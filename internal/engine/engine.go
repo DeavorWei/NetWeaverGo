@@ -15,8 +15,9 @@ import (
 
 // Engine 全局中央调度器，控制所有物理设备的并发执行流
 type Engine struct {
-	Devices  []config.DeviceAsset
-	Commands []string
+	Devices    []config.DeviceAsset
+	Commands   []string
+	MaxWorkers int // 最大并发协程数量
 
 	// 用于在控制台同一时刻串行化“挂起询问”操作，避免终端文字输出错位混淆
 	promptMu sync.Mutex
@@ -25,22 +26,35 @@ type Engine struct {
 // NewEngine 初始化并行执行引擎
 func NewEngine(assets []config.DeviceAsset, commands []string) *Engine {
 	return &Engine{
-		Devices:  assets,
-		Commands: commands,
+		Devices:    assets,
+		Commands:   commands,
+		MaxWorkers: 32, // 默认并发连接上限，未来可以提取到配置文件中
 	}
 }
 
 // Run 启动 WorkerPool，正式分发任务
 func (e *Engine) Run(ctx context.Context) {
 	fmt.Printf("\n[NetWeaverGo] 控制台引擎启动，共准备向 %d 台设备下发 %d 条命令...\n", len(e.Devices), len(e.Commands))
-	fmt.Println("设备日志将实时记录于 logs/ 目录，并发下发中...")
+	fmt.Printf("当前已配置全局并发安全限制 (MaxWorkers=%d)。\n设备日志将实时记录于 logs/ 目录，正在分批并发下发中...\n", e.MaxWorkers)
 
 	var wg sync.WaitGroup
+	// 创建带缓冲的 channel 作为并发令牌桶
+	sem := make(chan struct{}, e.MaxWorkers)
 
 	for _, dev := range e.Devices {
 		wg.Add(1)
 
-		go e.worker(ctx, dev, &wg)
+		// 阻塞等待获取并发执行令牌，如果超过 MaxWorkers 则会在这里等待
+		sem <- struct{}{}
+
+		// 将 dev 作为参数传递，避免在闭包内捕获循环变量（虽然 Go 1.22+ 已经修复了这个由循环变量导致的问题，但显式传递也是好的编码习惯）
+		go func(device config.DeviceAsset) {
+			defer func() {
+				// 执行完毕后，归还令牌
+				<-sem
+			}()
+			e.worker(ctx, device, &wg)
+		}(dev)
 	}
 
 	wg.Wait()
