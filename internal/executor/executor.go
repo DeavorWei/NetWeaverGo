@@ -34,7 +34,7 @@ type DeviceExecutor struct {
 
 	Matcher *matcher.StreamMatcher
 	Client  *sshutil.SSHClient
-	Log     *logger.DeviceLogger
+	Log     *logger.DeviceOutput // changed from DeviceLogger
 
 	OnSuspend SuspendHandler
 }
@@ -67,12 +67,12 @@ func (e *DeviceExecutor) Connect(ctx context.Context) error {
 	}
 	e.Client = client
 
-	devLog, err := logger.NewDeviceLogger(e.IP)
+	devOutput, err := logger.NewDeviceOutput(e.IP) // changed
 	if err != nil {
 		e.Client.Close()
 		return err
 	}
-	e.Log = devLog
+	e.Log = devOutput
 
 	return nil
 }
@@ -87,7 +87,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 	outReader := io.TeeReader(e.Client.Stdout, e.Log)
 	errReader := io.TeeReader(e.Client.Stderr, e.Log)
 
-	// 丢弃并记录 stderr（因为 TeeReader 已经挂在日志里了）
+	// 丢弃并记录 stderr（因为 TeeReader 已经挂在流文件里了）
 	go func() {
 		_, _ = io.Copy(io.Discard, errReader)
 	}()
@@ -120,16 +120,12 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 
 	readDelay := 100 * time.Millisecond
 	for {
-		// Reset the timer at the start of each select iteration
-		// Since we handle timer.C, we need to ensure it's drained if we reset it, but here we just leave it firing.
-		// Actually, standard way is to stop/drain, or just re-create/reset cleanly.
-		// A simpler approach: timer is reset after any prompt matches or data received.
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timer.C:
 			// Timeout triggered
-			e.Log.Log("====== [等待超时] 命令无回显或提示符超时 (30s) ======")
+			logger.Warn("[%s] ====== [等待超时] 命令无回显或提示符超时 (30s) ======", e.IP)
 
 			var failedCmd string
 			if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
@@ -140,10 +136,10 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 			action := e.OnSuspend(e.IP, "Timeout Error: No prompt received within 30 seconds", failedCmd)
 			switch action {
 			case ActionAbort:
-				e.Log.Log("====== 用户选择中止 (Abort): 将断开连接 ======")
+				logger.Warn("[%s] ====== 用户选择中止 (Abort): 将断开连接 ======", e.IP)
 				return fmt.Errorf("设备 %s 的执行因超时被用户中止", e.IP)
 			case ActionSkip:
-				e.Log.Log("====== 用户选择跳过 (Skip): 丢弃该超时，进入下一条命令 ======")
+				logger.Warn("[%s] ====== 用户选择跳过 (Skip): 丢弃该超时，进入下一条命令 ======", e.IP)
 				// Simulate prompt received to move to next command, and clear buffer
 				streamBuffer = ""
 				if currentCmdIndex >= 0 {
@@ -151,16 +147,13 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 				}
 				timer.Reset(timeoutDuration) // Restart timer for next command or finishing up
 			case ActionContinue:
-				e.Log.Log("====== 用户选择继续 (Continue): 强制忽略并继续等待 ======")
+				logger.Warn("[%s] ====== 用户选择继续 (Continue): 强制忽略并继续等待 ======", e.IP)
 				// Keep waiting
 				timer.Reset(timeoutDuration)
 			}
 		case res, ok := <-readCh:
 			if !ok {
-				// The channel is closed, which means background goroutine returned (likely due to error like EOF)
-				// The actual error was sent just before closing, so we normally would have caught it in the previous readCh case.
-				// However, if we get here, connection died.
-				e.Log.Log("SSH 会话由于连接中断或完成已结束。")
+				logger.Info("[%s] SSH 会话由于连接中断或完成已结束。", e.IP)
 				return nil
 			}
 
@@ -185,8 +178,8 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 				for i, line := range lines {
 					if i < len(lines)-1 {
 						if e.Matcher.MatchError(line) {
-							e.Log.Log("====== [命中异常规则] 挂起当前设备执行 ======")
-							e.Log.Log("错误流内容: %s", line)
+							logger.Warn("[%s] ====== [命中异常规则] 挂起当前设备执行 ======", e.IP)
+							logger.Warn("[%s] 错误流内容: %s", e.IP, line)
 
 							// 触发外部回调执行暂停，将由外部引擎的通道控制该函数返回，形成单设备挂起效果
 							var failedCmd string
@@ -197,12 +190,12 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 							action := e.OnSuspend(e.IP, line, failedCmd)
 							switch action {
 							case ActionAbort:
-								e.Log.Log("====== 用户选择中止 (Abort): 将断开连接 ======")
+								logger.Warn("[%s] ====== 用户选择中止 (Abort): 将断开连接 ======", e.IP)
 								return fmt.Errorf("设备 %s 的执行被用户手动中止", e.IP)
 							case ActionSkip:
-								e.Log.Log("====== 用户选择跳过 (Skip): 丢弃该错误继续当前流程 ======")
+								logger.Warn("[%s] ====== 用户选择跳过 (Skip): 丢弃该错误继续当前流程 ======", e.IP)
 							case ActionContinue:
-								e.Log.Log("====== 用户选择继续 (Continue): 强制忽略并放行 ======")
+								logger.Warn("[%s] ====== 用户选择继续 (Continue): 强制忽略并放行 ======", e.IP)
 							}
 
 							// 继续后清空缓冲区，避免二次重复报错
@@ -218,7 +211,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 				// 处于等待主提示符阶段
 				if currentCmdIndex == -1 {
 					if e.Matcher.IsPrompt(streamBuffer) {
-						e.Log.Log("==== [连接成功] 获得首个提示符，准备下发配置 ====")
+						logger.Info("[%s] ==== [连接成功] 获得首个提示符，准备下发配置 ====", e.IP)
 						currentCmdIndex = 0
 
 						e.Client.SendCommand("") // Wakeup Line 以稳定状态
@@ -229,7 +222,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 				if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
 					if e.Matcher.IsPrompt(streamBuffer) {
 						cmd := commands[currentCmdIndex]
-						e.Log.Log(">>> [发送命令]: %s", cmd)
+						logger.Info("[%s] >>> [发送命令]: %s", e.IP, cmd)
 						e.Client.SendCommand(cmd)
 						streamBuffer = "" // 发送命令后清空当前 Buffer，防止将上一步的提示符混到了接下来
 						currentCmdIndex++
@@ -237,7 +230,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 				} else if currentCmdIndex >= len(commands) {
 					// 任务完成，判断最后一条命令结果是否已回显出提示符
 					if e.Matcher.IsPrompt(streamBuffer) {
-						e.Log.Log("==== [执行完成] 所有命令已下发完毕 ====")
+						logger.Info("[%s] ==== [执行完成] 所有命令已下发完毕 ====", e.IP)
 						return nil
 					}
 				}
@@ -245,7 +238,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 
 			if err != nil {
 				if err == io.EOF {
-					e.Log.Log("SSH 会话已被远端安全断开。")
+					logger.Info("[%s] SSH 会话已被远端安全断开。", e.IP)
 					return nil
 				}
 				return fmt.Errorf("读取SSH流时发生错误: %w", err)
@@ -262,6 +255,6 @@ func (e *DeviceExecutor) Close() {
 		e.Client.Close()
 	}
 	if e.Log != nil {
-		e.Log.Close()
+		e.Log.Close() // this is now *DeviceOutput.Close
 	}
 }

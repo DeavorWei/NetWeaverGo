@@ -11,6 +11,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/executor"
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 // Engine 全局中央调度器，控制所有物理设备的并发执行流
@@ -34,8 +35,8 @@ func NewEngine(assets []config.DeviceAsset, commands []string) *Engine {
 
 // Run 启动 WorkerPool，正式分发任务
 func (e *Engine) Run(ctx context.Context) {
-	fmt.Printf("\n[NetWeaverGo] 控制台引擎启动，共准备向 %d 台设备下发 %d 条命令...\n", len(e.Devices), len(e.Commands))
-	fmt.Printf("当前已配置全局并发安全限制 (MaxWorkers=%d)。\n设备日志将实时记录于 logs/ 目录，正在分批并发下发中...\n", e.MaxWorkers)
+	logger.Info("[NetWeaverGo] 控制台引擎启动，共准备向 %d 台设备下发 %d 条命令...", len(e.Devices), len(e.Commands))
+	logger.Info("当前已配置全局并发安全限制 (MaxWorkers=%d)。\n设备回显位于 output/ 目录，系统日志位于 logs/app.log，正在分批并发下发中...", e.MaxWorkers)
 
 	var wg sync.WaitGroup
 	// 创建带缓冲的 channel 作为并发令牌桶
@@ -47,7 +48,7 @@ func (e *Engine) Run(ctx context.Context) {
 		// 阻塞等待获取并发执行令牌，如果超过 MaxWorkers 则会在这里等待
 		sem <- struct{}{}
 
-		// 将 dev 作为参数传递，避免在闭包内捕获循环变量（虽然 Go 1.22+ 已经修复了这个由循环变量导致的问题，但显式传递也是好的编码习惯）
+		// 将 dev 作为参数传递，避免在闭包内捕获循环变量
 		go func(device config.DeviceAsset) {
 			defer func() {
 				// 执行完毕后，归还令牌
@@ -58,7 +59,7 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 
 	wg.Wait()
-	fmt.Println("\n[NetWeaverGo] 所有设备的通信投递线程均已结束。安全退出。")
+	logger.Info("[NetWeaverGo] 所有设备的通信投递线程均已结束。安全退出。")
 }
 
 func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.WaitGroup) {
@@ -68,15 +69,15 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 	defer exec.Close()
 
 	if err := exec.Connect(ctx); err != nil {
-		fmt.Printf("\n[!] 无法连接到设备 %s: %v\n", dev.IP, err)
+		logger.Error("[!] 无法连接到设备 %s: %v", dev.IP, err)
 		return
 	}
 
-	fmt.Printf("[+] 成功打通设备 %s 面板连接，开始执行命令脚本...\n", dev.IP)
+	logger.Info("[+] 成功打通设备 %s 面板连接，开始执行命令脚本...", dev.IP)
 	if err := exec.ExecutePlaybook(ctx, e.Commands); err != nil {
-		fmt.Printf("\n[-] 设备 %s 终端流异常退出: %v\n", dev.IP, err)
+		logger.Error("[-] 设备 %s 终端流异常退出: %v", dev.IP, err)
 	} else {
-		fmt.Printf("[*] 设备 %s 命令全部下发成功，完成审计日志。\n", dev.IP)
+		logger.Info("[*] 设备 %s 命令全部下发成功。", dev.IP)
 	}
 }
 
@@ -86,6 +87,13 @@ func (e *Engine) handleSuspend(ip string, logLine string, cmd string) executor.E
 	e.promptMu.Lock()
 	defer e.promptMu.Unlock()
 
+	// 记录到应用日志中
+	logger.Warn("==================== [异常设备挂起干预] ====================")
+	logger.Warn("=> 目标设备: %s", ip)
+	logger.Warn("=> 触发指令: %s", cmd)
+	logger.Warn("=> 回显日志: %s", strings.TrimSpace(logLine))
+
+	// 控制台前台交互保持 fmt.Printf 不带时间格式化等前缀
 	fmt.Printf("\n==================== [异常设备挂起干预] ====================\n")
 	fmt.Printf("=> 目标设备: %s\n", ip)
 	fmt.Printf("=> 触发指令: %s\n", cmd)
@@ -97,7 +105,6 @@ func (e *Engine) handleSuspend(ip string, logLine string, cmd string) executor.E
 	for {
 		input, err := reader.ReadString('\n')
 		if err != nil {
-
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -105,13 +112,13 @@ func (e *Engine) handleSuspend(ip string, logLine string, cmd string) executor.E
 		cleanStr := strings.TrimSpace(strings.ToUpper(input))
 		switch cleanStr {
 		case "C":
-			fmt.Println("-> 指令已接收：放行此设备，强制继续。")
+			logger.Info("-> 指令已接收：放行设备 %s，强制继续。", ip)
 			return executor.ActionContinue
 		case "S":
-			fmt.Println("-> 指令已接收：忽略当前步骤返回继续。")
+			logger.Info("-> 指令已接收：跳过设备 %s 的当前报错步骤，继续下一条。", ip)
 			return executor.ActionSkip
 		case "A":
-			fmt.Println("-> 指令已接收：终止当前异常设备的运行流并脱离连接。")
+			logger.Warn("-> 指令已接收：终止异常设备 %s 的运行流并脱离连接。", ip)
 			return executor.ActionAbort
 		}
 		fmt.Print(">> 输入无效，仅支持 C、S 或 A: ")
