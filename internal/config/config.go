@@ -23,7 +23,7 @@ const (
 )
 
 // ParseOrGenerate 尝试读取当前目录下的配置文件，若不存在则生成模板
-func ParseOrGenerate() ([]DeviceAsset, []string, error) {
+func ParseOrGenerate(isBackup bool) ([]DeviceAsset, []string, error) {
 	var devices []DeviceAsset
 	var commands []string
 	var missingFiles []string
@@ -45,7 +45,10 @@ func ParseOrGenerate() ([]DeviceAsset, []string, error) {
 	} else {
 		cmds, err := readCommands()
 		if err != nil {
-			return nil, nil, fmt.Errorf("读取命令文件 %s 失败: %v", configFile, err)
+			// 在备份模式下，即使没有命令也不报错
+			if !isBackup {
+				return nil, nil, fmt.Errorf("读取命令文件 %s 失败: %v", configFile, err)
+			}
 		}
 		commands = cmds
 	}

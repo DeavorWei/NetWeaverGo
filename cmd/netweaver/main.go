@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -28,7 +29,10 @@ func main() {
               Go 并发网络自动化编排/配置集散部署工具
                  NetWeaverGo - v1.0 Framework`)
 
-	assets, commands, err := config.ParseOrGenerate()
+	isBackup := flag.Bool("b", false, "启动备份模式，自动下载交换机配置并忽略配置命令")
+	flag.Parse()
+
+	assets, commands, err := config.ParseOrGenerate(*isBackup)
 	if err != nil {
 		logger.Error("[配置/环境提示] %v", err)
 		os.Exit(0)
@@ -38,9 +42,14 @@ func main() {
 		logger.Error("[系统终止] 配置载入失败：没有找到合法的资产设备清单数据。")
 		os.Exit(1)
 	}
-	if len(commands) == 0 {
-		logger.Error("[系统终止] 命令获取失败：需要至少通过文本配置一条待下发命令。")
-		os.Exit(1)
+
+	if !*isBackup {
+		if len(commands) == 0 {
+			logger.Error("[系统终止] 命令获取失败：需要至少通过文本配置一条待下发命令。")
+			os.Exit(1)
+		}
+	} else {
+		logger.Info("[!] 检测到 -b 标志，应用已经进入备份模式（备份操作中将忽略 config.txt 指令）。")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -55,5 +64,10 @@ func main() {
 	}()
 
 	ng := engine.NewEngine(assets, commands)
-	ng.Run(ctx)
+
+	if *isBackup {
+		ng.RunBackup(ctx)
+	} else {
+		ng.Run(ctx)
+	}
 }

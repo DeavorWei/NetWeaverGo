@@ -258,3 +258,97 @@ func (e *DeviceExecutor) Close() {
 		e.Log.Close() // this is now *DeviceOutput.Close
 	}
 }
+
+// ExecuteCommandSync executes a single command synchronously and reads its output
+// until another prompt is found. This bypasses the Playbook queue system and is used for
+// interrogative commands like `display startup`.
+func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, timeout time.Duration) (string, error) {
+	if e.Client == nil || e.Log == nil {
+		return "", fmt.Errorf("执行器未安全建连")
+	}
+
+	// Prepare TeeReaders as normal execution
+	buf := make([]byte, 1024)
+	outReader := io.TeeReader(e.Client.Stdout, e.Log)
+
+	var outputBuffer strings.Builder
+	var streamBuffer string
+
+	// Ensure we wait for prompt first before sending if it's the very first command.
+	// But usually this function is called after the first prompt is seen.
+
+	logger.Info("[%s] >>> [同步发送命令]: %s", e.IP, cmd)
+	if err := e.Client.SendCommand(cmd); err != nil {
+		return "", fmt.Errorf("发送命令失败: %w", err)
+	}
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	type readResult struct {
+		n   int
+		err error
+	}
+	readCh := make(chan readResult, 1)
+
+	go func() {
+		for {
+			n, err := outReader.Read(buf)
+			readCh <- readResult{n: n, err: err}
+			if err != nil {
+				close(readCh)
+				return
+			}
+		}
+	}()
+
+	// Read loop
+	for {
+		select {
+		case <-ctx.Done():
+			return outputBuffer.String(), ctx.Err()
+		case <-timer.C:
+			return outputBuffer.String(), fmt.Errorf("同步命令执行超时: %s", cmd)
+		case res, ok := <-readCh:
+			if !ok {
+				return outputBuffer.String(), fmt.Errorf("SSH 流已关闭: %w", res.err)
+			}
+			n, err := res.n, res.err
+
+			if n > 0 {
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(timeout)
+
+				chunk := string(buf[:n])
+				outputBuffer.WriteString(chunk) // Append for our full return value
+				streamBuffer += chunk
+
+				// Find prompt to finish execution
+				lines := strings.Split(streamBuffer, "\n")
+				// Check the last segment without newline if it looks like a prompt
+				lastSegment := lines[len(lines)-1]
+				if e.Matcher.IsPrompt(lastSegment) {
+					// Prompt found, execution of command is complete
+					return outputBuffer.String(), nil
+				}
+
+				// Optional: Check if any previous lines were Prompts, but typically it shows up at the end.
+				streamBuffer = lastSegment
+			}
+
+			if err != nil {
+				if err == io.EOF {
+					return outputBuffer.String(), fmt.Errorf("SSH 会话已被远端安全断开")
+				}
+				return outputBuffer.String(), fmt.Errorf("读取SSH流时发生错误: %w", err)
+			}
+		}
+
+		time.Sleep(100 * time.Millisecond) // Reduce CPU busy spinning
+	}
+}

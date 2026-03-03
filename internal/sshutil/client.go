@@ -161,6 +161,9 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 func (c *SSHClient) SendCommand(cmd string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.Stdin == nil {
+		return fmt.Errorf("SSHClient not fully initialized for terminal sending (Stdin is nil)")
+	}
 	_, err := fmt.Fprintf(c.Stdin, "%s\n", cmd)
 	return err
 }
@@ -169,7 +172,9 @@ func (c *SSHClient) SendCommand(cmd string) error {
 func (c *SSHClient) Close() error {
 	var err error
 	if c.Session != nil {
-		c.Stdin.Close()
+		if c.Stdin != nil {
+			c.Stdin.Close()
+		}
 		err = c.Session.Close()
 	}
 	if c.Client != nil {
@@ -179,4 +184,81 @@ func (c *SSHClient) Close() error {
 		}
 	}
 	return err
+}
+
+// NewRawSSHClient 建立一个最基础的SSH连接，不请求任何 Session, PTY, 或 Shell。
+// 专供 SFTP 或其他只要求纯净底层子系统通道的应用（例如华为交换机的 sftp 子系统不能在包含 shell 的连接中打开）。
+func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
+	if cfg.Port == 0 {
+		cfg.Port = 22
+	}
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 10 * time.Second
+	}
+
+	sshConfig := &ssh.ClientConfig{
+		User: cfg.Username,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(cfg.Password),
+			ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
+				answers = make([]string, len(questions))
+				for i, q := range questions {
+					if strings.Contains(strings.ToLower(q), "password") {
+						answers[i] = cfg.Password
+					}
+				}
+				return answers, nil
+			}),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         cfg.Timeout,
+	}
+
+	sshConfig.Config.Ciphers = append(sshConfig.Config.Ciphers,
+		"aes128-gcm@openssh.com", "chacha20-poly1305@openssh.com",
+		"aes128-ctr", "aes192-ctr", "aes256-ctr",
+		"aes128-cbc", "aes192-cbc", "aes256-cbc", "3des-cbc",
+		"arcfour", "arcfour128", "arcfour256",
+	)
+	sshConfig.Config.KeyExchanges = append(sshConfig.Config.KeyExchanges,
+		"curve25519-sha256", "curve25519-sha256@libssh.org",
+		"ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521",
+		"diffie-hellman-group16-sha512",
+		"diffie-hellman-group14-sha256",
+		"diffie-hellman-group14-sha1",
+		"diffie-hellman-group-exchange-sha256",
+		"diffie-hellman-group-exchange-sha1",
+		"diffie-hellman-group1-sha1",
+	)
+	sshConfig.Config.MACs = append(sshConfig.Config.MACs,
+		"hmac-sha2-256-etm@openssh.com", "hmac-sha2-256",
+		"hmac-sha1", "hmac-sha1-96",
+	)
+	sshConfig.HostKeyAlgorithms = append(sshConfig.HostKeyAlgorithms,
+		"rsa-sha2-512", "rsa-sha2-256",
+		"ssh-rsa", "ssh-dss",
+		"ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
+		"ssh-ed25519",
+	)
+
+	target := fmt.Sprintf("%s:%d", cfg.IP, cfg.Port)
+	dialer := net.Dialer{Timeout: cfg.Timeout}
+
+	conn, err := dialer.DialContext(ctx, "tcp", target)
+	if err != nil {
+		return nil, fmt.Errorf("TCP连通失败: %w", err)
+	}
+
+	c, chans, reqs, err := ssh.NewClientConn(conn, target, sshConfig)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("SSH握手失败: %w", err)
+	}
+	client := ssh.NewClient(c, chans, reqs)
+
+	return &SSHClient{
+		Client: client, // 仅带有底层client，没有挂载任何终端特性 Session
+		IP:     cfg.IP,
+		Port:   cfg.Port,
+	}, nil
 }
