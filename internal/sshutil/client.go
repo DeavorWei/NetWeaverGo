@@ -64,32 +64,88 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 		Timeout:         cfg.Timeout,
 	}
 
-	sshConfig.Config.Ciphers = append(sshConfig.Config.Ciphers,
-		"aes128-gcm@openssh.com", "chacha20-poly1305@openssh.com",
-		"aes128-ctr", "aes192-ctr", "aes256-ctr",
-		"aes128-cbc", "aes192-cbc", "aes256-cbc", "3des-cbc",
-		"arcfour", "arcfour128", "arcfour256",
-	)
-	sshConfig.Config.KeyExchanges = append(sshConfig.Config.KeyExchanges,
-		"curve25519-sha256", "curve25519-sha256@libssh.org",
-		"ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521",
-		"diffie-hellman-group16-sha512",
-		"diffie-hellman-group14-sha256",
-		"diffie-hellman-group14-sha1",
-		"diffie-hellman-group-exchange-sha256",
-		"diffie-hellman-group-exchange-sha1",
-		"diffie-hellman-group1-sha1",
-	)
-	sshConfig.Config.MACs = append(sshConfig.Config.MACs,
-		"hmac-sha2-256-etm@openssh.com", "hmac-sha2-256",
-		"hmac-sha1", "hmac-sha1-96",
-	)
-	sshConfig.HostKeyAlgorithms = append(sshConfig.HostKeyAlgorithms,
-		"rsa-sha2-512", "rsa-sha2-256",
-		"ssh-rsa", "ssh-dss",
-		"ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
-		"ssh-ed25519",
-	)
+	sshConfig.Config.Ciphers = []string{
+		// 1. 官方推荐的最安全的现代算法（AEAD）
+		ssh.CipherAES128GCM,
+		ssh.CipherAES256GCM,
+		ssh.CipherChaCha20Poly1305,
+
+		// 2. 安全的传统对称加密算法（CTR 模式）
+		ssh.CipherAES128CTR,
+		ssh.CipherAES192CTR,
+		ssh.CipherAES256CTR,
+
+		// 3. 为了兼容老旧网络设备添加的不安全算法（CBC 模式及 RC4）
+		ssh.InsecureCipherAES128CBC,
+		"aes192-cbc", // golang.org/x/crypto/ssh 默认未公开此常量
+		"aes256-cbc",
+		ssh.InsecureCipherTripleDESCBC,
+		ssh.InsecureCipherRC4,
+		ssh.InsecureCipherRC4128,
+		ssh.InsecureCipherRC4256,
+	}
+	sshConfig.Config.KeyExchanges = []string{
+		// 1. 官方推荐的最安全的现代算法（包含抗量子和椭圆曲线）
+		ssh.KeyExchangeMLKEM768X25519,
+		ssh.KeyExchangeCurve25519,
+		ssh.KeyExchangeECDHP256,
+		ssh.KeyExchangeECDHP384,
+		ssh.KeyExchangeECDHP521,
+
+		// 2. 安全的传统 DH 算法
+		ssh.KeyExchangeDH14SHA256,
+		ssh.KeyExchangeDH16SHA512,
+		ssh.KeyExchangeDHGEXSHA256,
+
+		// 3. 为了兼容老旧网络设备（如旧 Cisco/H3C）添加的不安全算法
+		ssh.InsecureKeyExchangeDH14SHA1,  // 官方默认包含了这个
+		ssh.InsecureKeyExchangeDH1SHA1,   // diffie-hellman-group1-sha1
+		ssh.InsecureKeyExchangeDHGEXSHA1, // diffie-hellman-group-exchange-sha1
+	}
+	sshConfig.Config.MACs = []string{
+		// 1. 官方推荐的最安全的现代算法（AEAD 模式不需要 MAC，但以防万一也可配置）
+		ssh.HMACSHA256ETM,
+		ssh.HMACSHA512ETM,
+
+		// 2. 安全的传统哈希算法
+		ssh.HMACSHA256,
+		ssh.HMACSHA512,
+
+		// 3. 为了兼容老旧网络设备添加的不安全算法（SHA1）
+		ssh.HMACSHA1,
+		ssh.InsecureHMACSHA196,
+	}
+	sshConfig.HostKeyAlgorithms = []string{
+		// 1. 官方推荐的最安全的现代算法（椭圆曲线和 ED25519）
+		ssh.KeyAlgoED25519,
+		ssh.KeyAlgoECDSA256,
+		ssh.KeyAlgoECDSA384,
+		ssh.KeyAlgoECDSA521,
+
+		// 2. 基于硬件安全密钥 (SK, FIDO2/U2F) 的现代算法
+		ssh.KeyAlgoSKED25519,
+		ssh.KeyAlgoSKECDSA256,
+
+		// 3. 基于 OpenSSH 证书签发的现代/传统算法
+		ssh.CertAlgoED25519v01,
+		ssh.CertAlgoECDSA256v01,
+		ssh.CertAlgoECDSA384v01,
+		ssh.CertAlgoECDSA521v01,
+		ssh.CertAlgoSKED25519v01,
+		ssh.CertAlgoSKECDSA256v01,
+		ssh.CertAlgoRSASHA512v01,
+		ssh.CertAlgoRSASHA256v01,
+		ssh.CertAlgoRSAv01,
+
+		// 4. 安全的传统 RSA 算法（使用 SHA2）
+		ssh.KeyAlgoRSASHA512,
+		ssh.KeyAlgoRSASHA256,
+
+		// 5. 为了兼容老旧网络设备添加的不安全算法或弃用证书（SHA1 和 DSS）
+		ssh.KeyAlgoRSA,
+		ssh.InsecureKeyAlgoDSA,
+		ssh.InsecureCertAlgoDSAv01,
+	}
 
 	target := fmt.Sprintf("%s:%d", cfg.IP, cfg.Port)
 	dialer := net.Dialer{Timeout: cfg.Timeout}
@@ -236,32 +292,88 @@ func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 		Timeout:         cfg.Timeout,
 	}
 
-	sshConfig.Config.Ciphers = append(sshConfig.Config.Ciphers,
-		"aes128-gcm@openssh.com", "chacha20-poly1305@openssh.com",
-		"aes128-ctr", "aes192-ctr", "aes256-ctr",
-		"aes128-cbc", "aes192-cbc", "aes256-cbc", "3des-cbc",
-		"arcfour", "arcfour128", "arcfour256",
-	)
-	sshConfig.Config.KeyExchanges = append(sshConfig.Config.KeyExchanges,
-		"curve25519-sha256", "curve25519-sha256@libssh.org",
-		"ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521",
-		"diffie-hellman-group16-sha512",
-		"diffie-hellman-group14-sha256",
-		"diffie-hellman-group14-sha1",
-		"diffie-hellman-group-exchange-sha256",
-		"diffie-hellman-group-exchange-sha1",
-		"diffie-hellman-group1-sha1",
-	)
-	sshConfig.Config.MACs = append(sshConfig.Config.MACs,
-		"hmac-sha2-256-etm@openssh.com", "hmac-sha2-256",
-		"hmac-sha1", "hmac-sha1-96",
-	)
-	sshConfig.HostKeyAlgorithms = append(sshConfig.HostKeyAlgorithms,
-		"rsa-sha2-512", "rsa-sha2-256",
-		"ssh-rsa", "ssh-dss",
-		"ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
-		"ssh-ed25519",
-	)
+	sshConfig.Config.Ciphers = []string{
+		// 1. 官方推荐的最安全的现代算法（AEAD）
+		ssh.CipherAES128GCM,
+		ssh.CipherAES256GCM,
+		ssh.CipherChaCha20Poly1305,
+
+		// 2. 安全的传统对称加密算法（CTR 模式）
+		ssh.CipherAES128CTR,
+		ssh.CipherAES192CTR,
+		ssh.CipherAES256CTR,
+
+		// 3. 为了兼容老旧网络设备添加的不安全算法（CBC 模式及 RC4）
+		ssh.InsecureCipherAES128CBC,
+		"aes192-cbc", // golang.org/x/crypto/ssh 默认未公开此常量
+		"aes256-cbc",
+		ssh.InsecureCipherTripleDESCBC,
+		ssh.InsecureCipherRC4,
+		ssh.InsecureCipherRC4128,
+		ssh.InsecureCipherRC4256,
+	}
+	sshConfig.Config.KeyExchanges = []string{
+		// 1. 官方推荐的最安全的现代算法（包含抗量子和椭圆曲线）
+		ssh.KeyExchangeMLKEM768X25519,
+		ssh.KeyExchangeCurve25519,
+		ssh.KeyExchangeECDHP256,
+		ssh.KeyExchangeECDHP384,
+		ssh.KeyExchangeECDHP521,
+
+		// 2. 安全的传统 DH 算法
+		ssh.KeyExchangeDH14SHA256,
+		ssh.KeyExchangeDH16SHA512,
+		ssh.KeyExchangeDHGEXSHA256,
+
+		// 3. 为了兼容老旧网络设备（如旧 Cisco/H3C）添加的不安全算法
+		ssh.InsecureKeyExchangeDH14SHA1,  // 官方默认包含了这个
+		ssh.InsecureKeyExchangeDH1SHA1,   // diffie-hellman-group1-sha1
+		ssh.InsecureKeyExchangeDHGEXSHA1, // diffie-hellman-group-exchange-sha1
+	}
+	sshConfig.Config.MACs = []string{
+		// 1. 官方推荐的最安全的现代算法（AEAD 模式不需要 MAC，但以防万一也可配置）
+		ssh.HMACSHA256ETM,
+		ssh.HMACSHA512ETM,
+
+		// 2. 安全的传统哈希算法
+		ssh.HMACSHA256,
+		ssh.HMACSHA512,
+
+		// 3. 为了兼容老旧网络设备添加的不安全算法（SHA1）
+		ssh.HMACSHA1,
+		ssh.InsecureHMACSHA196,
+	}
+	sshConfig.HostKeyAlgorithms = []string{
+		// 1. 官方推荐的最安全的现代算法（椭圆曲线和 ED25519）
+		ssh.KeyAlgoED25519,
+		ssh.KeyAlgoECDSA256,
+		ssh.KeyAlgoECDSA384,
+		ssh.KeyAlgoECDSA521,
+
+		// 2. 基于硬件安全密钥 (SK, FIDO2/U2F) 的现代算法
+		ssh.KeyAlgoSKED25519,
+		ssh.KeyAlgoSKECDSA256,
+
+		// 3. 基于 OpenSSH 证书签发的现代/传统算法
+		ssh.CertAlgoED25519v01,
+		ssh.CertAlgoECDSA256v01,
+		ssh.CertAlgoECDSA384v01,
+		ssh.CertAlgoECDSA521v01,
+		ssh.CertAlgoSKED25519v01,
+		ssh.CertAlgoSKECDSA256v01,
+		ssh.CertAlgoRSASHA512v01,
+		ssh.CertAlgoRSASHA256v01,
+		ssh.CertAlgoRSAv01,
+
+		// 4. 安全的传统 RSA 算法（使用 SHA2）
+		ssh.KeyAlgoRSASHA512,
+		ssh.KeyAlgoRSASHA256,
+
+		// 5. 为了兼容老旧网络设备添加的不安全算法或弃用证书（SHA1 和 DSS）
+		ssh.KeyAlgoRSA,
+		ssh.InsecureKeyAlgoDSA,
+		ssh.InsecureCertAlgoDSAv01,
+	}
 
 	target := fmt.Sprintf("%s:%d", cfg.IP, cfg.Port)
 	dialer := net.Dialer{Timeout: cfg.Timeout}
