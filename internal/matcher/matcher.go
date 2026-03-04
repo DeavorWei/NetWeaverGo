@@ -3,6 +3,8 @@ package matcher
 import (
 	"strings"
 	"sync"
+
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 // DefaultPrompts 常见的网络设备提示符结尾
@@ -40,6 +42,7 @@ func (m *StreamMatcher) MatchErrorRule(line string) (bool, *ErrorRule) {
 	defer m.mu.RUnlock()
 	for _, rule := range m.Rules {
 		if rule.Pattern.MatchString(line) {
+			logger.DebugAll("Matcher", "-", "行 `%s` 命中了错误规则 [%s]", line, rule.Name)
 			// 在此简单返回命中的首个规则。可以通过重排序保证 critical 优先
 			return true, &rule
 		}
@@ -54,6 +57,7 @@ func (m *StreamMatcher) IsPrompt(chunk string) bool {
 	defer m.mu.RUnlock()
 	for _, prompt := range m.Prompts {
 		if strings.HasSuffix(cleanChunk, prompt) {
+			logger.DebugAll("Matcher", "-", "Chunk 末缀匹配到了提示符: '%s'", prompt)
 			return true
 		}
 	}
@@ -66,6 +70,7 @@ func (m *StreamMatcher) IsPaginationPrompt(chunk string) bool {
 	defer m.mu.RUnlock()
 	for _, prompt := range m.PaginationPrompts {
 		if strings.Contains(chunk, prompt) {
+			logger.DebugAll("Matcher", "-", "探测到了分页拦截符: '%s'", prompt)
 			return true
 		}
 	}

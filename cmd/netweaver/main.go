@@ -32,7 +32,7 @@ func main() {
 	// 初始化全局随机数种子
 	rand.Seed(time.Now().UnixNano())
 
-	logger.Info(`
+	logger.Info("System", "-", `
     _   __     __ _       __                           ______     
    / | / /__  / /| |     / /__  ____ __   _____  _____/ ____/___  
   /  |/ / _ \/ __/ | /| / / _ \/ __ '/ | / / _ \/ ___/ / __/ __ \ 
@@ -61,31 +61,31 @@ func main() {
 
 	assets, commands, _, missingFiles, err := config.ParseOrGenerate(*isBackup)
 	if err != nil {
-		logger.Error("[系统错误] %v", err)
+		logger.Error("System", "-", "[系统错误] %v", err)
 		os.Exit(1)
 	}
 
 	if isNewSettings {
-		missingFiles = append(missingFiles, "settings.yaml")
+		logger.Info("System", "-", "[配置/环境提示] 初次运行，已在当前目录生成默认配置文件: settings.yaml，将自动按默认设置继续运行。")
 	}
 
 	if len(missingFiles) > 0 {
-		logger.Error("[配置/环境提示] 已在当前目录生成模板文件: %s，请填写内容后重新运行程序", strings.Join(missingFiles, ", "))
+		logger.Error("System", "-", "[配置/环境提示] 已在当前目录生成模板文件: %s，请填写内容后重新运行程序", strings.Join(missingFiles, ", "))
 		os.Exit(0)
 	}
 
 	if len(assets) == 0 {
-		logger.Error("[系统终止] 配置载入失败：没有找到合法的资产设备清单数据。")
+		logger.Error("System", "-", "[系统终止] 配置载入失败：没有找到合法的资产设备清单数据。")
 		os.Exit(1)
 	}
 
 	if !*isBackup {
 		if len(commands) == 0 {
-			logger.Error("[系统终止] 命令获取失败：需要至少通过文本配置一条待下发命令。")
+			logger.Error("System", "-", "[系统终止] 命令获取失败：需要至少通过文本配置一条待下发命令。")
 			os.Exit(1)
 		}
 	} else {
-		logger.Info("[!] 检测到 -b 标志，应用已经进入备份模式（备份操作中将忽略 config.txt 指令）。")
+		logger.Info("System", "-", "[!] 检测到 -b 标志，应用已经进入备份模式（备份操作中将忽略 config.txt 指令）。")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -95,7 +95,7 @@ func main() {
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sigCh
-		logger.Warn("[!] 收到外界中断请求(CTRL+C), 正在广播取消命令以清理释放所有设备...")
+		logger.Warn("System", "-", "[!] 收到外界中断请求(CTRL+C), 正在广播取消命令以清理释放所有设备...")
 		cancel()
 	}()
 

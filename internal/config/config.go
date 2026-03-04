@@ -26,7 +26,7 @@ const (
 
 // ParseOrGenerate 尝试读取当前目录下的配置文件，若不存在则生成模板
 func ParseOrGenerate(isBackup bool) ([]DeviceAsset, []string, []string, []string, error) {
-	logger.Debug("[Config] 开始解析或生成配置文件 (isBackup=%v)", isBackup)
+	logger.Debug("Config", "-", "开始解析或生成配置文件 (isBackup=%v)", isBackup)
 	var devices []DeviceAsset
 	var commands []string
 	var missingFiles []string
@@ -37,10 +37,10 @@ func ParseOrGenerate(isBackup bool) ([]DeviceAsset, []string, []string, []string
 	} else {
 		devs, err := readInventory()
 		if err != nil {
-			logger.Debug("[Config] 读取资产文件 %s 失败: %v", inventoryFile, err)
+			logger.Debug("Config", "-", "读取资产文件 %s 失败: %v", inventoryFile, err)
 			return nil, nil, nil, nil, fmt.Errorf("读取资产文件 %s 失败: %v", inventoryFile, err)
 		}
-		logger.Debug("[Config] 成功读取资产文件，共 %d 台设备", len(devs))
+		logger.Debug("Config", "-", "成功读取资产文件，共 %d 台设备", len(devs))
 		devices = devs
 	}
 
@@ -50,13 +50,13 @@ func ParseOrGenerate(isBackup bool) ([]DeviceAsset, []string, []string, []string
 	} else {
 		cmds, err := readCommands()
 		if err != nil {
-			logger.Debug("[Config] 读取命令文件 %s 失败: %v", configFile, err)
+			logger.Debug("Config", "-", "读取命令文件 %s 失败: %v", configFile, err)
 			// 在备份模式下，即使没有命令也不报错
 			if !isBackup {
 				return nil, nil, nil, nil, fmt.Errorf("读取命令文件 %s 失败: %v", configFile, err)
 			}
 		} else {
-			logger.Debug("[Config] 成功读取命令文件，共 %d 条命令", len(cmds))
+			logger.Debug("Config", "-", "成功读取命令文件，共 %d 条命令", len(cmds))
 		}
 		commands = cmds
 	}
@@ -70,7 +70,7 @@ func ParseOrGenerate(isBackup bool) ([]DeviceAsset, []string, []string, []string
 
 // readInventory 读取并解析资产清单文件
 func readInventory() ([]DeviceAsset, error) {
-	logger.DebugAll("[Config] 尝试打开文件: %s", inventoryFile)
+	logger.DebugAll("Config", "-", "尝试打开文件: %s", inventoryFile)
 	file, err := os.Open(inventoryFile)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func readInventory() ([]DeviceAsset, error) {
 
 // readCommands 读取并解析命令列表文件
 func readCommands() ([]string, error) {
-	logger.DebugAll("[Config] 尝试打开文件: %s", configFile)
+	logger.DebugAll("Config", "-", "尝试打开文件: %s", configFile)
 	content, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, err

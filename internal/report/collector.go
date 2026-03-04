@@ -96,6 +96,7 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 
 	summary, exists := p.status[evt.IP]
 	if !exists {
+		logger.DebugAll("Report", evt.IP, "初始化设备状态记录大盘")
 		summary = &DeviceSummary{
 			IP:        evt.IP,
 			Status:    "Init",
@@ -104,6 +105,8 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 		}
 		p.status[evt.IP] = summary
 	}
+
+	logger.DebugAll("Report", evt.IP, "EventBus接收到事件: Type=%v, Message=%s", evt.Type, evt.Message)
 
 	switch evt.Type {
 	case EventDeviceStart:
@@ -138,7 +141,7 @@ func (p *ProgressTracker) renderDisplay() {
 
 	var buf strings.Builder
 	// 取消前后的 \n，防止终端自动滚动导致 uilive 的往上回退产生错位（即“残留的悬崖”）
-	fmt.Fprintf(&buf, "[ NetWeaverGo ] 进度大盘: 完成 [%d/%d]\n", p.finished, p.total)
+	fmt.Fprintf(&buf, "\r[ NetWeaverGo ] 进度大盘: 完成 [%d/%d]\n", p.finished, p.total)
 	fmt.Fprintf(&buf, "--------------------------------------------------------")
 
 	// 抽出所有 IP 以稳定行序展现
@@ -222,12 +225,13 @@ func renderProgressBar(current, total int) string {
 
 // ExportCSV 生成小票结尾结算文档
 func (p *ProgressTracker) ExportCSV(outputDir string) {
+	logger.Debug("Report", "-", "开始生成结算 CSV 报表 -> %s", outputDir)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	// 确保输出目录存在
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		logger.Error("无法创建报告目录 %s: %v", outputDir, err)
+		logger.Error("Report", "-", "无法创建报告目录 %s: %v", outputDir, err)
 		return
 	}
 
@@ -236,7 +240,7 @@ func (p *ProgressTracker) ExportCSV(outputDir string) {
 
 	file, err := os.Create(reportPath)
 	if err != nil {
-		logger.Error("生成报告文件失败: %v", err)
+		logger.Error("Report", "-", "生成报告文件失败: %v", err)
 		return
 	}
 	defer file.Close()
@@ -267,7 +271,7 @@ func (p *ProgressTracker) ExportCSV(outputDir string) {
 		})
 	}
 
-	logger.Info("\n[结算报表已生成] -> %s", reportPath)
+	logger.Info("Report", "-", "\n[结算报表已生成] -> %s", reportPath)
 }
 
 // truncateDisplayString 根据终端字符显示宽度来截断中英文字符串，避免半角全角混合下的等宽对齐偏离

@@ -43,7 +43,7 @@ type DeviceExecutor struct {
 
 // NewDeviceExecutor 初始化执行器
 func NewDeviceExecutor(ip string, port int, user, pass string, eb chan report.ExecutorEvent, onSuspend SuspendHandler) *DeviceExecutor {
-	logger.DebugAll("[Executor] 初始化 NewDeviceExecutor (%s)", ip)
+	logger.DebugAll("Executor", ip, "初始化 NewDeviceExecutor")
 	return &DeviceExecutor{
 		IP:        ip,
 		Port:      port,
@@ -57,7 +57,7 @@ func NewDeviceExecutor(ip string, port int, user, pass string, eb chan report.Ex
 
 // Connect 创建SSH长连接并初始化日志审计
 func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) error {
-	logger.Debug("[Executor] 准备与设备 %s 建立SSH连接 (Timeout: %v)", e.IP, timeout)
+	logger.Debug("Executor", e.IP, "准备建立SSH连接 (Timeout: %v)", timeout)
 	cfg := sshutil.Config{
 		IP:       e.IP,
 		Port:     e.Port,
@@ -74,19 +74,19 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 
 	devOutput, err := logger.NewDeviceOutput(e.IP)
 	if err != nil {
-		logger.Debug("[Executor] 设备 %s 初始化日志文件失败: %v", e.IP, err)
+		logger.Debug("Executor", e.IP, "初始化日志文件失败: %v", err)
 		e.Client.Close()
 		return err
 	}
 	e.Log = devOutput
-	logger.Debug("[Executor] 设备 %s 连接与日志挂载成功", e.IP)
+	logger.Debug("Executor", e.IP, "连接与日志挂载成功")
 
 	return nil
 }
 
 // ExecutePlaybook 核心引擎方法：对该设备步进发送命令队列，并支持局部阻塞等待（配合 SuspendHandler）
 func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string, cmdTimeout time.Duration) error {
-	logger.Debug("[Executor] 设备 %s 开始执行 Playbook (%d 条)", e.IP, len(commands))
+	logger.Debug("Executor", e.IP, "开始执行 Playbook (%d 条)", len(commands))
 	if e.Client == nil || e.Log == nil {
 		return fmt.Errorf("执行器未安全建连")
 	}
@@ -139,7 +139,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timer.C:
-			logger.Debug("[Executor] 设备 %s 读取提示符超时 (index=%d)", e.IP, currentCmdIndex)
+			logger.Debug("Executor", e.IP, "读取提示符超时 (index=%d)", currentCmdIndex)
 			// Timeout triggered
 			var failedCmd string
 			if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
@@ -169,14 +169,14 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 				}
 				timer.Reset(timeoutDuration) // 为下一条命令或结束操作重启计时器
 			case ActionContinue:
-				logger.Warn("[%s] ====== 用户选择继续 (Continue): 强制忽略并继续等待 ======", e.IP)
+				logger.Warn("Executor", e.IP, "====== 用户选择继续 (Continue): 强制忽略并继续等待 ======")
 				// 继续等待
 				timer.Reset(timeoutDuration)
 			}
 		case res, ok := <-readCh:
 			if !ok {
-				logger.Info("[%s] SSH 会话由于连接中断或完成已结束。", e.IP)
-				logger.DebugAll("[Executor] %s 读取流 readCh 已关闭", e.IP)
+				logger.Info("Executor", e.IP, "SSH 会话由于连接中断或完成已结束。")
+				logger.DebugAll("Executor", e.IP, "读取流 readCh 已关闭")
 				return nil
 			}
 
@@ -195,7 +195,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 
 				chunk := string(buf[:n])
 				streamBuffer += chunk
-				logger.DebugAll("[%s] [DEBUG STREAM] Received chunk (len=%d) | streamBuffer_len=%d", e.IP, n, len(streamBuffer))
+				logger.DebugAll("Executor", e.IP, "Received chunk (len=%d) | streamBuffer_len=%d", n, len(streamBuffer))
 
 				lines := strings.Split(streamBuffer, "\n")
 				// 检查最后一行以外的完整回显行，查找 error 关键字
@@ -212,7 +212,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 								if e.EventBus != nil {
 									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "警告: " + rule.Message + " (" + line + ")", TotalCmd: len(commands)}
 								}
-								logger.Warn("[%s] [告警放行] %s: %s", e.IP, rule.Name, rule.Message)
+								logger.Warn("Executor", e.IP, "[告警放行] %s: %s", rule.Name, rule.Message)
 								continue
 							}
 
@@ -249,7 +249,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 
 				// 检测是否由于回显过长触发了终端分页符（如 ---- More ----）
 				if e.Matcher.IsPaginationPrompt(streamBuffer) {
-					logger.Debug("[%s] [自动翻页] 截获终端分页拦截符(More)，自动下发空格放行...", e.IP)
+					logger.Debug("Executor", e.IP, "[自动翻页] 截获终端分页拦截符(More)，自动下发空格放行...")
 					e.Client.SendRawBytes([]byte(" ")) // 向 SSH 隧道发送一个纯净空格
 					streamBuffer = ""                  // 清除已匹配的分页符避免残留污染
 					continue
@@ -258,8 +258,8 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 				// 处于等待主提示符阶段
 				if currentCmdIndex == -1 {
 					if e.Matcher.IsPrompt(streamBuffer) {
-						logger.Debug("[Executor] 设备 %s 等到首个提示符", e.IP)
-						logger.Info("[%s] ==== [连接成功] 获得首个提示符，下发预检探针(Wakeup Line) ====", e.IP)
+						logger.Debug("Executor", e.IP, "等到首个提示符")
+						logger.Info("Executor", e.IP, "==== [连接成功] 获得首个提示符，下发预检探针(Wakeup Line) ====")
 						currentCmdIndex = -2     // -2 implies waiting for pre-flight check response
 						e.Client.SendCommand("") // Wakeup Line 以稳定状态
 
@@ -271,14 +271,14 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 					}
 				} else if currentCmdIndex == -2 {
 					if e.Matcher.IsPrompt(streamBuffer) {
-						logger.Debug("[Executor] 设备 %s 预检完毕返回 Prompt", e.IP)
-						logger.Info("[%s] ==== [预检通过] 终端响应及时，正式进入配置下发循环 ====", e.IP)
+						logger.Debug("Executor", e.IP, "预检完毕返回 Prompt")
+						logger.Info("Executor", e.IP, "==== [预检通过] 终端响应及时，正式进入配置下发循环 ====")
 						currentCmdIndex = 0
 						// 严重 FIX：这里绝对不能清空 streamBuffer！
 						// 因为本次正好匹配到了 Prompt，清空后下一行的 if currentCmdIndex >= 0 判断中 e.Matcher.IsPrompt("") 将永远返回 false，
 						// 从而导致第一条指令(如 system-view)永远不被发送，最终引发 30s Timeout。
 						// streamBuffer = ""
-						logger.Debug("[%s] [DEBUG STATE] 预检通过，状态切入0，保留的 streamBuffer 长度=%d", e.IP, len(streamBuffer))
+						logger.Debug("Executor", e.IP, "预检通过，状态切入0，保留的 streamBuffer 长度=%d", len(streamBuffer))
 					}
 				}
 
@@ -295,8 +295,8 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 							timeoutStr := strings.TrimSpace(rawCmd[idx+len("// nw-timeout="):])
 							if pd, err := time.ParseDuration(timeoutStr); err == nil {
 								customDelay = pd
-								logger.Debug("[Executor] 设备 %s 命令拥有自定超时 %v => %s", e.IP, customDelay, cmdToSend)
-								logger.Info("[%s] === 检测到自定义长效命令超时控制 ===: %s -> %v", e.IP, cmdToSend, customDelay)
+								logger.Debug("Executor", e.IP, "命令拥有自定超时 %v => %s", customDelay, cmdToSend)
+								logger.Info("Executor", e.IP, "=== 检测到自定义长效命令超时控制 ===: %s -> %v", cmdToSend, customDelay)
 							}
 						}
 
@@ -314,16 +314,16 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 							}
 						}
 						timer.Reset(customDelay)
-						logger.DebugAll("[%s] [DEBUG ACTION] 已执行发送动作，将 streamBuffer 人为清空防止污染。原长度=%d", e.IP, len(streamBuffer))
+						logger.DebugAll("Executor", e.IP, "已执行发送动作，将 streamBuffer 人为清空防止污染。原长度=%d", len(streamBuffer))
 						streamBuffer = "" // 发送命令后清空当前 Buffer，防止将上一步的提示符混到了接下来
 						currentCmdIndex++
 					} else {
-						logger.DebugAll("[%s] [DEBUG WAIT] currentCmd=%d，还在等待匹配 Prompt, 当前 buff 末尾：%s", e.IP, currentCmdIndex, streamBuffer)
+						logger.DebugAll("Executor", e.IP, "currentCmd=%d，还在等待匹配 Prompt, 当前 buff 末尾：%s", currentCmdIndex, streamBuffer)
 					}
 				} else if currentCmdIndex >= len(commands) {
 					// 任务完成，判断最后一条命令结果是否已回显出提示符
 					if e.Matcher.IsPrompt(streamBuffer) {
-						logger.Debug("[Executor] 设备 %s 命令全部下发完成", e.IP)
+						logger.Debug("Executor", e.IP, "命令全部下发完成")
 						// logger.Info("[%s] ==== [执行完成] 所有命令已下发完毕 ====", e.IP)
 						return nil
 					}
@@ -332,7 +332,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 
 			if err != nil {
 				if err == io.EOF {
-					logger.Info("[%s] SSH 会话已被远端安全断开。", e.IP)
+					logger.Info("Executor", e.IP, "SSH 会话已被远端安全断开。")
 					return nil
 				}
 				return fmt.Errorf("读取SSH流时发生错误: %w", err)
@@ -357,7 +357,7 @@ func (e *DeviceExecutor) Close() {
 // 直到找到下一个提示符。这绕过了 Playbook 队列系统，用于
 // 像 `display startup` 这样的查询命令。
 func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, defaultTimeout time.Duration) (string, error) {
-	logger.Debug("[Executor] 设备 %s 进入同步交互模式: %s", e.IP, cmd)
+	logger.Debug("Executor", e.IP, "进入同步交互模式: %s", cmd)
 	if e.Client == nil || e.Log == nil {
 		return "", fmt.Errorf("执行器未安全建连")
 	}
@@ -378,11 +378,11 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 		timeoutStr := strings.TrimSpace(cmd[idx+len("// nw-timeout="):])
 		if pd, err := time.ParseDuration(timeoutStr); err == nil {
 			customTimeout = pd
-			logger.Info("[%s] === 检测到同步交互命令超时自定义控制 ===: %s -> %v", e.IP, cmdToSend, customTimeout)
+			logger.Info("Executor", e.IP, "=== 检测到同步交互命令超时自定义控制 ===: %s -> %v", cmdToSend, customTimeout)
 		}
 	}
 
-	logger.Info("[%s] >>> [同步发送命令]: %s", e.IP, cmdToSend)
+	logger.Info("Executor", e.IP, ">>> [同步发送命令]: %s", cmdToSend)
 	if err := e.Client.SendCommand(cmdToSend); err != nil {
 		return "", fmt.Errorf("发送命令失败: %w", err)
 	}
@@ -445,7 +445,7 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 					if i < len(lines)-1 {
 						if matched, rule := e.Matcher.MatchErrorRule(line); matched {
 							if rule.Severity == matcher.SeverityWarning {
-								logger.Warn("[%s] [同步命令警告] %s: %s", e.IP, rule.Name, rule.Message)
+								logger.Warn("Executor", e.IP, "[同步命令警告] %s: %s", rule.Name, rule.Message)
 							} else {
 								// Sync execution typically expects pure strings to be parsed back, but a truly critical error warrants early exit
 								return outputBuffer.String(), fmt.Errorf("同步指令遇到 Critical 异常: %s", line)
@@ -459,7 +459,7 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 
 				// 对待同步交互，同样可能遇到分页符卡死
 				if e.Matcher.IsPaginationPrompt(lastSegment) {
-					logger.Debug("[%s] [同步自动翻页] 截获终端分页拦截符(More)，自动下发空格放行...", e.IP)
+					logger.Debug("Executor", e.IP, "[同步自动翻页] 截获终端分页拦截符(More)，自动下发空格放行...")
 					e.Client.SendRawBytes([]byte(" "))
 					streamBuffer = "" // 因为同步方法中 streamBuffer 的末尾就是 lastSegment
 					continue

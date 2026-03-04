@@ -57,9 +57,9 @@ func NewEngine(assets []config.DeviceAsset, commands []string, settings *config.
 
 // Run 启动 WorkerPool，正式分发任务
 func (e *Engine) Run(ctx context.Context) {
-	logger.Debug("[Engine] Run() 开始，将向 %d 台设备分发任务 (MaxWorkers=%d)", len(e.Devices), e.MaxWorkers)
-	logger.Info("[NetWeaverGo] 控制台引擎启动，共准备向 %d 台设备下发 %d 条命令...", len(e.Devices), len(e.Commands))
-	logger.Info("当前已配置全局并发安全限制 (MaxWorkers=%d)。\n设备回显位于 output/ 目录，系统日志位于 logs/app.log，正在分批并发下发中...", e.MaxWorkers)
+	logger.Debug("Engine", "-", "Run() 开始，将向 %d 台设备分发任务 (MaxWorkers=%d)", len(e.Devices), e.MaxWorkers)
+	logger.Info("Engine", "-", "控制台引擎启动，共准备向 %d 台设备下发 %d 条命令...", len(e.Devices), len(e.Commands))
+	logger.Info("Engine", "-", "当前已配置全局并发安全限制 (MaxWorkers=%d)。\n设备回显位于 output/ 目录，系统日志位于 logs/app.log，正在分批并发下发中...", e.MaxWorkers)
 
 	logger.ConsoleMuted = true
 	defer func() { logger.ConsoleMuted = false }()
@@ -84,14 +84,14 @@ func (e *Engine) Run(ctx context.Context) {
 
 		// 阻塞等待获取并发执行令牌，如果超过 MaxWorkers 则会在这里等待
 		sem <- struct{}{}
-		logger.DebugAll("[Engine] 获取到执行令牌，准备启动 worker (IP: %s)", dev.IP)
+		logger.DebugAll("Engine", dev.IP, "获取到执行令牌，准备启动 worker")
 
 		// 将 dev 作为参数传递，避免在闭包内捕获循环变量
 		go func(device config.DeviceAsset) {
 			defer func() {
 				// 执行完毕后，归还令牌
 				<-sem
-				logger.DebugAll("[Engine] worker 执行完毕，已归还令牌 (IP: %s)", device.IP)
+				logger.DebugAll("Engine", device.IP, "worker 执行完毕，已归还令牌")
 			}()
 
 			// 增加抖动，平滑 SSH 突发连接压力 (Jitter Delay, 0-500ms)
@@ -108,16 +108,16 @@ func (e *Engine) Run(ctx context.Context) {
 	e.tracker.ExportCSV(e.Settings.OutputDir)
 
 	// 最终谢幕，保留一条普通的记录
-	logger.Info("[NetWeaverGo] 所有设备的通信投递线程均已结束。安全退出。")
+	logger.Info("Engine", "-", "所有设备的通信投递线程均已结束。安全退出。")
 }
 
 // RunBackup 启动基于 `-b` 参数的交换机备份流程专线
 func (e *Engine) RunBackup(ctx context.Context) {
-	logger.Debug("[Engine] RunBackup() 启动备份模式")
-	logger.Info("=======================================")
-	logger.Info("[NetWeaverGo SFTP-Backup] 备份模式启动")
-	logger.Info("开始向 %d 台设备提取配置文件...", len(e.Devices))
-	logger.Info("=======================================")
+	logger.Debug("Engine", "-", "RunBackup() 启动备份模式")
+	logger.Info("Engine", "-", "=======================================")
+	logger.Info("Engine", "-", "备份模式启动")
+	logger.Info("Engine", "-", "开始向 %d 台设备提取配置文件...", len(e.Devices))
+	logger.Info("Engine", "-", "=======================================")
 
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, e.MaxWorkers)
@@ -134,7 +134,7 @@ func (e *Engine) RunBackup(ctx context.Context) {
 	wg.Wait()
 
 	// 备份结束，汇总失败信息
-	logger.Info("\n========== [备份任务结束] ==========")
+	logger.Info("Engine", "-", "\n========== [备份任务结束] ==========")
 	var hasFailures bool
 	e.failedBackups.Range(func(key, value interface{}) bool {
 		hasFailures = true
@@ -142,20 +142,20 @@ func (e *Engine) RunBackup(ctx context.Context) {
 	})
 
 	if hasFailures {
-		logger.Warn("[警告] 以下设备备份失败:")
+		logger.Warn("Engine", "-", "[警告] 以下设备备份失败:")
 		e.failedBackups.Range(func(key, value interface{}) bool {
-			logger.Warn("  - IP: %-15s | 原因: %s", key, value)
+			logger.Warn("Engine", "-", "  - IP: %-15s | 原因: %s", key.(string), value.(string))
 			return true
 		})
 	} else {
-		logger.Info("[成功] 所有设备的配置均已成功备份。")
+		logger.Info("Engine", "-", "[成功] 所有设备的配置均已成功备份。")
 	}
-	logger.Info("====================================\n")
+	logger.Info("Engine", "-", "====================================\n")
 }
 
 func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.WaitGroup) {
 	defer wg.Done()
-	logger.Debug("[Engine] worker 启动 (IP: %s)", dev.IP)
+	logger.Debug("Worker", dev.IP, "worker 启动")
 
 	connectTimeout, err := time.ParseDuration(e.Settings.ConnectTimeout)
 	if err != nil {
@@ -177,10 +177,10 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 	}
 
 	if err := exec.ExecutePlaybook(ctx, e.Commands, commandTimeout); err != nil {
-		logger.Debug("[Engine] worker(%s) 播放命令集结束，返回了 error: %v", dev.IP, err)
+		logger.Debug("Engine", dev.IP, "worker 播放命令集结束，返回了 error: %v", err)
 		// Event 已经被底层的 action (Abort|Error)抛出过，此处无需重复抛出全量错误
 	} else {
-		logger.Debug("[Engine] worker(%s) 播放命令集成功完成", dev.IP)
+		logger.Debug("Engine", dev.IP, "worker 播放命令集成功完成")
 		e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceSuccess, Message: "执行完毕", TotalCmd: len(e.Commands)}
 	}
 }
@@ -201,7 +201,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	}
 
 	if err := exec.Connect(ctx, connectTimeout); err != nil {
-		logger.Error("[-] 设备 %s SSH建连失败: %v", dev.IP, err)
+		logger.Error("Worker", dev.IP, "SSH建连失败: %v", err)
 		e.failedBackups.Store(dev.IP, fmt.Sprintf("SSH连通信失败: %v", err))
 		return
 	}
@@ -217,7 +217,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	sftpClient, err := sftputil.NewSFTPClient(ctx, sftpCfg)
 	if err != nil {
 		// 如果 SFTP 连接失败，则探测 sftp 是否开启
-		logger.Warn("[%s] SFTP 挂载异常(底层异常: %v)，开始提取服务状态原因...", dev.IP, err)
+		logger.Warn("Worker", dev.IP, "SFTP 挂载异常(底层异常: %v)，开始提取服务状态原因...", err)
 		out, _ := exec.ExecuteCommandSync(ctx, "disp cur | inc sftp", 10*time.Second)
 		if strings.Contains(strings.ToLower(out), "sftp server enable") {
 			e.failedBackups.Store(dev.IP, fmt.Sprintf("SFTP建连失败（服务已配置，可能存在其他连通性或权限问题）。底层报错: %v", err))
@@ -229,7 +229,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	defer sftpClient.Close()
 
 	// 2. 正常读取配置文件名称
-	logger.Info("[%s] SFTP会话成功挂载，准备查询下次启动配置文件...", dev.IP)
+	logger.Info("Worker", dev.IP, "SFTP会话成功挂载，准备查询下次启动配置文件...")
 	// 某些设备需要禁用分屏，或者我们依赖“Next startup saved-configuration file”出现在第一屏回显中
 	exec.ExecuteCommandSync(ctx, "screen-length 0 temporary", 2*time.Second) // 尽可能的规避翻页问题
 	output, err := exec.ExecuteCommandSync(ctx, "display startup", 15*time.Second)
@@ -282,34 +282,33 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 		return
 	}
 
-	logger.Info("[*] %s 配置备份完成 -> %s", dev.IP, localPath)
+	logger.Info("Worker", dev.IP, "配置备份完成 -> %s", localPath)
 }
 
 // handleSuspend 被传递到每一个 `executor`，一旦匹配到 error 正则则回调该函数，挂起当前设备的 Goroutine。
 // 使用 `promptMu` 互斥锁包围控制台的 STDIN 输入，保证多个设备同时发生 error 时，命令行不会争抢标准输入光标。
 func (e *Engine) handleSuspend(ip string, logLine string, cmd string) executor.ErrorAction {
 	// 记录到应用日志中
-	logger.Warn("==================== [异常设备挂起干预] ====================")
-	logger.Warn("=> 目标设备: %s", ip)
-	logger.Warn("=> 触发指令: %s", cmd)
-	logger.Warn("=> 回显日志: %s", strings.TrimSpace(logLine))
+	logger.Warn("Engine", ip, "==================== [异常设备挂起干预] ====================")
+	logger.Warn("Engine", ip, "=> 触发指令: %s", cmd)
+	logger.Warn("Engine", ip, "=> 回显日志: %s", strings.TrimSpace(logLine))
 
 	cleanStr := strings.TrimSpace(strings.ToUpper(logLine))
 	// 如果是无人值守模式，直接静默根据配置执行对应的动作
 	if e.NonInteractive {
 		switch e.Settings.ErrorMode {
 		case "skip":
-			logger.Info("-> [Non-Interactive] 触发全局 skip 策略: 已跳过设备 %s 的当前报错动作。", ip)
+			logger.Info("Engine", ip, "-> [Non-Interactive] 触发全局 skip 策略: 已跳过当前报错动作。")
 			return executor.ActionSkip
 		case "abort":
-			logger.Warn("-> [Non-Interactive] 触发全局 abort 策略: 正在终止异常设备 %s 的运行流。", ip)
+			logger.Warn("Engine", ip, "-> [Non-Interactive] 触发全局 abort 策略: 正在终止异常设备的运行流。")
 			return executor.ActionAbort
 		case "pause":
 			// Non-interactive 模式下 pause 应该导致整机中止，因为无人值守不会有人去按下继续
-			logger.Warn("-> [Non-Interactive] 触发全局 pause 策略: 无人值守状态下无法挂起，降级为 abort，正在终止异常设备 %s。", ip)
+			logger.Warn("Engine", ip, "-> [Non-Interactive] 触发全局 pause 策略: 无人值守状态下无法挂起，降级为 abort，正在终止异常设备。")
 			return executor.ActionAbort
 		default:
-			logger.Warn("-> [Non-Interactive] 未知全局策略 %s，回退采用 abort 流。", e.Settings.ErrorMode)
+			logger.Warn("Engine", "-", "-> [Non-Interactive] 未知全局策略 %s，回退采用 abort 流。", e.Settings.ErrorMode)
 			return executor.ActionAbort
 		}
 	}

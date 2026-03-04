@@ -45,10 +45,16 @@ func InitGlobalLogger() error {
 }
 
 // writeGlobalLog 写入全局日志，同时输出到终端
-func writeGlobalLog(level, format string, args ...interface{}) {
+func writeGlobalLog(level string, module string, ip string, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	timestamp := time.Now().Format("2006/01/02 15:04:05")
-	logLine := fmt.Sprintf("[%s] [%s] %s\n", timestamp, level, msg)
+	if module == "" {
+		module = "-"
+	}
+	if ip == "" {
+		ip = "-"
+	}
+	logLine := fmt.Sprintf("[%s] [%s] [%s] [%s] %s\n", timestamp, level, module, ip, msg)
 
 	// 终端输出
 	if !ConsoleMuted {
@@ -64,18 +70,18 @@ func writeGlobalLog(level, format string, args ...interface{}) {
 }
 
 // Info 输出信息级别日志
-func Info(format string, args ...interface{}) {
-	writeGlobalLog("INFO", format, args...)
+func Info(module string, ip string, format string, args ...interface{}) {
+	writeGlobalLog("Info", module, ip, format, args...)
 }
 
 // Warn 输出警告级别日志
-func Warn(format string, args ...interface{}) {
-	writeGlobalLog("WARN", format, args...)
+func Warn(module string, ip string, format string, args ...interface{}) {
+	writeGlobalLog("Warn", module, ip, format, args...)
 }
 
 // Error 输出错误级别日志
-func Error(format string, args ...interface{}) {
-	writeGlobalLog("ERROR", format, args...)
+func Error(module string, ip string, format string, args ...interface{}) {
+	writeGlobalLog("Error", module, ip, format, args...)
 }
 
 var (
@@ -84,20 +90,20 @@ var (
 )
 
 // Debug 输出调试级别日志
-func Debug(format string, args ...interface{}) {
+func Debug(module string, ip string, format string, args ...interface{}) {
 	if !EnableDebug {
 		return
 	}
-	writeGlobalLog("DEBUG", format, args...)
+	writeGlobalLog("Debug", module, ip, format, args...)
 }
 
 // DebugAll 输出全量调试级别日志（仅在 EnableDebugAll 为 true 时生效）
-func DebugAll(format string, args ...interface{}) {
+func DebugAll(module string, ip string, format string, args ...interface{}) {
 	if !EnableDebugAll {
 		return
 	}
-	// 为了在日志里区分，这里将前缀设为 DEBUG-ALL
-	writeGlobalLog("DEBUG-ALL", format, args...)
+	// 为了在日志里区分，这里将前缀设为 Debug-All
+	writeGlobalLog("Debug-All", module, ip, format, args...)
 }
 
 // DeviceOutput 处理单台设备的回显流落盘
