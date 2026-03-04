@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,35 +15,65 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/sftputil"
 	"github.com/NetWeaverGo/core/internal/sshutil"
 )
 
 // Engine 全局中央调度器，控制所有物理设备的并发执行流
 type Engine struct {
-	Devices    []config.DeviceAsset
-	Commands   []string
-	MaxWorkers int // 最大并发协程数量
+	Devices        []config.DeviceAsset
+	Commands       []string
+	MaxWorkers     int // 最大并发协程数量
+	Settings       *config.GlobalSettings
+	NonInteractive bool
 
 	// 用于在控制台同一时刻串行化“挂起询问”操作，避免终端文字输出错位混淆
 	promptMu sync.Mutex
+
+	// EventBus 事件采集挂载
+	EventBus chan report.ExecutorEvent
+	tracker  *report.ProgressTracker
 
 	failedBackups sync.Map // 记录备份失败的设备和原因
 }
 
 // NewEngine 初始化并行执行引擎
-func NewEngine(assets []config.DeviceAsset, commands []string) *Engine {
+func NewEngine(assets []config.DeviceAsset, commands []string, settings *config.GlobalSettings, nonInteractive bool) *Engine {
+	workers := settings.MaxWorkers
+	if workers <= 0 {
+		workers = 32
+	}
+
 	return &Engine{
-		Devices:    assets,
-		Commands:   commands,
-		MaxWorkers: 32, // 默认并发连接上限，未来可以提取到配置文件中
+		Devices:        assets,
+		Commands:       commands,
+		MaxWorkers:     workers, // 使用配置的并发限制
+		Settings:       settings,
+		NonInteractive: nonInteractive,
+		EventBus:       make(chan report.ExecutorEvent, 1000), // 队列化 EventBus
 	}
 }
 
 // Run 启动 WorkerPool，正式分发任务
 func (e *Engine) Run(ctx context.Context) {
+	logger.Debug("[Engine] Run() 开始，将向 %d 台设备分发任务 (MaxWorkers=%d)", len(e.Devices), e.MaxWorkers)
 	logger.Info("[NetWeaverGo] 控制台引擎启动，共准备向 %d 台设备下发 %d 条命令...", len(e.Devices), len(e.Commands))
 	logger.Info("当前已配置全局并发安全限制 (MaxWorkers=%d)。\n设备回显位于 output/ 目录，系统日志位于 logs/app.log，正在分批并发下发中...", e.MaxWorkers)
+
+	logger.ConsoleMuted = true
+	defer func() { logger.ConsoleMuted = false }()
+
+	e.tracker = report.NewProgressTracker(len(e.Devices))
+	e.tracker.EventBus = e.EventBus
+
+	// 启动后台事件收归与界面的渲染
+	var uiWg sync.WaitGroup
+	uiWg.Add(1)
+	go func() {
+		defer uiWg.Done()
+		e.tracker.Listen(ctx)
+	}()
 
 	var wg sync.WaitGroup
 	// 创建带缓冲的 channel 作为并发令牌桶
@@ -53,23 +84,36 @@ func (e *Engine) Run(ctx context.Context) {
 
 		// 阻塞等待获取并发执行令牌，如果超过 MaxWorkers 则会在这里等待
 		sem <- struct{}{}
+		logger.DebugAll("[Engine] 获取到执行令牌，准备启动 worker (IP: %s)", dev.IP)
 
 		// 将 dev 作为参数传递，避免在闭包内捕获循环变量
 		go func(device config.DeviceAsset) {
 			defer func() {
 				// 执行完毕后，归还令牌
 				<-sem
+				logger.DebugAll("[Engine] worker 执行完毕，已归还令牌 (IP: %s)", device.IP)
 			}()
+
+			// 增加抖动，平滑 SSH 突发连接压力 (Jitter Delay, 0-500ms)
+			time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
+
 			e.worker(ctx, device, &wg)
 		}(dev)
 	}
 
 	wg.Wait()
+	close(e.EventBus) // 安全关闭通道，引发界面结算
+	uiWg.Wait()
+
+	e.tracker.ExportCSV(e.Settings.OutputDir)
+
+	// 最终谢幕，保留一条普通的记录
 	logger.Info("[NetWeaverGo] 所有设备的通信投递线程均已结束。安全退出。")
 }
 
 // RunBackup 启动基于 `-b` 参数的交换机备份流程专线
 func (e *Engine) RunBackup(ctx context.Context) {
+	logger.Debug("[Engine] RunBackup() 启动备份模式")
 	logger.Info("=======================================")
 	logger.Info("[NetWeaverGo SFTP-Backup] 备份模式启动")
 	logger.Info("开始向 %d 台设备提取配置文件...", len(e.Devices))
@@ -89,7 +133,7 @@ func (e *Engine) RunBackup(ctx context.Context) {
 
 	wg.Wait()
 
-	// End of Backup, summarize failures
+	// 备份结束，汇总失败信息
 	logger.Info("\n========== [备份任务结束] ==========")
 	var hasFailures bool
 	e.failedBackups.Range(func(key, value interface{}) bool {
@@ -111,20 +155,33 @@ func (e *Engine) RunBackup(ctx context.Context) {
 
 func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.WaitGroup) {
 	defer wg.Done()
+	logger.Debug("[Engine] worker 启动 (IP: %s)", dev.IP)
 
-	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, e.handleSuspend)
+	connectTimeout, err := time.ParseDuration(e.Settings.ConnectTimeout)
+	if err != nil {
+		connectTimeout = 10 * time.Second
+	}
+	commandTimeout, err := time.ParseDuration(e.Settings.CommandTimeout)
+	if err != nil {
+		commandTimeout = 30 * time.Second
+	}
+
+	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, e.EventBus, e.handleSuspend)
 	defer exec.Close()
 
-	if err := exec.Connect(ctx); err != nil {
-		logger.Error("[!] 无法连接到设备 %s: %v", dev.IP, err)
+	e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceStart, TotalCmd: len(e.Commands), Message: "Connecting SSH..."}
+
+	if err := exec.Connect(ctx, connectTimeout); err != nil {
+		e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: fmt.Sprintf("SSH 建连失败: %v", err)}
 		return
 	}
 
-	logger.Info("[+] 成功打通设备 %s 面板连接，开始执行命令脚本...", dev.IP)
-	if err := exec.ExecutePlaybook(ctx, e.Commands); err != nil {
-		logger.Error("[-] 设备 %s 终端流异常退出: %v", dev.IP, err)
+	if err := exec.ExecutePlaybook(ctx, e.Commands, commandTimeout); err != nil {
+		logger.Debug("[Engine] worker(%s) 播放命令集结束，返回了 error: %v", dev.IP, err)
+		// Event 已经被底层的 action (Abort|Error)抛出过，此处无需重复抛出全量错误
 	} else {
-		logger.Info("[*] 设备 %s 命令全部下发成功。", dev.IP)
+		logger.Debug("[Engine] worker(%s) 播放命令集成功完成", dev.IP)
+		e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceSuccess, Message: "执行完毕", TotalCmd: len(e.Commands)}
 	}
 }
 
@@ -132,13 +189,18 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	// 通过 Executor 建立底座 SSH 连接（为了防止阻塞中断，回调暂时传入默认略过日志）
-	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, func(ip, log, cmd string) executor.ErrorAction {
+	// 备份模块不初始化 ProgressTracker，因此 EventBus 必须设为 nil 以避免死锁。
+	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, nil, func(ip, log, cmd string) executor.ErrorAction {
 		return executor.ActionContinue
 	})
 	defer exec.Close()
 
-	if err := exec.Connect(ctx); err != nil {
+	connectTimeout, err := time.ParseDuration(e.Settings.ConnectTimeout)
+	if err != nil {
+		connectTimeout = 10 * time.Second
+	}
+
+	if err := exec.Connect(ctx, connectTimeout); err != nil {
 		logger.Error("[-] 设备 %s SSH建连失败: %v", dev.IP, err)
 		e.failedBackups.Store(dev.IP, fmt.Sprintf("SSH连通信失败: %v", err))
 		return
@@ -150,7 +212,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 		Port:     dev.Port,
 		Username: dev.Username,
 		Password: dev.Password,
-		Timeout:  10 * time.Second,
+		Timeout:  connectTimeout,
 	}
 	sftpClient, err := sftputil.NewSFTPClient(ctx, sftpCfg)
 	if err != nil {
@@ -168,7 +230,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 
 	// 2. 正常读取配置文件名称
 	logger.Info("[%s] SFTP会话成功挂载，准备查询下次启动配置文件...", dev.IP)
-	// Some devices need screen-length disable, or we rely on Next startup saved-configuration file occurring within first screen
+	// 某些设备需要禁用分屏，或者我们依赖“Next startup saved-configuration file”出现在第一屏回显中
 	exec.ExecuteCommandSync(ctx, "screen-length 0 temporary", 2*time.Second) // 尽可能的规避翻页问题
 	output, err := exec.ExecuteCommandSync(ctx, "display startup", 15*time.Second)
 	if err != nil {
@@ -210,9 +272,9 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	fileName := fmt.Sprintf("%s_%s%s", dev.IP, nowStr, ext)
 	localPath := filepath.Join("confBakup", dateDir, fileName)
 
-	// Since SFTP on most Huawei/H3C requires the exact flash location:
-	// "flash:/1.cfg" needs to be fetched as "1.cfg" or "/1.cfg" depending on the SFTP subsystem.
-	// pkg/sftp typically resolves `1.cfg` against the current directory, which is fine for flash root.
+	// 因为大多数华为/华三设备上的 SFTP 需要准确的 flash 位置：
+	// 根据 SFTP 子系统不同，“flash:/1.cfg” 需要作为 “1.cfg” 或 “/1.cfg” 来获取。
+	// pkg/sftp 通常基准当前目录解析 `1.cfg`，这对于 flash 根目录来说是没问题的。
 
 	err = sftpClient.DownloadFile(cleanRemotePath, localPath)
 	if err != nil {
@@ -226,16 +288,48 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 // handleSuspend 被传递到每一个 `executor`，一旦匹配到 error 正则则回调该函数，挂起当前设备的 Goroutine。
 // 使用 `promptMu` 互斥锁包围控制台的 STDIN 输入，保证多个设备同时发生 error 时，命令行不会争抢标准输入光标。
 func (e *Engine) handleSuspend(ip string, logLine string, cmd string) executor.ErrorAction {
-	e.promptMu.Lock()
-	defer e.promptMu.Unlock()
-
 	// 记录到应用日志中
 	logger.Warn("==================== [异常设备挂起干预] ====================")
 	logger.Warn("=> 目标设备: %s", ip)
 	logger.Warn("=> 触发指令: %s", cmd)
 	logger.Warn("=> 回显日志: %s", strings.TrimSpace(logLine))
 
-	// 控制台前台交互保持 fmt.Printf 不带时间格式化等前缀
+	cleanStr := strings.TrimSpace(strings.ToUpper(logLine))
+	// 如果是无人值守模式，直接静默根据配置执行对应的动作
+	if e.NonInteractive {
+		switch e.Settings.ErrorMode {
+		case "skip":
+			logger.Info("-> [Non-Interactive] 触发全局 skip 策略: 已跳过设备 %s 的当前报错动作。", ip)
+			return executor.ActionSkip
+		case "abort":
+			logger.Warn("-> [Non-Interactive] 触发全局 abort 策略: 正在终止异常设备 %s 的运行流。", ip)
+			return executor.ActionAbort
+		case "pause":
+			// Non-interactive 模式下 pause 应该导致整机中止，因为无人值守不会有人去按下继续
+			logger.Warn("-> [Non-Interactive] 触发全局 pause 策略: 无人值守状态下无法挂起，降级为 abort，正在终止异常设备 %s。", ip)
+			return executor.ActionAbort
+		default:
+			logger.Warn("-> [Non-Interactive] 未知全局策略 %s，回退采用 abort 流。", e.Settings.ErrorMode)
+			return executor.ActionAbort
+		}
+	}
+
+	// 此时需要阻塞前台，加锁保护以免乱打
+	e.promptMu.Lock()
+	if e.tracker != nil {
+		e.tracker.Suspend()
+	}
+	// 交互时需要控制台输出，解开静音
+	logger.ConsoleMuted = false
+	defer func() {
+		logger.ConsoleMuted = true
+		if e.tracker != nil {
+			e.tracker.Resume()
+		}
+		e.promptMu.Unlock()
+	}()
+
+	// 交互模式下的标准提示
 	fmt.Printf("\n==================== [异常设备挂起干预] ====================\n")
 	fmt.Printf("=> 目标设备: %s\n", ip)
 	fmt.Printf("=> 触发指令: %s\n", cmd)
@@ -251,16 +345,11 @@ func (e *Engine) handleSuspend(ip string, logLine string, cmd string) executor.E
 			continue
 		}
 
-		cleanStr := strings.TrimSpace(strings.ToUpper(input))
+		cleanStr = strings.TrimSpace(strings.ToUpper(input))
 		switch cleanStr {
 		case "C":
-			logger.Info("-> 指令已接收：放行设备 %s，强制继续。", ip)
-			return executor.ActionContinue
-		case "S":
-			logger.Info("-> 指令已接收：跳过设备 %s 的当前报错步骤，继续下一条。", ip)
 			return executor.ActionSkip
 		case "A":
-			logger.Warn("-> 指令已接收：终止异常设备 %s 的运行流并脱离连接。", ip)
 			return executor.ActionAbort
 		}
 		fmt.Print(">> 输入无效，仅支持 C、S 或 A: ")

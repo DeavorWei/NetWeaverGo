@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 // DeviceAsset 表示单台交换机的连接凭证信息
@@ -23,7 +25,8 @@ const (
 )
 
 // ParseOrGenerate 尝试读取当前目录下的配置文件，若不存在则生成模板
-func ParseOrGenerate(isBackup bool) ([]DeviceAsset, []string, error) {
+func ParseOrGenerate(isBackup bool) ([]DeviceAsset, []string, []string, []string, error) {
+	logger.Debug("[Config] 开始解析或生成配置文件 (isBackup=%v)", isBackup)
 	var devices []DeviceAsset
 	var commands []string
 	var missingFiles []string
@@ -34,8 +37,10 @@ func ParseOrGenerate(isBackup bool) ([]DeviceAsset, []string, error) {
 	} else {
 		devs, err := readInventory()
 		if err != nil {
-			return nil, nil, fmt.Errorf("读取资产文件 %s 失败: %v", inventoryFile, err)
+			logger.Debug("[Config] 读取资产文件 %s 失败: %v", inventoryFile, err)
+			return nil, nil, nil, nil, fmt.Errorf("读取资产文件 %s 失败: %v", inventoryFile, err)
 		}
+		logger.Debug("[Config] 成功读取资产文件，共 %d 台设备", len(devs))
 		devices = devs
 	}
 
@@ -45,22 +50,27 @@ func ParseOrGenerate(isBackup bool) ([]DeviceAsset, []string, error) {
 	} else {
 		cmds, err := readCommands()
 		if err != nil {
+			logger.Debug("[Config] 读取命令文件 %s 失败: %v", configFile, err)
 			// 在备份模式下，即使没有命令也不报错
 			if !isBackup {
-				return nil, nil, fmt.Errorf("读取命令文件 %s 失败: %v", configFile, err)
+				return nil, nil, nil, nil, fmt.Errorf("读取命令文件 %s 失败: %v", configFile, err)
 			}
+		} else {
+			logger.Debug("[Config] 成功读取命令文件，共 %d 条命令", len(cmds))
 		}
 		commands = cmds
 	}
 
-	if len(missingFiles) > 0 {
-		return nil, nil, fmt.Errorf("已在当前目录生成模板文件: %s，请填写内容后重新运行程序", strings.Join(missingFiles, ", "))
-	}
+	// if len(missingFiles) > 0 {
+	// 	return nil, nil, fmt.Errorf("已在当前目录生成模板文件: %s，请填写内容后重新运行程序", strings.Join(missingFiles, ", "))
+	// }
 
-	return devices, commands, nil
+	return devices, commands, nil, missingFiles, nil
 }
 
+// readInventory 读取并解析资产清单文件
 func readInventory() ([]DeviceAsset, error) {
+	logger.DebugAll("[Config] 尝试打开文件: %s", inventoryFile)
 	file, err := os.Open(inventoryFile)
 	if err != nil {
 		return nil, err
@@ -107,7 +117,9 @@ func readInventory() ([]DeviceAsset, error) {
 	return devices, nil
 }
 
+// readCommands 读取并解析命令列表文件
 func readCommands() ([]string, error) {
+	logger.DebugAll("[Config] 尝试打开文件: %s", configFile)
 	content, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, err
@@ -130,6 +142,7 @@ func readCommands() ([]string, error) {
 	return commands, nil
 }
 
+// generateInventoryTemplate 生成默认的资产清单模板
 func generateInventoryTemplate() {
 	cwd, _ := os.Getwd()
 	path := filepath.Join(cwd, inventoryFile)
@@ -148,6 +161,7 @@ func generateInventoryTemplate() {
 	writer.Write([]string{"192.168.1.11", "22", "root", "Root@456"})
 }
 
+// generateConfigTemplate 生成默认的命令列表模板
 func generateConfigTemplate() {
 	cwd, _ := os.Getwd()
 	path := filepath.Join(cwd, configFile)

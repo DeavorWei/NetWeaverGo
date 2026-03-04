@@ -12,7 +12,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// SSHClient represents an active SSH connection to a device
+// SSHClient 表示一个到设备的活跃 SSH 连接
 type SSHClient struct {
 	Client  *ssh.Client
 	Session *ssh.Session
@@ -164,7 +164,19 @@ func (c *SSHClient) SendCommand(cmd string) error {
 	if c.Stdin == nil {
 		return fmt.Errorf("SSHClient not fully initialized for terminal sending (Stdin is nil)")
 	}
+	// 恢复标准 \n。之前改为 \r\n 导致部分交换机将其解析为两下回车，严重干扰 Prompt 匹配缓冲流。
 	_, err := fmt.Fprintf(c.Stdin, "%s\n", cmd)
+	return err
+}
+
+// SendRawBytes 发送原生字节序列到终端流中（不附加回车换行）
+func (c *SSHClient) SendRawBytes(data []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.Stdin == nil {
+		return fmt.Errorf("SSHClient not fully initialized for terminal sending (Stdin is nil)")
+	}
+	_, err := c.Stdin.Write(data)
 	return err
 }
 

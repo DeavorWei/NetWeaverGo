@@ -9,6 +9,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/matcher"
+	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/sshutil"
 )
 
@@ -34,31 +35,35 @@ type DeviceExecutor struct {
 
 	Matcher *matcher.StreamMatcher
 	Client  *sshutil.SSHClient
-	Log     *logger.DeviceOutput // changed from DeviceLogger
+	Log     *logger.DeviceOutput
 
+	EventBus  chan report.ExecutorEvent
 	OnSuspend SuspendHandler
 }
 
 // NewDeviceExecutor 初始化执行器
-func NewDeviceExecutor(ip string, port int, user, pass string, onSuspend SuspendHandler) *DeviceExecutor {
+func NewDeviceExecutor(ip string, port int, user, pass string, eb chan report.ExecutorEvent, onSuspend SuspendHandler) *DeviceExecutor {
+	logger.DebugAll("[Executor] 初始化 NewDeviceExecutor (%s)", ip)
 	return &DeviceExecutor{
 		IP:        ip,
 		Port:      port,
 		Username:  user,
 		Password:  pass,
 		Matcher:   matcher.NewStreamMatcher(),
+		EventBus:  eb,
 		OnSuspend: onSuspend,
 	}
 }
 
 // Connect 创建SSH长连接并初始化日志审计
-func (e *DeviceExecutor) Connect(ctx context.Context) error {
+func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) error {
+	logger.Debug("[Executor] 准备与设备 %s 建立SSH连接 (Timeout: %v)", e.IP, timeout)
 	cfg := sshutil.Config{
 		IP:       e.IP,
 		Port:     e.Port,
 		Username: e.Username,
 		Password: e.Password,
-		Timeout:  10 * time.Second,
+		Timeout:  timeout,
 	}
 
 	client, err := sshutil.NewSSHClient(ctx, cfg)
@@ -67,18 +72,21 @@ func (e *DeviceExecutor) Connect(ctx context.Context) error {
 	}
 	e.Client = client
 
-	devOutput, err := logger.NewDeviceOutput(e.IP) // changed
+	devOutput, err := logger.NewDeviceOutput(e.IP)
 	if err != nil {
+		logger.Debug("[Executor] 设备 %s 初始化日志文件失败: %v", e.IP, err)
 		e.Client.Close()
 		return err
 	}
 	e.Log = devOutput
+	logger.Debug("[Executor] 设备 %s 连接与日志挂载成功", e.IP)
 
 	return nil
 }
 
 // ExecutePlaybook 核心引擎方法：对该设备步进发送命令队列，并支持局部阻塞等待（配合 SuspendHandler）
-func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string) error {
+func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string, cmdTimeout time.Duration) error {
+	logger.Debug("[Executor] 设备 %s 开始执行 Playbook (%d 条)", e.IP, len(commands))
 	if e.Client == nil || e.Log == nil {
 		return fmt.Errorf("执行器未安全建连")
 	}
@@ -95,8 +103,8 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 	currentCmdIndex := -1 // 初始化状态: -1 表示还在探测第一个提示符
 	var streamBuffer string
 
-	// Timeout duration for waiting for command prompts
-	timeoutDuration := 30 * time.Second
+	// 等待命令提示符的超时时间
+	timeoutDuration := cmdTimeout
 	timer := time.NewTimer(timeoutDuration)
 	defer timer.Stop()
 
@@ -108,11 +116,18 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 
 	// 后台运行读操作，以便主流程能响应 timeout 和 ctx.Done()
 	go func() {
+		defer close(readCh)
 		for {
 			n, err := outReader.Read(buf)
-			readCh <- readResult{n: n, err: err}
+			// 注意：这里由于 readCh 缓冲为1，且上层 select 在提取数据时可能会超时返回或 ctx.Done 返回，
+			// 在退出 ExecutePlaybook 时如果 outReader 阻塞，此协程可能会残留直到连接断开。
+			// 解决办法：在外部 Close 调用或 EOF 时自动解绑，同时 select 写入使用 default 丢弃以防长期死锁。
+			select {
+			case readCh <- readResult{n: n, err: err}:
+			case <-ctx.Done():
+				return
+			}
 			if err != nil {
-				close(readCh)
 				return
 			}
 		}
@@ -124,45 +139,53 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timer.C:
+			logger.Debug("[Executor] 设备 %s 读取提示符超时 (index=%d)", e.IP, currentCmdIndex)
 			// Timeout triggered
-			logger.Warn("[%s] ====== [等待超时] 命令无回显或提示符超时 (30s) ======", e.IP)
-
 			var failedCmd string
 			if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
 				failedCmd = commands[currentCmdIndex]
 			}
 
-			// Report to interceptor
+			if e.EventBus != nil {
+				e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceError, Message: "Waiting for prompt Timeout (30s)", TotalCmd: len(commands), CmdIndex: currentCmdIndex}
+			}
+
+			// 汇报给拦截器
 			action := e.OnSuspend(e.IP, "Timeout Error: No prompt received within 30 seconds", failedCmd)
 			switch action {
 			case ActionAbort:
-				logger.Warn("[%s] ====== 用户选择中止 (Abort): 将断开连接 ======", e.IP)
+				if e.EventBus != nil {
+					e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceAbort, Message: "因超时被手动中止", TotalCmd: len(commands)}
+				}
 				return fmt.Errorf("设备 %s 的执行因超时被用户中止", e.IP)
 			case ActionSkip:
-				logger.Warn("[%s] ====== 用户选择跳过 (Skip): 丢弃该超时，进入下一条命令 ======", e.IP)
-				// Simulate prompt received to move to next command, and clear buffer
+				if e.EventBus != nil {
+					e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "跳过超时步骤，进入下一条", TotalCmd: len(commands)}
+				}
+				// 模拟接收到了提示符以便进入下一条命令，并清空缓冲区
 				streamBuffer = ""
 				if currentCmdIndex >= 0 {
 					currentCmdIndex++
 				}
-				timer.Reset(timeoutDuration) // Restart timer for next command or finishing up
+				timer.Reset(timeoutDuration) // 为下一条命令或结束操作重启计时器
 			case ActionContinue:
 				logger.Warn("[%s] ====== 用户选择继续 (Continue): 强制忽略并继续等待 ======", e.IP)
-				// Keep waiting
+				// 继续等待
 				timer.Reset(timeoutDuration)
 			}
 		case res, ok := <-readCh:
 			if !ok {
 				logger.Info("[%s] SSH 会话由于连接中断或完成已结束。", e.IP)
+				logger.DebugAll("[Executor] %s 读取流 readCh 已关闭", e.IP)
 				return nil
 			}
 
 			n, err := res.n, res.err
 
 			if n > 0 {
-				// We received data, reset the idle timeout timer
+				// 接收到数据，重置空闲超时计时器
 				if !timer.Stop() {
-					// Drain the channel if the timer had already fired but we didn't consume it yet
+					// 如果计时器已触发但尚未消费，则排空通道
 					select {
 					case <-timer.C:
 					default:
@@ -172,30 +195,46 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 
 				chunk := string(buf[:n])
 				streamBuffer += chunk
+				logger.DebugAll("[%s] [DEBUG STREAM] Received chunk (len=%d) | streamBuffer_len=%d", e.IP, n, len(streamBuffer))
 
 				lines := strings.Split(streamBuffer, "\n")
 				// 检查最后一行以外的完整回显行，查找 error 关键字
 				for i, line := range lines {
 					if i < len(lines)-1 {
-						if e.Matcher.MatchError(line) {
-							logger.Warn("[%s] ====== [命中异常规则] 挂起当前设备执行 ======", e.IP)
-							logger.Warn("[%s] 错误流内容: %s", e.IP, line)
-
-							// 触发外部回调执行暂停，将由外部引擎的通道控制该函数返回，形成单设备挂起效果
+						if matched, rule := e.Matcher.MatchErrorRule(line); matched {
 							var failedCmd string
 							if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
-								failedCmd = commands[currentCmdIndex] // 上一条发送的引起错误的命令
+								failedCmd = commands[currentCmdIndex]
 							}
 
+							if rule.Severity == matcher.SeverityWarning {
+								// 仅抛出警告事件并放行
+								if e.EventBus != nil {
+									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "警告: " + rule.Message + " (" + line + ")", TotalCmd: len(commands)}
+								}
+								logger.Warn("[%s] [告警放行] %s: %s", e.IP, rule.Name, rule.Message)
+								continue
+							}
+
+							// 如果是严重错误 (Critical)，则触发原始告警和阻断
+							if e.EventBus != nil {
+								e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceError, Message: "执行错误: " + line, TotalCmd: len(commands)}
+							}
+
+							// 触发外部回调执行暂停，将由外部引擎的通道控制该函数返回，形成单设备挂起效果
 							action := e.OnSuspend(e.IP, line, failedCmd)
 							switch action {
 							case ActionAbort:
-								logger.Warn("[%s] ====== 用户选择中止 (Abort): 将断开连接 ======", e.IP)
+								if e.EventBus != nil {
+									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceAbort, Message: "执行异常被手动中止", TotalCmd: len(commands)}
+								}
 								return fmt.Errorf("设备 %s 的执行被用户手动中止", e.IP)
 							case ActionSkip:
-								logger.Warn("[%s] ====== 用户选择跳过 (Skip): 丢弃该错误继续当前流程 ======", e.IP)
+								if e.EventBus != nil {
+									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "放行异常指令", TotalCmd: len(commands)}
+								}
 							case ActionContinue:
-								logger.Warn("[%s] ====== 用户选择继续 (Continue): 强制忽略并放行 ======", e.IP)
+								// Nothing to broadcast for simple continue
 							}
 
 							// 继续后清空缓冲区，避免二次重复报错
@@ -208,29 +247,84 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string)
 				// 将没有换行符的最后一部分留到 Buffer 中进行提示符识别
 				streamBuffer = lines[len(lines)-1]
 
+				// 检测是否由于回显过长触发了终端分页符（如 ---- More ----）
+				if e.Matcher.IsPaginationPrompt(streamBuffer) {
+					logger.Debug("[%s] [自动翻页] 截获终端分页拦截符(More)，自动下发空格放行...", e.IP)
+					e.Client.SendRawBytes([]byte(" ")) // 向 SSH 隧道发送一个纯净空格
+					streamBuffer = ""                  // 清除已匹配的分页符避免残留污染
+					continue
+				}
+
 				// 处于等待主提示符阶段
 				if currentCmdIndex == -1 {
 					if e.Matcher.IsPrompt(streamBuffer) {
-						logger.Info("[%s] ==== [连接成功] 获得首个提示符，准备下发配置 ====", e.IP)
-						currentCmdIndex = 0
-
+						logger.Debug("[Executor] 设备 %s 等到首个提示符", e.IP)
+						logger.Info("[%s] ==== [连接成功] 获得首个提示符，下发预检探针(Wakeup Line) ====", e.IP)
+						currentCmdIndex = -2     // -2 implies waiting for pre-flight check response
 						e.Client.SendCommand("") // Wakeup Line 以稳定状态
+
+						// 这里不暴力清空整个 streamBuffer，仅清除最后一段（即刚才匹配的提示符）及之前产生的杂质
+						lines := strings.Split(streamBuffer, "\n")
+						if len(lines) > 0 {
+							streamBuffer = strings.Replace(streamBuffer, lines[len(lines)-1], "", 1)
+						}
+					}
+				} else if currentCmdIndex == -2 {
+					if e.Matcher.IsPrompt(streamBuffer) {
+						logger.Debug("[Executor] 设备 %s 预检完毕返回 Prompt", e.IP)
+						logger.Info("[%s] ==== [预检通过] 终端响应及时，正式进入配置下发循环 ====", e.IP)
+						currentCmdIndex = 0
+						// 严重 FIX：这里绝对不能清空 streamBuffer！
+						// 因为本次正好匹配到了 Prompt，清空后下一行的 if currentCmdIndex >= 0 判断中 e.Matcher.IsPrompt("") 将永远返回 false，
+						// 从而导致第一条指令(如 system-view)永远不被发送，最终引发 30s Timeout。
+						// streamBuffer = ""
+						logger.Debug("[%s] [DEBUG STATE] 预检通过，状态切入0，保留的 streamBuffer 长度=%d", e.IP, len(streamBuffer))
 					}
 				}
 
 				// 发送队列中的命令
 				if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
 					if e.Matcher.IsPrompt(streamBuffer) {
-						cmd := commands[currentCmdIndex]
-						logger.Info("[%s] >>> [发送命令]: %s", e.IP, cmd)
-						e.Client.SendCommand(cmd)
+						rawCmd := commands[currentCmdIndex]
+						cmdToSend := rawCmd
+						customDelay := timeoutDuration
+
+						// 解析内联行尾注释以获取特殊命令超时设定
+						if idx := strings.Index(rawCmd, "// nw-timeout="); idx != -1 {
+							cmdToSend = strings.TrimSpace(rawCmd[:idx])
+							timeoutStr := strings.TrimSpace(rawCmd[idx+len("// nw-timeout="):])
+							if pd, err := time.ParseDuration(timeoutStr); err == nil {
+								customDelay = pd
+								logger.Debug("[Executor] 设备 %s 命令拥有自定超时 %v => %s", e.IP, customDelay, cmdToSend)
+								logger.Info("[%s] === 检测到自定义长效命令超时控制 ===: %s -> %v", e.IP, cmdToSend, customDelay)
+							}
+						}
+
+						if e.EventBus != nil {
+							e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceCmd, Message: rawCmd, CmdIndex: currentCmdIndex + 1, TotalCmd: len(commands)}
+						}
+						// logger.Info("[%s] >>> [发送命令]: %s", e.IP, cmd) (Moved to GUI)
+						e.Client.SendCommand(cmdToSend)
+
+						// 重置自定义计时器并清空 Buffer
+						if !timer.Stop() {
+							select {
+							case <-timer.C:
+							default:
+							}
+						}
+						timer.Reset(customDelay)
+						logger.DebugAll("[%s] [DEBUG ACTION] 已执行发送动作，将 streamBuffer 人为清空防止污染。原长度=%d", e.IP, len(streamBuffer))
 						streamBuffer = "" // 发送命令后清空当前 Buffer，防止将上一步的提示符混到了接下来
 						currentCmdIndex++
+					} else {
+						logger.DebugAll("[%s] [DEBUG WAIT] currentCmd=%d，还在等待匹配 Prompt, 当前 buff 末尾：%s", e.IP, currentCmdIndex, streamBuffer)
 					}
 				} else if currentCmdIndex >= len(commands) {
 					// 任务完成，判断最后一条命令结果是否已回显出提示符
 					if e.Matcher.IsPrompt(streamBuffer) {
-						logger.Info("[%s] ==== [执行完成] 所有命令已下发完毕 ====", e.IP)
+						logger.Debug("[Executor] 设备 %s 命令全部下发完成", e.IP)
+						// logger.Info("[%s] ==== [执行完成] 所有命令已下发完毕 ====", e.IP)
 						return nil
 					}
 				}
@@ -255,34 +349,45 @@ func (e *DeviceExecutor) Close() {
 		e.Client.Close()
 	}
 	if e.Log != nil {
-		e.Log.Close() // this is now *DeviceOutput.Close
+		e.Log.Close()
 	}
 }
 
-// ExecuteCommandSync executes a single command synchronously and reads its output
-// until another prompt is found. This bypasses the Playbook queue system and is used for
-// interrogative commands like `display startup`.
-func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, timeout time.Duration) (string, error) {
+// ExecuteCommandSync 同步执行单条命令并读取其输出
+// 直到找到下一个提示符。这绕过了 Playbook 队列系统，用于
+// 像 `display startup` 这样的查询命令。
+func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, defaultTimeout time.Duration) (string, error) {
+	logger.Debug("[Executor] 设备 %s 进入同步交互模式: %s", e.IP, cmd)
 	if e.Client == nil || e.Log == nil {
 		return "", fmt.Errorf("执行器未安全建连")
 	}
 
-	// Prepare TeeReaders as normal execution
+	// 像正常执行一样准备 TeeReader
 	buf := make([]byte, 1024)
 	outReader := io.TeeReader(e.Client.Stdout, e.Log)
 
 	var outputBuffer strings.Builder
 	var streamBuffer string
 
-	// Ensure we wait for prompt first before sending if it's the very first command.
-	// But usually this function is called after the first prompt is seen.
+	cmdToSend := cmd
+	customTimeout := defaultTimeout
 
-	logger.Info("[%s] >>> [同步发送命令]: %s", e.IP, cmd)
-	if err := e.Client.SendCommand(cmd); err != nil {
+	// 解析内联行尾注释以获取特殊命令超时设定
+	if idx := strings.Index(cmd, "// nw-timeout="); idx != -1 {
+		cmdToSend = strings.TrimSpace(cmd[:idx])
+		timeoutStr := strings.TrimSpace(cmd[idx+len("// nw-timeout="):])
+		if pd, err := time.ParseDuration(timeoutStr); err == nil {
+			customTimeout = pd
+			logger.Info("[%s] === 检测到同步交互命令超时自定义控制 ===: %s -> %v", e.IP, cmdToSend, customTimeout)
+		}
+	}
+
+	logger.Info("[%s] >>> [同步发送命令]: %s", e.IP, cmdToSend)
+	if err := e.Client.SendCommand(cmdToSend); err != nil {
 		return "", fmt.Errorf("发送命令失败: %w", err)
 	}
 
-	timer := time.NewTimer(timeout)
+	timer := time.NewTimer(customTimeout)
 	defer timer.Stop()
 
 	type readResult struct {
@@ -292,17 +397,21 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, tim
 	readCh := make(chan readResult, 1)
 
 	go func() {
+		defer close(readCh)
 		for {
 			n, err := outReader.Read(buf)
-			readCh <- readResult{n: n, err: err}
+			select {
+			case readCh <- readResult{n: n, err: err}:
+			case <-ctx.Done():
+				return
+			}
 			if err != nil {
-				close(readCh)
 				return
 			}
 		}
 	}()
 
-	// Read loop
+	// 读取循环
 	for {
 		select {
 		case <-ctx.Done():
@@ -322,22 +431,46 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, tim
 					default:
 					}
 				}
-				timer.Reset(timeout)
+				timer.Reset(customTimeout)
 
 				chunk := string(buf[:n])
-				outputBuffer.WriteString(chunk) // Append for our full return value
+				outputBuffer.WriteString(chunk) // 追加以作为完整的返回值
 				streamBuffer += chunk
 
-				// Find prompt to finish execution
+				// 查找提示符以完成执行
 				lines := strings.Split(streamBuffer, "\n")
-				// Check the last segment without newline if it looks like a prompt
+
+				// Optional enhancement: During sync execution, verify if errors are warned vs critical.
+				for i, line := range lines {
+					if i < len(lines)-1 {
+						if matched, rule := e.Matcher.MatchErrorRule(line); matched {
+							if rule.Severity == matcher.SeverityWarning {
+								logger.Warn("[%s] [同步命令警告] %s: %s", e.IP, rule.Name, rule.Message)
+							} else {
+								// Sync execution typically expects pure strings to be parsed back, but a truly critical error warrants early exit
+								return outputBuffer.String(), fmt.Errorf("同步指令遇到 Critical 异常: %s", line)
+							}
+						}
+					}
+				}
+
+				// 检查没有换行符的最后一段是否看起来像提示符
 				lastSegment := lines[len(lines)-1]
+
+				// 对待同步交互，同样可能遇到分页符卡死
+				if e.Matcher.IsPaginationPrompt(lastSegment) {
+					logger.Debug("[%s] [同步自动翻页] 截获终端分页拦截符(More)，自动下发空格放行...", e.IP)
+					e.Client.SendRawBytes([]byte(" "))
+					streamBuffer = "" // 因为同步方法中 streamBuffer 的末尾就是 lastSegment
+					continue
+				}
+
 				if e.Matcher.IsPrompt(lastSegment) {
-					// Prompt found, execution of command is complete
+					// 找到提示符，命令执行完成
 					return outputBuffer.String(), nil
 				}
 
-				// Optional: Check if any previous lines were Prompts, but typically it shows up at the end.
+				// 可选：检查前面的行是否为提示符？但通常它出现在最后
 				streamBuffer = lastSegment
 			}
 
@@ -349,6 +482,6 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, tim
 			}
 		}
 
-		time.Sleep(100 * time.Millisecond) // Reduce CPU busy spinning
+		time.Sleep(100 * time.Millisecond) // 减少 CPU 忙等待
 	}
 }

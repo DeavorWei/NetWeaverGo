@@ -12,24 +12,24 @@ import (
 	"github.com/pkg/sftp"
 )
 
-// SFTPClient wraps the pkg/sftp client
+// SFTPClient 包装了 pkg/sftp 客户端
 type SFTPClient struct {
 	client *sftp.Client
 	ip     string
 }
 
-// NewSFTPClient initializes an SFTP connection over a fresh SSH connection.
-// Note: Many network devices (Huawei/H3C) reject opening an "sftp" subsystem channel
-// on an SSH connection that already has an active "shell" or "pty" channel.
-// Therefore, we must create a completely new SSH connection specifically for SFTP.
+// NewSFTPClient 在一个全新的 SSH 连接上初始化 SFTP 连接。
+// 注意：许多网络设备 (华为/华三) 拒绝在
+// 已经有活跃的 "shell" 或 "pty" 通道的 SSH 连接上打开 "sftp" 子系统通道。
+// 因此，我们必须专门为 SFTP 创建一个全新的 SSH 连接。
 func NewSFTPClient(ctx context.Context, cfg sshutil.Config) (*SFTPClient, error) {
-	// 1. Create a dedicated raw SSH connection without requesting PTY/Shell
+	// 1. 创建一个专用的原始 SSH 连接，不请求 PTY/Shell
 	sshClient, err := sshutil.NewRawSSHClient(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("SFTP专属SSH建连失败: %w", err)
 	}
 
-	// 2. Initialize the SFTP subsystem on this clean connection
+	// 2. 在这个干净的连接上初始化 SFTP 子系统
 	client, err := sftp.NewClient(sshClient.Client)
 	if err != nil {
 		sshClient.Close()
@@ -42,8 +42,8 @@ func NewSFTPClient(ctx context.Context, cfg sshutil.Config) (*SFTPClient, error)
 	}, nil
 }
 
-// DownloadFile downloads a file from the remote path to the local path.
-// It creates the local parent directories if they don't exist.
+// DownloadFile 从远程路径下载文件到本地路径。
+// 如果本地父目录不存在，将会自动创建。
 func (s *SFTPClient) DownloadFile(remotePath, localPath string) error {
 	remoteFile, err := s.client.Open(remotePath)
 	if err != nil {
@@ -70,7 +70,7 @@ func (s *SFTPClient) DownloadFile(remotePath, localPath string) error {
 	return nil
 }
 
-// Close closes the SFTP client
+// Close 关闭 SFTP 客户端
 func (s *SFTPClient) Close() error {
 	if s.client != nil {
 		return s.client.Close()
