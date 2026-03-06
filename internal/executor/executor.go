@@ -420,7 +420,7 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 			return outputBuffer.String(), fmt.Errorf("同步命令执行超时: %s", cmd)
 		case res, ok := <-readCh:
 			if !ok {
-				return outputBuffer.String(), fmt.Errorf("SSH 流已关闭: %w", res.err)
+				return outputBuffer.String(), fmt.Errorf("SSH 流已关闭")
 			}
 			n, err := res.n, res.err
 

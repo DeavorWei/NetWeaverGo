@@ -124,6 +124,11 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 	case EventDeviceError:
 		summary.Status = "Error"
 		summary.ErrorMsg = evt.Message
+		// 注意：Error 不是终态事件——后续引擎会根据用户或策略选择发出 Abort 或 Skip。
+		// 仅 Abort 和 Success 为终态，p.finished++ 统一在各自分支处理。
+		// 边界情况：如果 SSH 流关闭导致 ExecutePlaybook 直接返回 nil（未发 Abort），
+		// 引擎不会发 Success/Abort，finished 会少计 1。此类情况极罕见，可在 engine.worker
+		// 结束时补发兜底事件来解决（已记录为优化待办）。
 	case EventDeviceSkip:
 		summary.Status = "Warning"
 		summary.ErrorMsg = "Skip: " + evt.Message

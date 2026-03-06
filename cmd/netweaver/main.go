@@ -4,16 +4,18 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"io/fs"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
+	"github.com/NetWeaverGo/core"
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/engine"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/ui"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 func main() {
@@ -22,29 +24,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 提前加载全局配置（如果不存在则生成），由于日志系统初始化不在引擎内，后续日志路径也可以考虑受设置影响，但目前保持现状
-	settings, isNewSettings, err := config.LoadSettings()
-	if err != nil {
-		fmt.Printf("[配置/环境提示] %v\n", err)
-		os.Exit(0)
-	}
-
-	// 初始化全局随机数种子
-	rand.Seed(time.Now().UnixNano())
-
-	logger.Info("System", "-", `
-    _   __     __ _       __                           ______     
-   / | / /__  / /| |     / /__  ____ __   _____  _____/ ____/___  
-  /  |/ / _ \/ __/ | /| / / _ \/ __ '/ | / / _ \/ ___/ / __/ __ \ 
- / /|  /  __/ /_ | |/ |/ /  __/ /_/ /| |/ /  __/ /  / /_/ / /_/ / 
-/_/ |_/\___/\__/ |__/|__/\___/\__,_/ |___/\___/_/   \____/\____/  
-   
-              Go 并发网络自动化编排/配置集散部署工具
-                 NetWeaverGo - v1.0 Framework`)
-
-	isBackup := flag.Bool("b", false, "启动备份模式，自动下载交换机配置并忽略配置命令")
-	nonInteractive := flag.Bool("non-interactive", false, "无人值守模式：发生报错时自动执行 error_mode 策略且不挂起等待手动输入")
-	flag.BoolVar(nonInteractive, "ni", false, "同 --non-interactive，无人值守模式(简写)")
+	isCLI := flag.Bool("cli", false, "以纯命令行免 UI 模式运行 (用于服务器环境后台执行)")
+	isBackup := flag.Bool("b", false, "CLI模式：启动备份模式，自动下载交换机配置并忽略配置命令")
+	nonInteractive := flag.Bool("non-interactive", false, "CLI模式：无人值守模式：发生报错时自动执行 error_mode 策略且不挂起等待手动输入")
+	flag.BoolVar(nonInteractive, "ni", false, "CLI模式：同 --non-interactive，无人值守模式(简写)")
 
 	debugMode := flag.Bool("debug", false, "启用 DEBUG 级别日志输出到文件和控制台")
 	debugAllMode := flag.Bool("debugall", false, "启用全量且详细的 DEBUG 级别日志输出到文件和控制台")
@@ -54,12 +37,92 @@ func main() {
 	// 初始化日志全局状态
 	if *debugAllMode {
 		logger.EnableDebugAll = true
-		logger.EnableDebug = true // 开启全量则必定开启普通 debug
+		logger.EnableDebug = true
 	} else if *debugMode {
 		logger.EnableDebug = true
 	}
 
-	assets, commands, _, missingFiles, err := config.ParseOrGenerate(*isBackup)
+	if *isCLI || *isBackup || *nonInteractive {
+		runCLI(*isBackup, *nonInteractive)
+	} else {
+		runGUI()
+	}
+}
+
+func runGUI() {
+	logger.Info("System", "-", "正在初始化 Wails GUI 环境...")
+	appService := ui.NewAppService()
+
+	// 修正：修正嵌入文件系统的路径级联问题
+	// core.FrontendAssets 包含了 "frontend/dist" 这一层，我们需要提取其子 FS
+	assetsFS, err := fs.Sub(core.FrontendAssets, "frontend/dist")
+	if err != nil {
+		logger.Error("System", "-", "无法初始化嵌入资产子集: %v", err)
+		return
+	}
+
+	// 调试：打印资源列表，确保 index.html 存在于子 FS 根目录
+	logger.Info("System", "-", "--- [自检] 嵌入资源列表 ---")
+	fs.WalkDir(assetsFS, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		logger.Info("System", "-", "  > Asset File: %s (IsDir: %v)", path, d.IsDir())
+		return nil
+	})
+	logger.Info("System", "-", "--- [自检] 结束 ---")
+
+	app := application.New(application.Options{
+		Name:        "NetWeaverGo",
+		Description: "网络自动化巡检与动作集散引擎",
+		Services: []application.Service{
+			application.NewService(appService),
+		},
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(assetsFS),
+		},
+	})
+
+	// 通过 app.Window.NewWithOptions 创建窗口，使其注册到 app 实例中
+	// 注意：必须使用 app 的 WindowManager 方法，而非顶层 application.NewWindow()
+	// 后者仅构造对象但不会被 app 管理，导致 Run 时无窗口可显示
+	app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:            "NetWeaverGo Control Center",
+		BackgroundColour: application.NewRGB(15, 17, 23),
+		URL:              "/",
+		Width:            1440,
+		Height:           900,
+		DisableResize:    true,
+		MinWidth:         1440,
+		MinHeight:        900,
+		MaxWidth:         1440,
+		MaxHeight:        900,
+	})
+
+	logger.Info("System", "-", "正在启动 Wails 应用主循环...")
+	if err := app.Run(); err != nil {
+		logger.Error("System", "-", "GUI 应用程序崩溃或异常退出: %v", err)
+	}
+}
+
+func runCLI(isBackup bool, nonInteractive bool) {
+	settings, isNewSettings, err := config.LoadSettings()
+	if err != nil {
+		fmt.Printf("[配置/环境提示] %v\n", err)
+		os.Exit(0)
+	}
+
+	logger.Info("System", "-", `
+    _   __     __ _       __                           ______     
+   / | / /__  / /| |     / /__  ____ __   _____  _____/ ____/___  
+  /  |/ / _ \/ __/ | /| / / _ \/ __ '/ | / / _ \/ ___/ / __/ __ \ 
+ / /|  /  __/ /_ | |/ |/ /  __/ /_/ /| |/ /  __/ /  / /_/ / /_/ / 
+/_/ |_/\___/\__/ |__/|__/\___/\__,_/ |___/\___/_/   \____/\____/  
+   
+              Go 并发网络自动化编排/配置集散部署工具
+                 NetWeaverGo - v1.0 CLI Engine`)
+
+	assets, commands, _, missingFiles, err := config.ParseOrGenerate(isBackup)
 	if err != nil {
 		logger.Error("System", "-", "[系统错误] %v", err)
 		os.Exit(1)
@@ -79,7 +142,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !*isBackup {
+	if !isBackup {
 		if len(commands) == 0 {
 			logger.Error("System", "-", "[系统终止] 命令获取失败：需要至少通过文本配置一条待下发命令。")
 			os.Exit(1)
@@ -99,9 +162,9 @@ func main() {
 		cancel()
 	}()
 
-	ng := engine.NewEngine(assets, commands, settings, *nonInteractive)
+	ng := engine.NewEngine(assets, commands, settings, nonInteractive)
 
-	if *isBackup {
+	if isBackup {
 		ng.RunBackup(ctx)
 	} else {
 		ng.Run(ctx)

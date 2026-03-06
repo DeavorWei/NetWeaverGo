@@ -14,8 +14,9 @@ import (
 
 // SFTPClient 包装了 pkg/sftp 客户端
 type SFTPClient struct {
-	client *sftp.Client
-	ip     string
+	client    *sftp.Client
+	sshClient *sshutil.SSHClient // 保存底层 SSH 连接，以便 Close 时一并释放
+	ip        string
 }
 
 // NewSFTPClient 在一个全新的 SSH 连接上初始化 SFTP 连接。
@@ -41,8 +42,9 @@ func NewSFTPClient(ctx context.Context, cfg sshutil.Config) (*SFTPClient, error)
 	logger.Debug("SFTP", cfg.IP, "SFTP 子系统挂载成功")
 
 	return &SFTPClient{
-		client: client,
-		ip:     cfg.IP,
+		client:    client,
+		sshClient: sshClient, // 保存引用
+		ip:        cfg.IP,
 	}, nil
 }
 
@@ -76,11 +78,24 @@ func (s *SFTPClient) DownloadFile(remotePath, localPath string) error {
 	return nil
 }
 
-// Close 关闭 SFTP 客户端
+// Close 关闭 SFTP 客户端及其底层 SSH 连接，防止连接泄漏
 func (s *SFTPClient) Close() error {
-	logger.DebugAll("SFTP", s.ip, "正在关闭 SFTP Client")
+	logger.DebugAll("SFTP", s.ip, "正在关闭 SFTP Client 及底层 SSH 连接")
+	var firstErr error
+
+	// 先关闭 SFTP 协议层
 	if s.client != nil {
-		return s.client.Close()
+		if err := s.client.Close(); err != nil {
+			firstErr = err
+		}
 	}
-	return nil
+
+	// 再关闭底层 SSH 连接（修复：原实现遗漏此步骤导致连接泄漏）
+	if s.sshClient != nil {
+		if err := s.sshClient.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	return firstErr
 }

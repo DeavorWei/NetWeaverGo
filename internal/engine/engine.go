@@ -36,6 +36,9 @@ type Engine struct {
 	tracker  *report.ProgressTracker
 
 	failedBackups sync.Map // 记录备份失败的设备和原因
+
+	// CustomSuspendHandler 允许外部（如 Wails UI）注入自定义的异常挂起处理逻辑
+	CustomSuspendHandler executor.SuspendHandler
 }
 
 // NewEngine 初始化并行执行引擎
@@ -166,7 +169,12 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 		commandTimeout = 30 * time.Second
 	}
 
-	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, e.EventBus, e.handleSuspend)
+	suspendHandler := e.handleSuspend
+	if e.CustomSuspendHandler != nil {
+		suspendHandler = e.CustomSuspendHandler
+	}
+
+	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, e.EventBus, suspendHandler)
 	defer exec.Close()
 
 	e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceStart, TotalCmd: len(e.Commands), Message: "Connecting SSH..."}
@@ -347,6 +355,8 @@ func (e *Engine) handleSuspend(ip string, logLine string, cmd string) executor.E
 		cleanStr = strings.TrimSpace(strings.ToUpper(input))
 		switch cleanStr {
 		case "C":
+			return executor.ActionContinue
+		case "S":
 			return executor.ActionSkip
 		case "A":
 			return executor.ActionAbort
