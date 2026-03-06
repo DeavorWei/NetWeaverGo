@@ -4,23 +4,24 @@ export default {
     './index.html',
     './src/**/*.{vue,js,ts,jsx,tsx}',
   ],
+  darkMode: 'class', // 启用基于 class 的暗黑模式切换
   theme: {
     extend: {
       colors: {
-        // 深色系主色调
-        'bg-dark':    '#0f1117',
-        'bg-panel':   '#161b27',
-        'bg-card':    '#1a2236',
-        'bg-hover':   '#1e2a3f',
-        'border':     '#2a3a5c',
-        'accent':     '#3b82f6',
-        'accent-glow':'#60a5fa',
-        'success':    '#22c55e',
-        'warning':    '#f59e0b',
-        'error':      '#ef4444',
-        'text-primary':'#e2e8f0',
-        'text-secondary':'#94a3b8',
-        'text-muted':  '#64748b',
+        // 使用 CSS 变量以支持主题切换
+        'bg-dark':    'var(--bg-dark)',
+        'bg-panel':   'var(--bg-panel)',
+        'bg-card':    'var(--bg-card)',
+        'bg-hover':   'var(--bg-hover)',
+        'border':     'var(--border)',
+        'accent':     'var(--accent)',
+        'accent-glow':'var(--accent-glow)',
+        'success':    'var(--success)',
+        'warning':    'var(--warning)',
+        'error':      'var(--error)',
+        'text-primary':'var(--text-primary)',
+        'text-secondary':'var(--text-secondary)',
+        'text-muted':  'var(--text-muted)',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
