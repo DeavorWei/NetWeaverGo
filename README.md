@@ -1,80 +1,92 @@
-# NetWeaverGo Wails v3 前端集成设计方案
+# NetWeaverGo 项目架构及功能介绍书
 
-## 1. 架构概览与目标
+## 1. 项目概述
 
-当前 NetWeaverGo 是一套拥有强大并发调度能力和异常干预能力的 CLI 应用。
-引入 Wails v3 后，目标是将核心调度引擎 (`engine`) 与原本的控制台输入输出（`fmt/logger/bufio`）解耦，利用 Wails 的 Events 机制作为全双工的事件总线，利用 Bindings 方法作为前端对引擎的控制接口。
-
-**技术栈建议：**
-
-- **前端:** Vue 3 + TypeScript + Vite (TailwindCSS 或原生 CSS)
-- **后端:** Wails v3 (Go)
-- **前后端通信:** Wails Bindings 提供 RPC 调用；Wails Events 提供状态广播。
+**NetWeaverGo** 是一款基于 Go 语言开发的并发网络自动化编排与配置集散工具。它专为网络工程师设计，旨在通过自动化手段批量管理网络设备（如交换机、路由器），支持大规模并发执行命令、配置备份以及智能异常干预。项目采用现代化的 **Wails v3** 框架，实现了高性能后端与美观前端 GUI 的完美结合。
 
 ---
 
-## 2. 核心挑战与解决方案
+## 2. 系统架构
 
-### 2.1 阻塞式的异常干预 ([handleSuspend](file:///d:/Document/GO/NetWeaverGo/internal/engine/engine.go#288-357) 改造)
+项目采用前后端分离的混合应用架构：
 
-**现状:** [executor.go](file:///d:/Document/GO/NetWeaverGo/internal/executor/executor.go) 发生严重报错时，调用回调函数 [handleSuspend(ip, logLine, cmd) ErrorAction](file:///d:/Document/GO/NetWeaverGo/internal/engine/engine.go#288-357)，该函数在 [engine.go](file:///d:/Document/GO/NetWeaverGo/internal/engine/engine.go) 中通过获得全局 `promptMu` 互斥锁，阻塞地从标准输入读取用户的动作 (`C/S/A`)。
-**Wails 方案:** 必须将标准输入的阻塞改造为“事件阻塞”。
+### 2.1 前端架构 (Frontend)
 
-1. 后端维护一个全局（或由引擎持有）的交互状态管理器，如 `suspendChannels := map[string]chan ErrorAction{}`。
-2. 当发生异常时，[handleSuspend](file:///d:/Document/GO/NetWeaverGo/internal/engine/engine.go#288-357) 首先向前端发送广播事件 `Emit("engine:suspend_required", SuspendPayload{IP:..., Error:...})`。
-3. [handleSuspend](file:///d:/Document/GO/NetWeaverGo/internal/engine/engine.go#288-357) 通过 `<-suspendChannels[ip]` 陷入阻塞等待。
-4. 前端展示 Modal 对话框让用户选择，并调用暴露的 Wails 绑定函数 `ResolveSuspend(ip, action)`。
-5. 该函数内部寻址到对应的 channel，将 action 送入，解锁挂起的设备 Goroutine。
+- **技术栈**: Vue 3 + TypeScript + Vite + Tailwind CSS。
+- **核心组件**:
+  - `Devices.vue`: 资产设备管理界面。
+  - `Dashboard.vue`: 任务概览与运行统计。
+  - `Tasks.vue`: 任务下发控制中心。
+- **通信机制**: 通过 Wails 提供的 Bindings 与 Go 后端进行 RPC 调用，并监听后端推送的实时事件（如任务进度、设备回显）。
 
-### 2.2 日志与进度回传 (`ProgressTracker` 与 `EventBus` 改造)
+### 2.2 后端架构 (Internal)
 
-**现状:** [engine.go](file:///d:/Document/GO/NetWeaverGo/internal/engine/engine.go) 构建了 `EventBus chan report.ExecutorEvent`，交由 `report.ProgressTracker` 在终端利用 ANSI 控制符进行刷新渲染。
-**Wails 方案:** 
+后端代码位于 `internal/` 目录下，采用高度模块化的设计：
 
-1. 完全废弃基于终端控制符的 `ProgressTracker` （或保留并仅在使用纯 CLI 标志启动时激活）。
-2. 在 Wails 环境下，初始化一个桥接 Goroutine 监听 `EventBus`。
-3. 将接收到的 `report.ExecutorEvent` 转化为 Wails 事件并发送给前端：`Emit("device:event", event)`。
-4. 前端 Vue 接管所有渲染逻辑（进度条更新、终端回显输出），实现每台设备的独立日志面板。
-
-### 2.3 生命周期与入口 ([main.go](file:///d:/Document/GO/NetWeaverGo/cmd/netweaver/main.go) 改造)
-
-**现状:** 解析命令行参数 -> 读取配置文件 -> 启动 Engine -> Wait。
-**Wails 方案:**
-
-1. 将核心 CLI 逻辑抽取。
-2. [main.go](file:///d:/Document/GO/NetWeaverGo/cmd/netweaver/main.go) 启动时可识别是否带有 `--cli` 等参数，如果没有，则初始化 `wails.Application`。
-3. 在 `OnStartup` 钩子中，准备好系统配置 `config.LoadSettings()` 等。
-4. 暴露一组 Wails 结构体方法 (如 `AppService`) 供前端调用：
-   - `GetAssets()`: 前端拉取资产列表展示。
-   - `StartEngine(assets, commands)`: 前端点击“开始”后，触发后端的并行下发。
-   - `StartBackup(assets)`: 启动备份模式。
-   - `SaveSettings(settings)`: 将页面上的设置保存至 `settings.yaml`。
+- **核心调度引擎 (Engine)**: 负责全局并发管理，通过 Worker Pool 模型控制任务分发，支持平滑连接抖动控制。
+- **执行单元 (Executor)**: 针对单台设备的任务执行器，管理 SSH 长连接生命周期，负责命令流的步进发送。
+- **通信模块 (sshutil & sftputil)**: 封装了底层 SSH 和 SFTP 协议操作，支持多种加密算法和连接保持。
+- **智能匹配器 (Matcher)**: 核心“智慧”所在，通过正则匹配实现：
+  - **提示符识别**: 自动识别不同厂商设备的终端提示符。
+  - **自动翻页**: 检测并处理 `---- More ----` 等分页符。
+  - **异常识别**: 动态识别命令执行过程中的 Critical 错误或 Warning 警告。
+- **配置管理 (Config)**: 支持 `inventory.csv`（资产池）、`config.txt`（命令集）及 `settings.yaml`（全局参数）的解析。
+- **日志与报告 (Logger & Report)**: 记录详细的系统日志及每台设备的操作回显，支持任务结束后导出 CSV 格式的执行清单。
+- **桥接层 (UI Service)**: 将后端核心功能暴露给 Wails 前端，处理复杂的挂起交互逻辑。
 
 ---
 
-## 3. 具体实施计划
+## 3. 核心功能特性
 
-### 第一阶段：准备工作与 Wails v3 脚手架初始化
+### 3.1 双模运行
 
-1. 在项目根目录外使用 Wails v3 CLI 生成 Vue3 模板项目。
-2. 将现有的 NetWeaverGo `internal` 目录迁移到新的 Wails 目录架构内。
-3. 保留原有的核心逻辑 `executor` 与 `engine` 保持纯 Go 环境不污染前端代码。
+- **GUI 模式**: 提供直观的操作界面，适合日常桌面端运维使用。
+- **CLI 模式**: 提供命令行参数支持（如 `-cli`, `-b`），适用于服务器后台调度或定时任务集成。
 
-### 第二阶段：重构 Engine 交互层
+### 3.2 智能自动化
 
-1. **新增 `WailsAdapter`:** 为 [Engine](file:///d:/Document/GO/NetWeaverGo/internal/engine/engine.go#24-40) 编写一层封装。在 Wails 模式下运行 [Engine](file:///d:/Document/GO/NetWeaverGo/internal/engine/engine.go#24-40) 时，不调用原始带 bufio 的 [handleSuspend](file:///d:/Document/GO/NetWeaverGo/internal/engine/engine.go#288-357)。
-2. **重写 [handleSuspend](file:///d:/Document/GO/NetWeaverGo/internal/engine/engine.go#288-357) 回调:** 通过注入闭包的方式，由 `WailsAdapter` 提供基于 channel 阻塞的 [handleSuspend](file:///d:/Document/GO/NetWeaverGo/internal/engine/engine.go#288-357)。
-3. **暴露 `AppService` Binding:** 实现获取配置、保存配置等方法。前端可以管理 `settings.yaml` 和 `config.txt` 内容，而不再强依赖配置文件读写。
+- **全自动交互**: 无需用户干预即可处理复杂的终端交互，包括登录探测、预检探针和命令步进。
+- **智能翻页**: 自动检测并模拟发送空格以越过设备的分页输出，确保长配置/查看命令能完整抓取。
 
-### 第三阶段：前端 UI 开发
+### 3.3 并发与安全控制
 
-1. **仪表盘 (Dashboard):** 展示设备清单 (IP/状态)、全局并发数、执行总览进度条。
-2. **任务配置页:** 可以在 UI 上直接编写/粘贴下发的指令流。
-3. **执行与实时监控面板:** 发起 `StartEngine`，挂载 `OnEvent("device:event")`，根据发回的数据渲染各设备的实时终端回放，状态显示排队/拉取/成功/异常。
-4. **干预弹窗 (Suspend Dialog):** 监听 `engine:suspend_required`，弹窗强制要求用户决策处理方式。
+- **高效并发**: 支持同时向数十甚至上百台设备下发配置，并发数可自定义。
+- **令牌桶限流**: 内置并发令牌管理，防止突发流量冲垮网络设备或管理栈。
 
-### 第四阶段：整合测试与编译
+### 3.4 交互式异常干预 (Pause-and-Resolve)
 
-1. 测试 Wails 环境下的日志文件输出 (`logs/` 目录挂载是否正常)。
-2. 测试并行 100+ 设备前端 UI 的性能压力（限制终端回放面板数量以节省内存）。
-3. 使用 `wails build` 输出多平台的可执行文件，交付最终产物。
+这是项目的独特亮点：当某台设备在下发过程中遇到报错时，系统可以**只挂起该设备的执行流**，并弹出交互窗口询问用户：
+
+- **Continue**: 强制发送下一条命令。
+- **Skip**: 跳过当前报错命令，标记为放行。
+- **Abort**: 立即切断该设备连接，终止后续操作。
+
+### 3.5 配置备份专项 (Backup Mode)
+
+支持专门的备份模式（`-b` 标志），系统会自动登录设备，解析 `display startup` 获取下次启动配置文件名，并通过 SFTP 协议安全地将配置文件抓回本地 `confBakup/` 目录。
+
+### 3.6 详细审计与回溯
+
+- 为每台设备生成独立的回显文件（`output/`）。
+- 系统级运行日志（`logs/app.log`）。
+- 自动化生成带色彩标记的控制台进度条及最终执行报告。
+
+---
+
+## 4. 目录结构预览
+
+```text
+NetWeaverGo/
+├── cmd/netweaver/        # 应用程序入口 (main.go)
+├── internal/             # 后端核心逻辑
+│   ├── config/           # 配置解析与生成
+│   ├── engine/           # 并发调度中心
+│   ├── executor/         # 设备任务执行器
+│   ├── logger/           # 日志系统
+│   ├── matcher/          # 正则匹配器（翻页/错误/提示符）
+│   ├── sshutil/          # SSH 通信工具
+│   └── ui/               # Wails 服务桥接
+├── frontend/             # Vue 3 前端源码
+├── core/                 # 资源嵌入管理 (Wails Assets)
+└── dist/                 # 编译产物存放目录（符合用户规则）
+```
