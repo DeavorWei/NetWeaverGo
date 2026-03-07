@@ -77,7 +77,7 @@
           </div>
           <!-- 终端日志区 -->
           <div
-            class="h-52 overflow-y-auto scrollbar-custom bg-[#0d1117] p-3 font-mono text-xs leading-relaxed"
+            class="h-52 overflow-y-auto scrollbar-custom bg-terminal-bg p-3 font-mono text-xs leading-relaxed"
             :ref="el => setTerminalRef(dev.ip, el)"
           >
             <div
@@ -188,11 +188,11 @@ function statusLabel(s: string) {
 }
 function logColor(log: string) {
   const l = log.toLowerCase()
-  if (l.includes('error') || l.includes('失败') || l.includes('错误')) return 'text-red-400'
-  if (l.includes('warn')  || l.includes('警告'))                        return 'text-yellow-400'
-  if (l.includes('success')|| l.includes('成功') || l.includes('完成')) return 'text-green-400'
-  if (log.startsWith('[')) return 'text-blue-400'
-  return 'text-gray-300'
+  if (l.includes('error') || l.includes('失败') || l.includes('错误')) return 'text-error'
+  if (l.includes('warn')  || l.includes('警告'))                        return 'text-warning'
+  if (l.includes('success')|| l.includes('成功') || l.includes('完成')) return 'text-success'
+  if (log.startsWith('[')) return 'text-info'
+  return 'text-text-muted'
 }
 
 async function startEngine() {

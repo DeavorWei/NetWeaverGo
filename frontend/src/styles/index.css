@@ -60,6 +60,9 @@
   --color-info: var(--color-info);
   --color-info-bg: var(--color-info-bg);
 
+  /* 终端/代码块背景 */
+  --color-terminal-bg: var(--color-terminal-bg);
+
   /* 自定义字体 */
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);

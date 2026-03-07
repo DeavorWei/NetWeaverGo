@@ -1,0 +1,84 @@
+/**
+ * CSS 重置样式
+ * CSS Reset Styles
+ * 
+ * 提供一致的跨浏览器基础样式
+ */
+
+/* 基础层样式 */
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html,
+  body,
+  #app {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    line-height: var(--leading-normal);
+    transition:
+      background-color 0.3s,
+      color 0.3s;
+  }
+
+  /* 移除列表样式 */
+  ul,
+  ol {
+    list-style: none;
+  }
+
+  /* 图片默认为块级元素 */
+  img,
+  picture,
+  video,
+  canvas,
+  svg {
+    display: block;
+    max-width: 100%;
+  }
+
+  /* 表单元素继承字体 */
+  input,
+  button,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  /* 移除按钮默认样式 */
+  button {
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  /* 链接样式 */
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* 表格边框合并 */
+  table {
+    border-collapse: collapse;
+    border-spacing: 0;
+  }
+}

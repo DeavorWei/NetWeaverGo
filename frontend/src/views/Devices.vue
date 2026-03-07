@@ -236,7 +236,7 @@
                   </button>
                   <button
                     @click="confirmDelete(idx)"
-                    class="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-500/10 rounded transition-all duration-200"
+                    class="p-1.5 text-text-muted hover:text-error hover:bg-error-bg rounded transition-all duration-200"
                     title="删除"
                   >
                     <svg
@@ -445,7 +445,7 @@
           </div>
           <div
             v-if="errorMessage"
-            class="px-3 py-2 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg"
+            class="px-3 py-2 text-sm text-error bg-error-bg border border-error/30 rounded-lg"
           >
             {{ errorMessage }}
           </div>
@@ -555,7 +555,7 @@
 
           <div
             v-if="batchErrorMessage"
-            class="px-3 py-2 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg"
+            class="px-3 py-2 text-sm text-error bg-error-bg border border-error/30 rounded-lg"
           >
             {{ batchErrorMessage }}
           </div>
@@ -593,10 +593,10 @@
       >
         <div class="p-6">
           <div class="flex items-center gap-3 mb-4">
-            <div class="p-2 bg-red-500/10 rounded-lg">
+            <div class="p-2 bg-error-bg rounded-lg">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                class="w-6 h-6 text-red-500"
+                class="w-6 h-6 text-error"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -627,7 +627,7 @@
             <button
               @click="deleteDevice"
               :disabled="isDeleting"
-              class="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-4 py-2 text-sm font-medium text-white bg-error hover:bg-error/90 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {{ isDeleting ? "删除中..." : "删除" }}
             </button>
@@ -1016,11 +1016,11 @@ async function deleteDevice() {
 // 协议徽章样式
 function getProtocolBadgeClass(protocol: string) {
   const classes: Record<string, string> = {
-    SSH: "bg-green-500/20 text-green-400",
-    SNMP: "bg-blue-500/20 text-blue-400",
-    TELNET: "bg-yellow-500/20 text-yellow-400",
+    SSH: "bg-success-bg text-success",
+    SNMP: "bg-info-bg text-info",
+    TELNET: "bg-warning-bg text-warning",
   };
-  return classes[protocol] || "bg-gray-500/20 text-gray-400";
+  return classes[protocol] || "bg-bg-hover text-text-muted";
 }
 
 onMounted(() => {

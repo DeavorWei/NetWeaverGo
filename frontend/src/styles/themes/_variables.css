@@ -163,6 +163,9 @@
   --scrollbar-track: transparent;
   --scrollbar-thumb: var(--primitive-gray-300);
   --scrollbar-thumb-hover: var(--primitive-gray-400);
+
+  /* 终端/代码块背景 */
+  --color-terminal-bg: var(--primitive-gray-900);
 }
 
 /* 黑暗主题 */
@@ -219,6 +222,9 @@
   --scrollbar-track: transparent;
   --scrollbar-thumb: #2a3a5c;
   --scrollbar-thumb-hover: #3a4a6c;
+
+  /* 终端/代码块背景 */
+  --color-terminal-bg: #0d1117;
 }
 
 /* ============================================
