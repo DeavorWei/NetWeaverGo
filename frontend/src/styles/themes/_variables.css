@@ -1,0 +1,271 @@
+/**
+ * 主题变量定义
+ * Theme Variables Definition
+ * 
+ * 使用 CSS 自定义属性实现主题切换
+ * 遵循设计令牌（Design Tokens）规范
+ */
+
+/* ============================================
+   第一层：原始颜色值（Primitive Tokens）
+   这些是基础颜色，不直接用于组件
+   ============================================ */
+:root {
+  /* 灰度色板 */
+  --primitive-gray-50: #f8fafc;
+  --primitive-gray-100: #f1f5f9;
+  --primitive-gray-200: #e2e8f0;
+  --primitive-gray-300: #cbd5e1;
+  --primitive-gray-400: #94a3b8;
+  --primitive-gray-500: #64748b;
+  --primitive-gray-600: #475569;
+  --primitive-gray-700: #334155;
+  --primitive-gray-800: #1e293b;
+  --primitive-gray-900: #0f172a;
+  --primitive-gray-950: #020617;
+
+  /* 蓝色色板（主色调） */
+  --primitive-blue-400: #60a5fa;
+  --primitive-blue-500: #3b82f6;
+  --primitive-blue-600: #2563eb;
+
+  /* 绿色色板（成功状态） */
+  --primitive-green-400: #4ade80;
+  --primitive-green-500: #22c55e;
+  --primitive-green-600: #16a34a;
+
+  /* 黄色色板（警告状态） */
+  --primitive-yellow-400: #fbbf24;
+  --primitive-yellow-500: #f59e0b;
+  --primitive-yellow-600: #d97706;
+
+  /* 红色色板（错误状态） */
+  --primitive-red-400: #f87171;
+  --primitive-red-500: #ef4444;
+  --primitive-red-600: #dc2626;
+
+  /* 靛蓝色板（辅助色） */
+  --primitive-indigo-400: #818cf8;
+  --primitive-indigo-500: #6366f1;
+  --primitive-indigo-600: #4f46e5;
+
+  /* 青色色板（辅助色） */
+  --primitive-sky-400: #38bdf8;
+  --primitive-sky-500: #0ea5e9;
+  --primitive-sky-600: #0284c7;
+
+  /* 间距令牌 */
+  --spacing-0: 0;
+  --spacing-1: 0.25rem; /* 4px */
+  --spacing-1-5: 0.375rem; /* 6px */
+  --spacing-2: 0.5rem; /* 8px */
+  --spacing-2-5: 0.625rem; /* 10px */
+  --spacing-3: 0.75rem; /* 12px */
+  --spacing-4: 1rem; /* 16px */
+  --spacing-5: 1.25rem; /* 20px */
+  --spacing-6: 1.5rem; /* 24px */
+  --spacing-8: 2rem; /* 32px */
+  --spacing-10: 2.5rem; /* 40px */
+  --spacing-12: 3rem; /* 48px */
+
+  /* 圆角令牌 */
+  --radius-sm: 0.25rem; /* 4px */
+  --radius-md: 0.375rem; /* 6px */
+  --radius-lg: 0.5rem; /* 8px */
+  --radius-xl: 0.75rem; /* 12px */
+  --radius-2xl: 1rem; /* 16px */
+  --radius-full: 9999px;
+
+  /* 字体令牌 */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  /* 字号令牌 */
+  --text-xs: 0.75rem; /* 12px */
+  --text-sm: 0.875rem; /* 14px */
+  --text-base: 1rem; /* 16px */
+  --text-lg: 1.125rem; /* 18px */
+  --text-xl: 1.25rem; /* 20px */
+  --text-2xl: 1.5rem; /* 24px */
+
+  /* 行高令牌 */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  /* 过渡时间 */
+  --transition-fast: 150ms;
+  --transition-normal: 200ms;
+  --transition-slow: 300ms;
+
+  /* 过渡曲线 */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* ============================================
+   第二层：语义化令牌（Semantic Tokens）
+   这些变量会根据主题变化
+   ============================================ */
+
+/* 默认主题（明亮模式） */
+:root,
+[data-theme="light"] {
+  /* 背景色 */
+  --color-bg-primary: var(--primitive-gray-50); /* 主背景 */
+  --color-bg-secondary: #ffffff; /* 次背景/面板 */
+  --color-bg-tertiary: var(--primitive-gray-100); /* 第三背景/卡片 */
+  --color-bg-hover: var(--primitive-gray-200); /* 悬停背景 */
+  --color-bg-active: var(--primitive-gray-300); /* 激活背景 */
+
+  /* 文字颜色 */
+  --color-text-primary: var(--primitive-gray-900); /* 主文字 */
+  --color-text-secondary: var(--primitive-gray-600); /* 次文字 */
+  --color-text-muted: var(--primitive-gray-400); /* 弱化文字 */
+  --color-text-inverse: #ffffff; /* 反色文字 */
+
+  /* 边框颜色 */
+  --color-border-default: var(--primitive-gray-200); /* 默认边框 */
+  --color-border-muted: var(--primitive-gray-100); /* 弱化边框 */
+  --color-border-focus: var(--primitive-blue-500); /* 聚焦边框 */
+
+  /* 强调色 */
+  --color-accent-primary: var(--primitive-blue-500); /* 主强调色 */
+  --color-accent-secondary: var(--primitive-blue-400); /* 次强调色 */
+  --color-accent-bg: rgba(59, 130, 246, 0.1); /* 强调色背景 */
+  --color-accent-glow: rgba(59, 130, 246, 0.3); /* 强调色光晕 */
+
+  /* 状态色 */
+  --color-success: var(--primitive-green-500);
+  --color-success-bg: rgba(34, 197, 94, 0.1);
+  --color-warning: var(--primitive-yellow-500);
+  --color-warning-bg: rgba(245, 158, 11, 0.1);
+  --color-error: var(--primitive-red-500);
+  --color-error-bg: rgba(239, 68, 68, 0.1);
+  --color-info: var(--primitive-sky-500);
+  --color-info-bg: rgba(14, 165, 233, 0.1);
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08);
+  --shadow-glow: 0 0 20px var(--color-accent-glow);
+  --shadow-inner-glow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+  /* 遮罩层 */
+  --overlay-bg: rgba(0, 0, 0, 0.4);
+  --overlay-blur-bg: rgba(255, 255, 255, 0.8);
+
+  /* 滚动条 */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: var(--primitive-gray-300);
+  --scrollbar-thumb-hover: var(--primitive-gray-400);
+}
+
+/* 黑暗主题 */
+[data-theme="dark"],
+.dark {
+  /* 背景色 */
+  --color-bg-primary: #0f1117; /* 主背景 */
+  --color-bg-secondary: #161b27; /* 次背景/面板 */
+  --color-bg-tertiary: #1a2236; /* 第三背景/卡片 */
+  --color-bg-hover: #1e2a3f; /* 悬停背景 */
+  --color-bg-active: #243044; /* 激活背景 */
+
+  /* 文字颜色 */
+  --color-text-primary: var(--primitive-gray-200); /* 主文字 */
+  --color-text-secondary: var(--primitive-gray-400); /* 次文字 */
+  --color-text-muted: var(--primitive-gray-500); /* 弱化文字 */
+  --color-text-inverse: var(--primitive-gray-900); /* 反色文字 */
+
+  /* 边框颜色 */
+  --color-border-default: #2a3a5c; /* 默认边框 */
+  --color-border-muted: #1e2a3f; /* 弱化边框 */
+  --color-border-focus: var(--primitive-blue-500); /* 聚焦边框 */
+
+  /* 强调色 */
+  --color-accent-primary: var(--primitive-blue-400); /* 主强调色 */
+  --color-accent-secondary: var(--primitive-blue-500); /* 次强调色 */
+  --color-accent-bg: rgba(96, 165, 250, 0.15); /* 强调色背景 */
+  --color-accent-glow: rgba(96, 165, 250, 0.5); /* 强调色光晕 */
+
+  /* 状态色 */
+  --color-success: var(--primitive-green-400);
+  --color-success-bg: rgba(74, 222, 128, 0.15);
+  --color-warning: var(--primitive-yellow-400);
+  --color-warning-bg: rgba(251, 191, 36, 0.15);
+  --color-error: var(--primitive-red-400);
+  --color-error-bg: rgba(248, 113, 113, 0.15);
+  --color-info: var(--primitive-sky-400);
+  --color-info-bg: rgba(56, 189, 248, 0.15);
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px var(--color-accent-glow);
+  --shadow-inner-glow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  /* 遮罩层 */
+  --overlay-bg: rgba(0, 0, 0, 0.6);
+  --overlay-blur-bg: rgba(15, 17, 23, 0.8);
+
+  /* 滚动条 */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #2a3a5c;
+  --scrollbar-thumb-hover: #3a4a6c;
+}
+
+/* ============================================
+   第三层：组件级变量（Component Tokens）
+   可根据需要扩展
+   ============================================ */
+
+/* 卡片组件变量 */
+.card {
+  --card-bg: var(--color-bg-tertiary);
+  --card-border: var(--color-border-default);
+  --card-shadow: var(--shadow-card);
+  --card-radius: var(--radius-2xl);
+}
+
+/* 按钮组件变量 */
+.btn {
+  --btn-bg: var(--color-bg-tertiary);
+  --btn-text: var(--color-text-primary);
+  --btn-border: var(--color-border-default);
+  --btn-radius: var(--radius-lg);
+  --btn-shadow: var(--shadow-sm);
+}
+
+/* 输入框组件变量 */
+.input {
+  --input-bg: var(--color-bg-secondary);
+  --input-text: var(--color-text-primary);
+  --input-border: var(--color-border-default);
+  --input-placeholder: var(--color-text-muted);
+  --input-focus-border: var(--color-border-focus);
+  --input-radius: var(--radius-lg);
+}
+
+/* 弹窗组件变量 */
+.modal {
+  --modal-bg: var(--color-bg-secondary);
+  --modal-border: var(--color-border-default);
+  --modal-shadow: var(--shadow-xl);
+  --modal-radius: var(--radius-2xl);
+  --modal-overlay: var(--overlay-bg);
+}
+
+/* 导航栏组件变量 */
+.navbar {
+  --navbar-bg: var(--color-bg-secondary);
+  --navbar-border: var(--color-border-default);
+  --navbar-item-hover: var(--color-bg-hover);
+  --navbar-item-active: var(--color-accent-bg);
+}

@@ -96,14 +96,14 @@ const switchTab = (tab: 'port' | 'protocol') => {
       <!-- 控制栏：搜索和 Tabs -->
       <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
         <!-- Tabs -->
-        <div class="flex p-1 space-x-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-full md:w-auto">
+        <div class="flex p-1 space-x-1 bg-bg-tertiary rounded-xl w-full md:w-auto">
           <button
             @click="switchTab('port')"
             :class="[
               'w-full md:w-32 py-2 text-sm font-medium rounded-lg transition-all duration-200',
               currentTab === 'port' 
-                ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-400 shadow'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
+                ? 'bg-bg-secondary text-accent shadow'
+                : 'text-text-muted hover:text-text-primary hover:bg-bg-hover'
             ]"
           >
             常见端口
@@ -113,8 +113,8 @@ const switchTab = (tab: 'port' | 'protocol') => {
             :class="[
               'w-full md:w-32 py-2 text-sm font-medium rounded-lg transition-all duration-200',
               currentTab === 'protocol' 
-                ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-400 shadow'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
+                ? 'bg-bg-secondary text-accent shadow'
+                : 'text-text-muted hover:text-text-primary hover:bg-bg-hover'
             ]"
           >
             IP 协议号
@@ -124,55 +124,55 @@ const switchTab = (tab: 'port' | 'protocol') => {
         <!-- 全局搜索 -->
         <div class="relative w-full md:w-72">
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg class="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+            <svg class="h-5 w-5 text-text-muted" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
             </svg>
           </div>
           <input
             v-model="searchQuery"
             type="text"
-            class="block w-full pl-10 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-xl leading-5 bg-white/60 dark:bg-slate-800/60 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm transition-colors duration-200 text-slate-800 dark:text-slate-200"
+            class="block w-full pl-10 pr-3 py-2 border border-border rounded-xl leading-5 bg-bg-secondary/60 placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent sm:text-sm transition-colors duration-200 text-text-primary"
             placeholder="输入名称、端口或描述进行过滤..."
           />
         </div>
       </div>
 
       <!-- 常见端口表格视图 -->
-      <div v-if="currentTab === 'port'" class="flex-1 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white/30 dark:bg-slate-800/30">
-        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead class="bg-slate-50/50 dark:bg-slate-800/80 sticky top-0">
+      <div v-if="currentTab === 'port'" class="flex-1 overflow-auto rounded-xl border border-border bg-bg-secondary/30">
+        <table class="min-w-full divide-y divide-border">
+          <thead class="bg-bg-tertiary/80 sticky top-0">
             <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-24">端口</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-32">协议</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-32">名称</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">描述</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider w-24">端口</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider w-32">协议</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider w-32">名称</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">描述</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+          <tbody class="divide-y divide-border/50">
             <template v-if="filteredPorts.length > 0">
               <tr 
                 v-for="item in filteredPorts" 
                 :key="item.name + item.port"
-                class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors"
+                class="hover:bg-bg-hover transition-colors"
               >
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-800 dark:text-slate-200">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-text-primary">
                   {{ item.port }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-accent-bg text-accent border border-accent/30">
                     {{ item.protocol }}
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-sky-600 dark:text-sky-400">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-info">
                   {{ item.name }}
                 </td>
-                <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                <td class="px-6 py-4 text-sm text-text-secondary">
                   {{ item.description }}
                 </td>
               </tr>
             </template>
             <tr v-else>
-              <td colspan="4" class="px-6 py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+              <td colspan="4" class="px-6 py-12 text-center text-sm text-text-muted">
                 未找到匹配的端口信息
               </td>
             </tr>
@@ -181,39 +181,39 @@ const switchTab = (tab: 'port' | 'protocol') => {
       </div>
 
       <!-- IP协议号表格视图 -->
-      <div v-if="currentTab === 'protocol'" class="flex-1 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white/30 dark:bg-slate-800/30">
-        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead class="bg-slate-50/50 dark:bg-slate-800/80 sticky top-0">
+      <div v-if="currentTab === 'protocol'" class="flex-1 overflow-auto rounded-xl border border-border bg-bg-secondary/30">
+        <table class="min-w-full divide-y divide-border">
+          <thead class="bg-bg-tertiary/80 sticky top-0">
             <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-24">协议号</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-24">十六进制</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-32">名称</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">描述</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider w-24">协议号</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider w-24">十六进制</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider w-32">名称</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">描述</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+          <tbody class="divide-y divide-border/50">
             <template v-if="filteredProtocols.length > 0">
               <tr 
                 v-for="item in filteredProtocols" 
                 :key="item.name + item.number"
-                class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors"
+                class="hover:bg-bg-hover transition-colors"
               >
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-800 dark:text-slate-200">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-text-primary">
                   {{ item.number }}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400 font-mono">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-text-muted font-mono">
                   0x{{ item.hex }}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-teal-600 dark:text-teal-400">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-success">
                   {{ item.name }}
                 </td>
-                <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                <td class="px-6 py-4 text-sm text-text-secondary">
                   {{ item.description }}
                 </td>
               </tr>
             </template>
             <tr v-else>
-              <td colspan="4" class="px-6 py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+              <td colspan="4" class="px-6 py-12 text-center text-sm text-text-muted">
                 未找到匹配的协议信息
               </td>
             </tr>

@@ -291,37 +291,37 @@ const v6SubnetEvaluation = computed(() => {
 
 <template>
   <div class="space-y-6 md:space-y-8">
-    <section class="glass-panel p-5 md:p-8 rounded-2xl shadow-lg border border-white/50 bg-white dark:bg-slate-800/40 backdrop-blur-md">
-      <h2 class="heading-sub mb-4 md:mb-6 flex items-center">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <section class="bg-bg-secondary border border-border rounded-2xl shadow-card p-5 md:p-8 backdrop-blur-md">
+      <h2 class="text-base font-semibold text-text-primary mb-4 md:mb-6 flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
         </svg>
         IPv6 参数输入
       </h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="flex flex-col gap-2 relative">
-          <label class="label-base">IPv6 地址</label>
+        <div class="flex flex-col gap-2">
+          <label class="text-sm font-medium text-text-secondary">IPv6 地址</label>
           <input 
             type="text" 
             v-model="ipv6Str" 
             placeholder="例如: 2001:db8::1" 
-            class="px-4 py-3 bg-white dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition-all w-full font-mono text-sm"
+            class="px-4 py-3 bg-bg-tertiary border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
           />
         </div>
-        <div class="flex flex-col gap-2 relative">
-          <label class="label-base">前缀长度 (/n)</label>
+        <div class="flex flex-col gap-2">
+          <label class="text-sm font-medium text-text-secondary">前缀长度 (/n)</label>
           <input 
             type="text" 
             v-model="prefixStr" 
             placeholder="例如: 64" 
-            class="px-4 py-3 bg-white dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition-all w-full font-mono"
+            class="px-4 py-3 bg-bg-tertiary border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
           />
         </div>
       </div>
       
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-slate-100 dark:border-slate-700/50">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-border">
           <div class="flex flex-col gap-2">
-            <label class="label-base flex items-center justify-between">
+            <label class="text-sm font-medium text-text-secondary flex items-center justify-between">
               子网划分: 目标新前缀
             </label>
             <div class="relative">
@@ -329,12 +329,12 @@ const v6SubnetEvaluation = computed(() => {
                 type="text" 
                 v-model="v6NewPrefixStr" 
                 placeholder="例如: 68" 
-                class="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none transition-all w-full font-mono"
+                class="px-4 py-3 bg-bg-tertiary border border-border rounded-xl focus:ring-2 focus:ring-success focus:border-success outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
               />
                <button 
                 v-if="v6NewPrefixStr" 
                 @click="v6NewPrefixStr = ''" 
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 transition-colors p-1"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-error transition-colors p-1"
                 title="清除输入"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -342,11 +342,11 @@ const v6SubnetEvaluation = computed(() => {
                 </svg>
               </button>
             </div>
-            <p class="text-hint mt-1">注意: 出于性能考虑，单次计算最多允许分配 16 位深度</p>
+            <p class="text-xs text-text-muted mt-1">注意: 出于性能考虑，单次计算最多允许分配 16 位深度</p>
           </div>
 
           <div class="flex flex-col gap-2">
-            <label class="label-base flex items-center justify-between">
+            <label class="text-sm font-medium text-text-secondary flex items-center justify-between">
               地址包含关系检查 (可选)
             </label>
             <div class="relative">
@@ -354,12 +354,12 @@ const v6SubnetEvaluation = computed(() => {
                 type="text" 
                 v-model="v6CheckIpStr" 
                 placeholder="在此输入待检查的 IPv6 地址" 
-                class="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none transition-all w-full font-mono text-sm"
+                class="px-4 py-3 bg-bg-tertiary border border-border rounded-xl focus:ring-2 focus:ring-success focus:border-success outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
               />
                <button 
                 v-if="v6CheckIpStr" 
                 @click="v6CheckIpStr = ''" 
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 transition-colors p-1"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-error transition-colors p-1"
                 title="清除输入"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -367,7 +367,7 @@ const v6SubnetEvaluation = computed(() => {
                 </svg>
               </button>
             </div>
-            <p v-if="inclusionCheck" :class="['text-xs font-semibold mt-1', inclusionCheck.isIncluded ? 'text-emerald-500' : 'text-red-500']">
+            <p v-if="inclusionCheck" :class="['text-xs font-semibold mt-1', inclusionCheck.isIncluded ? 'text-success' : 'text-error']">
               {{ inclusionCheck.message }}
             </p>
           </div>
@@ -377,7 +377,7 @@ const v6SubnetEvaluation = computed(() => {
 
     <!-- 错误提示 -->
     <transition name="fade">
-      <div v-if="evaluation.error" class="bg-red-50 text-red-600 border border-red-200 p-4 rounded-xl flex items-center shadow-sm">
+      <div v-if="evaluation.error" class="bg-error-bg text-error border border-error/30 p-4 rounded-xl flex items-center shadow-sm">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
@@ -386,7 +386,7 @@ const v6SubnetEvaluation = computed(() => {
     </transition>
     
     <transition name="fade">
-      <div v-if="v6SubnetEvaluation.error" class="bg-red-50 text-red-600 border border-red-200 p-4 rounded-xl flex items-center shadow-sm">
+      <div v-if="v6SubnetEvaluation.error" class="bg-error-bg text-error border border-error/30 p-4 rounded-xl flex items-center shadow-sm">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
@@ -397,22 +397,22 @@ const v6SubnetEvaluation = computed(() => {
 
    <!-- 划分子网结果展示 -->
     <transition name="fade">
-      <section v-if="v6SubnetEvaluation.subnets.length > 0" class="glass-panel p-5 md:p-8 rounded-2xl shadow-lg border border-white/50 bg-white dark:bg-slate-800/40 backdrop-blur-md">
+      <section v-if="v6SubnetEvaluation.subnets.length > 0" class="bg-bg-secondary border border-border rounded-2xl shadow-card p-5 md:p-8 backdrop-blur-md">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 md:mb-6 gap-3">
-          <h2 class="heading-sub flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <h2 class="text-base font-semibold text-text-primary flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
             </svg>
             IPv6 子网划分列表
           </h2>
           <div class="flex items-center gap-3">
-            <span class="text-sm font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/80 px-4 py-1.5 rounded-full border border-slate-200 dark:border-slate-600">
-              共划分出 <span class="text-indigo-600 dark:text-indigo-400 font-bold mx-1">{{ v6SubnetEvaluation.total.toLocaleString() }}</span> 个网段
+            <span class="text-sm font-medium text-text-secondary bg-bg-tertiary px-4 py-1.5 rounded-full border border-border">
+              共划分出 <span class="text-accent font-bold mx-1">{{ v6SubnetEvaluation.total.toLocaleString() }}</span> 个网段
             </span>
           </div>
         </div>
 
-        <div v-if="v6SubnetEvaluation.warning" class="bg-amber-50 text-amber-600 border border-amber-200 p-4 rounded-xl flex shadow-sm mb-5 text-sm items-start justify-between">
+        <div v-if="v6SubnetEvaluation.warning" class="bg-warning-bg text-warning border border-warning/30 p-4 rounded-xl flex shadow-sm mb-5 text-sm items-start justify-between">
           <div class="flex items-start">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -421,36 +421,36 @@ const v6SubnetEvaluation = computed(() => {
           </div>
         </div>
 
-        <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800/50 max-h-[500px] overflow-y-auto custom-scrollbar">
+        <div class="overflow-x-auto rounded-xl border border-border bg-bg-tertiary max-h-[500px] overflow-y-auto scrollbar-custom">
           <table class="w-full text-left border-collapse min-w-[600px]">
-             <thead class="sticky top-0 bg-slate-50 dark:bg-slate-800/95 backdrop-blur p-2 shadow-sm z-10 border-b border-slate-200 dark:border-slate-700">
+             <thead class="sticky top-0 bg-bg-tertiary backdrop-blur p-2 shadow-sm z-10 border-b border-border">
               <tr>
-                <th class="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-20">序号</th>
-                <th class="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">IPv6 网络号</th>
-                <th class="px-4 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-24">CIDR</th>
+                <th class="px-4 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider w-20">序号</th>
+                <th class="px-4 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">IPv6 网络号</th>
+                <th class="px-4 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider w-24">CIDR</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100 dark:divide-slate-700/80">
+            <tbody class="divide-y divide-border">
               <tr 
                 v-for="item in v6SubnetEvaluation.subnets" 
                 :key="item.index" 
                 :class="[
                   'transition-colors',
                   item.isIncluded 
-                    ? 'bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50' 
-                    : 'hover:bg-slate-50 dark:hover:bg-slate-700/60'
+                    ? 'bg-success-bg hover:bg-success-bg' 
+                    : 'hover:bg-bg-hover'
                 ]"
               >
-                <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 tabular-nums">
+                <td class="px-4 py-3 text-sm text-text-secondary tabular-nums">
                    <div class="flex items-center">
-                     <span v-if="item.isIncluded" class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+                     <span v-if="item.isIncluded" class="w-1.5 h-1.5 rounded-full bg-success mr-2 shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
                      {{ item.index }}
                    </div>
                 </td>
-                <td :class="['px-4 py-3 text-sm font-mono font-medium', item.isIncluded ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-200']">
+                <td :class="['px-4 py-3 text-sm font-mono font-medium', item.isIncluded ? 'text-success' : 'text-text-primary']">
                   {{ item.network }}
                 </td>
-                <td :class="['px-4 py-3 text-sm font-mono', item.isIncluded ? 'text-emerald-600 dark:text-emerald-500' : 'text-slate-700 dark:text-slate-300']">
+                <td :class="['px-4 py-3 text-sm font-mono', item.isIncluded ? 'text-success' : 'text-text-secondary']">
                   /{{ item.cidr }}
                 </td>
               </tr>
@@ -464,23 +464,23 @@ const v6SubnetEvaluation = computed(() => {
 
     <!-- 基础计算结果展示 -->
     <transition name="fade">
-      <section v-if="evaluation.records.length > 0" class="glass-panel p-5 md:p-8 rounded-2xl shadow-lg border border-white/50 bg-white dark:bg-slate-800/40 backdrop-blur-md">
-        <h2 class="heading-sub mb-4 md:mb-6 flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <section v-if="evaluation.records.length > 0" class="bg-bg-secondary border border-border rounded-2xl shadow-card p-5 md:p-8 backdrop-blur-md">
+        <h2 class="text-base font-semibold text-text-primary mb-4 md:mb-6 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
           </svg>
           分析结果
         </h2>
-        <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800/50">
+        <div class="overflow-x-auto rounded-xl border border-border bg-bg-tertiary">
           <table class="w-full text-left border-collapse">
             <tbody>
-              <tr v-for="(record, idx) in evaluation.records" :key="idx" class="border-b border-slate-100 dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors group">
-                <td class="px-3 md:px-6 py-3 md:py-4 text-sm md:text-base font-medium text-slate-600 dark:text-slate-400 w-[30%] sm:w-1/3">{{ record.label }}</td>
-                <td class="px-2 md:px-6 py-3 md:py-4 text-sm md:text-base text-slate-800 dark:text-slate-200 font-mono break-all">{{ record.value }}</td>
+              <tr v-for="(record, idx) in evaluation.records" :key="idx" class="border-b border-border last:border-b-0 hover:bg-bg-hover transition-colors group">
+                <td class="px-3 md:px-6 py-3 md:py-4 text-sm md:text-base font-medium text-text-secondary w-[30%] sm:w-1/3">{{ record.label }}</td>
+                <td class="px-2 md:px-6 py-3 md:py-4 text-sm md:text-base text-text-primary font-mono break-all">{{ record.value }}</td>
                 <td class="px-3 md:px-6 py-3 md:py-4 text-right w-16 md:w-24">
                   <button 
                     @click="copyText(record.value || '')" 
-                    class="text-xs text-indigo-500 hover:text-white hover:bg-indigo-500 border border-indigo-200 px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg transition-all md:opacity-0 group-hover:opacity-100 focus:opacity-100 shrink-0"
+                    class="text-xs text-accent hover:text-white hover:bg-accent border border-accent/30 px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg transition-all md:opacity-0 group-hover:opacity-100 focus:opacity-100"
                   >
                     复制
                   </button>
@@ -503,14 +503,11 @@ const v6SubnetEvaluation = computed(() => {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
-.dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #475569;
-}
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--scrollbar-thumb-hover);
 }
 
 .fade-enter-active,
