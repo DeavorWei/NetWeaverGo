@@ -13,11 +13,22 @@ import (
 
 // DeviceAsset 表示单台交换机的连接凭证信息
 type DeviceAsset struct {
-	IP       string
-	Port     int
-	Username string
-	Password string
+	IP       string `json:"ip"`
+	Port     int    `json:"port"`
+	Protocol string `json:"protocol"` // 连接协议：SSH/SNMP/TELNET
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
+
+// 协议默认端口映射
+var ProtocolDefaultPorts = map[string]int{
+	"SSH":     22,
+	"SNMP":    161,
+	"TELNET":  23,
+}
+
+// ValidProtocols 有效协议列表
+var ValidProtocols = []string{"SSH", "SNMP", "TELNET"}
 
 const (
 	inventoryFile = "inventory.csv"
@@ -90,26 +101,46 @@ func readInventory() ([]DeviceAsset, error) {
 	var devices []DeviceAsset
 
 	for i, row := range records[1:] {
+		// 兼容新旧格式：新格式5列(IP,Port,Protocol,Username,Password)，旧格式4列(IP,Port,Username,Password)
 		if len(row) < 4 {
-			return nil, fmt.Errorf("资产文件第 %d 行格式不匹配，必须包含 IP,Port,Username,Password", i+2)
+			return nil, fmt.Errorf("资产文件第 %d 行格式不匹配", i+2)
 		}
+
 		ip := strings.TrimSpace(row[0])
 		portStr := strings.TrimSpace(row[1])
-		username := strings.TrimSpace(row[2])
-		password := strings.TrimSpace(row[3])
+		var protocol, username, password string
+
+		// 判断是新旧格式
+		if len(row) >= 5 {
+			// 新格式：IP,Port,Protocol,Username,Password
+			protocol = strings.ToUpper(strings.TrimSpace(row[2]))
+			username = strings.TrimSpace(row[3])
+			password = strings.TrimSpace(row[4])
+		} else {
+			// 旧格式：IP,Port,Username,Password (兼容)
+			protocol = "SSH"
+			username = strings.TrimSpace(row[2])
+			password = strings.TrimSpace(row[3])
+		}
 
 		if ip == "" {
 			continue
 		}
 
+		// 校验协议有效性
+		if !isValidProtocol(protocol) {
+			protocol = "SSH"
+		}
+
 		port, err := strconv.Atoi(portStr)
 		if err != nil || port <= 0 {
-			port = 22
+			port = GetDefaultPort(protocol)
 		}
 
 		devices = append(devices, DeviceAsset{
 			IP:       ip,
 			Port:     port,
+			Protocol: protocol,
 			Username: username,
 			Password: password,
 		})
@@ -156,9 +187,9 @@ func generateInventoryTemplate() {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	writer.Write([]string{"IP", "Port", "Username", "Password"})
-	writer.Write([]string{"192.168.1.10", "22", "admin", "Admin@123"})
-	writer.Write([]string{"192.168.1.11", "22", "root", "Root@456"})
+	writer.Write([]string{"IP", "Port", "Protocol", "Username", "Password"})
+	writer.Write([]string{"192.168.1.10", "22", "SSH", "admin", "Admin@123"})
+	writer.Write([]string{"192.168.1.11", "161", "SNMP", "public", "public"})
 }
 
 // generateConfigTemplate 生成默认的命令列表模板
@@ -176,4 +207,90 @@ quit
 	if err != nil {
 		fmt.Printf("无法创建命令模板文件: %v\n", err)
 	}
+}
+
+// isValidProtocol 检查协议是否有效
+func isValidProtocol(protocol string) bool {
+	for _, p := range ValidProtocols {
+		if p == protocol {
+			return true
+		}
+	}
+	return false
+}
+
+// GetDefaultPort 根据协议获取默认端口
+func GetDefaultPort(protocol string) int {
+	if port, ok := ProtocolDefaultPorts[strings.ToUpper(protocol)]; ok {
+		return port
+	}
+	return 22 // 默认 SSH 端口
+}
+
+// ValidateDevice 校验设备信息合法性
+func ValidateDevice(device DeviceAsset) error {
+	if device.IP == "" {
+		return fmt.Errorf("IP 地址不能为空")
+	}
+
+	// 简单的 IP 格式校验
+	parts := strings.Split(device.IP, ".")
+	if len(parts) != 4 {
+		return fmt.Errorf("IP 地址格式不正确")
+	}
+	for _, part := range parts {
+		num, err := strconv.Atoi(part)
+		if err != nil || num < 0 || num > 255 {
+			return fmt.Errorf("IP 地址格式不正确")
+		}
+	}
+
+	if device.Port <= 0 || device.Port > 65535 {
+		return fmt.Errorf("端口号必须在 1-65535 之间")
+	}
+
+	if !isValidProtocol(device.Protocol) {
+		return fmt.Errorf("无效的协议类型: %s", device.Protocol)
+	}
+
+	// 用户名和密码可选，不再强制要求
+
+	return nil
+}
+
+// SaveInventory 保存设备列表到 CSV 文件
+func SaveInventory(devices []DeviceAsset) error {
+	cwd, _ := os.Getwd()
+	path := filepath.Join(cwd, inventoryFile)
+
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("无法创建文件: %v", err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// 写入表头
+	if err := writer.Write([]string{"IP", "Port", "Protocol", "Username", "Password"}); err != nil {
+		return fmt.Errorf("写入表头失败: %v", err)
+	}
+
+	// 写入数据行
+	for _, device := range devices {
+		row := []string{
+			device.IP,
+			strconv.Itoa(device.Port),
+			device.Protocol,
+			device.Username,
+			device.Password,
+		}
+		if err := writer.Write(row); err != nil {
+			return fmt.Errorf("写入数据失败: %v", err)
+		}
+	}
+
+	logger.Info("Config", "-", "成功保存 %d 台设备到 %s", len(devices), inventoryFile)
+	return nil
 }
