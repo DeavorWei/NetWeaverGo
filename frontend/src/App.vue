@@ -1,117 +1,123 @@
 <template>
   <div
-    class="flex h-screen w-screen overflow-hidden bg-bg-primary text-text-primary font-sans"
+    class="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary text-text-primary font-sans"
   >
-    <!-- 侧边栏 -->
-    <aside
-      :class="[
-        'flex flex-col transition-all duration-300 ease-in-out bg-bg-secondary flex-shrink-0',
-        collapsed ? 'w-16' : 'w-56',
-      ]"
-    >
-      <!-- Logo 头部 -->
-      <div
-        class="flex items-center gap-3 px-4 py-5 h-16 overflow-hidden"
+    <!-- 自定义标题栏 -->
+    <TitleBar />
+
+    <!-- 主内容区域 -->
+    <div class="flex flex-1 min-h-0">
+      <!-- 侧边栏 -->
+      <aside
+        :class="[
+          'flex flex-col transition-all duration-300 ease-in-out bg-bg-secondary flex-shrink-0',
+          collapsed ? 'w-16' : 'w-56',
+        ]"
       >
+        <!-- Logo 头部 -->
         <div
-          class="flex-shrink-0 w-8 h-8 rounded-lg bg-accent flex items-center justify-center shadow-glow"
+          class="flex items-center gap-3 px-4 py-5 h-16 overflow-hidden"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-4 h-4 text-white"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <circle cx="12" cy="12" r="3" />
-            <path
-              d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"
-            />
-          </svg>
-        </div>
-        <div v-if="!collapsed" class="overflow-hidden animate-fade-in">
           <div
-            class="text-sm font-semibold text-text-primary whitespace-nowrap"
+            class="flex-shrink-0 w-8 h-8 rounded-lg bg-accent flex items-center justify-center shadow-glow"
           >
-            NetWeaverGo
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="w-4 h-4 text-white"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"
+              />
+            </svg>
           </div>
-          <div class="text-xs text-text-muted whitespace-nowrap">
-            Control Center
+          <div v-if="!collapsed" class="overflow-hidden animate-fade-in">
+            <div
+              class="text-sm font-semibold text-text-primary whitespace-nowrap"
+            >
+              NetWeaverGo
+            </div>
+            <div class="text-xs text-text-muted whitespace-nowrap">
+              Control Center
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- 导航菜单 -->
-      <nav class="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-        <button
-          v-for="item in menuItems"
-          :key="item.key"
-          @click="handleNav(item.key)"
-          :class="[
-            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group',
-            activeKey === item.key
-              ? 'bg-accent-bg text-accent border border-accent/30 shadow-glow'
-              : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary border border-transparent',
-          ]"
-        >
-          <span class="flex-shrink-0 w-5 h-5" v-html="item.icon"></span>
-          <span
-            v-if="!collapsed"
-            class="animate-fade-in whitespace-nowrap overflow-hidden flex-1 text-left"
-            >{{ item.label }}</span
+        <!-- 导航菜单 -->
+        <nav class="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
+          <button
+            v-for="item in menuItems"
+            :key="item.key"
+            @click="handleNav(item.key)"
+            :class="[
+              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group',
+              activeKey === item.key
+                ? 'bg-accent-bg text-accent border border-accent/30 shadow-glow'
+                : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary border border-transparent',
+            ]"
           >
-        </button>
-      </nav>
+            <span class="flex-shrink-0 w-5 h-5" v-html="item.icon"></span>
+            <span
+              v-if="!collapsed"
+              class="animate-fade-in whitespace-nowrap overflow-hidden flex-1 text-left"
+              >{{ item.label }}</span
+            >
+          </button>
+        </nav>
 
-      <!-- 折叠按钮 -->
-      <div class="p-3">
-        <button
-          @click="collapsed = !collapsed"
-          class="w-full flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-hover transition-all duration-200"
-          :title="collapsed ? '展开侧边栏' : '折叠侧边栏'"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-4 h-4 transition-transform duration-300"
-            :class="collapsed ? 'rotate-180' : ''"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+        <!-- 折叠按钮 -->
+        <div class="p-3">
+          <button
+            @click="collapsed = !collapsed"
+            class="w-full flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-hover transition-all duration-200"
+            :title="collapsed ? '展开侧边栏' : '折叠侧边栏'"
           >
-            <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />
-          </svg>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="w-4 h-4 transition-transform duration-300"
+              :class="collapsed ? 'rotate-180' : ''"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />
+            </svg>
+          </button>
+        </div>
+      </aside>
+
+      <!-- 主内容区 -->
+      <div class="flex flex-col flex-1 min-w-0">
+        <!-- 顶部导航栏 -->
+        <header
+          class="flex items-center justify-between px-6 h-16 bg-bg-secondary flex-shrink-0"
+        >
+          <div class="flex items-center gap-3">
+            <h1 class="text-base font-semibold text-text-primary">
+              {{ currentTitle }}
+            </h1>
+          </div>
+          <div class="flex items-center gap-4">
+            <!-- 使用主题切换组件 -->
+            <ThemeSwitch />
+            <div class="text-xs text-text-muted font-mono">v1.0</div>
+          </div>
+        </header>
+
+        <!-- 内容主体 -->
+        <main class="flex-1 overflow-auto scrollbar-custom bg-bg-primary p-6">
+          <router-view />
+        </main>
       </div>
-    </aside>
-
-    <!-- 主内容区 -->
-    <div class="flex flex-col flex-1 min-w-0">
-      <!-- 顶部导航栏 -->
-      <header
-        class="flex items-center justify-between px-6 h-16 bg-bg-secondary flex-shrink-0"
-      >
-        <div class="flex items-center gap-3">
-          <h1 class="text-base font-semibold text-text-primary">
-            {{ currentTitle }}
-          </h1>
-        </div>
-        <div class="flex items-center gap-4">
-          <!-- 使用主题切换组件 -->
-          <ThemeSwitch />
-          <div class="text-xs text-text-muted font-mono">v1.0</div>
-        </div>
-      </header>
-
-      <!-- 内容主体 -->
-      <main class="flex-1 overflow-auto scrollbar-custom bg-bg-primary p-6">
-        <router-view />
-      </main>
     </div>
   </div>
 </template>
@@ -120,6 +126,7 @@
 import { ref, computed, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import ThemeSwitch from "@/components/common/ThemeSwitch.vue";
+import TitleBar from "@/components/common/TitleBar.vue";
 import { useTheme } from "@/composables/useTheme";
 
 const router = useRouter();

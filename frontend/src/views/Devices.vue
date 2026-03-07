@@ -31,6 +31,34 @@
           <thead class="sticky top-0 z-10">
             <tr class="bg-bg-panel border-b border-border">
               <th
+                class="px-4 py-3.5 text-center text-xs font-semibold text-text-muted uppercase tracking-wider w-12"
+              >
+                <button
+                  @click="toggleSelectAll"
+                  class="flex items-center justify-center w-4 h-4 mx-auto rounded border transition-all duration-200"
+                  :class="[
+                    isAllSelected 
+                      ? 'bg-accent border-accent text-white' 
+                      : isIndeterminate 
+                        ? 'bg-accent border-accent text-white' 
+                        : 'border-border hover:border-accent'
+                  ]"
+                  :title="isAllSelected ? '取消全选' : '全选当前页'"
+                >
+                  <svg
+                    v-if="isAllSelected || isIndeterminate"
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="w-3 h-3"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </button>
+              </th>
+              <th
                 class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-12"
               >
                 #
@@ -181,8 +209,36 @@
             <tr
               v-for="(row, idx) in pagedData"
               :key="row.ip + idx"
-              class="hover:bg-bg-hover transition-colors duration-150 group"
+              :class="[
+                'transition-colors duration-150 group',
+                isSelected(idx) 
+                  ? 'bg-accent/8 hover:bg-accent/12' 
+                  : 'hover:bg-bg-hover'
+              ]"
             >
+              <td class="px-4 py-3 text-center">
+                <button
+                  @click="toggleSelect(idx)"
+                  class="flex items-center justify-center w-4 h-4 mx-auto rounded border transition-all duration-200"
+                  :class="[
+                    isSelected(idx)
+                      ? 'bg-accent border-accent text-white'
+                      : 'border-border hover:border-accent'
+                  ]"
+                >
+                  <svg
+                    v-if="isSelected(idx)"
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="w-3 h-3"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </button>
+              </td>
               <td class="px-4 py-3 text-text-muted font-mono text-xs">
                 {{ (page - 1) * pageSize + idx + 1 }}
               </td>
@@ -258,6 +314,33 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- 选中提示 -->
+      <div
+        v-if="selectedCount > 0"
+        class="flex items-center gap-2 px-5 py-2.5 bg-accent/5 border-t border-accent/20"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="w-4 h-4 text-accent"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <polyline points="9 11 12 14 22 4" />
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+        </svg>
+        <span class="text-sm text-accent font-medium">
+          已选中 <strong>{{ selectedCount }}</strong> 台设备
+        </span>
+        <button
+          @click="clearSelection"
+          class="ml-2 px-2 py-0.5 text-xs text-text-muted hover:text-text-primary hover:bg-bg-hover rounded transition-all"
+        >
+          清空选择
+        </button>
       </div>
 
       <!-- 分页 -->
@@ -508,6 +591,12 @@
         >
           <h3 class="text-lg font-semibold text-text-primary">
             批量修改{{ batchFieldLabel }}
+            <span
+              v-if="selectedCount > 0"
+              class="ml-2 text-sm font-normal text-accent"
+            >
+              ({{ selectedCount }} 台设备)
+            </span>
           </h3>
           <button
             @click="closeBatchModal"
@@ -528,7 +617,7 @@
         </div>
         <form @submit.prevent="saveBatchEdit" class="p-6 space-y-4">
           <p class="text-sm text-text-secondary">
-            将所有设备的{{ batchFieldLabel }}修改为：
+            将{{ selectedCount > 0 ? '选中的' : '所有' }}设备的{{ batchFieldLabel }}修改为：
           </p>
 
           <!-- 协议选择 -->
@@ -682,6 +771,9 @@ const data = ref<Device[]>([]);
 const page = ref(1);
 const pageSize = 10; // 修改为10条每页
 
+// 多选状态
+const selectedIndexes = ref<Set<number>>(new Set());
+
 // 弹窗状态
 const showModal = ref(false);
 const isEditing = ref(false);
@@ -744,6 +836,28 @@ const batchFieldLabel = computed(() => {
     password: "密码",
   };
   return labels[batchField.value] || "";
+});
+
+// 多选相关计算属性
+const selectedCount = computed(() => selectedIndexes.value.size);
+
+// 当前页是否全选
+const isAllSelected = computed(() => {
+  if (pagedData.value.length === 0) return false;
+  const startIdx = (page.value - 1) * pageSize;
+  return pagedData.value.every((_, idx) => 
+    selectedIndexes.value.has(startIdx + idx)
+  );
+});
+
+// 当前页是否部分选中
+const isIndeterminate = computed(() => {
+  if (pagedData.value.length === 0) return false;
+  const startIdx = (page.value - 1) * pageSize;
+  const selectedInPage = pagedData.value.filter((_, idx) => 
+    selectedIndexes.value.has(startIdx + idx)
+  ).length;
+  return selectedInPage > 0 && selectedInPage < pagedData.value.length;
 });
 
 // 监听 IP 输入，解析语法糖并验证
@@ -1028,8 +1142,18 @@ async function saveBatchEdit() {
   isBatchSaving.value = true;
 
   try {
-    // 复制设备列表
-    const updatedDevices = data.value.map((d) => {
+    // 判断是修改选中的设备还是所有设备
+    const indexesToModify = selectedCount.value > 0
+      ? new Set(selectedIndexes.value)  // 选中的索引
+      : new Set(data.value.keys());      // 所有索引
+
+    // 复制设备列表，只修改目标设备
+    const updatedDevices = data.value.map((d, idx) => {
+      // 不在修改范围内，保持原样
+      if (!indexesToModify.has(idx)) {
+        return d;
+      }
+
       const newDevice = { ...d };
       if (batchField.value === "protocol") {
         const newProtocol = batchValue.value as string;
@@ -1056,6 +1180,8 @@ async function saveBatchEdit() {
     );
     await loadDevices();
     closeBatchModal();
+    // 保存成功后清空选择
+    clearSelection();
   } catch (e: any) {
     batchErrorMessage.value = e.message || "保存失败";
   } finally {
@@ -1105,6 +1231,46 @@ function getProtocolBadgeClass(protocol: string) {
     TELNET: "bg-warning-bg text-warning",
   };
   return classes[protocol] || "bg-bg-hover text-text-muted";
+}
+
+// 多选相关函数
+
+// 判断某行是否被选中
+function isSelected(idx: number): boolean {
+  const actualIdx = (page.value - 1) * pageSize + idx;
+  return selectedIndexes.value.has(actualIdx);
+}
+
+// 切换单行选中状态
+function toggleSelect(idx: number) {
+  const actualIdx = (page.value - 1) * pageSize + idx;
+  if (selectedIndexes.value.has(actualIdx)) {
+    selectedIndexes.value.delete(actualIdx);
+  } else {
+    selectedIndexes.value.add(actualIdx);
+  }
+}
+
+// 切换全选/取消全选（当前页）
+function toggleSelectAll() {
+  const startIdx = (page.value - 1) * pageSize;
+  
+  if (isAllSelected.value) {
+    // 取消当前页所有选中
+    for (let i = 0; i < pagedData.value.length; i++) {
+      selectedIndexes.value.delete(startIdx + i);
+    }
+  } else {
+    // 选中当前页所有
+    for (let i = 0; i < pagedData.value.length; i++) {
+      selectedIndexes.value.add(startIdx + i);
+    }
+  }
+}
+
+// 清空所有选择
+function clearSelection() {
+  selectedIndexes.value.clear();
 }
 
 onMounted(() => {

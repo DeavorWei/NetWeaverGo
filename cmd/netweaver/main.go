@@ -75,6 +75,7 @@ func runGUI() {
 	app := application.New(application.Options{
 		Name:        "NetWeaverGo",
 		Description: "网络自动化巡检与动作集散引擎",
+		Icon:        core.AppIcon,
 		Services: []application.Service{
 			application.NewService(appService),
 		},
@@ -92,6 +93,7 @@ func runGUI() {
 		URL:              "/",
 		Width:            1440,
 		Height:           900,
+		Frameless:        true,
 		DisableResize:    true,
 		MinWidth:         1440,
 		MinHeight:        900,

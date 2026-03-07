@@ -38,6 +38,28 @@ echo.
 if not exist "dist" mkdir dist
 
 :: ============================================
+:: Step 0: Generate Windows Resource (Icon)
+:: ============================================
+echo [0/2] Generating Windows resource file for application icon...
+echo.
+
+cd /d "%PROJECT_ROOT%"
+
+:: Check if rsrc.exe exists
+if exist "rsrc.exe" (
+    echo [INFO] Found rsrc.exe, generating resource file...
+    rsrc.exe -ico "frontend\public\logo.ico" -o "cmd\netweaver\rsrc.syso"
+    if %ERRORLEVEL% neq 0 (
+        echo [WARN] Failed to generate resource file, continuing without custom icon...
+    ) else (
+        echo [SUCCESS] Resource file generated: cmd\netweaver\rsrc.syso
+    )
+) else (
+    echo [WARN] rsrc.exe not found, skipping icon embedding...
+)
+echo.
+
+:: ============================================
 :: Step 1: Build Frontend
 :: ============================================
 echo [1/2] Building frontend...
@@ -93,9 +115,13 @@ set GOOS=windows
 set GOARCH=amd64
 set CGO_ENABLED=1
 
+:: Clean build cache to ensure icon is re-embedded
+echo [INFO] Cleaning Go build cache for icon refresh...
+go clean -cache
+
 :: Build backend, output to dist directory
 echo [INFO] Building backend program...
-go build -ldflags="-s -w" -o "dist\netWeaverGo.exe" ./cmd/netweaver
+go build -a -ldflags="-s -w" -o "dist\netWeaverGo.exe" ./cmd/netweaver
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Backend build failed
     exit /b 1
