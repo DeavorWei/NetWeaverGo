@@ -173,3 +173,55 @@ func (a *AppService) StartEngineWails() error {
 
 	return nil
 }
+
+// StartBackupWails 启动核心备份动作（UI包裹层）
+func (a *AppService) StartBackupWails() error {
+	a.mu.Lock()
+	if a.isRunning {
+		a.mu.Unlock()
+		return fmt.Errorf("引擎正在运行中，请勿重复启动")
+	}
+	a.isRunning = true
+	a.mu.Unlock()
+
+	defer func() {
+		a.mu.Lock()
+		a.isRunning = false
+		a.mu.Unlock()
+	}()
+
+	settings, _, err := config.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	assets, _, _, _, err := config.ParseOrGenerate(true) // isBackup = true
+	if err != nil {
+		return err
+	}
+
+	if len(assets) == 0 {
+		return fmt.Errorf("资产池为空。请检查 csv 文件！")
+	}
+
+	// 初始化 Engine
+	ng := engine.NewEngine(assets, nil, settings, false)
+	ng.CustomSuspendHandler = a.WailsSuspendHandler()
+
+	// 桥接事件：监听底层的 EventBus 转发给前端 Vue
+	go func() {
+		for ev := range ng.EventBus {
+			a.wailsApp.Event.Emit("device:event", ev)
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 开始执行备份任务
+	ng.RunBackup(ctx)
+
+	a.wailsApp.Event.Emit("engine:finished")
+
+	return nil
+}

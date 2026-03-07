@@ -6,20 +6,33 @@
         <h2 class="text-xl font-semibold text-text-primary">任务执行大屏</h2>
         <p class="text-sm text-text-muted mt-1">并发连接设备并下发配置命令</p>
       </div>
-      <button
-        @click="startEngine"
-        :disabled="isRunning"
-        class="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-card"
-        :class="isRunning
-          ? 'bg-bg-card border border-border text-text-muted cursor-not-allowed'
-          : 'bg-accent hover:bg-accent-glow text-white border border-accent/30 hover:shadow-glow'"
-      >
-        <svg v-if="!isRunning" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-          <polygon points="5 3 19 12 5 21 5 3"/>
-        </svg>
-        <span v-if="isRunning" class="w-4 h-4 border-2 border-text-muted border-t-transparent rounded-full animate-spin"></span>
-        {{ isRunning ? '执行中...' : '开始下发命令' }}
-      </button>
+      <div class="flex gap-3">
+        <button
+          @click="startEngine"
+          :disabled="isRunning"
+          class="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-card"
+          :class="isRunning
+            ? 'bg-bg-card border border-border text-text-muted cursor-not-allowed'
+            : 'bg-accent hover:bg-accent-glow text-white border border-accent/30 hover:shadow-glow'"
+        >
+          <svg v-if="!isRunning" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          <span v-if="isRunning" class="w-4 h-4 border-2 border-text-muted border-t-transparent rounded-full animate-spin"></span>
+          {{ isRunning ? '执行中...' : '开始下发命令' }}
+        </button>
+        <button
+          @click="startBackup"
+          :disabled="isRunning"
+          class="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50 group"
+          :class="isRunning ? 'cursor-not-allowed opacity-50' : ''"
+        >
+          <svg v-if="!isRunning" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent transition-transform group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          备份交换机配置
+        </button>
+      </div>
     </div>
 
     <!-- 进度条 -->
@@ -119,7 +132,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 // @ts-ignore
-import { StartEngineWails, ResolveSuspend } from '../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
+import { StartEngineWails, StartBackupWails, ResolveSuspend } from '../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
 import { Events } from '@wailsio/runtime'
 
 const isRunning      = ref(false)
@@ -192,6 +205,19 @@ async function startEngine() {
     await StartEngineWails()
   } catch (err: any) {
     console.error('启动失败:', err)
+    isRunning.value = false
+  }
+}
+
+async function startBackup() {
+  if (isRunning.value) return
+  isRunning.value = true
+  progressPercent.value = 5
+  devices.value = []
+  try {
+    await StartBackupWails()
+  } catch (err: any) {
+    console.error('备份启动失败:', err)
     isRunning.value = false
   }
 }

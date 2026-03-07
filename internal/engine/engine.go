@@ -122,6 +122,19 @@ func (e *Engine) RunBackup(ctx context.Context) {
 	logger.Info("Engine", "-", "开始向 %d 台设备提取配置文件...", len(e.Devices))
 	logger.Info("Engine", "-", "=======================================")
 
+	e.tracker = report.NewProgressTracker(len(e.Devices))
+	e.tracker.EventBus = e.EventBus
+
+	// 启动后台事件收归与界面的渲染 (如果启用了 EventBus)
+	var uiWg sync.WaitGroup
+	if e.EventBus != nil {
+		uiWg.Add(1)
+		go func() {
+			defer uiWg.Done()
+			e.tracker.Listen(ctx)
+		}()
+	}
+
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, e.MaxWorkers)
 
@@ -130,11 +143,18 @@ func (e *Engine) RunBackup(ctx context.Context) {
 		sem <- struct{}{}
 		go func(device config.DeviceAsset) {
 			defer func() { <-sem }()
+			// 增加抖动，平滑 SSH 突发连接压力
+			time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 			e.backupWorker(ctx, device, &wg)
 		}(dev)
 	}
 
 	wg.Wait()
+
+	if e.EventBus != nil {
+		close(e.EventBus)
+		uiWg.Wait()
+	}
 
 	// 备份结束，汇总失败信息
 	logger.Info("Engine", "-", "\n========== [备份任务结束] ==========")
@@ -198,10 +218,15 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	defer wg.Done()
 
 	// 备份模块不初始化 ProgressTracker，因此 EventBus 必须设为 nil 以避免死锁。
-	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, nil, func(ip, log, cmd string) executor.ErrorAction {
+	// 修正：如果外部注入了 EventBus，则使用它。
+	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, e.EventBus, func(ip, log, cmd string) executor.ErrorAction {
 		return executor.ActionContinue
 	})
 	defer exec.Close()
+
+	if e.EventBus != nil {
+		e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceStart, Message: "Connecting SSH for Backup..."}
+	}
 
 	connectTimeout, err := time.ParseDuration(e.Settings.ConnectTimeout)
 	if err != nil {
@@ -211,6 +236,9 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	if err := exec.Connect(ctx, connectTimeout); err != nil {
 		logger.Error("Worker", dev.IP, "SSH建连失败: %v", err)
 		e.failedBackups.Store(dev.IP, fmt.Sprintf("SSH连通信失败: %v", err))
+		if e.EventBus != nil {
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: fmt.Sprintf("SSH 建连失败: %v", err)}
+		}
 		return
 	}
 
@@ -226,11 +254,19 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	if err != nil {
 		// 如果 SFTP 连接失败，则探测 sftp 是否开启
 		logger.Warn("Worker", dev.IP, "SFTP 挂载异常(底层异常: %v)，开始提取服务状态原因...", err)
+		if e.EventBus != nil {
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Message: fmt.Sprintf("SFTP 挂载异常: %v", err)}
+		}
 		out, _ := exec.ExecuteCommandSync(ctx, "disp cur | inc sftp", 10*time.Second)
+		errMsg := ""
 		if strings.Contains(strings.ToLower(out), "sftp server enable") {
-			e.failedBackups.Store(dev.IP, fmt.Sprintf("SFTP建连失败（服务已配置，可能存在其他连通性或权限问题）。底层报错: %v", err))
+			errMsg = fmt.Sprintf("SFTP建连失败（服务已配置，可能存在其他连通性或权限问题）。底层报错: %v", err)
 		} else {
-			e.failedBackups.Store(dev.IP, fmt.Sprintf("sftp服务未启动（配置文件无 sftp server enable）。底层报错: %v", err))
+			errMsg = fmt.Sprintf("sftp服务未启动（配置文件无 sftp server enable）。底层报错: %v", err)
+		}
+		e.failedBackups.Store(dev.IP, errMsg)
+		if e.EventBus != nil {
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: errMsg}
 		}
 		return
 	}
@@ -242,7 +278,11 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	exec.ExecuteCommandSync(ctx, "screen-length 0 temporary", 2*time.Second) // 尽可能的规避翻页问题
 	output, err := exec.ExecuteCommandSync(ctx, "display startup", 15*time.Second)
 	if err != nil {
-		e.failedBackups.Store(dev.IP, fmt.Sprintf("采集 startup 信息超时或失败: %v", err))
+		errMsg := fmt.Sprintf("采集 startup 信息超时或失败: %v", err)
+		e.failedBackups.Store(dev.IP, errMsg)
+		if e.EventBus != nil {
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: errMsg}
+		}
 		return
 	}
 
@@ -250,7 +290,11 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	re := regexp.MustCompile(`(?i)Next\s+startup\s+saved-configuration\s+file:\s+([^\s]+)`)
 	matches := re.FindStringSubmatch(output)
 	if len(matches) < 2 {
-		e.failedBackups.Store(dev.IP, "未能在 display startup 回显中寻找到下次启动配置文件声明。")
+		errMsg := "未能在 display startup 回显中寻寻找下次启动配置文件声明"
+		e.failedBackups.Store(dev.IP, errMsg)
+		if e.EventBus != nil {
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: errMsg}
+		}
 		return
 	}
 
@@ -264,7 +308,11 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	}
 
 	if cleanRemotePath == "NULL" || strings.TrimSpace(cleanRemotePath) == "" {
-		e.failedBackups.Store(dev.IP, "未配置下次启动配置文件(NULL)。")
+		errMsg := "未配置下次启动配置文件(NULL)"
+		e.failedBackups.Store(dev.IP, errMsg)
+		if e.EventBus != nil {
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: errMsg}
+		}
 		return
 	}
 
@@ -286,11 +334,18 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 
 	err = sftpClient.DownloadFile(cleanRemotePath, localPath)
 	if err != nil {
-		e.failedBackups.Store(dev.IP, fmt.Sprintf("SFTP 下载 %s 失败: %v", cleanRemotePath, err))
+		errMsg := fmt.Sprintf("SFTP 下载 %s 失败: %v", cleanRemotePath, err)
+		e.failedBackups.Store(dev.IP, errMsg)
+		if e.EventBus != nil {
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: errMsg}
+		}
 		return
 	}
 
 	logger.Info("Worker", dev.IP, "配置备份完成 -> %s", localPath)
+	if e.EventBus != nil {
+		e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceSuccess, Message: fmt.Sprintf("备份成功: %s", fileName)}
+	}
 }
 
 // handleSuspend 被传递到每一个 `executor`，一旦匹配到 error 正则则回调该函数，挂起当前设备的 Goroutine。

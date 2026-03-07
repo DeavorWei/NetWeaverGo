@@ -27,7 +27,7 @@ import * as application$0 from "../../../../wailsapp/wails/v3/pkg/application/mo
  */
 export function EnsureConfig() {
     let $resultPromise = /** @type {any} */($Call.ByID(2944363242));
-    let $typingPromise = /** @type {any} */($resultPromise.then(($result) => {
+    let $typingPromise = /** @type {any} */($resultPromise.then((/** @type {any} */ $result) => {
         $result[0] = $$createType1($result[0]);
         $result[1] = $$createType2($result[1]);
         $result[2] = $$createType2($result[2]);
@@ -43,7 +43,7 @@ export function EnsureConfig() {
  */
 export function LoadSettings() {
     let $resultPromise = /** @type {any} */($Call.ByID(3584902543));
-    let $typingPromise = /** @type {any} */($resultPromise.then(($result) => {
+    let $typingPromise = /** @type {any} */($resultPromise.then((/** @type {any} */ $result) => {
         return $$createType4($result);
     }));
     $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
@@ -77,6 +77,15 @@ export function ServiceStartup(options) {
  */
 export function StartEngineWails() {
     let $resultPromise = /** @type {any} */($Call.ByID(1094601454));
+    return $resultPromise;
+}
+
+/**
+ * StartBackupWails 启动核心备份动作（UI包裹层）
+ * @returns {Promise<void> & { cancel(): void }}
+ */
+export function StartBackupWails() {
+    let $resultPromise = /** @type {any} */($Call.ByName("github.com/NetWeaverGo/core/internal/ui.AppService.StartBackupWails"));
     return $resultPromise;
 }
 
