@@ -186,7 +186,7 @@ const switchTab = (tab: 'port' | 'protocol') => {
           <thead class="bg-bg-tertiary/80 sticky top-0">
             <tr>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider w-24">协议号</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider w-24">十六进制</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider w-28">十六进制</th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider w-32">名称</th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">描述</th>
             </tr>
