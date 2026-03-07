@@ -117,7 +117,7 @@ set CGO_ENABLED=1
 
 :: Clean build cache to ensure icon is re-embedded
 echo [INFO] Cleaning Go build cache for icon refresh...
-go clean -cache
+:: go clean -cache
 
 :: Build backend, output to dist directory
 echo [INFO] Building backend program...
