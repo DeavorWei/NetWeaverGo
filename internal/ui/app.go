@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -169,6 +170,32 @@ func (a *AppService) GetProtocolDefaultPorts() map[string]int {
 // GetValidProtocols 获取有效协议列表
 func (a *AppService) GetValidProtocols() []string {
 	return config.ValidProtocols
+}
+
+// ========== 命令管理 API ==========
+
+// GetCommands 获取命令列表
+func (a *AppService) GetCommands() ([]string, error) {
+	_, commands, _, _, err := config.ParseOrGenerate(false)
+	return commands, err
+}
+
+// SaveCommands 保存命令列表
+func (a *AppService) SaveCommands(commands []string) error {
+	// 过滤空行
+	var filtered []string
+	for _, cmd := range commands {
+		trimmed := strings.TrimSpace(cmd)
+		if trimmed != "" {
+			filtered = append(filtered, trimmed)
+		}
+	}
+
+	if len(filtered) == 0 {
+		return fmt.Errorf("命令列表不能为空")
+	}
+
+	return config.SaveCommands(filtered)
 }
 
 // ResolveSuspend 被前端调用（当用户在弹窗中选择动作后）

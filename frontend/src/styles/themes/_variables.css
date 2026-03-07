@@ -165,7 +165,9 @@
   --scrollbar-thumb-hover: var(--primitive-gray-400);
 
   /* 终端/代码块背景 */
-  --color-terminal-bg: var(--primitive-gray-900);
+  --color-terminal-bg: var(--primitive-gray-100);
+  /* 终端/代码块文字 */
+  --color-terminal-text: var(--primitive-gray-900);
 }
 
 /* 黑暗主题 */
@@ -225,6 +227,8 @@
 
   /* 终端/代码块背景 */
   --color-terminal-bg: #0d1117;
+  /* 终端/代码块文字 */
+  --color-terminal-text: var(--primitive-gray-200);
 }
 
 /* ============================================

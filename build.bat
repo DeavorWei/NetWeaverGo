@@ -120,4 +120,14 @@ for %%A in ("dist\netWeaverGo.exe") do (
     echo File size: !SIZE_MB! MB
 )
 
+:: ============================================
+:: Launch Application
+:: ============================================
+echo.
+echo [INFO] Launching application...
+cd /d "%PROJECT_ROOT%dist"
+start "" "netWeaverGo.exe"
+echo [SUCCESS] Application started
+echo.
+
 exit /b 0

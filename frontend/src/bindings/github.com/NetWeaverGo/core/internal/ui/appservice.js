@@ -9,7 +9,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import {Call as $Call, Create as $Create} from "@wailsio/runtime";
+import { Call as $Call, Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -26,15 +26,17 @@ import * as application$0 from "../../../../wailsapp/wails/v3/pkg/application/mo
  * @returns {Promise<[config$0.DeviceAsset[], string[], string[]]> & { cancel(): void }}
  */
 export function EnsureConfig() {
-    let $resultPromise = /** @type {any} */($Call.ByID(2944363242));
-    let $typingPromise = /** @type {any} */($resultPromise.then((/** @type {any} */ $result) => {
-        $result[0] = $$createType1($result[0]);
-        $result[1] = $$createType2($result[1]);
-        $result[2] = $$createType2($result[2]);
-        return $result;
-    }));
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+  let $resultPromise = /** @type {any} */ ($Call.ByID(2944363242));
+  let $typingPromise = /** @type {any} */ (
+    $resultPromise.then((/** @type {any} */ $result) => {
+      $result[0] = $$createType1($result[0]);
+      $result[1] = $$createType2($result[1]);
+      $result[2] = $$createType2($result[2]);
+      return $result;
+    })
+  );
+  $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
+  return $typingPromise;
 }
 
 /**
@@ -42,12 +44,14 @@ export function EnsureConfig() {
  * @returns {Promise<config$0.GlobalSettings | null> & { cancel(): void }}
  */
 export function LoadSettings() {
-    let $resultPromise = /** @type {any} */($Call.ByID(3584902543));
-    let $typingPromise = /** @type {any} */($resultPromise.then((/** @type {any} */ $result) => {
-        return $$createType4($result);
-    }));
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+  let $resultPromise = /** @type {any} */ ($Call.ByID(3584902543));
+  let $typingPromise = /** @type {any} */ (
+    $resultPromise.then((/** @type {any} */ $result) => {
+      return $$createType4($result);
+    })
+  );
+  $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
+  return $typingPromise;
 }
 
 /**
@@ -57,8 +61,8 @@ export function LoadSettings() {
  * @returns {Promise<void> & { cancel(): void }}
  */
 export function ResolveSuspend(ip, action) {
-    let $resultPromise = /** @type {any} */($Call.ByID(3815659806, ip, action));
-    return $resultPromise;
+  let $resultPromise = /** @type {any} */ ($Call.ByID(3815659806, ip, action));
+  return $resultPromise;
 }
 
 /**
@@ -67,8 +71,8 @@ export function ResolveSuspend(ip, action) {
  * @returns {Promise<void> & { cancel(): void }}
  */
 export function ServiceStartup(options) {
-    let $resultPromise = /** @type {any} */($Call.ByID(2632958766, options));
-    return $resultPromise;
+  let $resultPromise = /** @type {any} */ ($Call.ByID(2632958766, options));
+  return $resultPromise;
 }
 
 /**
@@ -76,8 +80,8 @@ export function ServiceStartup(options) {
  * @returns {Promise<void> & { cancel(): void }}
  */
 export function StartEngineWails() {
-    let $resultPromise = /** @type {any} */($Call.ByID(1094601454));
-    return $resultPromise;
+  let $resultPromise = /** @type {any} */ ($Call.ByID(1094601454));
+  return $resultPromise;
 }
 
 /**
@@ -85,8 +89,12 @@ export function StartEngineWails() {
  * @returns {Promise<void> & { cancel(): void }}
  */
 export function StartBackupWails() {
-    let $resultPromise = /** @type {any} */($Call.ByName("github.com/NetWeaverGo/core/internal/ui.AppService.StartBackupWails"));
-    return $resultPromise;
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.StartBackupWails",
+    )
+  );
+  return $resultPromise;
 }
 
 /**
@@ -94,8 +102,42 @@ export function StartBackupWails() {
  * @returns {Promise<executor$0.SuspendHandler> & { cancel(): void }}
  */
 export function WailsSuspendHandler() {
-    let $resultPromise = /** @type {any} */($Call.ByID(269849284));
-    return $resultPromise;
+  let $resultPromise = /** @type {any} */ ($Call.ByID(269849284));
+  return $resultPromise;
+}
+
+/**
+ * GetCommands 获取命令列表
+ * @returns {Promise<string[]> & { cancel(): void }}
+ */
+export function GetCommands() {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.GetCommands",
+    )
+  );
+  let $typingPromise = /** @type {any} */ (
+    $resultPromise.then((/** @type {any} */ $result) => {
+      return $$createType2($result);
+    })
+  );
+  $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
+  return $typingPromise;
+}
+
+/**
+ * SaveCommands 保存命令列表
+ * @param {string[]} commands
+ * @returns {Promise<void> & { cancel(): void }}
+ */
+export function SaveCommands(commands) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.SaveCommands",
+      commands,
+    )
+  );
+  return $resultPromise;
 }
 
 // Private type creation functions

@@ -2,8 +2,10 @@
   <div class="animate-slide-in space-y-5 h-full flex flex-col">
     <!-- 标题栏 + 操作按钮 -->
     <div class="flex items-center justify-between flex-shrink-0">
-      <div>
+      <div class="flex items-center gap-4">
         <p class="text-sm text-text-muted">并发连接设备并下发配置命令</p>
+        <!-- 命令编辑器入口 -->
+        <CommandEditor @saved="onCommandsSaved" />
       </div>
       <div class="flex gap-3">
         <button
@@ -133,6 +135,7 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 // @ts-ignore
 import { StartEngineWails, StartBackupWails, ResolveSuspend } from '../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
 import { Events } from '@wailsio/runtime'
+import CommandEditor from '../components/task/CommandEditor.vue'
 
 const isRunning      = ref(false)
 const progressPercent= ref(0)
@@ -193,6 +196,10 @@ function logColor(log: string) {
   if (l.includes('success')|| l.includes('成功') || l.includes('完成')) return 'text-success'
   if (log.startsWith('[')) return 'text-info'
   return 'text-text-muted'
+}
+
+function onCommandsSaved(commands: string[]) {
+  console.log('命令已更新，共', commands.length, '条')
 }
 
 async function startEngine() {

@@ -258,6 +258,25 @@ func ValidateDevice(device DeviceAsset) error {
 	return nil
 }
 
+// SaveCommands 保存命令列表到文件
+func SaveCommands(commands []string) error {
+	cwd, _ := os.Getwd()
+	path := filepath.Join(cwd, configFile)
+
+	var content strings.Builder
+	for _, cmd := range commands {
+		content.WriteString(cmd + "\n")
+	}
+
+	err := os.WriteFile(path, []byte(content.String()), 0666)
+	if err != nil {
+		return fmt.Errorf("无法保存命令文件: %v", err)
+	}
+
+	logger.Info("Config", "-", "成功保存 %d 条命令到 %s", len(commands), configFile)
+	return nil
+}
+
 // SaveInventory 保存设备列表到 CSV 文件
 func SaveInventory(devices []DeviceAsset) error {
 	cwd, _ := os.Getwd()
