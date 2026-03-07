@@ -3,8 +3,7 @@
     <!-- 页面标题 + 统计 -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-xl font-semibold text-text-primary">设备资产清单</h2>
-        <p class="text-sm text-text-muted mt-1">共 {{ data.length }} 台已注册设备</p>
+        <p class="text-sm text-text-muted">共 {{ data.length }} 台已注册设备</p>
       </div>
     </div>
 

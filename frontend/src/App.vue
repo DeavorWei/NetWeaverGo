@@ -5,13 +5,13 @@
     <!-- 侧边栏 -->
     <aside
       :class="[
-        'flex flex-col transition-all duration-300 ease-in-out border-r border-border bg-bg-panel flex-shrink-0',
+        'flex flex-col transition-all duration-300 ease-in-out bg-bg-panel flex-shrink-0',
         collapsed ? 'w-16' : 'w-56',
       ]"
     >
       <!-- Logo 头部 -->
       <div
-        class="flex items-center gap-3 px-4 py-5 border-b border-border h-16 overflow-hidden"
+        class="flex items-center gap-3 px-4 py-5 h-16 overflow-hidden"
       >
         <div
           class="flex-shrink-0 w-8 h-8 rounded-lg bg-accent flex items-center justify-center shadow-glow"
@@ -67,7 +67,7 @@
       </nav>
 
       <!-- 折叠按钮 -->
-      <div class="p-3 border-t border-border">
+      <div class="p-3">
         <button
           @click="collapsed = !collapsed"
           class="w-full flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-hover transition-all duration-200"
@@ -94,20 +94,12 @@
     <div class="flex flex-col flex-1 min-w-0">
       <!-- 顶部导航栏 -->
       <header
-        class="flex items-center justify-between px-6 h-16 border-b border-border bg-bg-panel flex-shrink-0"
+        class="flex items-center justify-between px-6 h-16 bg-bg-panel flex-shrink-0"
       >
         <div class="flex items-center gap-3">
           <h1 class="text-base font-semibold text-text-primary">
             {{ currentTitle }}
           </h1>
-          <span
-            class="hidden sm:flex items-center gap-1.5 text-xs text-text-muted bg-bg-card px-2.5 py-1 rounded-full border border-border"
-          >
-            <span
-              class="w-1.5 h-1.5 rounded-full bg-success animate-pulse-slow"
-            ></span>
-            在线
-          </span>
         </div>
         <div class="flex items-center gap-4">
           <button

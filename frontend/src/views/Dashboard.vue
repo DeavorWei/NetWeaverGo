@@ -2,8 +2,7 @@
   <div class="animate-slide-in space-y-6">
     <!-- 页面标题 -->
     <div>
-      <h2 class="text-xl font-semibold text-text-primary">系统概览</h2>
-      <p class="text-sm text-text-muted mt-1">当前配置状态与资产统计</p>
+      <p class="text-sm text-text-muted">当前配置状态与资产统计</p>
     </div>
 
     <!-- 统计卡片组 -->

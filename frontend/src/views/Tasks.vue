@@ -3,8 +3,7 @@
     <!-- 标题栏 + 操作按钮 -->
     <div class="flex items-center justify-between flex-shrink-0">
       <div>
-        <h2 class="text-xl font-semibold text-text-primary">任务执行大屏</h2>
-        <p class="text-sm text-text-muted mt-1">并发连接设备并下发配置命令</p>
+        <p class="text-sm text-text-muted">并发连接设备并下发配置命令</p>
       </div>
       <div class="flex gap-3">
         <button
