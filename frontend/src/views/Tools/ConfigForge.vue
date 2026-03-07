@@ -1,11 +1,5 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-const goHome = () => {
-  router.push('/')
-}
 
 const showSyntaxHelp = ref(false)
 const showUsageHelp = ref(false)
@@ -446,43 +440,8 @@ const copyAll = async () => {
       </div>
     </div>
 
-    <!-- Navbar with Glassmorphism -->
-    <header class="w-[90%] mx-auto mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 relative z-20 px-6 mt-6">
-      <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-sky-400 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
-          </svg>
-        </div>
-        <div>
-          <h1 class="heading-1 !text-2xl mt-0 mb-0">ConfigForge</h1>
-          <p class="text-hint mt-0.5">Version: 1.0 BuildDate: 20260225</p>
-        </div>
-      </div>
-      
-      <div class="flex items-center gap-3">
-        <!-- 返回首页按钮 -->
-        <button 
-          @click="goHome" 
-          class="inline-flex items-center justify-center px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm text-sm font-medium text-slate-700 dark:text-slate-300 bg-white/50 dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700 backdrop-blur-sm transition-all"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 -ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          返回首页
-        </button>
-        <!-- 使用简介按钮 -->
-        <button @click="showUsageHelp = true" class="inline-flex items-center justify-center px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm text-sm font-medium text-slate-700 dark:text-slate-300 bg-white/50 dark:bg-slate-800/50 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-700 backdrop-blur-sm transition-all cursor-help focus:outline-none" title="使用简介" aria-label="使用简介">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          帮助
-        </button>
-      </div>
-    </header>
-    
     <!-- Main Workspace with Margins and Gaps -->
-    <main class="flex-1 flex overflow-y-auto md:overflow-hidden flex-col md:flex-row p-2 sm:p-4 gap-2.5 z-10 w-[90%] mx-auto mb-4">
+    <main class="flex-1 flex overflow-y-auto md:overflow-hidden flex-col md:flex-row p-2 sm:p-4 gap-2.5 z-10">
       
       <!-- Column 1: 配置模版 -->
       <div 
@@ -660,6 +619,18 @@ const copyAll = async () => {
         </div>
       </div>
     </main>
+
+    <!-- 右下角悬浮帮助按钮 -->
+    <button 
+      @click="showUsageHelp = true" 
+      class="fixed bottom-6 right-6 z-40 w-12 h-12 flex items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 to-sky-500 hover:from-indigo-600 hover:to-sky-600 text-white shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-110 transition-all duration-300 cursor-help focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2"
+      title="使用简介"
+      aria-label="使用简介"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </button>
 
     <!-- 使用简介弹窗 -->
     <div v-if="showUsageHelp" class="fixed inset-0 z-50 flex items-center justify-center p-4">

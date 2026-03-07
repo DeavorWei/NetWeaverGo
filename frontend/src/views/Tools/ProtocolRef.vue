@@ -89,33 +89,9 @@ const switchTab = (tab: 'port' | 'protocol') => {
 </script>
 
 <template>
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-    <!-- 顶栏标题 -->
-    <div class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-      <div>
-        <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-teal-500 to-emerald-500 mb-2 drop-shadow-sm">
-          协议号与端口速查
-        </h1>
-        <p class="text-slate-600 dark:text-slate-400">
-          快速查询常见的通信端口、传输层及网络层协议号
-        </p>
-        <p class="text-hint mt-1">Version: 1.0 BuildDate: 20260228</p>
-      </div>
-      
-      <!-- 返回首页按钮 -->
-      <router-link 
-        to="/" 
-        class="inline-flex items-center justify-center px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm text-sm font-medium text-slate-700 dark:text-slate-300 bg-white/50 dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700 backdrop-blur-sm transition-all self-start md:self-auto"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 -ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-        </svg>
-        返回首页
-      </router-link>
-    </div>
-
+  <div class="h-full w-full flex flex-col relative bg-transparent">
     <!-- 主要内容区 -->
-    <div class="glass-panel rounded-2xl p-6 flex flex-col min-h-[600px] border border-slate-200/50 dark:border-slate-700/50">
+    <div class="flex-1 flex flex-col min-h-0">
       
       <!-- 控制栏：搜索和 Tabs -->
       <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
@@ -162,9 +138,9 @@ const switchTab = (tab: 'port' | 'protocol') => {
       </div>
 
       <!-- 常见端口表格视图 -->
-      <div v-if="currentTab === 'port'" class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white/30 dark:bg-slate-800/30">
+      <div v-if="currentTab === 'port'" class="flex-1 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white/30 dark:bg-slate-800/30">
         <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead class="bg-slate-50/50 dark:bg-slate-800/80">
+          <thead class="bg-slate-50/50 dark:bg-slate-800/80 sticky top-0">
             <tr>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-24">端口</th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-32">协议</th>
@@ -205,9 +181,9 @@ const switchTab = (tab: 'port' | 'protocol') => {
       </div>
 
       <!-- IP协议号表格视图 -->
-      <div v-if="currentTab === 'protocol'" class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white/30 dark:bg-slate-800/30">
+      <div v-if="currentTab === 'protocol'" class="flex-1 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white/30 dark:bg-slate-800/30">
         <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead class="bg-slate-50/50 dark:bg-slate-800/80">
+          <thead class="bg-slate-50/50 dark:bg-slate-800/80 sticky top-0">
             <tr>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-24">协议号</th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-24">十六进制</th>
