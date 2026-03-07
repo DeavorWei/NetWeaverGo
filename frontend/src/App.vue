@@ -49,10 +49,10 @@
         <button
           v-for="item in menuItems"
           :key="item.key"
-          @click="item.children ? toggleSubMenu(item.key) : handleNav(item.key)"
+          @click="handleNav(item.key)"
           :class="[
             'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group',
-            (activeKey === item.key || (item.children && item.children.some((c: any) => c.key === activeKey)))
+            activeKey === item.key
               ? 'bg-accent-bg text-accent border border-accent/30 shadow-glow'
               : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary border border-transparent',
           ]"
@@ -63,41 +63,7 @@
             class="animate-fade-in whitespace-nowrap overflow-hidden flex-1 text-left"
             >{{ item.label }}</span
           >
-          <svg
-            v-if="!collapsed && item.children"
-            class="w-4 h-4 transition-transform duration-200"
-            :class="openSubMenu === item.key ? 'rotate-180' : ''"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
         </button>
-
-        <!-- 子菜单 -->
-        <transition name="submenu">
-          <div
-            v-if="!collapsed && openSubMenu"
-            class="ml-4 pl-3 border-l border-border-default space-y-1"
-          >
-            <button
-              v-for="child in subMenuItems"
-              :key="child.key"
-              @click="handleNav(child.key)"
-              :class="[
-                'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200',
-                activeKey === child.key
-                  ? 'bg-accent-bg text-accent'
-                  : 'text-text-muted hover:bg-bg-hover hover:text-text-primary',
-              ]"
-            >
-              <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
-              {{ child.label }}
-            </button>
-          </div>
-        </transition>
       </nav>
 
       <!-- 折叠按钮 -->
@@ -164,7 +130,6 @@ useTheme();
 
 const collapsed = ref(false);
 const activeKey = ref("Dashboard");
-const openSubMenu = ref<string | null>(null);
 
 const menuItems = [
   {
@@ -191,23 +156,28 @@ const menuItems = [
     </svg>`,
   },
   {
-    key: "Tools",
-    label: "网络工具",
+    key: "NetworkCalc",
+    label: "IP/子网计算",
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </svg>`,
+  },
+  {
+    key: "ProtocolRef",
+    label: "协议端口速查",
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+    </svg>`,
+  },
+  {
+    key: "ConfigForge",
+    label: "配置生成器",
     icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
     </svg>`,
-    children: [
-      { key: "NetworkCalc", label: "IP/子网计算" },
-      { key: "ProtocolRef", label: "协议端口速查" },
-      { key: "ConfigForge", label: "配置生成器" },
-    ],
   },
 ];
-
-const subMenuItems = computed(() => {
-  const toolsItem = menuItems.find((item) => item.key === "Tools");
-  return toolsItem?.children || [];
-});
 
 const titleMap: Record<string, string> = {
   Dashboard: "概览仪表盘",
@@ -220,20 +190,11 @@ const titleMap: Record<string, string> = {
 
 const currentTitle = computed(() => titleMap[activeKey.value] ?? "NetWeaverGo");
 
-const toggleSubMenu = (key: string) => {
-  openSubMenu.value = openSubMenu.value === key ? null : key;
-};
-
 watch(
   () => route.name,
   (name) => {
     if (name) {
       activeKey.value = name as string;
-      // 如果是工具子页面，展开子菜单
-      const toolsItem = menuItems.find((item) => item.key === "Tools");
-      if (toolsItem?.children?.some((c: any) => c.key === name)) {
-        openSubMenu.value = "Tools";
-      }
     }
   },
   { immediate: true }
@@ -244,21 +205,3 @@ function handleNav(key: string) {
   router.push({ name: key });
 }
 </script>
-
-<style scoped>
-.submenu-enter-active,
-.submenu-leave-active {
-  transition: all 0.2s ease;
-  overflow: hidden;
-}
-.submenu-enter-from,
-.submenu-leave-to {
-  opacity: 0;
-  max-height: 0;
-}
-.submenu-enter-to,
-.submenu-leave-from {
-  opacity: 1;
-  max-height: 200px;
-}
-</style>
