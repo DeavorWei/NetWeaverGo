@@ -2,10 +2,59 @@
   <div class="animate-slide-in space-y-6">
     <!-- 页面标题 + 操作按钮 -->
     <div class="flex items-center justify-between">
-      <p class="text-sm text-text-muted">共 {{ data.length }} 台已注册设备</p>
+      <!-- 搜索组件 -->
+      <div class="flex items-center gap-2">
+        <select
+          v-model="searchType"
+          class="px-3 h-9 text-sm bg-bg-panel border border-border rounded-lg text-text-primary focus:border-accent focus:outline-none transition-colors cursor-pointer"
+        >
+          <option v-for="opt in searchOptions" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </option>
+        </select>
+        <div class="relative">
+          <input
+            v-model="searchQuery"
+            type="text"
+            :placeholder="'搜索' + currentSearchLabel + '...'"
+            class="w-64 pl-10 pr-10 h-9 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
+          />
+          <!-- 搜索图标 -->
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <!-- 重置按钮 -->
+          <button
+            v-if="searchQuery"
+            @click="resetSearch"
+            class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded transition-all"
+            title="清空搜索"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="w-4 h-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
       <button
         @click="openAddModal"
-        class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-accent hover:bg-accent/90 rounded-lg transition-all duration-200 shadow-sm"
+        class="flex items-center gap-2 px-4 h-9 text-sm font-medium text-white bg-accent hover:bg-accent/90 rounded-lg transition-all duration-200 shadow-sm"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -428,8 +477,8 @@
       <div
         class="flex items-center justify-between px-5 py-3.5 border-t border-border bg-bg-panel"
       >
-        <span class="text-xs text-text-muted"
-          >第 {{ page }} / {{ totalPages }} 页，共 {{ data.length }} 条</span
+      <span class="text-xs text-text-muted"
+          >第 {{ page }} / {{ totalPages }} 页，共 {{ filteredData.length }} 条</span
         >
         <div class="flex items-center gap-2">
           <button
@@ -955,6 +1004,16 @@ const data = ref<Device[]>([]);
 const page = ref(1);
 const pageSize = 10; // 修改为10条每页
 
+// 搜索相关
+const searchQuery = ref("");
+const searchType = ref<"group" | "tag" | "ip">("group");
+const searchOptions = [
+  { value: "group", label: "分组" },
+  { value: "ip", label: "IP地址" },
+  { value: "tag", label: "TAG" }
+];
+let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
 // 多选状态
 const selectedIndexes = ref<Set<number>>(new Set());
 
@@ -1009,12 +1068,47 @@ const form = ref<Device>({
 // 记录上次的协议，用于判断端口是否需要自动更新
 const lastProtocol = ref("SSH");
 
+// 当前搜索类型的标签
+const currentSearchLabel = computed(() => {
+  const opt = searchOptions.find(o => o.value === searchType.value);
+  return opt ? opt.label : "";
+});
+
+// 过滤后的设备数据（模糊搜索）
+const filteredData = computed(() => {
+  // 如果没有搜索内容，返回所有数据
+  if (!searchQuery.value.trim()) {
+    return data.value;
+  }
+
+  const query = searchQuery.value.toLowerCase().trim();
+  
+  return data.value.filter(device => {
+    let searchValue = "";
+    
+    switch (searchType.value) {
+      case "group":
+        searchValue = (device.group || "").toLowerCase();
+        break;
+      case "tag":
+        searchValue = (device.tag || "").toLowerCase();
+        break;
+      case "ip":
+        searchValue = (device.ip || "").toLowerCase();
+        break;
+    }
+    
+    // 模糊搜索：包含即可匹配
+    return searchValue.includes(query);
+  });
+});
+
 const totalPages = computed(() =>
-  Math.max(1, Math.ceil(data.value.length / pageSize)),
+  Math.max(1, Math.ceil(filteredData.value.length / pageSize)),
 );
 const pagedData = computed(() => {
   const start = (page.value - 1) * pageSize;
-  return data.value.slice(start, start + pageSize);
+  return filteredData.value.slice(start, start + pageSize);
 });
 
 // 批量编辑字段标签
@@ -1055,6 +1149,31 @@ watch(
     ipValidationError.value = validation.error;
   },
 );
+
+// 监听搜索输入，实现防抖
+watch(searchQuery, (_newQuery) => {
+  // 清除之前的定时器
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+  }
+
+  // 防抖：300ms 后执行搜索
+  searchTimeout = setTimeout(() => {
+    // 搜索时重置到第一页
+    page.value = 1;
+  }, 300);
+});
+
+// 监听搜索类型变化，重置页码
+watch(searchType, () => {
+  page.value = 1;
+});
+
+// 重置搜索
+function resetSearch() {
+  searchQuery.value = "";
+  page.value = 1;
+}
 
 // 验证单个 IP 地址格式
 function isValidIp(ip: string): boolean {
