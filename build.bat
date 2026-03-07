@@ -16,6 +16,24 @@ echo.
 set "PROJECT_ROOT=%~dp0"
 cd /d "%PROJECT_ROOT%"
 
+:: ============================================
+:: Kill running process to allow file overwrite
+:: ============================================
+echo [INFO] Checking for running netWeaverGo.exe process...
+tasklist /FI "IMAGENAME eq netWeaverGo.exe" 2>nul | find /I "netWeaverGo.exe" >nul
+if %ERRORLEVEL% equ 0 (
+    echo [INFO] Found running netWeaverGo.exe, attempting to terminate...
+    taskkill /F /IM "netWeaverGo.exe" >nul 2>&1
+    if %ERRORLEVEL% equ 0 (
+        echo [SUCCESS] Process terminated successfully
+    ) else (
+        echo [WARN] Failed to terminate process, continuing build...
+    )
+) else (
+    echo [INFO] No running netWeaverGo.exe process found
+)
+echo.
+
 :: Create dist directory if not exists
 if not exist "dist" mkdir dist
 
