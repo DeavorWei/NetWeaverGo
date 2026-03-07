@@ -951,7 +951,6 @@ async function saveBatchEdit() {
         const newProtocol = batchValue.value as string;
         const oldDefaultPort = protocolDefaultPorts.value[d.protocol] || 22;
         const newDefaultPort = protocolDefaultPorts.value[newProtocol] || 22;
-        
         newDevice.protocol = newProtocol;
         // 如果当前端口是旧协议的默认端口，则同步更新为新协议的默认端口
         if (d.port === oldDefaultPort) {
