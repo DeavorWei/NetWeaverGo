@@ -14,41 +14,6 @@
           collapsed ? 'w-16' : 'w-56',
         ]"
       >
-        <!-- Logo 头部 -->
-        <div
-          class="flex items-center gap-3 px-4 py-5 h-16 overflow-hidden"
-        >
-          <div
-            class="flex-shrink-0 w-8 h-8 rounded-lg bg-accent flex items-center justify-center shadow-glow"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="w-4 h-4 text-white"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="12" r="3" />
-              <path
-                d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"
-              />
-            </svg>
-          </div>
-          <div v-if="!collapsed" class="overflow-hidden animate-fade-in">
-            <div
-              class="text-sm font-semibold text-text-primary whitespace-nowrap"
-            >
-              NetWeaverGo
-            </div>
-            <div class="text-xs text-text-muted whitespace-nowrap">
-              Control Center
-            </div>
-          </div>
-        </div>
-
         <!-- 导航菜单 -->
         <nav class="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
           <button
