@@ -1,7 +1,7 @@
 <template>
   <div class="titlebar" @dblclick="toggleMaximize">
     <!-- 左侧：Logo 和标题 -->
-    <div class="titlebar-left">
+    <!-- <div class="titlebar-left">
       <div class="titlebar-logo">
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -19,8 +19,10 @@
         </svg>
       </div>
       <span class="titlebar-title">NetWeaverGo Control Center</span>
-    </div>
-
+    </div> -->
+<div class="titlebar-left">
+  
+</div>
     <!-- 右侧：窗口控制按钮 -->
     <div class="titlebar-controls">
       <button class="titlebar-btn" @click="minimize" title="最小化">
