@@ -24,7 +24,7 @@
 
     <!-- 数据表格 -->
     <div
-      class="bg-bg-card border border-border rounded-xl shadow-card overflow-hidden"
+      class="bg-bg-panel border border-border rounded-xl shadow-card overflow-hidden"
     >
       <div class="overflow-auto scrollbar-custom max-h-[calc(100vh-220px)]">
         <table class="w-full text-sm">
@@ -330,9 +330,31 @@
               v-model="form.ip"
               type="text"
               placeholder="例如: 192.168.1.10 或 192.168.1.10-20"
-              class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
+              :class="[
+                'w-full px-3 py-2 text-sm bg-bg-panel border rounded-lg text-text-primary placeholder-text-muted/50 focus:outline-none transition-colors',
+                ipValidationError ? 'border-error focus:border-error' : 'border-border focus:border-accent'
+              ]"
               required
             />
+            <!-- IP 输入错误提示 -->
+            <div
+              v-if="ipValidationError"
+              class="mt-2 px-3 py-2 text-xs bg-error-bg border border-error/30 rounded-lg text-error flex items-center gap-2"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="w-4 h-4 flex-shrink-0"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+              <span>{{ ipValidationError }}</span>
+            </div>
             <!-- IP 语法糖提示 -->
             <div
               v-if="ipRangeHint"
@@ -670,6 +692,7 @@ const errorMessage = ref("");
 
 // IP 语法糖
 const ipRangeHint = ref<IpRangeHint | null>(null);
+const ipValidationError = ref("");
 
 // 删除确认
 const showDeleteConfirm = ref(false);
@@ -723,13 +746,63 @@ const batchFieldLabel = computed(() => {
   return labels[batchField.value] || "";
 });
 
-// 监听 IP 输入，解析语法糖
+// 监听 IP 输入，解析语法糖并验证
 watch(
   () => form.value.ip,
   (newIp) => {
     ipRangeHint.value = parseIpRange(newIp);
+    // 实时验证 IP 输入
+    const validation = validateIpInput(newIp);
+    ipValidationError.value = validation.error;
   },
 );
+
+// 验证单个 IP 地址格式
+function isValidIp(ip: string): boolean {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((part) => {
+    if (part === "" || part.length > 3) return false;
+    const num = parseInt(part, 10);
+    return !isNaN(num) && num >= 0 && num <= 255 && part === num.toString();
+  });
+}
+
+// 验证 IP 输入（单个 IP 或语法糖格式）
+function validateIpInput(ip: string): { valid: boolean; error: string } {
+  if (!ip) return { valid: false, error: "" };
+
+  // 检查是否为单个有效 IP
+  if (isValidIp(ip)) {
+    return { valid: true, error: "" };
+  }
+
+  // 检查是否为有效的语法糖格式
+  const rangeHint = parseIpRange(ip);
+  if (rangeHint) {
+    return { valid: true, error: "" };
+  }
+
+  // 检查语法糖格式的具体错误
+  const rangeMatch = ip.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})-(\d{1,3})$/);
+  if (rangeMatch && rangeMatch[2] && rangeMatch[3]) {
+    const start = parseInt(rangeMatch[2], 10);
+    const end = parseInt(rangeMatch[3], 10);
+    // 检查 IP 段值是否有效
+    if (start > 255 || end > 255) {
+      return { valid: false, error: "IP 段值必须在 0-255 范围内" };
+    }
+    if (start >= end) {
+      return { valid: false, error: "起始值必须小于结束值" };
+    }
+  }
+
+  // 其他无效格式
+  return {
+    valid: false,
+    error: "请输入有效 IP（如 192.168.1.10）或范围格式（如 192.168.1.10-20）",
+  };
+}
 
 // 解析 IP 范围语法糖
 function parseIpRange(ip: string): IpRangeHint | null {
@@ -821,6 +894,7 @@ function openAddModal() {
   errorMessage.value = "";
   showPassword.value = false;
   ipRangeHint.value = null;
+  ipValidationError.value = "";
   showModal.value = true;
 }
 
@@ -837,6 +911,7 @@ function openEditModal(idx: number) {
   errorMessage.value = "";
   showPassword.value = false;
   ipRangeHint.value = null;
+  ipValidationError.value = "";
   showModal.value = true;
 }
 
@@ -845,6 +920,7 @@ function closeModal() {
   showModal.value = false;
   errorMessage.value = "";
   ipRangeHint.value = null;
+  ipValidationError.value = "";
 }
 
 // 保存设备
@@ -853,6 +929,14 @@ async function saveDevice() {
   isSaving.value = true;
 
   try {
+    // 验证 IP 输入
+    const validation = validateIpInput(form.value.ip);
+    if (!validation.valid) {
+      errorMessage.value = validation.error || "请输入有效的 IP 地址";
+      isSaving.value = false;
+      return;
+    }
+
     if (isEditing.value) {
       // 编辑模式 - 单设备
       await Call.ByName(
