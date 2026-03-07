@@ -388,11 +388,14 @@ frontend/
 
 ### 4.3 路由配置
 
-| 路径       | 组件      | 功能         |
-| ---------- | --------- | ------------ |
-| `/`        | Dashboard | 概览仪表盘   |
-| `/devices` | Devices   | 设备资产清单 |
-| `/tasks`   | Tasks     | 任务执行大屏 |
+| 路径              | 组件        | 功能          |
+| ----------------- | ----------- | ------------- |
+| `/`               | Dashboard   | 概览仪表盘    |
+| `/devices`        | Devices     | 设备资产清单  |
+| `/tasks`          | Tasks       | 任务执行大屏  |
+| `/tools/calc`     | NetworkCalc | IP/子网计算器 |
+| `/tools/protocol` | ProtocolRef | 协议端口速查  |
+| `/tools/config`   | ConfigForge | 配置生成器    |
 
 ### 4.4 主题系统
 
