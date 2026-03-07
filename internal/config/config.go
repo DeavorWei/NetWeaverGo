@@ -18,6 +18,8 @@ type DeviceAsset struct {
 	Protocol string `json:"protocol"` // 连接协议：SSH/SNMP/TELNET
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Group    string `json:"group"` // 设备分组
+	Tag      string `json:"tag"`   // 设备标签
 }
 
 // 协议默认端口映射
@@ -101,26 +103,40 @@ func readInventory() ([]DeviceAsset, error) {
 	var devices []DeviceAsset
 
 	for i, row := range records[1:] {
-		// 兼容新旧格式：新格式5列(IP,Port,Protocol,Username,Password)，旧格式4列(IP,Port,Username,Password)
+		// 兼容新旧格式：
+		// 新格式7列(IP,Port,Protocol,Username,Password,Group,Tag)
+		// 旧格式5列(IP,Port,Protocol,Username,Password)
+		// 最旧格式4列(IP,Port,Username,Password)
 		if len(row) < 4 {
 			return nil, fmt.Errorf("资产文件第 %d 行格式不匹配", i+2)
 		}
 
 		ip := strings.TrimSpace(row[0])
 		portStr := strings.TrimSpace(row[1])
-		var protocol, username, password string
+		var protocol, username, password, group, tag string
 
-		// 判断是新旧格式
-		if len(row) >= 5 {
-			// 新格式：IP,Port,Protocol,Username,Password
+		// 判断是哪种格式
+		if len(row) >= 7 {
+			// 最新格式：IP,Port,Protocol,Username,Password,Group,Tag
 			protocol = strings.ToUpper(strings.TrimSpace(row[2]))
 			username = strings.TrimSpace(row[3])
 			password = strings.TrimSpace(row[4])
+			group = strings.TrimSpace(row[5])
+			tag = strings.TrimSpace(row[6])
+		} else if len(row) >= 5 {
+			// 旧格式：IP,Port,Protocol,Username,Password
+			protocol = strings.ToUpper(strings.TrimSpace(row[2]))
+			username = strings.TrimSpace(row[3])
+			password = strings.TrimSpace(row[4])
+			group = ""
+			tag = ""
 		} else {
-			// 旧格式：IP,Port,Username,Password (兼容)
+			// 最旧格式：IP,Port,Username,Password (兼容)
 			protocol = "SSH"
 			username = strings.TrimSpace(row[2])
 			password = strings.TrimSpace(row[3])
+			group = ""
+			tag = ""
 		}
 
 		if ip == "" {
@@ -143,6 +159,8 @@ func readInventory() ([]DeviceAsset, error) {
 			Protocol: protocol,
 			Username: username,
 			Password: password,
+			Group:    group,
+			Tag:      tag,
 		})
 	}
 	return devices, nil
@@ -187,9 +205,9 @@ func generateInventoryTemplate() {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	writer.Write([]string{"IP", "Port", "Protocol", "Username", "Password"})
-	writer.Write([]string{"192.168.1.10", "22", "SSH", "admin", "Admin@123"})
-	writer.Write([]string{"192.168.1.11", "161", "SNMP", "public", "public"})
+	writer.Write([]string{"IP", "Port", "Protocol", "Username", "Password", "Group", "Tag"})
+	writer.Write([]string{"192.168.1.10", "22", "SSH", "admin", "Admin@123", "核心交换机", "生产环境"})
+	writer.Write([]string{"192.168.1.11", "161", "SNMP", "public", "public", "接入交换机", "测试环境"})
 }
 
 // generateConfigTemplate 生成默认的命令列表模板
@@ -292,7 +310,7 @@ func SaveInventory(devices []DeviceAsset) error {
 	defer writer.Flush()
 
 	// 写入表头
-	if err := writer.Write([]string{"IP", "Port", "Protocol", "Username", "Password"}); err != nil {
+	if err := writer.Write([]string{"IP", "Port", "Protocol", "Username", "Password", "Group", "Tag"}); err != nil {
 		return fmt.Errorf("写入表头失败: %v", err)
 	}
 
@@ -304,6 +322,8 @@ func SaveInventory(devices []DeviceAsset) error {
 			device.Protocol,
 			device.Username,
 			device.Password,
+			device.Group,
+			device.Tag,
 		}
 		if err := writer.Write(row); err != nil {
 			return fmt.Errorf("写入数据失败: %v", err)

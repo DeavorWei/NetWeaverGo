@@ -40,13 +40,13 @@
                     isAllSelected 
                       ? 'bg-accent border-accent text-white' 
                       : isIndeterminate 
-                        ? 'bg-accent border-accent text-white' 
+                        ? 'bg-accent/30 border-accent/50' 
                         : 'border-border hover:border-accent'
                   ]"
-                  :title="isAllSelected ? '取消全选' : '全选当前页'"
+                  :title="isAllSelected ? '取消全选' : '全选所有设备'"
                 >
                   <svg
-                    v-if="isAllSelected || isIndeterminate"
+                    v-if="isAllSelected"
                     xmlns="http://www.w3.org/2000/svg"
                     class="w-3 h-3"
                     viewBox="0 0 24 24"
@@ -64,12 +64,40 @@
                 #
               </th>
               <th
-                class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider"
+                class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-20"
+              >
+                <div class="flex items-center gap-1">
+                  分组
+                  <button
+                    @click="openBatchEditModal('group')"
+                    class="p-0.5 text-text-muted hover:text-accent transition-colors"
+                    title="批量修改分组"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="w-3.5 h-3.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                      />
+                      <path
+                        d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th
+                class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-28"
               >
                 IP 地址
               </th>
               <th
-                class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-28"
+                class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-16"
               >
                 <div class="flex items-center gap-1">
                   协议
@@ -97,7 +125,7 @@
                 </div>
               </th>
               <th
-                class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-24"
+                class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-14"
               >
                 <div class="flex items-center gap-1">
                   端口
@@ -125,7 +153,7 @@
                 </div>
               </th>
               <th
-                class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider"
+                class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-16"
               >
                 <div class="flex items-center gap-1">
                   用户名
@@ -153,7 +181,7 @@
                 </div>
               </th>
               <th
-                class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider"
+                class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-16"
               >
                 <div class="flex items-center gap-1">
                   密码
@@ -181,7 +209,35 @@
                 </div>
               </th>
               <th
-                class="px-4 py-3.5 text-center text-xs font-semibold text-text-muted uppercase tracking-wider w-28"
+                class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-16"
+              >
+                <div class="flex items-center gap-1">
+                  Tag
+                  <button
+                    @click="openBatchEditModal('tag')"
+                    class="p-0.5 text-text-muted hover:text-accent transition-colors"
+                    title="批量修改标签"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="w-3.5 h-3.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                      />
+                      <path
+                        d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th
+                class="px-4 py-3.5 text-center text-xs font-semibold text-text-muted uppercase tracking-wider w-24"
               >
                 操作
               </th>
@@ -189,7 +245,7 @@
           </thead>
           <tbody class="divide-y divide-border">
             <tr v-if="data.length === 0">
-              <td colspan="7" class="px-5 py-12 text-center text-text-muted">
+              <td colspan="10" class="px-5 py-12 text-center text-text-muted">
                 <div class="flex flex-col items-center gap-3">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -242,6 +298,9 @@
               <td class="px-4 py-3 text-text-muted font-mono text-xs">
                 {{ (page - 1) * pageSize + idx + 1 }}
               </td>
+              <td class="px-4 py-3 text-text-secondary text-xs">
+                {{ row.group || "-" }}
+              </td>
               <td class="px-4 py-3">
                 <span class="font-mono text-accent font-medium">{{
                   row.ip
@@ -266,6 +325,9 @@
                   class="font-mono text-text-muted tracking-widest text-xs"
                   >{{ row.password ? "••••••••" : "-" }}</span
                 >
+              </td>
+              <td class="px-4 py-3 text-text-secondary text-xs">
+                {{ row.tag || "-" }}
               </td>
               <td class="px-4 py-3">
                 <div class="flex items-center justify-center gap-2">
@@ -319,27 +381,46 @@
       <!-- 选中提示 -->
       <div
         v-if="selectedCount > 0"
-        class="flex items-center gap-2 px-5 py-2.5 bg-accent/5 border-t border-accent/20"
+        class="flex items-center justify-between px-5 py-2.5 bg-accent/5 border-t border-accent/20"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          class="w-4 h-4 text-accent"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <polyline points="9 11 12 14 22 4" />
-          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-        </svg>
-        <span class="text-sm text-accent font-medium">
-          已选中 <strong>{{ selectedCount }}</strong> 台设备
-        </span>
+        <div class="flex items-center gap-2">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-4 h-4 text-accent"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <polyline points="9 11 12 14 22 4" />
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+          </svg>
+          <span class="text-sm text-accent font-medium">
+            已选中 <strong>{{ selectedCount }}</strong> 台设备
+          </span>
+          <button
+            @click="clearSelection"
+            class="ml-2 px-2 py-0.5 text-xs text-text-muted hover:text-text-primary hover:bg-bg-hover rounded transition-all"
+          >
+            清空选择
+          </button>
+        </div>
         <button
-          @click="clearSelection"
-          class="ml-2 px-2 py-0.5 text-xs text-text-muted hover:text-text-primary hover:bg-bg-hover rounded transition-all"
+          @click="confirmBatchDelete"
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-error hover:bg-error/90 rounded-lg transition-all duration-200"
         >
-          清空选择
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-3.5 h-3.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <polyline points="3,6 5,6 21,6" />
+            <path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2v2" />
+          </svg>
+          批量删除
         </button>
       </div>
 
@@ -405,6 +486,17 @@
           </button>
         </div>
         <form @submit.prevent="saveDevice" class="p-6 space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-text-secondary mb-1.5"
+              >分组 <span class="text-text-muted">(可选)</span></label
+            >
+            <input
+              v-model="form.group"
+              type="text"
+              placeholder="设备分组名称"
+              class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
+            />
+          </div>
           <div>
             <label class="block text-xs font-medium text-text-secondary mb-1.5"
               >IP 地址</label
@@ -492,61 +584,74 @@
               />
             </div>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-text-secondary mb-1.5"
-              >用户名 <span class="text-text-muted">(可选)</span></label
-            >
-            <input
-              v-model="form.username"
-              type="text"
-              placeholder="登录用户名"
-              class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
-            />
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-text-secondary mb-1.5"
+                >用户名 <span class="text-text-muted">(可选)</span></label
+              >
+              <input
+                v-model="form.username"
+                type="text"
+                placeholder="登录用户名"
+                class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-text-secondary mb-1.5"
+                >密码 <span class="text-text-muted">(可选)</span></label
+              >
+              <div class="relative">
+                <input
+                  v-model="form.password"
+                  :type="showPassword ? 'text' : 'password'"
+                  placeholder="登录密码"
+                  class="w-full px-3 py-2 pr-10 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  @click="showPassword = !showPassword"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
+                >
+                  <svg
+                    v-if="!showPassword"
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="w-4 h-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                  <svg
+                    v-else
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="w-4 h-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
+                    />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
           <div>
             <label class="block text-xs font-medium text-text-secondary mb-1.5"
-              >密码 <span class="text-text-muted">(可选)</span></label
+              >Tag <span class="text-text-muted">(可选)</span></label
             >
-            <div class="relative">
-              <input
-                v-model="form.password"
-                :type="showPassword ? 'text' : 'password'"
-                placeholder="登录密码"
-                class="w-full px-3 py-2 pr-10 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
-              />
-              <button
-                type="button"
-                @click="showPassword = !showPassword"
-                class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
-              >
-                <svg
-                  v-if="!showPassword"
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="w-4 h-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-                <svg
-                  v-else
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="w-4 h-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
-                  />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-              </button>
-            </div>
+            <input
+              v-model="form.tag"
+              type="text"
+              placeholder="设备标签"
+              class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
+            />
           </div>
           <div
             v-if="errorMessage"
@@ -664,6 +769,26 @@
             />
           </div>
 
+          <!-- 分组输入 -->
+          <div v-else-if="batchField === 'group'">
+            <input
+              v-model="batchValue"
+              type="text"
+              :placeholder="'请输入' + batchFieldLabel"
+              class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
+            />
+          </div>
+
+          <!-- 标签输入 -->
+          <div v-else-if="batchField === 'tag'">
+            <input
+              v-model="batchValue"
+              type="text"
+              :placeholder="'请输入' + batchFieldLabel"
+              class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
+            />
+          </div>
+
           <div
             v-if="batchErrorMessage"
             class="px-3 py-2 text-sm text-error bg-error-bg border border-error/30 rounded-lg"
@@ -746,6 +871,63 @@
         </div>
       </div>
     </div>
+
+    <!-- 批量删除确认弹窗 -->
+    <div
+      v-if="showBatchDeleteConfirm"
+      class="fixed inset-0 z-50 flex items-center justify-center"
+    >
+      <div
+        class="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        @click="showBatchDeleteConfirm = false"
+      ></div>
+      <div
+        class="relative bg-bg-card border border-border rounded-xl shadow-2xl w-full max-w-sm mx-4 animate-slide-in"
+      >
+        <div class="p-6">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="p-2 bg-error-bg rounded-lg">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="w-6 h-6 text-error"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-text-primary">批量删除确认</h3>
+              <p class="text-sm text-text-muted">此操作不可撤销</p>
+            </div>
+          </div>
+          <p class="text-sm text-text-secondary mb-6">
+            确定要删除选中的
+            <span class="font-mono text-accent font-bold">{{ selectedCount }}</span>
+            台设备吗？
+          </p>
+          <div class="flex items-center justify-end gap-3">
+            <button
+              @click="showBatchDeleteConfirm = false"
+              class="px-4 py-2 text-sm font-medium text-text-secondary bg-bg-panel border border-border rounded-lg hover:bg-bg-hover transition-colors"
+            >
+              取消
+            </button>
+            <button
+              @click="batchDeleteDevices"
+              :disabled="isBatchDeleting"
+              class="px-4 py-2 text-sm font-medium text-white bg-error hover:bg-error/90 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ isBatchDeleting ? "删除中..." : "确认删除" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -759,6 +941,8 @@ interface Device {
   protocol: string;
   username: string;
   password: string;
+  group: string;
+  tag: string;
 }
 
 interface IpRangeHint {
@@ -792,9 +976,13 @@ const deleteIndex = ref(-1);
 const deviceToDelete = ref<Device | null>(null);
 const isDeleting = ref(false);
 
+// 批量删除确认
+const showBatchDeleteConfirm = ref(false);
+const isBatchDeleting = ref(false);
+
 // 批量编辑
 const showBatchModal = ref(false);
-const batchField = ref<"protocol" | "port" | "username" | "password" | "">("");
+const batchField = ref<"protocol" | "port" | "username" | "password" | "group" | "tag" | "">("");
 const batchValue = ref<string | number>("");
 const isBatchSaving = ref(false);
 const batchErrorMessage = ref("");
@@ -814,6 +1002,8 @@ const form = ref<Device>({
   protocol: "SSH",
   username: "",
   password: "",
+  group: "",
+  tag: "",
 });
 
 // 记录上次的协议，用于判断端口是否需要自动更新
@@ -834,6 +1024,8 @@ const batchFieldLabel = computed(() => {
     port: "端口",
     username: "用户名",
     password: "密码",
+    group: "分组",
+    tag: "标签",
   };
   return labels[batchField.value] || "";
 });
@@ -841,23 +1033,16 @@ const batchFieldLabel = computed(() => {
 // 多选相关计算属性
 const selectedCount = computed(() => selectedIndexes.value.size);
 
-// 当前页是否全选
+// 是否选中了全部设备（所有页）
 const isAllSelected = computed(() => {
-  if (pagedData.value.length === 0) return false;
-  const startIdx = (page.value - 1) * pageSize;
-  return pagedData.value.every((_, idx) => 
-    selectedIndexes.value.has(startIdx + idx)
-  );
+  if (data.value.length === 0) return false;
+  return selectedIndexes.value.size === data.value.length;
 });
 
-// 当前页是否部分选中
+// 是否部分选中（有选中但未全选）
 const isIndeterminate = computed(() => {
-  if (pagedData.value.length === 0) return false;
-  const startIdx = (page.value - 1) * pageSize;
-  const selectedInPage = pagedData.value.filter((_, idx) => 
-    selectedIndexes.value.has(startIdx + idx)
-  ).length;
-  return selectedInPage > 0 && selectedInPage < pagedData.value.length;
+  const count = selectedIndexes.value.size;
+  return count > 0 && count < data.value.length;
 });
 
 // 监听 IP 输入，解析语法糖并验证
@@ -955,6 +1140,8 @@ async function loadDevices() {
         protocol: d.protocol || d.Protocol || "SSH",
         username: d.username || d.Username || "",
         password: d.password || d.Password || "",
+        group: d.group || d.Group || "",
+        tag: d.tag || d.Tag || "",
       }));
     }
   } catch (e) {
@@ -1003,6 +1190,8 @@ function openAddModal() {
     protocol: "SSH",
     username: "",
     password: "",
+    group: "",
+    tag: "",
   };
   lastProtocol.value = "SSH";
   errorMessage.value = "";
@@ -1078,6 +1267,8 @@ async function saveDevice() {
               protocol: form.value.protocol,
               username: form.value.username,
               password: form.value.password,
+              group: form.value.group,
+              tag: form.value.tag,
             });
           }
 
@@ -1108,7 +1299,7 @@ async function saveDevice() {
 
 // 打开批量编辑弹窗
 function openBatchEditModal(
-  field: "protocol" | "port" | "username" | "password",
+  field: "protocol" | "port" | "username" | "password" | "group" | "tag",
 ) {
   batchField.value = field;
   batchErrorMessage.value = "";
@@ -1170,6 +1361,10 @@ async function saveBatchEdit() {
         newDevice.username = batchValue.value as string;
       } else if (batchField.value === "password") {
         newDevice.password = batchValue.value as string;
+      } else if (batchField.value === "group") {
+        newDevice.group = batchValue.value as string;
+      } else if (batchField.value === "tag") {
+        newDevice.tag = batchValue.value as string;
       }
       return newDevice;
     });
@@ -1251,19 +1446,15 @@ function toggleSelect(idx: number) {
   }
 }
 
-// 切换全选/取消全选（当前页）
+// 切换全选/取消全选（全量设备）
 function toggleSelectAll() {
-  const startIdx = (page.value - 1) * pageSize;
-  
   if (isAllSelected.value) {
-    // 取消当前页所有选中
-    for (let i = 0; i < pagedData.value.length; i++) {
-      selectedIndexes.value.delete(startIdx + i);
-    }
+    // 取消所有选中
+    selectedIndexes.value.clear();
   } else {
-    // 选中当前页所有
-    for (let i = 0; i < pagedData.value.length; i++) {
-      selectedIndexes.value.add(startIdx + i);
+    // 选中所有设备
+    for (let i = 0; i < data.value.length; i++) {
+      selectedIndexes.value.add(i);
     }
   }
 }
@@ -1271,6 +1462,42 @@ function toggleSelectAll() {
 // 清空所有选择
 function clearSelection() {
   selectedIndexes.value.clear();
+}
+
+// 打开批量删除确认弹窗
+function confirmBatchDelete() {
+  showBatchDeleteConfirm.value = true;
+}
+
+// 执行批量删除
+async function batchDeleteDevices() {
+  isBatchDeleting.value = true;
+
+  try {
+    // 获取要删除的索引，按降序排列以便从后往前删除
+    const indexesToDelete = Array.from(selectedIndexes.value).sort((a, b) => b - a);
+
+    // 从后往前删除设备
+    for (const idx of indexesToDelete) {
+      await Call.ByName(
+        "github.com/NetWeaverGo/core/internal/ui.AppService.DeleteDevice",
+        idx,
+      );
+    }
+
+    await loadDevices();
+    showBatchDeleteConfirm.value = false;
+    clearSelection();
+
+    // 如果删除后当前页没有数据，跳转到上一页
+    if (pagedData.value.length === 0 && page.value > 1) {
+      page.value--;
+    }
+  } catch (e: any) {
+    console.error("Batch delete failed:", e);
+  } finally {
+    isBatchDeleting.value = false;
+  }
 }
 
 onMounted(() => {
