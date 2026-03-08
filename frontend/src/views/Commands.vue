@@ -120,25 +120,17 @@
             <div class="flex items-center justify-between text-xs text-text-muted mb-2">
               <span>命令列表 ({{ group.commands.length }} 条)</span>
               <button
-                @click="togglePreview(group.id)"
-                class="text-accent hover:text-accent-glow transition-colors"
+                @click="openPreviewModal(group)"
+                class="flex items-center gap-1 text-accent hover:text-accent-glow transition-colors"
               >
-                {{ expandedPreviews.has(group.id) ? '收起' : '展开' }}
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                预览
               </button>
             </div>
-            <div
-              v-if="expandedPreviews.has(group.id)"
-              class="bg-bg-secondary/50 rounded-lg p-2 font-mono text-xs max-h-40 overflow-y-auto scrollbar-custom"
-            >
-              <div
-                v-for="(cmd, idx) in group.commands"
-                :key="idx"
-                class="py-1 text-text-secondary border-b border-border/30 last:border-0"
-              >
-                <span class="text-text-muted mr-2">{{ idx + 1 }}.</span>{{ cmd }}
-              </div>
-            </div>
-            <div v-else class="text-xs text-text-muted line-clamp-2 font-mono">
+            <div class="text-xs text-text-muted line-clamp-2 font-mono">
               {{ group.commands.slice(0, 2).join('; ') }}{{ group.commands.length > 2 ? '...' : '' }}
             </div>
           </div>
@@ -318,6 +310,138 @@
         </div>
       </div>
     </Transition>
+
+    <!-- 命令预览弹窗 -->
+    <Transition name="modal">
+      <div v-if="previewModal.show" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="closePreviewModal"></div>
+        <div class="relative bg-bg-card border border-border rounded-xl shadow-2xl max-w-xl w-full mx-4 max-h-[85vh] overflow-hidden animate-slide-in flex flex-col">
+          <!-- 弹窗头部 -->
+          <div class="flex items-center justify-between px-5 py-4 border-b border-border bg-bg-panel flex-shrink-0">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg bg-accent/15 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-sm font-semibold text-text-primary">命令组预览</h3>
+                <p class="text-xs text-text-muted mt-0.5">{{ previewModal.group?.name }}</p>
+              </div>
+            </div>
+            <button
+              @click="closePreviewModal"
+              class="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-secondary transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- 内容区域 -->
+          <div class="flex-1 overflow-y-auto scrollbar-custom p-5 space-y-4">
+            <!-- 描述信息 -->
+            <div v-if="previewModal.group?.description" class="space-y-1.5">
+              <label class="text-xs font-medium text-text-muted uppercase tracking-wide">描述</label>
+              <p class="text-sm text-text-secondary">{{ previewModal.group.description }}</p>
+            </div>
+
+            <!-- 标签 -->
+            <div class="space-y-1.5">
+              <label class="text-xs font-medium text-text-muted uppercase tracking-wide">标签</label>
+              <div class="flex flex-wrap gap-1.5">
+                <span
+                  v-for="tag in previewModal.group?.tags"
+                  :key="tag"
+                  class="px-2 py-0.5 text-xs rounded-full bg-accent/10 text-accent border border-accent/20"
+                >
+                  {{ tag }}
+                </span>
+                <span v-if="!previewModal.group?.tags || previewModal.group.tags.length === 0" class="text-xs text-text-muted">无标签</span>
+              </div>
+            </div>
+
+            <!-- 统计信息 -->
+            <div class="flex items-center gap-4 text-xs text-text-muted">
+              <span class="flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                </svg>
+                {{ previewModal.group?.commands.length }} 条命令
+              </span>
+              <span class="flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                更新于 {{ formatDate(previewModal.group?.updatedAt || '') }}
+              </span>
+            </div>
+
+            <!-- 命令列表 -->
+            <div class="space-y-1.5">
+              <label class="text-xs font-medium text-text-muted uppercase tracking-wide">命令列表</label>
+              <div class="border border-border rounded-lg overflow-hidden bg-terminal-bg">
+                <div class="max-h-80 overflow-y-auto scrollbar-custom">
+                  <div
+                    v-for="(cmd, idx) in previewModal.group?.commands"
+                    :key="idx"
+                    class="group/cmd flex items-center gap-2 px-4 py-2 font-mono text-sm border-b border-border/30 last:border-0 hover:bg-white/5 transition-colors"
+                  >
+                    <span class="text-text-muted/50 w-6 text-right flex-shrink-0 select-none">{{ idx + 1 }}</span>
+                    <span class="flex-1 text-terminal-text break-all">{{ cmd }}</span>
+                    <button
+                      @click="copyCommand(cmd)"
+                      class="opacity-0 group-hover/cmd:opacity-100 p-1 rounded text-text-muted hover:text-accent transition-all flex-shrink-0"
+                      title="复制命令"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="flex justify-end gap-3 px-5 py-4 border-t border-border bg-bg-panel flex-shrink-0">
+            <button
+              @click="closePreviewModal"
+              class="px-4 py-2.5 rounded-lg text-sm font-medium bg-bg-secondary border border-border text-text-secondary hover:text-text-primary hover:border-accent/50 transition-all"
+            >
+              关闭
+            </button>
+            <button
+              @click="copyAllCommands"
+              class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-accent border border-accent/50 text-white hover:bg-accent-glow transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              复制全部
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 复制成功提示 -->
+    <Transition name="toast">
+      <div
+        v-if="copyToast.show"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-lg bg-success/90 text-white text-sm font-medium shadow-lg flex items-center gap-2"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        {{ copyToast.message }}
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -337,7 +461,6 @@ const loading = ref(true)
 const groups = ref<CommandGroup[]>([])
 const searchKeyword = ref('')
 const selectedTag = ref('')
-const expandedPreviews = ref(new Set<string>())
 
 // 编辑弹窗状态
 const editModal = ref({
@@ -361,6 +484,18 @@ const deleteModal = ref({
   groupId: '',
   groupName: '',
   deleting: false
+})
+
+// 预览弹窗状态
+const previewModal = ref({
+  show: false,
+  group: null as CommandGroup | null
+})
+
+// 复制成功提示状态
+const copyToast = ref({
+  show: false,
+  message: ''
 })
 
 // 计算所有标签
@@ -405,15 +540,6 @@ function formatDate(dateStr: string) {
     })
   } catch {
     return dateStr
-  }
-}
-
-// 切换预览展开状态
-function togglePreview(id: string) {
-  if (expandedPreviews.value.has(id)) {
-    expandedPreviews.value.delete(id)
-  } else {
-    expandedPreviews.value.add(id)
   }
 }
 
@@ -575,6 +701,54 @@ async function deleteGroup() {
   }
 }
 
+// 打开预览弹窗
+function openPreviewModal(group: CommandGroup) {
+  previewModal.value = {
+    show: true,
+    group: group
+  }
+}
+
+// 关闭预览弹窗
+function closePreviewModal() {
+  previewModal.value.show = false
+}
+
+// 显示复制成功提示
+function showCopyToast(message: string) {
+  copyToast.value = {
+    show: true,
+    message: message
+  }
+  setTimeout(() => {
+    copyToast.value.show = false
+  }, 2000)
+}
+
+// 复制单条命令
+async function copyCommand(command: string) {
+  try {
+    await navigator.clipboard.writeText(command)
+    showCopyToast('命令已复制到剪贴板')
+  } catch (err) {
+    console.error('复制失败:', err)
+    alert('复制失败')
+  }
+}
+
+// 复制全部命令
+async function copyAllCommands() {
+  if (!previewModal.value.group) return
+  try {
+    const commands = previewModal.value.group.commands.join('\n')
+    await navigator.clipboard.writeText(commands)
+    showCopyToast('已复制全部命令')
+  } catch (err) {
+    console.error('复制失败:', err)
+    alert('复制失败')
+  }
+}
+
 onMounted(() => {
   loadGroups()
 })
@@ -603,6 +777,21 @@ onMounted(() => {
 .modal-enter-from,
 .modal-leave-to {
   opacity: 0;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+
+.toast-enter-from {
+  opacity: 0;
+  transform: translate(-50%, 20px);
+}
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -10px);
 }
 
 .bg-terminal-bg {
