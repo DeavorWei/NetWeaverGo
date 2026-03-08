@@ -106,7 +106,7 @@ const activeKey = ref("Dashboard");
 const menuItems = [
   {
     key: "Dashboard",
-    label: "概览仪表盘",
+    label: "仪表盘",
     icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
       <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
@@ -136,7 +136,7 @@ const menuItems = [
   },
   {
     key: "NetworkCalc",
-    label: "IP/子网计算",
+    label: "子网计算",
     icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
       <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
@@ -144,14 +144,14 @@ const menuItems = [
   },
   {
     key: "ProtocolRef",
-    label: "协议端口速查",
+    label: "端口速查",
     icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
     </svg>`,
   },
   {
     key: "ConfigForge",
-    label: "配置生成器",
+    label: "配置生成",
     icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
     </svg>`,
@@ -166,13 +166,13 @@ const menuItems = [
 ];
 
 const titleMap: Record<string, string> = {
-  Dashboard: "概览仪表盘",
+  Dashboard: "仪表盘",
   Devices: "设备资产清单",
   Commands: "命令组管理",
   Tasks: "任务执行大屏",
-  NetworkCalc: "IP/子网计算器",
-  ProtocolRef: "协议端口速查",
-  ConfigForge: "配置生成器",
+  NetworkCalc: "子网计算器",
+  ProtocolRef: "端口速查",
+  ConfigForge: "配置生成",
   Settings: "系统设置",
 };
 
