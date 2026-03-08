@@ -59,6 +59,31 @@ func LoadSettings() (*GlobalSettings, bool, error) {
 	return &root.Settings, isNew, nil
 }
 
+// SaveSettings 保存全局设置到 settings.yaml 文件
+func SaveSettings(settings GlobalSettings) error {
+	cwd, _ := os.Getwd()
+	path := filepath.Join(cwd, settingsFile)
+
+	root := rootConfig{Settings: settings}
+	content, err := yaml.Marshal(root)
+	if err != nil {
+		return fmt.Errorf("序列化配置失败: %v", err)
+	}
+
+	// 添加文件头注释
+	header := []byte(`# NetWeaverGo 全局运行参数配置
+
+`)
+	fullContent := append(header, content...)
+
+	err = os.WriteFile(path, fullContent, 0666)
+	if err != nil {
+		return fmt.Errorf("写入配置文件失败: %v", err)
+	}
+
+	return nil
+}
+
 // generateSettingsTemplate 生成默认的全局运行参数模板文件
 func generateSettingsTemplate() {
 	cwd, _ := os.Getwd()

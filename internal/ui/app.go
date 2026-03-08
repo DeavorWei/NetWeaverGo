@@ -48,6 +48,11 @@ func (a *AppService) LoadSettings() (*config.GlobalSettings, error) {
 	return settings, err
 }
 
+// SaveSettings 保存全局设置到配置文件
+func (a *AppService) SaveSettings(settings config.GlobalSettings) error {
+	return config.SaveSettings(settings)
+}
+
 // EnsureConfig 检查必需配置文件并返回是否有文件遗漏，以便前端提示
 func (a *AppService) EnsureConfig() ([]config.DeviceAsset, []string, []string, error) {
 	assets, commands, _, missingFiles, err := config.ParseOrGenerate(false)
