@@ -203,6 +203,50 @@ func (a *AppService) SaveCommands(commands []string) error {
 	return config.SaveCommands(filtered)
 }
 
+// ========== 命令组管理 API ==========
+
+// ListCommandGroups 获取所有命令组列表
+func (a *AppService) ListCommandGroups() ([]config.CommandGroup, error) {
+	// 尝试迁移旧数据
+	config.MigrateLegacyCommands()
+	return config.ListCommandGroups()
+}
+
+// GetCommandGroup 根据 ID 获取单个命令组
+func (a *AppService) GetCommandGroup(id string) (*config.CommandGroup, error) {
+	return config.GetCommandGroup(id)
+}
+
+// CreateCommandGroup 创建新命令组
+func (a *AppService) CreateCommandGroup(group config.CommandGroup) (*config.CommandGroup, error) {
+	return config.CreateCommandGroup(group)
+}
+
+// UpdateCommandGroup 更新命令组
+func (a *AppService) UpdateCommandGroup(id string, group config.CommandGroup) (*config.CommandGroup, error) {
+	return config.UpdateCommandGroup(id, group)
+}
+
+// DeleteCommandGroup 删除命令组
+func (a *AppService) DeleteCommandGroup(id string) error {
+	return config.DeleteCommandGroup(id)
+}
+
+// DuplicateCommandGroup 复制命令组
+func (a *AppService) DuplicateCommandGroup(id string) (*config.CommandGroup, error) {
+	return config.DuplicateCommandGroup(id)
+}
+
+// ImportCommandGroup 从文件导入命令组
+func (a *AppService) ImportCommandGroup(filePath string) (*config.CommandGroup, error) {
+	return config.ImportCommandGroup(filePath)
+}
+
+// ExportCommandGroup 导出命令组到文件
+func (a *AppService) ExportCommandGroup(id string, filePath string) error {
+	return config.ExportCommandGroup(id, filePath)
+}
+
 // ResolveSuspend 被前端调用（当用户在弹窗中选择动作后）
 func (a *AppService) ResolveSuspend(ip string, action string) {
 	a.suspendMu.Lock()
@@ -312,6 +356,81 @@ func (a *AppService) StartEngineWails() error {
 	// 强制注入我们的 Wails UI 层 Suspend 引擎覆盖掉 Executor 的原本回调逻辑
 	// 方案: 注意：原来的 Engine 其实是在 run worker 的时候构建 executor 提供 SuspendHandler，我们需要进行一定的侵入覆盖。
 	// 但鉴于我们这里不需要修改 engine.go 源码太多，暂时只能让 engine 的 newExecutor 方法接受全局替代。
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 开始执行并发任务
+	ng.Run(ctx)
+
+	a.wailsApp.Event.Emit("engine:finished")
+
+	return nil
+}
+
+// StartEngineWithSelection 使用选定的设备和命令组启动引擎
+func (a *AppService) StartEngineWithSelection(deviceIPs []string, commandGroupID string) error {
+	a.mu.Lock()
+	if a.isRunning {
+		a.mu.Unlock()
+		return fmt.Errorf("引擎正在运行中，请勿重复启动")
+	}
+	a.isRunning = true
+	a.mu.Unlock()
+
+	defer func() {
+		a.mu.Lock()
+		a.isRunning = false
+		a.mu.Unlock()
+	}()
+
+	settings, _, err := config.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	// 获取所有设备
+	allAssets, _, _, _, err := config.ParseOrGenerate(false)
+	if err != nil {
+		return err
+	}
+
+	// 根据 IP 筛选设备
+	var selectedAssets []config.DeviceAsset
+	ipSet := make(map[string]bool)
+	for _, ip := range deviceIPs {
+		ipSet[ip] = true
+	}
+	for _, asset := range allAssets {
+		if ipSet[asset.IP] {
+			selectedAssets = append(selectedAssets, asset)
+		}
+	}
+
+	if len(selectedAssets) == 0 {
+		return fmt.Errorf("未选择任何有效设备")
+	}
+
+	// 获取命令组
+	group, err := config.GetCommandGroup(commandGroupID)
+	if err != nil {
+		return fmt.Errorf("获取命令组失败: %v", err)
+	}
+
+	if len(group.Commands) == 0 {
+		return fmt.Errorf("命令组为空")
+	}
+
+	// 初始化 Engine
+	ng := engine.NewEngine(selectedAssets, group.Commands, settings, false)
+	ng.CustomSuspendHandler = a.WailsSuspendHandler()
+
+	// 桥接事件：监听底层的 EventBus 转发给前端 Vue
+	go func() {
+		for ev := range ng.EventBus {
+			a.wailsApp.Event.Emit("device:event", ev)
+		}
+	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

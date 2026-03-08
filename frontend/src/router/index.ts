@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Dashboard from '../views/Dashboard.vue'
 import Devices from '../views/Devices.vue'
+import Commands from '../views/Commands.vue'
 import Tasks from '../views/Tasks.vue'
 import NetworkCalc from '../views/Tools/NetworkCalc.vue'
 import ProtocolRef from '../views/Tools/ProtocolRef.vue'
@@ -17,6 +18,11 @@ const routes = [
     path: '/devices',
     name: 'Devices',
     component: Devices
+  },
+  {
+    path: '/commands',
+    name: 'Commands',
+    component: Commands
   },
   {
     path: '/tasks',

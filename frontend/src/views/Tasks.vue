@@ -1,18 +1,14 @@
 <template>
   <div class="animate-slide-in space-y-5 h-full flex flex-col">
-    <!-- 标题栏 + 操作按钮 -->
+    <!-- 标题栏 -->
     <div class="flex items-center justify-between flex-shrink-0">
-      <div class="flex items-center gap-4">
-        <p class="text-sm text-text-muted">并发连接设备并下发配置命令</p>
-        <!-- 命令编辑器入口 -->
-        <CommandEditor @saved="onCommandsSaved" />
-      </div>
+      <p class="text-sm text-text-muted">并发连接设备并下发配置命令</p>
       <div class="flex gap-3">
         <button
           @click="startEngine"
-          :disabled="isRunning"
+          :disabled="isRunning || !canStart"
           class="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-card"
-          :class="isRunning
+          :class="(isRunning || !canStart)
             ? 'bg-bg-card border border-border text-text-muted cursor-not-allowed'
             : 'bg-accent hover:bg-accent-glow text-white border border-accent/30 hover:shadow-glow'"
         >
@@ -36,6 +32,43 @@
       </div>
     </div>
 
+    <!-- 步骤选择区域（未运行时显示） -->
+    <div v-if="!isRunning && progressPercent === 0" class="flex-shrink-0 space-y-5">
+      <!-- 步骤1: 选择目标设备 -->
+      <div class="bg-bg-card border border-border rounded-xl overflow-hidden">
+        <div class="flex items-center gap-3 px-4 py-3 border-b border-border bg-bg-panel">
+          <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">1</div>
+          <span class="text-sm font-medium text-text-primary">选择目标设备</span>
+          <button
+            @click="goToDevices"
+            class="ml-auto text-xs text-accent hover:text-accent-glow transition-colors"
+          >
+            管理设备资产
+          </button>
+        </div>
+        <div class="p-4">
+          <DeviceSelector
+            :devices="deviceList"
+            @selectionChange="onDeviceSelectionChange"
+          />
+        </div>
+      </div>
+
+      <!-- 步骤2: 选择命令组 -->
+      <div class="bg-bg-card border border-border rounded-xl overflow-hidden">
+        <div class="flex items-center gap-3 px-4 py-3 border-b border-border bg-bg-panel">
+          <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">2</div>
+          <span class="text-sm font-medium text-text-primary">选择命令组</span>
+        </div>
+        <div class="p-4">
+          <CommandGroupSelector
+            v-model="selectedCommandGroupId"
+            @selectionChange="onCommandGroupChange"
+          />
+        </div>
+      </div>
+    </div>
+
     <!-- 进度条 -->
     <div v-if="isRunning || progressPercent > 0" class="flex-shrink-0 space-y-1.5">
       <div class="flex items-center justify-between text-xs text-text-muted">
@@ -53,11 +86,15 @@
 
     <!-- 设备卡片网格 -->
     <div class="flex-1 overflow-auto scrollbar-custom min-h-0">
-      <div v-if="devices.length === 0" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
+      <div v-if="devices.length === 0 && !isRunning && progressPercent === 0" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 text-text-muted/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
         </svg>
-        <p class="text-sm">点击「开始下发命令」启动任务，设备卡片将在此实时显示</p>
+        <p class="text-sm">选择设备和命令组后，点击「开始下发命令」启动任务</p>
+      </div>
+      <div v-else-if="devices.length === 0 && isRunning" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
+        <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+        <p class="text-sm">正在初始化任务...</p>
       </div>
       <div v-else class="grid grid-cols-3 gap-4">
         <div
@@ -131,15 +168,36 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 // @ts-ignore
-import { StartEngineWails, StartBackupWails, ResolveSuspend } from '../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
+import { 
+  StartEngineWithSelection,
+  StartBackupWails, 
+  ResolveSuspend,
+  ListDevices 
+} from '../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
 import { Events } from '@wailsio/runtime'
-import CommandEditor from '../components/task/CommandEditor.vue'
+import type { DeviceAsset } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
+import type { CommandGroup } from '../types/command'
+import DeviceSelector from '../components/task/DeviceSelector.vue'
+import CommandGroupSelector from '../components/task/CommandGroupSelector.vue'
 
+const router = useRouter()
 const isRunning      = ref(false)
 const progressPercent= ref(0)
 const devices        = ref<any[]>([])
+
+// 设备列表和选择状态
+const deviceList = ref<DeviceAsset[]>([])
+const selectedDevices = ref<DeviceAsset[]>([])
+const selectedCommandGroupId = ref('')
+const selectedCommandGroup = ref<CommandGroup | null>(null)
+
+// 是否可以启动任务
+const canStart = computed(() => {
+  return selectedDevices.value.length > 0 && selectedCommandGroupId.value
+})
 
 // 终端 DOM 引用
 const terminalRefs = new Map<string, Element>()
@@ -198,17 +256,50 @@ function logColor(log: string) {
   return 'text-text-muted'
 }
 
-function onCommandsSaved(commands: string[]) {
-  console.log('命令已更新，共', commands.length, '条')
+// 设备选择变化
+function onDeviceSelectionChange(devs: DeviceAsset[]) {
+  selectedDevices.value = devs
+}
+
+// 命令组选择变化
+function onCommandGroupChange(group: CommandGroup | null) {
+  selectedCommandGroup.value = group
+}
+
+// 跳转到设备管理页面
+function goToDevices() {
+  router.push('/devices')
+}
+
+// 加载设备列表
+async function loadDevices() {
+  try {
+    const result = await ListDevices()
+    // 确保字段名正确映射（后端可能用小写 ip，前端期望大写 IP）
+    deviceList.value = (result || []).map((d: any) => ({
+      IP: d.IP || d.ip || '',
+      Port: d.Port || d.port || 22,
+      Protocol: d.Protocol || d.protocol || 'SSH',
+      Username: d.Username || d.username || '',
+      Password: d.Password || d.password || '',
+      Group: d.Group || d.group || '',
+      Tag: d.Tag || d.tag || ''
+    }))
+  } catch (err) {
+    console.error('加载设备列表失败:', err)
+    deviceList.value = []
+  }
 }
 
 async function startEngine() {
-  if (isRunning.value) return
+  if (isRunning.value || !canStart.value) return
   isRunning.value    = true
   progressPercent.value = 5
   devices.value      = []
   try {
-    await StartEngineWails()
+    // 使用新的 API：传入选定的设备 IP 和命令组 ID
+    const deviceIPs = selectedDevices.value.map((d: DeviceAsset) => d.IP)
+    await StartEngineWithSelection(deviceIPs, selectedCommandGroupId.value)
   } catch (err: any) {
     console.error('启动失败:', err)
     isRunning.value = false
@@ -230,6 +321,9 @@ async function startBackup() {
 
 let eventHandlers: any[] = []
 onMounted(() => {
+  // 加载设备列表
+  loadDevices()
+
   const hFinished = Events.On('engine:finished', () => {
     isRunning.value = false
     progressPercent.value = 100

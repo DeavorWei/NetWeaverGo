@@ -140,6 +140,252 @@ export function SaveCommands(commands) {
   return $resultPromise;
 }
 
+/**
+ * ListCommandGroups 获取所有命令组列表
+ * @returns {Promise<any[]> & { cancel(): void }}
+ */
+export function ListCommandGroups() {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.ListCommandGroups",
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * GetCommandGroup 根据 ID 获取单个命令组
+ * @param {string} id
+ * @returns {Promise<any> & { cancel(): void }}
+ */
+export function GetCommandGroup(id) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.GetCommandGroup",
+      id,
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * CreateCommandGroup 创建新命令组
+ * @param {object} group
+ * @returns {Promise<any> & { cancel(): void }}
+ */
+export function CreateCommandGroup(group) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.CreateCommandGroup",
+      group,
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * UpdateCommandGroup 更新命令组
+ * @param {string} id
+ * @param {object} group
+ * @returns {Promise<any> & { cancel(): void }}
+ */
+export function UpdateCommandGroup(id, group) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.UpdateCommandGroup",
+      id,
+      group,
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * DeleteCommandGroup 删除命令组
+ * @param {string} id
+ * @returns {Promise<void> & { cancel(): void }}
+ */
+export function DeleteCommandGroup(id) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.DeleteCommandGroup",
+      id,
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * DuplicateCommandGroup 复制命令组
+ * @param {string} id
+ * @returns {Promise<any> & { cancel(): void }}
+ */
+export function DuplicateCommandGroup(id) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.DuplicateCommandGroup",
+      id,
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * ImportCommandGroup 从文件导入命令组
+ * @param {string} filePath
+ * @returns {Promise<any> & { cancel(): void }}
+ */
+export function ImportCommandGroup(filePath) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.ImportCommandGroup",
+      filePath,
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * ExportCommandGroup 导出命令组到文件
+ * @param {string} id
+ * @param {string} filePath
+ * @returns {Promise<void> & { cancel(): void }}
+ */
+export function ExportCommandGroup(id, filePath) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.ExportCommandGroup",
+      id,
+      filePath,
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * StartEngineWithSelection 使用选定的设备和命令组启动引擎
+ * @param {string[]} deviceIPs
+ * @param {string} commandGroupID
+ * @returns {Promise<void> & { cancel(): void }}
+ */
+export function StartEngineWithSelection(deviceIPs, commandGroupID) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.StartEngineWithSelection",
+      deviceIPs,
+      commandGroupID,
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * ListDevices 获取设备列表
+ * @returns {Promise<config$0.DeviceAsset[]> & { cancel(): void }}
+ */
+export function ListDevices() {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.ListDevices",
+    )
+  );
+  let $typingPromise = /** @type {any} */ (
+    $resultPromise.then((/** @type {any} */ $result) => {
+      return $$createType1($result);
+    })
+  );
+  $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
+  return $typingPromise;
+}
+
+/**
+ * AddDevice 新增设备
+ * @param {config$0.DeviceAsset} device
+ * @returns {Promise<void> & { cancel(): void }}
+ */
+export function AddDevice(device) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.AddDevice",
+      device,
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * UpdateDevice 更新设备
+ * @param {number} index
+ * @param {config$0.DeviceAsset} device
+ * @returns {Promise<void> & { cancel(): void }}
+ */
+export function UpdateDevice(index, device) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.UpdateDevice",
+      index,
+      device,
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * DeleteDevice 删除设备
+ * @param {number} index
+ * @returns {Promise<void> & { cancel(): void }}
+ */
+export function DeleteDevice(index) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.DeleteDevice",
+      index,
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * SaveDevices 批量保存设备列表
+ * @param {config$0.DeviceAsset[]} devices
+ * @returns {Promise<void> & { cancel(): void }}
+ */
+export function SaveDevices(devices) {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.SaveDevices",
+      devices,
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * GetProtocolDefaultPorts 获取协议默认端口映射
+ * @returns {Promise<Record<string, number>> & { cancel(): void }}
+ */
+export function GetProtocolDefaultPorts() {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.GetProtocolDefaultPorts",
+    )
+  );
+  return $resultPromise;
+}
+
+/**
+ * GetValidProtocols 获取有效协议列表
+ * @returns {Promise<string[]> & { cancel(): void }}
+ */
+export function GetValidProtocols() {
+  let $resultPromise = /** @type {any} */ (
+    $Call.ByName(
+      "github.com/NetWeaverGo/core/internal/ui.AppService.GetValidProtocols",
+    )
+  );
+  return $resultPromise;
+}
+
 // Private type creation functions
 const $$createType0 = config$0.DeviceAsset.createFrom;
 const $$createType1 = $Create.Array($$createType0);
