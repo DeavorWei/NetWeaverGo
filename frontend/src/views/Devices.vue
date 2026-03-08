@@ -375,8 +375,17 @@
                   >{{ row.password ? "••••••••" : "-" }}</span
                 >
               </td>
-              <td class="px-4 py-3 text-text-secondary text-xs">
-                {{ row.tag || "-" }}
+              <td class="px-4 py-3 text-text-secondary">
+                <div class="flex flex-wrap gap-1">
+                  <span
+                    v-for="tag in row.tags"
+                    :key="tag"
+                    class="px-1.5 py-0.5 text-[10px] rounded bg-accent/10 text-accent border border-accent/20"
+                  >
+                    {{ tag }}
+                  </span>
+                  <span v-if="row.tags.length === 0" class="text-text-muted/50">-</span>
+                </div>
               </td>
               <td class="px-4 py-3">
                 <div class="flex items-center justify-center gap-2">
@@ -693,14 +702,42 @@
           </div>
           <div>
             <label class="block text-xs font-medium text-text-secondary mb-1.5"
-              >Tag <span class="text-text-muted">(可选)</span></label
+              >Tags <span class="text-text-muted">(多标签可用逗号分隔或按回车添加)</span></label
             >
-            <input
-              v-model="form.tag"
-              type="text"
-              placeholder="设备标签"
-              class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
-            />
+            <div class="flex flex-wrap gap-2 mb-2 min-h-[24px]">
+              <span
+                v-for="(tag, idx) in form.tags"
+                :key="idx"
+                class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-accent/10 text-accent border border-accent/20 shadow-sm"
+              >
+                {{ tag }}
+                <button 
+                  type="button" 
+                  @click="removeTag(idx)" 
+                  class="hover:text-error transition-colors ml-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </span>
+            </div>
+            <div class="flex gap-2">
+              <input
+                v-model="newTag"
+                type="text"
+                placeholder="添加标签"
+                class="flex-1 px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder:text-text-muted/50 focus:border-accent focus:outline-none transition-all"
+                @keyup.enter.prevent="addTag"
+              />
+              <button
+                type="button"
+                @click="addTag"
+                class="px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-xs font-medium hover:bg-accent/20 transition-colors"
+              >
+                添加
+              </button>
+            </div>
           </div>
           <div
             v-if="errorMessage"
@@ -836,12 +873,15 @@
 
           <!-- 标签输入 -->
           <div v-else-if="batchField === 'tag'">
-            <input
-              v-model="batchValue"
-              type="text"
-              :placeholder="'请输入' + batchFieldLabel"
-              class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
-            />
+            <div class="space-y-2">
+              <input
+                v-model="batchValue"
+                type="text"
+                :placeholder="'请输入' + batchFieldLabel + ' (多个用逗号分隔)'"
+                class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
+              />
+              <p class="text-[10px] text-text-muted">提示：输入多个标签时请使用英文或中文逗号分隔。</p>
+            </div>
           </div>
 
           <div
@@ -997,7 +1037,7 @@ interface Device {
   username: string;
   password: string;
   group: string;
-  tag: string;
+  tags: string[];
 }
 
 interface IpRangeHint {
@@ -1068,8 +1108,10 @@ const form = ref<Device>({
   username: "",
   password: "",
   group: "",
-  tag: "",
+  tags: [],
 });
+
+const newTag = ref("");
 
 // 记录上次的协议，用于判断端口是否需要自动更新
 const lastProtocol = ref("SSH");
@@ -1097,8 +1139,7 @@ const filteredData = computed(() => {
         searchValue = (device.group || "").toLowerCase();
         break;
       case "tag":
-        searchValue = (device.tag || "").toLowerCase();
-        break;
+        return device.tags.some(t => t.toLowerCase().includes(query));
       case "ip":
         searchValue = (device.ip || "").toLowerCase();
         break;
@@ -1280,7 +1321,7 @@ async function loadDevices() {
         username: d.username || d.Username || "",
         password: d.password || d.Password || "",
         group: d.group || d.Group || "",
-        tag: d.tag || d.Tag || "",
+        tags: (d.tag || d.Tag || "").split(",").map((s: string) => s.trim()).filter(Boolean),
       }));
     }
   } catch (e) {
@@ -1330,8 +1371,9 @@ function openAddModal() {
     username: "",
     password: "",
     group: "",
-    tag: "",
+    tags: [],
   };
+  newTag.value = "";
   lastProtocol.value = "SSH";
   errorMessage.value = "";
   showPassword.value = false;
@@ -1354,6 +1396,7 @@ function openEditModal(idx: number) {
   showPassword.value = false;
   ipRangeHint.value = null;
   ipValidationError.value = "";
+  newTag.value = "";
   showModal.value = true;
 }
 
@@ -1363,6 +1406,40 @@ function closeModal() {
   errorMessage.value = "";
   ipRangeHint.value = null;
   ipValidationError.value = "";
+}
+
+// 标签操作
+function addTag() {
+  const tag = newTag.value.trim();
+  if (tag && !form.value.tags.includes(tag)) {
+    form.value.tags.push(tag);
+  }
+  newTag.value = "";
+}
+
+function removeTag(index: number) {
+  form.value.tags.splice(index, 1);
+}
+
+// 保存设备接口适配器 (将 tags 数组转回逗号字符串)
+async function callWailsWithTags(method: string, ...args: any[]) {
+  const processedArgs = args.map(arg => {
+    if (arg && typeof arg === 'object' && 'tags' in arg && Array.isArray(arg.tags)) {
+      const { tags, ...rest } = arg;
+      return { ...rest, tag: tags.join(',') };
+    }
+    if (Array.isArray(arg)) {
+      return arg.map(item => {
+        if (item && typeof item === 'object' && 'tags' in item && Array.isArray(item.tags)) {
+          const { tags, ...rest } = item;
+          return { ...rest, tag: tags.join(',') };
+        }
+        return item;
+      });
+    }
+    return arg;
+  });
+  return Call.ByName(method, ...processedArgs);
 }
 
 // 保存设备
@@ -1381,7 +1458,7 @@ async function saveDevice() {
 
     if (isEditing.value) {
       // 编辑模式 - 单设备
-      await Call.ByName(
+      await callWailsWithTags(
         "github.com/NetWeaverGo/core/internal/ui.AppService.UpdateDevice",
         editingIndex.value,
         form.value,
@@ -1407,20 +1484,20 @@ async function saveDevice() {
               username: form.value.username,
               password: form.value.password,
               group: form.value.group,
-              tag: form.value.tag,
+              tags: [...form.value.tags],
             });
           }
 
           // 合并现有设备并保存
           const allDevices = [...data.value, ...newDevices];
-          await Call.ByName(
+          await callWailsWithTags(
             "github.com/NetWeaverGo/core/internal/ui.AppService.SaveDevices",
             allDevices,
           );
         }
       } else {
         // 单设备新增
-        await Call.ByName(
+        await callWailsWithTags(
           "github.com/NetWeaverGo/core/internal/ui.AppService.AddDevice",
           form.value,
         );
@@ -1505,12 +1582,12 @@ async function saveBatchEdit() {
       } else if (batchField.value === "group") {
         newDevice.group = batchValue.value as string;
       } else if (batchField.value === "tag") {
-        newDevice.tag = batchValue.value as string;
+        newDevice.tags = (batchValue.value as string).split(',').map(s => s.trim()).filter(Boolean);
       }
       return newDevice;
     });
 
-    await Call.ByName(
+    await callWailsWithTags(
       "github.com/NetWeaverGo/core/internal/ui.AppService.SaveDevices",
       updatedDevices,
     );

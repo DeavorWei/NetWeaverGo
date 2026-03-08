@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { CreateCommandGroup } from '../../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
+
+const router = useRouter()
 
 const showSyntaxHelp = ref(false)
 const showUsageHelp = ref(false)
@@ -102,6 +106,228 @@ const triggerToast = (msg: string) => {
   toastTimer = setTimeout(() => {
     showToast.value = false
   }, 3000)
+}
+
+// ========== 发送到命令管理功能状态 ==========
+
+// 弹窗显示状态
+const sendModal = ref({
+  show: false,           // 弹窗是否显示
+  mode: 'merge' as 'merge' | 'split',  // 创建模式: 'merge' | 'split'
+  saving: false,         // 保存中状态
+  form: {
+    name: '',            // 命令组名称（合并模式）或名称前缀（分开模式）
+    description: '',     // 描述
+    tags: [] as string[] // 标签
+  }
+})
+
+// 标签输入临时状态
+const newSendTag = ref('')
+
+// 创建结果状态（用于成功后显示）
+const sendResult = ref({
+  show: false,           // 是否显示结果提示
+  success: true,         // 是否成功
+  message: '',           // 提示消息
+  createdCount: 0,       // 创建的命令组数量
+  groupIds: [] as string[] // 创建的命令组ID列表
+})
+
+// 生成默认名称（带时间戳）
+const defaultGroupName = computed(() => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hour = String(now.getHours()).padStart(2, '0')
+  const minute = String(now.getMinutes()).padStart(2, '0')
+  const second = String(now.getSeconds()).padStart(2, '0')
+  return `ConfigForge_${year}${month}${day}_${hour}${minute}${second}`
+})
+
+// 预览信息
+const sendPreview = computed(() => {
+  const count = outputBlocks.value.length
+  if (sendModal.value.mode === 'merge') {
+    return {
+      type: 'merge',
+      commandCount: count,
+      message: `共 ${count} 条命令将被添加`
+    }
+  } else {
+    // 生成示例名称
+    const examples: string[] = []
+    const prefix = sendModal.value.form.name || 'ConfigForge_'
+    for (let i = 0; i < Math.min(count, 3); i++) {
+      examples.push(`${prefix}${String(i + 1).padStart(2, '0')}`)
+    }
+    return {
+      type: 'split',
+      groupCount: count,
+      message: `将创建 ${count} 个命令组`,
+      examples: examples
+    }
+  }
+})
+
+/**
+ * 打开发送到命令管理弹窗
+ * 初始化表单数据
+ */
+function openSendModal() {
+  // 重置表单状态
+  sendModal.value = {
+    show: true,
+    mode: 'merge',
+    saving: false,
+    form: {
+      name: defaultGroupName.value,
+      description: '从 ConfigForge 生成的配置',
+      tags: ['ConfigForge']
+    }
+  }
+  newSendTag.value = ''
+}
+
+/**
+ * 关闭发送弹窗
+ */
+function closeSendModal() {
+  sendModal.value.show = false
+}
+
+/**
+ * 添加标签
+ */
+function addSendTag() {
+  const tag = newSendTag.value.trim()
+  if (tag && !sendModal.value.form.tags.includes(tag)) {
+    sendModal.value.form.tags.push(tag)
+  }
+  newSendTag.value = ''
+}
+
+/**
+ * 移除标签
+ */
+function removeSendTag(index: number) {
+  sendModal.value.form.tags.splice(index, 1)
+}
+
+/**
+ * 执行创建命令组
+ */
+async function executeSend() {
+  if (sendModal.value.saving) return
+  
+  // 表单验证
+  const { name, description, tags } = sendModal.value.form
+  if (!name.trim()) {
+    triggerToast('请输入命令组名称')
+    return
+  }
+  
+  if (outputBlocks.value.length === 0) {
+    triggerToast('没有可发送的配置')
+    return
+  }
+  
+  sendModal.value.saving = true
+  
+  try {
+    if (sendModal.value.mode === 'merge') {
+      // ===== 合并模式：创建单个命令组 =====
+      // 将所有 block 展开并拆分为独立行，确保符合后端命令管理系统的行处理逻辑
+      const allLines: string[] = []
+      outputBlocks.value.forEach(block => {
+        if (block) {
+          const lines = block.split('\n').map(l => l.trim()).filter(l => l !== '')
+          allLines.push(...lines)
+        }
+      })
+
+      const groupData = {
+        name: name.trim(),
+        description: description.trim(),
+        tags: tags,
+        commands: allLines
+      }
+      
+      const result = await CreateCommandGroup(groupData)
+      
+      // 显示成功提示
+      showSendResult(true, `命令组「${name.trim()}」创建成功`, 1, [result.id || ''])
+      
+    } else {
+      // ===== 分开模式：批量创建多个命令组 =====
+      const createdIds: string[] = []
+      const prefix = name.trim()
+      
+      for (let i = 0; i < outputBlocks.value.length; i++) {
+        const block = outputBlocks.value[i]
+        if (!block) continue
+        
+        // 将当前 block 拆分为独立行
+        const blockLines = block.split('\n').map(l => l.trim()).filter(l => l !== '')
+        if (blockLines.length === 0) continue
+
+        // 生成序号：01, 02, ..., 10, 11, ...
+        const seq = String(i + 1).padStart(2, '0')
+        
+        const groupData = {
+          name: `${prefix}${seq}`,
+          description: description.trim(),
+          tags: tags,
+          commands: blockLines
+        }
+        
+        const result = await CreateCommandGroup(groupData)
+        createdIds.push(result.id || '')
+      }
+      
+      // 显示成功提示
+      showSendResult(
+        true, 
+        `成功创建 ${createdIds.length} 个命令组`, 
+        createdIds.length, 
+        createdIds
+      )
+    }
+    
+    closeSendModal()
+    
+  } catch (err: any) {
+    console.error('创建命令组失败:', err)
+    triggerToast('创建失败: ' + (err.message || err))
+  } finally {
+    sendModal.value.saving = false
+  }
+}
+
+/**
+ * 显示创建结果
+ */
+function showSendResult(success: boolean, message: string, count: number, ids: string[]) {
+  sendResult.value = {
+    show: true,
+    success,
+    message,
+    createdCount: count,
+    groupIds: ids
+  }
+  
+  // 5秒后自动隐藏
+  setTimeout(() => {
+    sendResult.value.show = false
+  }, 5000)
+}
+
+/**
+ * 跳转到命令管理页面
+ */
+function goToCommands() {
+  router.push('/commands')
 }
 
 // 动态变量管理
@@ -574,6 +800,21 @@ const copyAll = async () => {
 
           <!-- 功能按钮区 -->
           <div class="flex space-x-2 items-center" v-if="outputBlocks.length > 0">
+            <!-- 新增：发送到命令管理按钮 -->
+            <button 
+              @click="openSendModal"
+              class="btn btn-sm btn-secondary group relative"
+              title="发送到命令管理"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span class="absolute top-full mt-2 right-0 px-3 py-1.5 bg-bg-primary text-text-primary text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl pointer-events-none z-50">
+                发送到命令管理
+                <span class="absolute -top-1 right-2 w-2 h-2 bg-bg-primary rotate-45"></span>
+              </span>
+            </button>
+            
             <button 
               @click="downloadSplit"
               class="btn btn-sm btn-secondary group relative"
@@ -651,6 +892,174 @@ const copyAll = async () => {
       </svg>
     </button>
 
+    <!-- 发送到命令管理弹窗 -->
+    <Transition name="modal">
+      <div v-if="sendModal.show" class="modal-container modal-active">
+        <div class="modal-overlay" @click="closeSendModal"></div>
+        
+        <div class="modal modal-lg modal-glass">
+          <!-- 头部 -->
+          <div class="modal-header">
+            <h3 class="modal-header-title">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              发送到命令管理
+              <span class="text-xs text-text-muted font-normal ml-2">将生成的配置创建为命令组</span>
+            </h3>
+            <button @click="closeSendModal" class="modal-close">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <!-- 表单内容 -->
+          <div class="modal-body space-y-5">
+            <!-- 模式选择 -->
+            <div class="space-y-3">
+              <label class="text-sm font-medium text-text-primary">创建模式</label>
+              <div class="grid grid-cols-2 gap-3">
+                <!-- 合并模式 -->
+                <div 
+                  class="mode-card"
+                  :class="{ active: sendModal.mode === 'merge' }"
+                  @click="sendModal.mode = 'merge'"
+                >
+                  <div class="mode-icon">📦</div>
+                  <div class="mode-title">合并为一个命令组</div>
+                  <div class="mode-desc">所有配置块合并，每个块作为一条命令</div>
+                </div>
+                <!-- 分开模式 -->
+                <div 
+                  class="mode-card"
+                  :class="{ active: sendModal.mode === 'split' }"
+                  @click="sendModal.mode = 'split'"
+                >
+                  <div class="mode-icon">📂</div>
+                  <div class="mode-title">分开创建多个命令组</div>
+                  <div class="mode-desc">每个配置块创建独立命令组</div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 基本信息 -->
+            <div class="space-y-4">
+              <!-- 名称 -->
+              <div class="space-y-1.5">
+                <label class="text-sm font-medium text-text-primary">
+                  {{ sendModal.mode === 'merge' ? '命令组名称' : '名称前缀' }}
+                  <span class="text-error">*</span>
+                </label>
+                <input 
+                  v-model="sendModal.form.name" 
+                  type="text" 
+                  class="w-full px-4 py-2.5 rounded-lg bg-bg-secondary border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
+                  :placeholder="sendModal.mode === 'merge' ? '输入命令组名称' : '输入名称前缀'"
+                />
+              </div>
+              
+              <!-- 描述 -->
+              <div class="space-y-1.5">
+                <label class="text-sm font-medium text-text-primary">描述</label>
+                <input 
+                  v-model="sendModal.form.description" 
+                  type="text" 
+                  class="w-full px-4 py-2.5 rounded-lg bg-bg-secondary border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
+                  placeholder="输入描述（可选）" 
+                />
+              </div>
+              
+              <!-- 标签 -->
+              <div class="space-y-1.5">
+                <label class="text-sm font-medium text-text-primary">标签</label>
+                <div class="flex flex-wrap gap-2 mb-2">
+                  <span 
+                    v-for="(tag, idx) in sendModal.form.tags" 
+                    :key="idx" 
+                    class="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full bg-accent/10 text-accent border border-accent/20"
+                  >
+                    {{ tag }}
+                    <button @click="removeSendTag(idx)" class="hover:text-error transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="flex gap-2">
+                  <input 
+                    v-model="newSendTag" 
+                    type="text" 
+                    class="flex-1 px-3 py-2 rounded-lg bg-bg-secondary border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50 transition-all"
+                    placeholder="添加标签" 
+                    @keyup.enter="addSendTag"
+                  />
+                  <button 
+                    @click="addSendTag" 
+                    class="px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-colors"
+                  >
+                    添加
+                  </button>
+                </div>
+              </div>
+              
+              <!-- 预览信息 -->
+              <div class="preview-box">
+                <div class="preview-icon">📊</div>
+                <div class="preview-content">
+                  <template v-if="sendModal.mode === 'merge'">
+                    <span class="preview-text">共 <strong class="text-accent">{{ outputBlocks.length }}</strong> 条命令将被添加</span>
+                  </template>
+                  <template v-else>
+                    <span class="preview-text">将创建 <strong class="text-accent">{{ outputBlocks.length }}</strong> 个命令组</span>
+                    <div class="preview-examples">
+                      <span class="text-xs text-text-muted">命名规则：</span>
+                      <code v-for="(ex, i) in sendPreview.examples" :key="i" class="px-2 py-0.5 rounded bg-bg-tertiary font-mono text-xs">{{ ex }}</code>
+                      <span v-if="outputBlocks.length > 3" class="text-xs text-text-muted">...</span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 底部按钮 -->
+          <div class="modal-footer">
+            <button @click="closeSendModal" class="btn btn-secondary">取消</button>
+            <button 
+              @click="executeSend" 
+              :disabled="sendModal.saving" 
+              class="btn btn-primary"
+            >
+              <svg v-if="sendModal.saving" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke-opacity="1"/>
+              </svg>
+              {{ sendModal.saving ? '创建中...' : '确认创建' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 创建成功提示 -->
+    <Transition name="toast">
+      <div v-if="sendResult.show" class="success-toast">
+        <div class="toast-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="toast-content">
+          <div class="toast-title">{{ sendResult.message }}</div>
+          <button @click="goToCommands" class="toast-link">
+            查看命令管理 →
+          </button>
+        </div>
+      </div>
+    </Transition>
+
     <!-- 使用简介弹窗 -->
     <Transition name="modal">
       <div v-if="showUsageHelp" class="modal-container modal-active">
@@ -658,18 +1067,18 @@ const copyAll = async () => {
         
         <div class="modal modal-lg modal-glass">
           <div class="modal-header">
-          <h3 class="modal-header-title">
+            <h3 class="modal-header-title">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            ConfigForge 使用简介
-          </h3>
-          <button @click="showUsageHelp = false" class="modal-close">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+              ConfigForge 使用简介
+            </h3>
+            <button @click="showUsageHelp = false" class="modal-close">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         
         <div class="modal-body text-sm text-text-secondary space-y-5">
           <p class="leading-relaxed text-base">
@@ -704,8 +1113,8 @@ const copyAll = async () => {
                <strong>自动化生成提示：</strong>系统默认开启 <span class="font-semibold">"自动实时生成"</span>，随着您输入变量或模板内容，结果将无缝实时渲染，大大提高工作效率。
              </p>
           </div>
-        </div>
-        
+          </div>
+          
           <div class="modal-footer">
             <button @click="showUsageHelp = false" class="btn btn-primary">
               我知道了
@@ -822,3 +1231,84 @@ const copyAll = async () => {
     </Transition>
   </div>
 </template>
+
+<style scoped>
+@reference "../../styles/index.css";
+
+/* 模式选择卡片 */
+.mode-card {
+  @apply relative p-4 rounded-xl border border-border bg-bg-secondary/50 
+         cursor-pointer transition-all duration-200;
+}
+.mode-card:hover {
+  @apply border-accent/30 bg-bg-secondary/80;
+}
+.mode-card.active {
+  @apply border-accent bg-accent/10 ring-1 ring-accent/20;
+}
+.mode-icon {
+  @apply text-2xl mb-2;
+}
+.mode-title {
+  @apply text-sm font-semibold text-text-primary;
+}
+.mode-desc {
+  @apply text-xs text-text-muted mt-1;
+}
+
+/* 预览信息框 */
+.preview-box {
+  @apply flex items-start gap-3 p-4 rounded-xl bg-info/10 border border-info/20;
+}
+.preview-icon {
+  @apply text-lg;
+}
+.preview-content {
+  @apply flex-1;
+}
+.preview-text {
+  @apply text-sm text-text-secondary;
+}
+.preview-examples {
+  @apply flex items-center gap-2 mt-2 text-xs text-text-muted flex-wrap;
+}
+.preview-examples code {
+  @apply px-2 py-0.5 rounded bg-bg-tertiary font-mono;
+}
+
+/* 成功提示 */
+.success-toast {
+  @apply fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] 
+         flex items-center gap-3 px-5 py-4 rounded-xl 
+         bg-success/95 text-white shadow-lg shadow-success/20;
+}
+.success-toast .toast-icon {
+  @apply flex items-center justify-center w-8 h-8 rounded-full bg-white/20;
+}
+.success-toast .toast-content {
+  @apply flex flex-col;
+}
+.success-toast .toast-title {
+  @apply text-sm font-medium;
+}
+.success-toast .toast-link {
+  @apply text-xs text-white/80 hover:text-white underline underline-offset-2 mt-1 text-left;
+}
+
+/* Toast 动画 */
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+
+.toast-enter-from {
+  opacity: 0;
+  transform: translate(-50%, 20px);
+}
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -10px);
+}
+</style>
+
