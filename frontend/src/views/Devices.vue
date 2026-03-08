@@ -486,9 +486,28 @@
       <div
         class="flex items-center justify-between px-5 py-3.5 border-t border-border bg-bg-panel"
       >
-      <span class="text-xs text-text-muted"
-          >第 {{ page }} / {{ totalPages }} 页，共 {{ filteredData.length }} 条</span
-        >
+        <div class="flex items-center gap-6">
+          <span class="text-xs text-text-muted">
+            第 {{ page }} / {{ totalPages }} 页，共 {{ filteredData.length }} 条
+          </span>
+          <!-- 页面跳转 -->
+          <div class="flex items-center gap-2 border-l border-border pl-6">
+            <span class="text-xs text-text-muted">前往</span>
+            <input
+              v-model="jumpPageInput"
+              type="text"
+              class="w-12 h-7 text-xs text-center bg-bg-panel border border-border rounded focus:border-accent focus:outline-none transition-colors font-mono"
+              placeholder="页码"
+              @keyup.enter="jumpToPage"
+            />
+            <button
+              @click="jumpToPage"
+              class="px-2 h-7 text-xs text-accent hover:bg-accent/10 rounded transition-colors font-medium"
+            >
+              跳转
+            </button>
+          </div>
+        </div>
         <div class="flex items-center gap-2">
           <button
             @click="page = Math.max(1, page - 1)"
@@ -1049,6 +1068,7 @@ interface IpRangeHint {
 const data = ref<Device[]>([]);
 const page = ref(1);
 const pageSize = 10; // 修改为10条每页
+const jumpPageInput = ref("");
 
 // 搜索相关
 const searchQuery = ref("");
@@ -1234,6 +1254,24 @@ watch(searchType, () => {
 function resetSearch() {
   searchQuery.value = "";
   page.value = 1;
+}
+
+// 页面跳转
+function jumpToPage() {
+  const target = parseInt(jumpPageInput.value);
+  if (isNaN(target)) {
+    jumpPageInput.value = "";
+    return;
+  }
+
+  if (target >= 1 && target <= totalPages.value) {
+    page.value = target;
+  } else if (target < 1) {
+    page.value = 1;
+  } else if (target > totalPages.value) {
+    page.value = totalPages.value;
+  }
+  jumpPageInput.value = "";
 }
 
 // 验证单个 IP 地址格式
