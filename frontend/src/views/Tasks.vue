@@ -33,10 +33,10 @@
     </div>
 
     <!-- 步骤选择区域（未运行时显示） -->
-    <div v-if="!isRunning && progressPercent === 0" class="flex-shrink-0 space-y-5">
+    <div v-if="!isRunning && progressPercent === 0" class="flex-1 flex flex-col min-h-0 space-y-4">
       <!-- 步骤1: 选择目标设备 -->
-      <div class="bg-bg-card border border-border rounded-xl overflow-hidden">
-        <div class="flex items-center gap-3 px-4 py-3 border-b border-border bg-bg-panel">
+      <div class="bg-bg-card border border-border rounded-xl overflow-hidden flex-shrink-0">
+        <div class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel">
           <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">1</div>
           <span class="text-sm font-medium text-text-primary">选择目标设备</span>
           <button
@@ -46,7 +46,7 @@
             管理设备资产
           </button>
         </div>
-        <div class="p-4">
+        <div class="p-3">
           <DeviceSelector
             :devices="deviceList"
             @selectionChange="onDeviceSelectionChange"
@@ -55,14 +55,15 @@
       </div>
 
       <!-- 步骤2: 选择命令组 -->
-      <div class="bg-bg-card border border-border rounded-xl overflow-hidden">
-        <div class="flex items-center gap-3 px-4 py-3 border-b border-border bg-bg-panel">
+      <div class="bg-bg-card border border-border rounded-xl overflow-hidden flex-1 flex flex-col min-h-0">
+        <div class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel flex-shrink-0">
           <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">2</div>
           <span class="text-sm font-medium text-text-primary">选择命令组</span>
         </div>
-        <div class="p-4">
+        <div class="px-3 pb-3 flex-1 min-h-0 flex flex-col">
           <CommandGroupSelector
             v-model="selectedCommandGroupId"
+            class="flex-1"
             @selectionChange="onCommandGroupChange"
           />
         </div>
@@ -84,15 +85,9 @@
       </div>
     </div>
 
-    <!-- 设备卡片网格 -->
-    <div class="flex-1 overflow-auto scrollbar-custom min-h-0">
-      <div v-if="devices.length === 0 && !isRunning && progressPercent === 0" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 text-text-muted/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
-        </svg>
-        <p class="text-sm">选择设备和命令组后，点击「开始下发命令」启动任务</p>
-      </div>
-      <div v-else-if="devices.length === 0 && isRunning" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
+    <!-- 设备卡片网格 (仅在运行中或有进度时显示) -->
+    <div v-if="isRunning || progressPercent > 0" class="flex-1 overflow-auto scrollbar-custom min-h-0">
+      <div v-if="devices.length === 0 && isRunning" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
         <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
         <p class="text-sm">正在初始化任务...</p>
       </div>
@@ -128,6 +123,11 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- 底部提示 -->
+    <div v-if="!isRunning && progressPercent === 0" class="flex-shrink-0 text-center py-2">
+      <p class="text-sm text-text-muted">选择设备和命令组后，点击「开始下发命令」启动任务</p>
     </div>
 
     <!-- 自定义 Modal 对话框 -->

@@ -72,4 +72,75 @@
     outline: 2px solid var(--color-accent-primary);
     outline-offset: 2px;
   }
+
+  /* 可调整大小 */
+  .resize-y {
+    resize: vertical;
+    overflow: auto;
+  }
+
+  .resize-x {
+    resize: horizontal;
+    overflow: auto;
+  }
+
+  .resize-both {
+    resize: both;
+    overflow: auto;
+  }
+
+  .resize-none {
+    resize: none;
+  }
+
+  /* 拖拽手柄指示器 */
+  .resize-handle {
+    position: relative;
+  }
+
+  .resize-handle::after {
+    content: "";
+    position: absolute;
+    background-color: var(--color-border-default);
+    transition: background-color var(--transition-fast, 150ms);
+  }
+
+  .resize-handle-y::after {
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2rem;
+    height: 0.25rem;
+    border-radius: var(--radius-full, 9999px);
+  }
+
+  .resize-handle-y:hover::after {
+    background-color: var(--color-accent-primary);
+  }
+
+  .resize-handle-x::after {
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0.25rem;
+    height: 2rem;
+    border-radius: var(--radius-full, 9999px);
+  }
+
+  .resize-handle-x:hover::after {
+    background-color: var(--color-accent-primary);
+  }
+
+  /* 光标类型 */
+  .cursor-ns-resize {
+    cursor: ns-resize;
+  }
+
+  .cursor-ew-resize {
+    cursor: ew-resize;
+  }
+
+  .cursor-nwse-resize {
+    cursor: nwse-resize;
+  }
 }

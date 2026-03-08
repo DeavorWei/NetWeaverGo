@@ -10,14 +10,14 @@ const activeTab = ref<'ipv4' | 'ipv6'>('ipv4')
   <div class="h-full w-full flex flex-col relative bg-transparent">
     <!-- V4/V6 切换开关 -->
     <div class="w-full relative z-10 mb-6 flex justify-center">
-      <div class="bg-bg-tertiary/50 backdrop-blur-md p-1 rounded-xl shadow-sm border border-border inline-flex">
+      <div class="bg-bg-tertiary/20 glass p-1 rounded-xl border border-border inline-flex">
         <button 
           @click="activeTab = 'ipv4'"
           :class="[
             'px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-300',
             activeTab === 'ipv4' 
-              ? 'bg-accent text-white shadow-md' 
-              : 'text-text-muted hover:text-accent'
+              ? 'bg-accent text-white shadow-glow' 
+              : 'text-text-muted hover:text-accent hover:bg-bg-hover/50'
           ]"
         >
           IPv4 计算器
@@ -27,8 +27,8 @@ const activeTab = ref<'ipv4' | 'ipv6'>('ipv4')
           :class="[
             'px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-300',
             activeTab === 'ipv6' 
-              ? 'bg-accent text-white shadow-md' 
-              : 'text-text-muted hover:text-accent'
+              ? 'bg-accent text-white shadow-glow' 
+              : 'text-text-muted hover:text-accent hover:bg-bg-hover/50'
           ]"
         >
           IPv6 计算器

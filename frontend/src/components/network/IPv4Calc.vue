@@ -318,7 +318,7 @@ const exportToCSV = () => {
 <template>
   <div class="space-y-6 md:space-y-8">
     <!-- 输入模块 -->
-    <section class="bg-bg-secondary border border-border rounded-2xl shadow-card p-5 md:p-8 backdrop-blur-md">
+    <section class="bg-bg-secondary/60 glass border border-border rounded-2xl shadow-card p-5 md:p-8">
       <h2 class="text-base font-semibold text-text-primary mb-4 md:mb-6 flex items-center">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
@@ -328,38 +328,38 @@ const exportToCSV = () => {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="flex flex-col gap-2">
           <label class="text-sm font-medium text-text-secondary">IP 地址</label>
-          <input 
-            type="text" 
-            v-model="ipStr" 
-            placeholder="例如: 192.168.1.10" 
-            class="px-4 py-3 bg-bg-tertiary border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
-          />
-        </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-text-secondary">子网掩码 <span class="font-normal text-text-muted">(CIDR/十进制/反掩码)</span></label>
-          <input 
-            type="text" 
-            v-model="maskStr" 
-            placeholder="例如: 24 或 255.255.255.0" 
-            class="px-4 py-3 bg-bg-tertiary border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-text-primary placeholder-text-muted"
-          />
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-border">
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-text-secondary flex items-center justify-between">
-            选项一：需划分的主机数
-            <span v-if="subnetCountStr.length > 0" class="text-xs text-warning font-medium">已被互斥禁用</span>
-          </label>
-          <div class="relative">
             <input 
               type="text" 
-              v-model="hostCountStr" 
-              :disabled="subnetCountStr.length > 0"
-              placeholder="例如: 50" 
-              class="px-4 py-3 bg-bg-tertiary border border-border rounded-xl focus:ring-2 focus:ring-success focus:border-success outline-none transition-all w-full font-mono disabled:opacity-50 disabled:cursor-not-allowed text-text-primary placeholder-text-muted"
+              v-model="ipStr" 
+              placeholder="例如: 192.168.1.10" 
+              class="px-4 py-3 bg-bg-tertiary/50 border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
             />
+          </div>
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-medium text-text-secondary">子网掩码 <span class="font-normal text-text-muted">(CIDR/十进制/反掩码)</span></label>
+            <input 
+              type="text" 
+              v-model="maskStr" 
+              placeholder="例如: 24 或 255.255.255.0" 
+              class="px-4 py-3 bg-bg-tertiary/50 border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-text-primary placeholder-text-muted"
+            />
+          </div>
+        </div>
+  
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-border">
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-medium text-text-secondary flex items-center justify-between">
+              选项一：需划分的主机数
+              <span v-if="subnetCountStr.length > 0" class="text-xs text-warning font-medium">已被互斥禁用</span>
+            </label>
+            <div class="relative">
+              <input 
+                type="text" 
+                v-model="hostCountStr" 
+                :disabled="subnetCountStr.length > 0"
+                placeholder="例如: 50" 
+                class="px-4 py-3 bg-bg-tertiary/50 border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono disabled:opacity-50 disabled:cursor-not-allowed text-text-primary placeholder-text-muted"
+              />
             <button 
               v-if="hostCountStr" 
               @click="hostCountStr = ''" 
@@ -378,13 +378,13 @@ const exportToCSV = () => {
             <span v-if="hostCountStr.length > 0" class="text-xs text-warning font-medium">已被互斥禁用</span>
           </label>
           <div class="relative">
-            <input 
-              type="text" 
-              v-model="subnetCountStr" 
-              :disabled="hostCountStr.length > 0"
-              placeholder="例如: 4" 
-              class="px-4 py-3 bg-bg-tertiary border border-border rounded-xl focus:ring-2 focus:ring-success focus:border-success outline-none transition-all w-full font-mono disabled:opacity-50 disabled:cursor-not-allowed text-text-primary placeholder-text-muted"
-            />
+              <input 
+                type="text" 
+                v-model="subnetCountStr" 
+                :disabled="hostCountStr.length > 0"
+                placeholder="例如: 4" 
+                class="px-4 py-3 bg-bg-tertiary/50 border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono disabled:opacity-50 disabled:cursor-not-allowed text-text-primary placeholder-text-muted"
+              />
             <button 
               v-if="subnetCountStr" 
               @click="subnetCountStr = ''" 
@@ -422,7 +422,7 @@ const exportToCSV = () => {
 
     <!-- 划分子网结果展示 (排在计算结果之前) -->
     <transition name="fade">
-      <section v-if="subnettingEvaluation.subnets.length > 0" class="bg-bg-secondary border border-border rounded-2xl shadow-card p-5 md:p-8 backdrop-blur-md">
+      <section v-if="subnettingEvaluation.subnets.length > 0" class="bg-bg-secondary/60 glass border border-border rounded-2xl shadow-card p-5 md:p-8">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 md:mb-6 gap-3">
           <h2 class="text-base font-semibold text-text-primary flex items-center">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -436,7 +436,7 @@ const exportToCSV = () => {
             </span>
             <button 
               @click="exportToCSV"
-              class="flex items-center text-sm font-medium text-white bg-accent hover:bg-accent/90 px-4 py-1.5 rounded-full shadow-sm transition-all focus:ring-2 focus:ring-accent outline-none"
+              class="flex items-center text-sm font-medium text-white bg-accent hover:bg-accent/90 px-4 py-1.5 rounded-full shadow-glow transition-all focus:ring-2 focus:ring-accent outline-none"
               title="导出为 CSV (Excel可打开)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -494,7 +494,7 @@ const exportToCSV = () => {
 
     <!-- 结果展示 (排在子网列表之后) -->
     <transition name="fade">
-      <section v-if="evaluation.records.length > 0" class="bg-bg-secondary border border-border rounded-2xl shadow-card p-5 md:p-8 backdrop-blur-md">
+      <section v-if="evaluation.records.length > 0" class="bg-bg-secondary/60 glass border border-border rounded-2xl shadow-card p-5 md:p-8">
         <h2 class="text-base font-semibold text-text-primary mb-4 md:mb-6 flex items-center">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
@@ -508,12 +508,12 @@ const exportToCSV = () => {
                 <td class="px-3 md:px-6 py-3 md:py-4 text-sm md:text-base font-medium text-text-secondary w-[30%] sm:w-1/3">{{ record.label }}</td>
                 <td class="px-2 md:px-6 py-3 md:py-4 text-sm md:text-base text-text-primary font-mono">{{ record.value }}</td>
                 <td class="px-3 md:px-6 py-3 md:py-4 text-right w-16 md:w-24">
-                  <button 
-                    @click="copyText(record.value)" 
-                    class="text-xs text-accent hover:text-white hover:bg-accent border border-accent/30 px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg transition-all md:opacity-0 group-hover:opacity-100 focus:opacity-100"
-                  >
-                    复制
-                  </button>
+                    <button 
+                      @click="copyText(record.value)" 
+                      class="text-xs text-accent hover:text-white hover:bg-accent border border-accent/30 px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg transition-all md:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
+                    >
+                      复制
+                    </button>
                 </td>
               </tr>
             </tbody>

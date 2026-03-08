@@ -138,7 +138,7 @@ const switchTab = (tab: 'port' | 'protocol') => {
       </div>
 
       <!-- 常见端口表格视图 -->
-      <div v-if="currentTab === 'port'" class="flex-1 overflow-auto rounded-xl border border-border bg-bg-secondary/30">
+      <div v-if="currentTab === 'port'" class="flex-1 overflow-auto scrollbar-custom rounded-xl border border-border bg-bg-secondary/30">
         <table class="min-w-full divide-y divide-border">
           <thead class="bg-bg-tertiary/80 sticky top-0">
             <tr>
@@ -181,7 +181,7 @@ const switchTab = (tab: 'port' | 'protocol') => {
       </div>
 
       <!-- IP协议号表格视图 -->
-      <div v-if="currentTab === 'protocol'" class="flex-1 overflow-auto rounded-xl border border-border bg-bg-secondary/30">
+      <div v-if="currentTab === 'protocol'" class="flex-1 overflow-auto scrollbar-custom rounded-xl border border-border bg-bg-secondary/30">
         <table class="min-w-full divide-y divide-border">
           <thead class="bg-bg-tertiary/80 sticky top-0">
             <tr>

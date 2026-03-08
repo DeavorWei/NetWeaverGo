@@ -1232,7 +1232,7 @@ const copyAll = async () => {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="postcss">
 @reference "../../styles/index.css";
 
 /* 模式选择卡片 */

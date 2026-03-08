@@ -1,43 +1,45 @@
 <template>
-  <div class="device-selector space-y-4">
-    <!-- 筛选方式选择 -->
-    <div class="flex items-center gap-3 flex-wrap">
-      <span class="text-sm text-text-muted">筛选方式:</span>
-      <div class="flex gap-2 flex-wrap">
-        <button
-          v-for="filter in filterOptions"
-          :key="filter.value"
-          @click="applyFilter(filter.value)"
-          :class="[
-            'px-3 py-1.5 text-xs font-medium rounded-lg border transition-all duration-200',
-            currentFilter === filter.value
-              ? 'bg-accent/15 border-accent/40 text-accent'
-              : 'bg-bg-card border-border text-text-muted hover:text-text-primary hover:border-accent/30'
-          ]"
+  <div class="device-selector space-y-3">
+    <!-- 筛选方式与选项合并行 -->
+    <div class="flex items-center gap-4 flex-wrap bg-bg-panel/50 p-2 rounded-lg border border-border/50">
+      <div class="flex items-center gap-3">
+        <span class="text-xs font-medium text-text-muted uppercase tracking-wider">筛选方式:</span>
+        <div class="flex gap-1.5 flex-wrap">
+          <button
+            v-for="filter in filterOptions"
+            :key="filter.value"
+            @click="applyFilter(filter.value)"
+            :class="[
+              'px-2.5 py-1.5 text-xs font-medium rounded-md border transition-all duration-200',
+              currentFilter === filter.value
+                ? 'bg-accent border-accent text-white shadow-sm'
+                : 'bg-bg-card border-border text-text-muted hover:text-text-primary hover:border-accent/30'
+            ]"
+          >
+            {{ filter.label }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 分组/标签/协议下拉选择 (移动到右侧) -->
+      <div v-if="currentFilter !== 'all' && currentFilter !== 'manual'" class="flex items-center gap-3 pl-4 border-l border-border/50">
+        <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
+          {{ filterLabel }}:
+        </span>
+        <select
+          v-model="selectedOption"
+          class="px-3 py-1.5 rounded-md bg-bg-card border border-border text-xs text-text-primary focus:outline-none focus:border-accent/50 transition-all min-w-[140px]"
         >
-          {{ filter.label }}
-        </button>
+          <option value="">全部{{ filterLabel }}</option>
+          <option v-for="opt in selectOptions" :key="opt.value" :value="opt.value">
+            {{ opt.label }} ({{ opt.count }} 台)
+          </option>
+        </select>
       </div>
     </div>
 
-    <!-- 分组/标签/协议下拉选择 -->
-    <div v-if="currentFilter !== 'all' && currentFilter !== 'manual'" class="flex items-center gap-3">
-      <span class="text-sm text-text-muted">
-        {{ filterLabel }}:
-      </span>
-      <select
-        v-model="selectedOption"
-        class="px-3 py-2 rounded-lg bg-bg-card border border-border text-sm text-text-primary focus:outline-none focus:border-accent/50 transition-all min-w-[180px]"
-      >
-        <option value="">请选择</option>
-        <option v-for="opt in selectOptions" :key="opt.value" :value="opt.value">
-          {{ opt.label }} ({{ opt.count }} 台)
-        </option>
-      </select>
-    </div>
-
     <!-- 已选设备展示 -->
-    <div class="space-y-2">
+    <div class="space-y-1.5">
       <div class="flex items-center justify-between">
         <span class="text-sm text-text-muted">
           已选择: <span class="text-accent font-medium">{{ selectedDevices.length }}</span> 台设备
@@ -67,7 +69,7 @@
       </div>
       
       <!-- 非全选模式: 显示设备列表 -->
-      <div v-if="selectedDevices.length > 0 && currentFilter !== 'all'" class="max-h-48 overflow-y-auto scrollbar-custom border border-border rounded-lg">
+      <div v-if="selectedDevices.length > 0 && currentFilter !== 'all'" class="max-h-32 overflow-y-auto scrollbar-custom border border-border rounded-lg">
         <div
           v-for="device in selectedDevices"
           :key="device.IP"
@@ -118,13 +120,13 @@
             </button>
           </div>
         </div>
-        <div class="max-h-48 overflow-y-auto scrollbar-custom">
+        <div class="max-h-32 overflow-y-auto scrollbar-custom">
           <div
             v-for="device in filteredDeviceList"
             :key="device.IP"
             @click="toggleDevice(device)"
             :class="[
-              'flex items-center justify-between px-4 py-2.5 border-b border-border/50 cursor-pointer transition-colors last:border-0',
+              'flex items-center justify-between px-4 py-2 border-b border-border/50 cursor-pointer transition-colors last:border-0',
               isDeviceSelected(device.IP)
                 ? 'bg-accent/5 hover:bg-accent/10'
                 : 'hover:bg-bg-secondary/50'

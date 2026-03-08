@@ -61,15 +61,34 @@
           <!-- 卡片头部 -->
           <div class="flex items-start justify-between px-4 py-3 border-b border-border bg-bg-panel">
             <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
-                </svg>
-                <h3 class="text-sm font-semibold text-text-primary truncate">{{ group.name }}</h3>
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                  </svg>
+                  <h3 class="text-sm font-semibold text-text-primary truncate">{{ group.name }}</h3>
+                </div>
+                <!-- 标签贴近右侧 -->
+                <div class="flex flex-wrap gap-1 justify-end flex-shrink-0">
+                  <span
+                    v-for="tag in group.tags?.slice(0, 2)"
+                    :key="tag"
+                    class="px-1.5 py-0.5 text-xs rounded bg-accent/10 text-accent border border-accent/20"
+                  >
+                    {{ tag }}
+                  </span>
+                  <span
+                    v-if="group.tags && group.tags.length > 2"
+                    class="px-1.5 py-0.5 text-xs rounded bg-accent/10 text-accent border border-accent/20"
+                  >
+                    +{{ group.tags.length - 2 }}
+                  </span>
+                </div>
               </div>
-              <p class="text-xs text-text-muted mt-1 line-clamp-1">{{ group.description || '暂无描述' }}</p>
+              <!-- 描述单独一行 -->
+              <p class="text-xs text-text-muted line-clamp-1 mt-1">{{ group.description || '暂无描述' }}</p>
             </div>
-            <div class="flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
+            <div class="flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity ml-2">
               <button
                 @click="openEditModal(group)"
                 class="p-1.5 rounded-md text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
@@ -101,18 +120,6 @@
                 </svg>
               </button>
             </div>
-          </div>
-          
-          <!-- 标签 -->
-          <div class="px-4 py-2 flex flex-wrap gap-1.5">
-            <span
-              v-for="tag in group.tags"
-              :key="tag"
-              class="px-2 py-0.5 text-xs rounded-full bg-accent/10 text-accent border border-accent/20"
-            >
-              {{ tag }}
-            </span>
-            <span v-if="!group.tags || group.tags.length === 0" class="text-xs text-text-muted">无标签</span>
           </div>
           
           <!-- 命令预览 -->
@@ -198,7 +205,7 @@
             <!-- 标签 -->
             <div class="space-y-1.5">
               <label class="text-sm font-medium text-text-primary">标签</label>
-              <div class="flex flex-wrap gap-2 mb-2">
+              <div class="flex flex-wrap gap-2 mb-2 justify-start">
                 <span
                   v-for="(tag, idx) in editModal.form.tags"
                   :key="idx"
@@ -315,7 +322,20 @@
     <Transition name="modal">
       <div v-if="previewModal.show" class="fixed inset-0 z-50 flex items-center justify-center">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="closePreviewModal"></div>
-        <div class="relative bg-bg-card border border-border rounded-xl shadow-2xl max-w-xl w-full mx-4 max-h-[85vh] overflow-hidden animate-slide-in flex flex-col">
+        <div 
+          ref="previewModalRef"
+          class="relative bg-bg-card border border-border rounded-xl shadow-2xl mx-4 animate-slide-in flex flex-col min-w-[400px] min-h-[400px] max-w-[95vw] max-h-[90vh]"
+          style="width: 700px; height: 600px;"
+        >
+          <!-- 拖拽调整指示器 - 右下角 -->
+          <div 
+            @mousedown="startResize"
+            class="absolute bottom-0 right-0 w-6 h-6 flex items-center justify-center cursor-nwse-resize opacity-60 hover:opacity-100 transition-opacity z-10"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M21 15l-6 6m6-12l-12 12"/>
+            </svg>
+          </div>
           <!-- 弹窗头部 -->
           <div class="flex items-center justify-between px-5 py-4 border-b border-border bg-bg-panel flex-shrink-0">
             <div class="flex items-center gap-3">
@@ -341,49 +361,35 @@
           </div>
 
           <!-- 内容区域 -->
-          <div class="flex-1 overflow-y-auto scrollbar-custom p-5 space-y-4">
-            <!-- 描述信息 -->
-            <div v-if="previewModal.group?.description" class="space-y-1.5">
-              <label class="text-xs font-medium text-text-muted uppercase tracking-wide">描述</label>
-              <p class="text-sm text-text-secondary">{{ previewModal.group.description }}</p>
-            </div>
-
-            <!-- 标签 -->
-            <div class="space-y-1.5">
-              <label class="text-xs font-medium text-text-muted uppercase tracking-wide">标签</label>
-              <div class="flex flex-wrap gap-1.5">
-                <span
-                  v-for="tag in previewModal.group?.tags"
-                  :key="tag"
-                  class="px-2 py-0.5 text-xs rounded-full bg-accent/10 text-accent border border-accent/20"
-                >
-                  {{ tag }}
-                </span>
-                <span v-if="!previewModal.group?.tags || previewModal.group.tags.length === 0" class="text-xs text-text-muted">无标签</span>
+          <div class="flex-1 flex flex-col min-h-0 p-5">
+            <!-- 描述和标签并排显示 -->
+            <div class="flex gap-4 flex-shrink-0">
+              <!-- 描述 - 占50% -->
+              <div class="flex-1 min-w-0 space-y-1.5">
+                <label class="text-xs font-medium text-text-muted uppercase tracking-wide">描述</label>
+                <p class="text-sm text-text-secondary break-words">{{ previewModal.group?.description || '暂无描述' }}</p>
+              </div>
+              <!-- 标签 - 占50% -->
+              <div class="flex-1 min-w-0 space-y-1.5">
+                <label class="text-xs font-medium text-text-muted uppercase tracking-wide">标签</label>
+                <div class="flex flex-wrap gap-1.5">
+                  <span
+                    v-for="tag in previewModal.group?.tags"
+                    :key="tag"
+                    class="px-2 py-0.5 text-xs rounded-full bg-accent/10 text-accent border border-accent/20"
+                  >
+                    {{ tag }}
+                  </span>
+                  <span v-if="!previewModal.group?.tags || previewModal.group.tags.length === 0" class="text-xs text-text-muted">无标签</span>
+                </div>
               </div>
             </div>
 
-            <!-- 统计信息 -->
-            <div class="flex items-center gap-4 text-xs text-text-muted">
-              <span class="flex items-center gap-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
-                </svg>
-                {{ previewModal.group?.commands.length }} 条命令
-              </span>
-              <span class="flex items-center gap-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                </svg>
-                更新于 {{ formatDate(previewModal.group?.updatedAt || '') }}
-              </span>
-            </div>
-
             <!-- 命令列表 -->
-            <div class="space-y-1.5">
-              <label class="text-xs font-medium text-text-muted uppercase tracking-wide">命令列表</label>
-              <div class="border border-border rounded-lg overflow-hidden bg-terminal-bg">
-                <div class="max-h-80 overflow-y-auto scrollbar-custom">
+            <div class="space-y-1.5 flex-1 flex flex-col min-h-0 mt-4">
+              <label class="text-xs font-medium text-text-muted uppercase tracking-wide flex-shrink-0">命令列表</label>
+              <div class="border border-border rounded-lg overflow-hidden bg-terminal-bg flex-1 min-h-0">
+                <div class="h-full overflow-y-auto scrollbar-custom">
                   <div
                     v-for="(cmd, idx) in previewModal.group?.commands"
                     :key="idx"
@@ -403,6 +409,21 @@
                     </button>
                   </div>
                 </div>
+              </div>
+              <!-- 统计信息 - 放在命令列表后面 -->
+              <div class="flex items-center gap-4 text-xs text-text-muted pt-2 flex-shrink-0">
+                <span class="flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                  </svg>
+                  {{ previewModal.group?.commands.length }} 条命令
+                </span>
+                <span class="flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  更新于 {{ formatDate(previewModal.group?.updatedAt || '') }}
+                </span>
               </div>
             </div>
           </div>
@@ -491,6 +512,52 @@ const previewModal = ref({
   show: false,
   group: null as CommandGroup | null
 })
+
+// 预览弹窗DOM引用
+const previewModalRef = ref<HTMLElement | null>(null)
+
+// 拖拽调整大小相关
+let isResizing = false
+let startX = 0
+let startY = 0
+let startWidth = 0
+let startHeight = 0
+
+function startResize(e: MouseEvent) {
+  if (!previewModalRef.value) return
+  
+  isResizing = true
+  startX = e.clientX
+  startY = e.clientY
+  startWidth = previewModalRef.value.offsetWidth
+  startHeight = previewModalRef.value.offsetHeight
+  
+  document.addEventListener('mousemove', doResize)
+  document.addEventListener('mouseup', stopResize)
+  e.preventDefault()
+}
+
+function doResize(e: MouseEvent) {
+  if (!isResizing || !previewModalRef.value) return
+  
+  const newWidth = startWidth + (e.clientX - startX)
+  const newHeight = startHeight + (e.clientY - startY)
+  
+  // 限制最小和最大尺寸
+  const minWidth = 400
+  const minHeight = 400
+  const maxWidth = window.innerWidth * 0.95
+  const maxHeight = window.innerHeight * 0.9
+  
+  previewModalRef.value.style.width = Math.max(minWidth, Math.min(newWidth, maxWidth)) + 'px'
+  previewModalRef.value.style.height = Math.max(minHeight, Math.min(newHeight, maxHeight)) + 'px'
+}
+
+function stopResize() {
+  isResizing = false
+  document.removeEventListener('mousemove', doResize)
+  document.removeEventListener('mouseup', stopResize)
+}
 
 // 复制成功提示状态
 const copyToast = ref({

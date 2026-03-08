@@ -291,7 +291,7 @@ const v6SubnetEvaluation = computed(() => {
 
 <template>
   <div class="space-y-6 md:space-y-8">
-    <section class="bg-bg-secondary border border-border rounded-2xl shadow-card p-5 md:p-8 backdrop-blur-md">
+    <section class="bg-bg-secondary/60 glass border border-border rounded-2xl shadow-card p-5 md:p-8">
       <h2 class="text-base font-semibold text-text-primary mb-4 md:mb-6 flex items-center">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
@@ -305,7 +305,7 @@ const v6SubnetEvaluation = computed(() => {
             type="text" 
             v-model="ipv6Str" 
             placeholder="例如: 2001:db8::1" 
-            class="px-4 py-3 bg-bg-tertiary border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
+            class="px-4 py-3 bg-bg-tertiary/50 border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
           />
         </div>
         <div class="flex flex-col gap-2">
@@ -314,7 +314,7 @@ const v6SubnetEvaluation = computed(() => {
             type="text" 
             v-model="prefixStr" 
             placeholder="例如: 64" 
-            class="px-4 py-3 bg-bg-tertiary border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
+            class="px-4 py-3 bg-bg-tertiary/50 border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
           />
         </div>
       </div>
@@ -329,7 +329,7 @@ const v6SubnetEvaluation = computed(() => {
                 type="text" 
                 v-model="v6NewPrefixStr" 
                 placeholder="例如: 68" 
-                class="px-4 py-3 bg-bg-tertiary border border-border rounded-xl focus:ring-2 focus:ring-success focus:border-success outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
+                class="px-4 py-3 bg-bg-tertiary/50 border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
               />
                <button 
                 v-if="v6NewPrefixStr" 
@@ -354,7 +354,7 @@ const v6SubnetEvaluation = computed(() => {
                 type="text" 
                 v-model="v6CheckIpStr" 
                 placeholder="在此输入待检查的 IPv6 地址" 
-                class="px-4 py-3 bg-bg-tertiary border border-border rounded-xl focus:ring-2 focus:ring-success focus:border-success outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
+                class="px-4 py-3 bg-bg-tertiary/50 border border-border rounded-xl focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
               />
                <button 
                 v-if="v6CheckIpStr" 
@@ -397,7 +397,7 @@ const v6SubnetEvaluation = computed(() => {
 
    <!-- 划分子网结果展示 -->
     <transition name="fade">
-      <section v-if="v6SubnetEvaluation.subnets.length > 0" class="bg-bg-secondary border border-border rounded-2xl shadow-card p-5 md:p-8 backdrop-blur-md">
+      <section v-if="v6SubnetEvaluation.subnets.length > 0" class="bg-bg-secondary/60 glass border border-border rounded-2xl shadow-card p-5 md:p-8">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 md:mb-6 gap-3">
           <h2 class="text-base font-semibold text-text-primary flex items-center">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -464,7 +464,7 @@ const v6SubnetEvaluation = computed(() => {
 
     <!-- 基础计算结果展示 -->
     <transition name="fade">
-      <section v-if="evaluation.records.length > 0" class="bg-bg-secondary border border-border rounded-2xl shadow-card p-5 md:p-8 backdrop-blur-md">
+      <section v-if="evaluation.records.length > 0" class="bg-bg-secondary/60 glass border border-border rounded-2xl shadow-card p-5 md:p-8">
         <h2 class="text-base font-semibold text-text-primary mb-4 md:mb-6 flex items-center">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
@@ -480,7 +480,7 @@ const v6SubnetEvaluation = computed(() => {
                 <td class="px-3 md:px-6 py-3 md:py-4 text-right w-16 md:w-24">
                   <button 
                     @click="copyText(record.value || '')" 
-                    class="text-xs text-accent hover:text-white hover:bg-accent border border-accent/30 px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg transition-all md:opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    class="text-xs text-accent hover:text-white hover:bg-accent border border-accent/30 px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg transition-all md:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
                   >
                     复制
                   </button>
@@ -495,21 +495,6 @@ const v6SubnetEvaluation = computed(() => {
 </template>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
-}
-
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease, transform 0.3s ease;
