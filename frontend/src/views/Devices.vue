@@ -751,6 +751,12 @@
             >
               ({{ selectedCount }} 台设备)
             </span>
+            <span
+              v-else-if="searchQuery.trim()"
+              class="ml-2 text-sm font-normal text-accent"
+            >
+              (筛选后 {{ filteredData.length }} 台设备)
+            </span>
           </h3>
           <button
             @click="closeBatchModal"
@@ -771,7 +777,7 @@
         </div>
         <form @submit.prevent="saveBatchEdit" class="p-6 space-y-4">
           <p class="text-sm text-text-secondary">
-            将{{ selectedCount > 0 ? '选中的' : '所有' }}设备的{{ batchFieldLabel }}修改为：
+            将{{ selectedCount > 0 ? '选中的' : (searchQuery.trim() ? '筛选后的' : '所有') }}设备的{{ batchFieldLabel }}修改为：
           </p>
 
           <!-- 协议选择 -->
@@ -1127,16 +1133,30 @@ const batchFieldLabel = computed(() => {
 // 多选相关计算属性
 const selectedCount = computed(() => selectedIndexes.value.size);
 
-// 是否选中了全部设备（所有页）
+// 是否选中了当前筛选结果中的所有设备
 const isAllSelected = computed(() => {
-  if (data.value.length === 0) return false;
-  return selectedIndexes.value.size === data.value.length;
+  if (filteredData.value.length === 0) return false;
+  // 检查筛选后的所有设备是否都被选中
+  for (let i = 0; i < filteredData.value.length; i++) {
+    const device = filteredData.value[i];
+    if (!device) continue;
+    const actualIdx = data.value.indexOf(device);
+    if (!selectedIndexes.value.has(actualIdx)) return false;
+  }
+  return true;
 });
 
-// 是否部分选中（有选中但未全选）
+// 是否部分选中（筛选后的设备中有选中但未全选）
 const isIndeterminate = computed(() => {
-  const count = selectedIndexes.value.size;
-  return count > 0 && count < data.value.length;
+  if (filteredData.value.length === 0) return false;
+  let selectedInFiltered = 0;
+  for (let i = 0; i < filteredData.value.length; i++) {
+    const device = filteredData.value[i];
+    if (!device) continue;
+    const actualIdx = data.value.indexOf(device);
+    if (selectedIndexes.value.has(actualIdx)) selectedInFiltered++;
+  }
+  return selectedInFiltered > 0 && selectedInFiltered < filteredData.value.length;
 });
 
 // 监听 IP 输入，解析语法糖并验证
@@ -1452,10 +1472,12 @@ async function saveBatchEdit() {
   isBatchSaving.value = true;
 
   try {
-    // 判断是修改选中的设备还是所有设备
+    // 判断是修改选中的设备、筛选后的设备还是所有设备
     const indexesToModify = selectedCount.value > 0
-      ? new Set(selectedIndexes.value)  // 选中的索引
-      : new Set(data.value.keys());      // 所有索引
+      ? new Set(selectedIndexes.value)  // 用户手动选中的设备
+      : searchQuery.value.trim()        // 有搜索筛选条件
+        ? new Set(filteredData.value.map(d => data.value.indexOf(d)))  // 筛选后的设备
+        : new Set(data.value.keys());   // 所有设备
 
     // 复制设备列表，只修改目标设备
     const updatedDevices = data.value.map((d, idx) => {
@@ -1565,15 +1587,23 @@ function toggleSelect(idx: number) {
   }
 }
 
-// 切换全选/取消全选（全量设备）
+// 切换全选/取消全选（只针对筛选后的设备）
 function toggleSelectAll() {
   if (isAllSelected.value) {
-    // 取消所有选中
-    selectedIndexes.value.clear();
+    // 取消筛选后设备的选中状态
+    for (let i = 0; i < filteredData.value.length; i++) {
+      const device = filteredData.value[i];
+      if (!device) continue;
+      const actualIdx = data.value.indexOf(device);
+      selectedIndexes.value.delete(actualIdx);
+    }
   } else {
-    // 选中所有设备
-    for (let i = 0; i < data.value.length; i++) {
-      selectedIndexes.value.add(i);
+    // 选中筛选后的所有设备
+    for (let i = 0; i < filteredData.value.length; i++) {
+      const device = filteredData.value[i];
+      if (!device) continue;
+      const actualIdx = data.value.indexOf(device);
+      selectedIndexes.value.add(actualIdx);
     }
   }
 }
