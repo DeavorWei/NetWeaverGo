@@ -94,11 +94,9 @@ func runGUI() {
 		Width:            1440,
 		Height:           900,
 		Frameless:        true,
-		DisableResize:    true,
-		MinWidth:         1440,
-		MinHeight:        900,
-		MaxWidth:         1440,
-		MaxHeight:        900,
+		DisableResize:    false,
+		MinWidth:         1024,
+		MinHeight:        768,
 	})
 
 	logger.Info("System", "-", "正在启动 Wails 应用主循环...")
