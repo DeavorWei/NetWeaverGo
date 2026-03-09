@@ -1,0 +1,231 @@
+/**
+ * 组件级主题变量
+ * Component-level Theme Variables
+ *
+ * 定义组件级别的语义化变量，便于统一调整
+ */
+
+:root {
+  /* ============================================
+     卡片组件
+     ============================================ */
+  --card-padding: var(--spacing-5);
+  --card-padding-sm: var(--spacing-4);
+  --card-padding-lg: var(--spacing-6);
+  --card-gap: var(--spacing-4);
+  --card-radius: var(--radius-xl);
+  --card-border: var(--color-border-default);
+  --card-shadow: var(--shadow-card);
+  --card-hover-shadow: var(--shadow-lg);
+
+  /* ============================================
+     页面布局
+     ============================================ */
+  --page-padding: var(--spacing-6);
+  --page-padding-sm: var(--spacing-4);
+  --page-padding-lg: var(--spacing-8);
+  --section-gap: var(--spacing-5);
+
+  /* ============================================
+     表格组件
+     ============================================ */
+  --table-header-bg: var(--color-bg-secondary);
+  --table-row-hover: var(--color-bg-hover);
+  --table-row-selected: var(--color-accent-bg);
+  --table-cell-padding: var(--spacing-3) var(--spacing-4);
+  --table-border: var(--color-border-muted);
+  --table-stripe-bg: var(--color-bg-tertiary);
+
+  /* ============================================
+     表单组件
+     ============================================ */
+  --form-label-size: var(--text-xs);
+  --form-label-color: var(--color-text-secondary);
+  --form-label-weight: var(--font-weight-medium);
+  --form-help-color: var(--color-text-muted);
+  --form-error-color: var(--color-error);
+  --form-gap: var(--spacing-4);
+  --form-input-height: 2.25rem;
+  --form-input-height-sm: 2rem;
+  --form-input-height-lg: 2.75rem;
+
+  /* ============================================
+     按钮组件
+     ============================================ */
+  --btn-height: 2.25rem;
+  --btn-height-sm: 2rem;
+  --btn-height-lg: 2.75rem;
+  --btn-padding: var(--spacing-2) var(--spacing-4);
+  --btn-padding-sm: var(--spacing-1) var(--spacing-3);
+  --btn-padding-lg: var(--spacing-3) var(--spacing-6);
+  --btn-radius: var(--radius-lg);
+  --btn-font-size: var(--text-sm);
+  --btn-font-size-sm: var(--text-xs);
+  --btn-font-size-lg: var(--text-base);
+
+  /* ============================================
+     弹窗组件
+     ============================================ */
+  --modal-padding: var(--spacing-6);
+  --modal-header-padding: var(--spacing-4) var(--spacing-5);
+  --modal-footer-padding: var(--spacing-4) var(--spacing-5);
+  --modal-radius: var(--radius-2xl);
+  --modal-max-width: 32rem;
+  --modal-max-width-sm: 24rem;
+  --modal-max-width-lg: 48rem;
+  --modal-overlay: rgba(0, 0, 0, 0.6);
+  --modal-overlay-blur: rgba(0, 0, 0, 0.5);
+
+  /* ============================================
+     终端/代码块
+     ============================================ */
+  --terminal-bg: var(--color-terminal-bg);
+  --terminal-text: var(--color-terminal-text);
+  --terminal-font: var(--font-mono);
+  --terminal-font-size: var(--text-xs);
+  --terminal-line-height: var(--leading-relaxed);
+  --terminal-padding: var(--spacing-3);
+
+  /* ============================================
+     导航项
+     ============================================ */
+  --nav-item-padding: var(--spacing-2-5) var(--spacing-3);
+  --nav-item-radius: var(--radius-lg);
+  --nav-item-hover-bg: var(--color-bg-hover);
+  --nav-item-active-bg: var(--color-accent-bg);
+  --nav-item-active-color: var(--color-accent-primary);
+  --nav-item-active-border: rgba(59, 130, 246, 0.3);
+
+  /* ============================================
+     标签页
+     ============================================ */
+  --tabs-padding: var(--spacing-1);
+  --tabs-gap: var(--spacing-1);
+  --tab-padding: var(--spacing-2) var(--spacing-4);
+  --tab-radius: var(--radius-lg);
+
+  /* ============================================
+     下拉选择器
+     ============================================ */
+  --select-padding: var(--spacing-2-5) var(--spacing-3);
+  --select-padding-sm: var(--spacing-1-5) var(--spacing-2-5);
+  --select-padding-lg: var(--spacing-3) var(--spacing-4);
+  --select-radius: var(--radius-lg);
+
+  /* ============================================
+     徽章组件
+     ============================================ */
+  --badge-padding: var(--spacing-1) var(--spacing-2);
+  --badge-radius: var(--radius-full);
+  --badge-font-size: var(--text-xs);
+  --badge-font-weight: var(--font-weight-medium);
+
+  /* ============================================
+     Toast 提示
+     ============================================ */
+  --toast-padding: var(--spacing-3) var(--spacing-4);
+  --toast-radius: var(--radius-lg);
+  --toast-shadow: var(--shadow-lg);
+  --toast-font-size: var(--text-sm);
+
+  /* ============================================
+     进度条
+     ============================================ */
+  --progress-height: 0.5rem;
+  --progress-height-sm: 0.25rem;
+  --progress-height-lg: 0.75rem;
+  --progress-radius: var(--radius-full);
+  --progress-bg: var(--color-bg-tertiary);
+
+  /* ============================================
+     标签/Tag
+     ============================================ */
+  --tag-padding: var(--spacing-1) var(--spacing-1-5);
+  --tag-radius: var(--radius-md);
+  --tag-font-size: var(--text-xs);
+
+  /* ============================================
+   输入框
+     ============================================ */
+  --input-padding: var(--spacing-2-5) var(--spacing-3);
+  --input-padding-sm: var(--spacing-1-5) var(--spacing-2-5);
+  --input-padding-lg: var(--spacing-3) var(--spacing-4);
+  --input-radius: var(--radius-lg);
+  --input-border: var(--color-border-default);
+  --input-focus-border: var(--color-border-focus);
+  --input-focus-shadow: 0 0 0 3px var(--color-accent-bg);
+
+  /* ============================================
+     分页组件
+     ============================================ */
+  --pagination-padding: var(--spacing-1-5) var(--spacing-3);
+  --pagination-radius: var(--radius-lg);
+  --pagination-gap: var(--spacing-2);
+
+  /* ============================================
+     工具提示
+     ============================================ */
+  --tooltip-padding: var(--spacing-1-5) var(--spacing-2-5);
+  --tooltip-radius: var(--radius-md);
+  --tooltip-font-size: var(--text-xs);
+  --tooltip-bg: var(--color-bg-tertiary);
+  --tooltip-text: var(--color-text-primary);
+
+  /* ============================================
+     分隔线
+     ============================================ */
+  --divider-color: var(--color-border-default);
+  --divider-spacing: var(--spacing-4);
+
+  /* ============================================
+     间距系统映射
+     ============================================ */
+  --spacing-section: var(--spacing-5);
+  --spacing-card: var(--spacing-4);
+  --spacing-element: var(--spacing-3);
+  --spacing-tight: var(--spacing-2);
+}
+
+/* ============================================
+   暗黑主题微调
+   ============================================ */
+
+[data-theme="dark"],
+.dark {
+  --modal-overlay: rgba(0, 0, 0, 0.7);
+  --modal-overlay-blur: rgba(0, 0, 0, 0.6);
+  --table-header-bg: var(--color-bg-tertiary);
+  --table-stripe-bg: rgba(255, 255, 255, 0.02);
+  --tooltip-bg: var(--color-bg-tertiary);
+
+  /* 暗黑模式下增强对比度 */
+  --card-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--color-border-muted);
+  --card-hover-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--color-border-default);
+}
+
+/* ============================================
+   高对比度主题
+   ============================================ */
+
+@media (prefers-contrast: high) {
+  :root {
+    --card-border: var(--color-text-muted);
+    --input-border: var(--color-text-muted);
+    --table-border: var(--color-text-muted);
+    --divider-color: var(--color-text-muted);
+  }
+}
+
+/* ============================================
+   减少动画偏好
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-fast: 0ms;
+    --transition-normal: 0ms;
+    --transition-slow: 0ms;
+  }
+}

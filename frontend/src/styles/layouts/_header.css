@@ -1,0 +1,145 @@
+/**
+ * 顶部栏布局样式
+ * Header Layout Styles
+ *
+ * 从 App.vue 抽取的顶部栏样式
+ */
+
+/* ============================================
+   顶部栏容器
+   ============================================ */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 4rem; /* h-16 */
+  padding: 0 var(--spacing-6);
+  background-color: var(--color-bg-secondary);
+  flex-shrink: 0;
+}
+
+/* ============================================
+   左侧标题区
+   ============================================ */
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.header-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.header-subtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin-left: var(--spacing-3);
+  padding-left: var(--spacing-3);
+  border-left: 1px solid var(--color-border-default);
+}
+
+/* ============================================
+   右侧操作区
+   ============================================ */
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+}
+
+/* 操作区按钮组 */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+/* ============================================
+   版本号
+   ============================================ */
+
+.header-version {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+}
+
+/* ============================================
+   头部分隔线
+   ============================================ */
+
+.header-divider {
+  width: 1px;
+  height: 1.5rem;
+  background-color: var(--color-border-default);
+  margin: 0 var(--spacing-2);
+}
+
+/* ============================================
+   面包屑导航
+   ============================================ */
+
+.header-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
+}
+
+.header-breadcrumb-item {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color var(--transition-fast) var(--ease-in-out);
+}
+
+.header-breadcrumb-item:hover {
+  color: var(--color-text-primary);
+}
+
+.header-breadcrumb-item.active {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.header-breadcrumb-separator {
+  color: var(--color-text-muted);
+}
+
+/* ============================================
+   顶部栏响应式
+   ============================================ */
+
+@media (max-width: 768px) {
+  .header {
+    padding: 0 var(--spacing-4);
+  }
+
+  .header-subtitle {
+    display: none;
+  }
+
+  .header-breadcrumb {
+    display: none;
+  }
+
+  .header-divider {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 0 var(--spacing-3);
+  }
+
+  .header-version {
+    display: none;
+  }
+}

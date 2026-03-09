@@ -1,6 +1,8 @@
 /**
  * 组件样式入口
  * Component Styles Entry
+ *
+ * 统一管理所有组件样式导入
  */
 
 /* 基础组件 */
@@ -11,7 +13,16 @@
 @import "./toast.css";
 @import "./badge.css";
 
-/* 新增组件 */
+/* 数据展示组件 */
 @import "./_table.css";
 @import "./_progress.css";
 @import "./_terminal.css";
+
+/* 表单组件 */
+@import "./_select.css";
+
+/* 导航组件 */
+@import "./_tabs.css";
+
+/* 页面结构组件 */
+@import "./_page-header.css";

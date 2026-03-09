@@ -3,7 +3,7 @@
  * Main Styles Entry File
  *
  * 统一管理所有样式导入
- * 采用分层架构：令牌层 → 主题层 → 组件层 → 工具层
+ * 采用分层架构：令牌层 → 主题层 → 组件层 → 布局层 → 工具层
  */
 
 /* ============================================
@@ -17,8 +17,16 @@
 /* 第二层：主题变量 (Theme Variables) */
 @import "./themes/_variables.css";
 
+/* 第2.5层：组件级变量 (Component Variables) */
+@import "./themes/_components.css";
+
 /* 第三层：组件样式 (Component Styles) */
 @import "./components/index.css";
+
+/* 第三.五层：布局样式 (Layout Styles) */
+@import "./layouts/_sidebar.css";
+@import "./layouts/_header.css";
+@import "./layouts/_page.css";
 
 /* 第四层：基础重置样式 (Base Reset) */
 @import "./foundation/_reset.css";
