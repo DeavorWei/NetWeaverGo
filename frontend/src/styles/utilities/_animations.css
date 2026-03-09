@@ -1,0 +1,478 @@
+/**
+ * 动画工具类
+ * Animation Utilities
+ * 
+ * 提供统一的动画效果，确保整个应用的动画一致性
+ */
+
+@layer utilities {
+  /* ========================================
+     关键帧定义
+     ======================================== */
+
+  /* 淡入淡出 */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  /* 从上方滑入 */
+  @keyframes slideInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-1rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideOutUp {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-1rem);
+    }
+  }
+
+  /* 从下方滑入 */
+  @keyframes slideInUp {
+    from {
+      opacity: 0;
+      transform: translateY(1rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideOutDown {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(1rem);
+    }
+  }
+
+  /* 从左侧滑入 */
+  @keyframes slideInLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-1rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideOutLeft {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-1rem);
+    }
+  }
+
+  /* 从右侧滑入 */
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(1rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideOutRight {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(1rem);
+    }
+  }
+
+  /* 缩放 */
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes scaleOut {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+  }
+
+  /* 弹性缩放 */
+  @keyframes bounceIn {
+    0% {
+      opacity: 0;
+      transform: scale(0.3);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+    70% {
+      transform: scale(0.9);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* 抖动 (用于错误提示) */
+  @keyframes shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    10%,
+    30%,
+    50%,
+    70%,
+    90% {
+      transform: translateX(-0.25rem);
+    }
+    20%,
+    40%,
+    60%,
+    80% {
+      transform: translateX(0.25rem);
+    }
+  }
+
+  /* 脉冲 */
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  /* 旋转 */
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* 弹跳 */
+  @keyframes bounce {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-0.5rem);
+    }
+  }
+
+  /* 闪烁发光 */
+  @keyframes glow {
+    0%,
+    100% {
+      box-shadow: 0 0 5px var(--color-accent-primary);
+    }
+    50% {
+      box-shadow:
+        0 0 20px var(--color-accent-primary),
+        0 0 30px var(--color-accent-primary);
+    }
+  }
+
+  /* 进度条流动 */
+  @keyframes progressFlow {
+    0% {
+      background-position: 0 0;
+    }
+    100% {
+      background-position: 2rem 0;
+    }
+  }
+
+  /* ========================================
+     动画应用类
+     ======================================== */
+
+  /* 淡入淡出 */
+  .animate-fade-in {
+    animation: fadeIn var(--duration-normal, 200ms) ease-out;
+  }
+
+  .animate-fade-out {
+    animation: fadeOut var(--duration-normal, 200ms) ease-out;
+  }
+
+  /* 滑入滑出 - 上/下 */
+  .animate-slide-in-down {
+    animation: slideInDown var(--duration-normal, 200ms) ease-out;
+  }
+
+  .animate-slide-out-up {
+    animation: slideOutUp var(--duration-normal, 200ms) ease-out;
+  }
+
+  .animate-slide-in-up {
+    animation: slideInUp var(--duration-normal, 200ms) ease-out;
+  }
+
+  .animate-slide-out-down {
+    animation: slideOutDown var(--duration-normal, 200ms) ease-out;
+  }
+
+  /* 滑入滑出 - 左/右 */
+  .animate-slide-in-left {
+    animation: slideInLeft var(--duration-normal, 200ms) ease-out;
+  }
+
+  .animate-slide-out-left {
+    animation: slideOutLeft var(--duration-normal, 200ms) ease-out;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight var(--duration-normal, 200ms) ease-out;
+  }
+
+  .animate-slide-out-right {
+    animation: slideOutRight var(--duration-normal, 200ms) ease-out;
+  }
+
+  /* 缩放 */
+  .animate-scale-in {
+    animation: scaleIn var(--duration-normal, 200ms) ease-out;
+  }
+
+  .animate-scale-out {
+    animation: scaleOut var(--duration-normal, 200ms) ease-out;
+  }
+
+  .animate-bounce-in {
+    animation: bounceIn var(--duration-slow, 400ms) ease-out;
+  }
+
+  /* 抖动 */
+  .animate-shake {
+    animation: shake var(--duration-slow, 400ms) ease-in-out;
+  }
+
+  /* 脉冲 */
+  .animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* 旋转 */
+  .animate-spin {
+    animation: spin 1s linear infinite;
+  }
+
+  /* 弹跳 */
+  .animate-bounce {
+    animation: bounce 1s ease-in-out infinite;
+  }
+
+  /* 发光 */
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite;
+  }
+
+  /* 进度条流动 */
+  .animate-progress-flow {
+    animation: progressFlow 1s linear infinite;
+    background-size: 2rem 100%;
+    background-image: linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.15) 25%,
+      transparent 25%,
+      transparent 50%,
+      rgba(255, 255, 255, 0.15) 50%,
+      rgba(255, 255, 255, 0.15) 75%,
+      transparent 75%,
+      transparent
+    );
+  }
+
+  /* ========================================
+     动画持续时间
+     ======================================== */
+
+  .duration-fast {
+    --duration-fast: 100ms;
+    animation-duration: 100ms;
+  }
+
+  .duration-normal {
+    --duration-normal: 200ms;
+    animation-duration: 200ms;
+  }
+
+  .duration-slow {
+    --duration-slow: 400ms;
+    animation-duration: 400ms;
+  }
+
+  .duration-slower {
+    animation-duration: 600ms;
+  }
+
+  .duration-slowest {
+    animation-duration: 1000ms;
+  }
+
+  /* ========================================
+     动画延迟
+     ======================================== */
+
+  .delay-75 {
+    animation-delay: 75ms;
+  }
+
+  .delay-100 {
+    animation-delay: 100ms;
+  }
+
+  .delay-150 {
+    animation-delay: 150ms;
+  }
+
+  .delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .delay-300 {
+    animation-delay: 300ms;
+  }
+
+  .delay-500 {
+    animation-delay: 500ms;
+  }
+
+  .delay-700 {
+    animation-delay: 700ms;
+  }
+
+  .delay-1000 {
+    animation-delay: 1000ms;
+  }
+
+  /* ========================================
+     过渡效果
+     ======================================== */
+
+  .transition-none {
+    transition: none;
+  }
+
+  .transition-all {
+    transition: all var(--transition-normal, 200ms) ease;
+  }
+
+  .transition-colors {
+    transition:
+      color var(--transition-normal, 200ms) ease,
+      background-color var(--transition-normal, 200ms) ease,
+      border-color var(--transition-normal, 200ms) ease;
+  }
+
+  .transition-opacity {
+    transition: opacity var(--transition-normal, 200ms) ease;
+  }
+
+  .transition-transform {
+    transition: transform var(--transition-normal, 200ms) ease;
+  }
+
+  .transition-shadow {
+    transition: box-shadow var(--transition-normal, 200ms) ease;
+  }
+
+  /* ========================================
+     动画播放状态
+     ======================================== */
+
+  .animation-running {
+    animation-play-state: running;
+  }
+
+  .animation-paused {
+    animation-play-state: paused;
+  }
+
+  /* ========================================
+     悬停动画触发
+     ======================================== */
+
+  .hover-scale {
+    transition: transform var(--transition-fast, 150ms) ease;
+  }
+
+  .hover-scale:hover {
+    transform: scale(1.05);
+  }
+
+  .hover-lift {
+    transition:
+      transform var(--transition-fast, 150ms) ease,
+      box-shadow var(--transition-fast, 150ms) ease;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .hover-glow {
+    transition: box-shadow var(--transition-fast, 150ms) ease;
+  }
+
+  .hover-glow:hover {
+    box-shadow: 0 0 15px var(--color-accent-primary);
+  }
+}

@@ -10,3 +10,8 @@
 @import "./modal.css";
 @import "./toast.css";
 @import "./badge.css";
+
+/* 新增组件 */
+@import "./_table.css";
+@import "./_progress.css";
+@import "./_terminal.css";

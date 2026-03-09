@@ -8,7 +8,11 @@
           v-model="searchType"
           class="px-3 h-9 text-sm bg-bg-panel border border-border rounded-lg text-text-primary focus:border-accent focus:outline-none transition-colors cursor-pointer"
         >
-          <option v-for="opt in searchOptions" :key="opt.value" :value="opt.value">
+          <option
+            v-for="opt in searchOptions"
+            :key="opt.value"
+            :value="opt.value"
+          >
             {{ opt.label }}
           </option>
         </select>
@@ -86,11 +90,11 @@
                   @click="toggleSelectAll"
                   class="flex items-center justify-center w-4 h-4 mx-auto rounded border transition-all duration-200"
                   :class="[
-                    isAllSelected 
-                      ? 'bg-accent border-accent text-white' 
-                      : isIndeterminate 
-                        ? 'bg-accent/30 border-accent/50' 
-                        : 'border-border hover:border-accent'
+                    isAllSelected
+                      ? 'bg-accent border-accent text-white'
+                      : isIndeterminate
+                        ? 'bg-accent/30 border-accent/50'
+                        : 'border-border hover:border-accent',
                   ]"
                   :title="isAllSelected ? '取消全选' : '全选所有设备'"
                 >
@@ -316,9 +320,9 @@
               :key="row.ip + idx"
               :class="[
                 'transition-colors duration-150 group',
-                isSelected(idx) 
-                  ? 'bg-accent/8 hover:bg-accent/12' 
-                  : 'hover:bg-bg-hover'
+                isSelected(idx)
+                  ? 'bg-accent/8 hover:bg-accent/12'
+                  : 'hover:bg-bg-hover',
               ]"
             >
               <td class="px-4 py-3 text-center">
@@ -328,7 +332,7 @@
                   :class="[
                     isSelected(idx)
                       ? 'bg-accent border-accent text-white'
-                      : 'border-border hover:border-accent'
+                      : 'border-border hover:border-accent',
                   ]"
                 >
                   <svg
@@ -384,7 +388,9 @@
                   >
                     {{ tag }}
                   </span>
-                  <span v-if="row.tags.length === 0" class="text-text-muted/50">-</span>
+                  <span v-if="row.tags.length === 0" class="text-text-muted/50"
+                    >-</span
+                  >
                 </div>
               </td>
               <td class="px-4 py-3">
@@ -451,7 +457,9 @@
             stroke-width="2"
           >
             <polyline points="9 11 12 14 22 4" />
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            <path
+              d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+            />
           </svg>
           <span class="text-sm text-accent font-medium">
             已选中 <strong>{{ selectedCount }}</strong> 台设备
@@ -476,7 +484,9 @@
             stroke-width="2"
           >
             <polyline points="3,6 5,6 21,6" />
-            <path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2v2" />
+            <path
+              d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2v2"
+            />
           </svg>
           批量删除
         </button>
@@ -584,7 +594,9 @@
               placeholder="例如: 192.168.1.10 或 192.168.1.10-20"
               :class="[
                 'w-full px-3 py-2 text-sm bg-bg-panel border rounded-lg text-text-primary placeholder-text-muted/50 focus:outline-none transition-colors',
-                ipValidationError ? 'border-error focus:border-error' : 'border-border focus:border-accent'
+                ipValidationError
+                  ? 'border-error focus:border-error'
+                  : 'border-border focus:border-accent',
               ]"
               required
             />
@@ -663,7 +675,8 @@
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-medium text-text-secondary mb-1.5"
+              <label
+                class="block text-xs font-medium text-text-secondary mb-1.5"
                 >用户名 <span class="text-text-muted">(可选)</span></label
               >
               <input
@@ -674,7 +687,8 @@
               />
             </div>
             <div>
-              <label class="block text-xs font-medium text-text-secondary mb-1.5"
+              <label
+                class="block text-xs font-medium text-text-secondary mb-1.5"
                 >密码 <span class="text-text-muted">(可选)</span></label
               >
               <div class="relative">
@@ -721,7 +735,10 @@
           </div>
           <div>
             <label class="block text-xs font-medium text-text-secondary mb-1.5"
-              >Tags <span class="text-text-muted">(多标签可用逗号分隔或按回车添加)</span></label
+              >Tags
+              <span class="text-text-muted"
+                >(多标签可用逗号分隔或按回车添加)</span
+              ></label
             >
             <div class="flex flex-wrap gap-2 mb-2 min-h-[24px]">
               <span
@@ -730,13 +747,21 @@
                 class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-accent/10 text-accent border border-accent/20 shadow-sm"
               >
                 {{ tag }}
-                <button 
-                  type="button" 
-                  @click="removeTag(idx)" 
+                <button
+                  type="button"
+                  @click="removeTag(idx)"
                   class="hover:text-error transition-colors ml-1"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="w-3 h-3"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
                 </button>
               </span>
@@ -833,7 +858,13 @@
         </div>
         <form @submit.prevent="saveBatchEdit" class="p-6 space-y-4">
           <p class="text-sm text-text-secondary">
-            将{{ selectedCount > 0 ? '选中的' : (searchQuery.trim() ? '筛选后的' : '所有') }}设备的{{ batchFieldLabel }}修改为：
+            将{{
+              selectedCount > 0
+                ? "选中的"
+                : searchQuery.trim()
+                  ? "筛选后的"
+                  : "所有"
+            }}设备的{{ batchFieldLabel }}修改为：
           </p>
 
           <!-- 协议选择 -->
@@ -899,7 +930,9 @@
                 :placeholder="'请输入' + batchFieldLabel + ' (多个用逗号分隔)'"
                 class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
               />
-              <p class="text-[10px] text-text-muted">提示：输入多个标签时请使用英文或中文逗号分隔。</p>
+              <p class="text-[10px] text-text-muted">
+                提示：输入多个标签时请使用英文或中文逗号分隔。
+              </p>
             </div>
           </div>
 
@@ -1015,13 +1048,17 @@
               </svg>
             </div>
             <div>
-              <h3 class="text-lg font-semibold text-text-primary">批量删除确认</h3>
+              <h3 class="text-lg font-semibold text-text-primary">
+                批量删除确认
+              </h3>
               <p class="text-sm text-text-muted">此操作不可撤销</p>
             </div>
           </div>
           <p class="text-sm text-text-secondary mb-6">
             确定要删除选中的
-            <span class="font-mono text-accent font-bold">{{ selectedCount }}</span>
+            <span class="font-mono text-accent font-bold">{{
+              selectedCount
+            }}</span>
             台设备吗？
           </p>
           <div class="flex items-center justify-end gap-3">
@@ -1076,7 +1113,7 @@ const searchType = ref<"group" | "tag" | "ip">("group");
 const searchOptions = [
   { value: "group", label: "分组" },
   { value: "ip", label: "IP地址" },
-  { value: "tag", label: "TAG" }
+  { value: "tag", label: "TAG" },
 ];
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -1107,7 +1144,9 @@ const isBatchDeleting = ref(false);
 
 // 批量编辑
 const showBatchModal = ref(false);
-const batchField = ref<"protocol" | "port" | "username" | "password" | "group" | "tag" | "">("");
+const batchField = ref<
+  "protocol" | "port" | "username" | "password" | "group" | "tag" | ""
+>("");
 const batchValue = ref<string | number>("");
 const isBatchSaving = ref(false);
 const batchErrorMessage = ref("");
@@ -1138,7 +1177,7 @@ const lastProtocol = ref("SSH");
 
 // 当前搜索类型的标签
 const currentSearchLabel = computed(() => {
-  const opt = searchOptions.find(o => o.value === searchType.value);
+  const opt = searchOptions.find((o) => o.value === searchType.value);
   return opt ? opt.label : "";
 });
 
@@ -1150,21 +1189,21 @@ const filteredData = computed(() => {
   }
 
   const query = searchQuery.value.toLowerCase().trim();
-  
-  return data.value.filter(device => {
+
+  return data.value.filter((device) => {
     let searchValue = "";
-    
+
     switch (searchType.value) {
       case "group":
         searchValue = (device.group || "").toLowerCase();
         break;
       case "tag":
-        return device.tags.some(t => t.toLowerCase().includes(query));
+        return device.tags.some((t) => t.toLowerCase().includes(query));
       case "ip":
         searchValue = (device.ip || "").toLowerCase();
         break;
     }
-    
+
     // 模糊搜索：包含即可匹配
     return searchValue.includes(query);
   });
@@ -1217,7 +1256,9 @@ const isIndeterminate = computed(() => {
     const actualIdx = data.value.indexOf(device);
     if (selectedIndexes.value.has(actualIdx)) selectedInFiltered++;
   }
-  return selectedInFiltered > 0 && selectedInFiltered < filteredData.value.length;
+  return (
+    selectedInFiltered > 0 && selectedInFiltered < filteredData.value.length
+  );
 });
 
 // 监听 IP 输入，解析语法糖并验证
@@ -1301,7 +1342,9 @@ function validateIpInput(ip: string): { valid: boolean; error: string } {
   }
 
   // 检查语法糖格式的具体错误
-  const rangeMatch = ip.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})-(\d{1,3})$/);
+  const rangeMatch = ip.match(
+    /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})-(\d{1,3})$/,
+  );
   if (rangeMatch && rangeMatch[2] && rangeMatch[3]) {
     const start = parseInt(rangeMatch[2], 10);
     const end = parseInt(rangeMatch[3], 10);
@@ -1359,7 +1402,10 @@ async function loadDevices() {
         username: d.username || d.Username || "",
         password: d.password || d.Password || "",
         group: d.group || d.Group || "",
-        tags: (d.tag || d.Tag || "").split(",").map((s: string) => s.trim()).filter(Boolean),
+        tags: (d.tag || d.Tag || "")
+          .split(",")
+          .map((s: string) => s.trim())
+          .filter(Boolean),
       }));
     }
   } catch (e) {
@@ -1461,16 +1507,26 @@ function removeTag(index: number) {
 
 // 保存设备接口适配器 (将 tags 数组转回逗号字符串)
 async function callWailsWithTags(method: string, ...args: any[]) {
-  const processedArgs = args.map(arg => {
-    if (arg && typeof arg === 'object' && 'tags' in arg && Array.isArray(arg.tags)) {
+  const processedArgs = args.map((arg) => {
+    if (
+      arg &&
+      typeof arg === "object" &&
+      "tags" in arg &&
+      Array.isArray(arg.tags)
+    ) {
       const { tags, ...rest } = arg;
-      return { ...rest, tag: tags.join(',') };
+      return { ...rest, tag: tags.join(",") };
     }
     if (Array.isArray(arg)) {
-      return arg.map(item => {
-        if (item && typeof item === 'object' && 'tags' in item && Array.isArray(item.tags)) {
+      return arg.map((item) => {
+        if (
+          item &&
+          typeof item === "object" &&
+          "tags" in item &&
+          Array.isArray(item.tags)
+        ) {
           const { tags, ...rest } = item;
-          return { ...rest, tag: tags.join(',') };
+          return { ...rest, tag: tags.join(",") };
         }
         return item;
       });
@@ -1588,11 +1644,12 @@ async function saveBatchEdit() {
 
   try {
     // 判断是修改选中的设备、筛选后的设备还是所有设备
-    const indexesToModify = selectedCount.value > 0
-      ? new Set(selectedIndexes.value)  // 用户手动选中的设备
-      : searchQuery.value.trim()        // 有搜索筛选条件
-        ? new Set(filteredData.value.map(d => data.value.indexOf(d)))  // 筛选后的设备
-        : new Set(data.value.keys());   // 所有设备
+    const indexesToModify =
+      selectedCount.value > 0
+        ? new Set(selectedIndexes.value) // 用户手动选中的设备
+        : searchQuery.value.trim() // 有搜索筛选条件
+          ? new Set(filteredData.value.map((d) => data.value.indexOf(d))) // 筛选后的设备
+          : new Set(data.value.keys()); // 所有设备
 
     // 复制设备列表，只修改目标设备
     const updatedDevices = data.value.map((d, idx) => {
@@ -1620,7 +1677,10 @@ async function saveBatchEdit() {
       } else if (batchField.value === "group") {
         newDevice.group = batchValue.value as string;
       } else if (batchField.value === "tag") {
-        newDevice.tags = (batchValue.value as string).split(',').map(s => s.trim()).filter(Boolean);
+        newDevice.tags = (batchValue.value as string)
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
       }
       return newDevice;
     });
@@ -1739,7 +1799,9 @@ async function batchDeleteDevices() {
 
   try {
     // 获取要删除的索引，按降序排列以便从后往前删除
-    const indexesToDelete = Array.from(selectedIndexes.value).sort((a, b) => b - a);
+    const indexesToDelete = Array.from(selectedIndexes.value).sort(
+      (a, b) => b - a,
+    );
 
     // 从后往前删除设备
     for (const idx of indexesToDelete) {

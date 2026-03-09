@@ -1,18 +1,37 @@
 /**
  * 样式入口文件
  * Main Styles Entry File
- * 
+ *
  * 统一管理所有样式导入
+ * 采用分层架构：令牌层 → 主题层 → 组件层 → 工具层
  */
 
-/* 主题变量 - 必须在最前面 */
+/* ============================================
+   所有 @import 必须在最前面
+   All imports must precede other statements
+   ============================================ */
+
+/* 第一层：设计令牌 (Design Tokens) */
+@import "./foundation/_tokens.css";
+
+/* 第二层：主题变量 (Theme Variables) */
 @import "./themes/_variables.css";
 
-/* 组件样式 - 必须在 Tailwind 之前 */
+/* 第三层：组件样式 (Component Styles) */
 @import "./components/index.css";
+
+/* 第四层：基础重置样式 (Base Reset) */
+@import "./foundation/_reset.css";
+
+/* 第五层：工具类 (Utility Classes) */
+@import "./utilities/_index.css";
 
 /* Tailwind CSS 基础 */
 @import "tailwindcss";
+
+/* ============================================
+   Tailwind 配置
+   ============================================ */
 
 /* 配置内容来源 */
 @source "../index.html";
@@ -21,36 +40,41 @@
 /* 自定义暗黑模式变体 */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Tailwind 主题扩展 */
+/* ============================================
+   Tailwind 主题扩展
+   将语义化变量映射到 Tailwind
+   ============================================ */
 @theme {
-  /* 语义化颜色映射 */
+  /* 背景色 */
   --color-bg-primary: var(--color-bg-primary);
   --color-bg-secondary: var(--color-bg-secondary);
   --color-bg-tertiary: var(--color-bg-tertiary);
   --color-bg-hover: var(--color-bg-hover);
   --color-bg-active: var(--color-bg-active);
-
-  /* 别名映射（组件简化使用） */
-  --color-bg-card: var(--color-bg-tertiary);
+  --color-bg-elevated: var(--color-bg-tertiary);
   --color-bg-panel: var(--color-bg-secondary);
+  --color-bg-card: var(--color-bg-tertiary);
 
+  /* 文字颜色 */
   --color-text-primary: var(--color-text-primary);
   --color-text-secondary: var(--color-text-secondary);
   --color-text-muted: var(--color-text-muted);
   --color-text-inverse: var(--color-text-inverse);
 
+  /* 边框颜色 */
+  --color-border: var(--color-border-default);
   --color-border-default: var(--color-border-default);
   --color-border-muted: var(--color-border-muted);
   --color-border-focus: var(--color-border-focus);
 
-  /* 别名映射（组件简化使用） */
-  --color-border: var(--color-border-default);
-
+  /* 强调色 */
   --color-accent: var(--color-accent-primary);
+  --color-accent-primary: var(--color-accent-primary);
   --color-accent-secondary: var(--color-accent-secondary);
   --color-accent-bg: var(--color-accent-bg);
   --color-accent-glow: var(--color-accent-glow);
 
+  /* 状态色 */
   --color-success: var(--color-success);
   --color-success-bg: var(--color-success-bg);
   --color-warning: var(--color-warning);
@@ -60,8 +84,9 @@
   --color-info: var(--color-info);
   --color-info-bg: var(--color-info-bg);
 
-  /* 终端/代码块背景 */
+  /* 终端/代码块 */
   --color-terminal-bg: var(--color-terminal-bg);
+  --color-terminal-text: var(--color-terminal-text);
 
   /* 自定义字体 */
   --font-sans: var(--font-sans);
@@ -97,7 +122,9 @@
   }
 }
 
-/* 基础层样式 */
+/* ============================================
+   基础层样式
+   ============================================ */
 @layer base {
   * {
     box-sizing: border-box;
@@ -122,56 +149,5 @@
     transition:
       background-color 0.3s,
       color 0.3s;
-  }
-}
-
-/* 工具层样式 */
-@layer utilities {
-  /* 自定义滚动条 */
-  .scrollbar-custom::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  .scrollbar-custom::-webkit-scrollbar-track {
-    background: var(--scrollbar-track);
-  }
-  .scrollbar-custom::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-    border-radius: 3px;
-  }
-  .scrollbar-custom::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-thumb-hover);
-  }
-
-  /* 玻璃态效果 */
-  .glass {
-    background-color: var(--color-bg-secondary);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-  }
-
-  .glass-strong {
-    background-color: var(--overlay-blur-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-  }
-
-  /* 文本截断 */
-  .truncate-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .truncate-3 {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    -webkit-box-orient: vertical;
-    box-orient: vertical;
-    overflow: hidden;
   }
 }
