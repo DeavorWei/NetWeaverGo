@@ -3,6 +3,7 @@ import Dashboard from '../views/Dashboard.vue'
 import Devices from '../views/Devices.vue'
 import Commands from '../views/Commands.vue'
 import Tasks from '../views/Tasks.vue'
+import TaskExecution from '../views/TaskExecution.vue'
 import NetworkCalc from '../views/Tools/NetworkCalc.vue'
 import ProtocolRef from '../views/Tools/ProtocolRef.vue'
 import ConfigForge from '../views/Tools/ConfigForge.vue'
@@ -28,6 +29,11 @@ const routes = [
     path: '/tasks',
     name: 'Tasks',
     component: Tasks
+  },
+  {
+    path: '/task-execution',
+    name: 'TaskExecution',
+    component: TaskExecution
   },
   {
     path: '/tools/calc',
@@ -57,3 +63,4 @@ const router = createRouter({
 })
 
 export default router
+

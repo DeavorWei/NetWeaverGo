@@ -494,3 +494,150 @@ func (a *AppService) StartBackupWails() error {
 
 	return nil
 }
+
+// ========== 任务组管理 API ==========
+
+// ListTaskGroups 获取所有任务组列表
+func (a *AppService) ListTaskGroups() ([]config.TaskGroup, error) {
+	return config.ListTaskGroups()
+}
+
+// GetTaskGroup 根据 ID 获取单个任务组
+func (a *AppService) GetTaskGroup(id string) (*config.TaskGroup, error) {
+	return config.GetTaskGroup(id)
+}
+
+// CreateTaskGroup 创建新任务组
+func (a *AppService) CreateTaskGroup(group config.TaskGroup) (*config.TaskGroup, error) {
+	return config.CreateTaskGroup(group)
+}
+
+// UpdateTaskGroup 更新任务组
+func (a *AppService) UpdateTaskGroup(id string, group config.TaskGroup) (*config.TaskGroup, error) {
+	return config.UpdateTaskGroup(id, group)
+}
+
+// DeleteTaskGroup 删除任务组
+func (a *AppService) DeleteTaskGroup(id string) error {
+	return config.DeleteTaskGroup(id)
+}
+
+// StartTaskGroup 启动任务组执行
+func (a *AppService) StartTaskGroup(id string) error {
+	a.mu.Lock()
+	if a.isRunning {
+		a.mu.Unlock()
+		return fmt.Errorf("引擎正在运行中，请勿重复启动")
+	}
+	a.isRunning = true
+	a.mu.Unlock()
+
+	defer func() {
+		a.mu.Lock()
+		a.isRunning = false
+		a.mu.Unlock()
+	}()
+
+	// 获取任务组
+	taskGroup, err := config.GetTaskGroup(id)
+	if err != nil {
+		return fmt.Errorf("获取任务组失败: %v", err)
+	}
+
+	// 更新状态为运行中
+	config.UpdateTaskGroupStatus(id, "running")
+
+	settings, _, err := config.LoadSettings()
+	if err != nil {
+		config.UpdateTaskGroupStatus(id, "failed")
+		return err
+	}
+
+	// 获取所有设备
+	allAssets, _, _, _, err := config.ParseOrGenerate(false)
+	if err != nil {
+		config.UpdateTaskGroupStatus(id, "failed")
+		return err
+	}
+
+	finalStatus := "completed"
+
+	if taskGroup.Mode == "group" {
+		// 模式A：一组命令 → 多台设备
+		for _, item := range taskGroup.Items {
+			// 根据 IP 筛选设备
+			var selectedAssets []config.DeviceAsset
+			ipSet := make(map[string]bool)
+			for _, ip := range item.DeviceIPs {
+				ipSet[ip] = true
+			}
+			for _, asset := range allAssets {
+				if ipSet[asset.IP] {
+					selectedAssets = append(selectedAssets, asset)
+				}
+			}
+
+			if len(selectedAssets) == 0 {
+				continue
+			}
+
+			// 获取命令组
+			group, err := config.GetCommandGroup(item.CommandGroupID)
+			if err != nil {
+				logger.Warn("UI", "-", "获取命令组 %s 失败: %v", item.CommandGroupID, err)
+				finalStatus = "failed"
+				continue
+			}
+
+			ng := engine.NewEngine(selectedAssets, group.Commands, settings, false)
+			ng.CustomSuspendHandler = a.WailsSuspendHandler()
+
+			go func() {
+				for ev := range ng.EventBus {
+					a.wailsApp.Event.Emit("device:event", ev)
+				}
+			}()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			ng.Run(ctx)
+			cancel()
+		}
+	} else if taskGroup.Mode == "binding" {
+		// 模式B：每台设备独立命令
+		for _, item := range taskGroup.Items {
+			// 根据 IP 筛选设备
+			var selectedAssets []config.DeviceAsset
+			ipSet := make(map[string]bool)
+			for _, ip := range item.DeviceIPs {
+				ipSet[ip] = true
+			}
+			for _, asset := range allAssets {
+				if ipSet[asset.IP] {
+					selectedAssets = append(selectedAssets, asset)
+				}
+			}
+
+			if len(selectedAssets) == 0 || len(item.Commands) == 0 {
+				continue
+			}
+
+			ng := engine.NewEngine(selectedAssets, item.Commands, settings, false)
+			ng.CustomSuspendHandler = a.WailsSuspendHandler()
+
+			go func() {
+				for ev := range ng.EventBus {
+					a.wailsApp.Event.Emit("device:event", ev)
+				}
+			}()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			ng.Run(ctx)
+			cancel()
+		}
+	}
+
+	config.UpdateTaskGroupStatus(id, finalStatus)
+	a.wailsApp.Event.Emit("engine:finished")
+
+	return nil
+}

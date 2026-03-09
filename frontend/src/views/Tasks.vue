@@ -2,43 +2,41 @@
   <div class="animate-slide-in space-y-5 h-full flex flex-col">
     <!-- 标题栏 -->
     <div class="flex items-center justify-between flex-shrink-0">
-      <p class="text-sm text-text-muted">并发连接设备并下发配置命令</p>
+      <p class="text-sm text-text-muted">选择设备和命令组，创建任务绑定到任务执行页</p>
       <div class="flex gap-3">
         <button
-          @click="startEngine"
-          :disabled="isRunning || !canStart"
+          @click="goToTaskExecution"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          前往任务执行
+        </button>
+        <button
+          @click="openCreateModal"
+          :disabled="!canCreate"
           class="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-card"
-          :class="(isRunning || !canStart)
+          :class="!canCreate
             ? 'bg-bg-card border border-border text-text-muted cursor-not-allowed'
             : 'bg-accent hover:bg-accent-glow text-white border border-accent/30 hover:shadow-glow'"
         >
-          <svg v-if="!isRunning" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="5 3 19 12 5 21 5 3"/>
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
-          <span v-if="isRunning" class="w-4 h-4 border-2 border-text-muted border-t-transparent rounded-full animate-spin"></span>
-          {{ isRunning ? '执行中...' : '开始下发命令' }}
-        </button>
-        <button
-          @click="startBackup"
-          :disabled="isRunning"
-          class="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50 group"
-          :class="isRunning ? 'cursor-not-allowed opacity-50' : ''"
-        >
-          <svg v-if="!isRunning" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent transition-transform group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          备份交换机配置
+          创建任务
         </button>
       </div>
     </div>
 
-    <!-- 步骤选择区域（未运行时显示） -->
-    <div v-if="!isRunning && progressPercent === 0" class="flex-1 flex flex-col min-h-0 space-y-4">
+    <!-- 步骤选择区域 -->
+    <div class="flex-1 flex flex-col min-h-0 space-y-4">
       <!-- 步骤1: 选择目标设备 -->
       <div class="bg-bg-card border border-border rounded-xl overflow-hidden flex-shrink-0">
         <div class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel">
           <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">1</div>
           <span class="text-sm font-medium text-text-primary">选择目标设备</span>
+          <span v-if="selectedDevices.length > 0" class="ml-2 text-xs text-accent font-mono">已选 {{ selectedDevices.length }} 台</span>
           <button
             @click="goToDevices"
             class="ml-auto text-xs text-accent hover:text-accent-glow transition-colors"
@@ -59,6 +57,7 @@
         <div class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel flex-shrink-0">
           <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">2</div>
           <span class="text-sm font-medium text-text-primary">选择命令组</span>
+          <span v-if="selectedCommandGroup" class="ml-2 text-xs text-accent font-mono">{{ selectedCommandGroup.name }}</span>
         </div>
         <div class="px-3 pb-3 flex-1 min-h-0 flex flex-col">
           <CommandGroupSelector
@@ -70,97 +69,122 @@
       </div>
     </div>
 
-    <!-- 进度条 -->
-    <div v-if="isRunning || progressPercent > 0" class="flex-shrink-0 space-y-1.5">
-      <div class="flex items-center justify-between text-xs text-text-muted">
-        <span>总体进度</span>
-        <span class="font-mono">{{ progressPercent }}%</span>
-      </div>
-      <div class="h-2 bg-bg-card rounded-full overflow-hidden border border-border">
-        <div
-          class="h-full rounded-full transition-all duration-500 ease-out"
-          :class="progressPercent === 100 ? 'bg-success' : 'bg-accent'"
-          :style="{ width: progressPercent + '%' }"
-        ></div>
-      </div>
+    <!-- 底部提示 -->
+    <div class="flex-shrink-0 text-center py-2">
+      <p class="text-sm text-text-muted">选择设备和命令组后，点击「创建任务」将绑定组合发送到任务执行页</p>
     </div>
 
-    <!-- 设备卡片网格 (仅在运行中或有进度时显示) -->
-    <div v-if="isRunning || progressPercent > 0" class="flex-1 overflow-auto scrollbar-custom min-h-0">
-      <div v-if="devices.length === 0 && isRunning" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
-        <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-        <p class="text-sm">正在初始化任务...</p>
-      </div>
-      <div v-else class="grid grid-cols-3 gap-4">
-        <div
-          v-for="dev in devices"
-          :key="dev.ip"
-          class="bg-bg-card border rounded-xl overflow-hidden shadow-card transition-all duration-300"
-          :class="statusBorder(dev.status)"
-        >
-          <!-- 卡片头部 -->
-          <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-panel">
-            <span class="font-mono text-sm font-semibold text-text-primary">{{ dev.ip }}</span>
-            <span
-              class="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border"
-              :class="statusBadge(dev.status)"
-            >
-              <span class="w-1.5 h-1.5 rounded-full" :class="statusDot(dev.status)"></span>
-              {{ statusLabel(dev.status) }}
-            </span>
+    <!-- 创建任务弹窗 -->
+    <Transition name="modal">
+      <div v-if="createModal.show" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="createModal.show = false"></div>
+        <div class="relative bg-bg-card border border-border rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden animate-slide-in">
+          <!-- 弹窗头部 -->
+          <div class="flex items-center justify-between px-5 py-4 border-b border-border bg-bg-panel">
+            <h3 class="text-sm font-semibold text-text-primary">创建任务</h3>
+            <button @click="createModal.show = false" class="text-text-muted hover:text-text-primary transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
-          <!-- 终端日志区 -->
-          <div
-            class="h-52 overflow-y-auto scrollbar-custom bg-terminal-bg p-3 font-mono text-xs leading-relaxed"
-            :ref="el => setTerminalRef(dev.ip, el)"
-          >
-            <div
-              v-for="(log, idx) in dev.logs"
-              :key="idx"
-              class="whitespace-pre-wrap break-all mb-0.5"
-              :class="logColor(log)"
-            >{{ log }}</div>
+
+          <!-- 弹窗内容 -->
+          <div class="px-5 py-4 space-y-4 max-h-[60vh] overflow-auto scrollbar-custom">
+            <!-- 任务名称 -->
+            <div>
+              <label class="block text-xs font-medium text-text-secondary mb-1.5">任务名称</label>
+              <input
+                v-model="createModal.name"
+                type="text"
+                class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
+                placeholder="输入任务名称"
+              />
+            </div>
+
+            <!-- 任务描述 -->
+            <div>
+              <label class="block text-xs font-medium text-text-secondary mb-1.5">描述（可选）</label>
+              <textarea
+                v-model="createModal.description"
+                rows="2"
+                class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all resize-none"
+                placeholder="输入任务描述"
+              ></textarea>
+            </div>
+
+            <!-- 标签管理 -->
+            <div>
+              <label class="block text-xs font-medium text-text-secondary mb-1.5">标签</label>
+              <div class="flex flex-wrap gap-2 mb-2">
+                <span v-for="(tag, idx) in createModal.tags" :key="idx"
+                  class="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-accent/10 border border-accent/30 text-accent"
+                >
+                  {{ tag }}
+                  <button @click="createModal.tags.splice(idx, 1)" class="hover:text-error transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </span>
+              </div>
+              <div class="flex gap-2">
+                <input
+                  v-model="createModal.newTag"
+                  type="text"
+                  class="flex-1 px-3 py-1.5 rounded-lg bg-bg-panel border border-border text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50 transition-all"
+                  placeholder="输入标签后按回车"
+                  @keydown.enter.prevent="addTag"
+                />
+                <button @click="addTag" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white transition-all">
+                  添加
+                </button>
+              </div>
+            </div>
+
+            <!-- 绑定预览 -->
+            <div class="bg-bg-panel border border-border rounded-lg p-3 space-y-2">
+              <h4 class="text-xs font-medium text-text-secondary mb-2">绑定预览</h4>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="px-2 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent font-mono">
+                  {{ selectedCommandGroup?.name || '未选择' }}
+                </span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                <span class="text-text-secondary">{{ selectedDevices.length }} 台设备</span>
+              </div>
+              <div class="flex flex-wrap gap-1 mt-1">
+                <span v-for="dev in selectedDevices.slice(0, 10)" :key="dev.IP"
+                  class="text-xs font-mono px-1.5 py-0.5 rounded bg-bg-card border border-border text-text-muted"
+                >{{ dev.IP }}</span>
+                <span v-if="selectedDevices.length > 10" class="text-xs text-text-muted">+{{ selectedDevices.length - 10 }} 台</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 弹窗底部 -->
+          <div class="flex justify-end gap-3 px-5 py-4 border-t border-border">
+            <button
+              @click="createModal.show = false"
+              class="px-4 py-2 rounded-lg text-sm font-medium bg-bg-panel border border-border text-text-secondary hover:text-text-primary transition-all"
+            >取消</button>
+            <button
+              @click="confirmCreate"
+              :disabled="!createModal.name.trim()"
+              class="px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
+              :class="createModal.name.trim()
+                ? 'bg-accent hover:bg-accent-glow text-white border border-accent/30 hover:shadow-glow'
+                : 'bg-bg-card border border-border text-text-muted cursor-not-allowed'"
+            >确认创建</button>
           </div>
         </div>
       </div>
-    </div>
+    </Transition>
 
-    <!-- 底部提示 -->
-    <div v-if="!isRunning && progressPercent === 0" class="flex-shrink-0 text-center py-2">
-      <p class="text-sm text-text-muted">选择设备和命令组后，点击「开始下发命令」启动任务</p>
-    </div>
-
-    <!-- 自定义 Modal 对话框 -->
-    <Transition name="modal">
-      <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="modal.show = false"></div>
-        <div class="relative bg-bg-card border border-warning/50 rounded-xl shadow-card max-w-md w-full mx-4 overflow-hidden animate-slide-in">
-          <!-- 对话框头部 -->
-          <div class="flex items-center gap-3 px-5 py-4 border-b border-border bg-warning/5">
-            <div class="w-9 h-9 rounded-lg bg-warning/15 flex items-center justify-center flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            </div>
-            <div>
-              <h3 class="text-sm font-semibold text-text-primary">异常干预（阻塞流）</h3>
-              <p class="text-xs text-text-muted mt-0.5">当前设备已被挂起，全局其余设备继续执行</p>
-            </div>
-          </div>
-          <!-- 内容 -->
-          <div class="px-5 py-4 space-y-3">
-            <div class="bg-bg-panel border border-border rounded-lg p-3 font-mono text-xs text-text-secondary leading-relaxed whitespace-pre-wrap">{{ modal.content }}</div>
-            <p class="text-xs text-text-muted">请选择如何处理该设备的挂起任务：</p>
-          </div>
-          <!-- 操作按钮 -->
-          <div class="flex gap-3 px-5 py-4 border-t border-border">
-            <button
-              @click="resolveModal('S')"
-              class="flex-1 py-2.5 text-sm font-medium rounded-lg bg-accent/20 border border-accent/40 text-accent hover:bg-accent hover:text-white transition-all duration-200"
-            >放弃此指令继续 (Skip)</button>
-            <button
-              @click="resolveModal('A')"
-              class="flex-1 py-2.5 text-sm font-medium rounded-lg bg-error/20 border border-error/40 text-error hover:bg-error hover:text-white transition-all duration-200"
-            >掐断设备连接 (Abort)</button>
-          </div>
+    <!-- Toast 通知 -->
+    <Transition name="toast">
+      <div v-if="showToast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+        <div class="flex items-center gap-2 px-5 py-3 rounded-xl shadow-2xl border"
+          :class="toastType === 'success' ? 'bg-success/10 border-success/30 text-success' : 'bg-error/10 border-error/30 text-error'"
+        >
+          <svg v-if="toastType === 'success'" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          <span class="text-sm font-medium">{{ toastMessage }}</span>
         </div>
       </div>
     </Transition>
@@ -168,25 +192,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 // @ts-ignore
-import { 
-  StartEngineWithSelection,
-  StartBackupWails, 
-  ResolveSuspend,
-  ListDevices 
+import {
+  ListDevices,
+  CreateTaskGroup as ApiCreateTaskGroup
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
-import { Events } from '@wailsio/runtime'
 import type { DeviceAsset } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
 import type { CommandGroup } from '../types/command'
 import DeviceSelector from '../components/task/DeviceSelector.vue'
 import CommandGroupSelector from '../components/task/CommandGroupSelector.vue'
 
 const router = useRouter()
-const isRunning      = ref(false)
-const progressPercent= ref(0)
-const devices        = ref<any[]>([])
 
 // 设备列表和选择状态
 const deviceList = ref<DeviceAsset[]>([])
@@ -194,66 +212,91 @@ const selectedDevices = ref<DeviceAsset[]>([])
 const selectedCommandGroupId = ref('')
 const selectedCommandGroup = ref<CommandGroup | null>(null)
 
-// 是否可以启动任务
-const canStart = computed(() => {
+// 是否可以创建任务
+const canCreate = computed(() => {
   return selectedDevices.value.length > 0 && selectedCommandGroupId.value
 })
 
-// 终端 DOM 引用
-const terminalRefs = new Map<string, Element>()
-function setTerminalRef(ip: string, el: any) {
-  if (el) terminalRefs.set(ip, el as Element)
-  else terminalRefs.delete(ip)
+// Toast 通知
+const showToast = ref(false)
+const toastMessage = ref('')
+const toastType = ref<'success' | 'error'>('success')
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+function triggerToast(msg: string, type: 'success' | 'error' = 'success') {
+  toastMessage.value = msg
+  toastType.value = type
+  showToast.value = true
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { showToast.value = false }, 3000)
 }
 
-// 自定义 modal 状态
-const modal = ref({ show: false, ip: '', content: '' })
-function resolveModal(action: 'S' | 'A') {
-  ResolveSuspend(modal.value.ip, action)
-  modal.value.show = false
+// 创建任务弹窗
+const createModal = ref({
+  show: false,
+  name: '',
+  description: '',
+  tags: [] as string[],
+  newTag: ''
+})
+
+function generateDefaultName() {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  const h = String(now.getHours()).padStart(2, '0')
+  const mi = String(now.getMinutes()).padStart(2, '0')
+  const s = String(now.getSeconds()).padStart(2, '0')
+  return `Task_${y}${m}${d}_${h}${mi}${s}`
 }
 
-// 状态样式映射
-function statusBorder(s: string) {
-  switch (s) {
-    case 'running': return 'border-accent/50'
-    case 'success': return 'border-success/50'
-    case 'error':   return 'border-error/50'
-    case 'waiting': return 'border-warning/40'
-    default:        return 'border-border'
+function openCreateModal() {
+  if (!canCreate.value) return
+  createModal.value = {
+    show: true,
+    name: generateDefaultName(),
+    description: '',
+    tags: [],
+    newTag: ''
   }
 }
-function statusBadge(s: string) {
-  switch (s) {
-    case 'running': return 'bg-accent/10 border-accent/30 text-accent'
-    case 'success': return 'bg-success/10 border-success/30 text-success'
-    case 'error':   return 'bg-error/10 border-error/30 text-error'
-    case 'waiting': return 'bg-warning/10 border-warning/30 text-warning'
-    default:        return 'bg-bg-panel border-border text-text-muted'
+
+function addTag() {
+  const tag = createModal.value.newTag.trim()
+  if (tag && !createModal.value.tags.includes(tag)) {
+    createModal.value.tags.push(tag)
   }
+  createModal.value.newTag = ''
 }
-function statusDot(s: string) {
-  switch (s) {
-    case 'running': return 'bg-accent animate-pulse'
-    case 'success': return 'bg-success'
-    case 'error':   return 'bg-error'
-    case 'waiting': return 'bg-warning animate-pulse'
-    default:        return 'bg-text-muted'
+
+async function confirmCreate() {
+  if (!createModal.value.name.trim() || !canCreate.value) return
+
+  try {
+    const taskGroup = {
+      id: '',
+      name: createModal.value.name.trim(),
+      description: createModal.value.description.trim(),
+      mode: 'group',
+      items: [{
+        commandGroupId: selectedCommandGroupId.value,
+        commands: [] as string[],
+        deviceIPs: selectedDevices.value.map((d: DeviceAsset) => d.IP)
+      }],
+      tags: createModal.value.tags,
+      status: 'pending',
+      createdAt: '',
+      updatedAt: ''
+    }
+
+    await ApiCreateTaskGroup(taskGroup)
+    createModal.value.show = false
+    triggerToast('任务创建成功！可前往任务执行页查看', 'success')
+  } catch (err: any) {
+    console.error('创建任务失败:', err)
+    triggerToast(`创建失败: ${err?.message || err}`, 'error')
   }
-}
-function statusLabel(s: string) {
-  const map: Record<string, string> = {
-    running: '执行中', success: '成功', error: '失败', waiting: '等待', idle: '空闲'
-  }
-  return map[s] ?? s
-}
-function logColor(log: string) {
-  const l = log.toLowerCase()
-  if (l.includes('error') || l.includes('失败') || l.includes('错误')) return 'text-error'
-  if (l.includes('warn')  || l.includes('警告'))                        return 'text-warning'
-  if (l.includes('success')|| l.includes('成功') || l.includes('完成')) return 'text-success'
-  if (log.startsWith('[')) return 'text-info'
-  return 'text-text-muted'
 }
 
 // 设备选择变化
@@ -266,16 +309,19 @@ function onCommandGroupChange(group: CommandGroup | null) {
   selectedCommandGroup.value = group
 }
 
-// 跳转到设备管理页面
+// 导航
 function goToDevices() {
   router.push('/devices')
+}
+
+function goToTaskExecution() {
+  router.push('/task-execution')
 }
 
 // 加载设备列表
 async function loadDevices() {
   try {
     const result = await ListDevices()
-    // 确保字段名正确映射（后端可能用小写 ip，前端期望大写 IP）
     deviceList.value = (result || []).map((d: any) => ({
       IP: d.IP || d.ip || '',
       Port: d.Port || d.port || 22,
@@ -291,86 +337,8 @@ async function loadDevices() {
   }
 }
 
-async function startEngine() {
-  if (isRunning.value || !canStart.value) return
-  isRunning.value    = true
-  progressPercent.value = 5
-  devices.value      = []
-  try {
-    // 使用新的 API：传入选定的设备 IP 和命令组 ID
-    const deviceIPs = selectedDevices.value.map((d: DeviceAsset) => d.IP)
-    await StartEngineWithSelection(deviceIPs, selectedCommandGroupId.value)
-  } catch (err: any) {
-    console.error('启动失败:', err)
-    isRunning.value = false
-  }
-}
-
-async function startBackup() {
-  if (isRunning.value) return
-  isRunning.value = true
-  progressPercent.value = 5
-  devices.value = []
-  try {
-    await StartBackupWails()
-  } catch (err: any) {
-    console.error('备份启动失败:', err)
-    isRunning.value = false
-  }
-}
-
-let eventHandlers: any[] = []
 onMounted(() => {
-  // 加载设备列表
   loadDevices()
-
-  const hFinished = Events.On('engine:finished', () => {
-    isRunning.value = false
-    progressPercent.value = 100
-  })
-
-  const hEvent = Events.On('device:event', (ev: any) => {
-    const data = ev.data[0]
-    let dev = devices.value.find(d => d.ip === data.IP)
-    if (!dev) {
-      dev = { ip: data.IP, status: 'waiting', logs: [] }
-      devices.value.push(dev)
-    }
-    if (data.Message) {
-      dev.logs.push(data.Message)
-      nextTick(() => {
-        const el = terminalRefs.get(dev.ip)
-        if (el) el.scrollTop = el.scrollHeight
-      })
-    }
-    if (data.Type === 'start') dev.status = 'running'
-    else if ((data.Type === 'success' || data.Type === 'skip') && dev.status !== 'error') dev.status = 'success'
-    else if (data.Type === 'error' || data.Type === 'abort') dev.status = 'error'
-
-    const totalComplete = devices.value.reduce((acc, curr) =>
-      acc + (curr.status === 'success' || curr.status === 'error' ? 1 : 0), 0)
-    if (devices.value.length > 0) {
-      progressPercent.value = Math.min(95, Math.floor((totalComplete / devices.value.length) * 100))
-    }
-  })
-
-  const hSuspend = Events.On('engine:suspend_required', (ev: any) => {
-    const data = ev.data[0]
-    modal.value = {
-      show:    true,
-      ip:      data.ip,
-      content: `设备: ${data.ip}\n命令: ${data.command}\n\n错误详情:\n${data.error}`,
-    }
-  })
-
-  eventHandlers.push(hFinished, hEvent, hSuspend)
-})
-
-onUnmounted(() => {
-  eventHandlers.forEach(h => {
-    if (h && typeof h === 'function') h()
-    else if (h && h.cancel) h.cancel()
-  })
 })
 </script>
 
@@ -380,5 +348,19 @@ onUnmounted(() => {
 }
 .modal-enter-from, .modal-leave-to {
   opacity: 0;
+}
+.toast-enter-active {
+  transition: all 0.3s ease-out;
+}
+.toast-leave-active {
+  transition: all 0.2s ease-in;
+}
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
+}
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
 }
 </style>

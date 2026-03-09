@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { CreateCommandGroup } from '../../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
+// @ts-ignore
+import { CreateCommandGroup, CreateTaskGroup } from '../../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
 
 const router = useRouter()
 
@@ -639,6 +640,128 @@ const downloadSplit = async () => {
   }
 }
 
+// ========== BindingDeviceIP 功能 ==========
+
+// 检测是否为绑定模式：模板第一行包含 [BindingDeviceIP]
+const isBindingMode = computed(() => {
+  const firstLine = templateText.value.split('\n')[0]?.trim() || ''
+  return firstLine.includes('[BindingDeviceIP]')
+})
+
+// 当检测到 BindingDeviceIP 时，自动将第一个变量名设为 [BindingDeviceIP]
+watch(isBindingMode, (isBinding) => {
+  if (isBinding && variables.value.length > 0) {
+    const firstVar = variables.value[0]
+    if (firstVar) firstVar.name = '[BindingDeviceIP]'
+  }
+})
+
+// 发送到任务执行弹窗状态
+const taskModal = ref({
+  show: false,
+  saving: false,
+  name: '',
+  description: '',
+  tags: [] as string[],
+  newTag: ''
+})
+
+function openTaskModal() {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  const h = String(now.getHours()).padStart(2, '0')
+  const mi = String(now.getMinutes()).padStart(2, '0')
+  const s = String(now.getSeconds()).padStart(2, '0')
+  taskModal.value = {
+    show: true,
+    saving: false,
+    name: `ConfigForge_${y}${m}${d}_${h}${mi}${s}`,
+    description: '从 ConfigForge (BindingDeviceIP) 生成的任务',
+    tags: ['ConfigForge', 'BindingDeviceIP'],
+    newTag: ''
+  }
+}
+
+function closeTaskModal() {
+  taskModal.value.show = false
+}
+
+function addTaskTag() {
+  const tag = taskModal.value.newTag.trim()
+  if (tag && !taskModal.value.tags.includes(tag)) {
+    taskModal.value.tags.push(tag)
+  }
+  taskModal.value.newTag = ''
+}
+
+function removeTaskTag(index: number) {
+  taskModal.value.tags.splice(index, 1)
+}
+
+// 获取绑定模式下每台 IP 对应的命令
+const bindingPreview = computed(() => {
+  if (!isBindingMode.value || variables.value.length === 0) return []
+  const firstVar = variables.value[0]
+  if (!firstVar) return []
+  const ipValues = firstVar.valueString
+    .split(/,|\n/)
+    .map((s: string) => s.trim())
+    .filter((s: string) => s !== '')
+  return ipValues.map((ip: string, idx: number) => ({
+    ip,
+    commands: outputBlocks.value[idx] || ''
+  }))
+})
+
+async function executeTaskSend() {
+  if (taskModal.value.saving) return
+  if (!taskModal.value.name.trim()) {
+    triggerToast('请输入任务名称')
+    return
+  }
+  if (bindingPreview.value.length === 0) {
+    triggerToast('没有可发送的绑定配置')
+    return
+  }
+
+  taskModal.value.saving = true
+  try {
+    // 构建模式B的任务组：每台 IP 对应一组独立命令
+    const items = bindingPreview.value.map(b => ({
+      commandGroupId: '',
+      commands: b.commands.split('\n').map((l: string) => l.trim()).filter((l: string) => l !== ''),
+      deviceIPs: [b.ip]
+    }))
+
+    const taskGroup = {
+      id: '',
+      name: taskModal.value.name.trim(),
+      description: taskModal.value.description.trim(),
+      mode: 'binding',
+      items,
+      tags: taskModal.value.tags,
+      status: 'pending',
+      createdAt: '',
+      updatedAt: ''
+    }
+
+    await CreateTaskGroup(taskGroup)
+    closeTaskModal()
+    showSendResult(true, `任务「${taskModal.value.name.trim()}」已发送到任务执行`, bindingPreview.value.length, [])
+  } catch (err: any) {
+    console.error('发送到任务执行失败:', err)
+    triggerToast('发送失败: ' + (err.message || err))
+  } finally {
+    taskModal.value.saving = false
+  }
+}
+
+function goToTaskExecution() {
+  router.push('/task-execution')
+}
+
 // 一键复制功能
 const copyAll = async () => {
   if (outputBlocks.value.length === 0) return
@@ -746,18 +869,23 @@ const copyAll = async () => {
           </button>
         </div>
         <div class="flex-1 overflow-y-auto p-4 space-y-4">
-          <div v-for="(v, index) in variables" :key="v.id || index" class="bg-bg-tertiary/40 border border-border backdrop-blur-sm flex flex-col rounded-xl shadow-sm hover:shadow-md transition-shadow group">
+          <div v-for="(v, index) in variables" :key="v.id || index" class="bg-bg-tertiary/40 border border-border backdrop-blur-sm flex flex-col rounded-xl shadow-sm hover:shadow-md transition-shadow group" :class="isBindingMode && index === 0 ? 'border-warning/40 ring-1 ring-warning/20' : ''">
             <div class="flex items-center justify-between px-3 py-2 border-b border-border bg-bg-tertiary/40 rounded-t-xl">
-              <div class="relative">
+              <div class="relative flex items-center gap-2">
                 <input 
                   v-model="v.name"
                   class="input input-sm input-mono w-20 text-center tracking-wider"
+                  :class="isBindingMode && index === 0 ? 'text-warning font-bold' : ''"
+                  :readonly="isBindingMode && index === 0"
                 />
+                <span v-if="isBindingMode && index === 0" class="text-xs px-1.5 py-0.5 rounded bg-warning/10 border border-warning/30 text-warning font-medium">IP绑定</span>
               </div>
               <button 
                 @click="removeVariable(index)"
                 class="text-text-muted hover:text-error hover:bg-error-bg p-1.5 rounded-md transition-all"
                 title="删除变量"
+                :disabled="isBindingMode && index === 0"
+                :class="isBindingMode && index === 0 ? 'opacity-30 cursor-not-allowed' : ''"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -768,7 +896,7 @@ const copyAll = async () => {
               v-model="v.valueString"
               @blur="expandSyntaxSugar(v)"
               class="input textarea h-16 input-mono rounded-b-xl rounded-t-none border-0 border-t border-border bg-bg-tertiary/30"
-              :placeholder="index === 0 ? '1, 2, 3...' : index === 1 ? '1-3' : index === 2 ? 'vlan10-13' : index === 3 ? '192.168.1.1-3' : '...'"
+              :placeholder="isBindingMode && index === 0 ? '192.168.1.1, 192.168.1.2, ...' : index === 0 ? '1, 2, 3...' : index === 1 ? '1-3' : index === 2 ? 'vlan10-13' : index === 3 ? '192.168.1.1-3' : '...'"
               spellcheck="false"
             ></textarea>
           </div>
@@ -800,7 +928,22 @@ const copyAll = async () => {
 
           <!-- 功能按钮区 -->
           <div class="flex space-x-2 items-center" v-if="outputBlocks.length > 0">
-            <!-- 新增：发送到命令管理按钮 -->
+            <!-- BindingDeviceIP 模式: 发送到任务执行 -->
+            <button 
+              v-if="isBindingMode"
+              @click="openTaskModal"
+              class="btn btn-sm btn-secondary group relative"
+              title="发送到任务执行"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3" fill="none" stroke="currentColor" stroke-width="2"/>
+              </svg>
+              <span class="absolute top-full mt-2 right-0 px-3 py-1.5 bg-bg-primary text-text-primary text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl pointer-events-none z-50">
+                发送到任务执行
+                <span class="absolute -top-1 right-2 w-2 h-2 bg-bg-primary rotate-45"></span>
+              </span>
+            </button>
+            <!-- 发送到命令管理按钮 -->
             <button 
               @click="openSendModal"
               class="btn btn-sm btn-secondary group relative"
@@ -1043,6 +1186,85 @@ const copyAll = async () => {
       </div>
     </Transition>
 
+    <!-- 发送到任务执行弹窗 -->
+    <Transition name="modal">
+      <div v-if="taskModal.show" class="modal-container modal-active">
+        <div class="modal-overlay" @click="closeTaskModal"></div>
+        <div class="modal modal-lg modal-glass">
+          <!-- 头部 -->
+          <div class="modal-header">
+            <h3 class="modal-header-title">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3" fill="none" stroke="currentColor" stroke-width="2"/>
+              </svg>
+              发送到任务执行
+              <span class="text-xs text-text-muted font-normal ml-2">基于 IP 绑定生成的配置任务</span>
+            </h3>
+            <button @click="closeTaskModal" class="modal-close">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <!-- 表单内容 -->
+          <div class="modal-body space-y-5">
+            <!-- 名称 -->
+            <div class="space-y-1.5">
+              <label class="text-sm font-medium text-text-primary">任务名称 <span class="text-error">*</span></label>
+              <input v-model="taskModal.name" type="text" class="w-full px-4 py-2.5 rounded-lg bg-bg-secondary border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all" placeholder="输入任务名称" />
+            </div>
+            <!-- 描述 -->
+            <div class="space-y-1.5">
+              <label class="text-sm font-medium text-text-primary">描述</label>
+              <input v-model="taskModal.description" type="text" class="w-full px-4 py-2.5 rounded-lg bg-bg-secondary border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all" placeholder="输入描述（可选）" />
+            </div>
+            <!-- 标签 -->
+            <div class="space-y-1.5">
+              <label class="text-sm font-medium text-text-primary">标签</label>
+              <div class="flex flex-wrap gap-2 mb-2">
+                <span v-for="(tag, idx) in taskModal.tags" :key="idx" class="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full bg-accent/10 text-accent border border-accent/20">
+                  {{ tag }}
+                  <button @click="removeTaskTag(idx)" class="hover:text-error transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </span>
+              </div>
+              <div class="flex gap-2">
+                <input v-model="taskModal.newTag" type="text" class="flex-1 px-3 py-2 rounded-lg bg-bg-secondary border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50 transition-all" placeholder="添加标签" @keyup.enter="addTaskTag" />
+                <button @click="addTaskTag" class="px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-colors">添加</button>
+              </div>
+            </div>
+            <!-- 绑定预览 -->
+            <div class="preview-box">
+              <div class="preview-icon">🔗</div>
+              <div class="preview-content">
+                <span class="preview-text">共 <strong class="text-warning">{{ bindingPreview.length }}</strong> 台设备的 IP 绑定任务</span>
+                <div class="mt-2 space-y-1 max-h-32 overflow-auto scrollbar-custom">
+                  <div v-for="(b, i) in bindingPreview.slice(0, 5)" :key="i" class="flex items-center gap-2 text-xs">
+                    <span class="font-mono text-warning">{{ b.ip }}</span>
+                    <span class="text-text-muted">→</span>
+                    <span class="text-text-secondary truncate">{{ b.commands.split('\n').length }} 行命令</span>
+                  </div>
+                  <div v-if="bindingPreview.length > 5" class="text-xs text-text-muted">+{{ bindingPreview.length - 5 }} 台设备...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 底部按钮 -->
+          <div class="modal-footer">
+            <button @click="closeTaskModal" class="btn btn-secondary">取消</button>
+            <button @click="executeTaskSend" :disabled="taskModal.saving" class="btn btn-primary">
+              <svg v-if="taskModal.saving" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke-opacity="1"/>
+              </svg>
+              {{ taskModal.saving ? '发送中...' : '确认发送' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- 创建成功提示 -->
     <Transition name="toast">
       <div v-if="sendResult.show" class="success-toast">
@@ -1053,7 +1275,10 @@ const copyAll = async () => {
         </div>
         <div class="toast-content">
           <div class="toast-title">{{ sendResult.message }}</div>
-          <button @click="goToCommands" class="toast-link">
+          <button v-if="sendResult.message.includes('任务执行')" @click="goToTaskExecution" class="toast-link">
+            查看任务执行 →
+          </button>
+          <button v-else @click="goToCommands" class="toast-link">
             查看命令管理 →
           </button>
         </div>

@@ -18,11 +18,31 @@ export interface CreateCommandGroupRequest {
 }
 
 // 设备筛选方式
-export type DeviceFilterType = 'all' | 'group' | 'tag' | 'protocol' | 'manual';
+export type DeviceFilterType = "all" | "group" | "tag" | "protocol" | "manual";
 
 // 设备筛选选项
 export interface DeviceFilterOption {
   label: string;
   value: string;
   count?: number;
+}
+
+// 任务项（一组命令绑定一组设备）
+export interface TaskItem {
+  commandGroupId: string;
+  commands: string[];
+  deviceIPs: string[];
+}
+
+// 任务组
+export interface TaskGroup {
+  id: string;
+  name: string;
+  description: string;
+  mode: "group" | "binding";
+  items: TaskItem[];
+  tags: string[];
+  status: "pending" | "running" | "completed" | "failed";
+  createdAt: string;
+  updatedAt: string;
 }
