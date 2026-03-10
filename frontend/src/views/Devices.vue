@@ -1084,8 +1084,16 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from "vue";
-import { Call } from "@wailsio/runtime";
-
+import {
+  ListDevices,
+  AddDevice,
+  UpdateDevice,
+  DeleteDevice,
+  SaveDevices,
+  GetProtocolDefaultPorts,
+  GetValidProtocols,
+} from "../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js";
+// 使用后端定义的类型，前端直接使用小写字段名
 interface Device {
   ip: string;
   port: number;
@@ -1390,22 +1398,16 @@ function parseIpRange(ip: string): IpRangeHint | null {
 // 加载设备列表
 async function loadDevices() {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const devices: any = await Call.ByName(
-      "github.com/NetWeaverGo/core/internal/ui.AppService.ListDevices",
-    );
+    const devices = await ListDevices();
     if (devices && Array.isArray(devices)) {
-      data.value = devices.map((d: any) => ({
-        ip: d.ip || d.IP || "",
-        port: d.port || d.Port || 22,
-        protocol: d.protocol || d.Protocol || "SSH",
-        username: d.username || d.Username || "",
-        password: d.password || d.Password || "",
-        group: d.group || d.Group || "",
-        tags: (d.tag || d.Tag || "")
-          .split(",")
-          .map((s: string) => s.trim())
-          .filter(Boolean),
+      data.value = devices.map((d) => ({
+        ip: d.ip || "",
+        port: d.port || 22,
+        protocol: d.protocol || "SSH",
+        username: d.username || "",
+        password: d.password || "",
+        group: d.group || "",
+        tags: d.tags || [],
       }));
     }
   } catch (e) {
@@ -1416,14 +1418,8 @@ async function loadDevices() {
 // 加载协议配置
 async function loadProtocolConfig() {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ports: any = await Call.ByName(
-      "github.com/NetWeaverGo/core/internal/ui.AppService.GetProtocolDefaultPorts",
-    );
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const protocols: any = await Call.ByName(
-      "github.com/NetWeaverGo/core/internal/ui.AppService.GetValidProtocols",
-    );
+    const ports = await GetProtocolDefaultPorts();
+    const protocols = await GetValidProtocols();
     if (ports) protocolDefaultPorts.value = ports;
     if (protocols) validProtocols.value = protocols;
   } catch (e) {
@@ -1505,37 +1501,6 @@ function removeTag(index: number) {
   form.value.tags.splice(index, 1);
 }
 
-// 保存设备接口适配器 (将 tags 数组转回逗号字符串)
-async function callWailsWithTags(method: string, ...args: any[]) {
-  const processedArgs = args.map((arg) => {
-    if (
-      arg &&
-      typeof arg === "object" &&
-      "tags" in arg &&
-      Array.isArray(arg.tags)
-    ) {
-      const { tags, ...rest } = arg;
-      return { ...rest, tag: tags.join(",") };
-    }
-    if (Array.isArray(arg)) {
-      return arg.map((item) => {
-        if (
-          item &&
-          typeof item === "object" &&
-          "tags" in item &&
-          Array.isArray(item.tags)
-        ) {
-          const { tags, ...rest } = item;
-          return { ...rest, tag: tags.join(",") };
-        }
-        return item;
-      });
-    }
-    return arg;
-  });
-  return Call.ByName(method, ...processedArgs);
-}
-
 // 保存设备
 async function saveDevice() {
   errorMessage.value = "";
@@ -1552,11 +1517,7 @@ async function saveDevice() {
 
     if (isEditing.value) {
       // 编辑模式 - 单设备
-      await callWailsWithTags(
-        "github.com/NetWeaverGo/core/internal/ui.AppService.UpdateDevice",
-        editingIndex.value,
-        form.value,
-      );
+      await UpdateDevice(editingIndex.value, form.value);
     } else {
       // 新增模式 - 检查语法糖
       if (ipRangeHint.value) {
@@ -1584,17 +1545,11 @@ async function saveDevice() {
 
           // 合并现有设备并保存
           const allDevices = [...data.value, ...newDevices];
-          await callWailsWithTags(
-            "github.com/NetWeaverGo/core/internal/ui.AppService.SaveDevices",
-            allDevices,
-          );
+          await SaveDevices(allDevices);
         }
       } else {
         // 单设备新增
-        await callWailsWithTags(
-          "github.com/NetWeaverGo/core/internal/ui.AppService.AddDevice",
-          form.value,
-        );
+        await AddDevice(form.value);
       }
     }
 
@@ -1685,10 +1640,7 @@ async function saveBatchEdit() {
       return newDevice;
     });
 
-    await callWailsWithTags(
-      "github.com/NetWeaverGo/core/internal/ui.AppService.SaveDevices",
-      updatedDevices,
-    );
+    await SaveDevices(updatedDevices);
     await loadDevices();
     closeBatchModal();
     // 保存成功后清空选择
@@ -1716,10 +1668,7 @@ async function deleteDevice() {
   isDeleting.value = true;
 
   try {
-    await Call.ByName(
-      "github.com/NetWeaverGo/core/internal/ui.AppService.DeleteDevice",
-      deleteIndex.value,
-    );
+    await DeleteDevice(deleteIndex.value);
     await loadDevices();
     showDeleteConfirm.value = false;
 
@@ -1805,10 +1754,7 @@ async function batchDeleteDevices() {
 
     // 从后往前删除设备
     for (const idx of indexesToDelete) {
-      await Call.ByName(
-        "github.com/NetWeaverGo/core/internal/ui.AppService.DeleteDevice",
-        idx,
-      );
+      await DeleteDevice(idx);
     }
 
     await loadDevices();

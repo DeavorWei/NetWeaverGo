@@ -51,6 +51,8 @@ func main() {
 
 func runGUI() {
 	logger.Info("System", "-", "正在初始化 Wails GUI 环境...")
+
+	// 创建 AppService 门面实例（内部委托给各独立服务）
 	appService := ui.NewAppService()
 
 	// 修正：修正嵌入文件系统的路径级联问题

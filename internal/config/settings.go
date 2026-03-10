@@ -10,12 +10,12 @@ import (
 
 // GlobalSettings 全局运行参数
 type GlobalSettings struct {
-	MaxWorkers     int    `yaml:"max_workers"`     // 并发数 (当前硬编码为 32)
-	ConnectTimeout string `yaml:"connect_timeout"` // SSH/SFTP 连接超时 (如 "10s")
-	CommandTimeout string `yaml:"command_timeout"` // 单条命令默认超时 (如 "30s")
-	OutputDir      string `yaml:"output_dir"`      // 回显输出与配置备份的根目录
-	LogDir         string `yaml:"log_dir"`         // 系统运行日志存放目录
-	ErrorMode      string `yaml:"error_mode"`      // "pause" | "skip" | "abort"
+	MaxWorkers     int    `json:"maxWorkers" yaml:"max_workers"`         // 并发数 (当前硬编码为 32)
+	ConnectTimeout string `json:"connectTimeout" yaml:"connect_timeout"` // SSH/SFTP 连接超时 (如 "10s")
+	CommandTimeout string `json:"commandTimeout" yaml:"command_timeout"` // 单条命令默认超时 (如 "30s")
+	OutputDir      string `json:"outputDir" yaml:"output_dir"`           // 回显输出与配置备份的根目录
+	LogDir         string `json:"logDir" yaml:"log_dir"`                 // 系统运行日志存放目录
+	ErrorMode      string `json:"errorMode" yaml:"error_mode"`           // "pause" | "skip" | "abort"
 }
 
 // rootConfig 用于解析 YAML 格式的根结构

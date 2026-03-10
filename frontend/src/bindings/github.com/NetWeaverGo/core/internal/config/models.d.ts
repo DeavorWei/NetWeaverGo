@@ -1,23 +1,33 @@
 // Type declarations for models.js
-// 后端使用小写 json tag，但 Wails 绑定使用大写字段名
+// 自动生成的类型定义 - 与后端 Go 结构体保持一致
 
 export interface DeviceAsset {
-  IP: string;
-  Port: number;
-  Protocol: string;
-  Username: string;
-  Password: string;
-  Group: string;
-  Tag: string;
+  ip: string;
+  port: number;
+  protocol: string;
+  username: string;
+  password: string;
+  group: string;
+  tags: string[];
 }
 
 export interface GlobalSettings {
-  MaxWorkers: number;
-  ConnectTimeout: string;
-  CommandTimeout: string;
-  OutputDir: string;
-  LogDir: string;
-  ErrorMode: string;
+  maxWorkers: number;
+  connectTimeout: string;
+  commandTimeout: string;
+  outputDir: string;
+  logDir: string;
+  errorMode: string;
+}
+
+export interface CommandGroup {
+  id: string;
+  name: string;
+  description: string;
+  commands: string[];
+  createdAt: string;
+  updatedAt: string;
+  tags: string[];
 }
 
 export class DeviceAsset {

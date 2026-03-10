@@ -13,20 +13,20 @@ import (
 
 // DeviceAsset 表示单台交换机的连接凭证信息
 type DeviceAsset struct {
-	IP       string `json:"ip"`
-	Port     int    `json:"port"`
-	Protocol string `json:"protocol"` // 连接协议：SSH/SNMP/TELNET
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Group    string `json:"group"` // 设备分组
-	Tag      string `json:"tag"`   // 设备标签
+	IP       string   `json:"ip"`
+	Port     int      `json:"port"`
+	Protocol string   `json:"protocol"` // 连接协议：SSH/SNMP/TELNET
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+	Group    string   `json:"group"` // 设备分组
+	Tags     []string `json:"tags"`  // 设备标签列表
 }
 
 // 协议默认端口映射
 var ProtocolDefaultPorts = map[string]int{
-	"SSH":     22,
-	"SNMP":    161,
-	"TELNET":  23,
+	"SSH":    22,
+	"SNMP":   161,
+	"TELNET": 23,
 }
 
 // ValidProtocols 有效协议列表
@@ -160,7 +160,7 @@ func readInventory() ([]DeviceAsset, error) {
 			Username: username,
 			Password: password,
 			Group:    group,
-			Tag:      tag,
+			Tags:     parseTags(tag),
 		})
 	}
 	return devices, nil
@@ -235,6 +235,27 @@ func isValidProtocol(protocol string) bool {
 		}
 	}
 	return false
+}
+
+// parseTags 从字符串解析标签数组（支持逗号或分号分隔）
+func parseTags(tagStr string) []string {
+	if tagStr == "" {
+		return []string{}
+	}
+	// 支持逗号或分号分隔
+	tags := strings.Split(strings.ReplaceAll(tagStr, ";", ","), ",")
+	result := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		if t := strings.TrimSpace(tag); t != "" {
+			result = append(result, t)
+		}
+	}
+	return result
+}
+
+// joinTags 将标签数组合并为逗号分隔的字符串
+func joinTags(tags []string) string {
+	return strings.Join(tags, ",")
 }
 
 // GetDefaultPort 根据协议获取默认端口
@@ -323,7 +344,7 @@ func SaveInventory(devices []DeviceAsset) error {
 			device.Username,
 			device.Password,
 			device.Group,
-			device.Tag,
+			joinTags(device.Tags),
 		}
 		if err := writer.Write(row); err != nil {
 			return fmt.Errorf("写入数据失败: %v", err)

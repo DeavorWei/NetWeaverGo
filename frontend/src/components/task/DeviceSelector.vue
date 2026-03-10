@@ -72,17 +72,17 @@
       <div v-if="selectedDevices.length > 0 && currentFilter !== 'all'" class="max-h-32 overflow-y-auto scrollbar-custom border border-border rounded-lg">
         <div
           v-for="device in selectedDevices"
-          :key="device.IP"
+          :key="device.ip"
           class="flex items-center justify-between px-3 py-2 border-b border-border/50 last:border-0 hover:bg-bg-secondary/30 transition-colors"
         >
           <div class="flex items-center gap-3">
-            <span class="font-mono text-sm text-text-primary">{{ device.IP }}</span>
-            <span class="text-xs text-text-muted">{{ device.Protocol }}</span>
-            <span v-if="device.Group" class="text-xs px-1.5 py-0.5 rounded bg-bg-panel text-text-muted">{{ device.Group }}</span>
-            <span v-if="device.Tag" class="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent">{{ device.Tag }}</span>
+            <span class="font-mono text-sm text-text-primary">{{ device.ip }}</span>
+            <span class="text-xs text-text-muted">{{ device.protocol }}</span>
+            <span v-if="device.group" class="text-xs px-1.5 py-0.5 rounded bg-bg-panel text-text-muted">{{ device.group }}</span>
+            <span v-for="tag in device.tags" :key="tag" class="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent">{{ tag }}</span>
           </div>
           <button
-            @click="removeDevice(device.IP)"
+            @click="removeDevice(device.ip)"
             class="p-1 text-text-muted hover:text-error transition-colors rounded hover:bg-error/10"
             title="移除此设备"
           >
@@ -123,11 +123,11 @@
         <div class="max-h-32 overflow-y-auto scrollbar-custom">
           <div
             v-for="device in filteredDeviceList"
-            :key="device.IP"
+            :key="device.ip"
             @click="toggleDevice(device)"
             :class="[
               'flex items-center justify-between px-4 py-2 border-b border-border/50 cursor-pointer transition-colors last:border-0',
-              isDeviceSelected(device.IP)
+              isDeviceSelected(device.ip)
                 ? 'bg-accent/5 hover:bg-accent/10'
                 : 'hover:bg-bg-secondary/50'
             ]"
@@ -136,19 +136,19 @@
               <div
                 :class="[
                   'w-4 h-4 rounded border flex items-center justify-center transition-colors',
-                  isDeviceSelected(device.IP)
+                  isDeviceSelected(device.ip)
                     ? 'bg-accent border-accent'
                     : 'border-border'
                 ]"
               >
-                <svg v-if="isDeviceSelected(device.IP)" xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <svg v-if="isDeviceSelected(device.ip)" xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
               </div>
-              <span class="font-mono text-sm text-text-primary">{{ device.IP }}</span>
-              <span class="text-xs text-text-muted">{{ device.Protocol }}</span>
+              <span class="font-mono text-sm text-text-primary">{{ device.ip }}</span>
+              <span class="text-xs text-text-muted">{{ device.protocol }}</span>
             </div>
-            <span class="text-xs text-text-muted">{{ device.Group || '默认分组' }}</span>
+            <span class="text-xs text-text-muted">{{ device.group || '默认分组' }}</span>
           </div>
         </div>
       </div>
@@ -198,7 +198,7 @@ const selectOptions = computed(() => {
   if (currentFilter.value === 'group') {
     const groups = new Map<string, number>()
     props.devices.forEach(d => {
-      const group = d.Group || '默认分组'
+      const group = d.group || '默认分组'
       groups.set(group, (groups.get(group) || 0) + 1)
     })
     groups.forEach((count, group) => {
@@ -207,8 +207,11 @@ const selectOptions = computed(() => {
   } else if (currentFilter.value === 'tag') {
     const tags = new Map<string, number>()
     props.devices.forEach(d => {
-      if (d.Tag) {
-        tags.set(d.Tag, (tags.get(d.Tag) || 0) + 1)
+      // tags 是数组，遍历每个标签
+      if (d.tags && d.tags.length > 0) {
+        d.tags.forEach(tag => {
+          tags.set(tag, (tags.get(tag) || 0) + 1)
+        })
       }
     })
     tags.forEach((count, tag) => {
@@ -217,7 +220,7 @@ const selectOptions = computed(() => {
   } else if (currentFilter.value === 'protocol') {
     const protocols = new Map<string, number>()
     props.devices.forEach(d => {
-      protocols.set(d.Protocol, (protocols.get(d.Protocol) || 0) + 1)
+      protocols.set(d.protocol, (protocols.get(d.protocol) || 0) + 1)
     })
     protocols.forEach((count, protocol) => {
       options.push({ label: protocol, value: protocol, count })
@@ -238,22 +241,22 @@ const filteredDeviceList = computed(() => {
   // 根据关键字过滤
   const keyword = searchKeyword.value.toLowerCase()
   return props.devices.filter(d => {
-    // 容错处理：确保 IP 字段存在
-    const ip = d.IP || ''
+    // 容错处理：确保 ip 字段存在
+    const ip = d.ip || ''
     return ip.toLowerCase().includes(keyword)
   })
 })
 
 // 选中的设备列表
 const selectedDevices = computed(() => {
-  return props.devices.filter(d => selectedIPs.value.has(d.IP))
+  return props.devices.filter(d => selectedIPs.value.has(d.ip))
 })
 
 // 协议统计信息
 const protocolStats = computed(() => {
   const stats = new Map<string, number>()
   selectedDevices.value.forEach(d => {
-    const protocol = d.Protocol || '未知'
+    const protocol = d.protocol || '未知'
     stats.set(protocol, (stats.get(protocol) || 0) + 1)
   })
   return Array.from(stats.entries()).map(([k, v]) => `${k}(${v})`).join(', ')
@@ -263,7 +266,7 @@ const protocolStats = computed(() => {
 const groupStats = computed(() => {
   const stats = new Map<string, number>()
   selectedDevices.value.forEach(d => {
-    const group = d.Group || '默认分组'
+    const group = d.group || '默认分组'
     stats.set(group, (stats.get(group) || 0) + 1)
   })
   return Array.from(stats.entries()).map(([k, v]) => `${k}(${v})`).join(', ')
@@ -277,7 +280,7 @@ function applyFilter(filter: string) {
   
   if (filter === 'all') {
     // 全选
-    props.devices.forEach(d => selectedIPs.value.add(d.IP))
+    props.devices.forEach(d => selectedIPs.value.add(d.ip))
   }
   
   emitSelection()
@@ -289,20 +292,21 @@ watch(selectedOption, (option) => {
   
   if (currentFilter.value === 'group') {
     props.devices.forEach(d => {
-      if ((d.Group || '默认分组') === option) {
-        selectedIPs.value.add(d.IP)
+      if ((d.group || '默认分组') === option) {
+        selectedIPs.value.add(d.ip)
       }
     })
   } else if (currentFilter.value === 'tag') {
     props.devices.forEach(d => {
-      if (d.Tag === option) {
-        selectedIPs.value.add(d.IP)
+      // tags 是数组，检查是否包含该标签
+      if (d.tags && d.tags.includes(option)) {
+        selectedIPs.value.add(d.ip)
       }
     })
   } else if (currentFilter.value === 'protocol') {
     props.devices.forEach(d => {
-      if (d.Protocol === option) {
-        selectedIPs.value.add(d.IP)
+      if (d.protocol === option) {
+        selectedIPs.value.add(d.ip)
       }
     })
   }
@@ -312,10 +316,10 @@ watch(selectedOption, (option) => {
 
 // 切换设备选择
 function toggleDevice(device: DeviceAsset) {
-  if (selectedIPs.value.has(device.IP)) {
-    selectedIPs.value.delete(device.IP)
+  if (selectedIPs.value.has(device.ip)) {
+    selectedIPs.value.delete(device.ip)
   } else {
-    selectedIPs.value.add(device.IP)
+    selectedIPs.value.add(device.ip)
   }
   emitSelection()
 }
@@ -341,13 +345,13 @@ function clearSelection() {
 
 // 全选可见设备
 function selectAllVisible() {
-  filteredDeviceList.value.forEach(d => selectedIPs.value.add(d.IP))
+  filteredDeviceList.value.forEach(d => selectedIPs.value.add(d.ip))
   emitSelection()
 }
 
 // 取消选择可见设备
 function deselectAllVisible() {
-  filteredDeviceList.value.forEach(d => selectedIPs.value.delete(d.IP))
+  filteredDeviceList.value.forEach(d => selectedIPs.value.delete(d.ip))
   emitSelection()
 }
 
@@ -358,7 +362,7 @@ function emitSelection() {
 
 // 初始化时全选
 onMounted(() => {
-  props.devices.forEach(d => selectedIPs.value.add(d.IP))
+  props.devices.forEach(d => selectedIPs.value.add(d.ip))
   emitSelection()
 })
 </script>

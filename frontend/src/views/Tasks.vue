@@ -322,21 +322,43 @@ function goToTaskExecution() {
 async function loadDevices() {
   try {
     const result = await ListDevices()
-    deviceList.value = (result || []).map((d: any) => ({
-      IP: d.IP || d.ip || '',
-      Port: d.Port || d.port || 22,
-      Protocol: d.Protocol || d.protocol || 'SSH',
-      Username: d.Username || d.username || '',
-      Password: d.Password || d.password || '',
-      Group: d.Group || d.group || '',
-      Tag: d.Tag || d.tag || ''
-    }))
+    // 后端已统一使用小写字段名，前端组件也已适配
+    deviceList.value = result || []
   } catch (err) {
     console.error('加载设备列表失败:', err)
     deviceList.value = []
   }
 }
 
+async function startEngine() {
+  if (isRunning.value || !canStart.value) return
+  isRunning.value    = true
+  progressPercent.value = 5
+  devices.value      = []
+  try {
+    // 使用新的 API：传入选定的设备 IP 和命令组 ID
+    const deviceIPs = selectedDevices.value.map((d: DeviceAsset) => d.ip)
+    await StartEngineWithSelection(deviceIPs, selectedCommandGroupId.value)
+  } catch (err: any) {
+    console.error('启动失败:', err)
+    isRunning.value = false
+  }
+}
+
+async function startBackup() {
+  if (isRunning.value) return
+  isRunning.value = true
+  progressPercent.value = 5
+  devices.value = []
+  try {
+    await StartBackupWails()
+  } catch (err: any) {
+    console.error('备份启动失败:', err)
+    isRunning.value = false
+  }
+}
+
+let eventHandlers: any[] = []
 onMounted(() => {
   loadDevices()
 })

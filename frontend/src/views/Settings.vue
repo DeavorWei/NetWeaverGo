@@ -157,8 +157,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { LoadSettings } from '../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
 import { Call } from '@wailsio/runtime'
+import type { GlobalSettings as BackendSettings } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
 
+// 前端使用的设置接口（大写字段名，与表单绑定）
 interface GlobalSettings {
   MaxWorkers: number
   ConnectTimeout: string
@@ -205,18 +208,16 @@ function showToast(message: string, type: 'success' | 'error' = 'success') {
 async function loadSettings() {
   try {
     loading.value = true
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = await Call.ByName(
-      'github.com/NetWeaverGo/core/internal/ui.AppService.LoadSettings'
-    )
+    const result: BackendSettings | null = await LoadSettings()
     if (result) {
+      // 后端返回小写字段名，转换为前端大写字段名
       settings.value = {
-        MaxWorkers: result.MaxWorkers || result.max_workers || 32,
-        ConnectTimeout: result.ConnectTimeout || result.connect_timeout || '10s',
-        CommandTimeout: result.CommandTimeout || result.command_timeout || '30s',
-        OutputDir: result.OutputDir || result.output_dir || 'output',
-        LogDir: result.LogDir || result.log_dir || 'logs',
-        ErrorMode: result.ErrorMode || result.error_mode || 'pause'
+        MaxWorkers: result.maxWorkers || 32,
+        ConnectTimeout: result.connectTimeout || '10s',
+        CommandTimeout: result.commandTimeout || '30s',
+        OutputDir: result.outputDir || 'output',
+        LogDir: result.logDir || 'logs',
+        ErrorMode: result.errorMode || 'pause'
       }
     }
   } catch (err) {
@@ -230,9 +231,19 @@ async function loadSettings() {
 async function saveSettings() {
   try {
     saving.value = true
+    // 转换为后端期望的小写字段名格式
+    const backendSettings = {
+      maxWorkers: settings.value.MaxWorkers,
+      connectTimeout: settings.value.ConnectTimeout,
+      commandTimeout: settings.value.CommandTimeout,
+      outputDir: settings.value.OutputDir,
+      logDir: settings.value.LogDir,
+      errorMode: settings.value.ErrorMode
+    }
+    // SaveSettings 未在绑定中生成，使用 Call.ByName
     await Call.ByName(
       'github.com/NetWeaverGo/core/internal/ui.AppService.SaveSettings',
-      settings.value
+      backendSettings
     )
     showToast('设置已保存')
   } catch (err) {

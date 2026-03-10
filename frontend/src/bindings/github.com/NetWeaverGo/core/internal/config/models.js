@@ -4,128 +4,155 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import {Create as $Create} from "@wailsio/runtime";
+import { Create as $Create } from "@wailsio/runtime";
 
 /**
  * DeviceAsset 表示单台交换机的连接凭证信息
  */
 export class DeviceAsset {
-    /**
-     * Creates a new DeviceAsset instance.
-     * @param {Partial<DeviceAsset>} [$$source = {}] - The source object to create the DeviceAsset.
-     */
-    constructor($$source = {}) {
-        if (!("IP" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["IP"] = "";
-        }
-        if (!("Port" in $$source)) {
-            /**
-             * @member
-             * @type {number}
-             */
-            this["Port"] = 0;
-        }
-        if (!("Username" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["Username"] = "";
-        }
-        if (!("Password" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["Password"] = "";
-        }
-
-        Object.assign(this, $$source);
+  /**
+   * Creates a new DeviceAsset instance.
+   * @param {Partial<DeviceAsset>} [$$source = {}] - The source object to create the DeviceAsset.
+   */
+  constructor($$source = {}) {
+    if (!("ip" in $$source)) {
+      /**
+       * @member
+       * @type {string}
+       */
+      this["ip"] = "";
+    }
+    if (!("port" in $$source)) {
+      /**
+       * @member
+       * @type {number}
+       */
+      this["port"] = 0;
+    }
+    if (!("protocol" in $$source)) {
+      /**
+       * @member
+       * @type {string}
+       */
+      this["protocol"] = "";
+    }
+    if (!("username" in $$source)) {
+      /**
+       * @member
+       * @type {string}
+       */
+      this["username"] = "";
+    }
+    if (!("password" in $$source)) {
+      /**
+       * @member
+       * @type {string}
+       */
+      this["password"] = "";
+    }
+    if (!("group" in $$source)) {
+      /**
+       * @member
+       * @type {string}
+       */
+      this["group"] = "";
+    }
+    if (!("tags" in $$source)) {
+      /**
+       * @member
+       * @type {string[]}
+       */
+      this["tags"] = [];
     }
 
-    /**
-     * Creates a new DeviceAsset instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {DeviceAsset}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new DeviceAsset(/** @type {Partial<DeviceAsset>} */($$parsedSource));
-    }
+    Object.assign(this, $$source);
+  }
+
+  /**
+   * Creates a new DeviceAsset instance from a string or object.
+   * @param {any} [$$source = {}]
+   * @returns {DeviceAsset}
+   */
+  static createFrom($$source = {}) {
+    let $$parsedSource =
+      typeof $$source === "string" ? JSON.parse($$source) : $$source;
+    return new DeviceAsset(
+      /** @type {Partial<DeviceAsset>} */ ($$parsedSource),
+    );
+  }
 }
 
 /**
  * GlobalSettings 全局运行参数
  */
 export class GlobalSettings {
-    /**
-     * Creates a new GlobalSettings instance.
-     * @param {Partial<GlobalSettings>} [$$source = {}] - The source object to create the GlobalSettings.
-     */
-    constructor($$source = {}) {
-        if (!("MaxWorkers" in $$source)) {
-            /**
-             * 并发数 (当前硬编码为 32)
-             * @member
-             * @type {number}
-             */
-            this["MaxWorkers"] = 0;
-        }
-        if (!("ConnectTimeout" in $$source)) {
-            /**
-             * SSH/SFTP 连接超时 (如 "10s")
-             * @member
-             * @type {string}
-             */
-            this["ConnectTimeout"] = "";
-        }
-        if (!("CommandTimeout" in $$source)) {
-            /**
-             * 单条命令默认超时 (如 "30s")
-             * @member
-             * @type {string}
-             */
-            this["CommandTimeout"] = "";
-        }
-        if (!("OutputDir" in $$source)) {
-            /**
-             * 回显输出与配置备份的根目录
-             * @member
-             * @type {string}
-             */
-            this["OutputDir"] = "";
-        }
-        if (!("LogDir" in $$source)) {
-            /**
-             * 系统运行日志存放目录
-             * @member
-             * @type {string}
-             */
-            this["LogDir"] = "";
-        }
-        if (!("ErrorMode" in $$source)) {
-            /**
-             * "pause" | "skip" | "abort"
-             * @member
-             * @type {string}
-             */
-            this["ErrorMode"] = "";
-        }
-
-        Object.assign(this, $$source);
+  /**
+   * Creates a new GlobalSettings instance.
+   * @param {Partial<GlobalSettings>} [$$source = {}] - The source object to create the GlobalSettings.
+   */
+  constructor($$source = {}) {
+    if (!("maxWorkers" in $$source)) {
+      /**
+       * 并发数 (当前硬编码为 32)
+       * @member
+       * @type {number}
+       */
+      this["maxWorkers"] = 0;
+    }
+    if (!("connectTimeout" in $$source)) {
+      /**
+       * SSH/SFTP 连接超时 (如 "10s")
+       * @member
+       * @type {string}
+       */
+      this["connectTimeout"] = "";
+    }
+    if (!("commandTimeout" in $$source)) {
+      /**
+       * 单条命令默认超时 (如 "30s")
+       * @member
+       * @type {string}
+       */
+      this["commandTimeout"] = "";
+    }
+    if (!("outputDir" in $$source)) {
+      /**
+       * 回显输出与配置备份的根目录
+       * @member
+       * @type {string}
+       */
+      this["outputDir"] = "";
+    }
+    if (!("logDir" in $$source)) {
+      /**
+       * 系统运行日志存放目录
+       * @member
+       * @type {string}
+       */
+      this["logDir"] = "";
+    }
+    if (!("errorMode" in $$source)) {
+      /**
+       * "pause" | "skip" | "abort"
+       * @member
+       * @type {string}
+       */
+      this["errorMode"] = "";
     }
 
-    /**
-     * Creates a new GlobalSettings instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {GlobalSettings}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new GlobalSettings(/** @type {Partial<GlobalSettings>} */($$parsedSource));
-    }
+    Object.assign(this, $$source);
+  }
+
+  /**
+   * Creates a new GlobalSettings instance from a string or object.
+   * @param {any} [$$source = {}]
+   * @returns {GlobalSettings}
+   */
+  static createFrom($$source = {}) {
+    let $$parsedSource =
+      typeof $$source === "string" ? JSON.parse($$source) : $$source;
+    return new GlobalSettings(
+      /** @type {Partial<GlobalSettings>} */ ($$parsedSource),
+    );
+  }
 }
