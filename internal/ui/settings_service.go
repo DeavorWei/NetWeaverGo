@@ -51,15 +51,15 @@ func (s *SettingsService) GetAppInfo() map[string]string {
 
 // LogInfo 记录信息日志（前端调用）
 func (s *SettingsService) LogInfo(category, ip, message string) {
-	logger.Info(category, ip, message)
+	logger.Info(category, ip, "%s", message)
 }
 
 // LogWarn 记录警告日志（前端调用）
 func (s *SettingsService) LogWarn(category, ip, message string) {
-	logger.Warn(category, ip, message)
+	logger.Warn(category, ip, "%s", message)
 }
 
 // LogError 记录错误日志（前端调用）
 func (s *SettingsService) LogError(category, ip, message string) {
-	logger.Error(category, ip, message)
+	logger.Error(category, ip, "%s", message)
 }
