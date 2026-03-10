@@ -261,7 +261,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ListTaskGroups as ApiListTaskGroups,
@@ -274,6 +274,13 @@ import { useEngineEvents } from '../composables/useEngineEvents'
 
 const router = useRouter()
 
+// 定义执行设备类型
+interface ExecDevice {
+  ip: string
+  status: string
+  logs: string[]
+}
+
 // 状态
 const loading = ref(false)
 const tasks = ref<TaskGroup[]>([])
@@ -282,7 +289,7 @@ const filterStatus = ref('')
 const filterMode = ref('')
 const isRunning = ref(false)
 const progressPercent = ref(0)
-const execDevices = ref<any[]>([])
+const execDevices = ref<ExecDevice[]>([])
 
 // 执行视图状态
 const executionView = ref({
@@ -317,6 +324,15 @@ function setTerminalRef(ip: string, el: any) {
   if (el) terminalRefs.set(ip, el as Element)
   else terminalRefs.delete(ip)
 }
+
+// 组件卸载时清理资源
+onUnmounted(() => {
+  terminalRefs.clear()
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+    toastTimer = null
+  }
+})
 
 // 过滤逻辑
 const filteredTasks = computed(() => {

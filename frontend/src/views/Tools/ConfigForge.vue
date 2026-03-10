@@ -700,6 +700,27 @@ function removeTaskTag(index: number) {
   taskModal.value.tags.splice(index, 1)
 }
 
+// IP 地址格式验证函数
+const isValidIP = (ip: string): boolean => {
+  // IPv4 验证: x.x.x.x 格式，每段 0-255
+  const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
+  if (ipv4Regex.test(ip)) {
+    const parts = ip.split('.')
+    return parts.every(part => {
+      const num = parseInt(part, 10)
+      return num >= 0 && num <= 255
+    })
+  }
+  
+  // IPv6 验证: 支持完整格式和压缩格式
+  const ipv6Regex = /^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|::|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$/
+  if (ipv6Regex.test(ip)) {
+    return true
+  }
+  
+  return false
+}
+
 // 获取绑定模式下每台 IP 对应的命令
 const bindingPreview = computed(() => {
   if (!isBindingMode.value || variables.value.length === 0) return []
@@ -709,11 +730,30 @@ const bindingPreview = computed(() => {
     .split(/,|\n/)
     .map((s: string) => s.trim())
     .filter((s: string) => s !== '')
-  return ipValues.map((ip: string, idx: number) => ({
-    ip,
-    commands: outputBlocks.value[idx] || ''
-  }))
+  
+  // 只返回有效 IP 的绑定预览
+  return ipValues
+    .filter((ip: string) => isValidIP(ip))
+    .map((ip: string, idx: number) => ({
+      ip,
+      commands: outputBlocks.value[idx] || ''
+    }))
 })
+
+// 获取无效的 IP 列表（用于警告提示）
+const invalidIPs = computed(() => {
+  if (!isBindingMode.value || variables.value.length === 0) return []
+  const firstVar = variables.value[0]
+  if (!firstVar) return []
+  const ipValues = firstVar.valueString
+    .split(/,|\n/)
+    .map((s: string) => s.trim())
+    .filter((s: string) => s !== '')
+  return ipValues.filter((ip: string) => !isValidIP(ip))
+})
+
+// 是否有无效 IP
+const hasInvalidIP = computed(() => invalidIPs.value.length > 0)
 
 async function executeTaskSend() {
   if (taskModal.value.saving) return
@@ -1208,6 +1248,19 @@ const copyAll = async () => {
           </div>
           <!-- 表单内容 -->
           <div class="modal-body space-y-5">
+            <!-- 无效 IP 警告 -->
+            <div v-if="hasInvalidIP" class="flex items-start gap-3 p-4 rounded-xl bg-error/10 border border-error/30">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-error mt-0.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+              <div class="flex-1">
+                <p class="text-sm font-medium text-error">检测到无效 IP 地址</p>
+                <p class="text-xs text-text-muted mt-1">
+                  以下 IP 格式无效，已被过滤：{{ invalidIPs.slice(0, 3).join(', ') }}{{ invalidIPs.length > 3 ? ` 等 ${invalidIPs.length} 个` : '' }}
+                </p>
+                <p class="text-xs text-text-muted mt-1">支持 IPv4 (如 192.168.1.1) 和 IPv6 格式</p>
+              </div>
+            </div>
             <!-- 名称 -->
             <div class="space-y-1.5">
               <label class="text-sm font-medium text-text-primary">任务名称 <span class="text-error">*</span></label>

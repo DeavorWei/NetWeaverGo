@@ -11,11 +11,19 @@ import (
 	"github.com/google/uuid"
 )
 
+// 有效状态值常量
+var validStatuses = map[string]bool{
+	"pending":   true,
+	"running":   true,
+	"completed": true,
+	"failed":    true,
+}
+
 // TaskItem 单个任务项（一组命令绑定一组设备）
 type TaskItem struct {
 	CommandGroupID string   `json:"commandGroupId"` // 命令组ID（模式A使用）
-	Commands       []string `json:"commands"`        // 直接命令列表（模式B使用）
-	DeviceIPs      []string `json:"deviceIPs"`       // 绑定的设备IP列表
+	Commands       []string `json:"commands"`       // 直接命令列表（模式B使用）
+	DeviceIPs      []string `json:"deviceIPs"`      // 绑定的设备IP列表
 }
 
 // TaskGroup 任务组
@@ -23,10 +31,10 @@ type TaskGroup struct {
 	ID          string     `json:"id"`
 	Name        string     `json:"name"`
 	Description string     `json:"description"`
-	Mode        string     `json:"mode"`      // "group" 模式A | "binding" 模式B
-	Items       []TaskItem `json:"items"`      // 任务项列表
+	Mode        string     `json:"mode"`  // "group" 模式A | "binding" 模式B
+	Items       []TaskItem `json:"items"` // 任务项列表
 	Tags        []string   `json:"tags"`
-	Status      string     `json:"status"`     // "pending" | "running" | "completed" | "failed"
+	Status      string     `json:"status"` // "pending" | "running" | "completed" | "failed"
 	CreatedAt   string     `json:"createdAt"`
 	UpdatedAt   string     `json:"updatedAt"`
 }
@@ -99,7 +107,10 @@ func ListTaskGroups() ([]TaskGroup, error) {
 	defer tasksMu.RUnlock()
 
 	if tasksCached != nil {
-		return tasksCached.Groups, nil
+		// 返回切片副本，防止外部修改影响缓存
+		result := make([]TaskGroup, len(tasksCached.Groups))
+		copy(result, tasksCached.Groups)
+		return result, nil
 	}
 
 	file, err := loadTaskGroupsFromFile()
@@ -107,7 +118,10 @@ func ListTaskGroups() ([]TaskGroup, error) {
 		return nil, err
 	}
 	tasksCached = file
-	return file.Groups, nil
+	// 返回切片副本
+	result := make([]TaskGroup, len(file.Groups))
+	copy(result, file.Groups)
+	return result, nil
 }
 
 // GetTaskGroup 根据 ID 获取单个任务组
@@ -115,13 +129,27 @@ func GetTaskGroup(id string) (*TaskGroup, error) {
 	tasksMu.RLock()
 	defer tasksMu.RUnlock()
 
+	// 优先使用缓存
+	if tasksCached != nil {
+		for _, g := range tasksCached.Groups {
+			if g.ID == id {
+				// 返回副本，防止外部修改
+				copyGroup := g
+				return &copyGroup, nil
+			}
+		}
+		return nil, fmt.Errorf("任务组不存在: %s", id)
+	}
+
+	// 缓存为空时才读取文件
 	file, err := loadTaskGroupsFromFile()
 	if err != nil {
 		return nil, err
 	}
 	for _, g := range file.Groups {
 		if g.ID == id {
-			return &g, nil
+			copyGroup := g
+			return &copyGroup, nil
 		}
 	}
 	return nil, fmt.Errorf("任务组不存在: %s", id)
@@ -228,6 +256,11 @@ func DeleteTaskGroup(id string) error {
 
 // UpdateTaskGroupStatus 更新任务组状态
 func UpdateTaskGroupStatus(id string, status string) error {
+	// 校验状态值有效性
+	if !validStatuses[status] {
+		return fmt.Errorf("无效的状态值: %s (应为 pending/running/completed/failed)", status)
+	}
+
 	tasksMu.Lock()
 	defer tasksMu.Unlock()
 

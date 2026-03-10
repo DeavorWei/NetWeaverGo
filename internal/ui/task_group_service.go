@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/engine"
@@ -65,6 +66,9 @@ func (s *TaskGroupService) DeleteTaskGroup(id string) error {
 	return config.DeleteTaskGroup(id)
 }
 
+// Suspend 超时时间常量
+const suspendTimeout = 5 * time.Minute
+
 // WailsSuspendHandler 构建代理 Suspend 钩子替换原先的控制台询问方式
 func (s *TaskGroupService) WailsSuspendHandler() executor.SuspendHandler {
 	return func(ip string, logLine string, cmd string) executor.ErrorAction {
@@ -89,9 +93,13 @@ func (s *TaskGroupService) WailsSuspendHandler() executor.SuspendHandler {
 
 		logger.Warn("Engine", ip, "已向界面发射阻断警告，等待用户操作...")
 
+		// 添加超时机制，防止 goroutine 永久阻塞
 		select {
 		case action := <-actionCh:
 			return action
+		case <-time.After(suspendTimeout):
+			logger.Warn("Engine", ip, "Suspend 等待超时，自动中断设备连接")
+			return executor.ActionAbort
 		}
 	}
 }
