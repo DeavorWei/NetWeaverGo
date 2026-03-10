@@ -1,20 +1,11 @@
-// 命令组类型定义
-export interface CommandGroup {
-  id: string;
-  name: string;
-  description: string;
-  commands: string[];
-  createdAt: string;
-  updatedAt: string;
-  tags: string[];
-}
+// 命令组类型定义 - 从绑定导出
+export type { CommandGroup } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
 
-// 创建命令组请求（不含 id 和时间戳）
-export interface CreateCommandGroupRequest {
+// 创建命令组请求类型（使用 Partial 允许省略 id 和时间戳）
+import type { CommandGroup as CommandGroupBase } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
+export type CreateCommandGroupRequest = Partial<CommandGroupBase> & {
   name: string;
-  description: string;
   commands: string[];
-  tags: string[];
 }
 
 // 设备筛选方式

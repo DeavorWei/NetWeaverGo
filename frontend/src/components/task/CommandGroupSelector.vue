@@ -67,8 +67,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import type { CommandGroup } from '../../types/command'
-// @ts-ignore
-import { ListCommandGroups } from '../../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
+import { ListCommandGroups } from '../../services/api'
 
 const props = defineProps<{
   modelValue?: string // 选中的命令组ID

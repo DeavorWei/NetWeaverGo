@@ -157,9 +157,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { LoadSettings } from '../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
+import { LoadSettings } from '../services/api'
 import { Call } from '@wailsio/runtime'
-import type { GlobalSettings as BackendSettings } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
+import type { GlobalSettings as BackendSettings } from '../services/api'
 
 // 前端使用的设置接口（大写字段名，与表单绑定）
 interface GlobalSettings {

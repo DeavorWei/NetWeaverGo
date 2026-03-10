@@ -261,17 +261,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-// @ts-ignore
 import {
   ListTaskGroups as ApiListTaskGroups,
   DeleteTaskGroup as ApiDeleteTaskGroup,
   StartTaskGroup as ApiStartTaskGroup,
   ResolveSuspend
-} from '../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
-import { Events } from '@wailsio/runtime'
-import type { TaskGroup } from '../types/command'
+} from '../services/api'
+import type { TaskGroup } from '../services/api'
+import { useEngineEvents } from '../composables/useEngineEvents'
 
 const router = useRouter()
 
@@ -483,22 +482,15 @@ function formatDate(dateStr: string) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
-// 事件监听
-let eventHandlers: any[] = []
-
-onMounted(() => {
-  loadTasks()
-
-  const hFinished = Events.On('engine:finished', () => {
+// 使用事件监听 Composable
+useEngineEvents({
+  onFinished: () => {
     isRunning.value = false
     progressPercent.value = 100
-    // 刷新任务列表（状态可能更新了）
     setTimeout(() => loadTasks(), 500)
-  })
-
-  const hEvent = Events.On('device:event', (ev: any) => {
+  },
+  onDeviceEvent: (data: any) => {
     if (!executionView.value.active) return
-    const data = ev.data[0]
     let dev = execDevices.value.find(d => d.ip === data.IP)
     if (!dev) {
       dev = { ip: data.IP, status: 'waiting', logs: [] }
@@ -520,26 +512,18 @@ onMounted(() => {
     if (execDevices.value.length > 0) {
       progressPercent.value = Math.min(95, Math.floor((totalComplete / execDevices.value.length) * 100))
     }
-  })
-
-  const hSuspend = Events.On('engine:suspend_required', (ev: any) => {
-    const data = ev.data[0]
+  },
+  onSuspend: (data) => {
     suspendModal.value = {
       show: true,
       ip: data.ip,
       content: `设备: ${data.ip}\n命令: ${data.command}\n\n错误详情:\n${data.error}`,
     }
-  })
-
-  eventHandlers.push(hFinished, hEvent, hSuspend)
+  }
 })
 
-onUnmounted(() => {
-  eventHandlers.forEach(h => {
-    if (h && typeof h === 'function') h()
-    else if (h && h.cancel) h.cancel()
-  })
-})
+// 加载任务列表
+loadTasks()
 </script>
 
 <style scoped>

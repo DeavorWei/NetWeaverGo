@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-// @ts-ignore
-import { CreateCommandGroup, CreateTaskGroup } from '../../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
+import { CreateCommandGroup, CreateTaskGroup } from '../../services/api'
+import type { CommandGroup } from '../../bindings/github.com/NetWeaverGo/core/internal/config/models'
 
 const router = useRouter()
 
@@ -248,17 +248,17 @@ async function executeSend() {
         }
       })
 
-      const groupData = {
+      const groupData: Partial<CommandGroup> = {
         name: name.trim(),
         description: description.trim(),
         tags: tags,
         commands: allLines
       }
       
-      const result = await CreateCommandGroup(groupData)
+      const result = await CreateCommandGroup(groupData as CommandGroup)
       
       // 显示成功提示
-      showSendResult(true, `命令组「${name.trim()}」创建成功`, 1, [result.id || ''])
+      showSendResult(true, `命令组「${name.trim()}」创建成功`, 1, [result?.id || ''])
       
     } else {
       // ===== 分开模式：批量创建多个命令组 =====
@@ -276,15 +276,15 @@ async function executeSend() {
         // 生成序号：01, 02, ..., 10, 11, ...
         const seq = String(i + 1).padStart(2, '0')
         
-        const groupData = {
+        const groupData: Partial<CommandGroup> = {
           name: `${prefix}${seq}`,
           description: description.trim(),
           tags: tags,
           commands: blockLines
         }
         
-        const result = await CreateCommandGroup(groupData)
-        createdIds.push(result.id || '')
+        const result = await CreateCommandGroup(groupData as CommandGroup)
+        createdIds.push(result?.id || '')
       }
       
       // 显示成功提示
@@ -739,10 +739,10 @@ async function executeTaskSend() {
       id: '',
       name: taskModal.value.name.trim(),
       description: taskModal.value.description.trim(),
-      mode: 'binding',
+      mode: 'binding' as const,
       items,
       tags: taskModal.value.tags,
-      status: 'pending',
+      status: 'pending' as const,
       createdAt: '',
       updatedAt: ''
     }
@@ -1536,4 +1536,3 @@ const copyAll = async () => {
   transform: translate(-50%, -10px);
 }
 </style>
-

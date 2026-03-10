@@ -52,8 +52,12 @@ func main() {
 func runGUI() {
 	logger.Info("System", "-", "正在初始化 Wails GUI 环境...")
 
-	// 创建 AppService 门面实例（内部委托给各独立服务）
-	appService := ui.NewAppService()
+	// 创建各独立服务实例
+	deviceService := ui.NewDeviceService()
+	commandGroupService := ui.NewCommandGroupService()
+	settingsService := ui.NewSettingsService()
+	engineService := ui.NewEngineService()
+	taskGroupService := ui.NewTaskGroupService()
 
 	// 修正：修正嵌入文件系统的路径级联问题
 	// core.FrontendAssets 包含了 "frontend/dist" 这一层，我们需要提取其子 FS
@@ -79,7 +83,11 @@ func runGUI() {
 		Description: "网络自动化巡检与动作集散引擎",
 		Icon:        core.AppIcon,
 		Services: []application.Service{
-			application.NewService(appService),
+			application.NewService(deviceService),
+			application.NewService(commandGroupService),
+			application.NewService(settingsService),
+			application.NewService(engineService),
+			application.NewService(taskGroupService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assetsFS),

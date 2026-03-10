@@ -1092,7 +1092,7 @@ import {
   SaveDevices,
   GetProtocolDefaultPorts,
   GetValidProtocols,
-} from "../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js";
+} from "../services/api";
 // 使用后端定义的类型，前端直接使用小写字段名
 interface Device {
   ip: string;

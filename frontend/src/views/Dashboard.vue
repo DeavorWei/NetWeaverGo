@@ -97,8 +97,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-// @ts-ignore
-import { EnsureConfig } from '../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
+import { EnsureConfig } from '../services/api'
 
 const deviceCount  = ref(0)
 const commandCount = ref(0)

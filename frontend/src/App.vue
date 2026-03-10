@@ -85,6 +85,8 @@
       </div>
     </div>
   </div>
+  <!-- 全局 Toast 通知 -->
+  <GlobalToast />
 </template>
 
 <script setup lang="ts">
@@ -92,6 +94,7 @@ import { ref, computed, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import ThemeSwitch from "@/components/common/ThemeSwitch.vue";
 import TitleBar from "@/components/common/TitleBar.vue";
+import GlobalToast from "@/components/common/GlobalToast.vue";
 import { useTheme } from "@/composables/useTheme";
 
 const router = useRouter();

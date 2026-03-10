@@ -155,8 +155,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-// @ts-ignore
-import { GetCommands, SaveCommands } from '../../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
+import { GetCommands, SaveCommands } from '../../services/api'
 
 const isOpen = ref(false)
 const isEditing = ref(false)

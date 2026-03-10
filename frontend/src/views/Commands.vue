@@ -468,15 +468,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import type { CommandGroup } from '../types/command'
-// @ts-ignore
+import type { CommandGroup } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
 import { 
   ListCommandGroups, 
   CreateCommandGroup, 
   UpdateCommandGroup, 
   DeleteCommandGroup as DeleteCommandGroupAPI,
   DuplicateCommandGroup as DuplicateCommandGroupAPI
-} from '../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
+} from '../services/api'
 
 const loading = ref(true)
 const groups = ref<CommandGroup[]>([])
@@ -706,12 +705,12 @@ async function saveGroup() {
       description: description.trim(),
       tags: tags,
       commands: commands
-    }
+    } as Partial<CommandGroup>
     
     if (editModal.value.isCreate) {
-      await CreateCommandGroup(groupData)
+      await CreateCommandGroup(groupData as CommandGroup)
     } else {
-      await UpdateCommandGroup(editModal.value.editingId, groupData)
+      await UpdateCommandGroup(editModal.value.editingId, groupData as CommandGroup)
     }
     
     closeEditModal()

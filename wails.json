@@ -10,5 +10,19 @@
   },
   "build": {
     "dir": "cmd/netweaver"
+  },
+  "bindings": {
+    "services": [
+      {
+        "package": "github.com/NetWeaverGo/core/internal/ui",
+        "services": [
+          "DeviceService",
+          "CommandGroupService",
+          "SettingsService",
+          "EngineService",
+          "TaskGroupService"
+        ]
+      }
+    ]
   }
 }

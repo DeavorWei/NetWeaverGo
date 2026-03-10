@@ -74,8 +74,9 @@ func (s *EngineService) ResolveSuspend(ip string, action string) {
 	}
 }
 
-// WailsSuspendHandler 构建代理 Suspend 钩子替换原先的控制台询问方式
-func (s *EngineService) WailsSuspendHandler() executor.SuspendHandler {
+// wailsSuspendHandler 构建代理 Suspend 钩子替换原先的控制台询问方式
+// 注意：此方法为私有方法（首字母小写），不会被 Wails 自动绑定到前端
+func (s *EngineService) wailsSuspendHandler() executor.SuspendHandler {
 	return func(ip string, logLine string, cmd string) executor.ErrorAction {
 		// 阻断 Channel 预留
 		actionCh := make(chan executor.ErrorAction, 1)
@@ -143,7 +144,7 @@ func (s *EngineService) StartEngine() error {
 
 	// 初始化 Engine，开启了非交互模式的参数设定为 false（因为前端接管了交互）
 	ng := engine.NewEngine(assets, commands, settings, false)
-	ng.CustomSuspendHandler = s.WailsSuspendHandler()
+	ng.CustomSuspendHandler = s.wailsSuspendHandler()
 
 	// 桥接事件：监听底层的 EventBus 转发给前端 Vue
 	go func() {
@@ -218,7 +219,7 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 
 	// 初始化 Engine
 	ng := engine.NewEngine(selectedAssets, group.Commands, settings, false)
-	ng.CustomSuspendHandler = s.WailsSuspendHandler()
+	ng.CustomSuspendHandler = s.wailsSuspendHandler()
 
 	// 桥接事件：监听底层的 EventBus 转发给前端 Vue
 	go func() {
@@ -270,7 +271,7 @@ func (s *EngineService) StartBackup() error {
 
 	// 初始化 Engine
 	ng := engine.NewEngine(assets, nil, settings, false)
-	ng.CustomSuspendHandler = s.WailsSuspendHandler()
+	ng.CustomSuspendHandler = s.wailsSuspendHandler()
 
 	// 桥接事件：监听底层的 EventBus 转发给前端 Vue
 	go func() {

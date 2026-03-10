@@ -149,9 +149,9 @@
                 <span class="text-text-secondary">{{ selectedDevices.length }} 台设备</span>
               </div>
               <div class="flex flex-wrap gap-1 mt-1">
-                <span v-for="dev in selectedDevices.slice(0, 10)" :key="dev.IP"
+                <span v-for="dev in selectedDevices.slice(0, 10)" :key="dev.ip"
                   class="text-xs font-mono px-1.5 py-0.5 rounded bg-bg-card border border-border text-text-muted"
-                >{{ dev.IP }}</span>
+                >{{ dev.ip }}</span>
                 <span v-if="selectedDevices.length > 10" class="text-xs text-text-muted">+{{ selectedDevices.length - 10 }} 台</span>
               </div>
             </div>
@@ -194,13 +194,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-// @ts-ignore
 import {
   ListDevices,
   CreateTaskGroup as ApiCreateTaskGroup
-} from '../bindings/github.com/NetWeaverGo/core/internal/ui/appservice.js'
-import type { DeviceAsset } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
-import type { CommandGroup } from '../types/command'
+} from '../services/api'
+import type { DeviceAsset, CommandGroup } from '../services/api'
 import DeviceSelector from '../components/task/DeviceSelector.vue'
 import CommandGroupSelector from '../components/task/CommandGroupSelector.vue'
 
@@ -278,14 +276,14 @@ async function confirmCreate() {
       id: '',
       name: createModal.value.name.trim(),
       description: createModal.value.description.trim(),
-      mode: 'group',
+      mode: 'group' as const,
       items: [{
         commandGroupId: selectedCommandGroupId.value,
         commands: [] as string[],
-        deviceIPs: selectedDevices.value.map((d: DeviceAsset) => d.IP)
+        deviceIPs: selectedDevices.value.map((d: DeviceAsset) => d.ip)
       }],
       tags: createModal.value.tags,
-      status: 'pending',
+      status: 'pending' as const,
       createdAt: '',
       updatedAt: ''
     }
@@ -330,35 +328,6 @@ async function loadDevices() {
   }
 }
 
-async function startEngine() {
-  if (isRunning.value || !canStart.value) return
-  isRunning.value    = true
-  progressPercent.value = 5
-  devices.value      = []
-  try {
-    // 使用新的 API：传入选定的设备 IP 和命令组 ID
-    const deviceIPs = selectedDevices.value.map((d: DeviceAsset) => d.ip)
-    await StartEngineWithSelection(deviceIPs, selectedCommandGroupId.value)
-  } catch (err: any) {
-    console.error('启动失败:', err)
-    isRunning.value = false
-  }
-}
-
-async function startBackup() {
-  if (isRunning.value) return
-  isRunning.value = true
-  progressPercent.value = 5
-  devices.value = []
-  try {
-    await StartBackupWails()
-  } catch (err: any) {
-    console.error('备份启动失败:', err)
-    isRunning.value = false
-  }
-}
-
-let eventHandlers: any[] = []
 onMounted(() => {
   loadDevices()
 })

@@ -40,7 +40,7 @@ if not exist "dist" mkdir dist
 :: ============================================
 :: Step 0: Generate Windows Resource (Icon)
 :: ============================================
-echo [0/2] Generating Windows resource file for application icon...
+echo [0/3] Generating Windows resource file for application icon...
 echo.
 
 cd /d "%PROJECT_ROOT%"
@@ -60,9 +60,33 @@ if exist "rsrc.exe" (
 echo.
 
 :: ============================================
-:: Step 1: Build Frontend
+:: Step 1: Generate Wails Bindings
 :: ============================================
-echo [1/2] Building frontend...
+echo [1/3] Generating Wails bindings...
+echo.
+
+cd /d "%PROJECT_ROOT%"
+
+:: Check if wails3 command exists
+where wails3 >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo [WARN] wails3 command not found, skipping bindings generation...
+    echo [WARN] Please install Wails3 or ensure wails3 is in PATH
+) else (
+    echo [INFO] Running wails3 generate bindings...
+    wails3 generate bindings
+    if %ERRORLEVEL% neq 0 (
+        echo [ERROR] Failed to generate Wails bindings
+        exit /b 1
+    )
+    echo [SUCCESS] Wails bindings generated to frontend/src/bindings
+)
+echo.
+
+:: ============================================
+:: Step 2: Build Frontend
+:: ============================================
+echo [2/3] Building frontend...
 echo.
 
 cd /d "%PROJECT_ROOT%frontend"
@@ -96,9 +120,9 @@ echo [SUCCESS] Frontend build completed
 echo.
 
 :: ============================================
-:: Step 2: Build Backend
+:: Step 3: Build Backend
 :: ============================================
-echo [2/2] Building backend...
+echo [3/3] Building backend...
 echo.
 
 cd /d "%PROJECT_ROOT%"
