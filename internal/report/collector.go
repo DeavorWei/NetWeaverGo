@@ -82,6 +82,11 @@ func (p *ProgressTracker) Suspend() {
 	p.paused = true
 }
 
+// CollectEvent 直接收集事件（用于从 worker 接收事件）
+func (p *ProgressTracker) CollectEvent(evt ExecutorEvent) {
+	p.handleEvent(evt)
+}
+
 // Resume 恢复界面刷新
 func (p *ProgressTracker) Resume() {
 	p.mu.Lock()

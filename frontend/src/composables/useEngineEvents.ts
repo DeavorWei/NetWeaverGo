@@ -38,13 +38,21 @@ export function useEngineEvents(callbacks: EngineEventCallbacks) {
    * 安全订阅事件
    * @param eventName 事件名称
    * @param handler 事件处理器
+   * @param requiresData 是否需要数据载荷（默认 true）
    */
   function safeSubscribe<T>(
     eventName: EventName,
-    handler: (data: T) => void
+    handler: (data: T) => void,
+    requiresData: boolean = true
   ): void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: any = Events.On(eventName, (ev: { data?: [T] }) => {
+      // 对于不需要数据载荷的事件（如 engine:finished），直接调用处理器
+      if (!requiresData) {
+        handler(undefined as T)
+        return
+      }
+      // 对于需要数据载荷的事件，检查数据是否存在
       const data = ev.data?.[0]
       if (data) {
         handler(data)
@@ -60,11 +68,11 @@ export function useEngineEvents(callbacks: EngineEventCallbacks) {
   }
 
   onMounted(() => {
-    // 订阅引擎完成事件
+    // 订阅引擎完成事件（此事件无数据载荷）
     if (callbacks.onFinished) {
       safeSubscribe<EngineFinishedEvent>(EventNames.ENGINE_FINISHED, () => {
         callbacks.onFinished!()
-      })
+      }, false)  // 明确指定此事件不需要数据载荷
     }
 
     // 订阅设备事件

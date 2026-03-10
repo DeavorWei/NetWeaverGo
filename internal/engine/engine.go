@@ -28,12 +28,14 @@ type Engine struct {
 	Settings       *config.GlobalSettings
 	NonInteractive bool
 
-	// 用于在控制台同一时刻串行化“挂起询问”操作，避免终端文字输出错位混淆
+	// 用于在控制台同一时刻串行化"挂起询问"操作，避免终端文字输出错位混淆
 	promptMu sync.Mutex
 
-	// EventBus 事件采集挂载
+	// EventBus 事件采集挂载（内部使用，由 tracker 消费）
 	EventBus chan report.ExecutorEvent
-	tracker  *report.ProgressTracker
+	// FrontendBus 前端事件通道（外部使用，用于转发到 Wails 前端）
+	FrontendBus chan report.ExecutorEvent
+	tracker     *report.ProgressTracker
 
 	failedBackups sync.Map // 记录备份失败的设备和原因
 
@@ -54,7 +56,25 @@ func NewEngine(assets []config.DeviceAsset, commands []string, settings *config.
 		MaxWorkers:     workers, // 使用配置的并发限制
 		Settings:       settings,
 		NonInteractive: nonInteractive,
-		EventBus:       make(chan report.ExecutorEvent, 1000), // 队列化 EventBus
+		EventBus:       make(chan report.ExecutorEvent, 1000), // 队列化 EventBus（内部 tracker 使用）
+		FrontendBus:    make(chan report.ExecutorEvent, 1000), // 前端事件通道（外部转发使用）
+	}
+}
+
+// emitEvent 同时向 EventBus 和 FrontendBus 发送事件（广播）
+func (e *Engine) emitEvent(ev report.ExecutorEvent) {
+	// 发送到 EventBus（用于 tracker 生成报告）
+	select {
+	case e.EventBus <- ev:
+	default:
+		logger.Debug("Engine", ev.IP, "EventBus 已满，丢弃事件: %v", ev.Type)
+	}
+
+	// 发送到 FrontendBus（用于转发到前端）
+	select {
+	case e.FrontendBus <- ev:
+	default:
+		logger.Debug("Engine", ev.IP, "FrontendBus 已满，丢弃事件: %v", ev.Type)
 	}
 }
 
@@ -68,7 +88,7 @@ func (e *Engine) Run(ctx context.Context) {
 	defer func() { logger.ConsoleMuted = false }()
 
 	e.tracker = report.NewProgressTracker(len(e.Devices))
-	e.tracker.EventBus = e.EventBus
+	// 注意：不要设置 e.tracker.EventBus，让 tracker 使用自己内部的事件收集
 
 	// 启动后台事件收归与界面的渲染
 	var uiWg sync.WaitGroup
@@ -105,7 +125,13 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 
 	wg.Wait()
-	close(e.EventBus) // 安全关闭通道，引发界面结算
+
+	// 关闭 tracker 的事件通道，让 Listen() 退出
+	close(e.tracker.EventBus)
+
+	// 关闭通道，等待所有事件处理完成
+	close(e.EventBus)
+	close(e.FrontendBus)
 	uiWg.Wait()
 
 	e.tracker.ExportCSV(e.Settings.OutputDir)
@@ -194,23 +220,43 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 		suspendHandler = e.CustomSuspendHandler
 	}
 
-	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, e.EventBus, suspendHandler)
+	// 创建一个包装的 EventBus，同时发送到 tracker 和 FrontendBus
+	workerEventBus := make(chan report.ExecutorEvent, 100)
+
+	// 启动事件转发器
+	go func() {
+		for ev := range workerEventBus {
+			// 发送到 tracker 的内部 EventBus
+			e.tracker.CollectEvent(ev)
+			// 发送到 FrontendBus
+			select {
+			case e.FrontendBus <- ev:
+			default:
+				logger.Debug("Engine", ev.IP, "FrontendBus 已满，丢弃事件: %v", ev.Type)
+			}
+		}
+	}()
+
+	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, workerEventBus, suspendHandler)
 	defer exec.Close()
 
-	e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceStart, TotalCmd: len(e.Commands), Message: "Connecting SSH..."}
+	// 发送开始事件
+	workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceStart, TotalCmd: len(e.Commands), Message: "Connecting SSH..."}
 
 	if err := exec.Connect(ctx, connectTimeout); err != nil {
-		e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: fmt.Sprintf("SSH 建连失败: %v", err)}
+		workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: fmt.Sprintf("SSH 建连失败: %v", err)}
+		workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: fmt.Sprintf("连接失败: %v", err), TotalCmd: len(e.Commands)}
+		close(workerEventBus)
 		return
 	}
 
 	if err := exec.ExecutePlaybook(ctx, e.Commands, commandTimeout); err != nil {
 		logger.Debug("Engine", dev.IP, "worker 播放命令集结束，返回了 error: %v", err)
-		// Event 已经被底层的 action (Abort|Error)抛出过，此处无需重复抛出全量错误
 	} else {
 		logger.Debug("Engine", dev.IP, "worker 播放命令集成功完成")
-		e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceSuccess, Message: "执行完毕", TotalCmd: len(e.Commands)}
+		workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceSuccess, Message: "执行完毕", TotalCmd: len(e.Commands)}
 	}
+	close(workerEventBus)
 }
 
 // backupWorker 是基于单个设备进行交互的备份动作集散流

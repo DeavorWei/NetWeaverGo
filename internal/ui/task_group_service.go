@@ -201,14 +201,26 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 			ng := engine.NewEngine(selectedAssets, group.Commands, settings, false)
 			ng.CustomSuspendHandler = s.WailsSuspendHandler()
 
+			// 使用 WaitGroup 确保事件监听器在 Run() 之前准备好
+			var listenerReady sync.WaitGroup
+			listenerReady.Add(1)
+
+			// 监听 FrontendBus 而不是 EventBus
 			go func() {
-				for ev := range ng.EventBus {
+				time.Sleep(50 * time.Millisecond) // 确保 Wails 事件系统准备好
+				listenerReady.Done()              // 通知监听器已准备好
+				for ev := range ng.FrontendBus {
 					s.wailsApp.Event.Emit("device:event", ev)
 				}
 			}()
 
+			// 等待监听器准备好再开始执行
+			listenerReady.Wait()
+
 			ctx, cancel := context.WithCancel(context.Background())
 			ng.Run(ctx)
+			// 确保所有事件都被处理完毕
+			time.Sleep(100 * time.Millisecond)
 			cancel()
 		}
 	} else if taskGroup.Mode == "binding" {
@@ -242,14 +254,26 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 			ng := engine.NewEngine(selectedAssets, filtered, settings, false)
 			ng.CustomSuspendHandler = s.WailsSuspendHandler()
 
+			// 使用 WaitGroup 确保事件监听器在 Run() 之前准备好
+			var listenerReady sync.WaitGroup
+			listenerReady.Add(1)
+
+			// 监听 FrontendBus 而不是 EventBus
 			go func() {
-				for ev := range ng.EventBus {
+				time.Sleep(50 * time.Millisecond) // 确保 Wails 事件系统准备好
+				listenerReady.Done()              // 通知监听器已准备好
+				for ev := range ng.FrontendBus {
 					s.wailsApp.Event.Emit("device:event", ev)
 				}
 			}()
 
+			// 等待监听器准备好再开始执行
+			listenerReady.Wait()
+
 			ctx, cancel := context.WithCancel(context.Background())
 			ng.Run(ctx)
+			// 确保所有事件都被处理完毕
+			time.Sleep(100 * time.Millisecond)
 			cancel()
 		}
 	}

@@ -372,7 +372,7 @@ async function loadTasks() {
 async function executeTask(task: TaskGroup) {
   if (isRunning.value) return
 
-  // 进入执行视图
+  // 先设置执行视图和状态，确保事件能被正确处理
   executionView.value = {
     active: true,
     taskId: task.id,
@@ -381,6 +381,9 @@ async function executeTask(task: TaskGroup) {
   isRunning.value = true
   progressPercent.value = 5
   execDevices.value = []
+
+  // 使用 nextTick 确保状态已更新后再调用 API
+  await nextTick()
 
   try {
     await ApiStartTaskGroup(task.id)

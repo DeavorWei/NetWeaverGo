@@ -146,18 +146,29 @@ func (s *EngineService) StartEngine() error {
 	ng := engine.NewEngine(assets, commands, settings, false)
 	ng.CustomSuspendHandler = s.wailsSuspendHandler()
 
-	// 桥接事件：监听底层的 EventBus 转发给前端 Vue
+	// 使用 WaitGroup 确保事件监听器在 Run() 之前准备好
+	var listenerReady sync.WaitGroup
+	listenerReady.Add(1)
+
+	// 桥接事件：监听 FrontendBus 转发给前端 Vue
 	go func() {
-		for ev := range ng.EventBus {
+		time.Sleep(50 * time.Millisecond) // 确保 Wails 事件系统准备好
+		listenerReady.Done()              // 通知监听器已准备好
+		for ev := range ng.FrontendBus {
 			s.wailsApp.Event.Emit("device:event", ev)
 		}
 	}()
+
+	// 等待监听器准备好再开始执行
+	listenerReady.Wait()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// 开始执行并发任务
 	ng.Run(ctx)
+	// 确保所有事件都被处理完毕
+	time.Sleep(100 * time.Millisecond)
 
 	s.wailsApp.Event.Emit("engine:finished")
 
@@ -221,18 +232,29 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 	ng := engine.NewEngine(selectedAssets, group.Commands, settings, false)
 	ng.CustomSuspendHandler = s.wailsSuspendHandler()
 
-	// 桥接事件：监听底层的 EventBus 转发给前端 Vue
+	// 使用 WaitGroup 确保事件监听器在 Run() 之前准备好
+	var listenerReady sync.WaitGroup
+	listenerReady.Add(1)
+
+	// 桥接事件：监听 FrontendBus 转发给前端 Vue
 	go func() {
-		for ev := range ng.EventBus {
+		time.Sleep(50 * time.Millisecond) // 确保 Wails 事件系统准备好
+		listenerReady.Done()              // 通知监听器已准备好
+		for ev := range ng.FrontendBus {
 			s.wailsApp.Event.Emit("device:event", ev)
 		}
 	}()
+
+	// 等待监听器准备好再开始执行
+	listenerReady.Wait()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// 开始执行并发任务
 	ng.Run(ctx)
+	// 确保所有事件都被处理完毕
+	time.Sleep(100 * time.Millisecond)
 
 	s.wailsApp.Event.Emit("engine:finished")
 
@@ -273,18 +295,29 @@ func (s *EngineService) StartBackup() error {
 	ng := engine.NewEngine(assets, nil, settings, false)
 	ng.CustomSuspendHandler = s.wailsSuspendHandler()
 
-	// 桥接事件：监听底层的 EventBus 转发给前端 Vue
+	// 使用 WaitGroup 确保事件监听器在 Run() 之前准备好
+	var listenerReady sync.WaitGroup
+	listenerReady.Add(1)
+
+	// 桥接事件：监听 FrontendBus 转发给前端 Vue
 	go func() {
-		for ev := range ng.EventBus {
+		time.Sleep(50 * time.Millisecond) // 确保 Wails 事件系统准备好
+		listenerReady.Done()              // 通知监听器已准备好
+		for ev := range ng.FrontendBus {
 			s.wailsApp.Event.Emit("device:event", ev)
 		}
 	}()
+
+	// 等待监听器准备好再开始执行
+	listenerReady.Wait()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// 开始执行备份任务
 	ng.RunBackup(ctx)
+	// 确保所有事件都被处理完毕
+	time.Sleep(100 * time.Millisecond)
 
 	s.wailsApp.Event.Emit("engine:finished")
 
