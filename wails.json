@@ -1,0 +1,14 @@
+{
+  "name": "NetWeaverGo",
+  "outputdir": "frontend/src/bindings",
+  "outputtype": "typescript",
+  "frontend": {
+    "dir": "frontend",
+    "build": "npm run build",
+    "dev": "npm run dev",
+    "devtoolsurl": "http://localhost:5173"
+  },
+  "build": {
+    "dir": "cmd/netweaver"
+  }
+}
