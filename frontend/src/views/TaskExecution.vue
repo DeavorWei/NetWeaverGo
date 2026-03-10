@@ -264,10 +264,8 @@
 import { ref, computed, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  ListTaskGroups as ApiListTaskGroups,
-  DeleteTaskGroup as ApiDeleteTaskGroup,
-  StartTaskGroup as ApiStartTaskGroup,
-  ResolveSuspend
+  TaskGroupAPI,
+  EngineAPI
 } from '../services/api'
 import type { TaskGroup } from '../services/api'
 import { useEngineEvents } from '../composables/useEngineEvents'
@@ -358,7 +356,7 @@ const filteredTasks = computed(() => {
 async function loadTasks() {
   loading.value = true
   try {
-    const result = await ApiListTaskGroups()
+    const result = await TaskGroupAPI.listTaskGroups()
     tasks.value = result || []
   } catch (err) {
     console.error('加载任务列表失败:', err)
@@ -386,7 +384,7 @@ async function executeTask(task: TaskGroup) {
   await nextTick()
 
   try {
-    await ApiStartTaskGroup(task.id)
+    await TaskGroupAPI.startTaskGroup(task.id)
   } catch (err: any) {
     console.error('执行任务失败:', err)
     triggerToast(`执行失败: ${err?.message || err}`, 'error')
@@ -401,7 +399,7 @@ function confirmDelete(task: TaskGroup) {
 
 async function doDelete() {
   try {
-    await ApiDeleteTaskGroup(deleteModal.value.taskId)
+    await TaskGroupAPI.deleteTaskGroup(deleteModal.value.taskId)
     deleteModal.value.show = false
     triggerToast('任务已删除', 'success')
     loadTasks()
@@ -420,7 +418,7 @@ function closeExecutionView() {
 
 // Suspend 处理
 function resolveSuspend(action: 'S' | 'A') {
-  ResolveSuspend(suspendModal.value.ip, action)
+  EngineAPI.resolveSuspend(suspendModal.value.ip, action)
   suspendModal.value.show = false
 }
 
