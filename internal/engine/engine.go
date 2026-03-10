@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
@@ -18,6 +19,45 @@ import (
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/sftputil"
 	"github.com/NetWeaverGo/core/internal/sshutil"
+)
+
+// 敏感信息脱敏正则表达式
+var sensitivePatterns = []struct {
+	pattern *regexp.Regexp
+	replace string
+}{
+	// password xxx cipher/plain xxx -> password xxx cipher ****
+	{regexp.MustCompile(`(?i)(password\s+\S+\s+cipher\s+)(\S+)`), "${1}****"},
+	{regexp.MustCompile(`(?i)(password\s+\S+\s+plain\s+)(\S+)`), "${1}****"},
+	// password xxx xxx (简写形式) -> password xxx ****
+	{regexp.MustCompile(`(?i)(password\s+\S+\s+)(\S+)`), "${1}****"},
+	// cipher xxx -> cipher ****
+	{regexp.MustCompile(`(?i)(cipher\s+)(\S+)`), "${1}****"},
+	// key xxx xxx -> key xxx **** (密钥配置)
+	{regexp.MustCompile(`(?i)(key\s+\S+\s+)(\S+)`), "${1}****"},
+	// secret xxx -> secret ****
+	{regexp.MustCompile(`(?i)(secret\s+)(\S+)`), "${1}****"},
+	// credential xxx -> credential ****
+	{regexp.MustCompile(`(?i)(credential\s+)(\S+)`), "${1}****"},
+}
+
+// sanitizeMessage 脱敏消息中的敏感信息
+func sanitizeMessage(msg string) string {
+	sanitized := msg
+	for _, p := range sensitivePatterns {
+		sanitized = p.pattern.ReplaceAllString(sanitized, p.replace)
+	}
+	return sanitized
+}
+
+// engineState 引擎状态枚举
+type engineState int32
+
+const (
+	stateIdle engineState = iota
+	stateRunning
+	stateClosing
+	stateClosed
 )
 
 // Engine 全局中央调度器，控制所有物理设备的并发执行流
@@ -41,6 +81,31 @@ type Engine struct {
 
 	// CustomSuspendHandler 允许外部（如 Wails UI）注入自定义的异常挂起处理逻辑
 	CustomSuspendHandler executor.SuspendHandler
+
+	// fallbackEvents 后备事件存储，当 FrontendBus 满时暂存事件
+	fallbackEvents []report.ExecutorEvent
+	fallbackMu     sync.Mutex
+
+	// Fallback 事件存储上限
+	maxFallbackEvents int
+
+	// ====== 新增: 精确的生命周期控制 ======
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	// 事件发送追踪
+	emitWg sync.WaitGroup
+
+	// 状态管理（使用互斥锁保护，替代 atomic.Bool）
+	stateMu sync.RWMutex
+	state   engineState
+
+	// 新增：使用 atomic 标记快速检查，避免 TOCTOU 竞态
+	closedFlag atomic.Bool
+
+	// 新增：关闭信号 channel，用于通知所有发送者停止
+	closeSignal chan struct{}
+	closeOnce   sync.Once
 }
 
 // NewEngine 初始化并行执行引擎
@@ -51,21 +116,93 @@ func NewEngine(assets []config.DeviceAsset, commands []string, settings *config.
 	}
 
 	return &Engine{
-		Devices:        assets,
-		Commands:       commands,
-		MaxWorkers:     workers, // 使用配置的并发限制
-		Settings:       settings,
-		NonInteractive: nonInteractive,
-		EventBus:       make(chan report.ExecutorEvent, 1000), // 队列化 EventBus（内部 tracker 使用）
-		FrontendBus:    make(chan report.ExecutorEvent, 1000), // 前端事件通道（外部转发使用）
+		Devices:           assets,
+		Commands:          commands,
+		MaxWorkers:        workers, // 使用配置的并发限制
+		Settings:          settings,
+		NonInteractive:    nonInteractive,
+		EventBus:          make(chan report.ExecutorEvent, 1000), // 队列化 EventBus（内部 tracker 使用）
+		FrontendBus:       make(chan report.ExecutorEvent, 1000), // 前端事件通道（外部转发使用）
+		maxFallbackEvents: 500,                                   // 后备存储上限
+		state:             stateIdle,
+		closeSignal:       make(chan struct{}), // 初始化关闭信号 channel
+	}
+}
+
+// isClosing 检查引擎是否正在关闭或已关闭
+func (e *Engine) isClosing() bool {
+	e.stateMu.RLock()
+	defer e.stateMu.RUnlock()
+	return e.state >= stateClosing
+}
+
+// GetFallbackEvents 获取后备事件列表（用于前端恢复丢失的事件）
+func (e *Engine) GetFallbackEvents() []report.ExecutorEvent {
+	e.fallbackMu.Lock()
+	defer e.fallbackMu.Unlock()
+	result := make([]report.ExecutorEvent, len(e.fallbackEvents))
+	copy(result, e.fallbackEvents)
+	return result
+}
+
+// ClearFallbackEvents 清空后备事件
+func (e *Engine) ClearFallbackEvents() {
+	e.fallbackMu.Lock()
+	defer e.fallbackMu.Unlock()
+	e.fallbackEvents = nil
+}
+
+// isRunning 检查引擎是否正在运行
+func (e *Engine) isRunning() bool {
+	e.stateMu.RLock()
+	defer e.stateMu.RUnlock()
+	return e.state == stateRunning
+}
+
+// setState 设置引擎状态
+func (e *Engine) setState(newState engineState) {
+	e.stateMu.Lock()
+	e.state = newState
+	e.stateMu.Unlock()
+
+	// 同步更新 atomic 标记，用于快速检查
+	if newState >= stateClosing {
+		e.closedFlag.Store(true)
 	}
 }
 
 // emitEvent 同时向 EventBus 和 FrontendBus 发送事件（广播）
+// 使用精确的生命周期控制，防止向已关闭的 channel 发送数据
+// 采用 atomic 快速检查 + 关闭信号 channel 双重保护机制
 func (e *Engine) emitEvent(ev report.ExecutorEvent) {
+	// 快速检查：使用 atomic 避免锁竞争
+	if e.closedFlag.Load() {
+		logger.Debug("Engine", ev.IP, "引擎已关闭，丢弃事件: %v", ev.Type)
+		return
+	}
+
+	// 增加等待计数（在二次检查之前）
+	e.emitWg.Add(1)
+	defer e.emitWg.Done()
+
+	// 二次检查：检查关闭信号
+	select {
+	case <-e.closeSignal:
+		logger.Debug("Engine", ev.IP, "引擎正在关闭，丢弃事件: %v", ev.Type)
+		return
+	default:
+	}
+
+	// 脱敏处理：对 Message 进行敏感信息过滤
+	ev.Message = sanitizeMessage(ev.Message)
+
 	// 发送到 EventBus（用于 tracker 生成报告）
 	select {
 	case e.EventBus <- ev:
+	case <-e.closeSignal:
+		return
+	case <-e.ctx.Done():
+		return
 	default:
 		logger.Debug("Engine", ev.IP, "EventBus 已满，丢弃事件: %v", ev.Type)
 	}
@@ -73,8 +210,58 @@ func (e *Engine) emitEvent(ev report.ExecutorEvent) {
 	// 发送到 FrontendBus（用于转发到前端）
 	select {
 	case e.FrontendBus <- ev:
-	default:
-		logger.Debug("Engine", ev.IP, "FrontendBus 已满，丢弃事件: %v", ev.Type)
+		// 成功发送
+	case <-e.closeSignal:
+		// 关闭信号触发，写入后备存储
+		e.fallbackMu.Lock()
+		if len(e.fallbackEvents) < e.maxFallbackEvents {
+			e.fallbackEvents = append(e.fallbackEvents, ev)
+		} else {
+			// 达到上限，移除最旧的事件（FIFO 淘汰）
+			e.fallbackEvents = append(e.fallbackEvents[1:], ev)
+			logger.Warn("Engine", ev.IP, "后备存储已满，淘汰最旧事件")
+		}
+		e.fallbackMu.Unlock()
+	case <-e.ctx.Done():
+		// Context 已取消，写入后备存储
+		e.fallbackMu.Lock()
+		if len(e.fallbackEvents) < e.maxFallbackEvents {
+			e.fallbackEvents = append(e.fallbackEvents, ev)
+		} else {
+			// 达到上限，移除最旧的事件（FIFO 淘汰）
+			e.fallbackEvents = append(e.fallbackEvents[1:], ev)
+			logger.Warn("Engine", ev.IP, "后备存储已满，淘汰最旧事件")
+		}
+		e.fallbackMu.Unlock()
+	}
+}
+
+// emitEventDirect 直接发送事件，用于高优先级事件
+// 同样使用 atomic 快速检查 + 关闭信号 channel 双重保护
+func (e *Engine) emitEventDirect(ev report.ExecutorEvent) {
+	// 快速检查
+	if e.closedFlag.Load() {
+		return
+	}
+
+	ev.Message = sanitizeMessage(ev.Message)
+
+	// 强制发送到 EventBus
+	select {
+	case e.EventBus <- ev:
+	case <-e.closeSignal:
+		return
+	case <-e.ctx.Done():
+		return
+	}
+
+	// 强制发送到 FrontendBus
+	select {
+	case e.FrontendBus <- ev:
+	case <-e.closeSignal:
+		return
+	case <-e.ctx.Done():
+		return
 	}
 }
 
@@ -87,16 +274,11 @@ func (e *Engine) Run(ctx context.Context) {
 	logger.ConsoleMuted = true
 	defer func() { logger.ConsoleMuted = false }()
 
-	e.tracker = report.NewProgressTracker(len(e.Devices))
-	// 注意：不要设置 e.tracker.EventBus，让 tracker 使用自己内部的事件收集
+	// 初始化 context 和状态
+	e.ctx, e.cancel = context.WithCancel(ctx)
+	e.setState(stateRunning)
 
-	// 启动后台事件收归与界面的渲染
-	var uiWg sync.WaitGroup
-	uiWg.Add(1)
-	go func() {
-		defer uiWg.Done()
-		e.tracker.Listen(ctx)
-	}()
+	e.tracker = report.NewProgressTracker(len(e.Devices))
 
 	var wg sync.WaitGroup
 	// 创建带缓冲的 channel 作为并发令牌桶
@@ -106,8 +288,15 @@ func (e *Engine) Run(ctx context.Context) {
 		wg.Add(1)
 
 		// 阻塞等待获取并发执行令牌，如果超过 MaxWorkers 则会在这里等待
-		sem <- struct{}{}
-		logger.DebugAll("Engine", dev.IP, "获取到执行令牌，准备启动 worker")
+		// 添加 Context 感知，避免在 Context 取消后仍然阻塞等待令牌
+		select {
+		case sem <- struct{}{}:
+			logger.DebugAll("Engine", dev.IP, "获取到执行令牌，准备启动 worker")
+		case <-e.ctx.Done():
+			wg.Done()
+			logger.Debug("Engine", dev.IP, "Context 已取消，跳过获取令牌")
+			continue
+		}
 
 		// 将 dev 作为参数传递，避免在闭包内捕获循环变量
 		go func(device config.DeviceAsset) {
@@ -120,24 +309,86 @@ func (e *Engine) Run(ctx context.Context) {
 			// 增加抖动，平滑 SSH 突发连接压力 (Jitter Delay, 0-500ms)
 			time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 
-			e.worker(ctx, device, &wg)
+			e.worker(e.ctx, device, &wg)
 		}(dev)
 	}
 
 	wg.Wait()
 
-	// 关闭 tracker 的事件通道，让 Listen() 退出
-	close(e.tracker.EventBus)
-
-	// 关闭通道，等待所有事件处理完成
-	close(e.EventBus)
-	close(e.FrontendBus)
-	uiWg.Wait()
+	// 使用统一的优雅关闭方法
+	e.gracefulClose()
 
 	e.tracker.ExportCSV(e.Settings.OutputDir)
 
 	// 最终谢幕，保留一条普通的记录
 	logger.Info("Engine", "-", "所有设备的通信投递线程均已结束。安全退出。")
+}
+
+// gracefulClose 统一的优雅关闭方法
+// 确保 channel 关闭顺序正确，避免 send on closed channel panic
+func (e *Engine) gracefulClose() {
+	e.closeOnce.Do(func() {
+		// 阶段1: 标记为关闭中，阻止新事件
+		e.setState(stateClosing)
+
+		// 阶段2: 关闭信号 channel，通知所有发送者停止
+		close(e.closeSignal)
+
+		// 阶段3: 等待所有进行中的发送完成
+		e.emitWg.Wait()
+
+		// 阶段4: 取消 context，通知所有 goroutine 退出
+		if e.cancel != nil {
+			e.cancel()
+		}
+
+		// 阶段5: 短暂等待，确保所有 goroutine 收到取消信号
+		time.Sleep(50 * time.Millisecond)
+
+		// 阶段6: 关闭所有 channel
+		close(e.FrontendBus)
+		close(e.EventBus)
+		if e.tracker != nil && e.tracker.EventBus != nil {
+			close(e.tracker.EventBus)
+		}
+
+		// 阶段7: 标记为已关闭
+		e.setState(stateClosed)
+	})
+}
+
+// gracefulCloseForBackup 备份模式的优雅关闭方法
+// 与 gracefulClose 类似，但需要等待 UI 监听器完成
+func (e *Engine) gracefulCloseForBackup(uiWg *sync.WaitGroup) {
+	e.closeOnce.Do(func() {
+		// 阶段1: 标记为关闭中
+		e.setState(stateClosing)
+
+		// 阶段2: 关闭信号 channel
+		close(e.closeSignal)
+
+		// 阶段3: 等待所有进行中的发送完成
+		e.emitWg.Wait()
+
+		// 阶段4: 取消 context
+		if e.cancel != nil {
+			e.cancel()
+		}
+
+		// 阶段5: 短暂等待
+		time.Sleep(50 * time.Millisecond)
+
+		// 阶段6: 关闭 channels 并等待 UI 监听器
+		if e.EventBus != nil {
+			close(e.EventBus)
+		}
+		if uiWg != nil {
+			uiWg.Wait()
+		}
+
+		// 阶段7: 标记为已关闭
+		e.setState(stateClosed)
+	})
 }
 
 // RunBackup 启动基于 `-b` 参数的交换机备份流程专线
@@ -147,6 +398,10 @@ func (e *Engine) RunBackup(ctx context.Context) {
 	logger.Info("Engine", "-", "备份模式启动")
 	logger.Info("Engine", "-", "开始向 %d 台设备提取配置文件...", len(e.Devices))
 	logger.Info("Engine", "-", "=======================================")
+
+	// 初始化 context 和状态
+	e.ctx, e.cancel = context.WithCancel(ctx)
+	e.setState(stateRunning)
 
 	e.tracker = report.NewProgressTracker(len(e.Devices))
 	e.tracker.EventBus = e.EventBus
@@ -177,10 +432,8 @@ func (e *Engine) RunBackup(ctx context.Context) {
 
 	wg.Wait()
 
-	if e.EventBus != nil {
-		close(e.EventBus)
-		uiWg.Wait()
-	}
+	// 使用统一的优雅关闭方法
+	e.gracefulCloseForBackup(&uiWg)
 
 	// 备份结束，汇总失败信息
 	logger.Info("Engine", "-", "\n========== [备份任务结束] ==========")
@@ -223,16 +476,40 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 	// 创建一个包装的 EventBus，同时发送到 tracker 和 FrontendBus
 	workerEventBus := make(chan report.ExecutorEvent, 100)
 
-	// 启动事件转发器
+	// 启动事件转发器 - 带优先级处理和改进的排空逻辑
 	go func() {
-		for ev := range workerEventBus {
-			// 发送到 tracker 的内部 EventBus
-			e.tracker.CollectEvent(ev)
-			// 发送到 FrontendBus
+		defer func() {
+			// 确保排空 channel 中剩余的所有事件
+			for {
+				select {
+				case ev := <-workerEventBus:
+					if ev.Type == report.EventDeviceError || ev.Type == report.EventDeviceAbort {
+						e.emitEventDirect(ev)
+					} else {
+						e.emitEvent(ev)
+					}
+				default:
+					return
+				}
+			}
+		}()
+
+		for {
 			select {
-			case e.FrontendBus <- ev:
-			default:
-				logger.Debug("Engine", ev.IP, "FrontendBus 已满，丢弃事件: %v", ev.Type)
+			case ev, ok := <-workerEventBus:
+				if !ok {
+					// channel 已关闭，defer 会处理剩余事件
+					return
+				}
+				// 高优先级事件（如 Error/Abort）直接发送
+				if ev.Type == report.EventDeviceError || ev.Type == report.EventDeviceAbort {
+					e.emitEventDirect(ev)
+				} else {
+					e.emitEvent(ev)
+				}
+			case <-ctx.Done():
+				// Context 取消，defer 会处理剩余事件
+				return
 			}
 		}
 	}()
@@ -320,7 +597,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 
 	// 2. 正常读取配置文件名称
 	logger.Info("Worker", dev.IP, "SFTP会话成功挂载，准备查询下次启动配置文件...")
-	// 某些设备需要禁用分屏，或者我们依赖“Next startup saved-configuration file”出现在第一屏回显中
+	// 某些设备需要禁用分屏，或者我们依赖"Next startup saved-configuration file"出现在第一屏回显中
 	exec.ExecuteCommandSync(ctx, "screen-length 0 temporary", 2*time.Second) // 尽可能的规避翻页问题
 	output, err := exec.ExecuteCommandSync(ctx, "display startup", 15*time.Second)
 	if err != nil {
@@ -375,7 +652,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	localPath := filepath.Join("confBakup", dateDir, fileName)
 
 	// 因为大多数华为/华三设备上的 SFTP 需要准确的 flash 位置：
-	// 根据 SFTP 子系统不同，“flash:/1.cfg” 需要作为 “1.cfg” 或 “/1.cfg” 来获取。
+	// 根据 SFTP 子系统不同，"flash:/1.cfg" 需要作为 "1.cfg" 或 "/1.cfg" 来获取。
 	// pkg/sftp 通常基准当前目录解析 `1.cfg`，这对于 flash 根目录来说是没问题的。
 
 	err = sftpClient.DownloadFile(cleanRemotePath, localPath)
@@ -465,3 +742,7 @@ func (e *Engine) handleSuspend(ip string, logLine string, cmd string) executor.E
 		fmt.Print(">> 输入无效，仅支持 C、S 或 A: ")
 	}
 }
+
+// atomic.Bool 兼容性保留（用于旧的 closed 字段访问）
+// 注意：这是为了向后兼容，新代码应使用 state 状态管理
+var _ = atomic.Bool{}

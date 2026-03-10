@@ -9,7 +9,6 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/engine"
-	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -21,22 +20,18 @@ type TaskGroupService struct {
 	// 控制运行状态
 	isRunning bool
 	mu        sync.Mutex
-
-	// 挂起交互的通信频道
-	suspendSignals map[string]chan executor.ErrorAction
-	suspendMu      sync.Mutex
 }
 
 // NewTaskGroupService 创建任务组服务实例
 func NewTaskGroupService() *TaskGroupService {
-	return &TaskGroupService{
-		suspendSignals: make(map[string]chan executor.ErrorAction),
-	}
+	return &TaskGroupService{}
 }
 
 // ServiceStartup Wails 服务启动生命周期钩子
 func (s *TaskGroupService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	s.wailsApp = application.Get()
+	// 设置全局 SuspendManager 的 Wails App 实例（如果 EngineService 尚未设置）
+	GetSuspendManager().SetWailsApp(s.wailsApp)
 	logger.Info("UI", "-", "任务组服务已就绪")
 	return nil
 }
@@ -66,73 +61,21 @@ func (s *TaskGroupService) DeleteTaskGroup(id string) error {
 	return config.DeleteTaskGroup(id)
 }
 
-// Suspend 超时时间常量
-const suspendTimeout = 5 * time.Minute
-
-// WailsSuspendHandler 构建代理 Suspend 钩子替换原先的控制台询问方式
-func (s *TaskGroupService) WailsSuspendHandler() executor.SuspendHandler {
-	return func(ip string, logLine string, cmd string) executor.ErrorAction {
-		actionCh := make(chan executor.ErrorAction, 1)
-
-		s.suspendMu.Lock()
-		s.suspendSignals[ip] = actionCh
-		s.suspendMu.Unlock()
-
-		defer func() {
-			s.suspendMu.Lock()
-			delete(s.suspendSignals, ip)
-			s.suspendMu.Unlock()
-		}()
-
-		// 抛出悬停事件前台处理
-		s.wailsApp.Event.Emit("engine:suspend_required", map[string]interface{}{
-			"ip":      ip,
-			"error":   logLine,
-			"command": cmd,
-		})
-
-		logger.Warn("Engine", ip, "已向界面发射阻断警告，等待用户操作...")
-
-		// 添加超时机制，防止 goroutine 永久阻塞
-		select {
-		case action := <-actionCh:
-			return action
-		case <-time.After(suspendTimeout):
-			logger.Warn("Engine", ip, "Suspend 等待超时，自动中断设备连接")
-			return executor.ActionAbort
-		}
-	}
-}
-
 // ResolveSuspend 被前端调用（当用户在弹窗中选择动作后）
-func (s *TaskGroupService) ResolveSuspend(ip string, action string) {
-	s.suspendMu.Lock()
-	ch, exists := s.suspendSignals[ip]
-	s.suspendMu.Unlock()
-
-	if !exists {
-		logger.Warn("Engine", ip, "找不到对应的挂机通信频道，可能任务已结束或超时")
-		return
-	}
-
-	var errAction executor.ErrorAction
-	switch action {
-	case "C":
-		errAction = executor.ActionContinue
-	case "S":
-		errAction = executor.ActionSkip
-	case "A":
-		errAction = executor.ActionAbort
-	}
-
-	select {
-	case ch <- errAction:
-	default:
-	}
+// 委托给全局 SuspendManager 处理
+func (s *TaskGroupService) ResolveSuspend(sessionIDOrIP string, action string) {
+	GetSuspendManager().Resolve(sessionIDOrIP, action)
 }
 
-// StartTaskGroup 启动任务组执行
+// StartTaskGroup 启动任务组执行（并行执行模式）
 func (s *TaskGroupService) StartTaskGroup(id string) error {
+	// 首先获取全局引擎锁，防止与 EngineService 冲突
+	if err := engine.TryAcquireEngine("taskgroup_" + id); err != nil {
+		return err
+	}
+	// 确保在函数退出时释放全局锁
+	defer engine.ReleaseEngine()
+
 	s.mu.Lock()
 	if s.isRunning {
 		s.mu.Unlock()
@@ -169,79 +112,94 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 		return err
 	}
 
-	finalStatus := "completed"
+	// 创建设备 IP 到 Asset 的映射，用于快速查找
+	assetMap := make(map[string]config.DeviceAsset)
+	for _, asset := range allAssets {
+		assetMap[asset.IP] = asset
+	}
+
+	// 用于追踪执行状态
+	var executionWg sync.WaitGroup
+
+	// 创建根 context 用于取消所有并行任务
+	rootCtx, rootCancel := context.WithCancel(context.Background())
+	defer rootCancel()
+
+	// 使用 engine 实例 ID 追踪
+	engineInstanceID := fmt.Sprintf("taskgroup_%s", id)
 
 	if taskGroup.Mode == "group" {
 		// 模式A：一组命令 → 多台设备
+		// 优化：合并所有设备和命令，使用单一 Engine 实例
+		var allSelectedAssets []config.DeviceAsset
+		var allCommands []string
+		assetSet := make(map[string]bool)
+
 		for _, item := range taskGroup.Items {
-			// 根据 IP 筛选设备
-			var selectedAssets []config.DeviceAsset
-			ipSet := make(map[string]bool)
+			// 合并设备（去重）
 			for _, ip := range item.DeviceIPs {
-				ipSet[ip] = true
-			}
-			for _, asset := range allAssets {
-				if ipSet[asset.IP] {
-					selectedAssets = append(selectedAssets, asset)
+				if !assetSet[ip] {
+					assetSet[ip] = true
+					if asset, ok := assetMap[ip]; ok {
+						allSelectedAssets = append(allSelectedAssets, asset)
+					}
 				}
 			}
-
-			if len(selectedAssets) == 0 {
-				continue
+			// 获取第一个命令组（模式A下所有任务项使用相同命令组）
+			if len(allCommands) == 0 && item.CommandGroupID != "" {
+				group, err := config.GetCommandGroup(item.CommandGroupID)
+				if err == nil && len(group.Commands) > 0 {
+					allCommands = group.Commands
+				}
 			}
+		}
 
-			// 获取命令组
-			group, err := config.GetCommandGroup(item.CommandGroupID)
-			if err != nil {
-				logger.Warn("UI", "-", "获取命令组 %s 失败: %v", item.CommandGroupID, err)
-				finalStatus = "failed"
-				continue
-			}
-
-			ng := engine.NewEngine(selectedAssets, group.Commands, settings, false)
-			ng.CustomSuspendHandler = s.WailsSuspendHandler()
-
-			// 使用 WaitGroup 确保事件监听器在 Run() 之前准备好
-			var listenerReady sync.WaitGroup
-			listenerReady.Add(1)
-
-			// 监听 FrontendBus 而不是 EventBus
+		if len(allSelectedAssets) > 0 && len(allCommands) > 0 {
+			executionWg.Add(1)
 			go func() {
-				time.Sleep(50 * time.Millisecond) // 确保 Wails 事件系统准备好
-				listenerReady.Done()              // 通知监听器已准备好
-				for ev := range ng.FrontendBus {
-					s.wailsApp.Event.Emit("device:event", ev)
-				}
+				defer executionWg.Done()
+
+				ng := engine.NewEngine(allSelectedAssets, allCommands, settings, false)
+				ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
+
+				// 使用 channel 确保事件监听器在 Run() 之前准备好
+				listenerReady := make(chan struct{})
+
+				// 监听 FrontendBus
+				go func() {
+					// 等待 Wails 应用实例就绪
+					for i := 0; i < 100; i++ { // 最多等待 1 秒
+						if s.wailsApp != nil {
+							break
+						}
+						time.Sleep(10 * time.Millisecond)
+					}
+					// 通知已准备进入消费循环
+					close(listenerReady)
+					// 开始消费 FrontendBus
+					for ev := range ng.FrontendBus {
+						if s.wailsApp != nil {
+							s.wailsApp.Event.Emit("device:event", ev)
+						}
+					}
+				}()
+
+				// 等待监听器准备好
+				<-listenerReady
+				// 额外等待确保 goroutine 已进入 for-range 循环
+				time.Sleep(10 * time.Millisecond)
+
+				ng.Run(rootCtx)
 			}()
-
-			// 等待监听器准备好再开始执行
-			listenerReady.Wait()
-
-			ctx, cancel := context.WithCancel(context.Background())
-			ng.Run(ctx)
-			// 确保所有事件都被处理完毕
-			time.Sleep(100 * time.Millisecond)
-			cancel()
 		}
 	} else if taskGroup.Mode == "binding" {
 		// 模式B：每台设备独立命令
+		// 使用单一 Engine 实例，合并所有设备和命令
+		var allSelectedAssets []config.DeviceAsset
+		var allCommands []string
+		assetSet := make(map[string]bool)
+
 		for _, item := range taskGroup.Items {
-			// 根据 IP 筛选设备
-			var selectedAssets []config.DeviceAsset
-			ipSet := make(map[string]bool)
-			for _, ip := range item.DeviceIPs {
-				ipSet[ip] = true
-			}
-			for _, asset := range allAssets {
-				if ipSet[asset.IP] {
-					selectedAssets = append(selectedAssets, asset)
-				}
-			}
-
-			if len(selectedAssets) == 0 || len(item.Commands) == 0 {
-				continue
-			}
-
 			// 过滤空命令
 			var filtered []string
 			for _, cmd := range item.Commands {
@@ -251,35 +209,72 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 				}
 			}
 
-			ng := engine.NewEngine(selectedAssets, filtered, settings, false)
-			ng.CustomSuspendHandler = s.WailsSuspendHandler()
-
-			// 使用 WaitGroup 确保事件监听器在 Run() 之前准备好
-			var listenerReady sync.WaitGroup
-			listenerReady.Add(1)
-
-			// 监听 FrontendBus 而不是 EventBus
-			go func() {
-				time.Sleep(50 * time.Millisecond) // 确保 Wails 事件系统准备好
-				listenerReady.Done()              // 通知监听器已准备好
-				for ev := range ng.FrontendBus {
-					s.wailsApp.Event.Emit("device:event", ev)
+			// 合并设备（去重）
+			for _, ip := range item.DeviceIPs {
+				if !assetSet[ip] {
+					assetSet[ip] = true
+					if asset, ok := assetMap[ip]; ok {
+						allSelectedAssets = append(allSelectedAssets, asset)
+					}
 				}
+			}
+
+			// 合并命令
+			allCommands = append(allCommands, filtered...)
+		}
+
+		if len(allSelectedAssets) > 0 && len(allCommands) > 0 {
+			executionWg.Add(1)
+			go func() {
+				defer executionWg.Done()
+
+				ng := engine.NewEngine(allSelectedAssets, allCommands, settings, false)
+				ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
+
+				// 使用 channel 确保事件监听器在 Run() 之前准备好
+				listenerReady := make(chan struct{})
+
+				// 监听 FrontendBus
+				go func() {
+					// 等待 Wails 应用实例就绪
+					for i := 0; i < 100; i++ { // 最多等待 1 秒
+						if s.wailsApp != nil {
+							break
+						}
+						time.Sleep(10 * time.Millisecond)
+					}
+					// 通知已准备进入消费循环
+					close(listenerReady)
+					// 开始消费 FrontendBus
+					for ev := range ng.FrontendBus {
+						if s.wailsApp != nil {
+							s.wailsApp.Event.Emit("device:event", ev)
+						}
+					}
+				}()
+
+				// 等待监听器准备好
+				<-listenerReady
+				// 额外等待确保 goroutine 已进入 for-range 循环
+				time.Sleep(10 * time.Millisecond)
+
+				ng.Run(rootCtx)
 			}()
-
-			// 等待监听器准备好再开始执行
-			listenerReady.Wait()
-
-			ctx, cancel := context.WithCancel(context.Background())
-			ng.Run(ctx)
-			// 确保所有事件都被处理完毕
-			time.Sleep(100 * time.Millisecond)
-			cancel()
 		}
 	}
 
-	config.UpdateTaskGroupStatus(id, finalStatus)
-	s.wailsApp.Event.Emit("engine:finished")
+	// 等待所有并行任务完成
+	executionWg.Wait()
+
+	// 确保所有事件都被处理完毕
+	time.Sleep(100 * time.Millisecond)
+
+	// 更新最终状态
+	config.UpdateTaskGroupStatus(id, "completed")
+	s.wailsApp.Event.Emit("engine:finished", map[string]interface{}{
+		"instanceID": engineInstanceID,
+		"status":     "completed",
+	})
 
 	return nil
 }

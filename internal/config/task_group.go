@@ -107,10 +107,8 @@ func ListTaskGroups() ([]TaskGroup, error) {
 	defer tasksMu.RUnlock()
 
 	if tasksCached != nil {
-		// 返回切片副本，防止外部修改影响缓存
-		result := make([]TaskGroup, len(tasksCached.Groups))
-		copy(result, tasksCached.Groups)
-		return result, nil
+		// 返回深拷贝副本，防止外部修改影响缓存
+		return deepCopyTaskGroups(tasksCached.Groups)
 	}
 
 	file, err := loadTaskGroupsFromFile()
@@ -118,10 +116,8 @@ func ListTaskGroups() ([]TaskGroup, error) {
 		return nil, err
 	}
 	tasksCached = file
-	// 返回切片副本
-	result := make([]TaskGroup, len(file.Groups))
-	copy(result, file.Groups)
-	return result, nil
+	// 返回深拷贝副本
+	return deepCopyTaskGroups(file.Groups)
 }
 
 // GetTaskGroup 根据 ID 获取单个任务组
@@ -133,9 +129,8 @@ func GetTaskGroup(id string) (*TaskGroup, error) {
 	if tasksCached != nil {
 		for _, g := range tasksCached.Groups {
 			if g.ID == id {
-				// 返回副本，防止外部修改
-				copyGroup := g
-				return &copyGroup, nil
+				// 返回深拷贝副本，防止外部修改
+				return deepCopyTaskGroup(g)
 			}
 		}
 		return nil, fmt.Errorf("任务组不存在: %s", id)
@@ -148,8 +143,7 @@ func GetTaskGroup(id string) (*TaskGroup, error) {
 	}
 	for _, g := range file.Groups {
 		if g.ID == id {
-			copyGroup := g
-			return &copyGroup, nil
+			return deepCopyTaskGroup(g)
 		}
 	}
 	return nil, fmt.Errorf("任务组不存在: %s", id)
@@ -303,4 +297,33 @@ func validateTaskGroup(group TaskGroup) error {
 		}
 	}
 	return nil
+}
+
+// deepCopyTaskGroup 深拷贝单个任务组
+func deepCopyTaskGroup(g TaskGroup) (*TaskGroup, error) {
+	data, err := json.Marshal(g)
+	if err != nil {
+		return nil, fmt.Errorf("序列化任务组失败: %v", err)
+	}
+	var copy TaskGroup
+	if err := json.Unmarshal(data, &copy); err != nil {
+		return nil, fmt.Errorf("反序列化任务组失败: %v", err)
+	}
+	return &copy, nil
+}
+
+// deepCopyTaskGroups 深拷贝任务组列表
+func deepCopyTaskGroups(groups []TaskGroup) ([]TaskGroup, error) {
+	if groups == nil {
+		return nil, nil
+	}
+	data, err := json.Marshal(groups)
+	if err != nil {
+		return nil, fmt.Errorf("序列化任务组列表失败: %v", err)
+	}
+	var copy []TaskGroup
+	if err := json.Unmarshal(data, &copy); err != nil {
+		return nil, fmt.Errorf("反序列化任务组列表失败: %v", err)
+	}
+	return copy, nil
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -41,7 +42,7 @@ const TimeFormat = "2006-01-02T15:04:05"
 // 全局命令组管理器
 var (
 	groupsMu     sync.RWMutex
-	groupsCached *CommandGroupsFile
+	groupsCached atomic.Value // 使用 atomic.Value 替代指针缓存
 )
 
 // getCommandGroupsPath 获取命令组文件路径
@@ -107,15 +108,26 @@ func generateID() string {
 
 // ListCommandGroups 获取所有命令组列表
 func ListCommandGroups() ([]CommandGroup, error) {
-	groupsMu.RLock()
-	defer groupsMu.RUnlock()
+	// 先尝试读取缓存
+	if cached := groupsCached.Load(); cached != nil {
+		return cached.(*CommandGroupsFile).Groups, nil
+	}
+
+	// 缓存未命中，加写锁
+	groupsMu.Lock()
+	defer groupsMu.Unlock()
+
+	// 双重检查
+	if cached := groupsCached.Load(); cached != nil {
+		return cached.(*CommandGroupsFile).Groups, nil
+	}
 
 	data, err := loadCommandGroupsFromFile()
 	if err != nil {
 		return nil, err
 	}
 
-	groupsCached = data
+	groupsCached.Store(data)
 	return data.Groups, nil
 }
 

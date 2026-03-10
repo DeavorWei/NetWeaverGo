@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"time"
 
@@ -97,6 +98,12 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 
 	// 丢弃并记录 stderr（因为 TeeReader 已经挂在流文件里了）
 	go func() {
+		defer func() {
+			// 防止 panic 导致 goroutine 泄漏
+			if r := recover(); r != nil {
+				logger.Warn("Executor", e.IP, "stderr copier panic recovered: %v", r)
+			}
+		}()
 		_, _ = io.Copy(io.Discard, errReader)
 	}()
 
@@ -114,24 +121,67 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 	}
 	readCh := make(chan readResult, 1)
 
-	// 后台运行读操作，以便主流程能响应 timeout 和 ctx.Done()
+	// 创建一个 done channel 用于通知读取 goroutine 退出
+	done := make(chan struct{})
+
+	// 后台运行读操作，使用 SetReadDeadline 实现非阻塞读取
 	go func() {
 		defer close(readCh)
-		for {
-			n, err := outReader.Read(buf)
-			// 注意：这里由于 readCh 缓冲为1，且上层 select 在提取数据时可能会超时返回或 ctx.Done 返回，
-			// 在退出 ExecutePlaybook 时如果 outReader 阻塞，此协程可能会残留直到连接断开。
-			// 解决办法：在外部 Close 调用或 EOF 时自动解绑，同时 select 写入使用 default 丢弃以防长期死锁。
-			select {
-			case readCh <- readResult{n: n, err: err}:
-			case <-ctx.Done():
-				return
+		// 添加 panic recover 防止 goroutine 泄漏
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Warn("Executor", e.IP, "reader goroutine panic recovered: %v", r)
 			}
-			if err != nil {
+		}()
+
+		for {
+			select {
+			case <-done:
 				return
+			case <-ctx.Done():
+				// Context 被取消，立即退出
+				return
+			default:
+				// 设置读取超时，实现非阻塞读取
+				e.Client.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+				n, err := outReader.Read(buf)
+
+				if err != nil {
+					// 检查是否是超时错误
+					if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+						// 超时但不是真正的错误，继续检查 context 是否已取消
+						select {
+						case <-ctx.Done():
+							return
+						case <-done:
+							return
+						default:
+							continue // 超时但未取消，继续读取
+						}
+					}
+					// 其他错误（如 EOF），发送结果并退出
+					select {
+					case readCh <- readResult{n: n, err: err}:
+					case <-done:
+					case <-ctx.Done():
+					}
+					return
+				}
+
+				// 成功读取数据
+				select {
+				case readCh <- readResult{n: n, err: nil}:
+				case <-done:
+					return
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}()
+
+	// 确保在函数退出时关闭 done channel，让读取 goroutine 能够正确退出
+	defer close(done)
 
 	readDelay := 100 * time.Millisecond
 	for {
@@ -396,20 +446,66 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 	}
 	readCh := make(chan readResult, 1)
 
+	// 创建 done channel 用于通知读取 goroutine 退出
+	doneSync := make(chan struct{})
+
 	go func() {
 		defer close(readCh)
-		for {
-			n, err := outReader.Read(buf)
-			select {
-			case readCh <- readResult{n: n, err: err}:
-			case <-ctx.Done():
-				return
+		// 添加 panic recover 防止 goroutine 泄漏
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Warn("Executor", e.IP, "sync reader goroutine panic recovered: %v", r)
 			}
-			if err != nil {
+		}()
+
+		for {
+			select {
+			case <-doneSync:
 				return
+			case <-ctx.Done():
+				// Context 被取消，立即退出
+				return
+			default:
+				// 设置读取超时，实现非阻塞读取
+				e.Client.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+				n, err := outReader.Read(buf)
+
+				if err != nil {
+					// 检查是否是超时错误
+					if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+						// 超时但不是真正的错误，继续检查 context 是否已取消
+						select {
+						case <-ctx.Done():
+							return
+						case <-doneSync:
+							return
+						default:
+							continue // 超时但未取消，继续读取
+						}
+					}
+					// 其他错误（如 EOF），发送结果并退出
+					select {
+					case readCh <- readResult{n: n, err: err}:
+					case <-doneSync:
+					case <-ctx.Done():
+					}
+					return
+				}
+
+				// 成功读取数据
+				select {
+				case readCh <- readResult{n: n, err: nil}:
+				case <-doneSync:
+					return
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}()
+
+	// 确保在函数退出时关闭 done channel，让读取 goroutine 能够正确退出
+	defer close(doneSync)
 
 	// 读取循环
 	for {

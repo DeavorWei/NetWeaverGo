@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -24,7 +25,18 @@ type SSHClient struct {
 	Stdout io.Reader
 	Stderr io.Reader
 
-	mu sync.Mutex
+	// conn 保存底层的 TCP 连接，用于设置 deadline
+	conn net.Conn
+
+	// 读写锁：保护 Stdin/Stdout 的并发访问
+	mu sync.RWMutex
+
+	// closed 标记连接是否已关闭
+	closed atomic.Bool
+
+	// 新增：读取中断控制
+	readCancel context.CancelFunc
+	readCtx    context.Context
 }
 
 // Config 包含了建连的基础凭证和超时参数
@@ -208,15 +220,21 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 		return nil, fmt.Errorf("Shell启动失败: %w", err)
 	}
 
+	// 初始化读取上下文，用于控制读取中断
+	readCtx, readCancel := context.WithCancel(context.Background())
+
 	logger.Debug("SSH", cfg.IP, "目标 %s SSH全特性挂载(PTY/Shell)成功", target)
 	return &SSHClient{
-		Client:  client,
-		Session: session,
-		IP:      cfg.IP,
-		Port:    cfg.Port,
-		Stdin:   stdin,
-		Stdout:  stdout,
-		Stderr:  stderr,
+		Client:     client,
+		Session:    session,
+		IP:         cfg.IP,
+		Port:       cfg.Port,
+		Stdin:      stdin,
+		Stdout:     stdout,
+		Stderr:     stderr,
+		conn:       conn,
+		readCtx:    readCtx,
+		readCancel: readCancel,
 	}, nil
 }
 
@@ -224,6 +242,12 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 func (c *SSHClient) SendCommand(cmd string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// 检查是否已关闭
+	if c.closed.Load() {
+		return fmt.Errorf("SSH 连接已关闭")
+	}
+
 	logger.DebugAll("SSH", c.IP, "向底层隧道投递命令行包含回车: %q", cmd)
 	if c.Stdin == nil {
 		return fmt.Errorf("SSHClient not fully initialized for terminal sending (Stdin is nil)")
@@ -237,6 +261,12 @@ func (c *SSHClient) SendCommand(cmd string) error {
 func (c *SSHClient) SendRawBytes(data []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// 检查是否已关闭
+	if c.closed.Load() {
+		return fmt.Errorf("SSH 连接已关闭")
+	}
+
 	logger.DebugAll("SSH", c.IP, "向底层隧道投递 Raw Bytes: %q", string(data))
 	if c.Stdin == nil {
 		return fmt.Errorf("SSHClient not fully initialized for terminal sending (Stdin is nil)")
@@ -245,8 +275,33 @@ func (c *SSHClient) SendRawBytes(data []byte) error {
 	return err
 }
 
+// Read 从 Stdout 读取数据（线程安全）
+func (c *SSHClient) Read(p []byte) (n int, err error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// 检查是否已关闭
+	if c.closed.Load() {
+		return 0, net.ErrClosed
+	}
+
+	if c.Stdout == nil {
+		return 0, fmt.Errorf("SSHClient not fully initialized (Stdout is nil)")
+	}
+
+	return c.Stdout.Read(p)
+}
+
 // Close 断开流释放句柄
 func (c *SSHClient) Close() error {
+	// 原子性地标记为已关闭
+	if c.closed.Swap(true) {
+		return nil // 已经关闭
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	var err error
 	if c.Session != nil {
 		if c.Stdin != nil {
@@ -261,6 +316,50 @@ func (c *SSHClient) Close() error {
 		}
 	}
 	return err
+}
+
+// IsClosed 检查连接是否已关闭
+func (c *SSHClient) IsClosed() bool {
+	return c.closed.Load()
+}
+
+// SetReadDeadline 设置读取超时时间，用于实现非阻塞读取
+// 注意：SSH Session 的 Stdout 是通过管道实现的，不支持直接设置 deadline
+// 此方法通过底层 TCP 连接来设置 deadline 以中断阻塞的读取操作
+func (c *SSHClient) SetReadDeadline(t time.Time) error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// 检查是否已关闭
+	if c.closed.Load() {
+		return net.ErrClosed
+	}
+
+	// 使用保存的底层 TCP 连接设置 deadline
+	if c.conn != nil {
+		if err := c.conn.SetReadDeadline(t); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// CancelRead 强制中断当前的读取操作
+// 用于紧急情况下快速终止阻塞的读取
+func (c *SSHClient) CancelRead() {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// 取消读取上下文
+	if c.readCancel != nil {
+		c.readCancel()
+	}
+
+	// 设置一个过去的 deadline 来强制中断当前的读取
+	if c.conn != nil {
+		c.conn.SetReadDeadline(time.Now().Add(-1 * time.Second))
+	}
 }
 
 // NewRawSSHClient 建立一个最基础的SSH连接，不请求任何 Session, PTY, 或 Shell。

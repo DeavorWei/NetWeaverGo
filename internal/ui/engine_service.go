@@ -8,7 +8,6 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/engine"
-	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -17,116 +16,63 @@ import (
 type EngineService struct {
 	wailsApp *application.App
 
-	// 控制运行状态
-	isRunning bool
-	mu        sync.Mutex
-
-	// 挂起交互的通信频道
-	suspendSignals map[string]chan executor.ErrorAction
-	suspendMu      sync.Mutex
+	// Context 取消函数，用于停止正在执行的任务
+	cancelFunc context.CancelFunc
+	cancelMu   sync.Mutex
 }
 
 // NewEngineService 创建引擎服务实例
 func NewEngineService() *EngineService {
-	return &EngineService{
-		suspendSignals: make(map[string]chan executor.ErrorAction),
-	}
+	return &EngineService{}
 }
 
 // ServiceStartup Wails 服务启动生命周期钩子
 func (s *EngineService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	s.wailsApp = application.Get()
+	// 设置全局 SuspendManager 的 Wails App 实例
+	GetSuspendManager().SetWailsApp(s.wailsApp)
 	logger.Info("Engine", "-", "引擎控制服务已就绪")
 	return nil
 }
 
-// IsRunning 检查引擎是否正在运行
+// IsRunning 检查引擎是否正在运行（使用全局状态）
 func (s *EngineService) IsRunning() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.isRunning
+	return engine.IsEngineRunning()
+}
+
+// StopEngine 停止正在执行的任务
+func (s *EngineService) StopEngine() error {
+	s.cancelMu.Lock()
+	defer s.cancelMu.Unlock()
+
+	if !engine.IsEngineRunning() {
+		return fmt.Errorf("引擎未运行")
+	}
+
+	if s.cancelFunc != nil {
+		s.cancelFunc()
+		s.cancelFunc = nil
+		logger.Info("Engine", "-", "已发送停止信号")
+	}
+
+	return nil
 }
 
 // ResolveSuspend 被前端调用（当用户在弹窗中选择动作后）
-func (s *EngineService) ResolveSuspend(ip string, action string) {
-	s.suspendMu.Lock()
-	ch, exists := s.suspendSignals[ip]
-	s.suspendMu.Unlock()
-
-	if !exists {
-		logger.Warn("Engine", ip, "找不到对应的挂机通信频道，可能任务已结束或超时")
-		return
-	}
-
-	var errAction executor.ErrorAction
-	switch action {
-	case "C":
-		errAction = executor.ActionContinue
-	case "S":
-		errAction = executor.ActionSkip
-	case "A":
-		errAction = executor.ActionAbort
-	}
-
-	select {
-	case ch <- errAction:
-	default:
-	}
-}
-
-// wailsSuspendHandler 构建代理 Suspend 钩子替换原先的控制台询问方式
-// 注意：此方法为私有方法（首字母小写），不会被 Wails 自动绑定到前端
-func (s *EngineService) wailsSuspendHandler() executor.SuspendHandler {
-	return func(ip string, logLine string, cmd string) executor.ErrorAction {
-		// 阻断 Channel 预留
-		actionCh := make(chan executor.ErrorAction, 1)
-
-		s.suspendMu.Lock()
-		s.suspendSignals[ip] = actionCh
-		s.suspendMu.Unlock()
-
-		defer func() {
-			s.suspendMu.Lock()
-			delete(s.suspendSignals, ip)
-			s.suspendMu.Unlock()
-		}()
-
-		// 抛出悬停事件前台处理
-		s.wailsApp.Event.Emit("engine:suspend_required", map[string]interface{}{
-			"ip":      ip,
-			"error":   logLine,
-			"command": cmd,
-		})
-
-		// 无限阻塞等待前端回传决策，或者可设计一个 5分钟 的自动 abort 控制
-		logger.Warn("Engine", ip, "已向界面发射阻断警告，等待用户操作...")
-
-		// 带 5 分钟超时保护，避免用户关闭窗口或长时不操作导致 goroutine 永久挂起
-		select {
-		case action := <-actionCh:
-			return action
-		case <-time.After(5 * time.Minute):
-			logger.Warn("Engine", ip, "挂起等待超时（5分钟），自动执行 Abort 策略")
-			return executor.ActionAbort
-		}
-	}
+// 委托给全局 SuspendManager 处理
+func (s *EngineService) ResolveSuspend(sessionIDOrIP string, action string) {
+	GetSuspendManager().Resolve(sessionIDOrIP, action)
 }
 
 // StartEngine 启动核心下发动作
 func (s *EngineService) StartEngine() error {
-	s.mu.Lock()
-	if s.isRunning {
-		s.mu.Unlock()
-		return fmt.Errorf("引擎正在运行中，请勿重复启动")
+	// 使用全局引擎状态管理器尝试获取锁
+	if err := engine.TryAcquireEngine("engine_service"); err != nil {
+		return err
 	}
-	s.isRunning = true
-	s.mu.Unlock()
 
-	defer func() {
-		s.mu.Lock()
-		s.isRunning = false
-		s.mu.Unlock()
-	}()
+	// 确保在函数退出时释放锁
+	defer engine.ReleaseEngine()
 
 	settings, _, err := config.LoadSettings()
 	if err != nil {
@@ -144,29 +90,50 @@ func (s *EngineService) StartEngine() error {
 
 	// 初始化 Engine，开启了非交互模式的参数设定为 false（因为前端接管了交互）
 	ng := engine.NewEngine(assets, commands, settings, false)
-	ng.CustomSuspendHandler = s.wailsSuspendHandler()
+	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-	// 使用 WaitGroup 确保事件监听器在 Run() 之前准备好
-	var listenerReady sync.WaitGroup
-	listenerReady.Add(1)
+	// 使用 channel 确保事件监听器在 Run() 之前准备好
+	listenerReady := make(chan struct{})
 
 	// 桥接事件：监听 FrontendBus 转发给前端 Vue
 	go func() {
-		time.Sleep(50 * time.Millisecond) // 确保 Wails 事件系统准备好
-		listenerReady.Done()              // 通知监听器已准备好
+		// 等待 Wails 应用实例就绪
+		for i := 0; i < 100; i++ { // 最多等待 1 秒
+			if s.wailsApp != nil {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		// 通知已准备进入消费循环
+		close(listenerReady)
+		// 开始消费 FrontendBus
 		for ev := range ng.FrontendBus {
-			s.wailsApp.Event.Emit("device:event", ev)
+			if s.wailsApp != nil {
+				s.wailsApp.Event.Emit("device:event", ev)
+			}
 		}
 	}()
 
 	// 等待监听器准备好再开始执行
-	listenerReady.Wait()
+	<-listenerReady
+	// 额外等待确保 goroutine 已进入 for-range 循环
+	time.Sleep(10 * time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
+	// 保存 cancelFunc 以便 StopEngine 可以调用
+	s.cancelMu.Lock()
+	s.cancelFunc = cancel
+	s.cancelMu.Unlock()
 
 	// 开始执行并发任务
 	ng.Run(ctx)
+
+	// 清理 cancelFunc
+	s.cancelMu.Lock()
+	s.cancelFunc = nil
+	s.cancelMu.Unlock()
+
 	// 确保所有事件都被处理完毕
 	time.Sleep(100 * time.Millisecond)
 
@@ -177,19 +144,13 @@ func (s *EngineService) StartEngine() error {
 
 // StartEngineWithSelection 使用选定的设备和命令组启动引擎
 func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGroupID string) error {
-	s.mu.Lock()
-	if s.isRunning {
-		s.mu.Unlock()
-		return fmt.Errorf("引擎正在运行中，请勿重复启动")
+	// 使用全局引擎状态管理器尝试获取锁
+	if err := engine.TryAcquireEngine("task_group_service"); err != nil {
+		return err
 	}
-	s.isRunning = true
-	s.mu.Unlock()
 
-	defer func() {
-		s.mu.Lock()
-		s.isRunning = false
-		s.mu.Unlock()
-	}()
+	// 确保在函数退出时释放锁
+	defer engine.ReleaseEngine()
 
 	settings, _, err := config.LoadSettings()
 	if err != nil {
@@ -230,29 +191,50 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 
 	// 初始化 Engine
 	ng := engine.NewEngine(selectedAssets, group.Commands, settings, false)
-	ng.CustomSuspendHandler = s.wailsSuspendHandler()
+	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-	// 使用 WaitGroup 确保事件监听器在 Run() 之前准备好
-	var listenerReady sync.WaitGroup
-	listenerReady.Add(1)
+	// 使用 channel 确保事件监听器在 Run() 之前准备好
+	listenerReady := make(chan struct{})
 
 	// 桥接事件：监听 FrontendBus 转发给前端 Vue
 	go func() {
-		time.Sleep(50 * time.Millisecond) // 确保 Wails 事件系统准备好
-		listenerReady.Done()              // 通知监听器已准备好
+		// 等待 Wails 应用实例就绪
+		for i := 0; i < 100; i++ { // 最多等待 1 秒
+			if s.wailsApp != nil {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		// 通知已准备进入消费循环
+		close(listenerReady)
+		// 开始消费 FrontendBus
 		for ev := range ng.FrontendBus {
-			s.wailsApp.Event.Emit("device:event", ev)
+			if s.wailsApp != nil {
+				s.wailsApp.Event.Emit("device:event", ev)
+			}
 		}
 	}()
 
 	// 等待监听器准备好再开始执行
-	listenerReady.Wait()
+	<-listenerReady
+	// 额外等待确保 goroutine 已进入 for-range 循环
+	time.Sleep(10 * time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
+	// 保存 cancelFunc 以便 StopEngine 可以调用
+	s.cancelMu.Lock()
+	s.cancelFunc = cancel
+	s.cancelMu.Unlock()
 
 	// 开始执行并发任务
 	ng.Run(ctx)
+
+	// 清理 cancelFunc
+	s.cancelMu.Lock()
+	s.cancelFunc = nil
+	s.cancelMu.Unlock()
+
 	// 确保所有事件都被处理完毕
 	time.Sleep(100 * time.Millisecond)
 
@@ -263,19 +245,13 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 
 // StartBackup 启动核心备份动作
 func (s *EngineService) StartBackup() error {
-	s.mu.Lock()
-	if s.isRunning {
-		s.mu.Unlock()
-		return fmt.Errorf("引擎正在运行中，请勿重复启动")
+	// 使用全局引擎状态管理器尝试获取锁
+	if err := engine.TryAcquireEngine("backup_service"); err != nil {
+		return err
 	}
-	s.isRunning = true
-	s.mu.Unlock()
 
-	defer func() {
-		s.mu.Lock()
-		s.isRunning = false
-		s.mu.Unlock()
-	}()
+	// 确保在函数退出时释放锁
+	defer engine.ReleaseEngine()
 
 	settings, _, err := config.LoadSettings()
 	if err != nil {
@@ -293,29 +269,50 @@ func (s *EngineService) StartBackup() error {
 
 	// 初始化 Engine
 	ng := engine.NewEngine(assets, nil, settings, false)
-	ng.CustomSuspendHandler = s.wailsSuspendHandler()
+	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-	// 使用 WaitGroup 确保事件监听器在 Run() 之前准备好
-	var listenerReady sync.WaitGroup
-	listenerReady.Add(1)
+	// 使用 channel 确保事件监听器在 Run() 之前准备好
+	listenerReady := make(chan struct{})
 
 	// 桥接事件：监听 FrontendBus 转发给前端 Vue
 	go func() {
-		time.Sleep(50 * time.Millisecond) // 确保 Wails 事件系统准备好
-		listenerReady.Done()              // 通知监听器已准备好
+		// 等待 Wails 应用实例就绪
+		for i := 0; i < 100; i++ { // 最多等待 1 秒
+			if s.wailsApp != nil {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		// 通知已准备进入消费循环
+		close(listenerReady)
+		// 开始消费 FrontendBus
 		for ev := range ng.FrontendBus {
-			s.wailsApp.Event.Emit("device:event", ev)
+			if s.wailsApp != nil {
+				s.wailsApp.Event.Emit("device:event", ev)
+			}
 		}
 	}()
 
 	// 等待监听器准备好再开始执行
-	listenerReady.Wait()
+	<-listenerReady
+	// 额外等待确保 goroutine 已进入 for-range 循环
+	time.Sleep(10 * time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
+	// 保存 cancelFunc 以便 StopEngine 可以调用
+	s.cancelMu.Lock()
+	s.cancelFunc = cancel
+	s.cancelMu.Unlock()
 
 	// 开始执行备份任务
 	ng.RunBackup(ctx)
+
+	// 清理 cancelFunc
+	s.cancelMu.Lock()
+	s.cancelFunc = nil
+	s.cancelMu.Unlock()
+
 	// 确保所有事件都被处理完毕
 	time.Sleep(100 * time.Millisecond)
 

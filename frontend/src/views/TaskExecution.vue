@@ -93,6 +93,7 @@
               class="h-52 overflow-y-auto scrollbar-custom bg-terminal-bg p-3 font-mono text-xs leading-relaxed"
               :ref="el => setTerminalRef(dev.ip, el)"
             >
+              <div v-if="dev.truncated" class="text-warning text-xs mb-1">[日志已截断，显示最近 {{ dev.logs.length }} 条]</div>
               <div v-for="(log, idx) in dev.logs" :key="idx" class="whitespace-pre-wrap break-all mb-0.5" :class="logColor(log)">{{ log }}</div>
             </div>
           </div>
@@ -223,8 +224,9 @@
             <p class="text-xs text-text-muted">请选择如何处理该设备的挂起任务：</p>
           </div>
           <div class="flex gap-3 px-5 py-4 border-t border-border">
-            <button @click="resolveSuspend('S')" class="flex-1 py-2.5 text-sm font-medium rounded-lg bg-accent/20 border border-accent/40 text-accent hover:bg-accent hover:text-white transition-all duration-200">放弃此指令继续 (Skip)</button>
-            <button @click="resolveSuspend('A')" class="flex-1 py-2.5 text-sm font-medium rounded-lg bg-error/20 border border-error/40 text-error hover:bg-error hover:text-white transition-all duration-200">掐断设备连接 (Abort)</button>
+            <button @click="resolveSuspend('C')" class="flex-1 py-2.5 text-sm font-medium rounded-lg bg-success/20 border border-success/40 text-success hover:bg-success hover:text-white transition-all duration-200">继续下一条 (Continue)</button>
+            <button @click="resolveSuspend('S')" class="flex-1 py-2.5 text-sm font-medium rounded-lg bg-accent/20 border border-accent/40 text-accent hover:bg-accent hover:text-white transition-all duration-200">放弃此指令 (Skip)</button>
+            <button @click="resolveSuspend('A')" class="flex-1 py-2.5 text-sm font-medium rounded-lg bg-error/20 border border-error/40 text-error hover:bg-error hover:text-white transition-all duration-200">切断连接 (Abort)</button>
           </div>
         </div>
       </div>
@@ -269,14 +271,24 @@ import {
 } from '../services/api'
 import type { TaskGroup } from '../services/api'
 import { useEngineEvents } from '../composables/useEngineEvents'
+import type { DeviceEvent } from '../types/events'
 
 const router = useRouter()
 
-// 定义执行设备类型
+// ================== 日志配置常量 ==================
+const LOG_CONFIG = {
+  MAX_LOGS_PER_DEVICE: 500,      // 每设备最大日志条数
+  MAX_LOG_LENGTH: 2000,          // 单条日志最大字符数
+  WARNING_THRESHOLD: 400,        // 警告阈值
+}
+
+// 定义执行设备类型（增强版）
 interface ExecDevice {
   ip: string
   status: string
   logs: string[]
+  logCount: number      // 日志计数器
+  truncated: boolean    // 是否已截断标记
 }
 
 // 状态
@@ -297,7 +309,7 @@ const executionView = ref({
 })
 
 // Suspend弹窗
-const suspendModal = ref({ show: false, ip: '', content: '' })
+const suspendModal = ref({ show: false, sessionId: '', ip: '', content: '' })
 
 // 删除弹窗
 const deleteModal = ref({ show: false, taskId: '', taskName: '' })
@@ -366,6 +378,88 @@ async function loadTasks() {
   }
 }
 
+// ================== 日志管理函数 ==================
+
+/**
+ * 添加日志到设备（带上限控制）
+ */
+function addLog(dev: ExecDevice, message: string) {
+  // 截断过长日志
+  if (message.length > LOG_CONFIG.MAX_LOG_LENGTH) {
+    message = message.substring(0, LOG_CONFIG.MAX_LOG_LENGTH) + '...[截断]'
+  }
+
+  dev.logs.push(message)
+  dev.logCount++
+
+  // 超过阈值时截断
+  if (dev.logs.length > LOG_CONFIG.MAX_LOGS_PER_DEVICE) {
+    const removeCount = dev.logs.length - LOG_CONFIG.MAX_LOGS_PER_DEVICE + 50
+    dev.logs = dev.logs.slice(removeCount)
+    dev.truncated = true
+  }
+}
+
+/**
+ * 批量更新设备状态
+ * 用于处理批量事件，减少 Vue 更新次数
+ */
+function batchUpdateDevices(events: DeviceEvent[]) {
+  const updates = new Map<string, { logs: string[], status: string }>()
+
+  for (const data of events) {
+    let update = updates.get(data.IP)
+    if (!update) {
+      update = { logs: [], status: '' }
+      updates.set(data.IP, update)
+    }
+
+    if (data.Message) {
+      update.logs.push(data.Message)
+    }
+
+    // 状态更新逻辑
+    if (data.Type === 'start') update.status = 'running'
+    else if (data.Type === 'success' || data.Type === 'skip') update.status = 'success'
+    else if (data.Type === 'error' || data.Type === 'abort') update.status = 'error'
+  }
+
+  // 批量更新响应式状态（只触发一次 Vue 更新）
+  for (const [ip, update] of updates) {
+    const dev = execDevices.value.find(d => d.ip === ip)
+    if (dev) {
+      // 添加日志
+      for (const log of update.logs) {
+        addLog(dev, log)
+      }
+      // 更新状态
+      if (update.status) dev.status = update.status
+    }
+  }
+
+  // 单次滚动更新
+  nextTick(() => {
+    for (const ip of updates.keys()) {
+      const el = terminalRefs.get(ip)
+      if (el) el.scrollTop = el.scrollHeight
+    }
+  })
+
+  // 更新进度
+  updateProgress()
+}
+
+/**
+ * 更新进度百分比
+ */
+function updateProgress() {
+  const totalComplete = execDevices.value.reduce((acc, curr) =>
+    acc + (curr.status === 'success' || curr.status === 'error' ? 1 : 0), 0)
+  if (execDevices.value.length > 0) {
+    progressPercent.value = Math.min(95, Math.floor((totalComplete / execDevices.value.length) * 100))
+  }
+}
+
 // 执行任务
 async function executeTask(task: TaskGroup) {
   if (isRunning.value) return
@@ -416,9 +510,11 @@ function closeExecutionView() {
   loadTasks()
 }
 
-// Suspend 处理
-function resolveSuspend(action: 'S' | 'A') {
-  EngineAPI.resolveSuspend(suspendModal.value.ip, action)
+// Suspend 处理 - 支持 C/S/A 三种操作
+function resolveSuspend(action: 'C' | 'S' | 'A') {
+  // 优先使用 sessionId，如果没有则使用 ip
+  const identifier = suspendModal.value.sessionId || suspendModal.value.ip
+  EngineAPI.resolveSuspend(identifier, action)
   suspendModal.value.show = false
 }
 
@@ -499,40 +595,18 @@ function formatDate(dateStr: string) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
-// 使用事件监听 Composable
+// 使用事件监听 Composable - 使用批量事件处理优化性能
 useEngineEvents({
   onFinished: () => {
     isRunning.value = false
     progressPercent.value = 100
     setTimeout(() => loadTasks(), 500)
   },
-  onDeviceEvent: (data: any) => {
-    if (!executionView.value.active) return
-    let dev = execDevices.value.find(d => d.ip === data.IP)
-    if (!dev) {
-      dev = { ip: data.IP, status: 'waiting', logs: [] }
-      execDevices.value.push(dev)
-    }
-    if (data.Message) {
-      dev.logs.push(data.Message)
-      nextTick(() => {
-        const el = terminalRefs.get(dev.ip)
-        if (el) el.scrollTop = el.scrollHeight
-      })
-    }
-    if (data.Type === 'start') dev.status = 'running'
-    else if ((data.Type === 'success' || data.Type === 'skip') && dev.status !== 'error') dev.status = 'success'
-    else if (data.Type === 'error' || data.Type === 'abort') dev.status = 'error'
-
-    const totalComplete = execDevices.value.reduce((acc, curr) =>
-      acc + (curr.status === 'success' || curr.status === 'error' ? 1 : 0), 0)
-    if (execDevices.value.length > 0) {
-      progressPercent.value = Math.min(95, Math.floor((totalComplete / execDevices.value.length) * 100))
-    }
-  },
+  onBatchDeviceEvents: batchUpdateDevices,
   onSuspend: (data) => {
     suspendModal.value = {
       show: true,
+      sessionId: data.sessionId || '',
       ip: data.ip,
       content: `设备: ${data.ip}\n命令: ${data.command}\n\n错误详情:\n${data.error}`,
     }
