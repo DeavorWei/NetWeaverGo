@@ -106,6 +106,16 @@ func (m *SuspendManager) CreateHandler() executor.SuspendHandler {
 		case <-time.After(5 * time.Minute):
 			// 设置超时标记，防止前端后续响应
 			session.timedOut.Store(true)
+
+			// 发射超时事件到前端，让前端关闭弹窗
+			if app != nil {
+				app.Event.Emit("engine:suspend_timeout", map[string]interface{}{
+					"sessionId": sessionID,
+					"ip":        ip,
+					"message":   "挂起超时（5分钟），已自动终止设备连接",
+				})
+			}
+
 			logger.Warn("SuspendManager", ip, "挂起超时（5分钟），自动 Abort")
 			return executor.ActionAbort
 		}

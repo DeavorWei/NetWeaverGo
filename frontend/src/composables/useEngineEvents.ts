@@ -1,6 +1,6 @@
 import { Events } from '@wailsio/runtime'
 import { onMounted, onUnmounted } from 'vue'
-import type { DeviceEvent, SuspendRequiredEvent, EngineFinishedEvent, EventName } from '../types/events'
+import type { DeviceEvent, SuspendRequiredEvent, SuspendTimeoutEvent, EngineFinishedEvent, EventName } from '../types/events'
 import { EventNames } from '../types/events'
 
 /** 事件回调接口 */
@@ -13,6 +13,8 @@ export interface EngineEventCallbacks {
   onBatchDeviceEvents?: (events: DeviceEvent[]) => void
   /** 挂起请求回调 */
   onSuspend?: (data: SuspendRequiredEvent) => void
+  /** 挂起超时回调 */
+  onSuspendTimeout?: (data: SuspendTimeoutEvent) => void
 }
 
 /** 事件监听器清理函数 */
@@ -184,6 +186,13 @@ export function useEngineEvents(callbacks: EngineEventCallbacks) {
     if (callbacks.onSuspend) {
       safeSubscribe<SuspendRequiredEvent>(EventNames.SUSPEND_REQUIRED, (data) => {
         callbacks.onSuspend!(data)
+      })
+    }
+
+    // 订阅挂起超时
+    if (callbacks.onSuspendTimeout) {
+      safeSubscribe<SuspendTimeoutEvent>(EventNames.SUSPEND_TIMEOUT, (data) => {
+        callbacks.onSuspendTimeout!(data)
       })
     }
   })

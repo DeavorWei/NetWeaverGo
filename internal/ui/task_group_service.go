@@ -162,8 +162,16 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 				ng := engine.NewEngine(allSelectedAssets, allCommands, settings, false)
 				ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-				// 使用 channel 确保事件监听器在 Run() 之前准备好
-				listenerReady := make(chan struct{})
+				// 使用双重同步机制确保事件监听器完全就绪
+				type eventListenerState struct {
+					ready  chan struct{} // Wails App 就绪
+					active chan struct{} // 事件循环已进入
+				}
+
+				listenerState := &eventListenerState{
+					ready:  make(chan struct{}),
+					active: make(chan struct{}),
+				}
 
 				// 监听 FrontendBus
 				go func() {
@@ -174,8 +182,12 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 						}
 						time.Sleep(10 * time.Millisecond)
 					}
-					// 通知已准备进入消费循环
-					close(listenerReady)
+					// 通知 App 已就绪
+					close(listenerState.ready)
+
+					// 进入事件循环前，等待启动信号
+					<-listenerState.active
+
 					// 开始消费 FrontendBus
 					for ev := range ng.FrontendBus {
 						if s.wailsApp != nil {
@@ -184,10 +196,14 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 					}
 				}()
 
-				// 等待监听器准备好
-				<-listenerReady
-				// 额外等待确保 goroutine 已进入 for-range 循环
-				time.Sleep(10 * time.Millisecond)
+				// 等待 Wails App 就绪
+				<-listenerState.ready
+
+				// 发送启动信号，让事件循环开始
+				close(listenerState.active)
+
+				// 确保事件循环已真正进入（短暂等待 select 生效）
+				time.Sleep(5 * time.Millisecond)
 
 				ng.Run(rootCtx)
 			}()
@@ -231,8 +247,16 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 				ng := engine.NewEngine(allSelectedAssets, allCommands, settings, false)
 				ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-				// 使用 channel 确保事件监听器在 Run() 之前准备好
-				listenerReady := make(chan struct{})
+				// 使用双重同步机制确保事件监听器完全就绪
+				type eventListenerState struct {
+					ready  chan struct{} // Wails App 就绪
+					active chan struct{} // 事件循环已进入
+				}
+
+				listenerState := &eventListenerState{
+					ready:  make(chan struct{}),
+					active: make(chan struct{}),
+				}
 
 				// 监听 FrontendBus
 				go func() {
@@ -243,8 +267,12 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 						}
 						time.Sleep(10 * time.Millisecond)
 					}
-					// 通知已准备进入消费循环
-					close(listenerReady)
+					// 通知 App 已就绪
+					close(listenerState.ready)
+
+					// 进入事件循环前，等待启动信号
+					<-listenerState.active
+
 					// 开始消费 FrontendBus
 					for ev := range ng.FrontendBus {
 						if s.wailsApp != nil {
@@ -253,10 +281,14 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 					}
 				}()
 
-				// 等待监听器准备好
-				<-listenerReady
-				// 额外等待确保 goroutine 已进入 for-range 循环
-				time.Sleep(10 * time.Millisecond)
+				// 等待 Wails App 就绪
+				<-listenerState.ready
+
+				// 发送启动信号，让事件循环开始
+				close(listenerState.active)
+
+				// 确保事件循环已真正进入（短暂等待 select 生效）
+				time.Sleep(5 * time.Millisecond)
 
 				ng.Run(rootCtx)
 			}()

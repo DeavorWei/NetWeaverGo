@@ -610,6 +610,14 @@ useEngineEvents({
       ip: data.ip,
       content: `设备: ${data.ip}\n命令: ${data.command}\n\n错误详情:\n${data.error}`,
     }
+  },
+  onSuspendTimeout: (data) => {
+    // 关闭挂起弹窗（如果匹配当前显示的设备）
+    if (suspendModal.value.ip === data.ip || suspendModal.value.sessionId === data.sessionId) {
+      suspendModal.value.show = false
+    }
+    // 显示超时提示
+    triggerToast(`设备 ${data.ip} 挂起超时，已自动终止`, 'error')
   }
 })
 

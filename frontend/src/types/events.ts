@@ -35,6 +35,16 @@ export interface SuspendRequiredEvent {
 /** 引擎完成事件（无数据载荷） */
 export type EngineFinishedEvent = void
 
+/** 挂起超时事件 */
+export interface SuspendTimeoutEvent {
+  /** 会话 ID */
+  sessionId: string
+  /** 设备 IP */
+  ip: string
+  /** 超时消息 */
+  message: string
+}
+
 /** 事件名称常量 */
 export const EventNames = {
   /** 引擎执行完成 */
@@ -43,6 +53,8 @@ export const EventNames = {
   DEVICE_EVENT: 'device:event',
   /** 挂起请求 */
   SUSPEND_REQUIRED: 'engine:suspend_required',
+  /** 挂起超时 */
+  SUSPEND_TIMEOUT: 'engine:suspend_timeout',
 } as const
 
 /** 事件名称类型 */

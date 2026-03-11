@@ -92,8 +92,16 @@ func (s *EngineService) StartEngine() error {
 	ng := engine.NewEngine(assets, commands, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-	// 使用 channel 确保事件监听器在 Run() 之前准备好
-	listenerReady := make(chan struct{})
+	// 使用双重同步机制确保事件监听器完全就绪
+	type eventListenerState struct {
+		ready  chan struct{} // Wails App 就绪
+		active chan struct{} // 事件循环已进入
+	}
+
+	listenerState := &eventListenerState{
+		ready:  make(chan struct{}),
+		active: make(chan struct{}),
+	}
 
 	// 桥接事件：监听 FrontendBus 转发给前端 Vue
 	go func() {
@@ -104,8 +112,12 @@ func (s *EngineService) StartEngine() error {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		// 通知已准备进入消费循环
-		close(listenerReady)
+		// 通知 App 已就绪
+		close(listenerState.ready)
+
+		// 进入事件循环前，等待启动信号
+		<-listenerState.active
+
 		// 开始消费 FrontendBus
 		for ev := range ng.FrontendBus {
 			if s.wailsApp != nil {
@@ -114,10 +126,14 @@ func (s *EngineService) StartEngine() error {
 		}
 	}()
 
-	// 等待监听器准备好再开始执行
-	<-listenerReady
-	// 额外等待确保 goroutine 已进入 for-range 循环
-	time.Sleep(10 * time.Millisecond)
+	// 等待 Wails App 就绪
+	<-listenerState.ready
+
+	// 发送启动信号，让事件循环开始
+	close(listenerState.active)
+
+	// 确保事件循环已真正进入（短暂等待 select 生效）
+	time.Sleep(5 * time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -193,8 +209,16 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 	ng := engine.NewEngine(selectedAssets, group.Commands, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-	// 使用 channel 确保事件监听器在 Run() 之前准备好
-	listenerReady := make(chan struct{})
+	// 使用双重同步机制确保事件监听器完全就绪
+	type eventListenerState struct {
+		ready  chan struct{} // Wails App 就绪
+		active chan struct{} // 事件循环已进入
+	}
+
+	listenerState := &eventListenerState{
+		ready:  make(chan struct{}),
+		active: make(chan struct{}),
+	}
 
 	// 桥接事件：监听 FrontendBus 转发给前端 Vue
 	go func() {
@@ -205,8 +229,12 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		// 通知已准备进入消费循环
-		close(listenerReady)
+		// 通知 App 已就绪
+		close(listenerState.ready)
+
+		// 进入事件循环前，等待启动信号
+		<-listenerState.active
+
 		// 开始消费 FrontendBus
 		for ev := range ng.FrontendBus {
 			if s.wailsApp != nil {
@@ -215,10 +243,14 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 		}
 	}()
 
-	// 等待监听器准备好再开始执行
-	<-listenerReady
-	// 额外等待确保 goroutine 已进入 for-range 循环
-	time.Sleep(10 * time.Millisecond)
+	// 等待 Wails App 就绪
+	<-listenerState.ready
+
+	// 发送启动信号，让事件循环开始
+	close(listenerState.active)
+
+	// 确保事件循环已真正进入（短暂等待 select 生效）
+	time.Sleep(5 * time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -271,8 +303,16 @@ func (s *EngineService) StartBackup() error {
 	ng := engine.NewEngine(assets, nil, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-	// 使用 channel 确保事件监听器在 Run() 之前准备好
-	listenerReady := make(chan struct{})
+	// 使用双重同步机制确保事件监听器完全就绪
+	type eventListenerState struct {
+		ready  chan struct{} // Wails App 就绪
+		active chan struct{} // 事件循环已进入
+	}
+
+	listenerState := &eventListenerState{
+		ready:  make(chan struct{}),
+		active: make(chan struct{}),
+	}
 
 	// 桥接事件：监听 FrontendBus 转发给前端 Vue
 	go func() {
@@ -283,8 +323,12 @@ func (s *EngineService) StartBackup() error {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		// 通知已准备进入消费循环
-		close(listenerReady)
+		// 通知 App 已就绪
+		close(listenerState.ready)
+
+		// 进入事件循环前，等待启动信号
+		<-listenerState.active
+
 		// 开始消费 FrontendBus
 		for ev := range ng.FrontendBus {
 			if s.wailsApp != nil {
@@ -293,10 +337,14 @@ func (s *EngineService) StartBackup() error {
 		}
 	}()
 
-	// 等待监听器准备好再开始执行
-	<-listenerReady
-	// 额外等待确保 goroutine 已进入 for-range 循环
-	time.Sleep(10 * time.Millisecond)
+	// 等待 Wails App 就绪
+	<-listenerState.ready
+
+	// 发送启动信号，让事件循环开始
+	close(listenerState.active)
+
+	// 确保事件循环已真正进入（短暂等待 select 生效）
+	time.Sleep(5 * time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
