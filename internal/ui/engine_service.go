@@ -94,13 +94,15 @@ func (s *EngineService) StartEngine() error {
 
 	// 使用双重同步机制确保事件监听器完全就绪
 	type eventListenerState struct {
-		ready  chan struct{} // Wails App 就绪
-		active chan struct{} // 事件循环已进入
+		ready     chan struct{} // Wails App 就绪
+		active    chan struct{} // 事件循环确认启动
+		listening chan struct{} // 确保进入读取循环
 	}
 
 	listenerState := &eventListenerState{
-		ready:  make(chan struct{}),
-		active: make(chan struct{}),
+		ready:     make(chan struct{}),
+		active:    make(chan struct{}),
+		listening: make(chan struct{}),
 	}
 
 	// 桥接事件：监听 FrontendBus 转发给前端 Vue
@@ -117,6 +119,8 @@ func (s *EngineService) StartEngine() error {
 
 		// 进入事件循环前，等待启动信号
 		<-listenerState.active
+		
+		close(listenerState.listening)
 
 		// 开始消费 FrontendBus
 		for ev := range ng.FrontendBus {
@@ -132,8 +136,8 @@ func (s *EngineService) StartEngine() error {
 	// 发送启动信号，让事件循环开始
 	close(listenerState.active)
 
-	// 确保事件循环已真正进入（短暂等待 select 生效）
-	time.Sleep(5 * time.Millisecond)
+	// 精确阻塞等待确切就绪完毕
+	<-listenerState.listening
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -211,13 +215,15 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 
 	// 使用双重同步机制确保事件监听器完全就绪
 	type eventListenerState struct {
-		ready  chan struct{} // Wails App 就绪
-		active chan struct{} // 事件循环已进入
+		ready     chan struct{} // Wails App 就绪
+		active    chan struct{} // 事件循环确认启动
+		listening chan struct{} // 确保进入读取循环
 	}
 
 	listenerState := &eventListenerState{
-		ready:  make(chan struct{}),
-		active: make(chan struct{}),
+		ready:     make(chan struct{}),
+		active:    make(chan struct{}),
+		listening: make(chan struct{}),
 	}
 
 	// 桥接事件：监听 FrontendBus 转发给前端 Vue
@@ -234,6 +240,7 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 
 		// 进入事件循环前，等待启动信号
 		<-listenerState.active
+		close(listenerState.listening)
 
 		// 开始消费 FrontendBus
 		for ev := range ng.FrontendBus {
@@ -249,8 +256,8 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 	// 发送启动信号，让事件循环开始
 	close(listenerState.active)
 
-	// 确保事件循环已真正进入（短暂等待 select 生效）
-	time.Sleep(5 * time.Millisecond)
+	// 精确阻塞等待确切就绪完毕
+	<-listenerState.listening
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -305,13 +312,15 @@ func (s *EngineService) StartBackup() error {
 
 	// 使用双重同步机制确保事件监听器完全就绪
 	type eventListenerState struct {
-		ready  chan struct{} // Wails App 就绪
-		active chan struct{} // 事件循环已进入
+		ready     chan struct{} // Wails App 就绪
+		active    chan struct{} // 事件循环确认启动
+		listening chan struct{} // 确保进入读取循环
 	}
 
 	listenerState := &eventListenerState{
-		ready:  make(chan struct{}),
-		active: make(chan struct{}),
+		ready:     make(chan struct{}),
+		active:    make(chan struct{}),
+		listening: make(chan struct{}),
 	}
 
 	// 桥接事件：监听 FrontendBus 转发给前端 Vue
@@ -328,6 +337,7 @@ func (s *EngineService) StartBackup() error {
 
 		// 进入事件循环前，等待启动信号
 		<-listenerState.active
+		close(listenerState.listening)
 
 		// 开始消费 FrontendBus
 		for ev := range ng.FrontendBus {
@@ -343,8 +353,8 @@ func (s *EngineService) StartBackup() error {
 	// 发送启动信号，让事件循环开始
 	close(listenerState.active)
 
-	// 确保事件循环已真正进入（短暂等待 select 生效）
-	time.Sleep(5 * time.Millisecond)
+	// 精确阻塞等待确切就绪完毕
+	<-listenerState.listening
 
 	ctx, cancel := context.WithCancel(context.Background())
 

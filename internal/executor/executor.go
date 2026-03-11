@@ -25,7 +25,7 @@ const (
 
 // SuspendHandler 定义一个回调函数，当 Executor 遇到错误时，将其抛弃给主线程引擎询问用户决策
 // 引擎会阻塞在此，直到用户通过命令行或其他界面选定动作后返回，从而只影响该设备的 Goroutine 局部挂起
-type SuspendHandler func(ip string, deviceLog string, failedCmd string) ErrorAction
+type SuspendHandler func(ctx context.Context, ip string, deviceLog string, failedCmd string) ErrorAction
 
 // DeviceExecutor 封装特定设备的 SSH 数据流及命令步进下发生命周期
 type DeviceExecutor struct {
@@ -201,7 +201,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 			}
 
 			// 汇报给拦截器
-			action := e.OnSuspend(e.IP, "Timeout Error: No prompt received within 30 seconds", failedCmd)
+			action := e.OnSuspend(ctx, e.IP, "Timeout Error: No prompt received within 30 seconds", failedCmd)
 			switch action {
 			case ActionAbort:
 				if e.EventBus != nil {
@@ -272,7 +272,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 							}
 
 							// 触发外部回调执行暂停，将由外部引擎的通道控制该函数返回，形成单设备挂起效果
-							action := e.OnSuspend(e.IP, line, failedCmd)
+							action := e.OnSuspend(ctx, e.IP, line, failedCmd)
 							switch action {
 							case ActionAbort:
 								if e.EventBus != nil {

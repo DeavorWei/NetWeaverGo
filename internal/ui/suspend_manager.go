@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -50,7 +51,7 @@ func (m *SuspendManager) SetWailsApp(app *application.App) {
 
 // CreateHandler 创建 SuspendHandler（供 Engine/TaskGroupService 使用）
 func (m *SuspendManager) CreateHandler() executor.SuspendHandler {
-	return func(ip string, logLine string, cmd string) executor.ErrorAction {
+	return func(ctx context.Context, ip string, logLine string, cmd string) executor.ErrorAction {
 		sessionID := m.generateSessionID()
 		actionCh := make(chan executor.ErrorAction, 1)
 
@@ -103,6 +104,9 @@ func (m *SuspendManager) CreateHandler() executor.SuspendHandler {
 		case action := <-actionCh:
 			logger.Debug("SuspendManager", ip, "挂起会话 %s 已收到用户响应", sessionID)
 			return action
+		case <-ctx.Done():
+			logger.Warn("SuspendManager", ip, "引擎任务结束，强制释放挂起的会话 (sessionID: %s)", sessionID)
+			return executor.ActionAbort
 		case <-time.After(5 * time.Minute):
 			// 设置超时标记，防止前端后续响应
 			session.timedOut.Store(true)

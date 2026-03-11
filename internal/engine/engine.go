@@ -542,7 +542,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 
 	// 备份模块不初始化 ProgressTracker，因此 EventBus 必须设为 nil 以避免死锁。
 	// 修正：如果外部注入了 EventBus，则使用它。
-	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, e.EventBus, func(ip, log, cmd string) executor.ErrorAction {
+	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, e.EventBus, func(ctx context.Context, ip, log, cmd string) executor.ErrorAction {
 		return executor.ActionContinue
 	})
 	defer exec.Close()
@@ -673,7 +673,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 
 // handleSuspend 被传递到每一个 `executor`，一旦匹配到 error 正则则回调该函数，挂起当前设备的 Goroutine。
 // 使用 `promptMu` 互斥锁包围控制台的 STDIN 输入，保证多个设备同时发生 error 时，命令行不会争抢标准输入光标。
-func (e *Engine) handleSuspend(ip string, logLine string, cmd string) executor.ErrorAction {
+func (e *Engine) handleSuspend(ctx context.Context, ip string, logLine string, cmd string) executor.ErrorAction {
 	// 记录到应用日志中
 	logger.Warn("Engine", ip, "==================== [异常设备挂起干预] ====================")
 	logger.Warn("Engine", ip, "=> 触发指令: %s", cmd)
