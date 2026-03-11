@@ -63,18 +63,7 @@ func MigrateLegacyDataIfNeeded() {
 		}
 	}
 
-	// 2. 迁移全局设置
-	if _, err := os.Stat(settingsFile); err == nil {
-		DB.Model(&GlobalSettings{}).Count(&count)
-		if count == 0 {
-			if st, isNew, err := LoadSettingsFromFile(); err == nil && !isNew {
-				st.ID = 1
-				DB.Create(st)
-				logger.Info("Config", "-", "成功迁移全局设置到数据库")
-			}
-			os.Rename(settingsFile, settingsFile+".bak")
-		}
-	}
+	// 2. [已移除] 迁移全局设置（因配置文件已被彻底删除不依赖）
 
 	// 3. 迁移命令组
 	cwd, _ := os.Getwd()

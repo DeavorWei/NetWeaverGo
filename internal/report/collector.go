@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
-	"github.com/gosuri/uilive"
 )
 
 // DeviceSummary 存储单台设备的最终汇总信息
@@ -27,7 +26,6 @@ type DeviceSummary struct {
 // ProgressTracker 终端进度盘面板与报告收集器
 type ProgressTracker struct {
 	EventBus chan ExecutorEvent
-	writer   *uilive.Writer
 
 	mu       sync.Mutex
 	status   map[string]*DeviceSummary // 用于大盘展示各设备状态
@@ -37,11 +35,8 @@ type ProgressTracker struct {
 }
 
 func NewProgressTracker(totalDevices int) *ProgressTracker {
-	writer := uilive.New()
-
 	return &ProgressTracker{
 		EventBus: make(chan ExecutorEvent, 1000), // 留足缓冲
-		writer:   writer,
 		status:   make(map[string]*DeviceSummary),
 		total:    totalDevices,
 	}
@@ -49,9 +44,6 @@ func NewProgressTracker(totalDevices int) *ProgressTracker {
 
 // Listen 开始持续监听总线的事件并刷新屏幕
 func (p *ProgressTracker) Listen(ctx context.Context) {
-	ticker := time.NewTicker(200 * time.Millisecond) // 每秒刷新5次
-	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -64,13 +56,6 @@ func (p *ProgressTracker) Listen(ctx context.Context) {
 				return
 			}
 			p.handleEvent(evt)
-		case <-ticker.C:
-			p.mu.Lock()
-			isPaused := p.paused
-			p.mu.Unlock()
-			if !isPaused {
-				p.renderDisplay()
-			}
 		}
 	}
 }
@@ -91,7 +76,6 @@ func (p *ProgressTracker) CollectEvent(evt ExecutorEvent) {
 func (p *ProgressTracker) Resume() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.writer = uilive.New() // 重新生成 writer，让下一次排版行数清零，在底部新开画板！
 	p.paused = false
 }
 
@@ -117,18 +101,22 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 	case EventDeviceStart:
 		summary.Status = "Running"
 		summary.TotalCmds = evt.TotalCmd
+		logger.Info("Report", evt.IP, "开始执行设备任务，总命令数: %d", evt.TotalCmd)
 	case EventDeviceCmd:
 		summary.Status = "Running"
 		summary.ExecCmds = evt.CmdIndex
 		summary.ErrorMsg = evt.Message // 借用记录当前命令
+		logger.Info("Report", evt.IP, "正在执行: %s [%d/%d]", summary.ErrorMsg, summary.ExecCmds, summary.TotalCmds)
 	case EventDeviceSuccess:
 		summary.Status = "Success"
 		summary.ExecCmds = summary.TotalCmds
 		summary.ErrorMsg = "ALL Done"
 		p.finished++
+		logger.Info("Report", evt.IP, "设备任务执行成功")
 	case EventDeviceError:
 		summary.Status = "Error"
 		summary.ErrorMsg = evt.Message
+		logger.Error("Report", evt.IP, "设备任务执行出错: %s", evt.Message)
 		// 注意：Error 不是终态事件——后续引擎会根据用户或策略选择发出 Abort 或 Skip。
 		// 仅 Abort 和 Success 为终态，p.finished++ 统一在各自分支处理。
 		// 边界情况：如果 SSH 流关闭导致 ExecutePlaybook 直接返回 nil（未发 Abort），
@@ -137,41 +125,31 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 	case EventDeviceSkip:
 		summary.Status = "Warning"
 		summary.ErrorMsg = "Skip: " + evt.Message
+		logger.Info("Report", evt.IP, "跳过节点: %s", evt.Message)
 	case EventDeviceAbort:
 		summary.Status = "Aborted"
 		summary.ErrorMsg = "Aborted: " + evt.Message
 		p.finished++
+		logger.Error("Report", evt.IP, "设备任务被终止: %s", evt.Message)
 	}
 }
 
-// renderDisplay 清屏重绘当前的活动设备列表大盘
+// renderDisplay 简单的静态打印大盘（不再清屏）
 func (p *ProgressTracker) renderDisplay() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	var buf strings.Builder
-	// 取消前后的 \n，防止终端自动滚动导致 uilive 的往上回退产生错位（即“残留的悬崖”）
-	fmt.Fprintf(&buf, "\r[ NetWeaverGo ] 进度大盘: 完成 [%d/%d]\n", p.finished, p.total)
-	fmt.Fprintf(&buf, "--------------------------------------------------------")
+	logger.Info("Report", "-", "=== 终端汇总大盘: 完成 [%d/%d] ===", p.finished, p.total)
 
-	// 抽出所有 IP 以稳定行序展现
 	var ips []string
 	for ip := range p.status {
 		ips = append(ips, ip)
 	}
 	sort.Strings(ips)
 
-	// 最多显示最活跃的15台设备以防止终端过长
-	displayCount := 0
 	for _, ip := range ips {
 		s := p.status[ip]
-		if displayCount >= 15 && s.Status != "Running" && s.Status != "Error" && s.Status != "Init" {
-			continue // 隐藏成功并且排在后面的条目
-		}
-
-		// 进度条渲染 -> [██████░░░░]
 		bar := renderProgressBar(s.ExecCmds, s.TotalCmds)
-
 		statusColor := s.Status
 		if s.Status == "Success" {
 			statusColor = "√ Success"
@@ -179,34 +157,14 @@ func (p *ProgressTracker) renderDisplay() {
 			statusColor = "x " + s.Status
 		}
 
-		// 严格控制 dispMsg 长度，防止在此行发生终端换行（Wrap）导致被动滚动
 		dispMsg := strings.ReplaceAll(s.ErrorMsg, "\r", "")
 		dispMsg = strings.ReplaceAll(dispMsg, "\n", " ")
-		dispMsg = truncateDisplayString(dispMsg, 20) // 给20列的最大宽度，前缀大约占用55列，总计不超过80列
+		dispMsg = truncateDisplayString(dispMsg, 40)
 
-		// 保证此行的物理字符宽度 < 80 列
-		fmt.Fprintf(&buf, "\n > %-15s [%s] %d/%d | %-9s | %s",
+		logger.Info("Report", "-", " > %-15s [%s] %d/%d | %-9s | %s",
 			ip, bar, s.ExecCmds, s.TotalCmds, statusColor, dispMsg)
-
-		displayCount++
 	}
-
-	// 核心修复：恒定高度占位符！
-	// 动态增加的大盘会引起终端卷动，从而导致 uilive 的向上清屏发生错位。
-	// 这里预先输出足够多的空行，在一开始就把终端空间占住，使得渲染高度永远是恒定的。
-	targetHeight := p.total
-	if targetHeight > 15 {
-		targetHeight = 15
-	}
-	for displayCount < targetHeight {
-		fmt.Fprintf(&buf, "\n")
-		displayCount++
-	}
-
-	fmt.Fprintf(&buf, "\n--------------------------------------------------------")
-
-	p.writer.Write([]byte(buf.String()))
-	p.writer.Flush()
+	logger.Info("Report", "-", "========================================")
 }
 
 func (p *ProgressTracker) renderFinal() {
