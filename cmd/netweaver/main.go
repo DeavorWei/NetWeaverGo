@@ -42,6 +42,13 @@ func main() {
 		logger.EnableDebug = true
 	}
 
+	// 启动数据库并进行数据迁移校验
+	if err := config.InitDB(); err != nil {
+		logger.Error("System", "-", "数据库初始化失败: %v", err)
+		os.Exit(1)
+	}
+	config.MigrateLegacyDataIfNeeded()
+
 	if *isCLI || *isBackup || *nonInteractive {
 		runCLI(*isBackup, *nonInteractive)
 	} else {
@@ -50,6 +57,10 @@ func main() {
 }
 
 func runGUI() {
+	if err := config.InitDB(); err != nil {
+		fmt.Printf("数据库初始化失败: %v\n", err)
+		os.Exit(1)
+	}
 	logger.Info("System", "-", "正在初始化 Wails GUI 环境...")
 
 	// 创建各独立服务实例
@@ -116,6 +127,11 @@ func runGUI() {
 }
 
 func runCLI(isBackup bool, nonInteractive bool) {
+	if err := config.InitDB(); err != nil {
+		fmt.Printf("[配置/环境提示] 数据库初始化失败: %v\n", err)
+		os.Exit(1)
+	}
+
 	settings, isNewSettings, err := config.LoadSettings()
 	if err != nil {
 		fmt.Printf("[配置/环境提示] %v\n", err)

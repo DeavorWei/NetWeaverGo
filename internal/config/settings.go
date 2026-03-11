@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+	"gorm.io/gorm"
 )
 
 // GlobalSettings 全局运行参数
 type GlobalSettings struct {
+	ID             uint   `json:"id" gorm:"primaryKey"`
 	MaxWorkers     int    `json:"maxWorkers" yaml:"max_workers"`         // 并发数 (当前硬编码为 32)
 	ConnectTimeout string `json:"connectTimeout" yaml:"connect_timeout"` // SSH/SFTP 连接超时 (如 "10s")
 	CommandTimeout string `json:"commandTimeout" yaml:"command_timeout"` // 单条命令默认超时 (如 "30s")
@@ -37,8 +39,29 @@ func DefaultSettings() GlobalSettings {
 	}
 }
 
-// LoadSettings 读取并解析 settings.yaml，如果不存在则创建默认模板
+// LoadSettings 从数据库读取设置，如果不存在则自动创建默认模板
 func LoadSettings() (*GlobalSettings, bool, error) {
+	if DB == nil {
+		return nil, false, fmt.Errorf("数据库未初始化")
+	}
+
+	var st GlobalSettings
+	err := DB.First(&st, 1).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			st = DefaultSettings()
+			st.ID = 1
+			DB.Create(&st)
+			return &st, true, nil
+		}
+		return nil, false, err
+	}
+
+	return &st, false, nil
+}
+
+// LoadSettingsFromFile 从文件读取设置（用于数据迁移）
+func LoadSettingsFromFile() (*GlobalSettings, bool, error) {
 	root := rootConfig{Settings: DefaultSettings()}
 	isNew := false
 
@@ -54,34 +77,16 @@ func LoadSettings() (*GlobalSettings, bool, error) {
 			return nil, isNew, fmt.Errorf("解析配置文件 %s 失败: %v", settingsFile, err)
 		}
 	}
-
-	// 在解析完成后，将取到的值应用回去
 	return &root.Settings, isNew, nil
 }
 
-// SaveSettings 保存全局设置到 settings.yaml 文件
+// SaveSettings 保存全局设置到数据库
 func SaveSettings(settings GlobalSettings) error {
-	cwd, _ := os.Getwd()
-	path := filepath.Join(cwd, settingsFile)
-
-	root := rootConfig{Settings: settings}
-	content, err := yaml.Marshal(root)
-	if err != nil {
-		return fmt.Errorf("序列化配置失败: %v", err)
+	if DB == nil {
+		return fmt.Errorf("数据库未初始化")
 	}
-
-	// 添加文件头注释
-	header := []byte(`# NetWeaverGo 全局运行参数配置
-
-`)
-	fullContent := append(header, content...)
-
-	err = os.WriteFile(path, fullContent, 0666)
-	if err != nil {
-		return fmt.Errorf("写入配置文件失败: %v", err)
-	}
-
-	return nil
+	settings.ID = 1
+	return DB.Save(&settings).Error
 }
 
 // generateSettingsTemplate 生成默认的全局运行参数模板文件

@@ -9,17 +9,19 @@ import (
 	"strings"
 
 	"github.com/NetWeaverGo/core/internal/logger"
+	"gorm.io/gorm"
 )
 
 // DeviceAsset 表示单台交换机的连接凭证信息
 type DeviceAsset struct {
-	IP       string   `json:"ip"`
+	ID       uint     `json:"id" gorm:"primaryKey"`
+	IP       string   `json:"ip" gorm:"uniqueIndex;not null"`
 	Port     int      `json:"port"`
 	Protocol string   `json:"protocol"` // 连接协议：SSH/SNMP/TELNET
 	Username string   `json:"username"`
 	Password string   `json:"password"`
-	Group    string   `json:"group"` // 设备分组
-	Tags     []string `json:"tags"`  // 设备标签列表
+	Group    string   `json:"group" gorm:"column:group_name"` // 设备分组
+	Tags     []string `json:"tags" gorm:"serializer:json"`  // 设备标签列表
 }
 
 // 协议默认端口映射
@@ -37,52 +39,27 @@ const (
 	configFile    = "config.txt"
 )
 
-// ParseOrGenerate 尝试读取当前目录下的配置文件，若不存在则生成模板
+// ParseOrGenerate 尝试获取数据库内的设备和默认命令
 func ParseOrGenerate(isBackup bool) ([]DeviceAsset, []string, []string, []string, error) {
-	logger.Debug("Config", "-", "开始解析或生成配置文件 (isBackup=%v)", isBackup)
+	logger.Debug("Config", "-", "开始从数据库获取设备和默认命令")
 	var devices []DeviceAsset
+	if DB != nil {
+		DB.Find(&devices)
+	}
+
 	var commands []string
-	var missingFiles []string
-
-	if _, err := os.Stat(inventoryFile); os.IsNotExist(err) {
-		generateInventoryTemplate()
-		missingFiles = append(missingFiles, inventoryFile)
-	} else {
-		devs, err := readInventory()
-		if err != nil {
-			logger.Debug("Config", "-", "读取资产文件 %s 失败: %v", inventoryFile, err)
-			return nil, nil, nil, nil, fmt.Errorf("读取资产文件 %s 失败: %v", inventoryFile, err)
+	if DB != nil {
+		var defaultGroup CommandGroup
+		if err := DB.Where("name = ?", "默认命令组").First(&defaultGroup).Error; err == nil {
+			commands = defaultGroup.Commands
 		}
-		logger.Debug("Config", "-", "成功读取资产文件，共 %d 台设备", len(devs))
-		devices = devs
 	}
 
-	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		generateConfigTemplate()
-		missingFiles = append(missingFiles, configFile)
-	} else {
-		cmds, err := readCommands()
-		if err != nil {
-			logger.Debug("Config", "-", "读取命令文件 %s 失败: %v", configFile, err)
-			// 在备份模式下，即使没有命令也不报错
-			if !isBackup {
-				return nil, nil, nil, nil, fmt.Errorf("读取命令文件 %s 失败: %v", configFile, err)
-			}
-		} else {
-			logger.Debug("Config", "-", "成功读取命令文件，共 %d 条命令", len(cmds))
-		}
-		commands = cmds
-	}
-
-	// if len(missingFiles) > 0 {
-	// 	return nil, nil, fmt.Errorf("已在当前目录生成模板文件: %s，请填写内容后重新运行程序", strings.Join(missingFiles, ", "))
-	// }
-
-	return devices, commands, nil, missingFiles, nil
+	return devices, commands, nil, nil, nil
 }
 
-// readInventory 读取并解析资产清单文件
-func readInventory() ([]DeviceAsset, error) {
+// readInventoryLegacy 读取并解析旧版资产清单文件
+func readInventoryLegacy() ([]DeviceAsset, error) {
 	logger.DebugAll("Config", "-", "尝试打开文件: %s", inventoryFile)
 	file, err := os.Open(inventoryFile)
 	if err != nil {
@@ -166,8 +143,8 @@ func readInventory() ([]DeviceAsset, error) {
 	return devices, nil
 }
 
-// readCommands 读取并解析命令列表文件
-func readCommands() ([]string, error) {
+// readCommandsLegacy 读取并解析旧版命令列表文件
+func readCommandsLegacy() ([]string, error) {
 	logger.DebugAll("Config", "-", "尝试打开文件: %s", configFile)
 	content, err := os.ReadFile(configFile)
 	if err != nil {
@@ -297,8 +274,8 @@ func ValidateDevice(device DeviceAsset) error {
 	return nil
 }
 
-// SaveCommands 保存命令列表到文件
-func SaveCommands(commands []string) error {
+// SaveCommandsLegacy 保存命令列表到文件 (已遗弃，仅为兼容保留)
+func SaveCommandsLegacy(commands []string) error {
 	cwd, _ := os.Getwd()
 	path := filepath.Join(cwd, configFile)
 
@@ -316,41 +293,50 @@ func SaveCommands(commands []string) error {
 	return nil
 }
 
-// SaveInventory 保存设备列表到 CSV 文件
-func SaveInventory(devices []DeviceAsset) error {
-	cwd, _ := os.Getwd()
-	path := filepath.Join(cwd, inventoryFile)
+// SaveCommands 保存命令列表到默认命令组
+func SaveCommands(commands []string) error {
+	if DB == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
 
-	file, err := os.Create(path)
+	var group CommandGroup
+	err := DB.Where("name = ?", "默认命令组").First(&group).Error
 	if err != nil {
-		return fmt.Errorf("无法创建文件: %v", err)
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	// 写入表头
-	if err := writer.Write([]string{"IP", "Port", "Protocol", "Username", "Password", "Group", "Tag"}); err != nil {
-		return fmt.Errorf("写入表头失败: %v", err)
-	}
-
-	// 写入数据行
-	for _, device := range devices {
-		row := []string{
-			device.IP,
-			strconv.Itoa(device.Port),
-			device.Protocol,
-			device.Username,
-			device.Password,
-			device.Group,
-			joinTags(device.Tags),
+		if err == gorm.ErrRecordNotFound {
+			group = CommandGroup{
+				ID:          generateID(),
+				Name:        "默认命令组",
+				Description: "自动生成的默认命令组",
+				Commands:    commands,
+				CreatedAt:   nowFormatted(),
+				UpdatedAt:   nowFormatted(),
+				Tags:        []string{"系统默认"},
+			}
+			return DB.Create(&group).Error
 		}
-		if err := writer.Write(row); err != nil {
-			return fmt.Errorf("写入数据失败: %v", err)
-		}
+		return err
 	}
 
-	logger.Info("Config", "-", "成功保存 %d 台设备到 %s", len(devices), inventoryFile)
-	return nil
+	group.Commands = commands
+	group.UpdatedAt = nowFormatted()
+	return DB.Save(&group).Error
 }
+
+// SaveInventory 保存设备列表到数据库（全量覆盖）
+func SaveInventory(devices []DeviceAsset) error {
+	if DB == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+
+	return DB.Transaction(func(tx *gorm.DB) error {
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DeviceAsset{})
+		if len(devices) > 0 {
+			for i := range devices {
+				devices[i].ID = 0 // 重置ID以重新排列
+			}
+			return tx.Create(&devices).Error
+		}
+		return nil
+	})
+}
+

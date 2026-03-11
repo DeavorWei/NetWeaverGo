@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -16,83 +14,17 @@ import (
 
 // CommandGroup 命令组定义
 type CommandGroup struct {
-	ID          string   `json:"id"`          // 唯一标识（UUID）
-	Name        string   `json:"name"`        // 命令组名称
-	Description string   `json:"description"` // 描述信息
-	Commands    []string `json:"commands"`    // 命令列表
-	CreatedAt   string   `json:"createdAt"`   // 创建时间
-	UpdatedAt   string   `json:"updatedAt"`   // 更新时间
-	Tags        []string `json:"tags"`        // 标签（用于分类）
+	ID          string   `json:"id" gorm:"primaryKey"`          // 唯一标识（UUID）
+	Name        string   `json:"name" gorm:"uniqueIndex"`       // 命令组名称
+	Description string   `json:"description"`                   // 描述信息
+	Commands    []string `json:"commands" gorm:"serializer:json"` // 命令列表
+	CreatedAt   string   `json:"createdAt"`                     // 创建时间
+	UpdatedAt   string   `json:"updatedAt"`                     // 更新时间
+	Tags        []string `json:"tags" gorm:"serializer:json"`   // 标签（用于分类）
 }
-
-// CommandGroupsFile 命令组存储文件结构
-type CommandGroupsFile struct {
-	Groups []CommandGroup `json:"groups"`
-}
-
-// 命令组存储相关常量
-const (
-	commandGroupsDir  = "commands"
-	commandGroupsFile = "groups.json"
-)
 
 // 时间格式
 const TimeFormat = "2006-01-02T15:04:05"
-
-// 全局命令组管理器
-var (
-	groupsMu     sync.RWMutex
-	groupsCached atomic.Value // 使用 atomic.Value 替代指针缓存
-)
-
-// getCommandGroupsPath 获取命令组文件路径
-func getCommandGroupsPath() string {
-	cwd, _ := os.Getwd()
-	// 确保目录存在
-	dirPath := filepath.Join(cwd, commandGroupsDir)
-	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
-		os.MkdirAll(dirPath, 0755)
-	}
-	return filepath.Join(dirPath, commandGroupsFile)
-}
-
-// loadCommandGroupsFromFile 从文件加载命令组
-func loadCommandGroupsFromFile() (*CommandGroupsFile, error) {
-	path := getCommandGroupsPath()
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// 文件不存在，返回空结构
-			return &CommandGroupsFile{Groups: []CommandGroup{}}, nil
-		}
-		return nil, fmt.Errorf("读取命令组文件失败: %v", err)
-	}
-
-	var fileData CommandGroupsFile
-	if err := json.Unmarshal(data, &fileData); err != nil {
-		return nil, fmt.Errorf("解析命令组文件失败: %v", err)
-	}
-
-	return &fileData, nil
-}
-
-// saveCommandGroupsToFile 保存命令组到文件
-func saveCommandGroupsToFile(data *CommandGroupsFile) error {
-	path := getCommandGroupsPath()
-
-	jsonData, err := json.MarshalIndent(data, "", "  ")
-	if err != nil {
-		return fmt.Errorf("序列化命令组失败: %v", err)
-	}
-
-	if err := os.WriteFile(path, jsonData, 0666); err != nil {
-		return fmt.Errorf("写入命令组文件失败: %v", err)
-	}
-
-	logger.Info("Config", "-", "成功保存 %d 个命令组到 %s", len(data.Groups), path)
-	return nil
-}
 
 // nowFormatted 获取当前时间格式化字符串
 func nowFormatted() string {
@@ -108,83 +40,51 @@ func generateID() string {
 
 // ListCommandGroups 获取所有命令组列表
 func ListCommandGroups() ([]CommandGroup, error) {
-	// 先尝试读取缓存
-	if cached := groupsCached.Load(); cached != nil {
-		return cached.(*CommandGroupsFile).Groups, nil
+	if DB == nil {
+		return nil, fmt.Errorf("数据库未初始化")
 	}
-
-	// 缓存未命中，加写锁
-	groupsMu.Lock()
-	defer groupsMu.Unlock()
-
-	// 双重检查
-	if cached := groupsCached.Load(); cached != nil {
-		return cached.(*CommandGroupsFile).Groups, nil
-	}
-
-	data, err := loadCommandGroupsFromFile()
-	if err != nil {
+	var groups []CommandGroup
+	if err := DB.Find(&groups).Error; err != nil {
 		return nil, err
 	}
-
-	groupsCached.Store(data)
-	return data.Groups, nil
+	return groups, nil
 }
 
 // GetCommandGroup 根据 ID 获取单个命令组
 func GetCommandGroup(id string) (*CommandGroup, error) {
-	groupsMu.RLock()
-	defer groupsMu.RUnlock()
-
-	data, err := loadCommandGroupsFromFile()
-	if err != nil {
-		return nil, err
+	if DB == nil {
+		return nil, fmt.Errorf("数据库未初始化")
 	}
-
-	for _, group := range data.Groups {
-		if group.ID == id {
-			return &group, nil
-		}
+	var group CommandGroup
+	if err := DB.First(&group, "id = ?", id).Error; err != nil {
+		return nil, fmt.Errorf("未找到命令组: %s", id)
 	}
-
-	return nil, fmt.Errorf("未找到命令组: %s", id)
+	return &group, nil
 }
 
 // CreateCommandGroup 创建新命令组
 func CreateCommandGroup(group CommandGroup) (*CommandGroup, error) {
-	groupsMu.Lock()
-	defer groupsMu.Unlock()
-
-	data, err := loadCommandGroupsFromFile()
-	if err != nil {
-		return nil, err
+	if DB == nil {
+		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	// 生成 ID 和时间戳
 	group.ID = generateID()
 	group.CreatedAt = nowFormatted()
 	group.UpdatedAt = group.CreatedAt
 
-	// 校验
 	if err := validateCommandGroup(group); err != nil {
 		return nil, err
 	}
 
-	// 检查名称是否重复
-	for _, g := range data.Groups {
-		if g.Name == group.Name {
-			return nil, fmt.Errorf("命令组名称已存在: %s", group.Name)
-		}
+	var count int64
+	DB.Model(&CommandGroup{}).Where("name = ?", group.Name).Count(&count)
+	if count > 0 {
+		return nil, fmt.Errorf("命令组名称已存在: %s", group.Name)
 	}
 
-	data.Groups = append(data.Groups, group)
-
-	if err := saveCommandGroupsToFile(data); err != nil {
+	if err := DB.Create(&group).Error; err != nil {
 		return nil, err
 	}
-
-	// 更新缓存
-	groupsCached.Store(data)
 
 	logger.Info("Config", "-", "成功创建命令组: %s", group.Name)
 	return &group, nil
@@ -192,52 +92,32 @@ func CreateCommandGroup(group CommandGroup) (*CommandGroup, error) {
 
 // UpdateCommandGroup 更新命令组
 func UpdateCommandGroup(id string, group CommandGroup) (*CommandGroup, error) {
-	groupsMu.Lock()
-	defer groupsMu.Unlock()
-
-	data, err := loadCommandGroupsFromFile()
-	if err != nil {
-		return nil, err
+	if DB == nil {
+		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	// 查找要更新的命令组
-	index := -1
-	for i, g := range data.Groups {
-		if g.ID == id {
-			index = i
-			break
-		}
-	}
-
-	if index == -1 {
+	var existing CommandGroup
+	if err := DB.First(&existing, "id = ?", id).Error; err != nil {
 		return nil, fmt.Errorf("未找到命令组: %s", id)
 	}
 
-	// 保留原有的 ID 和创建时间
 	group.ID = id
-	group.CreatedAt = data.Groups[index].CreatedAt
+	group.CreatedAt = existing.CreatedAt
 	group.UpdatedAt = nowFormatted()
 
-	// 校验
 	if err := validateCommandGroup(group); err != nil {
 		return nil, err
 	}
 
-	// 检查名称是否与其他命令组重复
-	for i, g := range data.Groups {
-		if i != index && g.Name == group.Name {
-			return nil, fmt.Errorf("命令组名称已存在: %s", group.Name)
-		}
+	var count int64
+	DB.Model(&CommandGroup{}).Where("name = ? AND id != ?", group.Name, id).Count(&count)
+	if count > 0 {
+		return nil, fmt.Errorf("命令组名称已存在: %s", group.Name)
 	}
 
-	data.Groups[index] = group
-
-	if err := saveCommandGroupsToFile(data); err != nil {
+	if err := DB.Save(&group).Error; err != nil {
 		return nil, err
 	}
-
-	// 更新缓存
-	groupsCached.Store(data)
 
 	logger.Info("Config", "-", "成功更新命令组: %s", group.Name)
 	return &group, nil
@@ -245,102 +125,50 @@ func UpdateCommandGroup(id string, group CommandGroup) (*CommandGroup, error) {
 
 // DeleteCommandGroup 删除命令组
 func DeleteCommandGroup(id string) error {
-	groupsMu.Lock()
-	defer groupsMu.Unlock()
+	if DB == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
 
-	data, err := loadCommandGroupsFromFile()
-	if err != nil {
+	if err := DB.Delete(&CommandGroup{}, "id = ?", id).Error; err != nil {
 		return err
 	}
 
-	// 查找要删除的命令组
-	index := -1
-	for i, g := range data.Groups {
-		if g.ID == id {
-			index = i
-			break
-		}
-	}
-
-	if index == -1 {
-		return fmt.Errorf("未找到命令组: %s", id)
-	}
-
-	// 删除命令组
-	deletedName := data.Groups[index].Name
-	data.Groups = append(data.Groups[:index], data.Groups[index+1:]...)
-
-	if err := saveCommandGroupsToFile(data); err != nil {
-		return err
-	}
-
-	// 更新缓存
-	groupsCached.Store(data)
-
-	logger.Info("Config", "-", "成功删除命令组: %s", deletedName)
+	logger.Info("Config", "-", "成功删除命令组: %s", id)
 	return nil
 }
 
 // DuplicateCommandGroup 复制命令组
 func DuplicateCommandGroup(id string) (*CommandGroup, error) {
-	groupsMu.Lock()
-	defer groupsMu.Unlock()
-
-	data, err := loadCommandGroupsFromFile()
-	if err != nil {
-		return nil, err
+	if DB == nil {
+		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	// 查找要复制的命令组
-	var source *CommandGroup
-	for i := range data.Groups {
-		if data.Groups[i].ID == id {
-			source = &data.Groups[i]
-			break
-		}
-	}
-
-	if source == nil {
+	var source CommandGroup
+	if err := DB.First(&source, "id = ?", id).Error; err != nil {
 		return nil, fmt.Errorf("未找到命令组: %s", id)
 	}
 
-	// 创建副本
-	newGroup := CommandGroup{
-		ID:          generateID(),
-		Name:        source.Name + " - 副本",
-		Description: source.Description,
-		Commands:    append([]string{}, source.Commands...),
-		CreatedAt:   nowFormatted(),
-		UpdatedAt:   nowFormatted(),
-		Tags:        append([]string{}, source.Tags...),
-	}
+	newGroup := source
+	newGroup.ID = generateID()
+	newGroup.CreatedAt = nowFormatted()
+	newGroup.UpdatedAt = nowFormatted()
+	newGroup.Name = source.Name + " - 副本"
 
-	// 确保名称唯一
 	baseName := newGroup.Name
 	counter := 1
 	for {
-		nameExists := false
-		for _, g := range data.Groups {
-			if g.Name == newGroup.Name {
-				nameExists = true
-				break
-			}
-		}
-		if !nameExists {
+		var count int64
+		DB.Model(&CommandGroup{}).Where("name = ?", newGroup.Name).Count(&count)
+		if count == 0 {
 			break
 		}
 		counter++
 		newGroup.Name = fmt.Sprintf("%s (%d)", baseName, counter)
 	}
 
-	data.Groups = append(data.Groups, newGroup)
-
-	if err := saveCommandGroupsToFile(data); err != nil {
+	if err := DB.Create(&newGroup).Error; err != nil {
 		return nil, err
 	}
-
-	// 更新缓存
-	groupsCached.Store(data)
 
 	logger.Info("Config", "-", "成功复制命令组: %s -> %s", source.Name, newGroup.Name)
 	return &newGroup, nil
@@ -348,10 +176,10 @@ func DuplicateCommandGroup(id string) (*CommandGroup, error) {
 
 // ImportCommandGroup 从 JSON 文件导入命令组
 func ImportCommandGroup(filePath string) (*CommandGroup, error) {
-	groupsMu.Lock()
-	defer groupsMu.Unlock()
+	if DB == nil {
+		return nil, fmt.Errorf("数据库未初始化")
+	}
 
-	// 读取文件
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("读取导入文件失败: %v", err)
@@ -362,48 +190,29 @@ func ImportCommandGroup(filePath string) (*CommandGroup, error) {
 		return nil, fmt.Errorf("解析导入文件失败: %v", err)
 	}
 
-	// 生成新的 ID 和时间
 	group.ID = generateID()
 	group.CreatedAt = nowFormatted()
 	group.UpdatedAt = nowFormatted()
 
-	// 校验
 	if err := validateCommandGroup(group); err != nil {
 		return nil, err
 	}
 
-	// 加载现有数据
-	existingData, err := loadCommandGroupsFromFile()
-	if err != nil {
-		return nil, err
-	}
-
-	// 确保名称唯一
 	baseName := group.Name
 	counter := 1
 	for {
-		nameExists := false
-		for _, g := range existingData.Groups {
-			if g.Name == group.Name {
-				nameExists = true
-				break
-			}
-		}
-		if !nameExists {
+		var count int64
+		DB.Model(&CommandGroup{}).Where("name = ?", group.Name).Count(&count)
+		if count == 0 {
 			break
 		}
 		counter++
 		group.Name = fmt.Sprintf("%s (%d)", baseName, counter)
 	}
 
-	existingData.Groups = append(existingData.Groups, group)
-
-	if err := saveCommandGroupsToFile(existingData); err != nil {
+	if err := DB.Create(&group).Error; err != nil {
 		return nil, err
 	}
-
-	// 更新缓存
-	groupsCached.Store(existingData)
 
 	logger.Info("Config", "-", "成功导入命令组: %s", group.Name)
 	return &group, nil
@@ -411,34 +220,20 @@ func ImportCommandGroup(filePath string) (*CommandGroup, error) {
 
 // ExportCommandGroup 导出命令组到 JSON 文件
 func ExportCommandGroup(id string, filePath string) error {
-	groupsMu.RLock()
-	defer groupsMu.RUnlock()
-
-	data, err := loadCommandGroupsFromFile()
-	if err != nil {
-		return err
+	if DB == nil {
+		return fmt.Errorf("数据库未初始化")
 	}
 
-	// 查找命令组
-	var group *CommandGroup
-	for i := range data.Groups {
-		if data.Groups[i].ID == id {
-			group = &data.Groups[i]
-			break
-		}
-	}
-
-	if group == nil {
+	var group CommandGroup
+	if err := DB.First(&group, "id = ?", id).Error; err != nil {
 		return fmt.Errorf("未找到命令组: %s", id)
 	}
 
-	// 序列化
 	jsonData, err := json.MarshalIndent(group, "", "  ")
 	if err != nil {
 		return fmt.Errorf("序列化命令组失败: %v", err)
 	}
 
-	// 确保目录存在
 	dir := filepath.Dir(filePath)
 	if dir != "" {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -464,7 +259,6 @@ func validateCommandGroup(group CommandGroup) error {
 		return fmt.Errorf("命令列表不能为空")
 	}
 
-	// 过滤空命令
 	var validCommands []string
 	for _, cmd := range group.Commands {
 		trimmed := strings.TrimSpace(cmd)
@@ -476,56 +270,6 @@ func validateCommandGroup(group CommandGroup) error {
 	if len(validCommands) == 0 {
 		return fmt.Errorf("命令列表不能为空")
 	}
-
-	group.Commands = validCommands
-	return nil
-}
-
-// MigrateLegacyCommands 迁移旧版命令文件到命令组
-func MigrateLegacyCommands() error {
-	groupsMu.Lock()
-	defer groupsMu.Unlock()
-
-	// 检查 groups.json 是否已存在
-	path := getCommandGroupsPath()
-	if _, err := os.Stat(path); err == nil {
-		// 文件已存在，无需迁移
-		return nil
-	}
-
-	// 检查 config.txt 是否存在
-	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		// config.txt 不存在，无需迁移
-		return nil
-	}
-
-	// 读取旧命令
-	commands, err := readCommands()
-	if err != nil {
-		// 读取失败或文件为空
-		return nil
-	}
-
-	// 创建默认命令组
-	defaultGroup := CommandGroup{
-		ID:          generateID(),
-		Name:        "默认命令组",
-		Description: "从 config.txt 自动迁移的默认命令组",
-		Commands:    commands,
-		CreatedAt:   nowFormatted(),
-		UpdatedAt:   nowFormatted(),
-		Tags:        []string{"系统默认"},
-	}
-
-	data := &CommandGroupsFile{
-		Groups: []CommandGroup{defaultGroup},
-	}
-
-	if err := saveCommandGroupsToFile(data); err != nil {
-		return err
-	}
-
-	logger.Info("Config", "-", "成功迁移 config.txt 到默认命令组")
 	return nil
 }
 
@@ -536,4 +280,30 @@ func GetCommandGroupCommands(id string) ([]string, error) {
 		return nil, err
 	}
 	return group.Commands, nil
+}
+
+// MigrateLegacyCommands 将 config.txt 迁移到命令组（已简化，由 db.go 调用）
+func MigrateLegacyCommands() error {
+	commands, err := readCommandsLegacy()
+	if err != nil {
+		return nil
+	}
+
+	var count int64
+	DB.Model(&CommandGroup{}).Where("name = ?", "默认命令组").Count(&count)
+	if count > 0 {
+		return nil
+	}
+
+	defaultGroup := CommandGroup{
+		ID:          generateID(),
+		Name:        "默认命令组",
+		Description: "从 config.txt 自动迁移的默认命令组",
+		Commands:    commands,
+		CreatedAt:   nowFormatted(),
+		UpdatedAt:   nowFormatted(),
+		Tags:        []string{"系统默认"},
+	}
+
+	return DB.Create(&defaultGroup).Error
 }
