@@ -183,6 +183,9 @@ func CreateCommandGroup(group CommandGroup) (*CommandGroup, error) {
 		return nil, err
 	}
 
+	// 更新缓存
+	groupsCached.Store(data)
+
 	logger.Info("Config", "-", "成功创建命令组: %s", group.Name)
 	return &group, nil
 }
@@ -233,6 +236,9 @@ func UpdateCommandGroup(id string, group CommandGroup) (*CommandGroup, error) {
 		return nil, err
 	}
 
+	// 更新缓存
+	groupsCached.Store(data)
+
 	logger.Info("Config", "-", "成功更新命令组: %s", group.Name)
 	return &group, nil
 }
@@ -267,6 +273,9 @@ func DeleteCommandGroup(id string) error {
 	if err := saveCommandGroupsToFile(data); err != nil {
 		return err
 	}
+
+	// 更新缓存
+	groupsCached.Store(data)
 
 	logger.Info("Config", "-", "成功删除命令组: %s", deletedName)
 	return nil
@@ -330,6 +339,9 @@ func DuplicateCommandGroup(id string) (*CommandGroup, error) {
 		return nil, err
 	}
 
+	// 更新缓存
+	groupsCached.Store(data)
+
 	logger.Info("Config", "-", "成功复制命令组: %s -> %s", source.Name, newGroup.Name)
 	return &newGroup, nil
 }
@@ -389,6 +401,9 @@ func ImportCommandGroup(filePath string) (*CommandGroup, error) {
 	if err := saveCommandGroupsToFile(existingData); err != nil {
 		return nil, err
 	}
+
+	// 更新缓存
+	groupsCached.Store(existingData)
 
 	logger.Info("Config", "-", "成功导入命令组: %s", group.Name)
 	return &group, nil

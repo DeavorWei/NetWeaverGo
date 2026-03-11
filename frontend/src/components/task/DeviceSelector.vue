@@ -40,20 +40,6 @@
 
     <!-- 已选设备展示 -->
     <div class="space-y-1.5">
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-text-muted">
-          已选择: <span class="text-accent font-medium">{{ selectedDevices.length }}</span> 台设备
-          <span v-if="currentFilter === 'all'" class="text-xs text-text-muted/60 ml-1">(全选模式)</span>
-        </span>
-        <button
-          v-if="selectedDevices.length > 0"
-          @click="clearSelection"
-          class="text-xs text-text-muted hover:text-error transition-colors"
-        >
-          清空选择
-        </button>
-      </div>
-      
       <!-- 全选模式: 只显示统计信息 -->
       <div v-if="selectedDevices.length > 0 && currentFilter === 'all'" class="p-3 bg-bg-secondary/30 rounded-lg">
         <div class="flex items-center gap-2 text-sm text-text-secondary">
@@ -332,14 +318,6 @@ function isDeviceSelected(ip: string) {
 // 移除设备
 function removeDevice(ip: string) {
   selectedIPs.value.delete(ip)
-  emitSelection()
-}
-
-// 清空选择
-function clearSelection() {
-  selectedIPs.value.clear()
-  currentFilter.value = 'all'
-  selectedOption.value = ''
   emitSelection()
 }
 
