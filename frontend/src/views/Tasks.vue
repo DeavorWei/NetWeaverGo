@@ -30,41 +30,56 @@
     </div>
 
     <!-- 步骤选择区域 -->
-    <div class="flex-1 flex flex-col min-h-0 space-y-4">
-      <!-- 步骤1: 选择目标设备 -->
-      <div class="bg-bg-card border border-border rounded-xl overflow-hidden flex-shrink-0">
-        <div class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel">
-          <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">1</div>
-          <span class="text-sm font-medium text-text-primary">选择目标设备</span>
-          <span v-if="selectedDevices.length > 0" class="ml-2 text-xs text-accent font-mono">已选 {{ selectedDevices.length }} 台</span>
-          <button
-            @click="goToDevices"
-            class="ml-auto text-xs text-accent hover:text-accent-glow transition-colors"
-          >
-            管理设备资产
-          </button>
+    <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div class="flex-1 overflow-y-auto scrollbar-custom pr-1">
+        <!-- 步骤1: 选择目标设备 -->
+        <div 
+          class="bg-bg-card border border-border rounded-xl overflow-hidden"
+          :style="{ height: devicePanelHeight + 'px', minHeight: '200px' }"
+        >
+          <div class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel">
+            <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">1</div>
+            <span class="text-sm font-medium text-text-primary">选择目标设备</span>
+            <span v-if="selectedDevices.length > 0" class="ml-2 text-xs text-accent font-mono">已选 {{ selectedDevices.length }} 台</span>
+            <button
+              @click="goToDevices"
+              class="ml-auto text-xs text-accent hover:text-accent-glow transition-colors"
+            >
+              管理设备资产
+            </button>
+          </div>
+          <div class="p-3 h-[calc(100%-45px)] overflow-y-auto scrollbar-custom">
+            <DeviceSelector
+              :devices="deviceList"
+              @selectionChange="onDeviceSelectionChange"
+            />
+          </div>
         </div>
-        <div class="p-3">
-          <DeviceSelector
-            :devices="deviceList"
-            @selectionChange="onDeviceSelectionChange"
-          />
-        </div>
-      </div>
 
-      <!-- 步骤2: 选择命令组 -->
-      <div class="bg-bg-card border border-border rounded-xl overflow-hidden flex-1 flex flex-col min-h-0">
-        <div class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel flex-shrink-0">
-          <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">2</div>
-          <span class="text-sm font-medium text-text-primary">选择命令组</span>
-          <span v-if="selectedCommandGroup" class="ml-2 text-xs text-accent font-mono">{{ selectedCommandGroup.name }}</span>
+        <!-- 可拖拽分隔条 -->
+        <div 
+          class="h-2 flex items-center justify-center cursor-row-resize group py-1"
+          @mousedown="startResize"
+        >
+          <div class="w-16 h-1.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors"></div>
         </div>
-        <div class="px-3 pb-3 flex-1 min-h-0 flex flex-col">
-          <CommandGroupSelector
-            v-model="selectedCommandGroupId"
-            class="flex-1"
-            @selectionChange="onCommandGroupChange"
-          />
+
+        <!-- 步骤2: 选择命令组 -->
+        <div 
+          class="bg-bg-card border border-border rounded-xl overflow-hidden mb-4"
+          :style="{ minHeight: commandPanelMinHeight + 'px' }"
+        >
+          <div class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel">
+            <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">2</div>
+            <span class="text-sm font-medium text-text-primary">选择命令组</span>
+            <span v-if="selectedCommandGroup" class="ml-2 text-xs text-accent font-mono">{{ selectedCommandGroup.name }}</span>
+          </div>
+          <div class="p-3">
+            <CommandGroupSelector
+              v-model="selectedCommandGroupId"
+              @selectionChange="onCommandGroupChange"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -192,7 +207,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ListDevices,
@@ -209,6 +224,51 @@ const deviceList = ref<DeviceAsset[]>([])
 const selectedDevices = ref<DeviceAsset[]>([])
 const selectedCommandGroupId = ref('')
 const selectedCommandGroup = ref<CommandGroup | null>(null)
+
+// 面板高度控制
+const devicePanelHeight = ref(280) // 设备选择面板默认高度
+const commandPanelMinHeight = 300 // 命令组面板最小高度
+const minHeight = 150 // 面板最小高度限制
+
+// 拖拽调整高度相关
+let isResizing = false
+let startY = 0
+let startHeight = 0
+
+function startResize(e: MouseEvent) {
+  isResizing = true
+  startY = e.clientY
+  startHeight = devicePanelHeight.value
+  document.addEventListener('mousemove', onResize)
+  document.addEventListener('mouseup', stopResize)
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+}
+
+function onResize(e: MouseEvent) {
+  if (!isResizing) return
+  const deltaY = e.clientY - startY
+  const newHeight = startHeight + deltaY
+  
+  // 限制高度范围
+  if (newHeight >= minHeight) {
+    devicePanelHeight.value = newHeight
+  }
+}
+
+function stopResize() {
+  isResizing = false
+  document.removeEventListener('mousemove', onResize)
+  document.removeEventListener('mouseup', stopResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+
+// 组件卸载时清理事件监听
+onUnmounted(() => {
+  document.removeEventListener('mousemove', onResize)
+  document.removeEventListener('mouseup', stopResize)
+})
 
 // 是否可以创建任务
 const canCreate = computed(() => {
