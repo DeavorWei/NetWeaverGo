@@ -18,6 +18,7 @@ var DB *gorm.DB
 func InitDB() error {
 	cwd, _ := os.Getwd()
 	dataDir := filepath.Join(cwd, "data")
+	logger.DebugAll("Config", "-", "开始初始化SQLite存储逻辑，锁定本地工作区: %s", dataDir)
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("无法创建数据目录: %v", err)
 	}
@@ -32,6 +33,7 @@ func InitDB() error {
 
 	DB = db
 
+	logger.DebugAll("Config", "-", "连接SQLite数据库引擎已建立！正在扫描并校验内部表结构约束...")
 	// 自动迁移表结构
 	err = db.AutoMigrate(
 		&DeviceAsset{},
@@ -50,6 +52,7 @@ func InitDB() error {
 // MigrateLegacyDataIfNeeded 从旧文件系统迁移数据到数据库
 func MigrateLegacyDataIfNeeded() {
 	var count int64
+	logger.DebugAll("Config", "-", "执行自检模块，侦测是否存在遗留旧文件待转换为数据库对象格式...")
 
 	// 1. 迁移设备清单
 	if _, err := os.Stat(inventoryFile); err == nil {
@@ -98,4 +101,6 @@ func MigrateLegacyDataIfNeeded() {
 	if err := MigrateLegacyCommands(); err != nil {
 		logger.Warn("Config", "-", "迁移 config.txt 失败: %v", err)
 	}
+	
+	logger.DebugAll("Config", "-", "本地平滑升级巡检流程执行完毕！")
 }

@@ -35,6 +35,7 @@ type ProgressTracker struct {
 }
 
 func NewProgressTracker(totalDevices int) *ProgressTracker {
+	logger.DebugAll("Report", "-", "生成与编排新的终端任务信息收集进度板，目标设备总量规模: %d 台", totalDevices)
 	return &ProgressTracker{
 		EventBus: make(chan ExecutorEvent, 1000), // 留足缓冲
 		status:   make(map[string]*DeviceSummary),
@@ -44,14 +45,17 @@ func NewProgressTracker(totalDevices int) *ProgressTracker {
 
 // Listen 开始持续监听总线的事件并刷新屏幕
 func (p *ProgressTracker) Listen(ctx context.Context) {
+	logger.Debug("Report", "-", "总线收信机(Report-Collector)已进入工作循环，等待设备事件通报以生成最终大盘.")
 	for {
 		select {
 		case <-ctx.Done():
+			logger.Debug("Report", "-", "收到上级 Context 被中止信标，准备完成最后一次状态统筹汇算.")
 			p.renderFinal()
 			return
 		case evt, ok := <-p.EventBus:
 			if !ok {
 				// 通道关闭，正常谢幕
+				logger.DebugAll("Report", "-", "EventBus 频道已经下播，触发最终报表渲染并退出监听循环...")
 				p.renderFinal()
 				return
 			}
@@ -64,6 +68,7 @@ func (p *ProgressTracker) Listen(ctx context.Context) {
 func (p *ProgressTracker) Suspend() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	logger.DebugAll("Report", "-", "用户触发了互动式阻断，现已挂起大盘信息收集的定时排版状态...")
 	p.paused = true
 }
 
@@ -76,6 +81,7 @@ func (p *ProgressTracker) CollectEvent(evt ExecutorEvent) {
 func (p *ProgressTracker) Resume() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	logger.DebugAll("Report", "-", "用户输入处置结束，大盘状态监控解封，业务继续推进执行.")
 	p.paused = false
 }
 
@@ -139,6 +145,7 @@ func (p *ProgressTracker) renderDisplay() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	logger.DebugAll("Report", "-", "触发输出并生成新一期阶段设备态势与健康简报...")
 	logger.Info("Report", "-", "=== 终端汇总大盘: 完成 [%d/%d] ===", p.finished, p.total)
 
 	var ips []string
