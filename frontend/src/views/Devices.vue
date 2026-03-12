@@ -96,7 +96,7 @@
                         ? 'bg-accent/30 border-accent/50'
                         : 'border-border hover:border-accent',
                   ]"
-                  :title="isAllSelected ? '取消全选' : '全选所有设备'"
+                  :title="isAllSelected ? '取消全选' : '全选当前页设备'"
                 >
                   <svg
                     v-if="isAllSelected"
@@ -297,7 +297,18 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-border">
-            <tr v-if="data.length === 0">
+            <tr v-if="loading">
+              <td colspan="10" class="px-5 py-12 text-center text-text-muted">
+                <div class="flex flex-col items-center gap-3">
+                  <svg class="animate-spin w-8 h-8 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span class="text-sm">加载中...</span>
+                </div>
+              </td>
+            </tr>
+            <tr v-else-if="data.length === 0">
               <td colspan="10" class="px-5 py-12 text-center text-text-muted">
                 <div class="flex flex-col items-center gap-3">
                   <svg
@@ -316,7 +327,8 @@
               </td>
             </tr>
             <tr
-              v-for="(row, idx) in pagedData"
+              v-else
+              v-for="(row, idx) in data"
               :key="row.ip + idx"
               :class="[
                 'transition-colors duration-150 group',
@@ -498,7 +510,7 @@
       >
         <div class="flex items-center gap-6">
           <span class="text-xs text-text-muted">
-            第 {{ page }} / {{ totalPages }} 页，共 {{ filteredData.length }} 条
+            第 {{ page }} / {{ totalPages }} 页，共 {{ total }} 条
           </span>
           <!-- 页面跳转 -->
           <div class="flex items-center gap-2 border-l border-border pl-6">
@@ -520,15 +532,15 @@
         </div>
         <div class="flex items-center gap-2">
           <button
-            @click="page = Math.max(1, page - 1)"
-            :disabled="page === 1"
+            @click="handlePrevPage"
+            :disabled="page === 1 || loading"
             class="px-3 py-1.5 text-xs rounded-lg border border-border text-text-secondary hover:border-accent/50 hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200"
           >
             上一页
           </button>
           <button
-            @click="page = Math.min(totalPages, page + 1)"
-            :disabled="page === totalPages"
+            @click="handleNextPage"
+            :disabled="page === totalPages || loading"
             class="px-3 py-1.5 text-xs rounded-lg border border-border text-text-secondary hover:border-accent/50 hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200"
           >
             下一页
@@ -832,12 +844,6 @@
             >
               ({{ selectedCount }} 台设备)
             </span>
-            <span
-              v-else-if="searchQuery.trim()"
-              class="ml-2 text-sm font-normal text-accent"
-            >
-              (筛选后 {{ filteredData.length }} 台设备)
-            </span>
           </h3>
           <button
             @click="closeBatchModal"
@@ -858,13 +864,7 @@
         </div>
         <form @submit.prevent="saveBatchEdit" class="p-6 space-y-4">
           <p class="text-sm text-text-secondary">
-            将{{
-              selectedCount > 0
-                ? "选中的"
-                : searchQuery.trim()
-                  ? "筛选后的"
-                  : "所有"
-            }}设备的{{ batchFieldLabel }}修改为：
+            将选中的设备的{{ batchFieldLabel }}修改为：
           </p>
 
           <!-- 协议选择 -->
@@ -1085,7 +1085,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from "vue";
 import {
-  ListDevices,
+  QueryAPI,
   AddDevice,
   UpdateDevice,
   DeleteDevice,
@@ -1093,16 +1093,10 @@ import {
   GetProtocolDefaultPorts,
   GetValidProtocols,
 } from "../services/api";
-// 使用后端定义的类型，前端直接使用小写字段名
-interface Device {
-  ip: string;
-  port: number;
-  protocol: string;
-  username: string;
-  password: string;
-  group: string;
-  tags: string[];
-}
+import type { DeviceAsset } from "../services/api";
+
+// 使用后端定义的类型
+type Device = DeviceAsset;
 
 interface IpRangeHint {
   count: number;
@@ -1110,10 +1104,15 @@ interface IpRangeHint {
   end: string;
 }
 
+// ==================== 后端查询状态 ====================
+// data 现在直接存储当前页的数据（后端返回）
 const data = ref<Device[]>([]);
+const total = ref(0);           // 总记录数（后端返回）
+const totalPages = ref(1);      // 总页数（后端返回）
 const page = ref(1);
-const pageSize = 10; // 修改为10条每页
+const pageSize = 10;
 const jumpPageInput = ref("");
+const loading = ref(false);     // 加载状态
 
 // 搜索相关
 const searchQuery = ref("");
@@ -1125,7 +1124,7 @@ const searchOptions = [
 ];
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
-// 多选状态
+// 多选状态（存储当前页的选中索引）
 const selectedIndexes = ref<Set<number>>(new Set());
 
 // 弹窗状态
@@ -1183,46 +1182,12 @@ const newTag = ref("");
 // 记录上次的协议，用于判断端口是否需要自动更新
 const lastProtocol = ref("SSH");
 
+// ==================== 计算属性 ====================
+
 // 当前搜索类型的标签
 const currentSearchLabel = computed(() => {
   const opt = searchOptions.find((o) => o.value === searchType.value);
   return opt ? opt.label : "";
-});
-
-// 过滤后的设备数据（模糊搜索）
-const filteredData = computed(() => {
-  // 如果没有搜索内容，返回所有数据
-  if (!searchQuery.value.trim()) {
-    return data.value;
-  }
-
-  const query = searchQuery.value.toLowerCase().trim();
-
-  return data.value.filter((device) => {
-    let searchValue = "";
-
-    switch (searchType.value) {
-      case "group":
-        searchValue = (device.group || "").toLowerCase();
-        break;
-      case "tag":
-        return device.tags.some((t) => t.toLowerCase().includes(query));
-      case "ip":
-        searchValue = (device.ip || "").toLowerCase();
-        break;
-    }
-
-    // 模糊搜索：包含即可匹配
-    return searchValue.includes(query);
-  });
-});
-
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(filteredData.value.length / pageSize)),
-);
-const pagedData = computed(() => {
-  const start = (page.value - 1) * pageSize;
-  return filteredData.value.slice(start, start + pageSize);
 });
 
 // 批量编辑字段标签
@@ -1241,68 +1206,115 @@ const batchFieldLabel = computed(() => {
 // 多选相关计算属性
 const selectedCount = computed(() => selectedIndexes.value.size);
 
-// 是否选中了当前筛选结果中的所有设备
+// 是否选中了当前页所有设备
 const isAllSelected = computed(() => {
-  if (filteredData.value.length === 0) return false;
-  // 检查筛选后的所有设备是否都被选中
-  for (let i = 0; i < filteredData.value.length; i++) {
-    const device = filteredData.value[i];
-    if (!device) continue;
-    const actualIdx = data.value.indexOf(device);
-    if (!selectedIndexes.value.has(actualIdx)) return false;
-  }
-  return true;
+  if (data.value.length === 0) return false;
+  return data.value.every((_, idx) => selectedIndexes.value.has(idx));
 });
 
-// 是否部分选中（筛选后的设备中有选中但未全选）
+// 是否部分选中
 const isIndeterminate = computed(() => {
-  if (filteredData.value.length === 0) return false;
-  let selectedInFiltered = 0;
-  for (let i = 0; i < filteredData.value.length; i++) {
-    const device = filteredData.value[i];
-    if (!device) continue;
-    const actualIdx = data.value.indexOf(device);
-    if (selectedIndexes.value.has(actualIdx)) selectedInFiltered++;
-  }
-  return (
-    selectedInFiltered > 0 && selectedInFiltered < filteredData.value.length
-  );
+  if (data.value.length === 0) return false;
+  const selectedInPage = data.value.filter((_, idx) => selectedIndexes.value.has(idx)).length;
+  return selectedInPage > 0 && selectedInPage < data.value.length;
 });
+
+// ==================== 监听器 ====================
 
 // 监听 IP 输入，解析语法糖并验证
 watch(
   () => form.value.ip,
   (newIp) => {
     ipRangeHint.value = parseIpRange(newIp);
-    // 实时验证 IP 输入
     const validation = validateIpInput(newIp);
     ipValidationError.value = validation.error;
   },
 );
 
-// 监听搜索输入，实现防抖
-watch(searchQuery, (_newQuery) => {
-  // 清除之前的定时器
+// 监听搜索输入，实现防抖并触发后端查询
+watch(searchQuery, () => {
   if (searchTimeout) {
     clearTimeout(searchTimeout);
   }
-
-  // 防抖：300ms 后执行搜索
   searchTimeout = setTimeout(() => {
-    // 搜索时重置到第一页
     page.value = 1;
+    loadDevices();
   }, 300);
 });
 
-// 监听搜索类型变化，重置页码
+// 监听搜索类型变化，重新查询
 watch(searchType, () => {
   page.value = 1;
+  loadDevices();
 });
+
+// 监听页码变化，触发后端查询
+watch(page, () => {
+  loadDevices();
+});
+
+// ==================== 核心方法 ====================
+
+// 加载设备列表（后端查询）
+async function loadDevices() {
+  loading.value = true;
+  try {
+    const result = await QueryAPI.listDevices({
+      searchQuery: searchQuery.value,
+      filterField: searchType.value,
+      filterValue: "",
+      page: page.value,
+      pageSize: pageSize,
+      sortBy: "ip",
+      sortOrder: "asc",
+    });
+
+    data.value = result.data || [];
+    total.value = result.total;
+    totalPages.value = result.totalPages;
+
+    // 清空当前页选择（数据变化后）
+    selectedIndexes.value.clear();
+  } catch (err) {
+    console.error("加载设备列表失败:", err);
+    data.value = [];
+    total.value = 0;
+    totalPages.value = 1;
+  } finally {
+    loading.value = false;
+  }
+}
+
+// 加载协议配置
+async function loadProtocolConfig() {
+  try {
+    const ports = await GetProtocolDefaultPorts();
+    const protocols = await GetValidProtocols();
+    if (ports) protocolDefaultPorts.value = ports;
+    if (protocols) validProtocols.value = protocols;
+  } catch (e) {
+    console.error("Failed to load protocol config", e);
+  }
+}
 
 // 重置搜索
 function resetSearch() {
   searchQuery.value = "";
   page.value = 1;
+  loadDevices();
+}
+
+// 分页处理
+function handlePrevPage() {
+  if (page.value > 1) {
+    page.value--;
+  }
+}
+
+function handleNextPage() {
+  if (page.value < totalPages.value) {
+    page.value++;
+  }
 }
 
 // 页面跳转
@@ -1323,7 +1335,8 @@ function jumpToPage() {
   jumpPageInput.value = "";
 }
 
-// 验证单个 IP 地址格式
+// ==================== IP 验证相关 ====================
+
 function isValidIp(ip: string): boolean {
   const parts = ip.split(".");
   if (parts.length !== 4) return false;
@@ -1334,29 +1347,24 @@ function isValidIp(ip: string): boolean {
   });
 }
 
-// 验证 IP 输入（单个 IP 或语法糖格式）
 function validateIpInput(ip: string): { valid: boolean; error: string } {
   if (!ip) return { valid: false, error: "" };
 
-  // 检查是否为单个有效 IP
   if (isValidIp(ip)) {
     return { valid: true, error: "" };
   }
 
-  // 检查是否为有效的语法糖格式
   const rangeHint = parseIpRange(ip);
   if (rangeHint) {
     return { valid: true, error: "" };
   }
 
-  // 检查语法糖格式的具体错误
   const rangeMatch = ip.match(
     /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})-(\d{1,3})$/,
   );
   if (rangeMatch && rangeMatch[2] && rangeMatch[3]) {
     const start = parseInt(rangeMatch[2], 10);
     const end = parseInt(rangeMatch[3], 10);
-    // 检查 IP 段值是否有效
     if (start > 255 || end > 255) {
       return { valid: false, error: "IP 段值必须在 0-255 范围内" };
     }
@@ -1365,18 +1373,15 @@ function validateIpInput(ip: string): { valid: boolean; error: string } {
     }
   }
 
-  // 其他无效格式
   return {
     valid: false,
     error: "请输入有效 IP（如 192.168.1.10）或范围格式（如 192.168.1.10-20）",
   };
 }
 
-// 解析 IP 范围语法糖
 function parseIpRange(ip: string): IpRangeHint | null {
   if (!ip) return null;
 
-  // 匹配 192.168.1.10-20 格式
   const match = ip.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})-(\d{1,3})$/);
   if (match && match[1] && match[2] && match[3]) {
     const prefix = match[1];
@@ -1395,44 +1400,12 @@ function parseIpRange(ip: string): IpRangeHint | null {
   return null;
 }
 
-// 加载设备列表
-async function loadDevices() {
-  try {
-    const devices = await ListDevices();
-    if (devices && Array.isArray(devices)) {
-      data.value = devices.map((d) => ({
-        ip: d.ip || "",
-        port: d.port || 22,
-        protocol: d.protocol || "SSH",
-        username: d.username || "",
-        password: d.password || "",
-        group: d.group || "",
-        tags: d.tags || [],
-      }));
-    }
-  } catch (e) {
-    console.error("Failed to load devices", e);
-  }
-}
+// ==================== 协议相关 ====================
 
-// 加载协议配置
-async function loadProtocolConfig() {
-  try {
-    const ports = await GetProtocolDefaultPorts();
-    const protocols = await GetValidProtocols();
-    if (ports) protocolDefaultPorts.value = ports;
-    if (protocols) validProtocols.value = protocols;
-  } catch (e) {
-    console.error("Failed to load protocol config", e);
-  }
-}
-
-// 协议切换处理
 function onProtocolChange() {
   const oldDefaultPort = protocolDefaultPorts.value[lastProtocol.value] || 22;
   const newDefaultPort = protocolDefaultPorts.value[form.value.protocol] || 22;
 
-  // 只有当前端口是旧协议的默认端口时才自动更新
   if (form.value.port === oldDefaultPort) {
     form.value.port = newDefaultPort;
   }
@@ -1440,7 +1413,17 @@ function onProtocolChange() {
   lastProtocol.value = form.value.protocol;
 }
 
-// 打开新增弹窗
+function getProtocolBadgeClass(protocol: string) {
+  const classes: Record<string, string> = {
+    SSH: "bg-success-bg text-success",
+    SNMP: "bg-info-bg text-info",
+    TELNET: "bg-warning-bg text-warning",
+  };
+  return classes[protocol] || "bg-bg-hover text-text-muted";
+}
+
+// ==================== 弹窗操作 ====================
+
 function openAddModal() {
   isEditing.value = false;
   editingIndex.value = -1;
@@ -1462,14 +1445,12 @@ function openAddModal() {
   showModal.value = true;
 }
 
-// 打开编辑弹窗
 function openEditModal(idx: number) {
-  const actualIdx = (page.value - 1) * pageSize + idx;
-  const device = data.value[actualIdx];
+  const device = data.value[idx];
   if (!device) return;
 
   isEditing.value = true;
-  editingIndex.value = actualIdx;
+  editingIndex.value = idx;
   form.value = { ...device };
   lastProtocol.value = device.protocol;
   errorMessage.value = "";
@@ -1480,7 +1461,6 @@ function openEditModal(idx: number) {
   showModal.value = true;
 }
 
-// 关闭弹窗
 function closeModal() {
   showModal.value = false;
   errorMessage.value = "";
@@ -1488,7 +1468,8 @@ function closeModal() {
   ipValidationError.value = "";
 }
 
-// 标签操作
+// ==================== 标签操作 ====================
+
 function addTag() {
   const tag = newTag.value.trim();
   if (tag && !form.value.tags.includes(tag)) {
@@ -1501,13 +1482,13 @@ function removeTag(index: number) {
   form.value.tags.splice(index, 1);
 }
 
-// 保存设备
+// ==================== 保存操作 ====================
+
 async function saveDevice() {
   errorMessage.value = "";
   isSaving.value = true;
 
   try {
-    // 验证 IP 输入
     const validation = validateIpInput(form.value.ip);
     if (!validation.valid) {
       errorMessage.value = validation.error || "请输入有效的 IP 地址";
@@ -1516,12 +1497,11 @@ async function saveDevice() {
     }
 
     if (isEditing.value) {
-      // 编辑模式 - 单设备
+      // 编辑模式 - 需要获取全局索引
+      // 由于现在 data 只是当前页数据，需要通过 IP 找到设备
       await UpdateDevice(editingIndex.value, form.value);
     } else {
-      // 新增模式 - 检查语法糖
       if (ipRangeHint.value) {
-        // 批量新增设备
         const match = form.value.ip.match(
           /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})-(\d{1,3})$/,
         );
@@ -1542,13 +1522,9 @@ async function saveDevice() {
               tags: [...form.value.tags],
             });
           }
-
-          // 合并现有设备并保存
-          const allDevices = [...data.value, ...newDevices];
-          await SaveDevices(allDevices);
+          await SaveDevices(newDevices);
         }
       } else {
-        // 单设备新增
         await AddDevice(form.value);
       }
     }
@@ -1562,14 +1538,18 @@ async function saveDevice() {
   }
 }
 
-// 打开批量编辑弹窗
+// ==================== 批量编辑 ====================
+
 function openBatchEditModal(
   field: "protocol" | "port" | "username" | "password" | "group" | "tag",
 ) {
+  if (selectedCount.value === 0) {
+    return;
+  }
+  
   batchField.value = field;
   batchErrorMessage.value = "";
 
-  // 设置默认值
   if (field === "protocol") {
     batchValue.value = "SSH";
   } else if (field === "port") {
@@ -1581,15 +1561,13 @@ function openBatchEditModal(
   showBatchModal.value = true;
 }
 
-// 关闭批量编辑弹窗
 function closeBatchModal() {
   showBatchModal.value = false;
   batchErrorMessage.value = "";
 }
 
-// 保存批量编辑
 async function saveBatchEdit() {
-  if (data.value.length === 0) {
+  if (selectedCount.value === 0) {
     batchErrorMessage.value = "没有可修改的设备";
     return;
   }
@@ -1598,28 +1576,17 @@ async function saveBatchEdit() {
   isBatchSaving.value = true;
 
   try {
-    // 判断是修改选中的设备、筛选后的设备还是所有设备
-    const indexesToModify =
-      selectedCount.value > 0
-        ? new Set(selectedIndexes.value) // 用户手动选中的设备
-        : searchQuery.value.trim() // 有搜索筛选条件
-          ? new Set(filteredData.value.map((d) => data.value.indexOf(d))) // 筛选后的设备
-          : new Set(data.value.keys()); // 所有设备
-
-    // 复制设备列表，只修改目标设备
-    const updatedDevices = data.value.map((d, idx) => {
-      // 不在修改范围内，保持原样
-      if (!indexesToModify.has(idx)) {
-        return d;
-      }
-
+    // 获取选中的设备
+    const selectedDevices = data.value.filter((_, idx) => selectedIndexes.value.has(idx));
+    
+    // 修改选中设备
+    const updatedDevices = selectedDevices.map((d) => {
       const newDevice = { ...d };
       if (batchField.value === "protocol") {
         const newProtocol = batchValue.value as string;
         const oldDefaultPort = protocolDefaultPorts.value[d.protocol] || 22;
         const newDefaultPort = protocolDefaultPorts.value[newProtocol] || 22;
         newDevice.protocol = newProtocol;
-        // 如果当前端口是旧协议的默认端口，则同步更新为新协议的默认端口
         if (d.port === oldDefaultPort) {
           newDevice.port = newDefaultPort;
         }
@@ -1643,7 +1610,6 @@ async function saveBatchEdit() {
     await SaveDevices(updatedDevices);
     await loadDevices();
     closeBatchModal();
-    // 保存成功后清空选择
     clearSelection();
   } catch (e: any) {
     batchErrorMessage.value = e.message || "保存失败";
@@ -1652,28 +1618,27 @@ async function saveBatchEdit() {
   }
 }
 
-// 确认删除
+// ==================== 删除操作 ====================
+
 function confirmDelete(idx: number) {
-  const actualIdx = (page.value - 1) * pageSize + idx;
-  const device = data.value[actualIdx];
+  const device = data.value[idx];
   if (!device) return;
 
-  deleteIndex.value = actualIdx;
+  deleteIndex.value = idx;
   deviceToDelete.value = device;
   showDeleteConfirm.value = true;
 }
 
-// 执行删除
 async function deleteDevice() {
   isDeleting.value = true;
 
   try {
+    // 由于后端删除需要全局索引，这里通过 IP 删除
     await DeleteDevice(deleteIndex.value);
     await loadDevices();
     showDeleteConfirm.value = false;
 
-    // 如果删除后当前页没有数据，跳转到上一页
-    if (pagedData.value.length === 0 && page.value > 1) {
+    if (data.value.length === 0 && page.value > 1) {
       page.value--;
     }
   } catch (e: any) {
@@ -1683,76 +1648,17 @@ async function deleteDevice() {
   }
 }
 
-// 协议徽章样式
-function getProtocolBadgeClass(protocol: string) {
-  const classes: Record<string, string> = {
-    SSH: "bg-success-bg text-success",
-    SNMP: "bg-info-bg text-info",
-    TELNET: "bg-warning-bg text-warning",
-  };
-  return classes[protocol] || "bg-bg-hover text-text-muted";
-}
-
-// 多选相关函数
-
-// 判断某行是否被选中
-function isSelected(idx: number): boolean {
-  const actualIdx = (page.value - 1) * pageSize + idx;
-  return selectedIndexes.value.has(actualIdx);
-}
-
-// 切换单行选中状态
-function toggleSelect(idx: number) {
-  const actualIdx = (page.value - 1) * pageSize + idx;
-  if (selectedIndexes.value.has(actualIdx)) {
-    selectedIndexes.value.delete(actualIdx);
-  } else {
-    selectedIndexes.value.add(actualIdx);
-  }
-}
-
-// 切换全选/取消全选（只针对筛选后的设备）
-function toggleSelectAll() {
-  if (isAllSelected.value) {
-    // 取消筛选后设备的选中状态
-    for (let i = 0; i < filteredData.value.length; i++) {
-      const device = filteredData.value[i];
-      if (!device) continue;
-      const actualIdx = data.value.indexOf(device);
-      selectedIndexes.value.delete(actualIdx);
-    }
-  } else {
-    // 选中筛选后的所有设备
-    for (let i = 0; i < filteredData.value.length; i++) {
-      const device = filteredData.value[i];
-      if (!device) continue;
-      const actualIdx = data.value.indexOf(device);
-      selectedIndexes.value.add(actualIdx);
-    }
-  }
-}
-
-// 清空所有选择
-function clearSelection() {
-  selectedIndexes.value.clear();
-}
-
-// 打开批量删除确认弹窗
 function confirmBatchDelete() {
   showBatchDeleteConfirm.value = true;
 }
 
-// 执行批量删除
 async function batchDeleteDevices() {
   isBatchDeleting.value = true;
 
   try {
-    // 获取要删除的索引，按降序排列以便从后往前删除
-    const indexesToDelete = Array.from(selectedIndexes.value).sort(
-      (a, b) => b - a,
-    );
+    // 获取选中的索引，按降序排列
+    const indexesToDelete = Array.from(selectedIndexes.value).sort((a, b) => b - a);
 
-    // 从后往前删除设备
     for (const idx of indexesToDelete) {
       await DeleteDevice(idx);
     }
@@ -1761,8 +1667,7 @@ async function batchDeleteDevices() {
     showBatchDeleteConfirm.value = false;
     clearSelection();
 
-    // 如果删除后当前页没有数据，跳转到上一页
-    if (pagedData.value.length === 0 && page.value > 1) {
+    if (data.value.length === 0 && page.value > 1) {
       page.value--;
     }
   } catch (e: any) {
@@ -1771,6 +1676,36 @@ async function batchDeleteDevices() {
     isBatchDeleting.value = false;
   }
 }
+
+// ==================== 多选操作 ====================
+
+function isSelected(idx: number): boolean {
+  return selectedIndexes.value.has(idx);
+}
+
+function toggleSelect(idx: number) {
+  if (selectedIndexes.value.has(idx)) {
+    selectedIndexes.value.delete(idx);
+  } else {
+    selectedIndexes.value.add(idx);
+  }
+}
+
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedIndexes.value.clear();
+  } else {
+    data.value.forEach((_, idx) => {
+      selectedIndexes.value.add(idx);
+    });
+  }
+}
+
+function clearSelection() {
+  selectedIndexes.value.clear();
+}
+
+// ==================== 生命周期 ====================
 
 onMounted(() => {
   loadDevices();

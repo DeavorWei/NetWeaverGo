@@ -23,6 +23,7 @@ import * as SettingsServiceBinding from '../bindings/github.com/NetWeaverGo/core
 import * as EngineServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/engineservice.js'
 import * as TaskGroupServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/taskgroupservice.js'
 import * as ForgeServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice.js'
+import * as QueryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/queryservice.js'
 
 // ==================== 设备管理 API ====================
 /**
@@ -176,7 +177,7 @@ export type {
  * 查询服务 API
  * @description 提供带条件的列表查询，后端处理过滤、排序、分页
  * 
- * @note 目前使用前端过滤，后续可迁移至后端 QueryService
+ * @note 所有过滤、分页逻辑已迁移至后端 QueryService
  */
 
 /** 查询选项类型 */
@@ -200,59 +201,31 @@ export interface QueryResult<T> {
 }
 
 /**
- * QueryAPI - 前端过滤实现
- * @note 后续可通过后端 QueryService 优化大数据量场景
+ * QueryAPI - 后端查询实现
+ * @description 后端处理过滤、排序、分页，前端无需本地计算
  */
 export const QueryAPI = {
-  /** 查询设备列表（当前使用前端过滤） */
-  listDevices: async (_opts: QueryOptions): Promise<QueryResult<DeviceAsset>> => {
-    const devices = await DeviceAPI.listDevices()
-    // TODO: 实现后端过滤后移除此逻辑
-    return {
-      data: devices,
-      total: devices.length,
-      page: _opts.page || 1,
-      pageSize: _opts.pageSize || 10,
-      totalPages: Math.ceil(devices.length / (_opts.pageSize || 10))
-    }
-  },
-  /** 查询任务组列表（当前使用前端过滤） */
-  listTaskGroups: async (_opts: QueryOptions): Promise<QueryResult<TaskGroup>> => {
-    const groups = await TaskGroupAPI.listTaskGroups()
-    return {
-      data: groups,
-      total: groups.length,
-      page: _opts.page || 1,
-      pageSize: _opts.pageSize || 10,
-      totalPages: Math.ceil(groups.length / (_opts.pageSize || 10))
-    }
-  },
-  /** 查询命令组列表（当前使用前端过滤） */
-  listCommandGroups: async (_opts: QueryOptions): Promise<QueryResult<CommandGroup>> => {
-    const groups = await CommandGroupAPI.listCommandGroups()
-    return {
-      data: groups,
-      total: groups.length,
-      page: _opts.page || 1,
-      pageSize: _opts.pageSize || 10,
-      totalPages: Math.ceil(groups.length / (_opts.pageSize || 10))
-    }
-  },
-  /** 获取所有设备分组名称（用于下拉选项） */
-  getDeviceGroups: async (): Promise<string[]> => {
-    const devices = await DeviceAPI.listDevices()
-    const groupSet = new Set<string>()
-    devices.forEach(d => { if (d.group) groupSet.add(d.group) })
-    return Array.from(groupSet).sort()
-  },
-  /** 获取所有设备标签（用于下拉选项） */
-  getDeviceTags: async (): Promise<string[]> => {
-    const devices = await DeviceAPI.listDevices()
-    const tagSet = new Set<string>()
-    devices.forEach(d => d.tags?.forEach(t => { if (t) tagSet.add(t) }))
-    return Array.from(tagSet).sort()
-  },
+  /** 查询设备列表（后端过滤） */
+  listDevices: QueryServiceBinding.ListDevices,
+  
+  /** 查询任务组列表（后端过滤） */
+  listTaskGroups: QueryServiceBinding.ListTaskGroups,
+  
+  /** 查询命令组列表（后端过滤） */
+  listCommandGroups: QueryServiceBinding.ListCommandGroups,
+  
+  /** 获取所有设备分组名称（后端聚合） */
+  getDeviceGroups: QueryServiceBinding.GetDeviceGroups,
+  
+  /** 获取所有设备标签（后端聚合） */
+  getDeviceTags: QueryServiceBinding.GetDeviceTags,
 } as const
+
+// 导出 Query 相关类型
+export type {
+  QueryOptions as QueryOptionsBinding,
+  QueryResult as QueryResultBinding,
+} from '../bindings/github.com/NetWeaverGo/core/internal/ui/queryservice.js'
 
 // ==================== 类型导出 ====================
 export type { 
@@ -263,8 +236,6 @@ export type {
   TaskItem
 } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
 
-// 导入类型用于 QueryAPI
-import type { DeviceAsset, CommandGroup, TaskGroup } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
 
 // ==================== 向后兼容导出（Deprecated） ====================
 /**
