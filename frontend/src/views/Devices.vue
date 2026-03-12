@@ -1086,12 +1086,7 @@
 import { ref, computed, onMounted, watch } from "vue";
 import {
   QueryAPI,
-  AddDevice,
-  UpdateDevice,
-  DeleteDevice,
-  SaveDevices,
-  GetProtocolDefaultPorts,
-  GetValidProtocols,
+  DeviceAPI,
 } from "../services/api";
 import type { DeviceAsset } from "../services/api";
 
@@ -1288,8 +1283,8 @@ async function loadDevices() {
 // 加载协议配置
 async function loadProtocolConfig() {
   try {
-    const ports = await GetProtocolDefaultPorts();
-    const protocols = await GetValidProtocols();
+    const ports = await DeviceAPI.getProtocolDefaultPorts();
+    const protocols = await DeviceAPI.getValidProtocols();
     if (ports) protocolDefaultPorts.value = ports;
     if (protocols) validProtocols.value = protocols;
   } catch (e) {
@@ -1499,7 +1494,7 @@ async function saveDevice() {
     if (isEditing.value) {
       // 编辑模式 - 需要获取全局索引
       // 由于现在 data 只是当前页数据，需要通过 IP 找到设备
-      await UpdateDevice(editingIndex.value, form.value);
+      await DeviceAPI.updateDevice(editingIndex.value, form.value);
     } else {
       if (ipRangeHint.value) {
         const match = form.value.ip.match(
@@ -1522,10 +1517,10 @@ async function saveDevice() {
               tags: [...form.value.tags],
             });
           }
-          await SaveDevices(newDevices);
+        await DeviceAPI.saveDevices(newDevices);
         }
       } else {
-        await AddDevice(form.value);
+        await DeviceAPI.addDevice(form.value);
       }
     }
 
@@ -1607,7 +1602,7 @@ async function saveBatchEdit() {
       return newDevice;
     });
 
-    await SaveDevices(updatedDevices);
+    await DeviceAPI.saveDevices(updatedDevices);
     await loadDevices();
     closeBatchModal();
     clearSelection();
@@ -1634,7 +1629,7 @@ async function deleteDevice() {
 
   try {
     // 由于后端删除需要全局索引，这里通过 IP 删除
-    await DeleteDevice(deleteIndex.value);
+    await DeviceAPI.deleteDevice(deleteIndex.value);
     await loadDevices();
     showDeleteConfirm.value = false;
 
@@ -1660,7 +1655,7 @@ async function batchDeleteDevices() {
     const indexesToDelete = Array.from(selectedIndexes.value).sort((a, b) => b - a);
 
     for (const idx of indexesToDelete) {
-      await DeleteDevice(idx);
+      await DeviceAPI.deleteDevice(idx);
     }
 
     await loadDevices();

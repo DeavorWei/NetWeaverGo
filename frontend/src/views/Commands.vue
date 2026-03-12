@@ -468,14 +468,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import type { CommandGroup } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
-import { 
-  ListCommandGroups, 
-  CreateCommandGroup, 
-  UpdateCommandGroup, 
-  DeleteCommandGroup as DeleteCommandGroupAPI,
-  DuplicateCommandGroup as DuplicateCommandGroupAPI
-} from '../services/api'
+import type { CommandGroup } from '../services/api'
+import { CommandGroupAPI } from '../services/api'
 
 const loading = ref(true)
 const groups = ref<CommandGroup[]>([])
@@ -613,7 +607,7 @@ function formatDate(dateStr: string) {
 async function loadGroups() {
   loading.value = true
   try {
-    const result = await ListCommandGroups()
+    const result = await CommandGroupAPI.listCommandGroups()
     groups.value = result || []
   } catch (err) {
     console.error('加载命令组失败:', err)
@@ -708,9 +702,9 @@ async function saveGroup() {
     } as Partial<CommandGroup>
     
     if (editModal.value.isCreate) {
-      await CreateCommandGroup(groupData as CommandGroup)
+      await CommandGroupAPI.createCommandGroup(groupData as CommandGroup)
     } else {
-      await UpdateCommandGroup(editModal.value.editingId, groupData as CommandGroup)
+      await CommandGroupAPI.updateCommandGroup(editModal.value.editingId, groupData as CommandGroup)
     }
     
     closeEditModal()
@@ -726,7 +720,7 @@ async function saveGroup() {
 // 复制命令组
 async function duplicateGroup(id: string) {
   try {
-    await DuplicateCommandGroupAPI(id)
+    await CommandGroupAPI.duplicateCommandGroup(id)
     await loadGroups()
   } catch (err: any) {
     console.error('复制命令组失败:', err)
@@ -756,7 +750,7 @@ async function deleteGroup() {
   deleteModal.value.deleting = true
   
   try {
-    await DeleteCommandGroupAPI(deleteModal.value.groupId)
+    await CommandGroupAPI.deleteCommandGroup(deleteModal.value.groupId)
     closeDeleteModal()
     await loadGroups()
   } catch (err: any) {

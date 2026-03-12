@@ -67,7 +67,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import type { CommandGroup } from '../../types/command'
-import { ListCommandGroups } from '../../services/api'
+import { CommandGroupAPI } from '../../services/api'
 
 const props = defineProps<{
   modelValue?: string // 选中的命令组ID
@@ -92,7 +92,7 @@ const selectedGroup = computed(() => {
 async function loadGroups() {
   loading.value = true
   try {
-    const result = await ListCommandGroups()
+    const result = await CommandGroupAPI.listCommandGroups()
     groups.value = result || []
     
     // 如果有传入的modelValue，设置为选中项

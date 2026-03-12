@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { CreateCommandGroup, CreateTaskGroup, ForgeAPI } from '../../services/api'
-import type { CommandGroup } from '../../bindings/github.com/NetWeaverGo/core/internal/config/models'
-import type { VarInput, BuildResult, ForgeIPValidationResult } from '../../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice'
+import { CommandGroupAPI, TaskGroupAPI, ForgeAPI } from '../../services/api'
+import type { CommandGroup } from '../../services/api'
+import type { VarInput, BuildResult, ForgeIPValidationResult } from '../../services/api'
 
 const router = useRouter()
 
@@ -385,7 +385,7 @@ async function executeSend() {
         commands: allLines
       }
       
-      await CreateCommandGroup(groupData as CommandGroup)
+      await CommandGroupAPI.createCommandGroup(groupData as CommandGroup)
       showSendResult(true, `命令组「${name.trim()}」创建成功`, 1, [])
       
     } else {
@@ -408,7 +408,7 @@ async function executeSend() {
           commands: blockLines
         }
         
-        const result = await CreateCommandGroup(groupData as CommandGroup)
+        const result = await CommandGroupAPI.createCommandGroup(groupData as CommandGroup)
         createdIds.push(result?.id || '')
       }
       
@@ -501,7 +501,7 @@ async function executeTaskSend() {
       updatedAt: ''
     }
 
-    await CreateTaskGroup(taskGroup)
+    await TaskGroupAPI.createTaskGroup(taskGroup)
     closeTaskModal()
     showSendResult(true, `任务「${taskModal.value.name.trim()}」已发送到任务执行`, bindingPreview.value.length, [])
   } catch (err: any) {

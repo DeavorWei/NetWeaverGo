@@ -97,7 +97,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { EnsureConfig } from '../services/api'
+import { SettingsAPI } from '../services/api'
 
 const deviceCount  = ref(0)
 const commandCount = ref(0)
@@ -142,7 +142,7 @@ const statusDesc = computed(() => {
 
 onMounted(async () => {
   try {
-    const [assets, commands, missingFiles] = await EnsureConfig()
+    const [assets, commands, missingFiles] = await SettingsAPI.ensureConfig()
     deviceCount.value  = assets   ? assets.length   : 0
     commandCount.value = commands ? commands.length  : 0
     if (missingFiles && missingFiles.length > 0) {

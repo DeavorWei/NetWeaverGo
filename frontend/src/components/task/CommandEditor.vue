@@ -155,7 +155,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { GetCommands, SaveCommands } from '../../services/api'
+import { CommandGroupAPI } from '../../services/api'
 
 const isOpen = ref(false)
 const isEditing = ref(false)
@@ -168,7 +168,7 @@ const commandCount = computed(() => localCommands.value.length)
 
 async function loadCommands() {
   try {
-    const commands = await GetCommands()
+    const commands = await CommandGroupAPI.getCommands()
     localCommands.value = commands || []
   } catch (err) {
     console.error('加载命令失败:', err)
@@ -212,7 +212,7 @@ async function saveCommands() {
       return
     }
 
-    await SaveCommands(lines)
+    await CommandGroupAPI.saveCommands(lines)
     localCommands.value = lines
     isEditing.value = false
     editContent.value = ''

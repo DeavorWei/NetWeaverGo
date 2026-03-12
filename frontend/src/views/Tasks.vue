@@ -210,8 +210,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  ListDevices,
-  CreateTaskGroup as ApiCreateTaskGroup
+  DeviceAPI,
+  TaskGroupAPI
 } from '../services/api'
 import type { DeviceAsset, CommandGroup } from '../services/api'
 import DeviceSelector from '../components/task/DeviceSelector.vue'
@@ -348,7 +348,7 @@ async function confirmCreate() {
       updatedAt: ''
     }
 
-    await ApiCreateTaskGroup(taskGroup)
+    await TaskGroupAPI.createTaskGroup(taskGroup)
     createModal.value.show = false
     triggerToast('任务创建成功！可前往任务执行页查看', 'success')
   } catch (err: any) {
@@ -379,7 +379,7 @@ function goToTaskExecution() {
 // 加载设备列表
 async function loadDevices() {
   try {
-    const result = await ListDevices()
+    const result = await DeviceAPI.listDevices()
     // 后端已统一使用小写字段名，前端组件也已适配
     deviceList.value = result || []
   } catch (err) {

@@ -1,8 +1,8 @@
-// 命令组类型定义 - 从绑定导出
-export type { CommandGroup } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
+// 命令组类型定义 - 从 api.ts 统一导出
+export type { CommandGroup } from '../services/api'
 
 // 创建命令组请求类型（使用 Partial 允许省略 id 和时间戳）
-import type { CommandGroup as CommandGroupBase } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
+import type { CommandGroup as CommandGroupBase } from '../services/api'
 export type CreateCommandGroupRequest = Partial<CommandGroupBase> & {
   name: string;
   commands: string[];
