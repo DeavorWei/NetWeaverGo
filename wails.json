@@ -20,7 +20,9 @@
           "CommandGroupService",
           "SettingsService",
           "EngineService",
-          "TaskGroupService"
+          "TaskGroupService",
+          "ForgeService",
+          "QueryService"
         ]
       }
     ]

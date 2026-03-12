@@ -134,7 +134,16 @@ func (s *SettingsService) GetRuntimeConfig() (RuntimeConfigData, error) {
 	response.Pagination.LineThreshold = cfg.Pagination.LineThreshold
 	response.Pagination.CheckInterval = cfg.Pagination.CheckInterval
 
-	logger.DebugAll("SettingsService", "-", "返回运行时配置")
+	logger.DebugAll("SettingsService", "-", "返回运行时配置: timeouts=[cmd=%d, conn=%d, hs=%d, short=%d, long=%d], "+
+		"limits=[logs=%d, len=%d, trunc=%d, dev=%d], engine=[workers=%d, buf=%d, fallback=%d], "+
+		"buffers=[def=%d, small=%d, large=%d], pagination=[lines=%d, interval=%d]",
+		response.Timeouts.Command, response.Timeouts.Connection, response.Timeouts.Handshake,
+		response.Timeouts.ShortCmd, response.Timeouts.LongCmd,
+		response.Limits.MaxLogsPerDevice, response.Limits.MaxLogLength,
+		response.Limits.LogTruncateThreshold, response.Limits.MaxConcurrentDevices,
+		response.Engine.WorkerCount, response.Engine.EventBufferSize, response.Engine.FallbackEventCapacity,
+		response.Buffers.DefaultSize, response.Buffers.SmallSize, response.Buffers.LargeSize,
+		response.Pagination.LineThreshold, response.Pagination.CheckInterval)
 
 	return response, nil
 }
@@ -142,6 +151,16 @@ func (s *SettingsService) GetRuntimeConfig() (RuntimeConfigData, error) {
 // UpdateRuntimeConfig 更新运行时配置（热更新）
 func (s *SettingsService) UpdateRuntimeConfig(data RuntimeConfigData) error {
 	logger.Debug("SettingsService", "-", "收到前端 UpdateRuntimeConfig 调用请求")
+	logger.DebugAll("SettingsService", "-", "接收到的运行时配置: timeouts=[cmd=%d, conn=%d, hs=%d, short=%d, long=%d], "+
+		"limits=[logs=%d, len=%d, trunc=%d, dev=%d], engine=[workers=%d, buf=%d, fallback=%d], "+
+		"buffers=[def=%d, small=%d, large=%d], pagination=[lines=%d, interval=%d]",
+		data.Timeouts.Command, data.Timeouts.Connection, data.Timeouts.Handshake,
+		data.Timeouts.ShortCmd, data.Timeouts.LongCmd,
+		data.Limits.MaxLogsPerDevice, data.Limits.MaxLogLength,
+		data.Limits.LogTruncateThreshold, data.Limits.MaxConcurrentDevices,
+		data.Engine.WorkerCount, data.Engine.EventBufferSize, data.Engine.FallbackEventCapacity,
+		data.Buffers.DefaultSize, data.Buffers.SmallSize, data.Buffers.LargeSize,
+		data.Pagination.LineThreshold, data.Pagination.CheckInterval)
 
 	cfg := config.RuntimeConfig{}
 	cfg.Timeouts.Command = data.Timeouts.Command
@@ -191,6 +210,17 @@ func (s *SettingsService) ResetRuntimeConfigToDefault() error {
 
 	// 更新内存配置
 	manager.UpdateConfig(cfg)
+
+	logger.DebugAll("SettingsService", "-", "重置后的运行时配置: timeouts=[cmd=%d, conn=%d, hs=%d, short=%d, long=%d], "+
+		"limits=[logs=%d, len=%d, trunc=%d, dev=%d], engine=[workers=%d, buf=%d, fallback=%d], "+
+		"buffers=[def=%d, small=%d, large=%d], pagination=[lines=%d, interval=%d]",
+		cfg.Timeouts.Command, cfg.Timeouts.Connection, cfg.Timeouts.Handshake,
+		cfg.Timeouts.ShortCmd, cfg.Timeouts.LongCmd,
+		cfg.Limits.MaxLogsPerDevice, cfg.Limits.MaxLogLength,
+		cfg.Limits.LogTruncateThreshold, cfg.Limits.MaxConcurrentDevices,
+		cfg.Engine.WorkerCount, cfg.Engine.EventBufferSize, cfg.Engine.FallbackEventCapacity,
+		cfg.Buffers.DefaultSize, cfg.Buffers.SmallSize, cfg.Buffers.LargeSize,
+		cfg.Pagination.LineThreshold, cfg.Pagination.CheckInterval)
 
 	logger.Info("SettingsService", "-", "运行时配置已重置为默认值")
 	return nil

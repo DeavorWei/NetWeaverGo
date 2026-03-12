@@ -25,23 +25,23 @@
           <!-- 最大并发数 -->
           <div class="space-y-2">
             <label class="text-xs font-medium text-text-secondary">最大并发数</label>
-            <input
-              type="number"
-              v-model.number="settings.MaxWorkers"
-              min="1"
-              max="256"
-              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-            />
+          <input
+            type="number"
+            v-model.number="settings.maxWorkers"
+            min="1"
+            max="256"
+            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
+          />
             <p class="text-xs text-text-muted">同时执行的协程数量 (1-256)</p>
           </div>
 
           <!-- 错误处理模式 -->
           <div class="space-y-2">
             <label class="text-xs font-medium text-text-secondary">错误处理模式</label>
-            <select
-              v-model="settings.ErrorMode"
-              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-            >
+          <select
+            v-model="settings.errorMode"
+            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
+          >
               <option value="pause">挂起询问</option>
               <option value="skip">跳过继续</option>
               <option value="abort">终止执行</option>
@@ -63,24 +63,24 @@
           <!-- 连接超时 -->
           <div class="space-y-2">
             <label class="text-xs font-medium text-text-secondary">连接超时</label>
-            <input
-              type="text"
-              v-model="settings.ConnectTimeout"
-              placeholder="如: 10s"
-              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-            />
+          <input
+            type="text"
+            v-model="settings.connectTimeout"
+            placeholder="如: 10s"
+            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
+          />
             <p class="text-xs text-text-muted">SSH/SFTP 连接阶段超时时间</p>
           </div>
 
           <!-- 命令超时 -->
           <div class="space-y-2">
             <label class="text-xs font-medium text-text-secondary">命令超时</label>
-            <input
-              type="text"
-              v-model="settings.CommandTimeout"
-              placeholder="如: 30s"
-              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-            />
+          <input
+            type="text"
+            v-model="settings.commandTimeout"
+            placeholder="如: 30s"
+            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
+          />
             <p class="text-xs text-text-muted">单条命令执行超时时间</p>
           </div>
         </div>
@@ -98,24 +98,24 @@
           <!-- 输出目录 -->
           <div class="space-y-2">
             <label class="text-xs font-medium text-text-secondary">输出目录</label>
-            <input
-              type="text"
-              v-model="settings.OutputDir"
-              placeholder="如: output"
-              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-            />
+          <input
+            type="text"
+            v-model="settings.outputDir"
+            placeholder="如: output"
+            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
+          />
             <p class="text-xs text-text-muted">回显输出与配置备份的存放目录</p>
           </div>
 
           <!-- 日志目录 -->
           <div class="space-y-2">
             <label class="text-xs font-medium text-text-secondary">日志目录</label>
-            <input
-              type="text"
-              v-model="settings.LogDir"
-              placeholder="如: logs"
-              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-            />
+          <input
+            type="text"
+            v-model="settings.logDir"
+            placeholder="如: logs"
+            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
+          />
             <p class="text-xs text-text-muted">系统运行日志存放目录</p>
           </div>
         </div>
@@ -146,7 +146,7 @@
             <label class="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                v-model="settings.Debug"
+                v-model="settings.debug"
                 class="sr-only peer"
               />
               <div class="w-11 h-6 bg-bg-panel border border-border peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-accent/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
@@ -165,7 +165,7 @@
             <label class="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                v-model="settings.DebugAll"
+                v-model="settings.debugAll"
                 @change="onDebugAllChange"
                 class="sr-only peer"
               />
@@ -182,7 +182,7 @@
                 <line x1="12" y1="8" x2="12.01" y2="8"/>
               </svg>
               <p class="text-xs text-info">
-                启用 DebugAll 会自动同时启用 Debug。日志文件保存在 <code class="bg-bg-panel px-1 py-0.5 rounded">{{ settings.LogDir || 'logs' }}/app.log</code>
+                启用 DebugAll 会自动同时启用 Debug。日志文件保存在 <code class="bg-bg-panel px-1 py-0.5 rounded">{{ settings.logDir || 'logs' }}/app.log</code>
               </p>
             </div>
           </div>
@@ -203,7 +203,7 @@
         <div class="space-y-2 mb-4">
           <label class="text-xs font-medium text-text-secondary">预设模式</label>
           <select
-            v-model="settings.SSHAlgorithms.presetMode"
+            v-model="settings.sshAlgorithms.presetMode"
             class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
           >
             <option value="secure">安全优先</option>
@@ -216,10 +216,10 @@
         <!-- 预设模式说明 -->
         <div class="mb-4 p-3 rounded-lg bg-bg-panel/50 border border-border/50">
           <div class="text-xs space-y-1">
-            <p v-if="settings.SSHAlgorithms.presetMode === 'secure'" class="text-success">
+            <p v-if="settings.sshAlgorithms.presetMode === 'secure'" class="text-success">
               <span class="font-medium">安全优先：</span>仅使用现代安全算法（AEAD加密、椭圆曲线密钥交换、ED25519主机密钥），适用于新设备和追求最高安全性的场景。
             </p>
-            <p v-else-if="settings.SSHAlgorithms.presetMode === 'compatible'" class="text-accent">
+            <p v-else-if="settings.sshAlgorithms.presetMode === 'compatible'" class="text-accent">
               <span class="font-medium">兼容模式：</span>包含老旧设备支持的算法（CBC加密、SHA1密钥交换、RSA/DSA主机密钥），兼容性最佳，推荐用于网络设备管理。
             </p>
             <p v-else class="text-warning">
@@ -229,7 +229,7 @@
         </div>
 
         <!-- 自定义算法配置（仅自定义模式时显示） -->
-        <div v-if="settings.SSHAlgorithms.presetMode === 'custom'" class="space-y-4">
+        <div v-if="settings.sshAlgorithms.presetMode === 'custom'" class="space-y-4">
           <!-- 安全警告 -->
           <div class="p-3 rounded-lg bg-warning/10 border border-warning/30">
             <div class="flex items-start gap-2">
@@ -249,8 +249,8 @@
             <label class="text-xs font-medium text-text-secondary">加密算法 (Ciphers)</label>
             <input
               type="text"
-              :value="arrayToString(settings.SSHAlgorithms.ciphers)"
-              @input="settings.SSHAlgorithms.ciphers = stringToArray(($event.target as HTMLInputElement)?.value || '')"
+              :value="arrayToString(settings.sshAlgorithms.ciphers)"
+              @input="settings.sshAlgorithms.ciphers = stringToArray(($event.target as HTMLInputElement)?.value || '')"
               placeholder="如: aes128-ctr,aes192-ctr,aes256-ctr"
               class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
             />
@@ -262,8 +262,8 @@
             <label class="text-xs font-medium text-text-secondary">密钥交换算法 (Key Exchanges)</label>
             <input
               type="text"
-              :value="arrayToString(settings.SSHAlgorithms.keyExchanges)"
-              @input="settings.SSHAlgorithms.keyExchanges = stringToArray(($event.target as HTMLInputElement)?.value || '')"
+              :value="arrayToString(settings.sshAlgorithms.keyExchanges)"
+              @input="settings.sshAlgorithms.keyExchanges = stringToArray(($event.target as HTMLInputElement)?.value || '')"
               placeholder="如: curve25519-sha256,ecdh-sha2-nistp256"
               class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
             />
@@ -275,8 +275,8 @@
             <label class="text-xs font-medium text-text-secondary">MAC 算法 (Message Authentication Codes)</label>
             <input
               type="text"
-              :value="arrayToString(settings.SSHAlgorithms.macs)"
-              @input="settings.SSHAlgorithms.macs = stringToArray(($event.target as HTMLInputElement)?.value || '')"
+              :value="arrayToString(settings.sshAlgorithms.macs)"
+              @input="settings.sshAlgorithms.macs = stringToArray(($event.target as HTMLInputElement)?.value || '')"
               placeholder="如: hmac-sha2-256,hmac-sha2-512"
               class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
             />
@@ -288,8 +288,8 @@
             <label class="text-xs font-medium text-text-secondary">主机密钥算法 (Host Key Algorithms)</label>
             <input
               type="text"
-              :value="arrayToString(settings.SSHAlgorithms.hostKeyAlgorithms)"
-              @input="settings.SSHAlgorithms.hostKeyAlgorithms = stringToArray(($event.target as HTMLInputElement)?.value || '')"
+              :value="arrayToString(settings.sshAlgorithms.hostKeyAlgorithms)"
+              @input="settings.sshAlgorithms.hostKeyAlgorithms = stringToArray(($event.target as HTMLInputElement)?.value || '')"
               placeholder="如: ssh-ed25519,ecdsa-sha2-nistp256"
               class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
             />
@@ -298,11 +298,8 @@
         </div>
       </div>
 
-      <!-- 运行时配置面板 -->
-      <RuntimeConfigPanel />
-
-      <!-- 操作按钮 -->
-      <div class="flex items-center justify-end gap-3 pt-2">
+      <!-- 全局设置操作按钮 -->
+      <div class="flex items-center justify-end gap-3 pt-2 pb-2">
         <button
           @click="resetSettings"
           :disabled="saving"
@@ -322,6 +319,9 @@
           {{ saving ? '保存中...' : '保存设置' }}
         </button>
       </div>
+
+      <!-- 运行时配置面板 -->
+      <RuntimeConfigPanel />
     </div>
 
     <!-- Toast 提示 -->
@@ -350,17 +350,17 @@ interface SSHAlgorithmSettings {
   presetMode: string
 }
 
-// 前端使用的设置接口（大写字段名，与表单绑定）
+// 前端使用的设置接口（小写字段名，与后端绑定类保持一致）
 interface GlobalSettings {
-  MaxWorkers: number
-  ConnectTimeout: string
-  CommandTimeout: string
-  OutputDir: string
-  LogDir: string
-  ErrorMode: string
-  Debug: boolean
-  DebugAll: boolean
-  SSHAlgorithms: SSHAlgorithmSettings
+  maxWorkers: number
+  connectTimeout: string
+  commandTimeout: string
+  outputDir: string
+  logDir: string
+  errorMode: string
+  debug: boolean
+  debugAll: boolean
+  sshAlgorithms: SSHAlgorithmSettings
 }
 
 const loading = ref(true)
@@ -376,27 +376,27 @@ const defaultSSHAlgorithms: SSHAlgorithmSettings = {
 }
 
 const settings = ref<GlobalSettings>({
-  MaxWorkers: 32,
-  ConnectTimeout: '10s',
-  CommandTimeout: '30s',
-  OutputDir: 'output',
-  LogDir: 'logs',
-  ErrorMode: 'pause',
-  Debug: false,
-  DebugAll: false,
-  SSHAlgorithms: { ...defaultSSHAlgorithms }
+  maxWorkers: 32,
+  connectTimeout: '10s',
+  commandTimeout: '30s',
+  outputDir: 'output',
+  logDir: 'logs',
+  errorMode: 'pause',
+  debug: false,
+  debugAll: false,
+  sshAlgorithms: { ...defaultSSHAlgorithms }
 })
 
 const defaultSettings: GlobalSettings = {
-  MaxWorkers: 32,
-  ConnectTimeout: '10s',
-  CommandTimeout: '30s',
-  OutputDir: 'output',
-  LogDir: 'logs',
-  ErrorMode: 'pause',
-  Debug: false,
-  DebugAll: false,
-  SSHAlgorithms: { ...defaultSSHAlgorithms }
+  maxWorkers: 32,
+  connectTimeout: '10s',
+  commandTimeout: '30s',
+  outputDir: 'output',
+  logDir: 'logs',
+  errorMode: 'pause',
+  debug: false,
+  debugAll: false,
+  sshAlgorithms: { ...defaultSSHAlgorithms }
 }
 
 const toast = ref({
@@ -407,7 +407,7 @@ const toast = ref({
 
 // 预设模式说明
 const presetModeDescription = computed(() => {
-  switch (settings.value.SSHAlgorithms.presetMode) {
+  switch (settings.value.sshAlgorithms.presetMode) {
     case 'secure':
       return '仅使用现代安全算法，适用于新设备'
     case 'compatible':
@@ -421,8 +421,8 @@ const presetModeDescription = computed(() => {
 
 // DebugAll 变更处理：启用 DebugAll 时自动启用 Debug
 function onDebugAllChange() {
-  if (settings.value.DebugAll) {
-    settings.value.Debug = true
+  if (settings.value.debugAll) {
+    settings.value.debug = true
   }
 }
 
@@ -449,19 +449,18 @@ async function loadSettings() {
     loading.value = true
     const result: BackendSettings | null = await SettingsAPI.loadSettings()
     if (result) {
-      // 后端返回小写字段名，转换为前端大写字段名
-      // 使用 any 类型临时处理，因为类型文件需要构建后才会更新
+      // 后端返回小写字段名，直接赋值给前端（现在统一使用小写）
       const rawResult = result as any
       settings.value = {
-        MaxWorkers: result.maxWorkers || 32,
-        ConnectTimeout: result.connectTimeout || '10s',
-        CommandTimeout: result.commandTimeout || '30s',
-        OutputDir: result.outputDir || 'output',
-        LogDir: result.logDir || 'logs',
-        ErrorMode: result.errorMode || 'pause',
-        Debug: rawResult.debug || false,
-        DebugAll: rawResult.debugAll || false,
-        SSHAlgorithms: rawResult.sshAlgorithms || { ...defaultSSHAlgorithms }
+        maxWorkers: result.maxWorkers || 32,
+        connectTimeout: result.connectTimeout || '10s',
+        commandTimeout: result.commandTimeout || '30s',
+        outputDir: result.outputDir || 'output',
+        logDir: result.logDir || 'logs',
+        errorMode: result.errorMode || 'pause',
+        debug: rawResult.debug || false,
+        debugAll: rawResult.debugAll || false,
+        sshAlgorithms: rawResult.sshAlgorithms || { ...defaultSSHAlgorithms }
       }
     }
   } catch (err) {
@@ -473,23 +472,24 @@ async function loadSettings() {
 }
 
 // 类型转换函数：前端格式 → 后端格式
+// 由于现在前端和后端都使用小写字段名，直接返回即可
 function toBackendSettings(frontend: GlobalSettings): BackendSettings {
   return {
     id: 1,
-    maxWorkers: frontend.MaxWorkers,
-    connectTimeout: frontend.ConnectTimeout,
-    commandTimeout: frontend.CommandTimeout,
-    outputDir: frontend.OutputDir,
-    logDir: frontend.LogDir,
-    errorMode: frontend.ErrorMode,
-    debug: frontend.Debug,
-    debugAll: frontend.DebugAll,
+    maxWorkers: frontend.maxWorkers,
+    connectTimeout: frontend.connectTimeout,
+    commandTimeout: frontend.commandTimeout,
+    outputDir: frontend.outputDir,
+    logDir: frontend.logDir,
+    errorMode: frontend.errorMode,
+    debug: frontend.debug,
+    debugAll: frontend.debugAll,
     sshAlgorithms: {
-      presetMode: frontend.SSHAlgorithms.presetMode,
-      ciphers: frontend.SSHAlgorithms.ciphers,
-      keyExchanges: frontend.SSHAlgorithms.keyExchanges,
-      macs: frontend.SSHAlgorithms.macs,
-      hostKeyAlgorithms: frontend.SSHAlgorithms.hostKeyAlgorithms
+      presetMode: frontend.sshAlgorithms.presetMode,
+      ciphers: frontend.sshAlgorithms.ciphers,
+      keyExchanges: frontend.sshAlgorithms.keyExchanges,
+      macs: frontend.sshAlgorithms.macs,
+      hostKeyAlgorithms: frontend.sshAlgorithms.hostKeyAlgorithms
     }
   } as unknown as BackendSettings
 }
