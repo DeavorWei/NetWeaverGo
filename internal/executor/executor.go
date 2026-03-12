@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/matcher"
 	"github.com/NetWeaverGo/core/internal/report"
@@ -40,6 +41,9 @@ type DeviceExecutor struct {
 
 	EventBus  chan report.ExecutorEvent
 	OnSuspend SuspendHandler
+
+	// SSH 算法配置
+	Algorithms *config.SSHAlgorithmSettings
 }
 
 // NewDeviceExecutor 初始化执行器
@@ -56,15 +60,21 @@ func NewDeviceExecutor(ip string, port int, user, pass string, eb chan report.Ex
 	}
 }
 
+// SetAlgorithms 设置 SSH 算法配置
+func (e *DeviceExecutor) SetAlgorithms(algorithms *config.SSHAlgorithmSettings) {
+	e.Algorithms = algorithms
+}
+
 // Connect 创建SSH长连接并初始化日志审计
 func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) error {
 	logger.Debug("Executor", e.IP, "准备建立SSH连接 (Timeout: %v)", timeout)
 	cfg := sshutil.Config{
-		IP:       e.IP,
-		Port:     e.Port,
-		Username: e.Username,
-		Password: e.Password,
-		Timeout:  timeout,
+		IP:         e.IP,
+		Port:       e.Port,
+		Username:   e.Username,
+		Password:   e.Password,
+		Timeout:    timeout,
+		Algorithms: e.Algorithms,
 	}
 
 	client, err := sshutil.NewSSHClient(ctx, cfg)

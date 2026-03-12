@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "migrate:api": "node ../scripts/migrate-api.js src",
+    "migrate:api:file": "node ../scripts/migrate-api.js"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.1",

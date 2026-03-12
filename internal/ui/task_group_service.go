@@ -10,6 +10,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/engine"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -128,171 +129,20 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 	// 使用 engine 实例 ID 追踪
 	engineInstanceID := fmt.Sprintf("taskgroup_%s", id)
 
-	if taskGroup.Mode == "group" {
-		// 模式A：一组命令 → 多台设备
-		// 优化：合并所有设备和命令，使用单一 Engine 实例
-		var allSelectedAssets []config.DeviceAsset
-		var allCommands []string
-		assetSet := make(map[string]bool)
+	switch taskGroup.Mode {
+	case "group":
+		// 模式A：一组命令 → 多台设备（所有设备执行相同命令集）
+		err = s.executeModeA(taskGroup, assetMap, settings, rootCtx, &executionWg)
+	case "binding":
+		// 模式B：每台设备独立命令（每个任务项的设备执行各自的命令）
+		err = s.executeModeB(taskGroup, assetMap, settings, rootCtx, &executionWg)
+	default:
+		err = fmt.Errorf("未知的任务组模式: %s", taskGroup.Mode)
+	}
 
-		for _, item := range taskGroup.Items {
-			// 合并设备（去重）
-			for _, ip := range item.DeviceIPs {
-				if !assetSet[ip] {
-					assetSet[ip] = true
-					if asset, ok := assetMap[ip]; ok {
-						allSelectedAssets = append(allSelectedAssets, asset)
-					}
-				}
-			}
-			// 获取第一个命令组（模式A下所有任务项使用相同命令组）
-			if len(allCommands) == 0 && item.CommandGroupID != "" {
-				group, err := config.GetCommandGroup(item.CommandGroupID)
-				if err == nil && len(group.Commands) > 0 {
-					allCommands = group.Commands
-				}
-			}
-		}
-
-		if len(allSelectedAssets) > 0 && len(allCommands) > 0 {
-			executionWg.Add(1)
-			go func() {
-				defer executionWg.Done()
-
-				ng := engine.NewEngine(allSelectedAssets, allCommands, settings, false)
-				ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
-
-				// 使用双重同步机制确保事件监听器完全就绪
-				type eventListenerState struct {
-					ready  chan struct{} // Wails App 就绪
-					active chan struct{} // 事件循环已进入
-				}
-
-				listenerState := &eventListenerState{
-					ready:  make(chan struct{}),
-					active: make(chan struct{}),
-				}
-
-				// 监听 FrontendBus
-				go func() {
-					// 等待 Wails 应用实例就绪
-					for i := 0; i < 100; i++ { // 最多等待 1 秒
-						if s.wailsApp != nil {
-							break
-						}
-						time.Sleep(10 * time.Millisecond)
-					}
-					// 通知 App 已就绪
-					close(listenerState.ready)
-
-					// 进入事件循环前，等待启动信号
-					<-listenerState.active
-
-					// 开始消费 FrontendBus
-					for ev := range ng.FrontendBus {
-						if s.wailsApp != nil {
-							s.wailsApp.Event.Emit("device:event", ev)
-						}
-					}
-				}()
-
-				// 等待 Wails App 就绪
-				<-listenerState.ready
-
-				// 发送启动信号，让事件循环开始
-				close(listenerState.active)
-
-				// 确保事件循环已真正进入（短暂等待 select 生效）
-				time.Sleep(5 * time.Millisecond)
-
-				ng.Run(rootCtx)
-			}()
-		}
-	} else if taskGroup.Mode == "binding" {
-		// 模式B：每台设备独立命令
-		// 使用单一 Engine 实例，合并所有设备和命令
-		var allSelectedAssets []config.DeviceAsset
-		var allCommands []string
-		assetSet := make(map[string]bool)
-
-		for _, item := range taskGroup.Items {
-			// 过滤空命令
-			var filtered []string
-			for _, cmd := range item.Commands {
-				trimmed := strings.TrimSpace(cmd)
-				if trimmed != "" {
-					filtered = append(filtered, trimmed)
-				}
-			}
-
-			// 合并设备（去重）
-			for _, ip := range item.DeviceIPs {
-				if !assetSet[ip] {
-					assetSet[ip] = true
-					if asset, ok := assetMap[ip]; ok {
-						allSelectedAssets = append(allSelectedAssets, asset)
-					}
-				}
-			}
-
-			// 合并命令
-			allCommands = append(allCommands, filtered...)
-		}
-
-		if len(allSelectedAssets) > 0 && len(allCommands) > 0 {
-			executionWg.Add(1)
-			go func() {
-				defer executionWg.Done()
-
-				ng := engine.NewEngine(allSelectedAssets, allCommands, settings, false)
-				ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
-
-				// 使用双重同步机制确保事件监听器完全就绪
-				type eventListenerState struct {
-					ready  chan struct{} // Wails App 就绪
-					active chan struct{} // 事件循环已进入
-				}
-
-				listenerState := &eventListenerState{
-					ready:  make(chan struct{}),
-					active: make(chan struct{}),
-				}
-
-				// 监听 FrontendBus
-				go func() {
-					// 等待 Wails 应用实例就绪
-					for i := 0; i < 100; i++ { // 最多等待 1 秒
-						if s.wailsApp != nil {
-							break
-						}
-						time.Sleep(10 * time.Millisecond)
-					}
-					// 通知 App 已就绪
-					close(listenerState.ready)
-
-					// 进入事件循环前，等待启动信号
-					<-listenerState.active
-
-					// 开始消费 FrontendBus
-					for ev := range ng.FrontendBus {
-						if s.wailsApp != nil {
-							s.wailsApp.Event.Emit("device:event", ev)
-						}
-					}
-				}()
-
-				// 等待 Wails App 就绪
-				<-listenerState.ready
-
-				// 发送启动信号，让事件循环开始
-				close(listenerState.active)
-
-				// 确保事件循环已真正进入（短暂等待 select 生效）
-				time.Sleep(5 * time.Millisecond)
-
-				ng.Run(rootCtx)
-			}()
-		}
+	if err != nil {
+		config.UpdateTaskGroupStatus(id, "failed")
+		return err
 	}
 
 	// 等待所有并行任务完成
@@ -309,4 +159,138 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 	})
 
 	return nil
+}
+
+// executeModeA 模式A执行：一组命令发送给所有设备
+func (s *TaskGroupService) executeModeA(
+	taskGroup *config.TaskGroup,
+	assetMap map[string]config.DeviceAsset,
+	settings *config.GlobalSettings,
+	ctx context.Context,
+	wg *sync.WaitGroup,
+) error {
+	// 收集所有选中的设备（去重）
+	assetSet := make(map[string]bool)
+	var allSelectedAssets []config.DeviceAsset
+
+	// 获取命令组（模式A下所有任务项使用相同命令组）
+	var commands []string
+
+	for _, item := range taskGroup.Items {
+		// 收集设备
+		for _, ip := range item.DeviceIPs {
+			if !assetSet[ip] {
+				assetSet[ip] = true
+				if asset, ok := assetMap[ip]; ok {
+					allSelectedAssets = append(allSelectedAssets, asset)
+				}
+			}
+		}
+
+		// 获取第一个有效命令组
+		if len(commands) == 0 && item.CommandGroupID != "" {
+			group, err := config.GetCommandGroup(item.CommandGroupID)
+			if err == nil && len(group.Commands) > 0 {
+				commands = group.Commands
+			}
+		}
+	}
+
+	if len(allSelectedAssets) == 0 {
+		return fmt.Errorf("未选择任何有效设备")
+	}
+
+	if len(commands) == 0 {
+		return fmt.Errorf("命令组为空或未配置")
+	}
+
+	logger.Info("TaskGroup", "-", "模式A执行: %d 台设备, %d 条命令", len(allSelectedAssets), len(commands))
+
+	// 创建单个 Engine 实例执行所有设备
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		ng := engine.NewEngine(allSelectedAssets, commands, settings, false)
+		ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
+
+		// 启动事件监听
+		go s.listenEvents(ng.FrontendBus)
+
+		ng.Run(ctx)
+	}()
+
+	return nil
+}
+
+// executeModeB 模式B执行：每台设备执行各自的独立命令
+func (s *TaskGroupService) executeModeB(
+	taskGroup *config.TaskGroup,
+	assetMap map[string]config.DeviceAsset,
+	settings *config.GlobalSettings,
+	ctx context.Context,
+	wg *sync.WaitGroup,
+) error {
+	logger.Info("TaskGroup", "-", "模式B执行: %d 个任务项", len(taskGroup.Items))
+
+	// 为每个任务项创建独立的 Engine 实例
+	for _, item := range taskGroup.Items {
+		// 过滤空命令
+		var commands []string
+		for _, cmd := range item.Commands {
+			trimmed := strings.TrimSpace(cmd)
+			if trimmed != "" {
+				commands = append(commands, trimmed)
+			}
+		}
+
+		if len(commands) == 0 {
+			logger.Warn("TaskGroup", "-", "任务项命令为空，跳过")
+			continue
+		}
+
+		// 收集该任务项的设备
+		var itemAssets []config.DeviceAsset
+		for _, ip := range item.DeviceIPs {
+			if asset, ok := assetMap[ip]; ok {
+				itemAssets = append(itemAssets, asset)
+			}
+		}
+
+		if len(itemAssets) == 0 {
+			logger.Warn("TaskGroup", "-", "任务项设备为空，跳过")
+			continue
+		}
+
+		logger.Info("TaskGroup", "-", "启动独立任务: %d 台设备, %d 条命令", len(itemAssets), len(commands))
+
+		// 为每个任务项创建独立的 Engine 实例
+		// 注意：这里需要捕获循环变量，使用局部变量传递
+		assets := itemAssets
+		cmds := commands
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			ng := engine.NewEngine(assets, cmds, settings, false)
+			ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
+
+			// 启动事件监听
+			go s.listenEvents(ng.FrontendBus)
+
+			ng.Run(ctx)
+		}()
+	}
+
+	return nil
+}
+
+// listenEvents 事件监听协程（简化版）
+func (s *TaskGroupService) listenEvents(frontendBus chan report.ExecutorEvent) {
+	for ev := range frontendBus {
+		if s.wailsApp != nil {
+			s.wailsApp.Event.Emit("device:event", ev)
+		}
+	}
 }

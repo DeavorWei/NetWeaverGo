@@ -17,8 +17,19 @@ type GlobalEngineState struct {
 	startedAt time.Time // 启动时间
 }
 
-// globalEngine 全局单例实例
-var globalEngine = &GlobalEngineState{}
+// 全局单例相关变量
+var (
+	globalEngine     *GlobalEngineState
+	globalEngineOnce sync.Once
+)
+
+// getGlobalEngine 获取全局引擎状态实例（线程安全）
+func getGlobalEngine() *GlobalEngineState {
+	globalEngineOnce.Do(func() {
+		globalEngine = &GlobalEngineState{}
+	})
+	return globalEngine
+}
 
 // TryAcquire 尝试获取引擎运行锁
 // 如果引擎已在运行，返回错误；否则获取锁并返回 nil
@@ -95,35 +106,35 @@ func (g *GlobalEngineState) GetStatus() map[string]interface{} {
 
 // TryAcquireEngine 全局函数：尝试获取引擎锁（兼容旧接口）
 func TryAcquireEngine(runnerSrc string) error {
-	return globalEngine.TryAcquire(runnerSrc, "")
+	return getGlobalEngine().TryAcquire(runnerSrc, "")
 }
 
 // TryAcquireEngineWithID 全局函数：尝试获取引擎锁（带实例ID）
 func TryAcquireEngineWithID(runnerSrc, runnerID string) error {
-	return globalEngine.TryAcquire(runnerSrc, runnerID)
+	return getGlobalEngine().TryAcquire(runnerSrc, runnerID)
 }
 
 // ReleaseEngine 全局函数：释放引擎锁
 func ReleaseEngine() {
-	globalEngine.Release()
+	getGlobalEngine().Release()
 }
 
 // IsEngineRunning 全局函数：检查引擎是否运行中
 func IsEngineRunning() bool {
-	return globalEngine.IsRunning()
+	return getGlobalEngine().IsRunning()
 }
 
 // GetEngineRunnerSource 全局函数：获取当前运行来源
 func GetEngineRunnerSource() string {
-	return globalEngine.GetRunnerSource()
+	return getGlobalEngine().GetRunnerSource()
 }
 
 // GetEngineRunnerID 全局函数：获取当前运行实例ID
 func GetEngineRunnerID() string {
-	return globalEngine.GetRunnerID()
+	return getGlobalEngine().GetRunnerID()
 }
 
 // GetEngineStatus 全局函数：获取完整状态信息
 func GetEngineStatus() map[string]interface{} {
-	return globalEngine.GetStatus()
+	return getGlobalEngine().GetStatus()
 }

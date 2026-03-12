@@ -54,11 +54,33 @@ func sanitizeMessage(msg string) string {
 type engineState int32
 
 const (
-	stateIdle engineState = iota
-	stateRunning
-	stateClosing
-	stateClosed
+	stateIdle     engineState = iota // 空闲状态
+	stateStarting                    // 启动中
+	stateRunning                     // 运行中
+	statePaused                      // 暂停中（挂起状态）
+	stateError                       // 错误状态
+	stateClosing                     // 关闭中
+	stateClosed                      // 已关闭
 )
+
+// engineStateNames 状态名称映射（用于日志和调试）
+var engineStateNames = map[engineState]string{
+	stateIdle:     "Idle",
+	stateStarting: "Starting",
+	stateRunning:  "Running",
+	statePaused:   "Paused",
+	stateError:    "Error",
+	stateClosing:  "Closing",
+	stateClosed:   "Closed",
+}
+
+// String 返回状态名称
+func (s engineState) String() string {
+	if name, ok := engineStateNames[s]; ok {
+		return name
+	}
+	return "Unknown"
+}
 
 // Engine 全局中央调度器，控制所有物理设备的并发执行流
 type Engine struct {
@@ -530,6 +552,7 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 	}()
 
 	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, workerEventBus, suspendHandler)
+	exec.SetAlgorithms(&e.Settings.SSHAlgorithms)
 	defer exec.Close()
 
 	// 发送开始事件
@@ -582,11 +605,12 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 
 	// 1. 挂载 SFTP 作为初步连接检测 (使用独立的新通道避免 PTY 被占用)
 	sftpCfg := sshutil.Config{
-		IP:       dev.IP,
-		Port:     dev.Port,
-		Username: dev.Username,
-		Password: dev.Password,
-		Timeout:  connectTimeout,
+		IP:         dev.IP,
+		Port:       dev.Port,
+		Username:   dev.Username,
+		Password:   dev.Password,
+		Timeout:    connectTimeout,
+		Algorithms: &e.Settings.SSHAlgorithms,
 	}
 	sftpClient, err := sftputil.NewSFTPClient(ctx, sftpCfg)
 	if err != nil {

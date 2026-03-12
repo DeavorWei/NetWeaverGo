@@ -31,14 +31,20 @@ type SuspendManager struct {
 	wailsApp     *application.App
 }
 
-// globalSuspendManager 全局单例
-var globalSuspendManager = &SuspendManager{
-	sessions:     make(map[string]*SuspendSession),
-	sessionsByIP: make(map[string]string),
-}
+// 全局单例相关变量
+var (
+	globalSuspendManager     *SuspendManager
+	globalSuspendManagerOnce sync.Once
+)
 
-// GetSuspendManager 获取全局管理器
+// GetSuspendManager 获取全局管理器（线程安全）
 func GetSuspendManager() *SuspendManager {
+	globalSuspendManagerOnce.Do(func() {
+		globalSuspendManager = &SuspendManager{
+			sessions:     make(map[string]*SuspendSession),
+			sessionsByIP: make(map[string]string),
+		}
+	})
 	return globalSuspendManager
 }
 

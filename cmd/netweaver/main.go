@@ -34,12 +34,24 @@ func main() {
 
 	flag.Parse()
 
+	// 记录命令行是否显式指定了调试参数（CLI 模式下优先级最高）
+	cliDebugSet := false
+	cliDebugValue := false
+	cliDebugAllSet := false
+	cliDebugAllValue := false
+
 	// 初始化日志全局状态
 	if *debugAllMode {
 		logger.EnableDebugAll = true
 		logger.EnableDebug = true
+		cliDebugAllSet = true
+		cliDebugAllValue = true
+		cliDebugSet = true
+		cliDebugValue = true
 	} else if *debugMode {
 		logger.EnableDebug = true
+		cliDebugSet = true
+		cliDebugValue = true
 	}
 
 	// 启动数据库并进行数据迁移校验
@@ -50,17 +62,13 @@ func main() {
 	config.MigrateLegacyDataIfNeeded()
 
 	if *isCLI || *isBackup || *nonInteractive {
-		runCLI(*isBackup, *nonInteractive)
+		runCLI(*isBackup, *nonInteractive, cliDebugSet, cliDebugValue, cliDebugAllSet, cliDebugAllValue)
 	} else {
 		runGUI()
 	}
 }
 
 func runGUI() {
-	if err := config.InitDB(); err != nil {
-		fmt.Printf("数据库初始化失败: %v\n", err)
-		os.Exit(1)
-	}
 	logger.Info("System", "-", "正在初始化 Wails GUI 环境...")
 
 	// 创建各独立服务实例
@@ -130,16 +138,23 @@ func runGUI() {
 	}
 }
 
-func runCLI(isBackup bool, nonInteractive bool) {
-	if err := config.InitDB(); err != nil {
-		fmt.Printf("[配置/环境提示] 数据库初始化失败: %v\n", err)
-		os.Exit(1)
-	}
-
+func runCLI(isBackup bool, nonInteractive bool, cliDebugSet, cliDebugValue, cliDebugAllSet, cliDebugAllValue bool) {
 	settings, isNewSettings, err := config.LoadSettings()
 	if err != nil {
 		fmt.Printf("[配置/环境提示] %v\n", err)
 		os.Exit(0)
+	}
+
+	// CLI 模式下，命令行参数优先级高于数据库设置
+	if cliDebugAllSet {
+		settings.DebugAll = cliDebugAllValue
+		settings.Debug = cliDebugValue
+		// 重新应用调试设置
+		config.ApplyDebugSettings(settings.Debug, settings.DebugAll)
+	} else if cliDebugSet {
+		settings.Debug = cliDebugValue
+		// 重新应用调试设置
+		config.ApplyDebugSettings(settings.Debug, settings.DebugAll)
 	}
 
 	logger.Info("System", "-", `

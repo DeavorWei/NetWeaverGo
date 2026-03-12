@@ -159,25 +159,31 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 
 	logger.DebugAll("Report", evt.IP, "EventBus接收到事件: Type=%v, Message=%s", evt.Type, evt.Message)
 
+	// 格式化日志消息
+	var logMessage string
 	switch evt.Type {
 	case EventDeviceStart:
 		summary.Status = "Running"
 		summary.TotalCmds = evt.TotalCmd
+		logMessage = fmt.Sprintf("[START] 开始执行，总命令数: %d", evt.TotalCmd)
 		logger.Info("Report", evt.IP, "开始执行设备任务，总命令数: %d", evt.TotalCmd)
 	case EventDeviceCmd:
 		summary.Status = "Running"
 		summary.ExecCmds = evt.CmdIndex
 		summary.ErrorMsg = evt.Message // 借用记录当前命令
+		logMessage = fmt.Sprintf("[CMD] %s [%d/%d]", evt.Message, evt.CmdIndex, evt.TotalCmd)
 		logger.Info("Report", evt.IP, "正在执行: %s [%d/%d]", summary.ErrorMsg, summary.ExecCmds, summary.TotalCmds)
 	case EventDeviceSuccess:
 		summary.Status = "Success"
 		summary.ExecCmds = summary.TotalCmds
 		summary.ErrorMsg = "ALL Done"
 		p.finished++
+		logMessage = "[SUCCESS] 执行完成"
 		logger.Info("Report", evt.IP, "设备任务执行成功")
 	case EventDeviceError:
 		summary.Status = "Error"
 		summary.ErrorMsg = evt.Message
+		logMessage = fmt.Sprintf("[ERROR] %s", evt.Message)
 		logger.Error("Report", evt.IP, "设备任务执行出错: %s", evt.Message)
 		// 注意：Error 不是终态事件——后续引擎会根据用户或策略选择发出 Abort 或 Skip。
 		// 仅 Abort 和 Success 为终态，p.finished++ 统一在各自分支处理。
@@ -187,12 +193,46 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 	case EventDeviceSkip:
 		summary.Status = "Warning"
 		summary.ErrorMsg = "Skip: " + evt.Message
+		logMessage = fmt.Sprintf("[SKIP] %s", evt.Message)
 		logger.Info("Report", evt.IP, "跳过节点: %s", evt.Message)
 	case EventDeviceAbort:
 		summary.Status = "Aborted"
 		summary.ErrorMsg = "Aborted: " + evt.Message
 		p.finished++
+		logMessage = fmt.Sprintf("[ABORT] %s", evt.Message)
 		logger.Error("Report", evt.IP, "设备任务被终止: %s", evt.Message)
+	default:
+		logMessage = fmt.Sprintf("[UNKNOWN] %s", evt.Message)
+	}
+
+	// 添加日志到设备日志存储（无锁版本，因为已持有锁）
+	p.addDeviceLogLocked(evt.IP, logMessage)
+}
+
+// addDeviceLogLocked 添加日志到设备（必须在持有锁时调用）
+func (p *ProgressTracker) addDeviceLogLocked(ip string, message string) {
+	// 截断过长日志
+	if len(message) > MaxLogLength {
+		message = message[:MaxLogLength] + "...[截断]"
+	}
+
+	// 初始化日志存储
+	if p.deviceLogs == nil {
+		p.deviceLogs = make(map[string][]string)
+	}
+	if p.logCounts == nil {
+		p.logCounts = make(map[string]int)
+	}
+
+	// 添加日志
+	p.deviceLogs[ip] = append(p.deviceLogs[ip], message)
+	p.logCounts[ip]++
+
+	// 日志条数超过阈值时截断（保留最新的）
+	if len(p.deviceLogs[ip]) > MaxLogsPerDevice+50 {
+		// 移除旧的日志
+		removeCount := len(p.deviceLogs[ip]) - MaxLogsPerDevice
+		p.deviceLogs[ip] = p.deviceLogs[ip][removeCount:]
 	}
 }
 

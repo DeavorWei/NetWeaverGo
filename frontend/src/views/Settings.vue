@@ -121,6 +121,183 @@
         </div>
       </div>
 
+      <!-- 调试日志设置 -->
+      <div class="bg-bg-card border border-border rounded-xl p-5 shadow-card">
+        <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          调试日志
+        </h3>
+        <div class="space-y-4">
+          <!-- Debug 开关 -->
+          <div class="flex items-center justify-between p-3 rounded-lg bg-bg-panel/50 border border-border/50">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-text-primary">启用 Debug 日志</span>
+                <span class="px-2 py-0.5 text-xs bg-info/20 text-info rounded">Debug</span>
+              </div>
+              <p class="text-xs text-text-muted">输出一般调试信息，适用于常规问题排查</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                v-model="settings.Debug"
+                class="sr-only peer"
+              />
+              <div class="w-11 h-6 bg-bg-panel border border-border peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-accent/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
+            </label>
+          </div>
+
+          <!-- DebugAll 开关 -->
+          <div class="flex items-center justify-between p-3 rounded-lg bg-bg-panel/50 border border-border/50">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-text-primary">启用 DebugAll 日志</span>
+                <span class="px-2 py-0.5 text-xs bg-warning/20 text-warning rounded">Verbose</span>
+              </div>
+              <p class="text-xs text-text-muted">输出全量详细日志，包含底层通信数据，数据量较大</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                v-model="settings.DebugAll"
+                @change="onDebugAllChange"
+                class="sr-only peer"
+              />
+              <div class="w-11 h-6 bg-bg-panel border border-border peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-warning/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-warning"></div>
+            </label>
+          </div>
+
+          <!-- 提示信息 -->
+          <div class="p-3 rounded-lg bg-info/10 border border-info/30">
+            <div class="flex items-start gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-info mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+              <p class="text-xs text-info">
+                启用 DebugAll 会自动同时启用 Debug。日志文件保存在 <code class="bg-bg-panel px-1 py-0.5 rounded">{{ settings.LogDir || 'logs' }}/app.log</code>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SSH 算法配置 -->
+      <div class="bg-bg-card border border-border rounded-xl p-5 shadow-card">
+        <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          SSH 算法配置
+        </h3>
+
+        <!-- 预设模式选择 -->
+        <div class="space-y-2 mb-4">
+          <label class="text-xs font-medium text-text-secondary">预设模式</label>
+          <select
+            v-model="settings.SSHAlgorithms.presetMode"
+            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
+          >
+            <option value="secure">安全优先</option>
+            <option value="compatible">兼容模式（推荐）</option>
+            <option value="custom">自定义</option>
+          </select>
+          <p class="text-xs text-text-muted">{{ presetModeDescription }}</p>
+        </div>
+
+        <!-- 预设模式说明 -->
+        <div class="mb-4 p-3 rounded-lg bg-bg-panel/50 border border-border/50">
+          <div class="text-xs space-y-1">
+            <p v-if="settings.SSHAlgorithms.presetMode === 'secure'" class="text-success">
+              <span class="font-medium">安全优先：</span>仅使用现代安全算法（AEAD加密、椭圆曲线密钥交换、ED25519主机密钥），适用于新设备和追求最高安全性的场景。
+            </p>
+            <p v-else-if="settings.SSHAlgorithms.presetMode === 'compatible'" class="text-accent">
+              <span class="font-medium">兼容模式：</span>包含老旧设备支持的算法（CBC加密、SHA1密钥交换、RSA/DSA主机密钥），兼容性最佳，推荐用于网络设备管理。
+            </p>
+            <p v-else class="text-warning">
+              <span class="font-medium">自定义：</span>手动指定所有算法配置，适用于特殊场景。请确保了解每个算法的安全性和兼容性影响。
+            </p>
+          </div>
+        </div>
+
+        <!-- 自定义算法配置（仅自定义模式时显示） -->
+        <div v-if="settings.SSHAlgorithms.presetMode === 'custom'" class="space-y-4">
+          <!-- 安全警告 -->
+          <div class="p-3 rounded-lg bg-warning/10 border border-warning/30">
+            <div class="flex items-start gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-warning mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <p class="text-xs text-warning">
+                自定义算法配置可能导致连接失败或安全风险。请确保输入正确的算法名称，多个算法用英文逗号分隔。
+              </p>
+            </div>
+          </div>
+
+          <!-- 加密算法 -->
+          <div class="space-y-2">
+            <label class="text-xs font-medium text-text-secondary">加密算法 (Ciphers)</label>
+            <input
+              type="text"
+              :value="arrayToString(settings.SSHAlgorithms.ciphers)"
+              @input="settings.SSHAlgorithms.ciphers = stringToArray(($event.target as HTMLInputElement)?.value || '')"
+              placeholder="如: aes128-ctr,aes192-ctr,aes256-ctr"
+              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
+            />
+            <p class="text-xs text-text-muted">SSH 会话加密算法，多个算法用逗号分隔</p>
+          </div>
+
+          <!-- 密钥交换算法 -->
+          <div class="space-y-2">
+            <label class="text-xs font-medium text-text-secondary">密钥交换算法 (Key Exchanges)</label>
+            <input
+              type="text"
+              :value="arrayToString(settings.SSHAlgorithms.keyExchanges)"
+              @input="settings.SSHAlgorithms.keyExchanges = stringToArray(($event.target as HTMLInputElement)?.value || '')"
+              placeholder="如: curve25519-sha256,ecdh-sha2-nistp256"
+              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
+            />
+            <p class="text-xs text-text-muted">SSH 密钥交换算法，多个算法用逗号分隔</p>
+          </div>
+
+          <!-- MAC 算法 -->
+          <div class="space-y-2">
+            <label class="text-xs font-medium text-text-secondary">MAC 算法 (Message Authentication Codes)</label>
+            <input
+              type="text"
+              :value="arrayToString(settings.SSHAlgorithms.macs)"
+              @input="settings.SSHAlgorithms.macs = stringToArray(($event.target as HTMLInputElement)?.value || '')"
+              placeholder="如: hmac-sha2-256,hmac-sha2-512"
+              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
+            />
+            <p class="text-xs text-text-muted">SSH 消息认证码算法，多个算法用逗号分隔</p>
+          </div>
+
+          <!-- 主机密钥算法 -->
+          <div class="space-y-2">
+            <label class="text-xs font-medium text-text-secondary">主机密钥算法 (Host Key Algorithms)</label>
+            <input
+              type="text"
+              :value="arrayToString(settings.SSHAlgorithms.hostKeyAlgorithms)"
+              @input="settings.SSHAlgorithms.hostKeyAlgorithms = stringToArray(($event.target as HTMLInputElement)?.value || '')"
+              placeholder="如: ssh-ed25519,ecdsa-sha2-nistp256"
+              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
+            />
+            <p class="text-xs text-text-muted">SSH 主机密钥验证算法，多个算法用逗号分隔</p>
+          </div>
+        </div>
+      </div>
+
       <!-- 操作按钮 -->
       <div class="flex items-center justify-end gap-3 pt-2">
         <button
@@ -156,10 +333,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { LoadSettings } from '../services/api'
-import { Call } from '@wailsio/runtime'
+import { ref, computed, onMounted } from 'vue'
+import { SettingsAPI } from '../services/api'
 import type { GlobalSettings as BackendSettings } from '../services/api'
+
+// SSH 算法配置接口
+interface SSHAlgorithmSettings {
+  ciphers: string[]
+  keyExchanges: string[]
+  macs: string[]
+  hostKeyAlgorithms: string[]
+  presetMode: string
+}
 
 // 前端使用的设置接口（大写字段名，与表单绑定）
 interface GlobalSettings {
@@ -169,10 +354,22 @@ interface GlobalSettings {
   OutputDir: string
   LogDir: string
   ErrorMode: string
+  Debug: boolean
+  DebugAll: boolean
+  SSHAlgorithms: SSHAlgorithmSettings
 }
 
 const loading = ref(true)
 const saving = ref(false)
+
+// 默认 SSH 算法配置
+const defaultSSHAlgorithms: SSHAlgorithmSettings = {
+  ciphers: [],
+  keyExchanges: [],
+  macs: [],
+  hostKeyAlgorithms: [],
+  presetMode: 'compatible'
+}
 
 const settings = ref<GlobalSettings>({
   MaxWorkers: 32,
@@ -180,7 +377,10 @@ const settings = ref<GlobalSettings>({
   CommandTimeout: '30s',
   OutputDir: 'output',
   LogDir: 'logs',
-  ErrorMode: 'pause'
+  ErrorMode: 'pause',
+  Debug: false,
+  DebugAll: false,
+  SSHAlgorithms: { ...defaultSSHAlgorithms }
 })
 
 const defaultSettings: GlobalSettings = {
@@ -189,7 +389,10 @@ const defaultSettings: GlobalSettings = {
   CommandTimeout: '30s',
   OutputDir: 'output',
   LogDir: 'logs',
-  ErrorMode: 'pause'
+  ErrorMode: 'pause',
+  Debug: false,
+  DebugAll: false,
+  SSHAlgorithms: { ...defaultSSHAlgorithms }
 }
 
 const toast = ref({
@@ -197,6 +400,38 @@ const toast = ref({
   message: '',
   type: 'success' as 'success' | 'error'
 })
+
+// 预设模式说明
+const presetModeDescription = computed(() => {
+  switch (settings.value.SSHAlgorithms.presetMode) {
+    case 'secure':
+      return '仅使用现代安全算法，适用于新设备'
+    case 'compatible':
+      return '兼容老旧设备，推荐用于网络设备管理'
+    case 'custom':
+      return '手动指定算法配置'
+    default:
+      return ''
+  }
+})
+
+// DebugAll 变更处理：启用 DebugAll 时自动启用 Debug
+function onDebugAllChange() {
+  if (settings.value.DebugAll) {
+    settings.value.Debug = true
+  }
+}
+
+// 数组转逗号分隔字符串
+function arrayToString(arr: string[]): string {
+  return arr.join(', ')
+}
+
+// 逗号分隔字符串转数组
+function stringToArray(str: string): string[] {
+  if (!str || !str.trim()) return []
+  return str.split(',').map(s => s.trim()).filter(s => s.length > 0)
+}
 
 function showToast(message: string, type: 'success' | 'error' = 'success') {
   toast.value = { show: true, message, type }
@@ -208,16 +443,21 @@ function showToast(message: string, type: 'success' | 'error' = 'success') {
 async function loadSettings() {
   try {
     loading.value = true
-    const result: BackendSettings | null = await LoadSettings()
+    const result: BackendSettings | null = await SettingsAPI.loadSettings()
     if (result) {
       // 后端返回小写字段名，转换为前端大写字段名
+      // 使用 any 类型临时处理，因为类型文件需要构建后才会更新
+      const rawResult = result as any
       settings.value = {
         MaxWorkers: result.maxWorkers || 32,
         ConnectTimeout: result.connectTimeout || '10s',
         CommandTimeout: result.commandTimeout || '30s',
         OutputDir: result.outputDir || 'output',
         LogDir: result.logDir || 'logs',
-        ErrorMode: result.errorMode || 'pause'
+        ErrorMode: result.errorMode || 'pause',
+        Debug: rawResult.debug || false,
+        DebugAll: rawResult.debugAll || false,
+        SSHAlgorithms: rawResult.sshAlgorithms || { ...defaultSSHAlgorithms }
       }
     }
   } catch (err) {
@@ -228,27 +468,38 @@ async function loadSettings() {
   }
 }
 
+// 类型转换函数：前端格式 → 后端格式
+function toBackendSettings(frontend: GlobalSettings): BackendSettings {
+  return {
+    id: 1,
+    maxWorkers: frontend.MaxWorkers,
+    connectTimeout: frontend.ConnectTimeout,
+    commandTimeout: frontend.CommandTimeout,
+    outputDir: frontend.OutputDir,
+    logDir: frontend.LogDir,
+    errorMode: frontend.ErrorMode,
+    debug: frontend.Debug,
+    debugAll: frontend.DebugAll,
+    sshAlgorithms: {
+      presetMode: frontend.SSHAlgorithms.presetMode,
+      ciphers: frontend.SSHAlgorithms.ciphers,
+      keyExchanges: frontend.SSHAlgorithms.keyExchanges,
+      macs: frontend.SSHAlgorithms.macs,
+      hostKeyAlgorithms: frontend.SSHAlgorithms.hostKeyAlgorithms
+    }
+  } as unknown as BackendSettings
+}
+
 async function saveSettings() {
   try {
     saving.value = true
-    // 转换为后端期望的小写字段名格式
-    const backendSettings = {
-      maxWorkers: settings.value.MaxWorkers,
-      connectTimeout: settings.value.ConnectTimeout,
-      commandTimeout: settings.value.CommandTimeout,
-      outputDir: settings.value.OutputDir,
-      logDir: settings.value.LogDir,
-      errorMode: settings.value.ErrorMode
-    }
-    // SaveSettings 未在绑定中生成，使用 Call.ByName
-    await Call.ByName(
-      'github.com/NetWeaverGo/core/internal/ui.AppService.SaveSettings',
-      backendSettings
-    )
+    const backendSettings = toBackendSettings(settings.value)
+    await SettingsAPI.saveSettings(backendSettings)
     showToast('设置已保存')
   } catch (err) {
     console.error('Failed to save settings:', err)
-    showToast('保存设置失败', 'error')
+    const errorMessage = err instanceof Error ? err.message : '未知错误'
+    showToast(`保存设置失败: ${errorMessage}`, 'error')
   } finally {
     saving.value = false
   }

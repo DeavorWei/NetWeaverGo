@@ -238,80 +238,341 @@ export type {
 
 
 // ==================== 向后兼容导出（Deprecated） ====================
+// ⚠️ 警告：以下导出将在 v2.0 版本移除，请迁移到新的 API 命名空间
+// 详见文档：docs/API_MIGRATION.md
+
+// 开发环境显示弃用警告，生产环境静默
+const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV
+const showDeprecationWarning = (oldApi: string, newApi: string): void => {
+  if (isDev) {
+    console.warn(`[NetWeaverGo 弃用警告] ${oldApi} 将在 v2.0 移除，请迁移至 ${newApi}。详见 docs/API_MIGRATION.md`)
+  }
+}
+
 /**
- * @deprecated 请使用 DeviceAPI.listDevices
- * 向后兼容导出，将在 v2.0 版本移除
+ * @deprecated 将在 v2.0 移除，请使用 {@link DeviceAPI.listDevices}
+ * @see {@link DeviceAPI.listDevices}
+ * @example
+ * // 迁移前
+ * import { ListDevices } from '@/services/api'
+ * const devices = await ListDevices()
+ *
+ * // 迁移后
+ * import { DeviceAPI } from '@/services/api'
+ * const devices = await DeviceAPI.listDevices()
  */
-export const ListDevices = DeviceAPI.listDevices
-/** @deprecated 请使用 DeviceAPI.addDevice */
-export const AddDevice = DeviceAPI.addDevice
-/** @deprecated 请使用 DeviceAPI.updateDevice */
-export const UpdateDevice = DeviceAPI.updateDevice
-/** @deprecated 请使用 DeviceAPI.deleteDevice */
-export const DeleteDevice = DeviceAPI.deleteDevice
-/** @deprecated 请使用 DeviceAPI.saveDevices */
-export const SaveDevices = DeviceAPI.saveDevices
-/** @deprecated 请使用 DeviceAPI.getProtocolDefaultPorts */
-export const GetProtocolDefaultPorts = DeviceAPI.getProtocolDefaultPorts
-/** @deprecated 请使用 DeviceAPI.getValidProtocols */
-export const GetValidProtocols = DeviceAPI.getValidProtocols
+export const ListDevices = (...args: Parameters<typeof DeviceAPI.listDevices>) => {
+  showDeprecationWarning('ListDevices', 'DeviceAPI.listDevices')
+  return DeviceAPI.listDevices(...args)
+}
 
-/** @deprecated 请使用 CommandGroupAPI.listCommandGroups */
-export const ListCommandGroups = CommandGroupAPI.listCommandGroups
-/** @deprecated 请使用 CommandGroupAPI.getCommandGroup */
-export const GetCommandGroup = CommandGroupAPI.getCommandGroup
-/** @deprecated 请使用 CommandGroupAPI.createCommandGroup */
-export const CreateCommandGroup = CommandGroupAPI.createCommandGroup
-/** @deprecated 请使用 CommandGroupAPI.updateCommandGroup */
-export const UpdateCommandGroup = CommandGroupAPI.updateCommandGroup
-/** @deprecated 请使用 CommandGroupAPI.deleteCommandGroup */
-export const DeleteCommandGroup = CommandGroupAPI.deleteCommandGroup
-/** @deprecated 请使用 CommandGroupAPI.duplicateCommandGroup */
-export const DuplicateCommandGroup = CommandGroupAPI.duplicateCommandGroup
-/** @deprecated 请使用 CommandGroupAPI.importCommandGroup */
-export const ImportCommandGroup = CommandGroupAPI.importCommandGroup
-/** @deprecated 请使用 CommandGroupAPI.exportCommandGroup */
-export const ExportCommandGroup = CommandGroupAPI.exportCommandGroup
-/** @deprecated 请使用 CommandGroupAPI.getCommands */
-export const GetCommands = CommandGroupAPI.getCommands
-/** @deprecated 请使用 CommandGroupAPI.saveCommands */
-export const SaveCommands = CommandGroupAPI.saveCommands
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link DeviceAPI.addDevice}
+ * @see {@link DeviceAPI.addDevice}
+ */
+export const AddDevice = (...args: Parameters<typeof DeviceAPI.addDevice>) => {
+  showDeprecationWarning('AddDevice', 'DeviceAPI.addDevice')
+  return DeviceAPI.addDevice(...args)
+}
 
-/** @deprecated 请使用 SettingsAPI.loadSettings */
-export const LoadSettings = SettingsAPI.loadSettings
-/** @deprecated 请使用 SettingsAPI.saveSettings */
-export const SaveSettings = SettingsAPI.saveSettings
-/** @deprecated 请使用 SettingsAPI.ensureConfig */
-export const EnsureConfig = SettingsAPI.ensureConfig
-/** @deprecated 请使用 SettingsAPI.getAppInfo */
-export const GetAppInfo = SettingsAPI.getAppInfo
-/** @deprecated 请使用 SettingsAPI.logInfo */
-export const LogInfo = SettingsAPI.logInfo
-/** @deprecated 请使用 SettingsAPI.logWarn */
-export const LogWarn = SettingsAPI.logWarn
-/** @deprecated 请使用 SettingsAPI.logError */
-export const LogError = SettingsAPI.logError
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link DeviceAPI.updateDevice}
+ * @see {@link DeviceAPI.updateDevice}
+ */
+export const UpdateDevice = (...args: Parameters<typeof DeviceAPI.updateDevice>) => {
+  showDeprecationWarning('UpdateDevice', 'DeviceAPI.updateDevice')
+  return DeviceAPI.updateDevice(...args)
+}
 
-/** @deprecated 请使用 EngineAPI.startEngine */
-export const StartEngine = EngineAPI.startEngine
-/** @deprecated 请使用 EngineAPI.startEngineWithSelection */
-export const StartEngineWithSelection = EngineAPI.startEngineWithSelection
-/** @deprecated 请使用 EngineAPI.startBackup */
-export const StartBackup = EngineAPI.startBackup
-/** @deprecated 请使用 EngineAPI.resolveSuspend */
-export const ResolveSuspend = EngineAPI.resolveSuspend
-/** @deprecated 请使用 EngineAPI.isRunning */
-export const IsRunning = EngineAPI.isRunning
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link DeviceAPI.deleteDevice}
+ * @see {@link DeviceAPI.deleteDevice}
+ */
+export const DeleteDevice = (...args: Parameters<typeof DeviceAPI.deleteDevice>) => {
+  showDeprecationWarning('DeleteDevice', 'DeviceAPI.deleteDevice')
+  return DeviceAPI.deleteDevice(...args)
+}
 
-/** @deprecated 请使用 TaskGroupAPI.listTaskGroups */
-export const ListTaskGroups = TaskGroupAPI.listTaskGroups
-/** @deprecated 请使用 TaskGroupAPI.getTaskGroup */
-export const GetTaskGroup = TaskGroupAPI.getTaskGroup
-/** @deprecated 请使用 TaskGroupAPI.createTaskGroup */
-export const CreateTaskGroup = TaskGroupAPI.createTaskGroup
-/** @deprecated 请使用 TaskGroupAPI.updateTaskGroup */
-export const UpdateTaskGroup = TaskGroupAPI.updateTaskGroup
-/** @deprecated 请使用 TaskGroupAPI.deleteTaskGroup */
-export const DeleteTaskGroup = TaskGroupAPI.deleteTaskGroup
-/** @deprecated 请使用 TaskGroupAPI.startTaskGroup */
-export const StartTaskGroup = TaskGroupAPI.startTaskGroup
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link DeviceAPI.saveDevices}
+ * @see {@link DeviceAPI.saveDevices}
+ */
+export const SaveDevices = (...args: Parameters<typeof DeviceAPI.saveDevices>) => {
+  showDeprecationWarning('SaveDevices', 'DeviceAPI.saveDevices')
+  return DeviceAPI.saveDevices(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link DeviceAPI.getProtocolDefaultPorts}
+ * @see {@link DeviceAPI.getProtocolDefaultPorts}
+ */
+export const GetProtocolDefaultPorts = () => {
+  showDeprecationWarning('GetProtocolDefaultPorts', 'DeviceAPI.getProtocolDefaultPorts')
+  return DeviceAPI.getProtocolDefaultPorts()
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link DeviceAPI.getValidProtocols}
+ * @see {@link DeviceAPI.getValidProtocols}
+ */
+export const GetValidProtocols = () => {
+  showDeprecationWarning('GetValidProtocols', 'DeviceAPI.getValidProtocols')
+  return DeviceAPI.getValidProtocols()
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link CommandGroupAPI.listCommandGroups}
+ * @see {@link CommandGroupAPI.listCommandGroups}
+ */
+export const ListCommandGroups = (...args: Parameters<typeof CommandGroupAPI.listCommandGroups>) => {
+  showDeprecationWarning('ListCommandGroups', 'CommandGroupAPI.listCommandGroups')
+  return CommandGroupAPI.listCommandGroups(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link CommandGroupAPI.getCommandGroup}
+ * @see {@link CommandGroupAPI.getCommandGroup}
+ */
+export const GetCommandGroup = (...args: Parameters<typeof CommandGroupAPI.getCommandGroup>) => {
+  showDeprecationWarning('GetCommandGroup', 'CommandGroupAPI.getCommandGroup')
+  return CommandGroupAPI.getCommandGroup(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link CommandGroupAPI.createCommandGroup}
+ * @see {@link CommandGroupAPI.createCommandGroup}
+ */
+export const CreateCommandGroup = (...args: Parameters<typeof CommandGroupAPI.createCommandGroup>) => {
+  showDeprecationWarning('CreateCommandGroup', 'CommandGroupAPI.createCommandGroup')
+  return CommandGroupAPI.createCommandGroup(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link CommandGroupAPI.updateCommandGroup}
+ * @see {@link CommandGroupAPI.updateCommandGroup}
+ */
+export const UpdateCommandGroup = (...args: Parameters<typeof CommandGroupAPI.updateCommandGroup>) => {
+  showDeprecationWarning('UpdateCommandGroup', 'CommandGroupAPI.updateCommandGroup')
+  return CommandGroupAPI.updateCommandGroup(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link CommandGroupAPI.deleteCommandGroup}
+ * @see {@link CommandGroupAPI.deleteCommandGroup}
+ */
+export const DeleteCommandGroup = (...args: Parameters<typeof CommandGroupAPI.deleteCommandGroup>) => {
+  showDeprecationWarning('DeleteCommandGroup', 'CommandGroupAPI.deleteCommandGroup')
+  return CommandGroupAPI.deleteCommandGroup(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link CommandGroupAPI.duplicateCommandGroup}
+ * @see {@link CommandGroupAPI.duplicateCommandGroup}
+ */
+export const DuplicateCommandGroup = (...args: Parameters<typeof CommandGroupAPI.duplicateCommandGroup>) => {
+  showDeprecationWarning('DuplicateCommandGroup', 'CommandGroupAPI.duplicateCommandGroup')
+  return CommandGroupAPI.duplicateCommandGroup(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link CommandGroupAPI.importCommandGroup}
+ * @see {@link CommandGroupAPI.importCommandGroup}
+ */
+export const ImportCommandGroup = (...args: Parameters<typeof CommandGroupAPI.importCommandGroup>) => {
+  showDeprecationWarning('ImportCommandGroup', 'CommandGroupAPI.importCommandGroup')
+  return CommandGroupAPI.importCommandGroup(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link CommandGroupAPI.exportCommandGroup}
+ * @see {@link CommandGroupAPI.exportCommandGroup}
+ */
+export const ExportCommandGroup = (...args: Parameters<typeof CommandGroupAPI.exportCommandGroup>) => {
+  showDeprecationWarning('ExportCommandGroup', 'CommandGroupAPI.exportCommandGroup')
+  return CommandGroupAPI.exportCommandGroup(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link CommandGroupAPI.getCommands}
+ * @see {@link CommandGroupAPI.getCommands}
+ */
+export const GetCommands = (...args: Parameters<typeof CommandGroupAPI.getCommands>) => {
+  showDeprecationWarning('GetCommands', 'CommandGroupAPI.getCommands')
+  return CommandGroupAPI.getCommands(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link CommandGroupAPI.saveCommands}
+ * @see {@link CommandGroupAPI.saveCommands}
+ */
+export const SaveCommands = (...args: Parameters<typeof CommandGroupAPI.saveCommands>) => {
+  showDeprecationWarning('SaveCommands', 'CommandGroupAPI.saveCommands')
+  return CommandGroupAPI.saveCommands(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link SettingsAPI.loadSettings}
+ * @see {@link SettingsAPI.loadSettings}
+ */
+export const LoadSettings = (...args: Parameters<typeof SettingsAPI.loadSettings>) => {
+  showDeprecationWarning('LoadSettings', 'SettingsAPI.loadSettings')
+  return SettingsAPI.loadSettings(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link SettingsAPI.saveSettings}
+ * @see {@link SettingsAPI.saveSettings}
+ */
+export const SaveSettings = (...args: Parameters<typeof SettingsAPI.saveSettings>) => {
+  showDeprecationWarning('SaveSettings', 'SettingsAPI.saveSettings')
+  return SettingsAPI.saveSettings(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link SettingsAPI.ensureConfig}
+ * @see {@link SettingsAPI.ensureConfig}
+ */
+export const EnsureConfig = (...args: Parameters<typeof SettingsAPI.ensureConfig>) => {
+  showDeprecationWarning('EnsureConfig', 'SettingsAPI.ensureConfig')
+  return SettingsAPI.ensureConfig(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link SettingsAPI.getAppInfo}
+ * @see {@link SettingsAPI.getAppInfo}
+ */
+export const GetAppInfo = (...args: Parameters<typeof SettingsAPI.getAppInfo>) => {
+  showDeprecationWarning('GetAppInfo', 'SettingsAPI.getAppInfo')
+  return SettingsAPI.getAppInfo(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link SettingsAPI.logInfo}
+ * @see {@link SettingsAPI.logInfo}
+ */
+export const LogInfo = (...args: Parameters<typeof SettingsAPI.logInfo>) => {
+  showDeprecationWarning('LogInfo', 'SettingsAPI.logInfo')
+  return SettingsAPI.logInfo(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link SettingsAPI.logWarn}
+ * @see {@link SettingsAPI.logWarn}
+ */
+export const LogWarn = (...args: Parameters<typeof SettingsAPI.logWarn>) => {
+  showDeprecationWarning('LogWarn', 'SettingsAPI.logWarn')
+  return SettingsAPI.logWarn(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link SettingsAPI.logError}
+ * @see {@link SettingsAPI.logError}
+ */
+export const LogError = (...args: Parameters<typeof SettingsAPI.logError>) => {
+  showDeprecationWarning('LogError', 'SettingsAPI.logError')
+  return SettingsAPI.logError(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link EngineAPI.startEngine}
+ * @see {@link EngineAPI.startEngine}
+ */
+export const StartEngine = (...args: Parameters<typeof EngineAPI.startEngine>) => {
+  showDeprecationWarning('StartEngine', 'EngineAPI.startEngine')
+  return EngineAPI.startEngine(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link EngineAPI.startEngineWithSelection}
+ * @see {@link EngineAPI.startEngineWithSelection}
+ */
+export const StartEngineWithSelection = (...args: Parameters<typeof EngineAPI.startEngineWithSelection>) => {
+  showDeprecationWarning('StartEngineWithSelection', 'EngineAPI.startEngineWithSelection')
+  return EngineAPI.startEngineWithSelection(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link EngineAPI.startBackup}
+ * @see {@link EngineAPI.startBackup}
+ */
+export const StartBackup = (...args: Parameters<typeof EngineAPI.startBackup>) => {
+  showDeprecationWarning('StartBackup', 'EngineAPI.startBackup')
+  return EngineAPI.startBackup(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link EngineAPI.resolveSuspend}
+ * @see {@link EngineAPI.resolveSuspend}
+ */
+export const ResolveSuspend = (...args: Parameters<typeof EngineAPI.resolveSuspend>) => {
+  showDeprecationWarning('ResolveSuspend', 'EngineAPI.resolveSuspend')
+  return EngineAPI.resolveSuspend(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link EngineAPI.isRunning}
+ * @see {@link EngineAPI.isRunning}
+ */
+export const IsRunning = (...args: Parameters<typeof EngineAPI.isRunning>) => {
+  showDeprecationWarning('IsRunning', 'EngineAPI.isRunning')
+  return EngineAPI.isRunning(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link TaskGroupAPI.listTaskGroups}
+ * @see {@link TaskGroupAPI.listTaskGroups}
+ */
+export const ListTaskGroups = (...args: Parameters<typeof TaskGroupAPI.listTaskGroups>) => {
+  showDeprecationWarning('ListTaskGroups', 'TaskGroupAPI.listTaskGroups')
+  return TaskGroupAPI.listTaskGroups(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link TaskGroupAPI.getTaskGroup}
+ * @see {@link TaskGroupAPI.getTaskGroup}
+ */
+export const GetTaskGroup = (...args: Parameters<typeof TaskGroupAPI.getTaskGroup>) => {
+  showDeprecationWarning('GetTaskGroup', 'TaskGroupAPI.getTaskGroup')
+  return TaskGroupAPI.getTaskGroup(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link TaskGroupAPI.createTaskGroup}
+ * @see {@link TaskGroupAPI.createTaskGroup}
+ */
+export const CreateTaskGroup = (...args: Parameters<typeof TaskGroupAPI.createTaskGroup>) => {
+  showDeprecationWarning('CreateTaskGroup', 'TaskGroupAPI.createTaskGroup')
+  return TaskGroupAPI.createTaskGroup(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link TaskGroupAPI.updateTaskGroup}
+ * @see {@link TaskGroupAPI.updateTaskGroup}
+ */
+export const UpdateTaskGroup = (...args: Parameters<typeof TaskGroupAPI.updateTaskGroup>) => {
+  showDeprecationWarning('UpdateTaskGroup', 'TaskGroupAPI.updateTaskGroup')
+  return TaskGroupAPI.updateTaskGroup(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link TaskGroupAPI.deleteTaskGroup}
+ * @see {@link TaskGroupAPI.deleteTaskGroup}
+ */
+export const DeleteTaskGroup = (...args: Parameters<typeof TaskGroupAPI.deleteTaskGroup>) => {
+  showDeprecationWarning('DeleteTaskGroup', 'TaskGroupAPI.deleteTaskGroup')
+  return TaskGroupAPI.deleteTaskGroup(...args)
+}
+
+/**
+ * @deprecated 将在 v2.0 移除，请使用 {@link TaskGroupAPI.startTaskGroup}
+ * @see {@link TaskGroupAPI.startTaskGroup}
+ */
+export const StartTaskGroup = (...args: Parameters<typeof TaskGroupAPI.startTaskGroup>) => {
+  showDeprecationWarning('StartTaskGroup', 'TaskGroupAPI.startTaskGroup')
+  return TaskGroupAPI.startTaskGroup(...args)
+}
+
+// ==================== v2.0 移除警告 ====================
+// 以上所有向后兼容导出将在 v2.0 版本完全移除
+// 请尽快迁移到新的命名空间 API
+// 迁移指南详见：docs/API_MIGRATION.md

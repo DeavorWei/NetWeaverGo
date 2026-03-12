@@ -26,13 +26,39 @@ func (s *SettingsService) ServiceStartup(ctx context.Context, options applicatio
 
 // LoadSettings 获取合并后的主配置
 func (s *SettingsService) LoadSettings() (*config.GlobalSettings, error) {
-	settings, _, err := config.LoadSettings()
+	logger.Debug("SettingsService", "-", "收到前端 LoadSettings 调用请求")
+	settings, isNew, err := config.LoadSettings()
+	if err != nil {
+		logger.Error("SettingsService", "-", "LoadSettings 失败: %v", err)
+		return nil, err
+	}
+	if isNew {
+		logger.Debug("SettingsService", "-", "返回新创建的默认设置")
+	} else {
+		logger.DebugAll("SettingsService", "-", "返回已有设置: debug=%v, debugAll=%v", settings.Debug, settings.DebugAll)
+	}
 	return settings, err
 }
 
 // SaveSettings 保存全局设置到配置文件
 func (s *SettingsService) SaveSettings(settings config.GlobalSettings) error {
-	return config.SaveSettings(settings)
+	logger.Debug("SettingsService", "-", "收到前端 SaveSettings 调用请求")
+	logger.DebugAll("SettingsService", "-", "接收到的设置: maxWorkers=%d, timeout=%s/%s, debug=%v, debugAll=%v, sshPreset=%s",
+		settings.MaxWorkers,
+		settings.ConnectTimeout,
+		settings.CommandTimeout,
+		settings.Debug,
+		settings.DebugAll,
+		settings.SSHAlgorithms.PresetMode)
+
+	err := config.SaveSettings(settings)
+	if err != nil {
+		logger.Error("SettingsService", "-", "SaveSettings 处理失败: %v", err)
+		return err
+	}
+
+	logger.Debug("SettingsService", "-", "SaveSettings 处理成功完成")
+	return nil
 }
 
 // EnsureConfig 检查必需配置文件并返回是否有文件遗漏，以便前端提示

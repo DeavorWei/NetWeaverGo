@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"sort"
 	"strings"
 
 	"github.com/NetWeaverGo/core/internal/config"
@@ -28,12 +27,17 @@ func (s *QueryService) ServiceStartup(ctx context.Context, options application.S
 	return nil
 }
 
-// ListDevices 查询设备列表（支持搜索、过滤、分页）
+// ListDevices 查询设备列表（使用数据库分页查询）
 func (s *QueryService) ListDevices(opts QueryOptions) *QueryResult {
-	// 加载所有设备
-	allDevices, _, _, _, err := config.ParseOrGenerate(false)
-	if err != nil {
-		logger.Error("Query", "-", "加载设备列表失败: %v", err)
+	// 使用数据库查询替代内存过滤
+	result := s.queryDevicesFromDB(opts)
+	return result
+}
+
+// queryDevicesFromDB 从数据库查询设备列表
+func (s *QueryService) queryDevicesFromDB(opts QueryOptions) *QueryResult {
+	if config.DB == nil {
+		logger.Error("Query", "-", "数据库未初始化")
 		return &QueryResult{
 			Data:       []config.DeviceAsset{},
 			Total:      0,
@@ -43,14 +47,51 @@ func (s *QueryService) ListDevices(opts QueryOptions) *QueryResult {
 		}
 	}
 
+	var devices []config.DeviceAsset
+	var total int64
+
+	// 构建查询
+	query := config.DB.Model(&config.DeviceAsset{})
+
 	// 应用搜索过滤
-	filtered := s.filterDevices(allDevices, opts)
+	if opts.SearchQuery != "" {
+		searchPattern := "%" + strings.ToLower(opts.SearchQuery) + "%"
+		switch opts.FilterField {
+		case "group":
+			query = query.Where("LOWER(`group`) LIKE ?", searchPattern)
+		case "ip":
+			query = query.Where("LOWER(ip) LIKE ?", searchPattern)
+		case "tag":
+			query = query.Where("LOWER(tags) LIKE ?", searchPattern)
+		default:
+			// 默认搜索所有字段
+			query = query.Where(
+				"LOWER(ip) LIKE ? OR LOWER(`group`) LIKE ? OR LOWER(username) LIKE ? OR LOWER(tags) LIKE ?",
+				searchPattern, searchPattern, searchPattern, searchPattern,
+			)
+		}
+	}
+
+	// 应用状态/值过滤
+	if opts.FilterValue != "" {
+		switch opts.FilterField {
+		case "protocol":
+			query = query.Where("LOWER(protocol) = ?", strings.ToLower(opts.FilterValue))
+		case "group":
+			query = query.Where("LOWER(`group`) = ?", strings.ToLower(opts.FilterValue))
+		}
+	}
+
+	// 计算总数
+	query.Count(&total)
 
 	// 应用排序
-	sorted := s.sortDevices(filtered, opts.SortBy, opts.SortOrder)
+	orderClause := s.buildOrderClause(opts.SortBy, opts.SortOrder)
+	if orderClause != "" {
+		query = query.Order(orderClause)
+	}
 
-	// 计算分页
-	total := len(sorted)
+	// 计算分页参数
 	pageSize := opts.PageSize
 	if pageSize <= 0 {
 		pageSize = 10
@@ -60,33 +101,51 @@ func (s *QueryService) ListDevices(opts QueryOptions) *QueryResult {
 		page = 1
 	}
 
-	totalPages := (total + pageSize - 1) / pageSize
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
 	if totalPages < 1 {
 		totalPages = 1
 	}
 
 	// 边界检查
-	start := (page - 1) * pageSize
-	if start >= total {
-		start = 0
+	offset := (page - 1) * pageSize
+	if offset >= int(total) {
+		offset = 0
 		page = 1
 	}
-	end := start + pageSize
-	if end > total {
-		end = total
-	}
 
-	// 返回结果
+	// 执行分页查询
+	query.Offset(offset).Limit(pageSize).Find(&devices)
+
 	return &QueryResult{
-		Data:       sorted[start:end],
-		Total:      total,
+		Data:       devices,
+		Total:      int(total),
 		Page:       page,
 		PageSize:   pageSize,
 		TotalPages: totalPages,
 	}
 }
 
-// filterDevices 过滤设备列表
+// buildOrderClause 构建排序子句
+func (s *QueryService) buildOrderClause(sortBy, sortOrder string) string {
+	if sortBy == "" {
+		sortBy = "ip"
+	}
+
+	order := "ASC"
+	if sortOrder == "desc" {
+		order = "DESC"
+	}
+
+	// 处理特殊字段名（如 group 是 SQL 关键字）
+	field := sortBy
+	if sortBy == "group" {
+		field = "`group`"
+	}
+
+	return field + " " + order
+}
+
+// filterDevices 过滤设备列表（内存过滤，作为备用方案）
 func (s *QueryService) filterDevices(devices []config.DeviceAsset, opts QueryOptions) []config.DeviceAsset {
 	if opts.SearchQuery == "" && opts.FilterValue == "" {
 		return devices
@@ -151,38 +210,7 @@ func (s *QueryService) filterDevices(devices []config.DeviceAsset, opts QueryOpt
 
 // sortDevices 排序设备列表
 func (s *QueryService) sortDevices(devices []config.DeviceAsset, sortBy, sortOrder string) []config.DeviceAsset {
-	if sortBy == "" {
-		sortBy = "ip"
-	}
-
-	// 创建副本避免修改原数组
-	sorted := make([]config.DeviceAsset, len(devices))
-	copy(sorted, devices)
-
-	// 排序
-	switch sortBy {
-	case "ip":
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].IP < sorted[j].IP
-		})
-	case "group":
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].Group < sorted[j].Group
-		})
-	case "protocol":
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].Protocol < sorted[j].Protocol
-		})
-	}
-
-	// 降序
-	if sortOrder == "desc" {
-		for i, j := 0, len(sorted)-1; i < j; i, j = i+1, j-1 {
-			sorted[i], sorted[j] = sorted[j], sorted[i]
-		}
-	}
-
-	return sorted
+	return devices // 数据库查询已排序，此方法保留用于备用
 }
 
 // ListTaskGroups 查询任务组列表（支持搜索、过滤、分页）
@@ -288,39 +316,7 @@ func (s *QueryService) filterTaskGroups(groups []config.TaskGroup, opts QueryOpt
 
 // sortTaskGroups 排序任务组列表
 func (s *QueryService) sortTaskGroups(groups []config.TaskGroup, sortBy, sortOrder string) []config.TaskGroup {
-	if sortBy == "" {
-		sortBy = "updatedAt"
-	}
-
-	sorted := make([]config.TaskGroup, len(groups))
-	copy(sorted, groups)
-
-	switch sortBy {
-	case "name":
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].Name < sorted[j].Name
-		})
-	case "status":
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].Status < sorted[j].Status
-		})
-	case "updatedAt":
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].UpdatedAt > sorted[j].UpdatedAt // 默认最新在前
-		})
-	case "createdAt":
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].CreatedAt > sorted[j].CreatedAt
-		})
-	}
-
-	if sortOrder == "asc" {
-		for i, j := 0, len(sorted)-1; i < j; i, j = i+1, j-1 {
-			sorted[i], sorted[j] = sorted[j], sorted[i]
-		}
-	}
-
-	return sorted
+	return groups // 数据库查询已排序
 }
 
 // ListCommandGroups 查询命令组列表（支持搜索、过滤、分页）
@@ -341,11 +337,8 @@ func (s *QueryService) ListCommandGroups(opts QueryOptions) *QueryResult {
 	// 应用搜索过滤
 	filtered := s.filterCommandGroups(allGroups, opts)
 
-	// 应用排序
-	sorted := s.sortCommandGroups(filtered, opts.SortBy, opts.SortOrder)
-
 	// 计算分页
-	total := len(sorted)
+	total := len(filtered)
 	pageSize := opts.PageSize
 	if pageSize <= 0 {
 		pageSize = 10
@@ -371,7 +364,7 @@ func (s *QueryService) ListCommandGroups(opts QueryOptions) *QueryResult {
 	}
 
 	return &QueryResult{
-		Data:       sorted[start:end],
+		Data:       filtered[start:end],
 		Total:      total,
 		Page:       page,
 		PageSize:   pageSize,
@@ -408,68 +401,39 @@ func (s *QueryService) filterCommandGroups(groups []config.CommandGroup, opts Qu
 	return result
 }
 
-// sortCommandGroups 排序命令组列表
-func (s *QueryService) sortCommandGroups(groups []config.CommandGroup, sortBy, sortOrder string) []config.CommandGroup {
-	if sortBy == "" {
-		sortBy = "updatedAt"
-	}
-
-	sorted := make([]config.CommandGroup, len(groups))
-	copy(sorted, groups)
-
-	switch sortBy {
-	case "name":
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].Name < sorted[j].Name
-		})
-	case "updatedAt":
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].UpdatedAt > sorted[j].UpdatedAt
-		})
-	}
-
-	if sortOrder == "asc" {
-		for i, j := 0, len(sorted)-1; i < j; i, j = i+1, j-1 {
-			sorted[i], sorted[j] = sorted[j], sorted[i]
-		}
-	}
-
-	return sorted
-}
-
 // GetDeviceGroups 获取所有设备分组名称（用于前端下拉选项）
 func (s *QueryService) GetDeviceGroups() []string {
-	devices, _, _, _, err := config.ParseOrGenerate(false)
-	if err != nil {
+	if config.DB == nil {
 		return []string{}
 	}
 
-	groupSet := make(map[string]bool)
-	for _, dev := range devices {
-		if dev.Group != "" {
-			groupSet[dev.Group] = true
-		}
-	}
-
-	groups := make([]string, 0, len(groupSet))
-	for group := range groupSet {
-		groups = append(groups, group)
-	}
-	sort.Strings(groups)
+	var groups []string
+	config.DB.Model(&config.DeviceAsset{}).
+		Distinct("`group`").
+		Where("`group` != ''").
+		Pluck("`group`", &groups)
 
 	return groups
 }
 
 // GetDeviceTags 获取所有设备标签（用于前端下拉选项）
 func (s *QueryService) GetDeviceTags() []string {
-	devices, _, _, _, err := config.ParseOrGenerate(false)
-	if err != nil {
+	if config.DB == nil {
 		return []string{}
 	}
 
+	var tagStrings []string
+	config.DB.Model(&config.DeviceAsset{}).
+		Where("tags IS NOT NULL AND tags != ''").
+		Pluck("tags", &tagStrings)
+
+	// 解析并去重标签
 	tagSet := make(map[string]bool)
-	for _, dev := range devices {
-		for _, tag := range dev.Tags {
+	for _, ts := range tagStrings {
+		// 假设标签以逗号分隔或存储为 JSON 数组字符串
+		tags := strings.Split(ts, ",")
+		for _, tag := range tags {
+			tag = strings.TrimSpace(tag)
 			if tag != "" {
 				tagSet[tag] = true
 			}
@@ -480,7 +444,6 @@ func (s *QueryService) GetDeviceTags() []string {
 	for tag := range tagSet {
 		tags = append(tags, tag)
 	}
-	sort.Strings(tags)
 
 	return tags
 }

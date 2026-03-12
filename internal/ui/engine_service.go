@@ -35,16 +35,22 @@ type EngineService struct {
 	// 快照推送控制
 	snapshotTicker *time.Ticker
 	snapshotStop   chan struct{}
+
+	// 事件桥接器
+	eventBridge *EventBridge
 }
 
 // NewEngineService 创建引擎服务实例
 func NewEngineService() *EngineService {
-	return &EngineService{}
+	return &EngineService{
+		eventBridge: NewEventBridge(),
+	}
 }
 
 // ServiceStartup Wails 服务启动生命周期钩子
 func (s *EngineService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	s.wailsApp = application.Get()
+	s.eventBridge.SetWailsApp(s.wailsApp)
 	// 设置全局 SuspendManager 的 Wails App 实例
 	GetSuspendManager().SetWailsApp(s.wailsApp)
 	logger.Info("Engine", "-", "引擎控制服务已就绪")
@@ -82,6 +88,17 @@ func (s *EngineService) ResolveSuspend(sessionIDOrIP string, action string) {
 
 // StartEngine 启动核心下发动作
 func (s *EngineService) StartEngine() error {
+	return s.runEngineWithConfig(nil, "")
+}
+
+// StartEngineWithSelection 使用选定的设备和命令组启动引擎
+func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGroupID string) error {
+	return s.runEngineWithConfig(deviceIPs, commandGroupID)
+}
+
+// runEngineWithConfig 统一的引擎执行方法
+// deviceIPs 为 nil 时使用全部设备，commandGroupID 为空时使用默认命令
+func (s *EngineService) runEngineWithConfig(deviceIPs []string, commandGroupID string) error {
 	// 使用全局引擎状态管理器尝试获取锁
 	if err := engine.TryAcquireEngine("engine_service"); err != nil {
 		return err
@@ -95,7 +112,8 @@ func (s *EngineService) StartEngine() error {
 		return err
 	}
 
-	assets, commands, _, _, err := config.ParseOrGenerate(false)
+	// 准备设备和命令
+	assets, commands, err := s.prepareAssetsAndCommands(deviceIPs, commandGroupID)
 	if err != nil {
 		return err
 	}
@@ -104,68 +122,28 @@ func (s *EngineService) StartEngine() error {
 		return fmt.Errorf("资产池或命令集为空。请检查 csv 和 txt 文件！")
 	}
 
-	// 初始化 Engine，开启了非交互模式的参数设定为 false（因为前端接管了交互）
+	// 初始化 Engine
 	ng := engine.NewEngine(assets, commands, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-	// 创建并设置 Tracker（用于快照推送）
+	// 创建并设置 Tracker
+	taskName := "批量执行"
+	if commandGroupID != "" {
+		if group, err := config.GetCommandGroup(commandGroupID); err == nil {
+			taskName = group.Name
+		}
+	}
 	tracker := report.NewProgressTracker(len(assets))
-	tracker.SetTaskName("批量执行")
+	tracker.SetTaskName(taskName)
 	ng.SetTracker(tracker)
 
-	// 设置当前 Tracker 引用（用于 GetExecutionSnapshot）
+	// 设置当前 Tracker 引用
 	s.setCurrentTracker(tracker)
 
-	// 使用双重同步机制确保事件监听器完全就绪
-	type eventListenerState struct {
-		ready     chan struct{} // Wails App 就绪
-		active    chan struct{} // 事件循环确认启动
-		listening chan struct{} // 确保进入读取循环
-	}
-
-	listenerState := &eventListenerState{
-		ready:     make(chan struct{}),
-		active:    make(chan struct{}),
-		listening: make(chan struct{}),
-	}
-
-	// 桥接事件：监听 FrontendBus 转发给前端 Vue
-	go func() {
-		// 等待 Wails 应用实例就绪
-		for i := 0; i < 100; i++ { // 最多等待 1 秒
-			if s.wailsApp != nil {
-				break
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
-		// 通知 App 已就绪
-		close(listenerState.ready)
-
-		// 进入事件循环前，等待启动信号
-		<-listenerState.active
-
-		close(listenerState.listening)
-
-		// 开始消费 FrontendBus
-		for ev := range ng.FrontendBus {
-			if s.wailsApp != nil {
-				s.wailsApp.Event.Emit("device:event", ev)
-			}
-		}
-	}()
-
-	// 等待 Wails App 就绪
-	<-listenerState.ready
-
-	// 发送启动信号，让事件循环开始
-	close(listenerState.active)
-
-	// 精确阻塞等待确切就绪完毕
-	<-listenerState.listening
-
+	// 使用事件桥接器启动事件监听
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// 保存 cancelFunc 以便 StopEngine 可以调用
+	// 保存 cancelFunc
 	s.cancelMu.Lock()
 	s.cancelFunc = cancel
 	s.cancelMu.Unlock()
@@ -173,13 +151,16 @@ func (s *EngineService) StartEngine() error {
 	// 启动快照定时推送
 	s.startSnapshotTicker(ctx)
 
+	// 使用简化的事件监听器
+	go s.listenEvents(ng.FrontendBus)
+
 	// 开始执行并发任务
 	ng.Run(ctx)
 
 	// 停止快照推送
 	s.stopSnapshotTicker()
 
-	// 发送执行完成事件（包含最终快照）
+	// 发送执行完成事件
 	s.emitFinishedEvent()
 
 	// 清理 Tracker 引用
@@ -193,10 +174,63 @@ func (s *EngineService) StartEngine() error {
 	return nil
 }
 
-// StartEngineWithSelection 使用选定的设备和命令组启动引擎
-func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGroupID string) error {
+// prepareAssetsAndCommands 准备设备和命令
+func (s *EngineService) prepareAssetsAndCommands(deviceIPs []string, commandGroupID string) ([]config.DeviceAsset, []string, error) {
+	// 获取所有设备
+	allAssets, _, _, _, err := config.ParseOrGenerate(false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var assets []config.DeviceAsset
+	var commands []string
+
+	// 筛选设备
+	if deviceIPs != nil && len(deviceIPs) > 0 {
+		ipSet := make(map[string]bool)
+		for _, ip := range deviceIPs {
+			ipSet[ip] = true
+		}
+		for _, asset := range allAssets {
+			if ipSet[asset.IP] {
+				assets = append(assets, asset)
+			}
+		}
+	} else {
+		assets = allAssets
+	}
+
+	// 获取命令
+	if commandGroupID != "" {
+		group, err := config.GetCommandGroup(commandGroupID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("获取命令组失败: %v", err)
+		}
+		commands = group.Commands
+	} else {
+		_, cmds, _, _, err := config.ParseOrGenerate(false)
+		if err != nil {
+			return nil, nil, err
+		}
+		commands = cmds
+	}
+
+	return assets, commands, nil
+}
+
+// listenEvents 事件监听协程
+func (s *EngineService) listenEvents(frontendBus chan report.ExecutorEvent) {
+	for ev := range frontendBus {
+		if s.wailsApp != nil {
+			s.wailsApp.Event.Emit("device:event", ev)
+		}
+	}
+}
+
+// StartBackup 启动核心备份动作
+func (s *EngineService) StartBackup() error {
 	// 使用全局引擎状态管理器尝试获取锁
-	if err := engine.TryAcquireEngine("task_group_service"); err != nil {
+	if err := engine.TryAcquireEngine("backup_service"); err != nil {
 		return err
 	}
 
@@ -208,99 +242,31 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 		return err
 	}
 
-	// 获取所有设备
-	allAssets, _, _, _, err := config.ParseOrGenerate(false)
+	assets, _, _, _, err := config.ParseOrGenerate(true) // isBackup = true
 	if err != nil {
 		return err
 	}
 
-	// 根据 IP 筛选设备
-	var selectedAssets []config.DeviceAsset
-	ipSet := make(map[string]bool)
-	for _, ip := range deviceIPs {
-		ipSet[ip] = true
-	}
-	for _, asset := range allAssets {
-		if ipSet[asset.IP] {
-			selectedAssets = append(selectedAssets, asset)
-		}
-	}
-
-	if len(selectedAssets) == 0 {
-		return fmt.Errorf("未选择任何有效设备")
-	}
-
-	// 获取命令组
-	group, err := config.GetCommandGroup(commandGroupID)
-	if err != nil {
-		return fmt.Errorf("获取命令组失败: %v", err)
-	}
-
-	if len(group.Commands) == 0 {
-		return fmt.Errorf("命令组为空")
+	if len(assets) == 0 {
+		return fmt.Errorf("资产池为空。请检查 csv 文件！")
 	}
 
 	// 初始化 Engine
-	ng := engine.NewEngine(selectedAssets, group.Commands, settings, false)
+	ng := engine.NewEngine(assets, nil, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-	// 创建并设置 Tracker（用于快照推送）
-	tracker := report.NewProgressTracker(len(selectedAssets))
-	tracker.SetTaskName(group.Name)
+	// 创建并设置 Tracker
+	tracker := report.NewProgressTracker(len(assets))
+	tracker.SetTaskName("配置备份")
 	ng.SetTracker(tracker)
 
-	// 设置当前 Tracker 引用（用于 GetExecutionSnapshot）
+	// 设置当前 Tracker 引用
 	s.setCurrentTracker(tracker)
 
-	// 使用双重同步机制确保事件监听器完全就绪
-	type eventListenerState struct {
-		ready     chan struct{} // Wails App 就绪
-		active    chan struct{} // 事件循环确认启动
-		listening chan struct{} // 确保进入读取循环
-	}
-
-	listenerState := &eventListenerState{
-		ready:     make(chan struct{}),
-		active:    make(chan struct{}),
-		listening: make(chan struct{}),
-	}
-
-	// 桥接事件：监听 FrontendBus 转发给前端 Vue
-	go func() {
-		// 等待 Wails 应用实例就绪
-		for i := 0; i < 100; i++ { // 最多等待 1 秒
-			if s.wailsApp != nil {
-				break
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
-		// 通知 App 已就绪
-		close(listenerState.ready)
-
-		// 进入事件循环前，等待启动信号
-		<-listenerState.active
-		close(listenerState.listening)
-
-		// 开始消费 FrontendBus
-		for ev := range ng.FrontendBus {
-			if s.wailsApp != nil {
-				s.wailsApp.Event.Emit("device:event", ev)
-			}
-		}
-	}()
-
-	// 等待 Wails App 就绪
-	<-listenerState.ready
-
-	// 发送启动信号，让事件循环开始
-	close(listenerState.active)
-
-	// 精确阻塞等待确切就绪完毕
-	<-listenerState.listening
-
+	// 使用事件桥接器启动事件监听
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// 保存 cancelFunc 以便 StopEngine 可以调用
+	// 保存 cancelFunc
 	s.cancelMu.Lock()
 	s.cancelFunc = cancel
 	s.cancelMu.Unlock()
@@ -308,13 +274,16 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 	// 启动快照定时推送
 	s.startSnapshotTicker(ctx)
 
-	// 开始执行并发任务
-	ng.Run(ctx)
+	// 使用简化的事件监听器
+	go s.listenEvents(ng.FrontendBus)
+
+	// 开始执行备份任务
+	ng.RunBackup(ctx)
 
 	// 停止快照推送
 	s.stopSnapshotTicker()
 
-	// 发送执行完成事件（包含最终快照）
+	// 发送执行完成事件
 	s.emitFinishedEvent()
 
 	// 清理 Tracker 引用
@@ -406,116 +375,4 @@ func (s *EngineService) emitFinishedEvent() {
 	if s.wailsApp != nil {
 		s.wailsApp.Event.Emit(ExecutionFinishedEvent)
 	}
-}
-
-// StartBackup 启动核心备份动作
-func (s *EngineService) StartBackup() error {
-	// 使用全局引擎状态管理器尝试获取锁
-	if err := engine.TryAcquireEngine("backup_service"); err != nil {
-		return err
-	}
-
-	// 确保在函数退出时释放锁
-	defer engine.ReleaseEngine()
-
-	settings, _, err := config.LoadSettings()
-	if err != nil {
-		return err
-	}
-
-	assets, _, _, _, err := config.ParseOrGenerate(true) // isBackup = true
-	if err != nil {
-		return err
-	}
-
-	if len(assets) == 0 {
-		return fmt.Errorf("资产池为空。请检查 csv 文件！")
-	}
-
-	// 初始化 Engine
-	ng := engine.NewEngine(assets, nil, settings, false)
-	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
-
-	// 创建并设置 Tracker（用于快照推送）
-	tracker := report.NewProgressTracker(len(assets))
-	tracker.SetTaskName("配置备份")
-	ng.SetTracker(tracker)
-
-	// 设置当前 Tracker 引用（用于 GetExecutionSnapshot）
-	s.setCurrentTracker(tracker)
-
-	// 使用双重同步机制确保事件监听器完全就绪
-	type eventListenerState struct {
-		ready     chan struct{} // Wails App 就绪
-		active    chan struct{} // 事件循环确认启动
-		listening chan struct{} // 确保进入读取循环
-	}
-
-	listenerState := &eventListenerState{
-		ready:     make(chan struct{}),
-		active:    make(chan struct{}),
-		listening: make(chan struct{}),
-	}
-
-	// 桥接事件：监听 FrontendBus 转发给前端 Vue
-	go func() {
-		// 等待 Wails 应用实例就绪
-		for i := 0; i < 100; i++ { // 最多等待 1 秒
-			if s.wailsApp != nil {
-				break
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
-		// 通知 App 已就绪
-		close(listenerState.ready)
-
-		// 进入事件循环前，等待启动信号
-		<-listenerState.active
-		close(listenerState.listening)
-
-		// 开始消费 FrontendBus
-		for ev := range ng.FrontendBus {
-			if s.wailsApp != nil {
-				s.wailsApp.Event.Emit("device:event", ev)
-			}
-		}
-	}()
-
-	// 等待 Wails App 就绪
-	<-listenerState.ready
-
-	// 发送启动信号，让事件循环开始
-	close(listenerState.active)
-
-	// 精确阻塞等待确切就绪完毕
-	<-listenerState.listening
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// 保存 cancelFunc 以便 StopEngine 可以调用
-	s.cancelMu.Lock()
-	s.cancelFunc = cancel
-	s.cancelMu.Unlock()
-
-	// 启动快照定时推送
-	s.startSnapshotTicker(ctx)
-
-	// 开始执行备份任务
-	ng.RunBackup(ctx)
-
-	// 停止快照推送
-	s.stopSnapshotTicker()
-
-	// 发送执行完成事件（包含最终快照）
-	s.emitFinishedEvent()
-
-	// 清理 Tracker 引用
-	s.clearCurrentTracker()
-
-	// 清理 cancelFunc
-	s.cancelMu.Lock()
-	s.cancelFunc = nil
-	s.cancelMu.Unlock()
-
-	return nil
 }
