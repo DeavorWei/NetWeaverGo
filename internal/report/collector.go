@@ -23,6 +23,36 @@ type DeviceSummary struct {
 	ErrorMsg  string
 }
 
+// DeviceViewState 单设备视图状态（用于前端快照）
+type DeviceViewState struct {
+	IP        string   `json:"ip"`
+	Status    string   `json:"status"`    // running/success/error/aborted/waiting
+	Logs      []string `json:"logs"`      // 已截断的日志数组
+	LogCount  int      `json:"logCount"`  // 原始日志总条数
+	Truncated bool     `json:"truncated"` // 是否已截断标记
+	CmdIndex  int      `json:"cmdIndex"`  // 当前执行命令索引
+	TotalCmd  int      `json:"totalCmd"`  // 总命令数
+	Message   string   `json:"message"`   // 当前状态消息
+}
+
+// ExecutionSnapshot 执行快照（前端直接绑定渲染）
+type ExecutionSnapshot struct {
+	TaskName      string            `json:"taskName"`
+	TotalDevices  int               `json:"totalDevices"`
+	FinishedCount int               `json:"finishedCount"`
+	Progress      int               `json:"progress"` // 0-100
+	IsRunning     bool              `json:"isRunning"`
+	StartTime     string            `json:"startTime"`
+	Devices       []DeviceViewState `json:"devices"`
+}
+
+// 日志配置常量
+const (
+	MaxLogsPerDevice    = 500
+	MaxLogLength        = 2000
+	LogWarningThreshold = 400
+)
+
 // ProgressTracker 终端进度盘面板与报告收集器
 type ProgressTracker struct {
 	EventBus chan ExecutorEvent
@@ -32,15 +62,41 @@ type ProgressTracker struct {
 	finished int                       // 已经彻底跑完的设备数量
 	total    int                       // 总设备数量
 	paused   bool                      // 是否因交互被挂起
+
+	// 新增：状态树管理
+	taskName   string
+	startTime  time.Time
+	deviceLogs map[string][]string // 设备日志存储
+	logCounts  map[string]int      // 原始日志计数
+	sortedIPs  []string            // 有序的 IP 列表
 }
 
 func NewProgressTracker(totalDevices int) *ProgressTracker {
 	logger.DebugAll("Report", "-", "生成与编排新的终端任务信息收集进度板，目标设备总量规模: %d 台", totalDevices)
 	return &ProgressTracker{
-		EventBus: make(chan ExecutorEvent, 1000), // 留足缓冲
-		status:   make(map[string]*DeviceSummary),
-		total:    totalDevices,
+		EventBus:   make(chan ExecutorEvent, 1000), // 留足缓冲
+		status:     make(map[string]*DeviceSummary),
+		total:      totalDevices,
+		taskName:   "任务执行",
+		startTime:  time.Now(),
+		deviceLogs: make(map[string][]string),
+		logCounts:  make(map[string]int),
+		sortedIPs:  make([]string, 0, totalDevices),
 	}
+}
+
+// SetTaskName 设置任务名称
+func (p *ProgressTracker) SetTaskName(name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.taskName = name
+}
+
+// GetStartTime 获取开始时间
+func (p *ProgressTracker) GetStartTime() time.Time {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.startTime
 }
 
 // Listen 开始持续监听总线的事件并刷新屏幕
@@ -288,4 +344,225 @@ func isWideRune(r rune) bool {
 		return true
 	}
 	return false
+}
+
+// ================== 状态树快照方法（前端数据源） ==================
+
+// GetSnapshot 获取当前执行状态的完整快照
+// 前端无需任何计算，直接绑定渲染即可
+func (p *ProgressTracker) GetSnapshot() *ExecutionSnapshot {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// 计算进度百分比
+	progress := 0
+	if p.total > 0 {
+		progress = int(float64(p.finished) / float64(p.total) * 100)
+		// 限制最大 95%，完成时由前端设置为 100
+		if progress > 95 {
+			progress = 95
+		}
+	}
+
+	// 构建设备视图状态列表
+	devices := make([]DeviceViewState, 0, len(p.status))
+	for _, ip := range p.sortedIPs {
+		summary, exists := p.status[ip]
+		if !exists {
+			continue
+		}
+
+		// 获取设备日志（已截断）
+		logs, truncated := p.getDeviceLogsLocked(ip)
+
+		// 状态转换：后端状态 -> 前端状态
+		status := strings.ToLower(summary.Status)
+		switch status {
+		case "running":
+			status = "running"
+		case "success":
+			status = "success"
+		case "error":
+			status = "error"
+		case "aborted":
+			status = "error"
+		case "warning":
+			status = "success" // Skip 视为成功
+		case "init":
+			status = "waiting"
+		default:
+			status = "waiting"
+		}
+
+		deviceState := DeviceViewState{
+			IP:        summary.IP,
+			Status:    status,
+			Logs:      logs,
+			LogCount:  p.logCounts[ip],
+			Truncated: truncated,
+			CmdIndex:  summary.ExecCmds,
+			TotalCmd:  summary.TotalCmds,
+			Message:   summary.ErrorMsg,
+		}
+		devices = append(devices, deviceState)
+	}
+
+	return &ExecutionSnapshot{
+		TaskName:      p.taskName,
+		TotalDevices:  p.total,
+		FinishedCount: p.finished,
+		Progress:      progress,
+		IsRunning:     !p.paused,
+		StartTime:     p.startTime.Format(time.RFC3339),
+		Devices:       devices,
+	}
+}
+
+// GetDeviceSnapshot 获取单个设备的快照
+func (p *ProgressTracker) GetDeviceSnapshot(ip string) *DeviceViewState {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	summary, exists := p.status[ip]
+	if !exists {
+		return nil
+	}
+
+	logs, truncated := p.getDeviceLogsLocked(ip)
+
+	status := strings.ToLower(summary.Status)
+	switch status {
+	case "running":
+	case "success":
+	case "error", "aborted":
+		status = "error"
+	case "warning":
+		status = "success"
+	case "init":
+		status = "waiting"
+	default:
+		status = "waiting"
+	}
+
+	return &DeviceViewState{
+		IP:        summary.IP,
+		Status:    status,
+		Logs:      logs,
+		LogCount:  p.logCounts[ip],
+		Truncated: truncated,
+		CmdIndex:  summary.ExecCmds,
+		TotalCmd:  summary.TotalCmds,
+		Message:   summary.ErrorMsg,
+	}
+}
+
+// getDeviceLogsLocked 获取设备日志（已截断），必须在持有锁时调用
+func (p *ProgressTracker) getDeviceLogsLocked(ip string) ([]string, bool) {
+	logs, exists := p.deviceLogs[ip]
+	if !exists {
+		return []string{}, false
+	}
+
+	// 返回截断后的日志
+	if len(logs) > MaxLogsPerDevice {
+		// 返回最新的 MaxLogsPerDevice 条日志
+		return logs[len(logs)-MaxLogsPerDevice:], true
+	}
+
+	return logs, false
+}
+
+// AddDeviceLog 添加日志到设备（带上限控制）
+// 此方法由事件处理器调用
+func (p *ProgressTracker) AddDeviceLog(ip string, message string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// 截断过长日志
+	if len(message) > MaxLogLength {
+		message = message[:MaxLogLength] + "...[截断]"
+	}
+
+	// 初始化日志数组
+	if p.deviceLogs == nil {
+		p.deviceLogs = make(map[string][]string)
+	}
+	if p.logCounts == nil {
+		p.logCounts = make(map[string]int)
+	}
+
+	// 添加日志
+	p.deviceLogs[ip] = append(p.deviceLogs[ip], message)
+	p.logCounts[ip]++
+
+	// 日志条数超过阈值时截断（保留最新的）
+	if len(p.deviceLogs[ip]) > MaxLogsPerDevice+50 {
+		// 移除旧的日志
+		removeCount := len(p.deviceLogs[ip]) - MaxLogsPerDevice
+		p.deviceLogs[ip] = p.deviceLogs[ip][removeCount:]
+	}
+}
+
+// RegisterDevice 注册设备到有序列表
+func (p *ProgressTracker) RegisterDevice(ip string, totalCmd int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// 检查是否已注册
+	for _, existingIP := range p.sortedIPs {
+		if existingIP == ip {
+			return
+		}
+	}
+
+	// 添加到有序列表
+	p.sortedIPs = append(p.sortedIPs, ip)
+	sort.Strings(p.sortedIPs)
+
+	// 初始化状态
+	if _, exists := p.status[ip]; !exists {
+		p.status[ip] = &DeviceSummary{
+			IP:        ip,
+			Status:    "Init",
+			TotalCmds: totalCmd,
+			ExecCmds:  0,
+		}
+	}
+
+	// 初始化日志存储
+	if p.deviceLogs == nil {
+		p.deviceLogs = make(map[string][]string)
+	}
+	if p.logCounts == nil {
+		p.logCounts = make(map[string]int)
+	}
+	p.deviceLogs[ip] = make([]string, 0, 100)
+	p.logCounts[ip] = 0
+}
+
+// GetStats 获取当前统计信息
+func (p *ProgressTracker) GetStats() (total, finished, success, error int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	total = p.total
+	finished = p.finished
+
+	for _, summary := range p.status {
+		switch summary.Status {
+		case "Success", "Warning":
+			success++
+		case "Error", "Aborted":
+			error++
+		}
+	}
+
+	return
+}
+
+// IsFinished 检查是否所有设备都已完成
+func (p *ProgressTracker) IsFinished() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.finished >= p.total
 }

@@ -271,35 +271,20 @@ import {
 } from '../services/api'
 import type { TaskGroup } from '../services/api'
 import { useEngineEvents } from '../composables/useEngineEvents'
-import type { DeviceEvent } from '../types/events'
+import type { ExecutionSnapshot, DeviceViewState } from '../types/events'
 
 const router = useRouter()
 
-// ================== 日志配置常量 ==================
-const LOG_CONFIG = {
-  MAX_LOGS_PER_DEVICE: 500,      // 每设备最大日志条数
-  MAX_LOG_LENGTH: 2000,          // 单条日志最大字符数
-  WARNING_THRESHOLD: 400,        // 警告阈值
-}
-
-// 定义执行设备类型（增强版）
-interface ExecDevice {
-  ip: string
-  status: string
-  logs: string[]
-  logCount: number      // 日志计数器
-  truncated: boolean    // 是否已截断标记
-}
-
-// 状态
+// ================== 状态定义 ==================
 const loading = ref(false)
 const tasks = ref<TaskGroup[]>([])
 const searchQuery = ref('')
 const filterStatus = ref('')
 const filterMode = ref('')
 const isRunning = ref(false)
-const progressPercent = ref(0)
-const execDevices = ref<ExecDevice[]>([])
+
+// 执行快照状态 - 直接绑定后端推送
+const executionSnapshot = ref<ExecutionSnapshot | null>(null)
 
 // 执行视图状态
 const executionView = ref({
@@ -344,7 +329,15 @@ onUnmounted(() => {
   }
 })
 
-// 过滤逻辑
+// ================== 计算属性 - 直接使用快照数据 ==================
+
+/** 进度百分比 - 直接从快照获取 */
+const progressPercent = computed(() => executionSnapshot.value?.progress ?? 0)
+
+/** 设备列表 - 直接从快照获取 */
+const execDevices = computed<DeviceViewState[]>(() => executionSnapshot.value?.devices ?? [])
+
+// ================== 过滤逻辑（任务列表） ==================
 const filteredTasks = computed(() => {
   let result = tasks.value
   if (searchQuery.value) {
@@ -378,103 +371,21 @@ async function loadTasks() {
   }
 }
 
-// ================== 日志管理函数 ==================
-
-/**
- * 添加日志到设备（带上限控制）
- */
-function addLog(dev: ExecDevice, message: string) {
-  // 截断过长日志
-  if (message.length > LOG_CONFIG.MAX_LOG_LENGTH) {
-    message = message.substring(0, LOG_CONFIG.MAX_LOG_LENGTH) + '...[截断]'
-  }
-
-  dev.logs.push(message)
-  dev.logCount++
-
-  // 超过阈值时截断
-  if (dev.logs.length > LOG_CONFIG.MAX_LOGS_PER_DEVICE) {
-    const removeCount = dev.logs.length - LOG_CONFIG.MAX_LOGS_PER_DEVICE + 50
-    dev.logs = dev.logs.slice(removeCount)
-    dev.truncated = true
-  }
-}
-
-/**
- * 批量更新设备状态
- * 用于处理批量事件，减少 Vue 更新次数
- */
-function batchUpdateDevices(events: DeviceEvent[]) {
-  const updates = new Map<string, { logs: string[], status: string }>()
-
-  for (const data of events) {
-    let update = updates.get(data.IP)
-    if (!update) {
-      update = { logs: [], status: '' }
-      updates.set(data.IP, update)
-    }
-
-    if (data.Message) {
-      update.logs.push(data.Message)
-    }
-
-    // 状态更新逻辑
-    if (data.Type === 'start') update.status = 'running'
-    else if (data.Type === 'success' || data.Type === 'skip') update.status = 'success'
-    else if (data.Type === 'error' || data.Type === 'abort') update.status = 'error'
-  }
-
-  // 批量更新响应式状态（只触发一次 Vue 更新）
-  for (const [ip, update] of updates) {
-    const dev = execDevices.value.find(d => d.ip === ip)
-    if (dev) {
-      // 添加日志
-      for (const log of update.logs) {
-        addLog(dev, log)
-      }
-      // 更新状态
-      if (update.status) dev.status = update.status
-    }
-  }
-
-  // 单次滚动更新
-  nextTick(() => {
-    for (const ip of updates.keys()) {
-      const el = terminalRefs.get(ip)
-      if (el) el.scrollTop = el.scrollHeight
-    }
-  })
-
-  // 更新进度
-  updateProgress()
-}
-
-/**
- * 更新进度百分比
- */
-function updateProgress() {
-  const totalComplete = execDevices.value.reduce((acc, curr) =>
-    acc + (curr.status === 'success' || curr.status === 'error' ? 1 : 0), 0)
-  if (execDevices.value.length > 0) {
-    progressPercent.value = Math.min(95, Math.floor((totalComplete / execDevices.value.length) * 100))
-  }
-}
-
 // 执行任务
 async function executeTask(task: TaskGroup) {
   if (isRunning.value) return
 
-  // 先设置执行视图和状态，确保事件能被正确处理
+  // 重置快照状态
+  executionSnapshot.value = null
+  
+  // 设置执行视图
   executionView.value = {
     active: true,
     taskId: task.id,
     taskName: task.name
   }
   isRunning.value = true
-  progressPercent.value = 5
-  execDevices.value = []
 
-  // 使用 nextTick 确保状态已更新后再调用 API
   await nextTick()
 
   try {
@@ -505,14 +416,12 @@ async function doDelete() {
 // 关闭执行视图
 function closeExecutionView() {
   executionView.value.active = false
-  progressPercent.value = 0
-  execDevices.value = []
+  executionSnapshot.value = null
   loadTasks()
 }
 
-// Suspend 处理 - 支持 C/S/A 三种操作
+// Suspend 处理
 function resolveSuspend(action: 'C' | 'S' | 'A') {
-  // 优先使用 sessionId，如果没有则使用 ip
   const identifier = suspendModal.value.sessionId || suspendModal.value.ip
   EngineAPI.resolveSuspend(identifier, action)
   suspendModal.value.show = false
@@ -523,12 +432,13 @@ function goToTaskCreate() {
   router.push('/tasks')
 }
 
-// 状态样式
+// ================== 状态样式 ==================
 function statusBorder(s: string) {
   switch (s) {
     case 'running': return 'border-accent/50'
     case 'success': return 'border-success/50'
     case 'error':   return 'border-error/50'
+    case 'aborted': return 'border-error/50'
     case 'waiting': return 'border-warning/40'
     default:        return 'border-border'
   }
@@ -538,6 +448,7 @@ function statusBadge(s: string) {
     case 'running': return 'bg-accent/10 border-accent/30 text-accent'
     case 'success': return 'bg-success/10 border-success/30 text-success'
     case 'error':   return 'bg-error/10 border-error/30 text-error'
+    case 'aborted': return 'bg-error/10 border-error/30 text-error'
     case 'waiting': return 'bg-warning/10 border-warning/30 text-warning'
     default:        return 'bg-bg-panel border-border text-text-muted'
   }
@@ -547,12 +458,13 @@ function statusDot(s: string) {
     case 'running': return 'bg-accent animate-pulse'
     case 'success': return 'bg-success'
     case 'error':   return 'bg-error'
+    case 'aborted': return 'bg-error'
     case 'waiting': return 'bg-warning animate-pulse'
     default:        return 'bg-text-muted'
   }
 }
 function statusLabel(s: string) {
-  const map: Record<string, string> = { running: '执行中', success: '成功', error: '失败', waiting: '等待', idle: '空闲' }
+  const map: Record<string, string> = { running: '执行中', success: '成功', error: '失败', aborted: '已终止', waiting: '等待', idle: '空闲' }
   return map[s] ?? s
 }
 function logColor(log: string) {
@@ -595,14 +507,29 @@ function formatDate(dateStr: string) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
 
-// 使用事件监听 Composable - 使用批量事件处理优化性能
+// ================== 事件监听 - 使用快照订阅模式 ==================
 useEngineEvents({
   onFinished: () => {
     isRunning.value = false
-    progressPercent.value = 100
+    // 确保最终状态为 100%
+    if (executionSnapshot.value) {
+      executionSnapshot.value.progress = 100
+    }
     setTimeout(() => loadTasks(), 500)
   },
-  onBatchDeviceEvents: batchUpdateDevices,
+  onSnapshot: (snapshot: ExecutionSnapshot) => {
+    // 直接使用后端推送的快照数据
+    executionSnapshot.value = snapshot
+    isRunning.value = snapshot.isRunning
+    
+    // 自动滚动到底部
+    nextTick(() => {
+      for (const dev of snapshot.devices) {
+        const el = terminalRefs.get(dev.ip)
+        if (el) el.scrollTop = el.scrollHeight
+      }
+    })
+  },
   onSuspend: (data) => {
     suspendModal.value = {
       show: true,
@@ -612,11 +539,9 @@ useEngineEvents({
     }
   },
   onSuspendTimeout: (data) => {
-    // 关闭挂起弹窗（如果匹配当前显示的设备）
     if (suspendModal.value.ip === data.ip || suspendModal.value.sessionId === data.sessionId) {
       suspendModal.value.show = false
     }
-    // 显示超时提示
     triggerToast(`设备 ${data.ip} 挂起超时，已自动终止`, 'error')
   }
 })

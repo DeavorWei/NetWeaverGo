@@ -22,6 +22,7 @@ import * as CommandGroupServiceBinding from '../bindings/github.com/NetWeaverGo/
 import * as SettingsServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/settingsservice.js'
 import * as EngineServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/engineservice.js'
 import * as TaskGroupServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/taskgroupservice.js'
+import * as ForgeServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice.js'
 
 // ==================== 设备管理 API ====================
 /**
@@ -133,6 +134,126 @@ export const TaskGroupAPI = {
   startTaskGroup: TaskGroupServiceBinding.StartTaskGroup,
 } as const
 
+// ==================== ConfigForge 服务 API ====================
+/**
+ * ConfigForge 服务 API
+ * @description 提供配置生成、语法糖展开、IP验证等功能
+ * 
+ * @note 核心计算逻辑已迁移至后端，前端仅负责表单提交和结果渲染
+ */
+export const ForgeAPI = {
+  /** 构建配置 */
+  buildConfig: ForgeServiceBinding.BuildConfig,
+  /** 展开变量值 */
+  expandValues: ForgeServiceBinding.ExpandValues,
+  /** 验证IP格式 */
+  validateIP: ForgeServiceBinding.ValidateIP,
+  /** 解析IP范围语法 */
+  parseIPRange: ForgeServiceBinding.ParseIPRange,
+  /** 批量验证IP */
+  validateIPs: ForgeServiceBinding.ValidateIPs,
+  /** 检测是否为绑定模式 */
+  detectBindingMode: ForgeServiceBinding.DetectBindingMode,
+  /** 生成绑定模式预览 */
+  generateBindingPreview: ForgeServiceBinding.GenerateBindingPreview,
+} as const
+
+// 导出 Forge 相关类型
+export type {
+  BuildRequest,
+  VarInput,
+  BuildResult,
+  ExpandRequest,
+  ExpandResult,
+  ForgeIPValidationResult,
+  IPRangeResult,
+  IPsValidationResult,
+  BindingPreview,
+} from '../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice.js'
+
+// ==================== 查询服务 API ====================
+/**
+ * 查询服务 API
+ * @description 提供带条件的列表查询，后端处理过滤、排序、分页
+ * 
+ * @note 目前使用前端过滤，后续可迁移至后端 QueryService
+ */
+
+/** 查询选项类型 */
+export interface QueryOptions {
+  searchQuery?: string
+  filterField?: string
+  filterValue?: string
+  page?: number
+  pageSize?: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+}
+
+/** 查询结果类型 */
+export interface QueryResult<T> {
+  data: T[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+/**
+ * QueryAPI - 前端过滤实现
+ * @note 后续可通过后端 QueryService 优化大数据量场景
+ */
+export const QueryAPI = {
+  /** 查询设备列表（当前使用前端过滤） */
+  listDevices: async (_opts: QueryOptions): Promise<QueryResult<DeviceAsset>> => {
+    const devices = await DeviceAPI.listDevices()
+    // TODO: 实现后端过滤后移除此逻辑
+    return {
+      data: devices,
+      total: devices.length,
+      page: _opts.page || 1,
+      pageSize: _opts.pageSize || 10,
+      totalPages: Math.ceil(devices.length / (_opts.pageSize || 10))
+    }
+  },
+  /** 查询任务组列表（当前使用前端过滤） */
+  listTaskGroups: async (_opts: QueryOptions): Promise<QueryResult<TaskGroup>> => {
+    const groups = await TaskGroupAPI.listTaskGroups()
+    return {
+      data: groups,
+      total: groups.length,
+      page: _opts.page || 1,
+      pageSize: _opts.pageSize || 10,
+      totalPages: Math.ceil(groups.length / (_opts.pageSize || 10))
+    }
+  },
+  /** 查询命令组列表（当前使用前端过滤） */
+  listCommandGroups: async (_opts: QueryOptions): Promise<QueryResult<CommandGroup>> => {
+    const groups = await CommandGroupAPI.listCommandGroups()
+    return {
+      data: groups,
+      total: groups.length,
+      page: _opts.page || 1,
+      pageSize: _opts.pageSize || 10,
+      totalPages: Math.ceil(groups.length / (_opts.pageSize || 10))
+    }
+  },
+  /** 获取所有设备分组名称（用于下拉选项） */
+  getDeviceGroups: async (): Promise<string[]> => {
+    const devices = await DeviceAPI.listDevices()
+    const groupSet = new Set<string>()
+    devices.forEach(d => { if (d.group) groupSet.add(d.group) })
+    return Array.from(groupSet).sort()
+  },
+  /** 获取所有设备标签（用于下拉选项） */
+  getDeviceTags: async (): Promise<string[]> => {
+    const devices = await DeviceAPI.listDevices()
+    const tagSet = new Set<string>()
+    devices.forEach(d => d.tags?.forEach(t => { if (t) tagSet.add(t) }))
+    return Array.from(tagSet).sort()
+  },
+} as const
+
 // ==================== 类型导出 ====================
 export type { 
   DeviceAsset, 
@@ -141,6 +262,9 @@ export type {
   TaskGroup,
   TaskItem
 } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
+
+// 导入类型用于 QueryAPI
+import type { DeviceAsset, CommandGroup, TaskGroup } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
 
 // ==================== 向后兼容导出（Deprecated） ====================
 /**

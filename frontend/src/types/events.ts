@@ -20,6 +20,42 @@ export interface DeviceEvent {
   TotalCmd: number
 }
 
+// ================== 执行快照视图模型 ==================
+
+/** 单设备视图状态 - 与后端 DeviceViewState 结构保持一致 */
+export interface DeviceViewState {
+  /** 设备 IP 地址 */
+  ip: string
+  /** 执行状态: running/success/error/aborted */
+  status: string
+  /** 已截断的日志数组 */
+  logs: string[]
+  /** 日志总计数 */
+  logCount: number
+  /** 是否已截断标记 */
+  truncated: boolean
+  /** 当前命令索引 */
+  cmdIndex: number
+  /** 总命令数 */
+  totalCmd: number
+}
+
+/** 任务执行快照 - 前端直接绑定渲染 */
+export interface ExecutionSnapshot {
+  /** 任务名称 */
+  taskName: string
+  /** 设备总数 */
+  totalDevices: number
+  /** 已完成设备数 */
+  finishedCount: number
+  /** 进度百分比 (0-100) */
+  progress: number
+  /** 是否正在运行 */
+  isRunning: boolean
+  /** 设备状态列表 */
+  devices: DeviceViewState[]
+}
+
 /** 挂起请求事件 */
 export interface SuspendRequiredEvent {
   /** 会话 ID（用于唯一标识挂起会话，防止重复挂起时的信号泄漏） */
@@ -55,6 +91,8 @@ export const EventNames = {
   SUSPEND_REQUIRED: 'engine:suspend_required',
   /** 挂起超时 */
   SUSPEND_TIMEOUT: 'engine:suspend_timeout',
+  /** 执行快照推送 (200ms 定时) */
+  EXECUTION_SNAPSHOT: 'execution:snapshot',
 } as const
 
 /** 事件名称类型 */

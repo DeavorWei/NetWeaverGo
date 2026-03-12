@@ -9,7 +9,15 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/engine"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/wailsapp/wails/v3/pkg/application"
+)
+
+// 快照推送配置
+const (
+	SnapshotInterval       = 200 * time.Millisecond // 快照推送间隔
+	SnapshotEventName      = "execution:snapshot"   // 快照事件名称
+	ExecutionFinishedEvent = "engine:finished"      // 执行完成事件名称
 )
 
 // EngineService 引擎控制服务 - 负责任务执行和状态管理
@@ -19,6 +27,14 @@ type EngineService struct {
 	// Context 取消函数，用于停止正在执行的任务
 	cancelFunc context.CancelFunc
 	cancelMu   sync.Mutex
+
+	// 当前执行的 Tracker 引用（用于快照查询）
+	currentTracker *report.ProgressTracker
+	trackerMu      sync.RWMutex
+
+	// 快照推送控制
+	snapshotTicker *time.Ticker
+	snapshotStop   chan struct{}
 }
 
 // NewEngineService 创建引擎服务实例
@@ -92,6 +108,14 @@ func (s *EngineService) StartEngine() error {
 	ng := engine.NewEngine(assets, commands, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
+	// 创建并设置 Tracker（用于快照推送）
+	tracker := report.NewProgressTracker(len(assets))
+	tracker.SetTaskName("批量执行")
+	ng.SetTracker(tracker)
+
+	// 设置当前 Tracker 引用（用于 GetExecutionSnapshot）
+	s.setCurrentTracker(tracker)
+
 	// 使用双重同步机制确保事件监听器完全就绪
 	type eventListenerState struct {
 		ready     chan struct{} // Wails App 就绪
@@ -119,7 +143,7 @@ func (s *EngineService) StartEngine() error {
 
 		// 进入事件循环前，等待启动信号
 		<-listenerState.active
-		
+
 		close(listenerState.listening)
 
 		// 开始消费 FrontendBus
@@ -146,18 +170,25 @@ func (s *EngineService) StartEngine() error {
 	s.cancelFunc = cancel
 	s.cancelMu.Unlock()
 
+	// 启动快照定时推送
+	s.startSnapshotTicker(ctx)
+
 	// 开始执行并发任务
 	ng.Run(ctx)
+
+	// 停止快照推送
+	s.stopSnapshotTicker()
+
+	// 发送执行完成事件（包含最终快照）
+	s.emitFinishedEvent()
+
+	// 清理 Tracker 引用
+	s.clearCurrentTracker()
 
 	// 清理 cancelFunc
 	s.cancelMu.Lock()
 	s.cancelFunc = nil
 	s.cancelMu.Unlock()
-
-	// 确保所有事件都被处理完毕
-	time.Sleep(100 * time.Millisecond)
-
-	s.wailsApp.Event.Emit("engine:finished")
 
 	return nil
 }
@@ -213,6 +244,14 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 	ng := engine.NewEngine(selectedAssets, group.Commands, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
+	// 创建并设置 Tracker（用于快照推送）
+	tracker := report.NewProgressTracker(len(selectedAssets))
+	tracker.SetTaskName(group.Name)
+	ng.SetTracker(tracker)
+
+	// 设置当前 Tracker 引用（用于 GetExecutionSnapshot）
+	s.setCurrentTracker(tracker)
+
 	// 使用双重同步机制确保事件监听器完全就绪
 	type eventListenerState struct {
 		ready     chan struct{} // Wails App 就绪
@@ -266,20 +305,107 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 	s.cancelFunc = cancel
 	s.cancelMu.Unlock()
 
+	// 启动快照定时推送
+	s.startSnapshotTicker(ctx)
+
 	// 开始执行并发任务
 	ng.Run(ctx)
+
+	// 停止快照推送
+	s.stopSnapshotTicker()
+
+	// 发送执行完成事件（包含最终快照）
+	s.emitFinishedEvent()
+
+	// 清理 Tracker 引用
+	s.clearCurrentTracker()
 
 	// 清理 cancelFunc
 	s.cancelMu.Lock()
 	s.cancelFunc = nil
 	s.cancelMu.Unlock()
 
-	// 确保所有事件都被处理完毕
-	time.Sleep(100 * time.Millisecond)
-
-	s.wailsApp.Event.Emit("engine:finished")
-
 	return nil
+}
+
+// GetExecutionSnapshot 获取当前执行的快照
+// 前端调用此方法获取完整的执行状态，无需前端计算
+func (s *EngineService) GetExecutionSnapshot() *report.ExecutionSnapshot {
+	s.trackerMu.RLock()
+	defer s.trackerMu.RUnlock()
+
+	if s.currentTracker == nil {
+		return nil
+	}
+
+	return s.currentTracker.GetSnapshot()
+}
+
+// setCurrentTracker 设置当前的 Tracker 引用
+func (s *EngineService) setCurrentTracker(tracker *report.ProgressTracker) {
+	s.trackerMu.Lock()
+	defer s.trackerMu.Unlock()
+	s.currentTracker = tracker
+}
+
+// clearCurrentTracker 清除当前的 Tracker 引用
+func (s *EngineService) clearCurrentTracker() {
+	s.trackerMu.Lock()
+	defer s.trackerMu.Unlock()
+	s.currentTracker = nil
+}
+
+// startSnapshotTicker 启动快照定时推送
+func (s *EngineService) startSnapshotTicker(ctx context.Context) {
+	s.snapshotTicker = time.NewTicker(SnapshotInterval)
+	s.snapshotStop = make(chan struct{})
+
+	go func() {
+		for {
+			select {
+			case <-s.snapshotTicker.C:
+				snapshot := s.GetExecutionSnapshot()
+				if snapshot != nil && s.wailsApp != nil {
+					s.wailsApp.Event.Emit(SnapshotEventName, snapshot)
+				}
+			case <-ctx.Done():
+				s.stopSnapshotTicker()
+				return
+			case <-s.snapshotStop:
+				return
+			}
+		}
+	}()
+}
+
+// stopSnapshotTicker 停止快照定时推送
+func (s *EngineService) stopSnapshotTicker() {
+	if s.snapshotTicker != nil {
+		s.snapshotTicker.Stop()
+		s.snapshotTicker = nil
+	}
+	if s.snapshotStop != nil {
+		close(s.snapshotStop)
+		s.snapshotStop = nil
+	}
+}
+
+// emitFinishedEvent 发送执行完成事件
+func (s *EngineService) emitFinishedEvent() {
+	// 发送最终快照（100% 进度）
+	snapshot := s.GetExecutionSnapshot()
+	if snapshot != nil {
+		snapshot.Progress = 100
+		snapshot.IsRunning = false
+		if s.wailsApp != nil {
+			s.wailsApp.Event.Emit(SnapshotEventName, snapshot)
+		}
+	}
+
+	// 发送完成事件
+	if s.wailsApp != nil {
+		s.wailsApp.Event.Emit(ExecutionFinishedEvent)
+	}
 }
 
 // StartBackup 启动核心备份动作
@@ -310,6 +436,14 @@ func (s *EngineService) StartBackup() error {
 	ng := engine.NewEngine(assets, nil, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
+	// 创建并设置 Tracker（用于快照推送）
+	tracker := report.NewProgressTracker(len(assets))
+	tracker.SetTaskName("配置备份")
+	ng.SetTracker(tracker)
+
+	// 设置当前 Tracker 引用（用于 GetExecutionSnapshot）
+	s.setCurrentTracker(tracker)
+
 	// 使用双重同步机制确保事件监听器完全就绪
 	type eventListenerState struct {
 		ready     chan struct{} // Wails App 就绪
@@ -363,18 +497,25 @@ func (s *EngineService) StartBackup() error {
 	s.cancelFunc = cancel
 	s.cancelMu.Unlock()
 
+	// 启动快照定时推送
+	s.startSnapshotTicker(ctx)
+
 	// 开始执行备份任务
 	ng.RunBackup(ctx)
+
+	// 停止快照推送
+	s.stopSnapshotTicker()
+
+	// 发送执行完成事件（包含最终快照）
+	s.emitFinishedEvent()
+
+	// 清理 Tracker 引用
+	s.clearCurrentTracker()
 
 	// 清理 cancelFunc
 	s.cancelMu.Lock()
 	s.cancelFunc = nil
 	s.cancelMu.Unlock()
-
-	// 确保所有事件都被处理完毕
-	time.Sleep(100 * time.Millisecond)
-
-	s.wailsApp.Event.Emit("engine:finished")
 
 	return nil
 }

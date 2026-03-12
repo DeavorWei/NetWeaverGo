@@ -77,6 +77,10 @@ type Engine struct {
 	FrontendBus chan report.ExecutorEvent
 	tracker     *report.ProgressTracker
 
+	// Tracker 进度跟踪器（外部可设置，用于快照推送）
+	// 当外部设置此字段时，会自动连接到 Engine.EventBus
+	Tracker *report.ProgressTracker
+
 	failedBackups sync.Map // 记录备份失败的设备和原因
 
 	// CustomSuspendHandler 允许外部（如 Wails UI）注入自定义的异常挂起处理逻辑
@@ -106,6 +110,17 @@ type Engine struct {
 	// 新增：关闭信号 channel，用于通知所有发送者停止
 	closeSignal chan struct{}
 	closeOnce   sync.Once
+}
+
+// SetTracker 设置外部 Tracker 并连接事件总线
+// 当 EngineService 需要获取快照时，调用此方法设置 Tracker
+func (e *Engine) SetTracker(tracker *report.ProgressTracker) {
+	if tracker == nil {
+		return
+	}
+	e.tracker = tracker
+	// 连接 EventBus，让 tracker 能够接收事件
+	tracker.EventBus = e.EventBus
 }
 
 // NewEngine 初始化并行执行引擎
