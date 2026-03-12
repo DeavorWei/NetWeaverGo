@@ -332,3 +332,29 @@ await UpdateRuntimeConfig({
 ---
 
 **当前状态**：代码质量问题修复已基本完成。核心框架搭建、魔法值替换、错误处理重构、前端UI组件均已实现。项目构建验证通过，可正常编译运行。前端组件的 Wails 绑定需要在后续正确配置后启用。
+
+检查发现前端绑&#x5B9A;**&#x672A;完成**。
+
+当前生成的绑定文件 `frontend/src/bindings/github.com/NetWeaverGo/core/internal/ui/settingsservice.ts` &#x4E2D;**&#x7F3A;&#x5C11;**&#x4EE5;下三个关键方法：
+
+❌ **缺失的方法**：
+
+1. `GetRuntimeConfig` - 获取运行时配置
+2. `UpdateRuntimeConfig` - 更新运行时配置
+3. `ResetRuntimeConfigToDefault` - 重置为默认值
+
+**当前绑定中只有的方法**：
+
+- EnsureConfig
+- GetAppInfo
+- LoadSettings
+- LogError/LogInfo/LogWarn
+- SaveSettings
+- ServiceStartup
+
+**问题原因**：Wails 绑定生成器可能没有识别到 `SettingsService` 中的运行时配置方法。
+
+**需要检查**：
+
+1. `internal/ui/settings_service.go` 中的方法签名是否正确（是否有指针接收者、返回值格式等）
+2. 是否需要重新生成绑定
