@@ -79,7 +79,15 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 
 	client, err := sshutil.NewSSHClient(ctx, cfg)
 	if err != nil {
-		return err
+		// 使用统一错误处理
+		execErr := NewError(e.IP).
+			WithStage(StageConnect).
+			WithType(ClassifyError(err)).
+			WithError(err).
+			Build()
+		handler := NewErrorHandler()
+		handler.Handle(ctx, execErr)
+		return execErr
 	}
 	e.Client = client
 
@@ -87,7 +95,16 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 	if err != nil {
 		logger.Debug("Executor", e.IP, "初始化日志文件失败: %v", err)
 		e.Client.Close()
-		return err
+		// 使用统一错误处理
+		execErr := NewError(e.IP).
+			WithStage(StageConnect).
+			WithType(ErrorTypeWarning).
+			WithError(err).
+			WithContext("detail", "日志初始化失败").
+			Build()
+		handler := NewErrorHandler()
+		handler.Handle(ctx, execErr)
+		return execErr
 	}
 	e.Log = devOutput
 	logger.Debug("Executor", e.IP, "连接与日志挂载成功")
@@ -102,7 +119,8 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 		return fmt.Errorf("执行器未安全建连")
 	}
 
-	buf := make([]byte, 1024)
+	manager := config.GetRuntimeManager()
+	buf := make([]byte, manager.GetBufferSize())
 	outReader := io.TeeReader(e.Client.Stdout, e.Log)
 	errReader := io.TeeReader(e.Client.Stderr, e.Log)
 
@@ -193,7 +211,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 	// 确保在函数退出时关闭 done channel，让读取 goroutine 能够正确退出
 	defer close(done)
 
-	readDelay := 100 * time.Millisecond
+	readDelay := manager.GetPaginationCheckInterval()
 	for {
 		select {
 		case <-ctx.Done():
@@ -422,8 +440,9 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 		return "", fmt.Errorf("执行器未安全建连")
 	}
 
+	manager := config.GetRuntimeManager()
 	// 像正常执行一样准备 TeeReader
-	buf := make([]byte, 1024)
+	buf := make([]byte, manager.GetBufferSize())
 	outReader := io.TeeReader(e.Client.Stdout, e.Log)
 
 	var outputBuffer strings.Builder
@@ -588,6 +607,6 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 			}
 		}
 
-		time.Sleep(100 * time.Millisecond) // 减少 CPU 忙等待
+		time.Sleep(manager.GetPaginationCheckInterval()) // 减少 CPU 忙等待
 	}
 }

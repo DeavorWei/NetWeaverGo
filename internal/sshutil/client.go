@@ -171,10 +171,10 @@ func applyAlgorithmConfig(sshConfig *ssh.ClientConfig, algoSettings *config.SSHA
 func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	logger.DebugAll("SSH", cfg.IP, "开始初始化带 Shell 的 SSH 连接 -> %s:%d", cfg.IP, cfg.Port)
 	if cfg.Port == 0 {
-		cfg.Port = 22
+		cfg.Port = config.DefaultSSHPort
 	}
 	if cfg.Timeout == 0 {
-		cfg.Timeout = 10 * time.Second
+		cfg.Timeout = config.GetRuntimeManager().GetConnectionTimeout()
 	}
 
 	sshConfig := &ssh.ClientConfig{
@@ -406,10 +406,10 @@ func (c *SSHClient) CancelRead() {
 func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	logger.DebugAll("SSH", cfg.IP, "开始初始化 Raw SSH 连接 -> %s:%d", cfg.IP, cfg.Port)
 	if cfg.Port == 0 {
-		cfg.Port = 22
+		cfg.Port = config.DefaultSSHPort
 	}
 	if cfg.Timeout == 0 {
-		cfg.Timeout = 10 * time.Second
+		cfg.Timeout = config.GetRuntimeManager().GetConnectionTimeout()
 	}
 
 	sshConfig := &ssh.ClientConfig{

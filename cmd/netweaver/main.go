@@ -61,6 +61,12 @@ func main() {
 	}
 	config.MigrateLegacyDataIfNeeded()
 
+	// 初始化运行时配置管理器
+	if err := config.InitRuntimeManager(config.DB); err != nil {
+		logger.Error("System", "-", "运行时配置管理器初始化失败: %v", err)
+		os.Exit(1)
+	}
+
 	if *isCLI || *isBackup || *nonInteractive {
 		runCLI(*isBackup, *nonInteractive, cliDebugSet, cliDebugValue, cliDebugAllSet, cliDebugAllValue)
 	} else {

@@ -496,14 +496,9 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 	defer wg.Done()
 	logger.Debug("Worker", dev.IP, "worker 启动")
 
-	connectTimeout, err := time.ParseDuration(e.Settings.ConnectTimeout)
-	if err != nil {
-		connectTimeout = 10 * time.Second
-	}
-	commandTimeout, err := time.ParseDuration(e.Settings.CommandTimeout)
-	if err != nil {
-		commandTimeout = 30 * time.Second
-	}
+	manager := config.GetRuntimeManager()
+	connectTimeout := manager.GetConnectionTimeout()
+	commandTimeout := manager.GetCommandTimeout()
 
 	suspendHandler := e.handleSuspend
 	if e.CustomSuspendHandler != nil {
@@ -559,14 +554,48 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 	workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceStart, TotalCmd: len(e.Commands), Message: "Connecting SSH..."}
 
 	if err := exec.Connect(ctx, connectTimeout); err != nil {
-		workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: fmt.Sprintf("SSH 建连失败: %v", err)}
-		workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: fmt.Sprintf("连接失败: %v", err), TotalCmd: len(e.Commands)}
+		// 使用统一错误处理
+		if execErr, ok := executor.IsExecutionError(err); ok {
+			// 已经是 ExecutionError，记录并发送事件
+			handler := executor.NewErrorHandler()
+			handler.Handle(ctx, execErr)
+			workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: execErr.Message}
+			workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: execErr.Message, TotalCmd: len(e.Commands)}
+		} else {
+			// 包装为 ExecutionError
+			execErr := executor.NewError(dev.IP).
+				WithStage(executor.StageConnect).
+				WithType(executor.ClassifyError(err)).
+				WithError(err).
+				Build()
+			handler := executor.NewErrorHandler()
+			handler.Handle(ctx, execErr)
+			workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: fmt.Sprintf("SSH 建连失败: %v", err)}
+			workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: fmt.Sprintf("连接失败: %v", err), TotalCmd: len(e.Commands)}
+		}
 		close(workerEventBus)
 		return
 	}
 
 	if err := exec.ExecutePlaybook(ctx, e.Commands, commandTimeout); err != nil {
 		logger.Debug("Engine", dev.IP, "worker 播放命令集结束，返回了 error: %v", err)
+		// 使用统一错误处理
+		if execErr, ok := executor.IsExecutionError(err); ok {
+			handler := executor.NewErrorHandler()
+			shouldContinue := handler.Handle(ctx, execErr)
+			if !shouldContinue && !execErr.IsWarning() {
+				logger.Error("Engine", dev.IP, "严重错误，终止设备执行: %v", execErr.Message)
+			}
+		} else {
+			// 包装为 ExecutionError
+			execErr := executor.NewError(dev.IP).
+				WithStage(executor.StageExecute).
+				WithType(executor.ClassifyError(err)).
+				WithError(err).
+				Build()
+			handler := executor.NewErrorHandler()
+			handler.Handle(ctx, execErr)
+		}
 	} else {
 		logger.Debug("Engine", dev.IP, "worker 播放命令集成功完成")
 		workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceSuccess, Message: "执行完毕", TotalCmd: len(e.Commands)}
@@ -577,6 +606,8 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 // backupWorker 是基于单个设备进行交互的备份动作集散流
 func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *sync.WaitGroup) {
 	defer wg.Done()
+
+	manager := config.GetRuntimeManager()
 
 	// 备份模块不初始化 ProgressTracker，因此 EventBus 必须设为 nil 以避免死锁。
 	// 修正：如果外部注入了 EventBus，则使用它。
@@ -589,10 +620,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 		e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceStart, Message: "Connecting SSH for Backup..."}
 	}
 
-	connectTimeout, err := time.ParseDuration(e.Settings.ConnectTimeout)
-	if err != nil {
-		connectTimeout = 10 * time.Second
-	}
+	connectTimeout := manager.GetConnectionTimeout()
 
 	if err := exec.Connect(ctx, connectTimeout); err != nil {
 		logger.Error("Worker", dev.IP, "SSH建连失败: %v", err)
@@ -637,8 +665,8 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	// 2. 正常读取配置文件名称
 	logger.Info("Worker", dev.IP, "SFTP会话成功挂载，准备查询下次启动配置文件...")
 	// 某些设备需要禁用分屏，或者我们依赖"Next startup saved-configuration file"出现在第一屏回显中
-	exec.ExecuteCommandSync(ctx, "screen-length 0 temporary", 2*time.Second) // 尽可能的规避翻页问题
-	output, err := exec.ExecuteCommandSync(ctx, "display startup", 15*time.Second)
+	exec.ExecuteCommandSync(ctx, "screen-length 0 temporary", manager.GetShortCommandTimeout()) // 尽可能的规避翻页问题
+	output, err := exec.ExecuteCommandSync(ctx, "display startup", manager.GetLongCommandTimeout())
 	if err != nil {
 		errMsg := fmt.Sprintf("采集 startup 信息超时或失败: %v", err)
 		e.failedBackups.Store(dev.IP, errMsg)

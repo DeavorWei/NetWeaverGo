@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
 )
 
@@ -46,12 +47,17 @@ type ExecutionSnapshot struct {
 	Devices       []DeviceViewState `json:"devices"`
 }
 
-// 日志配置常量
-const (
-	MaxLogsPerDevice    = 500
-	MaxLogLength        = 2000
-	LogWarningThreshold = 400
-)
+// getMaxLogsPerDevice 获取每设备最大日志数（从运行时配置）
+func getMaxLogsPerDevice() int {
+	manager := config.GetRuntimeManager()
+	return manager.GetMaxLogsPerDevice()
+}
+
+// getMaxLogLength 获取单条日志最大长度（从运行时配置）
+func getMaxLogLength() int {
+	manager := config.GetRuntimeManager()
+	return manager.GetMaxLogLength()
+}
 
 // ProgressTracker 终端进度盘面板与报告收集器
 type ProgressTracker struct {
@@ -212,8 +218,9 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 // addDeviceLogLocked 添加日志到设备（必须在持有锁时调用）
 func (p *ProgressTracker) addDeviceLogLocked(ip string, message string) {
 	// 截断过长日志
-	if len(message) > MaxLogLength {
-		message = message[:MaxLogLength] + "...[截断]"
+	maxLen := getMaxLogLength()
+	if len(message) > maxLen {
+		message = message[:maxLen] + "...[截断]"
 	}
 
 	// 初始化日志存储
@@ -229,9 +236,10 @@ func (p *ProgressTracker) addDeviceLogLocked(ip string, message string) {
 	p.logCounts[ip]++
 
 	// 日志条数超过阈值时截断（保留最新的）
-	if len(p.deviceLogs[ip]) > MaxLogsPerDevice+50 {
+	maxLogs := getMaxLogsPerDevice()
+	if len(p.deviceLogs[ip]) > maxLogs+50 {
 		// 移除旧的日志
-		removeCount := len(p.deviceLogs[ip]) - MaxLogsPerDevice
+		removeCount := len(p.deviceLogs[ip]) - maxLogs
 		p.deviceLogs[ip] = p.deviceLogs[ip][removeCount:]
 	}
 }
@@ -504,9 +512,10 @@ func (p *ProgressTracker) getDeviceLogsLocked(ip string) ([]string, bool) {
 	}
 
 	// 返回截断后的日志
-	if len(logs) > MaxLogsPerDevice {
-		// 返回最新的 MaxLogsPerDevice 条日志
-		return logs[len(logs)-MaxLogsPerDevice:], true
+	maxLogs := getMaxLogsPerDevice()
+	if len(logs) > maxLogs {
+		// 返回最新的 maxLogs 条日志
+		return logs[len(logs)-maxLogs:], true
 	}
 
 	return logs, false
@@ -519,8 +528,9 @@ func (p *ProgressTracker) AddDeviceLog(ip string, message string) {
 	defer p.mu.Unlock()
 
 	// 截断过长日志
-	if len(message) > MaxLogLength {
-		message = message[:MaxLogLength] + "...[截断]"
+	maxLen := getMaxLogLength()
+	if len(message) > maxLen {
+		message = message[:maxLen] + "...[截断]"
 	}
 
 	// 初始化日志数组
@@ -536,9 +546,10 @@ func (p *ProgressTracker) AddDeviceLog(ip string, message string) {
 	p.logCounts[ip]++
 
 	// 日志条数超过阈值时截断（保留最新的）
-	if len(p.deviceLogs[ip]) > MaxLogsPerDevice+50 {
+	maxLogs := getMaxLogsPerDevice()
+	if len(p.deviceLogs[ip]) > maxLogs+50 {
 		// 移除旧的日志
-		removeCount := len(p.deviceLogs[ip]) - MaxLogsPerDevice
+		removeCount := len(p.deviceLogs[ip]) - maxLogs
 		p.deviceLogs[ip] = p.deviceLogs[ip][removeCount:]
 	}
 }

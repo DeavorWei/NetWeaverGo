@@ -75,6 +75,127 @@ func (s *SettingsService) GetAppInfo() map[string]string {
 	}
 }
 
+// ==================== 运行时配置管理接口 ====================
+
+// RuntimeConfigData 运行时配置数据结构（用于Wails绑定）
+type RuntimeConfigData struct {
+	Timeouts struct {
+		Command    int `json:"command"`
+		Connection int `json:"connection"`
+		Handshake  int `json:"handshake"`
+		ShortCmd   int `json:"shortCmd"`
+		LongCmd    int `json:"longCmd"`
+	} `json:"timeouts"`
+	Limits struct {
+		MaxLogsPerDevice     int `json:"maxLogsPerDevice"`
+		MaxLogLength         int `json:"maxLogLength"`
+		LogTruncateThreshold int `json:"logTruncateThreshold"`
+		MaxConcurrentDevices int `json:"maxConcurrentDevices"`
+	} `json:"limits"`
+	Engine struct {
+		WorkerCount           int `json:"workerCount"`
+		EventBufferSize       int `json:"eventBufferSize"`
+		FallbackEventCapacity int `json:"fallbackEventCapacity"`
+	} `json:"engine"`
+	Buffers struct {
+		DefaultSize int `json:"defaultSize"`
+		SmallSize   int `json:"smallSize"`
+		LargeSize   int `json:"largeSize"`
+	} `json:"buffers"`
+	Pagination struct {
+		LineThreshold int `json:"lineThreshold"`
+		CheckInterval int `json:"checkInterval"`
+	} `json:"pagination"`
+}
+
+// GetRuntimeConfig 获取运行时配置
+func (s *SettingsService) GetRuntimeConfig() (RuntimeConfigData, error) {
+	logger.Debug("SettingsService", "-", "收到前端 GetRuntimeConfig 调用请求")
+
+	manager := config.GetRuntimeManager()
+	cfg := manager.GetConfig()
+
+	var response RuntimeConfigData
+	response.Timeouts.Command = cfg.Timeouts.Command
+	response.Timeouts.Connection = cfg.Timeouts.Connection
+	response.Timeouts.Handshake = cfg.Timeouts.Handshake
+	response.Timeouts.ShortCmd = cfg.Timeouts.ShortCmd
+	response.Timeouts.LongCmd = cfg.Timeouts.LongCmd
+	response.Limits.MaxLogsPerDevice = cfg.Limits.MaxLogsPerDevice
+	response.Limits.MaxLogLength = cfg.Limits.MaxLogLength
+	response.Limits.LogTruncateThreshold = cfg.Limits.LogTruncateThreshold
+	response.Limits.MaxConcurrentDevices = cfg.Limits.MaxConcurrentDevices
+	response.Engine.WorkerCount = cfg.Engine.WorkerCount
+	response.Engine.EventBufferSize = cfg.Engine.EventBufferSize
+	response.Engine.FallbackEventCapacity = cfg.Engine.FallbackEventCapacity
+	response.Buffers.DefaultSize = cfg.Buffers.DefaultSize
+	response.Buffers.SmallSize = cfg.Buffers.SmallSize
+	response.Buffers.LargeSize = cfg.Buffers.LargeSize
+	response.Pagination.LineThreshold = cfg.Pagination.LineThreshold
+	response.Pagination.CheckInterval = cfg.Pagination.CheckInterval
+
+	logger.DebugAll("SettingsService", "-", "返回运行时配置")
+
+	return response, nil
+}
+
+// UpdateRuntimeConfig 更新运行时配置（热更新）
+func (s *SettingsService) UpdateRuntimeConfig(data RuntimeConfigData) error {
+	logger.Debug("SettingsService", "-", "收到前端 UpdateRuntimeConfig 调用请求")
+
+	cfg := config.RuntimeConfig{}
+	cfg.Timeouts.Command = data.Timeouts.Command
+	cfg.Timeouts.Connection = data.Timeouts.Connection
+	cfg.Timeouts.Handshake = data.Timeouts.Handshake
+	cfg.Timeouts.ShortCmd = data.Timeouts.ShortCmd
+	cfg.Timeouts.LongCmd = data.Timeouts.LongCmd
+	cfg.Limits.MaxLogsPerDevice = data.Limits.MaxLogsPerDevice
+	cfg.Limits.MaxLogLength = data.Limits.MaxLogLength
+	cfg.Limits.LogTruncateThreshold = data.Limits.LogTruncateThreshold
+	cfg.Limits.MaxConcurrentDevices = data.Limits.MaxConcurrentDevices
+	cfg.Engine.WorkerCount = data.Engine.WorkerCount
+	cfg.Engine.EventBufferSize = data.Engine.EventBufferSize
+	cfg.Engine.FallbackEventCapacity = data.Engine.FallbackEventCapacity
+	cfg.Buffers.DefaultSize = data.Buffers.DefaultSize
+	cfg.Buffers.SmallSize = data.Buffers.SmallSize
+	cfg.Buffers.LargeSize = data.Buffers.LargeSize
+	cfg.Pagination.LineThreshold = data.Pagination.LineThreshold
+	cfg.Pagination.CheckInterval = data.Pagination.CheckInterval
+
+	manager := config.GetRuntimeManager()
+	if err := manager.UpdateConfig(cfg); err != nil {
+		logger.Error("SettingsService", "-", "UpdateRuntimeConfig 失败: %v", err)
+		return err
+	}
+
+	logger.Info("SettingsService", "-", "运行时配置更新成功")
+	return nil
+}
+
+// ResetRuntimeConfigToDefault 重置运行时配置为默认值
+func (s *SettingsService) ResetRuntimeConfigToDefault() error {
+	logger.Debug("SettingsService", "-", "收到前端 ResetRuntimeConfigToDefault 调用请求")
+
+	if err := config.ResetRuntimeSettingsToDefault(config.DB); err != nil {
+		logger.Error("SettingsService", "-", "重置运行时配置失败: %v", err)
+		return err
+	}
+
+	// 重新加载配置到内存
+	manager := config.GetRuntimeManager()
+	cfg, err := config.LoadRuntimeConfig(config.DB)
+	if err != nil {
+		logger.Error("SettingsService", "-", "重新加载配置失败: %v", err)
+		return err
+	}
+
+	// 更新内存配置
+	manager.UpdateConfig(cfg)
+
+	logger.Info("SettingsService", "-", "运行时配置已重置为默认值")
+	return nil
+}
+
 // LogInfo 记录信息日志（前端调用）
 func (s *SettingsService) LogInfo(category, ip, message string) {
 	logger.Info(category, ip, "%s", message)

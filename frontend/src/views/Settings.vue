@@ -298,6 +298,9 @@
         </div>
       </div>
 
+      <!-- 运行时配置面板 -->
+      <RuntimeConfigPanel />
+
       <!-- 操作按钮 -->
       <div class="flex items-center justify-end gap-3 pt-2">
         <button
@@ -336,6 +339,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { SettingsAPI } from '../services/api'
 import type { GlobalSettings as BackendSettings } from '../services/api'
+import RuntimeConfigPanel from '../components/settings/RuntimeConfigPanel.vue'
 
 // SSH 算法配置接口
 interface SSHAlgorithmSettings {
