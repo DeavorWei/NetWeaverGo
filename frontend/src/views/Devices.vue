@@ -1093,6 +1093,9 @@ import type { DeviceAsset } from "../services/api";
 // 使用后端定义的类型
 type Device = DeviceAsset;
 
+// 新建设备时的类型（不含 id，由后端生成）
+type NewDevice = Omit<DeviceAsset, 'id'>;
+
 interface IpRangeHint {
   count: number;
   start: string;
@@ -1161,8 +1164,8 @@ const protocolDefaultPorts = ref<Record<string, number>>({
 });
 const validProtocols = ref<string[]>(["SSH", "SNMP", "TELNET"]);
 
-// 表单数据
-const form = ref<Device>({
+// 表单数据（新建设备不需要 id）
+const form = ref<NewDevice>({
   ip: "",
   port: 22,
   protocol: "SSH",
@@ -1446,7 +1449,8 @@ function openEditModal(idx: number) {
 
   isEditing.value = true;
   editingIndex.value = idx;
-  form.value = { ...device };
+  // 编辑时复制设备数据（包含 id）
+  form.value = { ...device } as NewDevice & { id: number };
   lastProtocol.value = device.protocol;
   errorMessage.value = "";
   showPassword.value = false;
@@ -1494,7 +1498,11 @@ async function saveDevice() {
     if (isEditing.value) {
       // 编辑模式 - 需要获取全局索引
       // 由于现在 data 只是当前页数据，需要通过 IP 找到设备
-      await DeviceAPI.updateDevice(editingIndex.value, form.value);
+      const editingDevice = data.value[editingIndex.value];
+      await DeviceAPI.updateDevice(editingIndex.value, {
+        id: editingDevice?.id || 0,
+        ...form.value,
+      } as Device);
     } else {
       if (ipRangeHint.value) {
         const match = form.value.ip.match(
@@ -1508,6 +1516,7 @@ async function saveDevice() {
           const newDevices: Device[] = [];
           for (let i = start; i <= end; i++) {
             newDevices.push({
+              id: 0, // 临时 id，后端会重新生成
               ip: prefix + i,
               port: form.value.port,
               protocol: form.value.protocol,
@@ -1520,7 +1529,11 @@ async function saveDevice() {
         await DeviceAPI.saveDevices(newDevices);
         }
       } else {
-        await DeviceAPI.addDevice(form.value);
+        // 新建设备时提供临时 id（后端会重新生成）
+        await DeviceAPI.addDevice({
+          id: 0,
+          ...form.value,
+        } as Device);
       }
     }
 

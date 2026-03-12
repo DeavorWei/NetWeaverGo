@@ -108,7 +108,7 @@ const buildConfig = async () => {
   try {
     const result = await ForgeAPI.buildConfig({
       template: templateText.value,
-      variables: variables.value.filter(v => v.valueString.trim() !== '' || v.name === '[A]'), // 保留有值的变量
+      variables: variables.value.filter((v: VarInput) => v.valueString.trim() !== '' || v.name === '[A]'), // 保留有值的变量
     })
     buildResult.value = result
     isCopied.value = false
@@ -137,10 +137,10 @@ const expandSyntaxSugar = async (v: VarInput) => {
   if (!v.valueString) return
   
   // 获取其他变量的最大长度作为目标长度
-  const otherVars = variables.value.filter(item => item.name !== v.name)
+  const otherVars = variables.value.filter((item: VarInput) => item.name !== v.name)
   let maxLen = 0
   for (const otherVar of otherVars) {
-    const vals = otherVar.valueString.split(/,|\n/).filter(s => s.trim() !== '')
+    const vals = otherVar.valueString.split(/,|\n/).filter((s: string) => s.trim() !== '')
     if (vals.length > maxLen) maxLen = vals.length
   }
   
@@ -207,8 +207,8 @@ const invalidIPs = computed(() => {
   
   const ipValues = firstVar.valueString
     .split(/,|\n/)
-    .map(s => s.trim())
-    .filter(s => s !== '')
+    .map((s: string) => s.trim())
+    .filter((s: string) => s !== '')
   
   return ipValues.filter(ip => {
     const cached = ipValidationCache.value.get(ip)
@@ -224,8 +224,8 @@ watch(() => variables.value[0]?.valueString, async (newValue) => {
   
   const ipValues = newValue
     .split(/,|\n/)
-    .map(s => s.trim())
-    .filter(s => s !== '')
+    .map((s: string) => s.trim())
+    .filter((s: string) => s !== '')
   
   for (const ip of ipValues) {
     if (!ipValidationCache.value.has(ip)) {
@@ -371,9 +371,9 @@ async function executeSend() {
   try {
     if (sendModal.value.mode === 'merge') {
       const allLines: string[] = []
-      outputBlocks.value.forEach(block => {
+      outputBlocks.value.forEach((block: string) => {
         if (block) {
-          const lines = block.split('\n').map(l => l.trim()).filter(l => l !== '')
+          const lines = block.split('\n').map((l: string) => l.trim()).filter((l: string) => l !== '')
           allLines.push(...lines)
         }
       })
@@ -396,7 +396,7 @@ async function executeSend() {
         const block = outputBlocks.value[i]
         if (!block) continue
         
-        const blockLines = block.split('\n').map(l => l.trim()).filter(l => l !== '')
+        const blockLines = block.split('\n').map((l: string) => l.trim()).filter((l: string) => l !== '')
         if (blockLines.length === 0) continue
 
         const seq = String(i + 1).padStart(2, '0')
@@ -483,9 +483,9 @@ async function executeTaskSend() {
 
   taskModal.value.saving = true
   try {
-    const items = bindingPreview.value.map(b => ({
+    const items = bindingPreview.value.map((b: {ip: string, commands: string}) => ({
       commandGroupId: '',
-      commands: b.commands.split('\n').map(l => l.trim()).filter(l => l !== ''),
+      commands: b.commands.split('\n').map((l: string) => l.trim()).filter((l: string) => l !== ''),
       deviceIPs: [b.ip]
     }))
 

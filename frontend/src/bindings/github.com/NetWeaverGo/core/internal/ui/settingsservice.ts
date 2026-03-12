@@ -8,92 +8,95 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import {Call as $Call, Create as $Create} from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "/wails/runtime.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as config$0 from "../config/models.js";
+
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as application$0 from "../../../../wailsapp/wails/v3/pkg/application/models.js";
+import * as $models from "./models.js";
 
 /**
  * EnsureConfig 检查必需配置文件并返回是否有文件遗漏，以便前端提示
  */
-export function EnsureConfig(): Promise<[config$0.DeviceAsset[], string[], string[]]> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(2867805956) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
+export function EnsureConfig(): $CancellablePromise<[config$0.DeviceAsset[], string[], string[]]> {
+    return $Call.ByID(2867805956).then(($result: any) => {
         $result[0] = $$createType1($result[0]);
         $result[1] = $$createType2($result[1]);
         $result[2] = $$createType2($result[2]);
         return $result;
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+    });
 }
 
 /**
  * GetAppInfo 获取应用信息
  */
-export function GetAppInfo(): Promise<{ [_: string]: string }> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(2108623295) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
+export function GetAppInfo(): $CancellablePromise<{ [_ in string]?: string }> {
+    return $Call.ByID(2108623295).then(($result: any) => {
         return $$createType3($result);
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+    });
+}
+
+/**
+ * GetRuntimeConfig 获取运行时配置
+ */
+export function GetRuntimeConfig(): $CancellablePromise<$models.RuntimeConfigData> {
+    return $Call.ByID(3968671906).then(($result: any) => {
+        return $$createType4($result);
+    });
 }
 
 /**
  * LoadSettings 获取合并后的主配置
  */
-export function LoadSettings(): Promise<config$0.GlobalSettings | null> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(3565402469) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
-        return $$createType5($result);
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+export function LoadSettings(): $CancellablePromise<config$0.GlobalSettings | null> {
+    return $Call.ByID(3565402469).then(($result: any) => {
+        return $$createType6($result);
+    });
 }
 
 /**
  * LogError 记录错误日志（前端调用）
  */
-export function LogError(category: string, ip: string, message: string): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(474104816, category, ip, message) as any;
-    return $resultPromise;
+export function LogError(category: string, ip: string, message: string): $CancellablePromise<void> {
+    return $Call.ByID(474104816, category, ip, message);
 }
 
 /**
  * LogInfo 记录信息日志（前端调用）
  */
-export function LogInfo(category: string, ip: string, message: string): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(1945591606, category, ip, message) as any;
-    return $resultPromise;
+export function LogInfo(category: string, ip: string, message: string): $CancellablePromise<void> {
+    return $Call.ByID(1945591606, category, ip, message);
 }
 
 /**
  * LogWarn 记录警告日志（前端调用）
  */
-export function LogWarn(category: string, ip: string, message: string): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(1210498838, category, ip, message) as any;
-    return $resultPromise;
+export function LogWarn(category: string, ip: string, message: string): $CancellablePromise<void> {
+    return $Call.ByID(1210498838, category, ip, message);
+}
+
+/**
+ * ResetRuntimeConfigToDefault 重置运行时配置为默认值
+ */
+export function ResetRuntimeConfigToDefault(): $CancellablePromise<void> {
+    return $Call.ByID(4262020943);
 }
 
 /**
  * SaveSettings 保存全局设置到配置文件
  */
-export function SaveSettings(settings: config$0.GlobalSettings): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(3400930556, settings) as any;
-    return $resultPromise;
+export function SaveSettings(settings: config$0.GlobalSettings): $CancellablePromise<void> {
+    return $Call.ByID(3400930556, settings);
 }
 
 /**
- * ServiceStartup Wails 服务启动生命周期钩子
+ * UpdateRuntimeConfig 更新运行时配置（热更新）
  */
-export function ServiceStartup(options: application$0.ServiceOptions): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(1962381768, options) as any;
-    return $resultPromise;
+export function UpdateRuntimeConfig(data: $models.RuntimeConfigData): $CancellablePromise<void> {
+    return $Call.ByID(114110761, data);
 }
 
 // Private type creation functions
@@ -101,5 +104,6 @@ const $$createType0 = config$0.DeviceAsset.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = $Create.Array($Create.Any);
 const $$createType3 = $Create.Map($Create.Any, $Create.Any);
-const $$createType4 = config$0.GlobalSettings.createFrom;
-const $$createType5 = $Create.Nullable($$createType4);
+const $$createType4 = $models.RuntimeConfigData.createFrom;
+const $$createType5 = config$0.GlobalSettings.createFrom;
+const $$createType6 = $Create.Nullable($$createType5);

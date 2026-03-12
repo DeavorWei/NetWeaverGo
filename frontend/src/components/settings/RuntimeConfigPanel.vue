@@ -269,12 +269,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-// Wails 绑定需要正确配置后才能生成，暂时注释
-// import { 
-//   GetRuntimeConfig, 
-//   UpdateRuntimeConfig, 
-//   ResetRuntimeConfigToDefault 
-// } from '../../bindings/github.com/NetWeaverGo/core/internal/ui/settingsservice'
+import { 
+  GetRuntimeConfig, 
+  UpdateRuntimeConfig, 
+  ResetRuntimeConfigToDefault 
+} from '../../bindings/github.com/NetWeaverGo/core/internal/ui/settingsservice'
+import { RuntimeConfigData } from '../../bindings/github.com/NetWeaverGo/core/internal/ui/models'
 
 // 配置数据
 const config = ref({
@@ -330,36 +330,34 @@ function showMessage(msg: string, type: 'success' | 'error' = 'success') {
 // 加载配置
 async function loadConfig() {
   try {
-    // TODO: 绑定生成后取消注释
-    // const data = await GetRuntimeConfig()
-    const data: any = {}
+    const data = await GetRuntimeConfig()
     config.value = {
       timeouts: {
-        command: data.Timeouts?.Command || 30000,
-        connection: data.Timeouts?.Connection || 10000,
-        handshake: data.Timeouts?.Handshake || 10000,
-        shortCmd: data.Timeouts?.ShortCmd || 10000,
-        longCmd: data.Timeouts?.LongCmd || 60000
+        command: data.timeouts?.command || 30000,
+        connection: data.timeouts?.connection || 10000,
+        handshake: data.timeouts?.handshake || 10000,
+        shortCmd: data.timeouts?.shortCmd || 10000,
+        longCmd: data.timeouts?.longCmd || 60000
       },
       limits: {
-        maxLogsPerDevice: data.Limits?.MaxLogsPerDevice || 500,
-        maxLogLength: data.Limits?.MaxLogLength || 2000,
-        logTruncateThreshold: data.Limits?.LogTruncateThreshold || 95,
-        maxConcurrentDevices: data.Limits?.MaxConcurrentDevices || 32
+        maxLogsPerDevice: data.limits?.maxLogsPerDevice || 500,
+        maxLogLength: data.limits?.maxLogLength || 2000,
+        logTruncateThreshold: data.limits?.logTruncateThreshold || 95,
+        maxConcurrentDevices: data.limits?.maxConcurrentDevices || 32
       },
       engine: {
-        workerCount: data.Engine?.WorkerCount || 10,
-        eventBufferSize: data.Engine?.EventBufferSize || 1000,
-        fallbackEventCapacity: data.Engine?.FallbackEventCapacity || 500
+        workerCount: data.engine?.workerCount || 10,
+        eventBufferSize: data.engine?.eventBufferSize || 1000,
+        fallbackEventCapacity: data.engine?.fallbackEventCapacity || 500
       },
       buffers: {
-        defaultSize: data.Buffers?.DefaultSize || 4096,
-        smallSize: data.Buffers?.SmallSize || 1024,
-        largeSize: data.Buffers?.LargeSize || 8192
+        defaultSize: data.buffers?.defaultSize || 4096,
+        smallSize: data.buffers?.smallSize || 1024,
+        largeSize: data.buffers?.largeSize || 8192
       },
       pagination: {
-        lineThreshold: data.Pagination?.LineThreshold || 50,
-        checkInterval: data.Pagination?.CheckInterval || 100
+        lineThreshold: data.pagination?.lineThreshold || 50,
+        checkInterval: data.pagination?.checkInterval || 100
       }
     }
     originalConfig.value = JSON.stringify(config.value)
@@ -373,36 +371,36 @@ async function loadConfig() {
 async function saveConfig() {
   saving.value = true
   try {
-    // TODO: 绑定生成后取消注释
-    // await UpdateRuntimeConfig({
-    //   Timeouts: {
-    //     Command: config.value.timeouts.command,
-    //     Connection: config.value.timeouts.connection,
-    //     Handshake: config.value.timeouts.handshake,
-    //     ShortCmd: config.value.timeouts.shortCmd,
-    //     LongCmd: config.value.timeouts.longCmd
-    //   },
-    //   Limits: {
-    //     MaxLogsPerDevice: config.value.limits.maxLogsPerDevice,
-    //     MaxLogLength: config.value.limits.maxLogLength,
-    //     LogTruncateThreshold: config.value.limits.logTruncateThreshold,
-    //     MaxConcurrentDevices: config.value.limits.maxConcurrentDevices
-    //   },
-    //   Engine: {
-    //     WorkerCount: config.value.engine.workerCount,
-    //     EventBufferSize: config.value.engine.eventBufferSize,
-    //     FallbackEventCapacity: config.value.engine.fallbackEventCapacity
-    //   },
-    //   Buffers: {
-    //     DefaultSize: config.value.buffers.defaultSize,
-    //     SmallSize: config.value.buffers.smallSize,
-    //     LargeSize: config.value.buffers.largeSize
-    //   },
-    //   Pagination: {
-    //     LineThreshold: config.value.pagination.lineThreshold,
-    //     CheckInterval: config.value.pagination.checkInterval
-    //   }
-    // })
+    const data = new RuntimeConfigData({
+      timeouts: {
+        command: config.value.timeouts.command,
+        connection: config.value.timeouts.connection,
+        handshake: config.value.timeouts.handshake,
+        shortCmd: config.value.timeouts.shortCmd,
+        longCmd: config.value.timeouts.longCmd
+      },
+      limits: {
+        maxLogsPerDevice: config.value.limits.maxLogsPerDevice,
+        maxLogLength: config.value.limits.maxLogLength,
+        logTruncateThreshold: config.value.limits.logTruncateThreshold,
+        maxConcurrentDevices: config.value.limits.maxConcurrentDevices
+      },
+      engine: {
+        workerCount: config.value.engine.workerCount,
+        eventBufferSize: config.value.engine.eventBufferSize,
+        fallbackEventCapacity: config.value.engine.fallbackEventCapacity
+      },
+      buffers: {
+        defaultSize: config.value.buffers.defaultSize,
+        smallSize: config.value.buffers.smallSize,
+        largeSize: config.value.buffers.largeSize
+      },
+      pagination: {
+        lineThreshold: config.value.pagination.lineThreshold,
+        checkInterval: config.value.pagination.checkInterval
+      }
+    })
+    await UpdateRuntimeConfig(data)
     originalConfig.value = JSON.stringify(config.value)
     showMessage('配置保存成功，已立即生效')
   } catch (err) {
@@ -420,9 +418,8 @@ async function resetToDefault() {
   }
   saving.value = true
   try {
-    // TODO: 绑定生成后取消注释
-    // await ResetRuntimeConfigToDefault()
-    // await loadConfig()
+    await ResetRuntimeConfigToDefault()
+    await loadConfig()
     showMessage('已重置为默认值')
   } catch (err) {
     console.error('重置配置失败:', err)

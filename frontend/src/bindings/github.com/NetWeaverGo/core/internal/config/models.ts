@@ -3,7 +3,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import {Create as $Create} from "@wailsio/runtime";
+import { Create as $Create } from "/wails/runtime.js";
 
 /**
  * CommandGroup 命令组定义
@@ -92,6 +92,7 @@ export class CommandGroup {
  * DeviceAsset 表示单台交换机的连接凭证信息
  */
 export class DeviceAsset {
+    "id": number;
     "ip": string;
     "port": number;
 
@@ -114,6 +115,9 @@ export class DeviceAsset {
 
     /** Creates a new DeviceAsset instance. */
     constructor($$source: Partial<DeviceAsset> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
         if (!("ip" in $$source)) {
             this["ip"] = "";
         }
@@ -143,10 +147,10 @@ export class DeviceAsset {
      * Creates a new DeviceAsset instance from a string or object.
      */
     static createFrom($$source: any = {}): DeviceAsset {
-        const $$createField6_0 = $$createType0;
+        const $$createField7_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tags" in $$parsedSource) {
-            $$parsedSource["tags"] = $$createField6_0($$parsedSource["tags"]);
+            $$parsedSource["tags"] = $$createField7_0($$parsedSource["tags"]);
         }
         return new DeviceAsset($$parsedSource as Partial<DeviceAsset>);
     }
@@ -156,6 +160,8 @@ export class DeviceAsset {
  * GlobalSettings 全局运行参数
  */
 export class GlobalSettings {
+    "id": number;
+
     /**
      * 并发数 (当前硬编码为 32)
      */
@@ -186,8 +192,27 @@ export class GlobalSettings {
      */
     "errorMode": string;
 
+    /**
+     * 调试日志开关
+     * 启用 DEBUG 级别日志
+     */
+    "debug": boolean;
+
+    /**
+     * 启用全量 DEBUG 级别日志（包含 Debug）
+     */
+    "debugAll": boolean;
+
+    /**
+     * SSH算法配置
+     */
+    "sshAlgorithms": SSHAlgorithmSettings;
+
     /** Creates a new GlobalSettings instance. */
     constructor($$source: Partial<GlobalSettings> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
         if (!("maxWorkers" in $$source)) {
             this["maxWorkers"] = 0;
         }
@@ -206,6 +231,15 @@ export class GlobalSettings {
         if (!("errorMode" in $$source)) {
             this["errorMode"] = "";
         }
+        if (!("debug" in $$source)) {
+            this["debug"] = false;
+        }
+        if (!("debugAll" in $$source)) {
+            this["debugAll"] = false;
+        }
+        if (!("sshAlgorithms" in $$source)) {
+            this["sshAlgorithms"] = (new SSHAlgorithmSettings());
+        }
 
         Object.assign(this, $$source);
     }
@@ -214,8 +248,87 @@ export class GlobalSettings {
      * Creates a new GlobalSettings instance from a string or object.
      */
     static createFrom($$source: any = {}): GlobalSettings {
+        const $$createField9_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("sshAlgorithms" in $$parsedSource) {
+            $$parsedSource["sshAlgorithms"] = $$createField9_0($$parsedSource["sshAlgorithms"]);
+        }
         return new GlobalSettings($$parsedSource as Partial<GlobalSettings>);
+    }
+}
+
+/**
+ * SSHAlgorithmSettings SSH算法配置
+ */
+export class SSHAlgorithmSettings {
+    /**
+     * 加密算法 (Ciphers)
+     */
+    "ciphers": string[];
+
+    /**
+     * 密钥交换算法
+     */
+    "keyExchanges": string[];
+
+    /**
+     * 消息认证码
+     */
+    "macs": string[];
+
+    /**
+     * 主机密钥算法
+     */
+    "hostKeyAlgorithms": string[];
+
+    /**
+     * 预设模式: "secure" | "compatible" | "custom"
+     */
+    "presetMode": string;
+
+    /** Creates a new SSHAlgorithmSettings instance. */
+    constructor($$source: Partial<SSHAlgorithmSettings> = {}) {
+        if (!("ciphers" in $$source)) {
+            this["ciphers"] = [];
+        }
+        if (!("keyExchanges" in $$source)) {
+            this["keyExchanges"] = [];
+        }
+        if (!("macs" in $$source)) {
+            this["macs"] = [];
+        }
+        if (!("hostKeyAlgorithms" in $$source)) {
+            this["hostKeyAlgorithms"] = [];
+        }
+        if (!("presetMode" in $$source)) {
+            this["presetMode"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SSHAlgorithmSettings instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SSHAlgorithmSettings {
+        const $$createField0_0 = $$createType0;
+        const $$createField1_0 = $$createType0;
+        const $$createField2_0 = $$createType0;
+        const $$createField3_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("ciphers" in $$parsedSource) {
+            $$parsedSource["ciphers"] = $$createField0_0($$parsedSource["ciphers"]);
+        }
+        if ("keyExchanges" in $$parsedSource) {
+            $$parsedSource["keyExchanges"] = $$createField1_0($$parsedSource["keyExchanges"]);
+        }
+        if ("macs" in $$parsedSource) {
+            $$parsedSource["macs"] = $$createField2_0($$parsedSource["macs"]);
+        }
+        if ("hostKeyAlgorithms" in $$parsedSource) {
+            $$parsedSource["hostKeyAlgorithms"] = $$createField3_0($$parsedSource["hostKeyAlgorithms"]);
+        }
+        return new SSHAlgorithmSettings($$parsedSource as Partial<SSHAlgorithmSettings>);
     }
 }
 
@@ -236,6 +349,10 @@ export class TaskGroup {
      * 任务项列表
      */
     "items": TaskItem[];
+
+    /**
+     * 标签
+     */
     "tags": string[];
 
     /**
@@ -282,7 +399,7 @@ export class TaskGroup {
      * Creates a new TaskGroup instance from a string or object.
      */
     static createFrom($$source: any = {}): TaskGroup {
-        const $$createField4_0 = $$createType2;
+        const $$createField4_0 = $$createType3;
         const $$createField5_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
@@ -348,5 +465,6 @@ export class TaskItem {
 
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
-const $$createType1 = TaskItem.createFrom;
-const $$createType2 = $Create.Array($$createType1);
+const $$createType1 = SSHAlgorithmSettings.createFrom;
+const $$createType2 = TaskItem.createFrom;
+const $$createType3 = $Create.Array($$createType2);

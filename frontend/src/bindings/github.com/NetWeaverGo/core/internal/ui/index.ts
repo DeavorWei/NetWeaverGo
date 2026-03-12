@@ -4,12 +4,26 @@
 import * as CommandGroupService from "./commandgroupservice.js";
 import * as DeviceService from "./deviceservice.js";
 import * as EngineService from "./engineservice.js";
+import * as ForgeService from "./forgeservice.js";
+import * as QueryService from "./queryservice.js";
 import * as SettingsService from "./settingsservice.js";
 import * as TaskGroupService from "./taskgroupservice.js";
 export {
     CommandGroupService,
     DeviceService,
     EngineService,
+    ForgeService,
+    QueryService,
     SettingsService,
     TaskGroupService
 };
+
+export {
+    BindingPreview,
+    ForgeIPValidationResult,
+    IPRangeResult,
+    IPsValidationResult,
+    QueryOptions,
+    QueryResult,
+    RuntimeConfigData
+} from "./models.js";

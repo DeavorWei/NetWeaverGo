@@ -74,7 +74,7 @@ if %ERRORLEVEL% neq 0 (
     echo [WARN] Please install Wails3 or ensure wails3 is in PATH
 ) else (
     echo [INFO] Running wails3 generate bindings...
-    wails3 generate bindings
+     wails3 generate bindings -b ./cmd/netweaver -d ./frontend/src/bindings -ts
     if %ERRORLEVEL% neq 0 (
         echo [ERROR] Failed to generate Wails bindings
         exit /b 1

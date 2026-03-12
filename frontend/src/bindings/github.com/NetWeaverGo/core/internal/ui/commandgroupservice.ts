@@ -8,129 +8,94 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import {Call as $Call, Create as $Create} from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "/wails/runtime.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as config$0 from "../config/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import * as application$0 from "../../../../wailsapp/wails/v3/pkg/application/models.js";
 
 /**
  * CreateCommandGroup 创建新命令组
  */
-export function CreateCommandGroup(group: config$0.CommandGroup): Promise<config$0.CommandGroup | null> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(3085661725, group) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
+export function CreateCommandGroup(group: config$0.CommandGroup): $CancellablePromise<config$0.CommandGroup | null> {
+    return $Call.ByID(3085661725, group).then(($result: any) => {
         return $$createType1($result);
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+    });
 }
 
 /**
  * DeleteCommandGroup 删除命令组
  */
-export function DeleteCommandGroup(id: string): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(53539042, id) as any;
-    return $resultPromise;
+export function DeleteCommandGroup(id: string): $CancellablePromise<void> {
+    return $Call.ByID(53539042, id);
 }
 
 /**
  * DuplicateCommandGroup 复制命令组
  */
-export function DuplicateCommandGroup(id: string): Promise<config$0.CommandGroup | null> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(1880070542, id) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
+export function DuplicateCommandGroup(id: string): $CancellablePromise<config$0.CommandGroup | null> {
+    return $Call.ByID(1880070542, id).then(($result: any) => {
         return $$createType1($result);
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+    });
 }
 
 /**
  * ExportCommandGroup 导出命令组到文件
  */
-export function ExportCommandGroup(id: string, filePath: string): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(2675289651, id, filePath) as any;
-    return $resultPromise;
+export function ExportCommandGroup(id: string, filePath: string): $CancellablePromise<void> {
+    return $Call.ByID(2675289651, id, filePath);
 }
 
 /**
  * GetCommandGroup 根据 ID 获取单个命令组
  */
-export function GetCommandGroup(id: string): Promise<config$0.CommandGroup | null> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(566479847, id) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
+export function GetCommandGroup(id: string): $CancellablePromise<config$0.CommandGroup | null> {
+    return $Call.ByID(566479847, id).then(($result: any) => {
         return $$createType1($result);
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+    });
 }
 
 /**
  * GetCommands 获取命令列表（兼容旧接口）
  */
-export function GetCommands(): Promise<string[]> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(1222284357) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
+export function GetCommands(): $CancellablePromise<string[]> {
+    return $Call.ByID(1222284357).then(($result: any) => {
         return $$createType2($result);
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+    });
 }
 
 /**
  * ImportCommandGroup 从文件导入命令组
  */
-export function ImportCommandGroup(filePath: string): Promise<config$0.CommandGroup | null> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(1574742228, filePath) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
+export function ImportCommandGroup(filePath: string): $CancellablePromise<config$0.CommandGroup | null> {
+    return $Call.ByID(1574742228, filePath).then(($result: any) => {
         return $$createType1($result);
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+    });
 }
 
 /**
  * ListCommandGroups 获取所有命令组列表
  */
-export function ListCommandGroups(): Promise<config$0.CommandGroup[]> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(1228011110) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
+export function ListCommandGroups(): $CancellablePromise<config$0.CommandGroup[]> {
+    return $Call.ByID(1228011110).then(($result: any) => {
         return $$createType3($result);
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+    });
 }
 
 /**
  * SaveCommands 保存命令列表（兼容旧接口）
  */
-export function SaveCommands(commands: string[]): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(27404006, commands) as any;
-    return $resultPromise;
-}
-
-/**
- * ServiceStartup Wails 服务启动生命周期钩子
- */
-export function ServiceStartup(options: application$0.ServiceOptions): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(3886900581, options) as any;
-    return $resultPromise;
+export function SaveCommands(commands: string[]): $CancellablePromise<void> {
+    return $Call.ByID(27404006, commands);
 }
 
 /**
  * UpdateCommandGroup 更新命令组
  */
-export function UpdateCommandGroup(id: string, group: config$0.CommandGroup): Promise<config$0.CommandGroup | null> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(4162611892, id, group) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
+export function UpdateCommandGroup(id: string, group: config$0.CommandGroup): $CancellablePromise<config$0.CommandGroup | null> {
+    return $Call.ByID(4162611892, id, group).then(($result: any) => {
         return $$createType1($result);
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+    });
 }
 
 // Private type creation functions

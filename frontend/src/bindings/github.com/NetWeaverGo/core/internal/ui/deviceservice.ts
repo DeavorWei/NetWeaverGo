@@ -8,89 +8,65 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import {Call as $Call, Create as $Create} from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "/wails/runtime.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as config$0 from "../config/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import * as application$0 from "../../../../wailsapp/wails/v3/pkg/application/models.js";
 
 /**
  * AddDevice 新增设备
  */
-export function AddDevice(device: config$0.DeviceAsset): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(728011368, device) as any;
-    return $resultPromise;
+export function AddDevice(device: config$0.DeviceAsset): $CancellablePromise<void> {
+    return $Call.ByID(728011368, device);
 }
 
 /**
  * DeleteDevice 删除设备
  */
-export function DeleteDevice(index: number): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(2793883322, index) as any;
-    return $resultPromise;
+export function DeleteDevice(index: number): $CancellablePromise<void> {
+    return $Call.ByID(2793883322, index);
 }
 
 /**
  * GetProtocolDefaultPorts 获取协议默认端口映射
  */
-export function GetProtocolDefaultPorts(): Promise<{ [_: string]: number }> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(939599686) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
+export function GetProtocolDefaultPorts(): $CancellablePromise<{ [_ in string]?: number }> {
+    return $Call.ByID(939599686).then(($result: any) => {
         return $$createType0($result);
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+    });
 }
 
 /**
  * GetValidProtocols 获取有效协议列表
  */
-export function GetValidProtocols(): Promise<string[]> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(1194827734) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
+export function GetValidProtocols(): $CancellablePromise<string[]> {
+    return $Call.ByID(1194827734).then(($result: any) => {
         return $$createType1($result);
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+    });
 }
 
 /**
  * ListDevices 获取设备列表
  */
-export function ListDevices(): Promise<config$0.DeviceAsset[]> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(779205990) as any;
-    let $typingPromise = $resultPromise.then(($result: any) => {
+export function ListDevices(): $CancellablePromise<config$0.DeviceAsset[]> {
+    return $Call.ByID(779205990).then(($result: any) => {
         return $$createType3($result);
-    }) as any;
-    $typingPromise.cancel = $resultPromise.cancel.bind($resultPromise);
-    return $typingPromise;
+    });
 }
 
 /**
  * SaveDevices 批量保存设备列表
  */
-export function SaveDevices(devices: config$0.DeviceAsset[]): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(3296917977, devices) as any;
-    return $resultPromise;
-}
-
-/**
- * ServiceStartup Wails 服务启动生命周期钩子
- */
-export function ServiceStartup(options: application$0.ServiceOptions): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(4240766859, options) as any;
-    return $resultPromise;
+export function SaveDevices(devices: config$0.DeviceAsset[]): $CancellablePromise<void> {
+    return $Call.ByID(3296917977, devices);
 }
 
 /**
  * UpdateDevice 更新设备
  */
-export function UpdateDevice(index: number, device: config$0.DeviceAsset): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(350852692, index, device) as any;
-    return $resultPromise;
+export function UpdateDevice(index: number, device: config$0.DeviceAsset): $CancellablePromise<void> {
+    return $Call.ByID(350852692, index, device);
 }
 
 // Private type creation functions

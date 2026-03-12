@@ -159,18 +159,21 @@ export const ForgeAPI = {
   generateBindingPreview: ForgeServiceBinding.GenerateBindingPreview,
 } as const
 
-// 导出 Forge 相关类型
+// 导出 Forge 相关类型（从正确的 models 文件导入）
 export type {
   BuildRequest,
   VarInput,
   BuildResult,
   ExpandRequest,
   ExpandResult,
+} from '../bindings/github.com/NetWeaverGo/core/internal/forge/models.js'
+
+export type {
   ForgeIPValidationResult,
   IPRangeResult,
   IPsValidationResult,
   BindingPreview,
-} from '../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice.js'
+} from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
 // ==================== 查询服务 API ====================
 /**
@@ -221,11 +224,11 @@ export const QueryAPI = {
   getDeviceTags: QueryServiceBinding.GetDeviceTags,
 } as const
 
-// 导出 Query 相关类型
+// 导出 Query 相关类型（从正确的 models 文件导入）
 export type {
   QueryOptions as QueryOptionsBinding,
   QueryResult as QueryResultBinding,
-} from '../bindings/github.com/NetWeaverGo/core/internal/ui/queryservice.js'
+} from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
 // ==================== 类型导出 ====================
 export type { 

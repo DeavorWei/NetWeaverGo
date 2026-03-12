@@ -9,5 +9,15 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
+  },
+  build: {
+    rollupOptions: {
+      external: ['/wails/runtime.js'],
+      output: {
+        globals: {
+          '/wails/runtime.js': 'wailsRuntime'
+        }
+      }
+    }
   }
 })

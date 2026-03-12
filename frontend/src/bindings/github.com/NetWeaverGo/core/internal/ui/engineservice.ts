@@ -8,67 +8,65 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import {Call as $Call, Create as $Create} from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "/wails/runtime.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as executor$0 from "../executor/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import * as application$0 from "../../../../wailsapp/wails/v3/pkg/application/models.js";
+import * as report$0 from "../report/models.js";
 
 /**
- * IsRunning 检查引擎是否正在运行
+ * GetExecutionSnapshot 获取当前执行的快照
+ * 前端调用此方法获取完整的执行状态，无需前端计算
  */
-export function IsRunning(): Promise<boolean> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(271359178) as any;
-    return $resultPromise;
+export function GetExecutionSnapshot(): $CancellablePromise<report$0.ExecutionSnapshot | null> {
+    return $Call.ByID(595539449).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+/**
+ * IsRunning 检查引擎是否正在运行（使用全局状态）
+ */
+export function IsRunning(): $CancellablePromise<boolean> {
+    return $Call.ByID(271359178);
 }
 
 /**
  * ResolveSuspend 被前端调用（当用户在弹窗中选择动作后）
+ * 委托给全局 SuspendManager 处理
  */
-export function ResolveSuspend(ip: string, action: string): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(2096616055, ip, action) as any;
-    return $resultPromise;
-}
-
-/**
- * ServiceStartup Wails 服务启动生命周期钩子
- */
-export function ServiceStartup(options: application$0.ServiceOptions): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(528566111, options) as any;
-    return $resultPromise;
+export function ResolveSuspend(sessionIDOrIP: string, action: string): $CancellablePromise<void> {
+    return $Call.ByID(2096616055, sessionIDOrIP, action);
 }
 
 /**
  * StartBackup 启动核心备份动作
  */
-export function StartBackup(): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(1249450791) as any;
-    return $resultPromise;
+export function StartBackup(): $CancellablePromise<void> {
+    return $Call.ByID(1249450791);
 }
 
 /**
  * StartEngine 启动核心下发动作
  */
-export function StartEngine(): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(977891171) as any;
-    return $resultPromise;
+export function StartEngine(): $CancellablePromise<void> {
+    return $Call.ByID(977891171);
 }
 
 /**
  * StartEngineWithSelection 使用选定的设备和命令组启动引擎
  */
-export function StartEngineWithSelection(deviceIPs: string[], commandGroupID: string): Promise<void> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(2776463903, deviceIPs, commandGroupID) as any;
-    return $resultPromise;
+export function StartEngineWithSelection(deviceIPs: string[], commandGroupID: string): $CancellablePromise<void> {
+    return $Call.ByID(2776463903, deviceIPs, commandGroupID);
 }
 
 /**
- * WailsSuspendHandler 构建代理 Suspend 钩子替换原先的控制台询问方式
+ * StopEngine 停止正在执行的任务
  */
-export function WailsSuspendHandler(): Promise<executor$0.SuspendHandler> & { cancel(): void } {
-    let $resultPromise = $Call.ByID(1950080195) as any;
-    return $resultPromise;
+export function StopEngine(): $CancellablePromise<void> {
+    return $Call.ByID(2703249073);
 }
+
+// Private type creation functions
+const $$createType0 = report$0.ExecutionSnapshot.createFrom;
+const $$createType1 = $Create.Nullable($$createType0);
