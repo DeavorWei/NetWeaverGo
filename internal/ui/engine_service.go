@@ -189,7 +189,7 @@ func (s *EngineService) prepareAssetsAndCommands(deviceIPs []string, commandGrou
 	var commands []string
 
 	// 筛选设备
-	if deviceIPs != nil && len(deviceIPs) > 0 {
+	if len(deviceIPs) > 0 {
 		ipSet := make(map[string]bool)
 		for _, ip := range deviceIPs {
 			ipSet[ip] = true
