@@ -159,16 +159,11 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// 【修复】自动注册未记录的设备
 	summary, exists := p.status[evt.IP]
 	if !exists {
-		logger.DebugAll("Report", evt.IP, "初始化设备状态记录大盘")
-		summary = &DeviceSummary{
-			IP:        evt.IP,
-			Status:    "Init",
-			TotalCmds: evt.TotalCmd,
-			ExecCmds:  0,
-		}
-		p.status[evt.IP] = summary
+		p.registerDeviceLocked(evt.IP, evt.TotalCmd)
+		summary = p.status[evt.IP]
 	}
 
 	logger.DebugAll("Report", evt.IP, "EventBus接收到事件: Type=%v, Message=%s", evt.Type, evt.Message)
@@ -223,6 +218,36 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 	p.addDeviceLogLocked(evt.IP, logMessage)
 }
 
+// registerDeviceLocked 内部注册设备（必须在持有锁时调用）
+func (p *ProgressTracker) registerDeviceLocked(ip string, totalCmd int) {
+	logger.DebugAll("Report", ip, "自动注册设备到进度追踪器")
+
+	// 添加到状态映射
+	p.status[ip] = &DeviceSummary{
+		IP:        ip,
+		Status:    "Init",
+		TotalCmds: totalCmd,
+		ExecCmds:  0,
+	}
+
+	// 添加到有序列表
+	p.sortedIPs = append(p.sortedIPs, ip)
+	sort.Strings(p.sortedIPs)
+
+	// 初始化磁盘日志存储
+	if p.logStorage != nil {
+		if err := p.logStorage.InitDevice(ip); err != nil {
+			logger.Error("Report", ip, "初始化设备日志存储失败: %v", err)
+		}
+	}
+
+	// 初始化计数
+	if p.logCounts == nil {
+		p.logCounts = make(map[string]int)
+	}
+	p.logCounts[ip] = 0
+}
+
 // addDeviceLogLocked 添加日志到设备（必须在持有锁时调用）
 func (p *ProgressTracker) addDeviceLogLocked(ip string, message string) {
 	// 截断过长日志
@@ -231,18 +256,22 @@ func (p *ProgressTracker) addDeviceLogLocked(ip string, message string) {
 		message = message[:maxLen] + "...[截断]"
 	}
 
-	// 使用磁盘存储
+	// 【修复】添加 nil 检查
 	if p.logStorage != nil {
 		if err := p.logStorage.AppendLog(ip, message); err != nil {
 			logger.Error("Report", ip, "写入日志失败: %v", err)
 		}
 	}
 
-	// 更新计数
+	// 【修复】更新计数时添加 nil 检查
 	if p.logCounts == nil {
 		p.logCounts = make(map[string]int)
 	}
-	p.logCounts[ip] = p.logStorage.GetLogCount(ip)
+	if p.logStorage != nil {
+		p.logCounts[ip] = p.logStorage.GetLogCount(ip)
+	} else {
+		p.logCounts[ip] = 0 // 降级处理：无日志存储时计数为 0
+	}
 }
 
 // renderDisplay 简单的静态打印大盘（不再清屏）
@@ -482,7 +511,9 @@ func (p *ProgressTracker) GetDeviceSnapshot(ip string) *DeviceViewState {
 	status := strings.ToLower(summary.Status)
 	switch status {
 	case "running":
+		status = "running"
 	case "success":
+		status = "success"
 	case "error", "aborted":
 		status = "error"
 	case "warning":
@@ -542,58 +573,29 @@ func (p *ProgressTracker) AddDeviceLog(ip string, message string) {
 		message = message[:maxLen] + "...[截断]"
 	}
 
-	// 使用磁盘存储
+	// 【修复】添加 nil 检查
 	if p.logStorage != nil {
 		if err := p.logStorage.AppendLog(ip, message); err != nil {
 			logger.Error("Report", ip, "写入日志失败: %v", err)
 		}
 	}
 
-	// 更新计数
+	// 【修复】更新计数时添加 nil 检查
 	if p.logCounts == nil {
 		p.logCounts = make(map[string]int)
 	}
-	p.logCounts[ip] = p.logStorage.GetLogCount(ip)
+	if p.logStorage != nil {
+		p.logCounts[ip] = p.logStorage.GetLogCount(ip)
+	} else {
+		p.logCounts[ip] = 0 // 降级处理：无日志存储时计数为 0
+	}
 }
 
-// RegisterDevice 注册设备到有序列表
+// RegisterDevice 注册设备到有序列表（公共方法）
 func (p *ProgressTracker) RegisterDevice(ip string, totalCmd int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	// 检查是否已注册
-	for _, existingIP := range p.sortedIPs {
-		if existingIP == ip {
-			return
-		}
-	}
-
-	// 添加到有序列表
-	p.sortedIPs = append(p.sortedIPs, ip)
-	sort.Strings(p.sortedIPs)
-
-	// 初始化状态
-	if _, exists := p.status[ip]; !exists {
-		p.status[ip] = &DeviceSummary{
-			IP:        ip,
-			Status:    "Init",
-			TotalCmds: totalCmd,
-			ExecCmds:  0,
-		}
-	}
-
-	// 初始化磁盘日志存储
-	if p.logStorage != nil {
-		if err := p.logStorage.InitDevice(ip); err != nil {
-			logger.Error("Report", ip, "初始化设备日志存储失败: %v", err)
-		}
-	}
-
-	// 初始化计数
-	if p.logCounts == nil {
-		p.logCounts = make(map[string]int)
-	}
-	p.logCounts[ip] = 0
+	p.registerDeviceLocked(ip, totalCmd)
 }
 
 // Close 关闭并清理资源

@@ -247,6 +247,16 @@ func (e *Engine) Run(ctx context.Context) {
 
 	e.tracker = report.NewProgressTracker(len(e.Devices))
 
+	// 【修复】启动 Tracker 监听协程（与 RunBackup 保持一致）
+	var trackerWg sync.WaitGroup
+	if e.EventBus != nil && e.tracker != nil {
+		trackerWg.Add(1)
+		go func() {
+			defer trackerWg.Done()
+			e.tracker.Listen(e.ctx)
+		}()
+	}
+
 	var wg sync.WaitGroup
 	// 创建带缓冲的 channel 作为并发令牌桶
 	sem := make(chan struct{}, e.MaxWorkers)
@@ -282,8 +292,16 @@ func (e *Engine) Run(ctx context.Context) {
 
 	wg.Wait()
 
-	// 使用统一的优雅关闭方法
-	e.gracefulClose()
+	// 【修复】先取消 Context，让 Tracker 退出，然后再等待它完成
+	if e.cancel != nil {
+		e.cancel()
+	}
+
+	// 等待 Tracker 监听完成
+	trackerWg.Wait()
+
+	// 使用统一的优雅关闭方法（不再调用 cancel，因为已在上面的步骤取消）
+	e.gracefulCloseWithoutCancel()
 
 	e.tracker.ExportCSV(e.Settings.OutputDir)
 
@@ -293,6 +311,16 @@ func (e *Engine) Run(ctx context.Context) {
 
 // gracefulClose 重构后 - 极简关闭流程
 func (e *Engine) gracefulClose() {
+	e.gracefulCloseWithCancel(true)
+}
+
+// gracefulCloseWithoutCancel 优雅关闭（不调用 cancel，因为已在外部取消）
+func (e *Engine) gracefulCloseWithoutCancel() {
+	e.gracefulCloseWithCancel(false)
+}
+
+// gracefulCloseWithCancel 统一的优雅关闭逻辑
+func (e *Engine) gracefulCloseWithCancel(shouldCancel bool) {
 	e.closeOnce.Do(func() {
 		// 1. 转移到 Closing 状态（防止重复关闭）
 		if err := e.stateManager.TransitionTo(StateClosing); err != nil {
@@ -301,7 +329,7 @@ func (e *Engine) gracefulClose() {
 		}
 
 		// 2. 取消 Context（这会立刻中断所有 select <-ctx.Done()）
-		if e.cancel != nil {
+		if shouldCancel && e.cancel != nil {
 			e.cancel()
 		}
 

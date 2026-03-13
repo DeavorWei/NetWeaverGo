@@ -35,6 +35,8 @@ type EngineService struct {
 	// 快照推送控制
 	snapshotTicker *time.Ticker
 	snapshotStop   chan struct{}
+	stopOnce       sync.Once  // 确保只关闭一次
+	stopMu         sync.Mutex // 保护 channel 创建/关闭
 
 	// 事件桥接器
 	eventBridge *EventBridge
@@ -327,8 +329,11 @@ func (s *EngineService) clearCurrentTracker() {
 
 // startSnapshotTicker 启动快照定时推送
 func (s *EngineService) startSnapshotTicker(ctx context.Context) {
+	s.stopMu.Lock()
 	s.snapshotTicker = time.NewTicker(SnapshotInterval)
 	s.snapshotStop = make(chan struct{})
+	s.stopOnce = sync.Once{} // 重置 Once
+	s.stopMu.Unlock()
 
 	go func() {
 		for {
@@ -348,16 +353,21 @@ func (s *EngineService) startSnapshotTicker(ctx context.Context) {
 	}()
 }
 
-// stopSnapshotTicker 停止快照定时推送
+// stopSnapshotTicker 停止快照定时推送（线程安全，可重复调用）
 func (s *EngineService) stopSnapshotTicker() {
-	if s.snapshotTicker != nil {
-		s.snapshotTicker.Stop()
-		s.snapshotTicker = nil
-	}
-	if s.snapshotStop != nil {
-		close(s.snapshotStop)
-		s.snapshotStop = nil
-	}
+	s.stopOnce.Do(func() {
+		s.stopMu.Lock()
+		defer s.stopMu.Unlock()
+
+		if s.snapshotTicker != nil {
+			s.snapshotTicker.Stop()
+			s.snapshotTicker = nil
+		}
+		if s.snapshotStop != nil {
+			close(s.snapshotStop)
+			s.snapshotStop = nil
+		}
+	})
 }
 
 // emitFinishedEvent 发送执行完成事件
