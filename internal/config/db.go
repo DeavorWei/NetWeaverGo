@@ -66,7 +66,8 @@ func InitDB() error {
 		&GlobalSettings{},
 		&CommandGroup{},
 		&TaskGroup{},
-		&RuntimeSetting{}, // 运行时配置表
+		&RuntimeSetting{},  // 运行时配置表
+		&ExecutionRecord{}, // 历史执行记录表
 	)
 	if err != nil {
 		return fmt.Errorf("自动迁移表结构失败: %v", err)
@@ -92,6 +93,12 @@ func createIndexes(db *gorm.DB) {
 		"CREATE INDEX IF NOT EXISTS idx_task_groups_name ON task_groups(name)",
 		"CREATE INDEX IF NOT EXISTS idx_runtime_category ON runtime_settings(category)",
 		"CREATE INDEX IF NOT EXISTS idx_runtime_key ON runtime_settings(key)",
+		// 历史执行记录索引
+		"CREATE INDEX IF NOT EXISTS idx_execution_records_task_group_id ON execution_records(task_group_id)",
+		"CREATE INDEX IF NOT EXISTS idx_execution_records_runner_source ON execution_records(runner_source)",
+		"CREATE INDEX IF NOT EXISTS idx_execution_records_status ON execution_records(status)",
+		"CREATE INDEX IF NOT EXISTS idx_execution_records_started_at ON execution_records(started_at)",
+		"CREATE INDEX IF NOT EXISTS idx_execution_records_created_at ON execution_records(created_at)",
 	}
 
 	for _, sql := range indexes {

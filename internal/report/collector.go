@@ -333,7 +333,8 @@ func renderProgressBar(current, total int) string {
 }
 
 // ExportCSV 生成小票结尾结算文档
-func (p *ProgressTracker) ExportCSV(outputDir string) {
+// 返回生成的报告路径
+func (p *ProgressTracker) ExportCSV(outputDir string) (string, error) {
 	logger.Debug("Report", "-", "开始生成结算 CSV 报表 -> %s", outputDir)
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -341,7 +342,7 @@ func (p *ProgressTracker) ExportCSV(outputDir string) {
 	// 确保输出目录存在
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		logger.Error("Report", "-", "无法创建报告目录 %s: %v", outputDir, err)
-		return
+		return "", fmt.Errorf("创建报告目录失败: %v", err)
 	}
 
 	reportName := fmt.Sprintf("report_%s.csv", time.Now().Format("20060102_150405"))
@@ -350,7 +351,7 @@ func (p *ProgressTracker) ExportCSV(outputDir string) {
 	file, err := os.Create(reportPath)
 	if err != nil {
 		logger.Error("Report", "-", "生成报告文件失败: %v", err)
-		return
+		return "", fmt.Errorf("创建报告文件失败: %v", err)
 	}
 	defer file.Close()
 
@@ -381,6 +382,7 @@ func (p *ProgressTracker) ExportCSV(outputDir string) {
 	}
 
 	logger.Info("Report", "-", "\n[结算报表已生成] -> %s", reportPath)
+	return reportPath, nil
 }
 
 // truncateDisplayString 根据终端字符显示宽度来截断中英文字符串，避免半角全角混合下的等宽对齐偏离
@@ -560,4 +562,119 @@ func (p *ProgressTracker) IsFinished() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.finished >= p.total
+}
+
+// ================== 执行摘要方法（用于历史记录保存） ==================
+
+// ExecutionSummaryData 执行摘要数据
+type ExecutionSummaryData struct {
+	TotalDevices  int
+	FinishedCount int
+	SuccessCount  int
+	ErrorCount    int
+	AbortedCount  int
+	WarningCount  int
+	StartedAt     time.Time
+	TaskName      string
+}
+
+// ExecutionDeviceData 设备执行数据
+type ExecutionDeviceData struct {
+	IP          string
+	Status      string
+	TotalCmd    int
+	ExecCmd     int
+	ErrorMsg    string
+	LogCount    int
+	LogTail     []string
+	LogFilePath string
+}
+
+// BuildExecutionSummary 构建执行摘要
+func (p *ProgressTracker) BuildExecutionSummary() *ExecutionSummaryData {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	summary := &ExecutionSummaryData{
+		TotalDevices:  p.total,
+		FinishedCount: p.finished,
+		TaskName:      p.taskName,
+		StartedAt:     p.startTime,
+	}
+
+	for _, device := range p.status {
+		switch device.Status {
+		case "Success":
+			summary.SuccessCount++
+		case "Error":
+			summary.ErrorCount++
+		case "Aborted":
+			summary.AbortedCount++
+		case "Warning":
+			summary.WarningCount++
+		}
+	}
+
+	return summary
+}
+
+// BuildExecutionDevices 构建设备执行数据列表
+// maxLogTail: 每个设备保留的最大日志尾部条数
+func (p *ProgressTracker) BuildExecutionDevices(maxLogTail int) []ExecutionDeviceData {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if maxLogTail <= 0 {
+		maxLogTail = 30 // 默认保留30条
+	}
+
+	devices := make([]ExecutionDeviceData, 0, len(p.sortedIPs))
+	for _, ip := range p.sortedIPs {
+		summary, exists := p.status[ip]
+		if !exists {
+			continue
+		}
+
+		device := ExecutionDeviceData{
+			IP:       summary.IP,
+			Status:   summary.Status,
+			TotalCmd: summary.TotalCmds,
+			ExecCmd:  summary.ExecCmds,
+			ErrorMsg: summary.ErrorMsg,
+			LogCount: p.logCounts[ip],
+		}
+
+		// 获取日志尾部
+		if p.logStorage != nil {
+			device.LogTail, _ = p.logStorage.GetLastLogs(ip, maxLogTail)
+			device.LogFilePath = p.logStorage.GetDeviceLogPath(ip)
+		}
+
+		devices = append(devices, device)
+	}
+
+	return devices
+}
+
+// GetDeviceLogTail 获取指定设备的日志尾部
+func (p *ProgressTracker) GetDeviceLogTail(ip string, maxLines int) ([]string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.logStorage == nil {
+		return []string{}, nil
+	}
+
+	if maxLines <= 0 {
+		maxLines = 30
+	}
+
+	return p.logStorage.GetLastLogs(ip, maxLines)
+}
+
+// GetLogStorage 获取日志存储实例（用于获取日志路径等）
+func (p *ProgressTracker) GetLogStorage() *LogStorage {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.logStorage
 }

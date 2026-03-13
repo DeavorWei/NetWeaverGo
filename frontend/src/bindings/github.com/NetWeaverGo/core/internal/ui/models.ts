@@ -5,6 +5,10 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "/wails/runtime.js";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as config$0 from "../config/models.js";
+
 /**
  * BindingPreview 绑定预览结果
  */
@@ -543,6 +547,98 @@ export class IPv6SubnetItem {
 }
 
 /**
+ * ListExecutionRecordsRequest 列表查询请求
+ */
+export class ListExecutionRecordsRequest {
+    "taskGroupId": string;
+    "runnerSource": string;
+    "status": string;
+    "page": number;
+    "pageSize": number;
+    "sortBy": string;
+    "sortOrder": string;
+
+    /** Creates a new ListExecutionRecordsRequest instance. */
+    constructor($$source: Partial<ListExecutionRecordsRequest> = {}) {
+        if (!("taskGroupId" in $$source)) {
+            this["taskGroupId"] = "";
+        }
+        if (!("runnerSource" in $$source)) {
+            this["runnerSource"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("page" in $$source)) {
+            this["page"] = 0;
+        }
+        if (!("pageSize" in $$source)) {
+            this["pageSize"] = 0;
+        }
+        if (!("sortBy" in $$source)) {
+            this["sortBy"] = "";
+        }
+        if (!("sortOrder" in $$source)) {
+            this["sortOrder"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ListExecutionRecordsRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ListExecutionRecordsRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ListExecutionRecordsRequest($$parsedSource as Partial<ListExecutionRecordsRequest>);
+    }
+}
+
+/**
+ * ListExecutionRecordsResponse 列表查询响应
+ */
+export class ListExecutionRecordsResponse {
+    "data": config$0.ExecutionRecord[];
+    "total": number;
+    "page": number;
+    "pageSize": number;
+    "totalPages": number;
+
+    /** Creates a new ListExecutionRecordsResponse instance. */
+    constructor($$source: Partial<ListExecutionRecordsResponse> = {}) {
+        if (!("data" in $$source)) {
+            this["data"] = [];
+        }
+        if (!("total" in $$source)) {
+            this["total"] = 0;
+        }
+        if (!("page" in $$source)) {
+            this["page"] = 0;
+        }
+        if (!("pageSize" in $$source)) {
+            this["pageSize"] = 0;
+        }
+        if (!("totalPages" in $$source)) {
+            this["totalPages"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ListExecutionRecordsResponse instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ListExecutionRecordsResponse {
+        const $$createField0_0 = $$createType10;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("data" in $$parsedSource) {
+            $$parsedSource["data"] = $$createField0_0($$parsedSource["data"]);
+        }
+        return new ListExecutionRecordsResponse($$parsedSource as Partial<ListExecutionRecordsResponse>);
+    }
+}
+
+/**
  * NetworkRecord 通用标签值记录，供前端直接渲染。
  */
 export class NetworkRecord {
@@ -755,3 +851,5 @@ const $$createType5 = IPv6InclusionResult.createFrom;
 const $$createType6 = $Create.Nullable($$createType5);
 const $$createType7 = IPv6SubnetItem.createFrom;
 const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = config$0.ExecutionRecord.createFrom;
+const $$createType10 = $Create.Array($$createType9);

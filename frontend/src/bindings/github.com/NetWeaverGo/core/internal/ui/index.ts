@@ -4,6 +4,7 @@
 import * as CommandGroupService from "./commandgroupservice.js";
 import * as DeviceService from "./deviceservice.js";
 import * as EngineService from "./engineservice.js";
+import * as ExecutionHistoryService from "./executionhistoryservice.js";
 import * as ForgeService from "./forgeservice.js";
 import * as QueryService from "./queryservice.js";
 import * as SettingsService from "./settingsservice.js";
@@ -12,6 +13,7 @@ export {
     CommandGroupService,
     DeviceService,
     EngineService,
+    ExecutionHistoryService,
     ForgeService,
     QueryService,
     SettingsService,
@@ -31,6 +33,8 @@ export {
     IPv6CalcResult,
     IPv6InclusionResult,
     IPv6SubnetItem,
+    ListExecutionRecordsRequest,
+    ListExecutionRecordsResponse,
     NetworkRecord,
     QueryOptions,
     QueryResult,

@@ -24,6 +24,7 @@ import * as EngineServiceBinding from '../bindings/github.com/NetWeaverGo/core/i
 import * as TaskGroupServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/taskgroupservice.js'
 import * as ForgeServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice.js'
 import * as QueryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/queryservice.js'
+import * as ExecutionHistoryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/executionhistoryservice.js'
 
 // ==================== 设备管理 API ====================
 /**
@@ -195,6 +196,39 @@ export type {
   DeviceViewState,
   ExecutionSnapshot,
 } from '../bindings/github.com/NetWeaverGo/core/internal/report/models.js'
+
+// ==================== 历史执行记录 API ====================
+/**
+ * 历史执行记录 API
+ * @description 提供历史执行记录的查询和管理
+ */
+export const ExecutionHistoryAPI = {
+  /** 查询历史执行记录列表 */
+  listExecutionRecords: ExecutionHistoryServiceBinding.ListExecutionRecords,
+  /** 获取单条历史执行记录详情 */
+  getExecutionRecord: ExecutionHistoryServiceBinding.GetExecutionRecord,
+  /** 删除历史执行记录 */
+  deleteExecutionRecord: ExecutionHistoryServiceBinding.DeleteExecutionRecord,
+  /** 获取执行记录统计信息 */
+  getExecutionRecordStats: ExecutionHistoryServiceBinding.GetExecutionRecordStats,
+  /** 获取状态列表 */
+  getStatusList: ExecutionHistoryServiceBinding.GetStatusList,
+  /** 获取模式列表 */
+  getModeList: ExecutionHistoryServiceBinding.GetModeList,
+  /** 获取执行来源列表 */
+  getRunnerSourceList: ExecutionHistoryServiceBinding.GetRunnerSourceList,
+} as const
+
+// 导出历史执行记录相关类型
+export type {
+  ExecutionRecord,
+  ExecutionDeviceRecord,
+} from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
+
+export type {
+  ListExecutionRecordsRequest,
+  ListExecutionRecordsResponse,
+} from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
 // ==================== 查询服务 API ====================
 /**

@@ -4,6 +4,8 @@
 export {
     CommandGroup,
     DeviceAsset,
+    ExecutionDeviceRecord,
+    ExecutionRecord,
     GlobalSettings,
     SSHAlgorithmSettings,
     TaskGroup,

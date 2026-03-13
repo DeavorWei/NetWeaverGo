@@ -149,11 +149,19 @@ func (s *TaskGroupService) executeModeA(
 	ng := engine.NewEngine(allSelectedAssets, commands, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-	tracker, err := getExecutionManager().RunEngine(
+	// 构建执行元数据
+	meta := &ExecutionMeta{
+		RunnerSource:  "task_group",
+		RunnerID:      taskGroup.ID,
+		TaskGroupID:   taskGroup.ID,
+		TaskGroupName: taskGroup.Name,
+		TaskName:      taskGroup.Name,
+		Mode:          "group",
+	}
+
+	tracker, err := getExecutionManager().RunEngineWithMeta(
 		ng,
-		"task_group",
-		taskGroup.ID,
-		taskGroup.Name,
+		meta,
 		func(ctx context.Context) error {
 			return ng.Run(ctx)
 		},
@@ -221,12 +229,20 @@ func (s *TaskGroupService) executeModeB(
 		return "", fmt.Errorf("任务组中没有可执行设备")
 	}
 
+	// 构建执行元数据
+	meta := &ExecutionMeta{
+		RunnerSource:  "task_group",
+		RunnerID:      taskGroup.ID,
+		TaskGroupID:   taskGroup.ID,
+		TaskGroupName: taskGroup.Name,
+		TaskName:      taskGroup.Name,
+		Mode:          "binding",
+	}
+
 	coordinator := engine.NewEngine(nil, nil, settings, false)
-	session, err := getExecutionManager().BeginCompositeExecution(
+	session, err := getExecutionManager().BeginCompositeExecutionWithMeta(
 		coordinator,
-		"task_group",
-		taskGroup.ID,
-		taskGroup.Name,
+		meta,
 		totalDevices,
 	)
 	if err != nil {

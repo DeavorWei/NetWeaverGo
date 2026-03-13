@@ -86,17 +86,25 @@ func (s *EngineService) runEngineWithConfig(deviceIPs []string, commandGroupID s
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
 	taskName := "批量执行"
+	mode := "manual"
 	if commandGroupID != "" {
 		if group, err := config.GetCommandGroup(commandGroupID); err == nil {
 			taskName = group.Name
 		}
+		mode = "group"
 	}
 
-	_, err = getExecutionManager().RunEngine(
+	// 构建执行元数据
+	meta := &ExecutionMeta{
+		RunnerSource: "engine_service",
+		RunnerID:     "",
+		TaskName:     taskName,
+		Mode:         mode,
+	}
+
+	_, err = getExecutionManager().RunEngineWithMeta(
 		ng,
-		"engine_service",
-		"",
-		taskName,
+		meta,
 		func(ctx context.Context) error {
 			return ng.Run(ctx)
 		},
@@ -174,11 +182,17 @@ func (s *EngineService) StartBackup() error {
 	ng := engine.NewEngine(assets, nil, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-	_, err = getExecutionManager().RunEngine(
+	// 构建执行元数据
+	meta := &ExecutionMeta{
+		RunnerSource: "backup_service",
+		RunnerID:     "",
+		TaskName:     "配置备份",
+		Mode:         "backup",
+	}
+
+	_, err = getExecutionManager().RunEngineWithMeta(
 		ng,
-		"backup_service",
-		"",
-		"配置备份",
+		meta,
 		func(ctx context.Context) error {
 			return ng.RunBackup(ctx)
 		},

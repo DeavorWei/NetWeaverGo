@@ -3,14 +3,27 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/engine"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+// ExecutionMeta 执行元数据 - 用于统一标识一次执行
+type ExecutionMeta struct {
+	RunnerSource  string // task_group / engine_service / backup_service
+	RunnerID      string // 运行实例ID，可为空
+	TaskGroupID   string // 任务组ID，非任务组执行时为空
+	TaskGroupName string // 任务组名称快照
+	TaskName      string // 执行任务名称快照
+	Mode          string // group / binding / manual / backup
+}
 
 type executionManager struct {
 	appMu    sync.RWMutex
@@ -33,6 +46,8 @@ type managedExecution struct {
 	lifecycle *engine.Engine
 	tracker   *report.ProgressTracker
 	ctx       context.Context
+	meta      *ExecutionMeta // 执行元数据
+	cancelled bool           // 是否被用户取消
 }
 
 var sharedExecutionManager = &executionManager{}
@@ -91,18 +106,21 @@ func (m *executionManager) GetExecutionSnapshot() *report.ExecutionSnapshot {
 	return m.currentTracker.GetSnapshot()
 }
 
-func (m *executionManager) RunEngine(
+// RunEngineWithMeta 启动引擎执行（带元数据）
+func (m *executionManager) RunEngineWithMeta(
 	ng *engine.Engine,
-	runnerSrc string,
-	runnerID string,
-	taskName string,
+	meta *ExecutionMeta,
 	runFn func(context.Context) error,
 ) (*report.ProgressTracker, error) {
 	tracker := report.NewProgressTracker(len(ng.Devices))
-	tracker.SetTaskName(taskName)
+	if meta != nil && meta.TaskName != "" {
+		tracker.SetTaskName(meta.TaskName)
+	} else {
+		tracker.SetTaskName("任务执行")
+	}
 	ng.SetTracker(tracker)
 
-	session, err := m.beginExecution(ng, runnerSrc, runnerID, tracker)
+	session, err := m.beginExecutionWithMeta(ng, meta, tracker)
 	if err != nil {
 		return nil, err
 	}
@@ -110,28 +128,36 @@ func (m *executionManager) RunEngine(
 	frontendDone := m.listenEvents(ng.FrontendBus, nil)
 	runErr := runFn(session.ctx)
 	<-frontendDone
+
+	// 判断是否是取消状态
+	if runErr != nil && runErr == context.Canceled {
+		session.cancelled = true
+	}
+
 	session.Finish()
 
 	return tracker, runErr
 }
 
-func (m *executionManager) BeginCompositeExecution(
+// BeginCompositeExecutionWithMeta 启动复合执行（带元数据）
+func (m *executionManager) BeginCompositeExecutionWithMeta(
 	lifecycle *engine.Engine,
-	runnerSrc string,
-	runnerID string,
-	taskName string,
+	meta *ExecutionMeta,
 	totalDevices int,
 ) (*managedExecution, error) {
 	tracker := report.NewProgressTracker(totalDevices)
-	tracker.SetTaskName(taskName)
+	if meta != nil && meta.TaskName != "" {
+		tracker.SetTaskName(meta.TaskName)
+	} else {
+		tracker.SetTaskName("任务执行")
+	}
 
-	return m.beginExecution(lifecycle, runnerSrc, runnerID, tracker)
+	return m.beginExecutionWithMeta(lifecycle, meta, tracker)
 }
 
-func (m *executionManager) beginExecution(
+func (m *executionManager) beginExecutionWithMeta(
 	lifecycle *engine.Engine,
-	runnerSrc string,
-	runnerID string,
+	meta *ExecutionMeta,
 	tracker *report.ProgressTracker,
 ) (*managedExecution, error) {
 	if lifecycle == nil {
@@ -139,6 +165,13 @@ func (m *executionManager) beginExecution(
 	}
 	if tracker == nil {
 		return nil, fmt.Errorf("进度追踪器不能为空")
+	}
+
+	runnerSrc := ""
+	runnerID := ""
+	if meta != nil {
+		runnerSrc = meta.RunnerSource
+		runnerID = meta.RunnerID
 	}
 
 	if err := engine.GetGlobalState().SetActiveEngine(lifecycle, runnerSrc, runnerID); err != nil {
@@ -151,12 +184,56 @@ func (m *executionManager) beginExecution(
 	m.setCurrentTracker(tracker)
 	m.startSnapshotTicker(ctx)
 
+	// 立即推送一次初始快照，让前端知道执行已开始
+	// 防止任务在第一个快照tick之前完成导致前端卡住
+	if app := m.getWailsApp(); app != nil {
+		initialSnapshot := tracker.GetSnapshot()
+		if initialSnapshot != nil {
+			app.Event.Emit(SnapshotEventName, initialSnapshot)
+		}
+	}
+
 	return &managedExecution{
 		manager:   m,
 		lifecycle: lifecycle,
 		tracker:   tracker,
 		ctx:       ctx,
+		meta:      meta,
 	}, nil
+}
+
+// RunEngine 启动引擎执行（兼容旧接口）
+func (m *executionManager) RunEngine(
+	ng *engine.Engine,
+	runnerSrc string,
+	runnerID string,
+	taskName string,
+	runFn func(context.Context) error,
+) (*report.ProgressTracker, error) {
+	meta := &ExecutionMeta{
+		RunnerSource: runnerSrc,
+		RunnerID:     runnerID,
+		TaskName:     taskName,
+		Mode:         "manual",
+	}
+	return m.RunEngineWithMeta(ng, meta, runFn)
+}
+
+// BeginCompositeExecution 启动复合执行（兼容旧接口）
+func (m *executionManager) BeginCompositeExecution(
+	lifecycle *engine.Engine,
+	runnerSrc string,
+	runnerID string,
+	taskName string,
+	totalDevices int,
+) (*managedExecution, error) {
+	meta := &ExecutionMeta{
+		RunnerSource: runnerSrc,
+		RunnerID:     runnerID,
+		TaskName:     taskName,
+		Mode:         "group",
+	}
+	return m.BeginCompositeExecutionWithMeta(lifecycle, meta, totalDevices)
 }
 
 func (m *executionManager) listenEvents(
@@ -276,6 +353,10 @@ func (s *managedExecution) Tracker() *report.ProgressTracker {
 	return s.tracker
 }
 
+func (s *managedExecution) SetCancelled(cancelled bool) {
+	s.cancelled = cancelled
+}
+
 func (s *managedExecution) TransitionTo(state engine.EngineState) error {
 	if s.lifecycle == nil {
 		return nil
@@ -284,6 +365,11 @@ func (s *managedExecution) TransitionTo(state engine.EngineState) error {
 }
 
 func (s *managedExecution) Finish() {
+	// 保存历史记录
+	if s.meta != nil && s.tracker != nil {
+		s.persistExecutionRecord()
+	}
+
 	s.finishLifecycle()
 	s.manager.stopSnapshotTicker()
 	s.manager.clearCancelFunc()
@@ -294,6 +380,135 @@ func (s *managedExecution) Finish() {
 	if s.tracker != nil {
 		s.tracker.Close()
 	}
+}
+
+// persistExecutionRecord 持久化执行记录到数据库
+func (s *managedExecution) persistExecutionRecord() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("ExecutionManager", "-", "保存历史记录时发生panic: %v", r)
+		}
+	}()
+
+	if s.tracker == nil || s.meta == nil {
+		return
+	}
+
+	// 生成CSV报告
+	cwd, _ := os.Getwd()
+	outputDir := filepath.Join(cwd, "output")
+	reportPath, _ := s.tracker.ExportCSV(outputDir)
+
+	// 构建执行摘要
+	summary := s.tracker.BuildExecutionSummary()
+	deviceData := s.tracker.BuildExecutionDevices(30) // 保留30条日志尾部
+
+	// 判定状态
+	status := s.deriveExecutionStatus(summary)
+
+	// 构建设备记录
+	devices := make([]config.ExecutionDeviceRecord, 0, len(deviceData))
+	for _, d := range deviceData {
+		devices = append(devices, config.ExecutionDeviceRecord{
+			IP:          d.IP,
+			Status:      d.Status,
+			TotalCmd:    d.TotalCmd,
+			ExecCmd:     d.ExecCmd,
+			ErrorMsg:    d.ErrorMsg,
+			LogCount:    d.LogCount,
+			LogTail:     d.LogTail,
+			LogFilePath: d.LogFilePath,
+		})
+	}
+
+	// 计算时长
+	finishedAt := time.Now()
+	startedAt := summary.StartedAt
+	durationMs := finishedAt.Sub(startedAt).Milliseconds()
+
+	// 创建记录
+	record := config.ExecutionRecord{
+		RunnerSource:  s.meta.RunnerSource,
+		RunnerID:      s.meta.RunnerID,
+		TaskGroupID:   s.meta.TaskGroupID,
+		TaskGroupName: s.meta.TaskGroupName,
+		TaskName:      summary.TaskName,
+		Mode:          s.meta.Mode,
+		Status:        status,
+		TotalDevices:  summary.TotalDevices,
+		FinishedCount: summary.FinishedCount,
+		SuccessCount:  summary.SuccessCount,
+		ErrorCount:    summary.ErrorCount,
+		AbortedCount:  summary.AbortedCount,
+		WarningCount:  summary.WarningCount,
+		StartedAt:     startedAt.Format(time.RFC3339),
+		FinishedAt:    finishedAt.Format(time.RFC3339),
+		DurationMs:    durationMs,
+		ReportPath:    reportPath,
+		Devices:       devices,
+	}
+
+	// 保存到数据库
+	if _, err := config.CreateExecutionRecord(record); err != nil {
+		logger.Error("ExecutionManager", "-", "保存历史执行记录失败: %v", err)
+	} else {
+		logger.Info("ExecutionManager", "-", "历史执行记录已保存: %s", record.ID)
+	}
+
+	// 执行保留策略清理（异步）
+	go func() {
+		if err := config.DeleteOldExecutionRecords(100); err != nil {
+			logger.Warn("ExecutionManager", "-", "清理旧历史记录失败: %v", err)
+		}
+	}()
+}
+
+// deriveExecutionStatus 根据执行结果判定历史记录状态
+func (s *managedExecution) deriveExecutionStatus(summary *report.ExecutionSummaryData) string {
+	// 如果用户取消，优先标记为 cancelled
+	if s.cancelled {
+		return "cancelled"
+	}
+
+	// 判定规则：
+	// - completed: 所有设备成功或告警放行完成，无失败和中止
+	// - partial: 存在成功设备，同时存在失败或中止设备
+	// - failed: 所有设备均失败或中止，或没有可成功执行的设备
+	// - cancelled: 用户主动停止
+
+	total := summary.TotalDevices
+	if total == 0 {
+		return "failed"
+	}
+
+	successAndWarning := summary.SuccessCount + summary.WarningCount
+	errorAndAborted := summary.ErrorCount + summary.AbortedCount
+
+	// 全部为成功/告警
+	if successAndWarning == total && errorAndAborted == 0 {
+		return "completed"
+	}
+
+	// 全部为失败/中止
+	if errorAndAborted == total {
+		return "failed"
+	}
+
+	// 部分成功，部分失败
+	if successAndWarning > 0 && errorAndAborted > 0 {
+		return "partial"
+	}
+
+	// 其他情况（如未完成）
+	if summary.FinishedCount < total {
+		// 如果是因为取消导致的未完成
+		if s.cancelled {
+			return "cancelled"
+		}
+		return "failed"
+	}
+
+	return "failed"
 }
 
 func (s *managedExecution) finishLifecycle() {

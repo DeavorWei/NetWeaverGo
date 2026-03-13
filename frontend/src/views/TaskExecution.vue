@@ -1,4 +1,4 @@
-<template>
+ <template>
   <div class="animate-slide-in space-y-5 h-full flex flex-col">
     <!-- 标题栏 -->
     <div class="flex items-center justify-between flex-shrink-0">
@@ -173,6 +173,13 @@
               <!-- 操作按钮 -->
               <div class="flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity ml-2">
                 <button
+                  @click="showExecutionHistory(task)"
+                  class="p-1.5 rounded-md text-text-muted hover:text-info hover:bg-info/10 transition-colors"
+                  title="查看执行历史"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+                </button>
+                <button
                   @click="executeTask(task)"
                   :disabled="isRunning"
                   class="p-1.5 rounded-md text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
@@ -284,6 +291,13 @@
         </div>
       </div>
     </Transition>
+
+    <!-- 执行历史抽屉 -->
+    <ExecutionHistoryDrawer
+      v-model="historyDrawer.show"
+      :task-group-id="historyDrawer.taskGroupId"
+      :task-group-name="historyDrawer.taskGroupName"
+    />
   </div>
 </template>
 
@@ -296,6 +310,7 @@ import {
 import type { DeviceViewState, TaskGroup } from '../services/api'
 import { useEngineStore } from '../stores/engineStore'
 import VirtualLogTerminal from '../components/task/VirtualLogTerminal.vue'
+import ExecutionHistoryDrawer from '../components/task/ExecutionHistoryDrawer.vue'
 
 const router = useRouter()
 const engineStore = useEngineStore()
@@ -314,9 +329,18 @@ const executionView = ref({
   taskName: ''
 })
 const awaitingSnapshot = ref(false)
+let snapshotTimeoutTimer: ReturnType<typeof setTimeout> | null = null
+const SNAPSHOT_TIMEOUT = 10000 // 10秒超时
 
 // 删除弹窗
 const deleteModal = ref({ show: false, taskId: '', taskName: '' })
+
+// 执行历史抽屉
+const historyDrawer = ref({
+  show: false,
+  taskGroupId: '',
+  taskGroupName: ''
+})
 
 // 虚拟滚动优化状态
 const showAllDevices = ref(false)
@@ -446,12 +470,37 @@ async function syncExecutionView() {
   }
 }
 
+// 设置快照超时保护
+function startSnapshotTimeout() {
+  if (snapshotTimeoutTimer) {
+    clearTimeout(snapshotTimeoutTimer)
+  }
+  snapshotTimeoutTimer = setTimeout(() => {
+    if (awaitingSnapshot.value) {
+      console.warn('[TaskExecution] 快照超时，重置UI状态')
+      awaitingSnapshot.value = false
+      triggerToast('任务执行超时，请检查设备连接配置', 'error')
+      executionView.value.active = false
+    }
+  }, SNAPSHOT_TIMEOUT)
+}
+
+function clearSnapshotTimeout() {
+  if (snapshotTimeoutTimer) {
+    clearTimeout(snapshotTimeoutTimer)
+    snapshotTimeoutTimer = null
+  }
+}
+
 // 执行任务
 async function executeTask(task: TaskGroup) {
   if (isRunning.value) return
 
   engineStore.reset()
   awaitingSnapshot.value = true
+  
+  // 启动超时保护
+  startSnapshotTimeout()
   
   executionView.value = {
     active: true,
@@ -465,12 +514,21 @@ async function executeTask(task: TaskGroup) {
     console.error('执行任务失败:', err)
     triggerToast(`执行失败: ${err?.message || err}`, 'error')
     executionView.value.active = false
-  } finally {
-    if (!executionSnapshot.value) {
-      awaitingSnapshot.value = false
-    }
+    clearSnapshotTimeout()
   }
 }
+
+// 监听快照变化，收到快照后清除超时
+watch(executionSnapshot, (snapshot) => {
+  if (snapshot) {
+    awaitingSnapshot.value = false
+    clearSnapshotTimeout()
+    executionView.value.active = true
+    if (snapshot.taskName) {
+      executionView.value.taskName = snapshot.taskName
+    }
+  }
+})
 
 // 删除任务
 function confirmDelete(task: TaskGroup) {
@@ -517,6 +575,15 @@ function resolveSuspend(action: 'C' | 'S' | 'A') {
 // 导航
 function goToTaskCreate() {
   router.push('/tasks')
+}
+
+// 查看执行历史
+function showExecutionHistory(task: TaskGroup) {
+  historyDrawer.value = {
+    show: true,
+    taskGroupId: task.id,
+    taskGroupName: task.name
+  }
 }
 
 // ================== 状态样式 ==================

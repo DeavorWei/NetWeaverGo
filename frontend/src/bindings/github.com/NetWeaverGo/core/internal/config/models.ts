@@ -157,6 +157,194 @@ export class DeviceAsset {
 }
 
 /**
+ * ExecutionDeviceRecord 设备执行记录（嵌套在 ExecutionRecord 中）
+ */
+export class ExecutionDeviceRecord {
+    "ip": string;
+    "status": string;
+    "totalCmd": number;
+    "execCmd": number;
+    "errorMsg": string;
+    "logCount": number;
+    "logTail": string[];
+    "logFilePath": string;
+
+    /** Creates a new ExecutionDeviceRecord instance. */
+    constructor($$source: Partial<ExecutionDeviceRecord> = {}) {
+        if (!("ip" in $$source)) {
+            this["ip"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("totalCmd" in $$source)) {
+            this["totalCmd"] = 0;
+        }
+        if (!("execCmd" in $$source)) {
+            this["execCmd"] = 0;
+        }
+        if (!("errorMsg" in $$source)) {
+            this["errorMsg"] = "";
+        }
+        if (!("logCount" in $$source)) {
+            this["logCount"] = 0;
+        }
+        if (!("logTail" in $$source)) {
+            this["logTail"] = [];
+        }
+        if (!("logFilePath" in $$source)) {
+            this["logFilePath"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ExecutionDeviceRecord instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ExecutionDeviceRecord {
+        const $$createField6_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("logTail" in $$parsedSource) {
+            $$parsedSource["logTail"] = $$createField6_0($$parsedSource["logTail"]);
+        }
+        return new ExecutionDeviceRecord($$parsedSource as Partial<ExecutionDeviceRecord>);
+    }
+}
+
+/**
+ * ExecutionRecord 历史执行记录
+ */
+export class ExecutionRecord {
+    "id": string;
+
+    /**
+     * task_group / engine_service / backup_service
+     */
+    "runnerSource": string;
+
+    /**
+     * 运行实例ID，可为空
+     */
+    "runnerId": string;
+
+    /**
+     * 任务组ID，非任务组执行时为空
+     */
+    "taskGroupId": string;
+
+    /**
+     * 任务组名称快照
+     */
+    "taskGroupName": string;
+
+    /**
+     * 执行任务名称快照
+     */
+    "taskName": string;
+
+    /**
+     * group / binding / manual / backup
+     */
+    "mode": string;
+
+    /**
+     * completed / partial / failed / cancelled
+     */
+    "status": string;
+    "totalDevices": number;
+    "finishedCount": number;
+    "successCount": number;
+    "errorCount": number;
+    "abortedCount": number;
+    "warningCount": number;
+    "startedAt": string;
+    "finishedAt": string;
+    "durationMs": number;
+    "reportPath": string;
+    "devices": ExecutionDeviceRecord[];
+    "createdAt": string;
+
+    /** Creates a new ExecutionRecord instance. */
+    constructor($$source: Partial<ExecutionRecord> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("runnerSource" in $$source)) {
+            this["runnerSource"] = "";
+        }
+        if (!("runnerId" in $$source)) {
+            this["runnerId"] = "";
+        }
+        if (!("taskGroupId" in $$source)) {
+            this["taskGroupId"] = "";
+        }
+        if (!("taskGroupName" in $$source)) {
+            this["taskGroupName"] = "";
+        }
+        if (!("taskName" in $$source)) {
+            this["taskName"] = "";
+        }
+        if (!("mode" in $$source)) {
+            this["mode"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("totalDevices" in $$source)) {
+            this["totalDevices"] = 0;
+        }
+        if (!("finishedCount" in $$source)) {
+            this["finishedCount"] = 0;
+        }
+        if (!("successCount" in $$source)) {
+            this["successCount"] = 0;
+        }
+        if (!("errorCount" in $$source)) {
+            this["errorCount"] = 0;
+        }
+        if (!("abortedCount" in $$source)) {
+            this["abortedCount"] = 0;
+        }
+        if (!("warningCount" in $$source)) {
+            this["warningCount"] = 0;
+        }
+        if (!("startedAt" in $$source)) {
+            this["startedAt"] = "";
+        }
+        if (!("finishedAt" in $$source)) {
+            this["finishedAt"] = "";
+        }
+        if (!("durationMs" in $$source)) {
+            this["durationMs"] = 0;
+        }
+        if (!("reportPath" in $$source)) {
+            this["reportPath"] = "";
+        }
+        if (!("devices" in $$source)) {
+            this["devices"] = [];
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ExecutionRecord instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ExecutionRecord {
+        const $$createField18_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("devices" in $$parsedSource) {
+            $$parsedSource["devices"] = $$createField18_0($$parsedSource["devices"]);
+        }
+        return new ExecutionRecord($$parsedSource as Partial<ExecutionRecord>);
+    }
+}
+
+/**
  * GlobalSettings 全局运行参数
  */
 export class GlobalSettings {
@@ -248,7 +436,7 @@ export class GlobalSettings {
      * Creates a new GlobalSettings instance from a string or object.
      */
     static createFrom($$source: any = {}): GlobalSettings {
-        const $$createField9_0 = $$createType1;
+        const $$createField9_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("sshAlgorithms" in $$parsedSource) {
             $$parsedSource["sshAlgorithms"] = $$createField9_0($$parsedSource["sshAlgorithms"]);
@@ -399,7 +587,7 @@ export class TaskGroup {
      * Creates a new TaskGroup instance from a string or object.
      */
     static createFrom($$source: any = {}): TaskGroup {
-        const $$createField4_0 = $$createType3;
+        const $$createField4_0 = $$createType5;
         const $$createField5_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
@@ -465,6 +653,8 @@ export class TaskItem {
 
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
-const $$createType1 = SSHAlgorithmSettings.createFrom;
-const $$createType2 = TaskItem.createFrom;
-const $$createType3 = $Create.Array($$createType2);
+const $$createType1 = ExecutionDeviceRecord.createFrom;
+const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = SSHAlgorithmSettings.createFrom;
+const $$createType4 = TaskItem.createFrom;
+const $$createType5 = $Create.Array($$createType4);

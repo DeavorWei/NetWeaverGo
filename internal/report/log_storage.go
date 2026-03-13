@@ -195,6 +195,17 @@ func (ls *LogStorage) GetLogCount(ip string) int {
 	return 0
 }
 
+// GetDeviceLogPath 获取设备日志文件路径
+func (ls *LogStorage) GetDeviceLogPath(ip string) string {
+	ls.mu.RLock()
+	defer ls.mu.RUnlock()
+
+	if idx, exists := ls.index[ip]; exists {
+		return idx.FilePath
+	}
+	return ""
+}
+
 // Close 关闭并清理
 func (ls *LogStorage) Close() {
 	ls.mu.Lock()
