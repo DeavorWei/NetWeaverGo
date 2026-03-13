@@ -4,46 +4,6 @@
 
 ---
 
-## 一、架构层面问题
-
-### 1.1 状态管理复杂度高
-
-**问题描述：**
-
-- `Engine` 结构体包含多种状态管理方式：`state` (互斥锁保护)、`closedFlag` (atomic.Bool)、`closeSignal` (channel)，存在状态冗余
-- `engineState` 枚举有 7 个状态，但部分状态转换逻辑不够清晰
-- 全局状态管理器 `GlobalEngineState` 与 `Engine` 内部状态存在职责重叠
-
-**优化建议：**
-
-```go
-// 建议统一状态管理
-type EngineState struct {
-    mu     sync.RWMutex
-    state  EngineStateEnum
-    closed atomic.Bool  // 仅作为快速查询缓存
-}
-
-func (e *EngineState) Transition(from, to EngineStateEnum) error {
-    // 显式状态机转换，防止非法状态转换
-}
-```
-
-### 1.2 并发控制机制复杂
-
-**问题描述：**
-
-- `emitEvent` 使用了 atomic 快速检查、关闭信号 channel、context.Done() 三重保护，过于复杂
-- `fallbackEvents` 后备存储机制增加了代码复杂度，且容量限制 500 可能不够
-- `emitWg` 等待组与 `closeOnce` 配合存在潜在竞态条件
-
-**优化建议：**
-
-- 简化事件发送机制，使用单一的 context 控制
-- 考虑使用有界队列 + 丢弃策略替代后备存储
-
----
-
 ## 三、性能优化建议
 
 ### 3.1 内存使用优化

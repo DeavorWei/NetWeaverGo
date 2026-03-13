@@ -69,33 +69,50 @@
         </div>
       </div>
 
-      <!-- 设备卡片网格 -->
-      <div class="flex-1 overflow-auto scrollbar-custom min-h-0">
+            <!-- 设备卡片网格 - 使用虚拟滚动优化 -->
+      <div class="flex-1 overflow-auto scrollbar-custom min-h-0 relative" ref="devicesContainer">
         <div v-if="execDevices.length === 0 && isRunning" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
           <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
           <p class="text-sm">正在初始化任务...</p>
         </div>
-        <div v-else class="grid grid-cols-3 gap-4">
-          <div
-            v-for="dev in execDevices"
-            :key="dev.ip"
-            class="bg-bg-card border rounded-xl overflow-hidden shadow-card transition-all duration-300"
-            :class="statusBorder(dev.status)"
-          >
-            <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-panel">
-              <span class="font-mono text-sm font-semibold text-text-primary">{{ dev.ip }}</span>
-              <span class="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border" :class="statusBadge(dev.status)">
-                <span class="w-1.5 h-1.5 rounded-full" :class="statusDot(dev.status)"></span>
-                {{ statusLabel(dev.status) }}
-              </span>
-            </div>
+        <div v-else>
+          <!-- 性能提示 -->
+          <div v-if="execDevices.length > 50" class="text-xs text-text-muted mb-2 px-1">
+            共 {{ execDevices.length }} 台设备，显示前 {{ visibleDeviceCount }} 台活跃设备
+            <button v-if="execDevices.length > visibleDeviceCount" @click="showAllDevices = !showAllDevices" class="ml-2 text-accent hover:underline">
+              {{ showAllDevices ? '收起' : '显示全部' }}
+            </button>
+          </div>
+          
+          <!-- 虚拟化设备网格 -->
+          <div class="grid grid-cols-3 gap-4">
             <div
-              class="h-52 overflow-y-auto scrollbar-custom bg-terminal-bg p-3 font-mono text-xs leading-relaxed"
-              :ref="el => setTerminalRef(dev.ip, el)"
+              v-for="dev in visibleDevices"
+              :key="dev.ip"
+              class="bg-bg-card border rounded-xl overflow-hidden shadow-card transition-all duration-300"
+              :class="statusBorder(dev.status)"
             >
-              <div v-if="dev.truncated" class="text-warning text-xs mb-1">[日志已截断，显示最近 {{ dev.logs.length }} 条]</div>
-              <div v-for="(log, idx) in dev.logs" :key="idx" class="whitespace-pre-wrap break-all mb-0.5" :class="logColor(log)">{{ log }}</div>
+              <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-panel">
+                <span class="font-mono text-sm font-semibold text-text-primary">{{ dev.ip }}</span>
+                <span class="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border" :class="statusBadge(dev.status)">
+                  <span class="w-1.5 h-1.5 rounded-full" :class="statusDot(dev.status)"></span>
+                  {{ statusLabel(dev.status) }}
+                </span>
+              </div>
+              <!-- 优化后的终端区域 - 使用虚拟滚动 -->
+              <VirtualLogTerminal
+                :logs="dev.logs"
+                :total-count="dev.logCount"
+                :truncated="dev.truncated"
+                :device-ip="dev.ip"
+              />
             </div>
+          </div>
+          
+          <!-- 更多设备提示 -->
+          <div v-if="!showAllDevices && execDevices.length > visibleDeviceCount" class="text-center py-4 text-text-muted text-sm">
+            还有 {{ execDevices.length - visibleDeviceCount }} 台设备已完成或等待中
+            <button @click="showAllDevices = true" class="ml-2 text-accent hover:underline">显示全部</button>
           </div>
         </div>
       </div>
@@ -263,13 +280,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   TaskGroupAPI
 } from '../services/api'
 import type { TaskGroup } from '../services/api'
 import { useEngineStore } from '../stores/engineStore'
+import VirtualLogTerminal from '../components/task/VirtualLogTerminal.vue'
 
 const router = useRouter()
 const engineStore = useEngineStore()
@@ -291,6 +309,10 @@ const executionView = ref({
 // 删除弹窗
 const deleteModal = ref({ show: false, taskId: '', taskName: '' })
 
+// 虚拟滚动优化状态
+const showAllDevices = ref(false)
+const VISIBLE_DEVICE_LIMIT = 30 // 默认显示的设备数量限制
+
 // Toast
 const showToast = ref(false)
 const toastMessage = ref('')
@@ -305,19 +327,39 @@ function triggerToast(msg: string, type: 'success' | 'error' = 'success') {
   toastTimer = setTimeout(() => { showToast.value = false }, 3000)
 }
 
-// 终端 DOM 引用
-const terminalRefs = new Map<string, Element>()
-function setTerminalRef(ip: string, el: any) {
-  if (el) terminalRefs.set(ip, el as Element)
-  else terminalRefs.delete(ip)
-}
-
 // ================== 计算属性 - 从 Store 获取 ==================
 const isRunning = computed(() => engineStore.isRunning)
 const progressPercent = computed(() => engineStore.progressPercent)
 const execDevices = computed(() => engineStore.execDevices)
 const suspendModal = computed(() => engineStore.suspendModal)
-const executionSnapshot = computed(() => engineStore.executionSnapshot)
+
+// ================== 虚拟滚动优化计算属性 ==================
+// 可见设备数量限制
+const visibleDeviceCount = computed(() => 
+  showAllDevices.value ? execDevices.value.length : VISIBLE_DEVICE_LIMIT
+)
+
+// 可见设备列表（优先显示运行中和错误的设备）
+const visibleDevices = computed(() => {
+  const devices = execDevices.value
+  
+  // 如果显示全部，直接返回
+  if (showAllDevices.value) {
+    return devices
+  }
+  
+  // 优先显示活跃设备（运行中、错误、等待）
+  const activeStatuses = ['running', 'error', 'waiting']
+  const active = devices.filter(d => activeStatuses.includes(d.status))
+  const inactive = devices.filter(d => !activeStatuses.includes(d.status))
+  
+  // 优先返回活跃设备，如果活跃设备不足限制数量，补充已完成设备
+  if (active.length >= VISIBLE_DEVICE_LIMIT) {
+    return active.slice(0, VISIBLE_DEVICE_LIMIT)
+  }
+  
+  return [...active, ...inactive].slice(0, VISIBLE_DEVICE_LIMIT)
+})
 
 // ================== 生命周期 ==================
 onMounted(() => {
@@ -331,7 +373,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   engineStore.cleanupListeners()
-  terminalRefs.clear()
   if (toastTimer) {
     clearTimeout(toastTimer)
     toastTimer = null
@@ -358,20 +399,6 @@ const filteredTasks = computed(() => {
   return result
 })
 
-// 自动滚动终端到底部
-function scrollToBottom() {
-  nextTick(() => {
-    if (executionSnapshot.value?.devices) {
-      for (const dev of executionSnapshot.value.devices) {
-        const el = terminalRefs.get(dev.ip)
-        if (el) el.scrollTop = el.scrollHeight
-      }
-    }
-  })
-}
-
-// 监听设备列表变化，自动滚动
-watch(execDevices, scrollToBottom, { deep: true })
 
 // 加载任务列表
 async function loadTasks() {
@@ -480,15 +507,6 @@ function statusLabel(s: string) {
   const map: Record<string, string> = { running: '执行中', success: '成功', error: '失败', aborted: '已终止', waiting: '等待', idle: '空闲' }
   return map[s] ?? s
 }
-function logColor(log: string) {
-  const l = log.toLowerCase()
-  if (l.includes('error') || l.includes('失败') || l.includes('错误')) return 'text-error'
-  if (l.includes('warn')  || l.includes('警告')) return 'text-warning'
-  if (l.includes('success')|| l.includes('成功') || l.includes('完成')) return 'text-success'
-  if (log.startsWith('[')) return 'text-info'
-  return 'text-text-muted'
-}
-
 // 任务状态样式
 function taskStatusBadge(s: string) {
   switch (s) {
