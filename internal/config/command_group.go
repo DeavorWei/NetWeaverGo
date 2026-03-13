@@ -14,13 +14,13 @@ import (
 
 // CommandGroup 命令组定义
 type CommandGroup struct {
-	ID          string   `json:"id" gorm:"primaryKey"`          // 唯一标识（UUID）
-	Name        string   `json:"name" gorm:"uniqueIndex"`       // 命令组名称
-	Description string   `json:"description"`                   // 描述信息
+	ID          string   `json:"id" gorm:"primaryKey"`            // 唯一标识（UUID）
+	Name        string   `json:"name" gorm:"uniqueIndex"`         // 命令组名称
+	Description string   `json:"description"`                     // 描述信息
 	Commands    []string `json:"commands" gorm:"serializer:json"` // 命令列表
-	CreatedAt   string   `json:"createdAt"`                     // 创建时间
-	UpdatedAt   string   `json:"updatedAt"`                     // 更新时间
-	Tags        []string `json:"tags" gorm:"serializer:json"`   // 标签（用于分类）
+	CreatedAt   string   `json:"createdAt"`                       // 创建时间
+	UpdatedAt   string   `json:"updatedAt"`                       // 更新时间
+	Tags        []string `json:"tags" gorm:"serializer:json"`     // 标签（用于分类）
 }
 
 // 时间格式
@@ -271,15 +271,6 @@ func validateCommandGroup(group CommandGroup) error {
 		return fmt.Errorf("命令列表不能为空")
 	}
 	return nil
-}
-
-// GetCommandGroupCommands 获取指定命令组的命令列表
-func GetCommandGroupCommands(id string) ([]string, error) {
-	group, err := GetCommandGroup(id)
-	if err != nil {
-		return nil, err
-	}
-	return group.Commands, nil
 }
 
 // MigrateLegacyCommands 将 config.txt 迁移到命令组（已简化，由 db.go 调用）

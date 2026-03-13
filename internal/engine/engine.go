@@ -67,10 +67,6 @@ type Engine struct {
 	FrontendBus chan report.ExecutorEvent
 	tracker     *report.ProgressTracker
 
-	// Tracker 进度跟踪器（外部可设置，用于快照推送）
-	// 当外部设置此字段时，会自动连接到 Engine.EventBus
-	Tracker *report.ProgressTracker
-
 	failedBackups sync.Map // 记录备份失败的设备和原因
 
 	// CustomSuspendHandler 允许外部（如 Wails UI）注入自定义的异常挂起处理逻辑
@@ -101,8 +97,23 @@ func (e *Engine) SetTracker(tracker *report.ProgressTracker) {
 		return
 	}
 	e.tracker = tracker
-	// 连接 EventBus，让 tracker 能够接收事件
-	tracker.EventBus = e.EventBus
+	e.tracker.EventBus = e.EventBus
+}
+
+// TransitionTo 暴露状态转移能力，供编排层协调组合执行生命周期
+func (e *Engine) TransitionTo(newState EngineState) error {
+	return e.stateManager.TransitionTo(newState)
+}
+
+func (e *Engine) ensureTracker(taskName string) *report.ProgressTracker {
+	if e.tracker == nil {
+		e.tracker = report.NewProgressTracker(len(e.Devices))
+	}
+	e.tracker.EventBus = e.EventBus
+	if taskName != "" {
+		e.tracker.SetTaskName(taskName)
+	}
+	return e.tracker
 }
 
 // NewEngine 初始化并行执行引擎（重构后）
@@ -230,7 +241,7 @@ func (e *Engine) emitEventDirect(ev report.ExecutorEvent) {
 }
 
 // Run 启动 WorkerPool，正式分发任务
-func (e *Engine) Run(ctx context.Context) {
+func (e *Engine) Run(ctx context.Context) error {
 	logger.Debug("Engine", "-", "Run() 开始，将向 %d 台设备分发任务 (MaxWorkers=%d)", len(e.Devices), e.MaxWorkers)
 	logger.Info("Engine", "-", "控制台引擎启动，共准备向 %d 台设备下发 %d 条命令...", len(e.Devices), len(e.Commands))
 	logger.Info("Engine", "-", "当前已配置全局并发安全限制 (MaxWorkers=%d)。\n设备回显位于 output/ 目录，系统日志位于 logs/app.log，正在分批并发下发中...", e.MaxWorkers)
@@ -238,14 +249,21 @@ func (e *Engine) Run(ctx context.Context) {
 	logger.ConsoleMuted = true
 	defer func() { logger.ConsoleMuted = false }()
 
-	// 初始化 context 和状态
-	e.ctx, e.cancel = context.WithCancel(ctx)
-	if err := e.stateManager.TransitionTo(StateRunning); err != nil {
-		logger.Error("Engine", "-", "状态转移失败: %v", err)
-		return
+	if err := e.stateManager.TransitionTo(StateStarting); err != nil {
+		e.gracefulCloseWithoutCancel()
+		return err
 	}
 
-	e.tracker = report.NewProgressTracker(len(e.Devices))
+	// 初始化 context 和状态
+	e.ctx, e.cancel = context.WithCancel(ctx)
+	e.ensureTracker("")
+	if err := e.stateManager.TransitionTo(StateRunning); err != nil {
+		if e.cancel != nil {
+			e.cancel()
+		}
+		e.gracefulCloseWithoutCancel()
+		return err
+	}
 
 	// 【修复】启动 Tracker 监听协程（与 RunBackup 保持一致）
 	var trackerWg sync.WaitGroup
@@ -303,10 +321,13 @@ func (e *Engine) Run(ctx context.Context) {
 	// 使用统一的优雅关闭方法（不再调用 cancel，因为已在上面的步骤取消）
 	e.gracefulCloseWithoutCancel()
 
-	e.tracker.ExportCSV(e.Settings.OutputDir)
+	if e.tracker != nil {
+		e.tracker.ExportCSV(e.Settings.OutputDir)
+	}
 
 	// 最终谢幕，保留一条普通的记录
 	logger.Info("Engine", "-", "所有设备的通信投递线程均已结束。安全退出。")
+	return nil
 }
 
 // gracefulClose 重构后 - 极简关闭流程
@@ -382,22 +403,28 @@ func (e *Engine) gracefulCloseForBackup(uiWg *sync.WaitGroup) {
 }
 
 // RunBackup 启动基于 `-b` 参数的交换机备份流程专线
-func (e *Engine) RunBackup(ctx context.Context) {
+func (e *Engine) RunBackup(ctx context.Context) error {
 	logger.Debug("Engine", "-", "RunBackup() 启动备份模式")
 	logger.Info("Engine", "-", "=======================================")
 	logger.Info("Engine", "-", "备份模式启动")
 	logger.Info("Engine", "-", "开始向 %d 台设备提取配置文件...", len(e.Devices))
 	logger.Info("Engine", "-", "=======================================")
 
-	// 初始化 context 和状态
-	e.ctx, e.cancel = context.WithCancel(ctx)
-	if err := e.stateManager.TransitionTo(StateRunning); err != nil {
-		logger.Error("Engine", "-", "状态转移失败: %v", err)
-		return
+	if err := e.stateManager.TransitionTo(StateStarting); err != nil {
+		e.gracefulCloseWithoutCancel()
+		return err
 	}
 
-	e.tracker = report.NewProgressTracker(len(e.Devices))
-	e.tracker.EventBus = e.EventBus
+	// 初始化 context 和状态
+	e.ctx, e.cancel = context.WithCancel(ctx)
+	e.ensureTracker("配置备份")
+	if err := e.stateManager.TransitionTo(StateRunning); err != nil {
+		if e.cancel != nil {
+			e.cancel()
+		}
+		e.gracefulCloseWithoutCancel()
+		return err
+	}
 
 	// 启动后台事件收归与界面的渲染 (如果启用了 EventBus)
 	var uiWg sync.WaitGroup
@@ -405,7 +432,7 @@ func (e *Engine) RunBackup(ctx context.Context) {
 		uiWg.Add(1)
 		go func() {
 			defer uiWg.Done()
-			e.tracker.Listen(ctx)
+			e.tracker.Listen(e.ctx)
 		}()
 	}
 
@@ -419,7 +446,7 @@ func (e *Engine) RunBackup(ctx context.Context) {
 			defer func() { <-sem }()
 			// 增加抖动，平滑 SSH 突发连接压力
 			time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
-			e.backupWorker(ctx, device, &wg)
+			e.backupWorker(e.ctx, device, &wg)
 		}(dev)
 	}
 
@@ -446,6 +473,7 @@ func (e *Engine) RunBackup(ctx context.Context) {
 		logger.Info("Engine", "-", "[成功] 所有设备的配置均已成功备份。")
 	}
 	logger.Info("Engine", "-", "====================================\n")
+	return nil
 }
 
 func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.WaitGroup) {
@@ -470,7 +498,10 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 			// 确保排空 channel 中剩余的所有事件
 			for {
 				select {
-				case ev := <-workerEventBus:
+				case ev, ok := <-workerEventBus:
+					if !ok {
+						return
+					}
 					if ev.Type == report.EventDeviceError || ev.Type == report.EventDeviceAbort {
 						e.emitEventDirect(ev)
 					} else {

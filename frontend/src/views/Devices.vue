@@ -329,26 +329,26 @@
             <tr
               v-else
               v-for="(row, idx) in data"
-              :key="row.ip + idx"
+              :key="row.id"
               :class="[
                 'transition-colors duration-150 group',
-                isSelected(idx)
+                isSelected(row.id)
                   ? 'bg-accent/8 hover:bg-accent/12'
                   : 'hover:bg-bg-hover',
               ]"
             >
               <td class="px-4 py-3 text-center">
                 <button
-                  @click="toggleSelect(idx)"
+                  @click="toggleSelect(row.id)"
                   class="flex items-center justify-center w-4 h-4 mx-auto rounded border transition-all duration-200"
                   :class="[
-                    isSelected(idx)
+                    isSelected(row.id)
                       ? 'bg-accent border-accent text-white'
                       : 'border-border hover:border-accent',
                   ]"
                 >
                   <svg
-                    v-if="isSelected(idx)"
+                    v-if="isSelected(row.id)"
                     xmlns="http://www.w3.org/2000/svg"
                     class="w-3 h-3"
                     viewBox="0 0 24 24"
@@ -408,7 +408,7 @@
               <td class="px-4 py-3">
                 <div class="flex items-center justify-center gap-2">
                   <button
-                    @click="openEditModal(idx)"
+                    @click="openEditModal(row)"
                     class="p-1.5 text-text-muted hover:text-accent hover:bg-accent/10 rounded transition-all duration-200"
                     title="编辑"
                   >
@@ -429,7 +429,7 @@
                     </svg>
                   </button>
                   <button
-                    @click="confirmDelete(idx)"
+                    @click="confirmDelete(row)"
                     class="p-1.5 text-text-muted hover:text-error hover:bg-error-bg rounded transition-all duration-200"
                     title="删除"
                   >
@@ -1122,13 +1122,13 @@ const searchOptions = [
 ];
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
-// 多选状态（存储当前页的选中索引）
-const selectedIndexes = ref<Set<number>>(new Set());
+// 多选状态（存储当前页的选中设备 ID）
+const selectedIds = ref<Set<number>>(new Set());
 
 // 弹窗状态
 const showModal = ref(false);
 const isEditing = ref(false);
-const editingIndex = ref(-1);
+const editingDeviceId = ref<number | null>(null);
 const isSaving = ref(false);
 const showPassword = ref(false);
 const errorMessage = ref("");
@@ -1139,7 +1139,6 @@ const ipValidationError = ref("");
 
 // 删除确认
 const showDeleteConfirm = ref(false);
-const deleteIndex = ref(-1);
 const deviceToDelete = ref<Device | null>(null);
 const isDeleting = ref(false);
 
@@ -1202,18 +1201,18 @@ const batchFieldLabel = computed(() => {
 });
 
 // 多选相关计算属性
-const selectedCount = computed(() => selectedIndexes.value.size);
+const selectedCount = computed(() => selectedIds.value.size);
 
 // 是否选中了当前页所有设备
 const isAllSelected = computed(() => {
   if (data.value.length === 0) return false;
-  return data.value.every((_, idx) => selectedIndexes.value.has(idx));
+  return data.value.every((row) => selectedIds.value.has(row.id));
 });
 
 // 是否部分选中
 const isIndeterminate = computed(() => {
   if (data.value.length === 0) return false;
-  const selectedInPage = data.value.filter((_, idx) => selectedIndexes.value.has(idx)).length;
+  const selectedInPage = data.value.filter((row) => selectedIds.value.has(row.id)).length;
   return selectedInPage > 0 && selectedInPage < data.value.length;
 });
 
@@ -1272,7 +1271,7 @@ async function loadDevices() {
     totalPages.value = result.totalPages;
 
     // 清空当前页选择（数据变化后）
-    selectedIndexes.value.clear();
+    selectedIds.value.clear();
   } catch (err) {
     console.error("加载设备列表失败:", err);
     data.value = [];
@@ -1424,7 +1423,7 @@ function getProtocolBadgeClass(protocol: string) {
 
 function openAddModal() {
   isEditing.value = false;
-  editingIndex.value = -1;
+  editingDeviceId.value = null;
   form.value = {
     ip: "",
     port: 22,
@@ -1443,14 +1442,18 @@ function openAddModal() {
   showModal.value = true;
 }
 
-function openEditModal(idx: number) {
-  const device = data.value[idx];
-  if (!device) return;
-
+function openEditModal(device: Device) {
   isEditing.value = true;
-  editingIndex.value = idx;
-  // 编辑时复制设备数据（包含 id）
-  form.value = { ...device } as NewDevice & { id: number };
+  editingDeviceId.value = device.id;
+  form.value = {
+    ip: device.ip,
+    port: device.port,
+    protocol: device.protocol,
+    username: device.username,
+    password: device.password,
+    group: device.group,
+    tags: [...device.tags],
+  };
   lastProtocol.value = device.protocol;
   errorMessage.value = "";
   showPassword.value = false;
@@ -1465,6 +1468,7 @@ function closeModal() {
   errorMessage.value = "";
   ipRangeHint.value = null;
   ipValidationError.value = "";
+  editingDeviceId.value = null;
 }
 
 // ==================== 标签操作 ====================
@@ -1496,11 +1500,12 @@ async function saveDevice() {
     }
 
     if (isEditing.value) {
-      // 编辑模式 - 需要获取全局索引
-      // 由于现在 data 只是当前页数据，需要通过 IP 找到设备
-      const editingDevice = data.value[editingIndex.value];
-      await DeviceAPI.updateDevice(editingIndex.value, {
-        id: editingDevice?.id || 0,
+      if (!editingDeviceId.value) {
+        throw new Error("缺少待编辑设备 ID");
+      }
+
+      await DeviceAPI.updateDevice(editingDeviceId.value, {
+        id: editingDeviceId.value,
         ...form.value,
       } as Device);
     } else {
@@ -1526,7 +1531,7 @@ async function saveDevice() {
               tags: [...form.value.tags],
             });
           }
-        await DeviceAPI.saveDevices(newDevices);
+          await DeviceAPI.addDevices(newDevices);
         }
       } else {
         // 新建设备时提供临时 id（后端会重新生成）
@@ -1585,7 +1590,7 @@ async function saveBatchEdit() {
 
   try {
     // 获取选中的设备
-    const selectedDevices = data.value.filter((_, idx) => selectedIndexes.value.has(idx));
+    const selectedDevices = data.value.filter((device) => selectedIds.value.has(device.id));
     
     // 修改选中设备
     const updatedDevices = selectedDevices.map((d) => {
@@ -1615,7 +1620,7 @@ async function saveBatchEdit() {
       return newDevice;
     });
 
-    await DeviceAPI.saveDevices(updatedDevices);
+    await DeviceAPI.updateDevices(updatedDevices);
     await loadDevices();
     closeBatchModal();
     clearSelection();
@@ -1628,11 +1633,7 @@ async function saveBatchEdit() {
 
 // ==================== 删除操作 ====================
 
-function confirmDelete(idx: number) {
-  const device = data.value[idx];
-  if (!device) return;
-
-  deleteIndex.value = idx;
+function confirmDelete(device: Device) {
   deviceToDelete.value = device;
   showDeleteConfirm.value = true;
 }
@@ -1641,11 +1642,15 @@ async function deleteDevice() {
   isDeleting.value = true;
 
   try {
-    // 由于后端删除需要全局索引，这里通过 IP 删除
-    await DeviceAPI.deleteDevice(deleteIndex.value);
-    await loadDevices();
-    showDeleteConfirm.value = false;
+    if (!deviceToDelete.value) {
+      throw new Error("未选择要删除的设备");
+    }
 
+    await DeviceAPI.deleteDevice(deviceToDelete.value.id);
+    showDeleteConfirm.value = false;
+    deviceToDelete.value = null;
+
+    await loadDevices();
     if (data.value.length === 0 && page.value > 1) {
       page.value--;
     }
@@ -1664,17 +1669,12 @@ async function batchDeleteDevices() {
   isBatchDeleting.value = true;
 
   try {
-    // 获取选中的索引，按降序排列
-    const indexesToDelete = Array.from(selectedIndexes.value).sort((a, b) => b - a);
-
-    for (const idx of indexesToDelete) {
-      await DeviceAPI.deleteDevice(idx);
-    }
-
-    await loadDevices();
+    const idsToDelete = Array.from(selectedIds.value);
+    await DeviceAPI.deleteDevices(idsToDelete);
     showBatchDeleteConfirm.value = false;
     clearSelection();
 
+    await loadDevices();
     if (data.value.length === 0 && page.value > 1) {
       page.value--;
     }
@@ -1687,30 +1687,30 @@ async function batchDeleteDevices() {
 
 // ==================== 多选操作 ====================
 
-function isSelected(idx: number): boolean {
-  return selectedIndexes.value.has(idx);
+function isSelected(id: number): boolean {
+  return selectedIds.value.has(id);
 }
 
-function toggleSelect(idx: number) {
-  if (selectedIndexes.value.has(idx)) {
-    selectedIndexes.value.delete(idx);
+function toggleSelect(id: number) {
+  if (selectedIds.value.has(id)) {
+    selectedIds.value.delete(id);
   } else {
-    selectedIndexes.value.add(idx);
+    selectedIds.value.add(id);
   }
 }
 
 function toggleSelectAll() {
   if (isAllSelected.value) {
-    selectedIndexes.value.clear();
+    selectedIds.value.clear();
   } else {
-    data.value.forEach((_, idx) => {
-      selectedIndexes.value.add(idx);
+    data.value.forEach((row) => {
+      selectedIds.value.add(row.id);
     });
   }
 }
 
 function clearSelection() {
-  selectedIndexes.value.clear();
+  selectedIds.value.clear();
 }
 
 // ==================== 生命周期 ====================

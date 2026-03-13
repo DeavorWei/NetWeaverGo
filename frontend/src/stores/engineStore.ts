@@ -48,10 +48,6 @@ export const useEngineStore = defineStore("engine", () => {
     content: string;
   }>({ show: false, sessionId: "", ip: "", content: "" });
 
-  // 事件日志（限制长度防止内存溢出）
-  const eventLogs = ref<any[]>([]);
-  const maxLogs = 1000;
-
   // ========== 计算属性 ==========
   const isRunning = computed(() => currentState.value === "Running");
   const progressPercent = computed(
@@ -115,19 +111,6 @@ export const useEngineStore = defineStore("engine", () => {
       cleanupFns.push(unlistenTimeout);
     }
 
-    // 监听设备事件（用于日志）
-    const unlistenDevice = Events.On("device:event", (ev: any) => {
-      const event = ev.data?.[0];
-      if (event) {
-        eventLogs.value.push(event);
-        if (eventLogs.value.length > maxLogs) {
-          eventLogs.value.shift(); // O(1) 淘汰最旧日志
-        }
-      }
-    });
-    if (typeof unlistenDevice === 'function') {
-      cleanupFns.push(unlistenDevice);
-    }
   }
 
   function cleanupListeners() {
@@ -169,15 +152,10 @@ export const useEngineStore = defineStore("engine", () => {
     suspendModal.value.show = false;
   }
 
-  function closeSuspendModal() {
-    suspendModal.value.show = false;
-  }
-
   function reset() {
     currentState.value = "Idle";
     executionSnapshot.value = null;
     isConnecting.value = false;
-    eventLogs.value = [];
     suspendModal.value.show = false;
   }
 
@@ -187,7 +165,6 @@ export const useEngineStore = defineStore("engine", () => {
     executionSnapshot,
     isConnecting,
     suspendModal,
-    eventLogs,
 
     // 计算属性
     isRunning,
@@ -200,7 +177,6 @@ export const useEngineStore = defineStore("engine", () => {
     syncStateFromGo,
     stopEngine,
     resolveSuspend,
-    closeSuspendModal,
     reset,
   };
 });

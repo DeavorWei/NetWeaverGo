@@ -3,12 +3,10 @@ package ui
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/engine"
-	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -23,63 +21,30 @@ const (
 // EngineService 引擎控制服务 - 负责任务执行和状态管理
 type EngineService struct {
 	wailsApp *application.App
-
-	// Context 取消函数，用于停止正在执行的任务
-	cancelFunc context.CancelFunc
-	cancelMu   sync.Mutex
-
-	// 当前执行的 Tracker 引用（用于快照查询）
-	currentTracker *report.ProgressTracker
-	trackerMu      sync.RWMutex
-
-	// 快照推送控制
-	snapshotTicker *time.Ticker
-	snapshotStop   chan struct{}
-	stopOnce       sync.Once  // 确保只关闭一次
-	stopMu         sync.Mutex // 保护 channel 创建/关闭
-
-	// 事件桥接器
-	eventBridge *EventBridge
 }
 
 // NewEngineService 创建引擎服务实例
 func NewEngineService() *EngineService {
-	return &EngineService{
-		eventBridge: NewEventBridge(),
-	}
+	return &EngineService{}
 }
 
 // ServiceStartup Wails 服务启动生命周期钩子
 func (s *EngineService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	s.wailsApp = application.Get()
-	s.eventBridge.SetWailsApp(s.wailsApp)
+	getExecutionManager().SetWailsApp(s.wailsApp)
 	// 设置全局 SuspendManager 的 Wails App 实例
 	GetSuspendManager().SetWailsApp(s.wailsApp)
-	logger.Info("Engine", "-", "引擎控制服务已就绪")
 	return nil
 }
 
 // IsRunning 检查引擎是否正在运行（使用全局状态）
 func (s *EngineService) IsRunning() bool {
-	return engine.IsEngineRunning()
+	return getExecutionManager().IsRunning()
 }
 
 // StopEngine 停止正在执行的任务
 func (s *EngineService) StopEngine() error {
-	s.cancelMu.Lock()
-	defer s.cancelMu.Unlock()
-
-	if !engine.IsEngineRunning() {
-		return fmt.Errorf("引擎未运行")
-	}
-
-	if s.cancelFunc != nil {
-		s.cancelFunc()
-		s.cancelFunc = nil
-		logger.Info("Engine", "-", "已发送停止信号")
-	}
-
-	return nil
+	return getExecutionManager().StopEngine()
 }
 
 // ResolveSuspend 被前端调用（当用户在弹窗中选择动作后）
@@ -113,76 +78,42 @@ func (s *EngineService) runEngineWithConfig(deviceIPs []string, commandGroupID s
 	}
 
 	if len(assets) == 0 || len(commands) == 0 {
-		return fmt.Errorf("资产池或命令集为空。请检查 csv 和 txt 文件！")
+		return fmt.Errorf("设备资产或命令集为空，请先在设备页和命令组中完成配置")
 	}
 
 	// 初始化 Engine
 	ng := engine.NewEngine(assets, commands, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-	// 【修改】设置到全局状态
-	if err := engine.GetGlobalState().SetActiveEngine(ng, "engine_service", ""); err != nil {
-		return err
-	}
-	defer engine.GetGlobalState().ClearActiveEngine()
-
-	// 创建并设置 Tracker
 	taskName := "批量执行"
 	if commandGroupID != "" {
 		if group, err := config.GetCommandGroup(commandGroupID); err == nil {
 			taskName = group.Name
 		}
 	}
-	tracker := report.NewProgressTracker(len(assets))
-	tracker.SetTaskName(taskName)
-	ng.SetTracker(tracker)
 
-	// 设置当前 Tracker 引用
-	s.setCurrentTracker(tracker)
+	_, err = getExecutionManager().RunEngine(
+		ng,
+		"engine_service",
+		"",
+		taskName,
+		func(ctx context.Context) error {
+			return ng.Run(ctx)
+		},
+	)
 
-	// 使用事件桥接器启动事件监听
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// 保存 cancelFunc
-	s.cancelMu.Lock()
-	s.cancelFunc = cancel
-	s.cancelMu.Unlock()
-
-	// 启动快照定时推送
-	s.startSnapshotTicker(ctx)
-
-	// 使用简化的事件监听器
-	go s.listenEvents(ng.FrontendBus)
-
-	// 开始执行并发任务
-	ng.Run(ctx)
-
-	// 停止快照推送
-	s.stopSnapshotTicker()
-
-	// 发送执行完成事件
-	s.emitFinishedEvent()
-
-	// 清理 Tracker 引用
-	s.clearCurrentTracker()
-
-	// 清理 cancelFunc
-	s.cancelMu.Lock()
-	s.cancelFunc = nil
-	s.cancelMu.Unlock()
-
-	return nil
+	return err
 }
 
 // GetEngineState 获取引擎当前状态（供前端调用）
 func (s *EngineService) GetEngineState() map[string]interface{} {
-	return engine.GetGlobalState().GetStatus()
+	return getExecutionManager().GetEngineState()
 }
 
 // prepareAssetsAndCommands 准备设备和命令
 func (s *EngineService) prepareAssetsAndCommands(deviceIPs []string, commandGroupID string) ([]config.DeviceAsset, []string, error) {
 	// 获取所有设备
-	allAssets, _, _, _, err := config.ParseOrGenerate(false)
+	allAssets, err := config.LoadDeviceAssets()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -213,7 +144,7 @@ func (s *EngineService) prepareAssetsAndCommands(deviceIPs []string, commandGrou
 		}
 		commands = group.Commands
 	} else {
-		_, cmds, _, _, err := config.ParseOrGenerate(false)
+		cmds, err := config.LoadDefaultCommands()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -223,15 +154,6 @@ func (s *EngineService) prepareAssetsAndCommands(deviceIPs []string, commandGrou
 	return assets, commands, nil
 }
 
-// listenEvents 事件监听协程
-func (s *EngineService) listenEvents(frontendBus chan report.ExecutorEvent) {
-	for ev := range frontendBus {
-		if s.wailsApp != nil {
-			s.wailsApp.Event.Emit("device:event", ev)
-		}
-	}
-}
-
 // StartBackup 启动核心备份动作
 func (s *EngineService) StartBackup() error {
 	settings, _, err := config.LoadSettings()
@@ -239,151 +161,34 @@ func (s *EngineService) StartBackup() error {
 		return err
 	}
 
-	assets, _, _, _, err := config.ParseOrGenerate(true) // isBackup = true
+	assets, err := config.LoadDeviceAssets()
 	if err != nil {
 		return err
 	}
 
 	if len(assets) == 0 {
-		return fmt.Errorf("资产池为空。请检查 csv 文件！")
+		return fmt.Errorf("设备资产为空，请先在设备页添加需要备份的设备")
 	}
 
 	// 初始化 Engine
 	ng := engine.NewEngine(assets, nil, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-	// 【修改】设置到全局状态
-	if err := engine.GetGlobalState().SetActiveEngine(ng, "backup_service", ""); err != nil {
-		return err
-	}
-	defer engine.GetGlobalState().ClearActiveEngine()
+	_, err = getExecutionManager().RunEngine(
+		ng,
+		"backup_service",
+		"",
+		"配置备份",
+		func(ctx context.Context) error {
+			return ng.RunBackup(ctx)
+		},
+	)
 
-	// 创建并设置 Tracker
-	tracker := report.NewProgressTracker(len(assets))
-	tracker.SetTaskName("配置备份")
-	ng.SetTracker(tracker)
-
-	// 设置当前 Tracker 引用
-	s.setCurrentTracker(tracker)
-
-	// 使用事件桥接器启动事件监听
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// 保存 cancelFunc
-	s.cancelMu.Lock()
-	s.cancelFunc = cancel
-	s.cancelMu.Unlock()
-
-	// 启动快照定时推送
-	s.startSnapshotTicker(ctx)
-
-	// 使用简化的事件监听器
-	go s.listenEvents(ng.FrontendBus)
-
-	// 开始执行备份任务
-	ng.RunBackup(ctx)
-
-	// 停止快照推送
-	s.stopSnapshotTicker()
-
-	// 发送执行完成事件
-	s.emitFinishedEvent()
-
-	// 清理 Tracker 引用
-	s.clearCurrentTracker()
-
-	// 清理 cancelFunc
-	s.cancelMu.Lock()
-	s.cancelFunc = nil
-	s.cancelMu.Unlock()
-
-	return nil
+	return err
 }
 
 // GetExecutionSnapshot 获取当前执行的快照
 // 前端调用此方法获取完整的执行状态，无需前端计算
 func (s *EngineService) GetExecutionSnapshot() *report.ExecutionSnapshot {
-	s.trackerMu.RLock()
-	defer s.trackerMu.RUnlock()
-
-	if s.currentTracker == nil {
-		return nil
-	}
-
-	return s.currentTracker.GetSnapshot()
-}
-
-// setCurrentTracker 设置当前的 Tracker 引用
-func (s *EngineService) setCurrentTracker(tracker *report.ProgressTracker) {
-	s.trackerMu.Lock()
-	defer s.trackerMu.Unlock()
-	s.currentTracker = tracker
-}
-
-// clearCurrentTracker 清除当前的 Tracker 引用
-func (s *EngineService) clearCurrentTracker() {
-	s.trackerMu.Lock()
-	defer s.trackerMu.Unlock()
-	s.currentTracker = nil
-}
-
-// startSnapshotTicker 启动快照定时推送
-func (s *EngineService) startSnapshotTicker(ctx context.Context) {
-	s.stopMu.Lock()
-	s.snapshotTicker = time.NewTicker(SnapshotInterval)
-	s.snapshotStop = make(chan struct{})
-	s.stopOnce = sync.Once{} // 重置 Once
-	s.stopMu.Unlock()
-
-	go func() {
-		for {
-			select {
-			case <-s.snapshotTicker.C:
-				snapshot := s.GetExecutionSnapshot()
-				if snapshot != nil && s.wailsApp != nil {
-					s.wailsApp.Event.Emit(SnapshotEventName, snapshot)
-				}
-			case <-ctx.Done():
-				s.stopSnapshotTicker()
-				return
-			case <-s.snapshotStop:
-				return
-			}
-		}
-	}()
-}
-
-// stopSnapshotTicker 停止快照定时推送（线程安全，可重复调用）
-func (s *EngineService) stopSnapshotTicker() {
-	s.stopOnce.Do(func() {
-		s.stopMu.Lock()
-		defer s.stopMu.Unlock()
-
-		if s.snapshotTicker != nil {
-			s.snapshotTicker.Stop()
-			s.snapshotTicker = nil
-		}
-		if s.snapshotStop != nil {
-			close(s.snapshotStop)
-			s.snapshotStop = nil
-		}
-	})
-}
-
-// emitFinishedEvent 发送执行完成事件
-func (s *EngineService) emitFinishedEvent() {
-	// 发送最终快照（100% 进度）
-	snapshot := s.GetExecutionSnapshot()
-	if snapshot != nil {
-		snapshot.Progress = 100
-		snapshot.IsRunning = false
-		if s.wailsApp != nil {
-			s.wailsApp.Event.Emit(SnapshotEventName, snapshot)
-		}
-	}
-
-	// 发送完成事件
-	if s.wailsApp != nil {
-		s.wailsApp.Event.Emit(ExecutionFinishedEvent)
-	}
+	return getExecutionManager().GetExecutionSnapshot()
 }

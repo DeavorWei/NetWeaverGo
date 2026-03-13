@@ -35,12 +35,16 @@ export const DeviceAPI = {
   listDevices: DeviceServiceBinding.ListDevices,
   /** 新增设备 */
   addDevice: DeviceServiceBinding.AddDevice,
+  /** 批量新增设备 */
+  addDevices: DeviceServiceBinding.AddDevices,
   /** 更新设备 */
   updateDevice: DeviceServiceBinding.UpdateDevice,
-  /** 删除设备 */
+  /** 批量更新设备 */
+  updateDevices: DeviceServiceBinding.UpdateDevices,
+  /** 删除单台设备 */
   deleteDevice: DeviceServiceBinding.DeleteDevice,
-  /** 批量保存设备列表 */
-  saveDevices: DeviceServiceBinding.SaveDevices,
+  /** 批量删除设备 */
+  deleteDevices: DeviceServiceBinding.DeleteDevices,
   /** 获取协议默认端口映射 */
   getProtocolDefaultPorts: DeviceServiceBinding.GetProtocolDefaultPorts,
   /** 获取有效协议列表 */

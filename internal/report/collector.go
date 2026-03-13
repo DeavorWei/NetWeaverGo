@@ -142,17 +142,17 @@ func (p *ProgressTracker) Suspend() {
 	p.paused = true
 }
 
-// CollectEvent 直接收集事件（用于从 worker 接收事件）
-func (p *ProgressTracker) CollectEvent(evt ExecutorEvent) {
-	p.handleEvent(evt)
-}
-
 // Resume 恢复界面刷新
 func (p *ProgressTracker) Resume() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	logger.DebugAll("Report", "-", "用户输入处置结束，大盘状态监控解封，业务继续推进执行.")
 	p.paused = false
+}
+
+// TrackEvent 将外部事件汇入统一进度追踪器
+func (p *ProgressTracker) TrackEvent(evt ExecutorEvent) {
+	p.handleEvent(evt)
 }
 
 func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
@@ -496,46 +496,6 @@ func (p *ProgressTracker) GetSnapshot() *ExecutionSnapshot {
 	}
 }
 
-// GetDeviceSnapshot 获取单个设备的快照
-func (p *ProgressTracker) GetDeviceSnapshot(ip string) *DeviceViewState {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	summary, exists := p.status[ip]
-	if !exists {
-		return nil
-	}
-
-	logs, truncated := p.getDeviceLogsLocked(ip)
-
-	status := strings.ToLower(summary.Status)
-	switch status {
-	case "running":
-		status = "running"
-	case "success":
-		status = "success"
-	case "error", "aborted":
-		status = "error"
-	case "warning":
-		status = "success"
-	case "init":
-		status = "waiting"
-	default:
-		status = "waiting"
-	}
-
-	return &DeviceViewState{
-		IP:        summary.IP,
-		Status:    status,
-		Logs:      logs,
-		LogCount:  p.logCounts[ip],
-		Truncated: truncated,
-		CmdIndex:  summary.ExecCmds,
-		TotalCmd:  summary.TotalCmds,
-		Message:   summary.ErrorMsg,
-	}
-}
-
 // getDeviceLogsLocked 获取设备日志（已截断），必须在持有锁时调用
 func (p *ProgressTracker) getDeviceLogsLocked(ip string) ([]string, bool) {
 	// 从磁盘存储读取日志
@@ -559,36 +519,6 @@ func (p *ProgressTracker) getDeviceLogsLocked(ip string) ([]string, bool) {
 
 	truncated := totalCount > maxLogs
 	return logs, truncated
-}
-
-// AddDeviceLog 添加日志到设备（带上限控制）
-// 此方法由事件处理器调用
-func (p *ProgressTracker) AddDeviceLog(ip string, message string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	// 截断过长日志
-	maxLen := getMaxLogLength()
-	if len(message) > maxLen {
-		message = message[:maxLen] + "...[截断]"
-	}
-
-	// 【修复】添加 nil 检查
-	if p.logStorage != nil {
-		if err := p.logStorage.AppendLog(ip, message); err != nil {
-			logger.Error("Report", ip, "写入日志失败: %v", err)
-		}
-	}
-
-	// 【修复】更新计数时添加 nil 检查
-	if p.logCounts == nil {
-		p.logCounts = make(map[string]int)
-	}
-	if p.logStorage != nil {
-		p.logCounts[ip] = p.logStorage.GetLogCount(ip)
-	} else {
-		p.logCounts[ip] = 0 // 降级处理：无日志存储时计数为 0
-	}
 }
 
 // RegisterDevice 注册设备到有序列表（公共方法）

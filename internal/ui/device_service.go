@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -26,108 +25,37 @@ func (s *DeviceService) ServiceStartup(ctx context.Context, options application.
 
 // ListDevices 获取设备列表
 func (s *DeviceService) ListDevices() ([]config.DeviceAsset, error) {
-	assets, _, _, _, err := config.ParseOrGenerate(false)
-	return assets, err
+	return config.LoadDeviceAssets()
 }
 
 // AddDevice 新增设备
 func (s *DeviceService) AddDevice(device config.DeviceAsset) error {
-	// 校验设备信息
-	if err := config.ValidateDevice(device); err != nil {
-		return err
-	}
+	return config.CreateDevice(device)
+}
 
-	// 读取现有设备列表
-	devices, _, _, _, err := config.ParseOrGenerate(false)
-	if err != nil {
-		return err
-	}
-
-	// 检查 IP 是否已存在
-	for _, d := range devices {
-		if d.IP == device.IP {
-			return fmt.Errorf("IP 地址 %s 已存在", device.IP)
-		}
-	}
-
-	// 添加新设备
-	devices = append(devices, device)
-
-	// 保存到文件
-	return config.SaveInventory(devices)
+// AddDevices 批量新增设备
+func (s *DeviceService) AddDevices(devices []config.DeviceAsset) error {
+	return config.CreateDevices(devices)
 }
 
 // UpdateDevice 更新设备
-func (s *DeviceService) UpdateDevice(index int, device config.DeviceAsset) error {
-	// 校验设备信息
-	if err := config.ValidateDevice(device); err != nil {
-		return err
-	}
+func (s *DeviceService) UpdateDevice(id uint, device config.DeviceAsset) error {
+	return config.UpdateDevice(id, device)
+}
 
-	// 读取现有设备列表
-	devices, _, _, _, err := config.ParseOrGenerate(false)
-	if err != nil {
-		return err
-	}
-
-	// 检查索引有效性
-	if index < 0 || index >= len(devices) {
-		return fmt.Errorf("无效的设备索引: %d", index)
-	}
-
-	// 检查 IP 是否与其他设备冲突
-	for i, d := range devices {
-		if i != index && d.IP == device.IP {
-			return fmt.Errorf("IP 地址 %s 已被其他设备使用", device.IP)
-		}
-	}
-
-	// 更新设备
-	devices[index] = device
-
-	// 保存到文件
-	return config.SaveInventory(devices)
+// UpdateDevices 批量更新设备
+func (s *DeviceService) UpdateDevices(devices []config.DeviceAsset) error {
+	return config.UpdateDevices(devices)
 }
 
 // DeleteDevice 删除设备
-func (s *DeviceService) DeleteDevice(index int) error {
-	// 读取现有设备列表
-	devices, _, _, _, err := config.ParseOrGenerate(false)
-	if err != nil {
-		return err
-	}
-
-	// 检查索引有效性
-	if index < 0 || index >= len(devices) {
-		return fmt.Errorf("无效的设备索引: %d", index)
-	}
-
-	// 删除设备
-	devices = append(devices[:index], devices[index+1:]...)
-
-	// 保存到文件
-	return config.SaveInventory(devices)
+func (s *DeviceService) DeleteDevice(id uint) error {
+	return config.DeleteDevice(id)
 }
 
-// SaveDevices 批量保存设备列表
-func (s *DeviceService) SaveDevices(devices []config.DeviceAsset) error {
-	// 校验所有设备
-	for i, device := range devices {
-		if err := config.ValidateDevice(device); err != nil {
-			return fmt.Errorf("第 %d 台设备: %v", i+1, err)
-		}
-	}
-
-	// 检查 IP 重复
-	ipSet := make(map[string]bool)
-	for _, device := range devices {
-		if ipSet[device.IP] {
-			return fmt.Errorf("存在重复的 IP 地址: %s", device.IP)
-		}
-		ipSet[device.IP] = true
-	}
-
-	return config.SaveInventory(devices)
+// DeleteDevices 批量删除设备
+func (s *DeviceService) DeleteDevices(ids []uint) error {
+	return config.DeleteDevices(ids)
 }
 
 // GetProtocolDefaultPorts 获取协议默认端口映射

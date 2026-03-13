@@ -171,19 +171,10 @@ func runCLI(isBackup bool, nonInteractive bool, cliDebugSet, cliDebugValue, cliD
               Go 并发网络自动化编排/配置集散部署工具
                  NetWeaverGo - v1.0 CLI Engine`)
 
-	assets, err := config.LoadDeviceAssets()
+	assets, commands, err := config.LoadExecutionResources()
 	if err != nil {
 		logger.Error("System", "-", "[系统错误] %v", err)
 		os.Exit(1)
-	}
-
-	var commands []string
-	if !isBackup {
-		commands, err = config.LoadDefaultCommands()
-		if err != nil {
-			logger.Error("System", "-", "[系统错误] %v", err)
-			os.Exit(1)
-		}
 	}
 
 	if isNewSettings {

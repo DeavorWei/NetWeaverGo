@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/engine"
@@ -17,10 +16,6 @@ import (
 // TaskGroupService 任务组管理服务 - 负责任务组的增删改查和执行
 type TaskGroupService struct {
 	wailsApp *application.App
-
-	// 控制运行状态
-	isRunning bool
-	mu        sync.Mutex
 }
 
 // NewTaskGroupService 创建任务组服务实例
@@ -31,9 +26,9 @@ func NewTaskGroupService() *TaskGroupService {
 // ServiceStartup Wails 服务启动生命周期钩子
 func (s *TaskGroupService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	s.wailsApp = application.Get()
+	getExecutionManager().SetWailsApp(s.wailsApp)
 	// 设置全局 SuspendManager 的 Wails App 实例（如果 EngineService 尚未设置）
 	GetSuspendManager().SetWailsApp(s.wailsApp)
-	logger.Info("UI", "-", "任务组服务已就绪")
 	return nil
 }
 
@@ -70,35 +65,14 @@ func (s *TaskGroupService) ResolveSuspend(sessionIDOrIP string, action string) {
 
 // StartTaskGroup 启动任务组执行（并行执行模式）
 func (s *TaskGroupService) StartTaskGroup(id string) error {
-	// 首先获取全局引擎锁，防止与 EngineService 冲突
-	if err := engine.TryAcquireEngine("taskgroup_" + id); err != nil {
-		return err
-	}
-	// 确保在函数退出时释放全局锁
-	defer engine.ReleaseEngine()
-
-	s.mu.Lock()
-	if s.isRunning {
-		s.mu.Unlock()
-		return fmt.Errorf("引擎正在运行中，请勿重复启动")
-	}
-	s.isRunning = true
-	s.mu.Unlock()
-
-	defer func() {
-		s.mu.Lock()
-		s.isRunning = false
-		s.mu.Unlock()
-	}()
-
-	// 获取任务组
 	taskGroup, err := config.GetTaskGroup(id)
 	if err != nil {
 		return fmt.Errorf("获取任务组失败: %v", err)
 	}
 
-	// 更新状态为运行中
-	config.UpdateTaskGroupStatus(id, "running")
+	if err := config.UpdateTaskGroupStatus(id, "running"); err != nil {
+		return err
+	}
 
 	settings, _, err := config.LoadSettings()
 	if err != nil {
@@ -106,36 +80,23 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 		return err
 	}
 
-	// 获取所有设备
-	allAssets, _, _, _, err := config.ParseOrGenerate(false)
+	allAssets, err := config.LoadDeviceAssets()
 	if err != nil {
 		config.UpdateTaskGroupStatus(id, "failed")
 		return err
 	}
 
-	// 创建设备 IP 到 Asset 的映射，用于快速查找
-	assetMap := make(map[string]config.DeviceAsset)
+	assetMap := make(map[string]config.DeviceAsset, len(allAssets))
 	for _, asset := range allAssets {
 		assetMap[asset.IP] = asset
 	}
 
-	// 用于追踪执行状态
-	var executionWg sync.WaitGroup
-
-	// 创建根 context 用于取消所有并行任务
-	rootCtx, rootCancel := context.WithCancel(context.Background())
-	defer rootCancel()
-
-	// 使用 engine 实例 ID 追踪
-	engineInstanceID := fmt.Sprintf("taskgroup_%s", id)
-
+	var finalStatus string
 	switch taskGroup.Mode {
 	case "group":
-		// 模式A：一组命令 → 多台设备（所有设备执行相同命令集）
-		err = s.executeModeA(taskGroup, assetMap, settings, rootCtx, &executionWg)
+		finalStatus, err = s.executeModeA(taskGroup, assetMap, settings)
 	case "binding":
-		// 模式B：每台设备独立命令（每个任务项的设备执行各自的命令）
-		err = s.executeModeB(taskGroup, assetMap, settings, rootCtx, &executionWg)
+		finalStatus, err = s.executeModeB(taskGroup, assetMap, settings)
 	default:
 		err = fmt.Errorf("未知的任务组模式: %s", taskGroup.Mode)
 	}
@@ -145,20 +106,7 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 		return err
 	}
 
-	// 等待所有并行任务完成
-	executionWg.Wait()
-
-	// 确保所有事件都被处理完毕
-	time.Sleep(100 * time.Millisecond)
-
-	// 更新最终状态
-	config.UpdateTaskGroupStatus(id, "completed")
-	s.wailsApp.Event.Emit("engine:finished", map[string]interface{}{
-		"instanceID": engineInstanceID,
-		"status":     "completed",
-	})
-
-	return nil
+	return config.UpdateTaskGroupStatus(id, finalStatus)
 }
 
 // executeModeA 模式A执行：一组命令发送给所有设备
@@ -166,18 +114,12 @@ func (s *TaskGroupService) executeModeA(
 	taskGroup *config.TaskGroup,
 	assetMap map[string]config.DeviceAsset,
 	settings *config.GlobalSettings,
-	ctx context.Context,
-	wg *sync.WaitGroup,
-) error {
-	// 收集所有选中的设备（去重）
+) (string, error) {
 	assetSet := make(map[string]bool)
 	var allSelectedAssets []config.DeviceAsset
-
-	// 获取命令组（模式A下所有任务项使用相同命令组）
 	var commands []string
 
 	for _, item := range taskGroup.Items {
-		// 收集设备
 		for _, ip := range item.DeviceIPs {
 			if !assetSet[ip] {
 				assetSet[ip] = true
@@ -187,7 +129,6 @@ func (s *TaskGroupService) executeModeA(
 			}
 		}
 
-		// 获取第一个有效命令组
 		if len(commands) == 0 && item.CommandGroupID != "" {
 			group, err := config.GetCommandGroup(item.CommandGroupID)
 			if err == nil && len(group.Commands) > 0 {
@@ -197,30 +138,31 @@ func (s *TaskGroupService) executeModeA(
 	}
 
 	if len(allSelectedAssets) == 0 {
-		return fmt.Errorf("未选择任何有效设备")
+		return "", fmt.Errorf("未选择任何有效设备")
 	}
-
 	if len(commands) == 0 {
-		return fmt.Errorf("命令组为空或未配置")
+		return "", fmt.Errorf("命令组为空或未配置")
 	}
 
 	logger.Info("TaskGroup", "-", "模式A执行: %d 台设备, %d 条命令", len(allSelectedAssets), len(commands))
 
-	// 创建单个 Engine 实例执行所有设备
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	ng := engine.NewEngine(allSelectedAssets, commands, settings, false)
+	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
 
-		ng := engine.NewEngine(allSelectedAssets, commands, settings, false)
-		ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
+	tracker, err := getExecutionManager().RunEngine(
+		ng,
+		"task_group",
+		taskGroup.ID,
+		taskGroup.Name,
+		func(ctx context.Context) error {
+			return ng.Run(ctx)
+		},
+	)
+	if err != nil {
+		return "", err
+	}
 
-		// 启动事件监听
-		go s.listenEvents(ng.FrontendBus)
-
-		ng.Run(ctx)
-	}()
-
-	return nil
+	return deriveTaskGroupStatus(tracker), nil
 }
 
 // executeModeB 模式B执行：每台设备执行各自的独立命令
@@ -228,14 +170,18 @@ func (s *TaskGroupService) executeModeB(
 	taskGroup *config.TaskGroup,
 	assetMap map[string]config.DeviceAsset,
 	settings *config.GlobalSettings,
-	ctx context.Context,
-	wg *sync.WaitGroup,
-) error {
+) (string, error) {
 	logger.Info("TaskGroup", "-", "模式B执行: %d 个任务项", len(taskGroup.Items))
 
-	// 为每个任务项创建独立的 Engine 实例
+	type taskRun struct {
+		assets   []config.DeviceAsset
+		commands []string
+	}
+
+	var runs []taskRun
+	uniqueIPs := make(map[string]struct{})
+
 	for _, item := range taskGroup.Items {
-		// 过滤空命令
 		var commands []string
 		for _, cmd := range item.Commands {
 			trimmed := strings.TrimSpace(cmd)
@@ -243,54 +189,114 @@ func (s *TaskGroupService) executeModeB(
 				commands = append(commands, trimmed)
 			}
 		}
-
 		if len(commands) == 0 {
 			logger.Warn("TaskGroup", "-", "任务项命令为空，跳过")
 			continue
 		}
 
-		// 收集该任务项的设备
 		var itemAssets []config.DeviceAsset
 		for _, ip := range item.DeviceIPs {
 			if asset, ok := assetMap[ip]; ok {
 				itemAssets = append(itemAssets, asset)
+				uniqueIPs[asset.IP] = struct{}{}
 			}
 		}
-
 		if len(itemAssets) == 0 {
 			logger.Warn("TaskGroup", "-", "任务项设备为空，跳过")
 			continue
 		}
 
-		logger.Info("TaskGroup", "-", "启动独立任务: %d 台设备, %d 条命令", len(itemAssets), len(commands))
-
-		// 为每个任务项创建独立的 Engine 实例
-		// 注意：这里需要捕获循环变量，使用局部变量传递
-		assets := itemAssets
-		cmds := commands
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			ng := engine.NewEngine(assets, cmds, settings, false)
-			ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
-
-			// 启动事件监听
-			go s.listenEvents(ng.FrontendBus)
-
-			ng.Run(ctx)
-		}()
+		runs = append(runs, taskRun{
+			assets:   itemAssets,
+			commands: commands,
+		})
 	}
 
-	return nil
+	if len(runs) == 0 {
+		return "", fmt.Errorf("任务组中没有可执行的任务项")
+	}
+
+	totalDevices := len(uniqueIPs)
+	if totalDevices == 0 {
+		return "", fmt.Errorf("任务组中没有可执行设备")
+	}
+
+	coordinator := engine.NewEngine(nil, nil, settings, false)
+	session, err := getExecutionManager().BeginCompositeExecution(
+		coordinator,
+		"task_group",
+		taskGroup.ID,
+		taskGroup.Name,
+		totalDevices,
+	)
+	if err != nil {
+		return "", err
+	}
+	defer session.Finish()
+
+	if err := session.TransitionTo(engine.StateStarting); err != nil {
+		return "", err
+	}
+	if err := session.TransitionTo(engine.StateRunning); err != nil {
+		return "", err
+	}
+
+	var (
+		runWG       sync.WaitGroup
+		errMu       sync.Mutex
+		firstRunErr error
+		forwarders  = make([]<-chan struct{}, 0, len(runs))
+	)
+
+	for _, run := range runs {
+		logger.Info("TaskGroup", "-", "启动独立任务: %d 台设备, %d 条命令", len(run.assets), len(run.commands))
+
+		ng := engine.NewEngine(run.assets, run.commands, settings, false)
+		ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
+
+		forwarders = append(forwarders, getExecutionManager().listenEvents(ng.FrontendBus, session.Tracker().TrackEvent))
+
+		runWG.Add(1)
+		go func(ng *engine.Engine) {
+			defer runWG.Done()
+
+			if err := ng.Run(session.Context()); err != nil {
+				errMu.Lock()
+				if firstRunErr == nil {
+					firstRunErr = err
+				}
+				errMu.Unlock()
+			}
+		}(ng)
+	}
+
+	runWG.Wait()
+	for _, done := range forwarders {
+		<-done
+	}
+
+	if firstRunErr != nil {
+		return "", firstRunErr
+	}
+
+	return deriveTaskGroupStatus(session.Tracker()), nil
 }
 
-// listenEvents 事件监听协程（简化版）
-func (s *TaskGroupService) listenEvents(frontendBus chan report.ExecutorEvent) {
-	for ev := range frontendBus {
-		if s.wailsApp != nil {
-			s.wailsApp.Event.Emit("device:event", ev)
-		}
+func deriveTaskGroupStatus(tracker *report.ProgressTracker) string {
+	total, finished, successCount, errorCount := tracker.GetStats()
+
+	if total == 0 {
+		return "failed"
 	}
+	if errorCount > 0 {
+		return "failed"
+	}
+	if finished < total {
+		return "failed"
+	}
+	if successCount < total {
+		return "failed"
+	}
+
+	return "completed"
 }

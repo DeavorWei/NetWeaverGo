@@ -101,12 +101,12 @@ import { SettingsAPI } from '../services/api'
 
 const deviceCount  = ref(0)
 const commandCount = ref(0)
-const status       = ref('Idle')
+const status       = ref('Checking')
 
 const statusColor = computed(() => {
   switch (status.value) {
     case 'Ready':          return 'text-success'
-    case 'Config Missing': return 'text-warning'
+    case 'Setup Required': return 'text-warning'
     case 'Error':          return 'text-error'
     default:               return 'text-text-muted'
   }
@@ -114,7 +114,7 @@ const statusColor = computed(() => {
 const statusBg = computed(() => {
   switch (status.value) {
     case 'Ready':          return 'bg-success/10'
-    case 'Config Missing': return 'bg-warning/10'
+    case 'Setup Required': return 'bg-warning/10'
     case 'Error':          return 'bg-error/10'
     default:               return 'bg-bg-panel'
   }
@@ -122,33 +122,43 @@ const statusBg = computed(() => {
 const statusDot = computed(() => {
   switch (status.value) {
     case 'Ready':          return 'bg-success animate-pulse'
-    case 'Config Missing': return 'bg-warning'
+    case 'Setup Required': return 'bg-warning'
     case 'Error':          return 'bg-error'
     default:               return 'bg-text-muted'
   }
 })
 const statusLabel = computed(() => {
-  const map: Record<string, string> = { Ready: 'Ready', 'Config Missing': 'Missing', Error: 'Error', Idle: 'Idle' }
+  const map: Record<string, string> = { Ready: 'Ready', 'Setup Required': 'Pending', Error: 'Error', Checking: 'Checking' }
   return map[status.value] ?? status.value
 })
 const statusDesc = computed(() => {
   switch (status.value) {
-    case 'Ready':          return '配置完整，可以开始任务'
-    case 'Config Missing': return '缺少必要配置文件'
-    case 'Error':          return '上次运行出现错误'
-    default:               return '等待配置加载'
+    case 'Ready':
+      return '设备资产和默认命令已就绪，可以开始任务'
+    case 'Setup Required':
+      if (deviceCount.value === 0 && commandCount.value === 0) {
+        return '请先添加设备资产并配置默认命令'
+      }
+      if (deviceCount.value === 0) {
+        return '请先添加设备资产'
+      }
+      return '请先配置默认命令，或创建任务组使用专属命令集'
+    case 'Error':
+      return '概览加载失败，请稍后重试'
+    default:
+      return '正在检查当前数据状态'
   }
 })
 
 onMounted(async () => {
   try {
-    const [assets, commands, missingFiles] = await SettingsAPI.ensureConfig()
+    const [assets, commands] = await SettingsAPI.ensureConfig()
     deviceCount.value  = assets   ? assets.length   : 0
     commandCount.value = commands ? commands.length  : 0
-    if (missingFiles && missingFiles.length > 0) {
-      status.value = 'Config Missing'
-    } else if (deviceCount.value > 0 && commandCount.value > 0) {
+    if (deviceCount.value > 0 && commandCount.value > 0) {
       status.value = 'Ready'
+    } else {
+      status.value = 'Setup Required'
     }
   } catch (err) {
     console.error('Failed to load dashboard data:', err)

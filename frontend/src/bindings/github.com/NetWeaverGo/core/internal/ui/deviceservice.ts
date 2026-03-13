@@ -22,10 +22,24 @@ export function AddDevice(device: config$0.DeviceAsset): $CancellablePromise<voi
 }
 
 /**
+ * AddDevices 批量新增设备
+ */
+export function AddDevices(devices: config$0.DeviceAsset[]): $CancellablePromise<void> {
+    return $Call.ByID(1783758977, devices);
+}
+
+/**
  * DeleteDevice 删除设备
  */
-export function DeleteDevice(index: number): $CancellablePromise<void> {
-    return $Call.ByID(2793883322, index);
+export function DeleteDevice(id: number): $CancellablePromise<void> {
+    return $Call.ByID(2793883322, id);
+}
+
+/**
+ * DeleteDevices 批量删除设备
+ */
+export function DeleteDevices(ids: number[]): $CancellablePromise<void> {
+    return $Call.ByID(4025773675, ids);
 }
 
 /**
@@ -56,17 +70,17 @@ export function ListDevices(): $CancellablePromise<config$0.DeviceAsset[]> {
 }
 
 /**
- * SaveDevices 批量保存设备列表
+ * UpdateDevice 更新设备
  */
-export function SaveDevices(devices: config$0.DeviceAsset[]): $CancellablePromise<void> {
-    return $Call.ByID(3296917977, devices);
+export function UpdateDevice(id: number, device: config$0.DeviceAsset): $CancellablePromise<void> {
+    return $Call.ByID(350852692, id, device);
 }
 
 /**
- * UpdateDevice 更新设备
+ * UpdateDevices 批量更新设备
  */
-export function UpdateDevice(index: number, device: config$0.DeviceAsset): $CancellablePromise<void> {
-    return $Call.ByID(350852692, index, device);
+export function UpdateDevices(devices: config$0.DeviceAsset[]): $CancellablePromise<void> {
+    return $Call.ByID(314007397, devices);
 }
 
 // Private type creation functions

@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -21,7 +20,7 @@ type DeviceAsset struct {
 	Username string   `json:"username"`
 	Password string   `json:"password"`
 	Group    string   `json:"group" gorm:"column:group_name"` // 设备分组
-	Tags     []string `json:"tags" gorm:"serializer:json"`  // 设备标签列表
+	Tags     []string `json:"tags" gorm:"serializer:json"`    // 设备标签列表
 }
 
 // 协议默认端口映射
@@ -39,23 +38,51 @@ const (
 	configFile    = "config.txt"
 )
 
-// ParseOrGenerate 尝试获取数据库内的设备和默认命令
-func ParseOrGenerate(isBackup bool) ([]DeviceAsset, []string, []string, []string, error) {
-	logger.Debug("Config", "-", "开始从数据库获取设备和默认命令")
+// LoadExecutionResources 获取执行所需的设备资产和默认命令组
+func LoadExecutionResources() ([]DeviceAsset, []string, error) {
+	devices, err := LoadDeviceAssets()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	commands, err := LoadDefaultCommands()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return devices, commands, nil
+}
+
+// LoadDeviceAssets 从数据库加载全部设备资产
+func LoadDeviceAssets() ([]DeviceAsset, error) {
+	logger.Debug("Config", "-", "开始从数据库加载设备资产")
+	if DB == nil {
+		return nil, fmt.Errorf("数据库未初始化")
+	}
+
 	var devices []DeviceAsset
-	if DB != nil {
-		DB.Find(&devices)
+	if err := DB.Order("ip ASC").Find(&devices).Error; err != nil {
+		return nil, err
+	}
+	return devices, nil
+}
+
+// LoadDefaultCommands 从默认命令组加载命令列表
+func LoadDefaultCommands() ([]string, error) {
+	logger.Debug("Config", "-", "开始从数据库加载默认命令组")
+	if DB == nil {
+		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	var commands []string
-	if DB != nil {
-		var defaultGroup CommandGroup
-		if err := DB.Where("name = ?", "默认命令组").First(&defaultGroup).Error; err == nil {
-			commands = defaultGroup.Commands
+	var defaultGroup CommandGroup
+	if err := DB.Where("name = ?", "默认命令组").First(&defaultGroup).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return []string{}, nil
 		}
+		return nil, err
 	}
 
-	return devices, commands, nil, nil, nil
+	return append([]string(nil), defaultGroup.Commands...), nil
 }
 
 // readInventoryLegacy 读取并解析旧版资产清单文件
@@ -168,42 +195,6 @@ func readCommandsLegacy() ([]string, error) {
 	return commands, nil
 }
 
-// generateInventoryTemplate 生成默认的资产清单模板
-func generateInventoryTemplate() {
-	cwd, _ := os.Getwd()
-	path := filepath.Join(cwd, inventoryFile)
-	file, err := os.Create(path)
-	if err != nil {
-		fmt.Printf("无法创建资产模板文件: %v\n", err)
-		return
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	writer.Write([]string{"IP", "Port", "Protocol", "Username", "Password", "Group", "Tag"})
-	writer.Write([]string{"192.168.1.10", "22", "SSH", "admin", "Admin@123", "核心交换机", "生产环境"})
-	writer.Write([]string{"192.168.1.11", "161", "SNMP", "public", "public", "接入交换机", "测试环境"})
-}
-
-// generateConfigTemplate 生成默认的命令列表模板
-func generateConfigTemplate() {
-	cwd, _ := os.Getwd()
-	path := filepath.Join(cwd, configFile)
-	content := []byte(`# 在此输入需要批量下发的交换机命令，每行一条
-# 空行和以 # 开头的行将被忽略
-
-system-view
-display interface brief
-quit
-`)
-	err := os.WriteFile(path, content, 0666)
-	if err != nil {
-		fmt.Printf("无法创建命令模板文件: %v\n", err)
-	}
-}
-
 // isValidProtocol 检查协议是否有效
 func isValidProtocol(protocol string) bool {
 	for _, p := range ValidProtocols {
@@ -274,22 +265,236 @@ func ValidateDevice(device DeviceAsset) error {
 	return nil
 }
 
-// SaveCommandsLegacy 保存命令列表到文件 (已遗弃，仅为兼容保留)
-func SaveCommandsLegacy(commands []string) error {
-	cwd, _ := os.Getwd()
-	path := filepath.Join(cwd, configFile)
+func normalizeDevice(device *DeviceAsset) {
+	device.IP = strings.TrimSpace(device.IP)
+	device.Protocol = strings.ToUpper(strings.TrimSpace(device.Protocol))
+	device.Username = strings.TrimSpace(device.Username)
+	device.Password = strings.TrimSpace(device.Password)
+	device.Group = strings.TrimSpace(device.Group)
 
-	var content strings.Builder
-	for _, cmd := range commands {
-		content.WriteString(cmd + "\n")
+	if len(device.Tags) == 0 {
+		device.Tags = []string{}
+		return
 	}
 
-	err := os.WriteFile(path, []byte(content.String()), 0666)
-	if err != nil {
-		return fmt.Errorf("无法保存命令文件: %v", err)
+	tags := make([]string, 0, len(device.Tags))
+	seen := make(map[string]struct{}, len(device.Tags))
+	for _, tag := range device.Tags {
+		trimmed := strings.TrimSpace(tag)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		tags = append(tags, trimmed)
+	}
+	device.Tags = tags
+}
+
+func validateDevicesForWrite(devices []DeviceAsset) error {
+	ipSet := make(map[string]struct{}, len(devices))
+	idSet := make(map[uint]struct{}, len(devices))
+
+	for i := range devices {
+		normalizeDevice(&devices[i])
+		if err := ValidateDevice(devices[i]); err != nil {
+			return fmt.Errorf("第 %d 台设备: %v", i+1, err)
+		}
+
+		if _, exists := ipSet[devices[i].IP]; exists {
+			return fmt.Errorf("存在重复的 IP 地址: %s", devices[i].IP)
+		}
+		ipSet[devices[i].IP] = struct{}{}
+
+		if devices[i].ID != 0 {
+			if _, exists := idSet[devices[i].ID]; exists {
+				return fmt.Errorf("存在重复的设备 ID: %d", devices[i].ID)
+			}
+			idSet[devices[i].ID] = struct{}{}
+		}
 	}
 
-	logger.Info("Config", "-", "成功保存 %d 条命令到 %s", len(commands), configFile)
+	return nil
+}
+
+// CreateDevice 创建单台设备
+func CreateDevice(device DeviceAsset) error {
+	if DB == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+
+	normalizeDevice(&device)
+	if err := ValidateDevice(device); err != nil {
+		return err
+	}
+
+	var count int64
+	if err := DB.Model(&DeviceAsset{}).Where("ip = ?", device.IP).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("IP 地址 %s 已存在", device.IP)
+	}
+
+	device.ID = 0
+	return DB.Create(&device).Error
+}
+
+// CreateDevices 批量创建设备
+func CreateDevices(devices []DeviceAsset) error {
+	if DB == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+	if len(devices) == 0 {
+		return nil
+	}
+
+	for i := range devices {
+		devices[i].ID = 0
+	}
+	if err := validateDevicesForWrite(devices); err != nil {
+		return err
+	}
+
+	ips := make([]string, 0, len(devices))
+	for _, device := range devices {
+		ips = append(ips, device.IP)
+	}
+
+	var existing []DeviceAsset
+	if err := DB.Where("ip IN ?", ips).Find(&existing).Error; err != nil {
+		return err
+	}
+	if len(existing) > 0 {
+		return fmt.Errorf("IP 地址 %s 已存在", existing[0].IP)
+	}
+
+	return DB.Create(&devices).Error
+}
+
+// UpdateDevice 更新单台设备
+func UpdateDevice(id uint, device DeviceAsset) error {
+	if DB == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+	if id == 0 {
+		return fmt.Errorf("无效的设备 ID")
+	}
+
+	device.ID = id
+	if err := validateDevicesForWrite([]DeviceAsset{device}); err != nil {
+		return err
+	}
+
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var existing DeviceAsset
+		if err := tx.First(&existing, id).Error; err != nil {
+			return fmt.Errorf("未找到设备: %d", id)
+		}
+
+		var conflict DeviceAsset
+		err := tx.Where("ip = ? AND id <> ?", device.IP, id).First(&conflict).Error
+		if err == nil {
+			return fmt.Errorf("IP 地址 %s 已被其他设备使用", device.IP)
+		}
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+
+		return tx.Save(&device).Error
+	})
+}
+
+// UpdateDevices 批量更新设备
+func UpdateDevices(devices []DeviceAsset) error {
+	if DB == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+	if len(devices) == 0 {
+		return nil
+	}
+
+	if err := validateDevicesForWrite(devices); err != nil {
+		return err
+	}
+
+	ids := make([]uint, 0, len(devices))
+	ips := make([]string, 0, len(devices))
+	idSet := make(map[uint]struct{}, len(devices))
+	for _, device := range devices {
+		if device.ID == 0 {
+			return fmt.Errorf("批量更新时存在无效设备 ID")
+		}
+		ids = append(ids, device.ID)
+		ips = append(ips, device.IP)
+		idSet[device.ID] = struct{}{}
+	}
+
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var existing []DeviceAsset
+		if err := tx.Where("id IN ?", ids).Find(&existing).Error; err != nil {
+			return err
+		}
+		if len(existing) != len(ids) {
+			return fmt.Errorf("部分设备不存在，无法完成批量更新")
+		}
+
+		var conflicts []DeviceAsset
+		if err := tx.Where("ip IN ?", ips).Find(&conflicts).Error; err != nil {
+			return err
+		}
+		for _, conflict := range conflicts {
+			if _, ok := idSet[conflict.ID]; !ok {
+				return fmt.Errorf("IP 地址 %s 已被其他设备使用", conflict.IP)
+			}
+		}
+
+		for _, device := range devices {
+			if err := tx.Save(&device).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// DeleteDevice 删除单台设备
+func DeleteDevice(id uint) error {
+	if DB == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+	if id == 0 {
+		return fmt.Errorf("无效的设备 ID")
+	}
+
+	result := DB.Delete(&DeviceAsset{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("未找到设备: %d", id)
+	}
+	return nil
+}
+
+// DeleteDevices 批量删除设备
+func DeleteDevices(ids []uint) error {
+	if DB == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	result := DB.Where("id IN ?", ids).Delete(&DeviceAsset{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("未找到可删除的设备")
+	}
 	return nil
 }
 
@@ -321,22 +526,3 @@ func SaveCommands(commands []string) error {
 	group.UpdatedAt = nowFormatted()
 	return DB.Save(&group).Error
 }
-
-// SaveInventory 保存设备列表到数据库（全量覆盖）
-func SaveInventory(devices []DeviceAsset) error {
-	if DB == nil {
-		return fmt.Errorf("数据库未初始化")
-	}
-
-	return DB.Transaction(func(tx *gorm.DB) error {
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DeviceAsset{})
-		if len(devices) > 0 {
-			for i := range devices {
-				devices[i].ID = 0 // 重置ID以重新排列
-			}
-			return tx.Create(&devices).Error
-		}
-		return nil
-	})
-}
-

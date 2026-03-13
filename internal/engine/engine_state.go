@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"context"
 	"errors"
 	"sync"
 )
@@ -108,43 +107,4 @@ func (sm *EngineStateManager) IsClosing() bool {
 	defer sm.mu.RUnlock()
 	// 显式检查，不依赖枚举值顺序
 	return sm.state == StateClosing || sm.state == StateClosed
-}
-
-// EngineStateContext 带状态的 Context 包装
-type EngineStateContext struct {
-	context.Context
-	stateManager *EngineStateManager
-}
-
-// NewEngineStateContext 创建带状态管理的 Context
-func NewEngineStateContext(parent context.Context) *EngineStateContext {
-	return &EngineStateContext{
-		Context:      parent,
-		stateManager: NewEngineStateManager(),
-	}
-}
-
-// StateManager 获取状态管理器
-func (esc *EngineStateContext) StateManager() *EngineStateManager {
-	return esc.stateManager
-}
-
-// State 获取当前状态
-func (esc *EngineStateContext) State() EngineState {
-	return esc.stateManager.State()
-}
-
-// IsRunning 检查是否运行中
-func (esc *EngineStateContext) IsRunning() bool {
-	return esc.stateManager.IsRunning()
-}
-
-// IsClosing 检查是否正在关闭
-func (esc *EngineStateContext) IsClosing() bool {
-	return esc.stateManager.IsClosing()
-}
-
-// TransitionTo 状态转移
-func (esc *EngineStateContext) TransitionTo(newState EngineState) error {
-	return esc.stateManager.TransitionTo(newState)
 }

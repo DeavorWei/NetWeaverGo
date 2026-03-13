@@ -294,37 +294,6 @@ func SaveRuntimeConfig(db *gorm.DB, config RuntimeConfig) error {
 	})
 }
 
-// GetRuntimeConfigValue 获取单个配置值
-func GetRuntimeConfigValue(db *gorm.DB, category, key string) (string, error) {
-	var setting RuntimeSetting
-	err := db.Where("category = ? AND key = ?", category, key).First(&setting).Error
-	if err != nil {
-		return "", err
-	}
-	return setting.Value, nil
-}
-
-// SetRuntimeConfigValue 设置单个配置值
-func SetRuntimeConfigValue(db *gorm.DB, category, key, value string) error {
-	result := db.Model(&RuntimeSetting{}).
-		Where("category = ? AND key = ?", category, key).
-		Update("value", value)
-
-	if result.Error != nil {
-		return result.Error
-	}
-
-	if result.RowsAffected == 0 {
-		return db.Create(&RuntimeSetting{
-			Category: category,
-			Key:      key,
-			Value:    value,
-		}).Error
-	}
-
-	return nil
-}
-
 // RuntimeConfigManager 运行时配置管理器（支持热更新）
 type RuntimeConfigManager struct {
 	db     *gorm.DB

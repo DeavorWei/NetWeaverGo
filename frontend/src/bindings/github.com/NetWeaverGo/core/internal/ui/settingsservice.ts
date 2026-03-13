@@ -19,13 +19,12 @@ import * as config$0 from "../config/models.js";
 import * as $models from "./models.js";
 
 /**
- * EnsureConfig 检查必需配置文件并返回是否有文件遗漏，以便前端提示
+ * EnsureConfig 返回当前数据库中的设备资产和默认命令组，供首页展示概况
  */
-export function EnsureConfig(): $CancellablePromise<[config$0.DeviceAsset[], string[], string[]]> {
+export function EnsureConfig(): $CancellablePromise<[config$0.DeviceAsset[], string[]]> {
     return $Call.ByID(2867805956).then(($result: any) => {
         $result[0] = $$createType1($result[0]);
         $result[1] = $$createType2($result[1]);
-        $result[2] = $$createType2($result[2]);
         return $result;
     });
 }
