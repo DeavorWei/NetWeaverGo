@@ -393,6 +393,17 @@ func UpdateDevice(id uint, device DeviceAsset) error {
 		if err := tx.First(&existing, id).Error; err != nil {
 			return fmt.Errorf("未找到设备: %d", id)
 		}
+		logger.DebugAll(
+			"Config",
+			existing.IP,
+			"收到单设备更新请求: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q, tags=%q->%q",
+			id,
+			existing.Protocol, device.Protocol,
+			existing.Port, device.Port,
+			existing.Group, device.Group,
+			existing.Username, device.Username,
+			strings.Join(existing.Tags, ","), strings.Join(device.Tags, ","),
+		)
 
 		var conflict DeviceAsset
 		err := tx.Where("ip = ? AND id <> ?", device.IP, id).First(&conflict).Error
@@ -403,7 +414,11 @@ func UpdateDevice(id uint, device DeviceAsset) error {
 			return err
 		}
 
-		return tx.Save(&device).Error
+		if err := tx.Save(&device).Error; err != nil {
+			return err
+		}
+		logger.DebugAll("Config", device.IP, "单设备更新完成: id=%d", id)
+		return nil
 	})
 }
 
@@ -432,6 +447,7 @@ func UpdateDevices(devices []DeviceAsset) error {
 		idSet[device.ID] = struct{}{}
 	}
 
+	logger.DebugAll("Config", "-", "收到批量设备更新请求: count=%d", len(devices))
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var existing []DeviceAsset
 		if err := tx.Where("id IN ?", ids).Find(&existing).Error; err != nil {
@@ -439,6 +455,10 @@ func UpdateDevices(devices []DeviceAsset) error {
 		}
 		if len(existing) != len(ids) {
 			return fmt.Errorf("部分设备不存在，无法完成批量更新")
+		}
+		existingByID := make(map[uint]DeviceAsset, len(existing))
+		for _, item := range existing {
+			existingByID[item.ID] = item
 		}
 
 		var conflicts []DeviceAsset
@@ -452,10 +472,25 @@ func UpdateDevices(devices []DeviceAsset) error {
 		}
 
 		for _, device := range devices {
+			old, ok := existingByID[device.ID]
+			if ok {
+				logger.DebugAll(
+					"Config",
+					old.IP,
+					"批量更新设备: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q, tags=%q->%q",
+					device.ID,
+					old.Protocol, device.Protocol,
+					old.Port, device.Port,
+					old.Group, device.Group,
+					old.Username, device.Username,
+					strings.Join(old.Tags, ","), strings.Join(device.Tags, ","),
+				)
+			}
 			if err := tx.Save(&device).Error; err != nil {
 				return err
 			}
 		}
+		logger.DebugAll("Config", "-", "批量设备更新完成: count=%d", len(devices))
 		return nil
 	})
 }

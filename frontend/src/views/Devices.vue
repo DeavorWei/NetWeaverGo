@@ -75,6 +75,13 @@
       </button>
     </div>
 
+    <div
+      v-if="pageNotice"
+      class="px-3 py-2 text-sm text-error bg-error-bg border border-error/30 rounded-lg"
+    >
+      {{ pageNotice }}
+    </div>
+
     <!-- 数据表格 -->
     <div
       class="bg-bg-panel border border-border rounded-xl shadow-card overflow-hidden"
@@ -123,8 +130,10 @@
                   分组
                   <button
                     @click="openBatchEditModal('group')"
-                    class="p-0.5 text-text-muted hover:text-accent transition-colors"
-                    title="批量修改分组"
+                    :disabled="selectedCount === 0"
+                    class="p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    :class="selectedCount > 0 ? 'text-text-muted hover:text-accent' : 'text-text-muted/60'"
+                    :title="selectedCount > 0 ? '批量修改分组' : '请先勾选设备后再批量修改分组'"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -156,8 +165,10 @@
                   协议
                   <button
                     @click="openBatchEditModal('protocol')"
-                    class="p-0.5 text-text-muted hover:text-accent transition-colors"
-                    title="批量修改协议"
+                    :disabled="selectedCount === 0"
+                    class="p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    :class="selectedCount > 0 ? 'text-text-muted hover:text-accent' : 'text-text-muted/60'"
+                    :title="selectedCount > 0 ? '批量修改协议' : '请先勾选设备后再批量修改协议'"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -184,8 +195,10 @@
                   端口
                   <button
                     @click="openBatchEditModal('port')"
-                    class="p-0.5 text-text-muted hover:text-accent transition-colors"
-                    title="批量修改端口"
+                    :disabled="selectedCount === 0"
+                    class="p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    :class="selectedCount > 0 ? 'text-text-muted hover:text-accent' : 'text-text-muted/60'"
+                    :title="selectedCount > 0 ? '批量修改端口' : '请先勾选设备后再批量修改端口'"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -212,8 +225,10 @@
                   用户名
                   <button
                     @click="openBatchEditModal('username')"
-                    class="p-0.5 text-text-muted hover:text-accent transition-colors"
-                    title="批量修改用户名"
+                    :disabled="selectedCount === 0"
+                    class="p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    :class="selectedCount > 0 ? 'text-text-muted hover:text-accent' : 'text-text-muted/60'"
+                    :title="selectedCount > 0 ? '批量修改用户名' : '请先勾选设备后再批量修改用户名'"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -240,8 +255,10 @@
                   密码
                   <button
                     @click="openBatchEditModal('password')"
-                    class="p-0.5 text-text-muted hover:text-accent transition-colors"
-                    title="批量修改密码"
+                    :disabled="selectedCount === 0"
+                    class="p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    :class="selectedCount > 0 ? 'text-text-muted hover:text-accent' : 'text-text-muted/60'"
+                    :title="selectedCount > 0 ? '批量修改密码' : '请先勾选设备后再批量修改密码'"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -268,8 +285,10 @@
                   Tag
                   <button
                     @click="openBatchEditModal('tag')"
-                    class="p-0.5 text-text-muted hover:text-accent transition-colors"
-                    title="批量修改标签"
+                    :disabled="selectedCount === 0"
+                    class="p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    :class="selectedCount > 0 ? 'text-text-muted hover:text-accent' : 'text-text-muted/60'"
+                    :title="selectedCount > 0 ? '批量修改标签' : '请先勾选设备后再批量修改标签'"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -1154,6 +1173,8 @@ const batchField = ref<
 const batchValue = ref<string | number>("");
 const isBatchSaving = ref(false);
 const batchErrorMessage = ref("");
+const pageNotice = ref("");
+let pageNoticeTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 协议相关
 const protocolDefaultPorts = ref<Record<string, number>>({
@@ -1557,9 +1578,18 @@ function openBatchEditModal(
   field: "protocol" | "port" | "username" | "password" | "group" | "tag",
 ) {
   if (selectedCount.value === 0) {
+    pageNotice.value = "请先勾选设备，再使用批量编辑功能";
+    if (pageNoticeTimer) {
+      clearTimeout(pageNoticeTimer);
+    }
+    pageNoticeTimer = setTimeout(() => {
+      pageNotice.value = "";
+      pageNoticeTimer = null;
+    }, 2500);
     return;
   }
-  
+
+  pageNotice.value = "";
   batchField.value = field;
   batchErrorMessage.value = "";
 
@@ -1692,25 +1722,31 @@ function isSelected(id: number): boolean {
 }
 
 function toggleSelect(id: number) {
-  if (selectedIds.value.has(id)) {
-    selectedIds.value.delete(id);
+  const next = new Set(selectedIds.value);
+  if (next.has(id)) {
+    next.delete(id);
   } else {
-    selectedIds.value.add(id);
+    next.add(id);
   }
+  selectedIds.value = next;
+  pageNotice.value = "";
 }
 
 function toggleSelectAll() {
+  const next = new Set<number>();
   if (isAllSelected.value) {
-    selectedIds.value.clear();
+    selectedIds.value = next;
   } else {
     data.value.forEach((row) => {
-      selectedIds.value.add(row.id);
+      next.add(row.id);
     });
+    selectedIds.value = next;
   }
+  pageNotice.value = "";
 }
 
 function clearSelection() {
-  selectedIds.value.clear();
+  selectedIds.value = new Set<number>();
 }
 
 // ==================== 生命周期 ====================
