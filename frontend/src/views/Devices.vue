@@ -95,6 +95,7 @@
               >
                 <button
                   @click="toggleSelectAll"
+                  :disabled="isSelectingAll"
                   class="flex items-center justify-center w-4 h-4 mx-auto rounded border transition-all duration-200"
                   :class="[
                     isAllSelected
@@ -103,7 +104,7 @@
                         ? 'bg-accent/30 border-accent/50'
                         : 'border-border hover:border-accent',
                   ]"
-                  :title="isAllSelected ? '取消全选' : '全选当前页设备'"
+                  :title="isAllSelected ? '取消全选' : '全选全部设备'"
                 >
                   <svg
                     v-if="isAllSelected"
@@ -1141,8 +1142,9 @@ const searchOptions = [
 ];
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
-// 多选状态（存储当前页的选中设备 ID）
+// 多选状态（支持跨页，存储全量设备 ID）
 const selectedIds = ref<Set<number>>(new Set());
+const isSelectingAll = ref(false);
 
 // 弹窗状态
 const showModal = ref(false);
@@ -1224,17 +1226,15 @@ const batchFieldLabel = computed(() => {
 // 多选相关计算属性
 const selectedCount = computed(() => selectedIds.value.size);
 
-// 是否选中了当前页所有设备
+// 是否选中了全部设备
 const isAllSelected = computed(() => {
-  if (data.value.length === 0) return false;
-  return data.value.every((row) => selectedIds.value.has(row.id));
+  if (total.value === 0) return false;
+  return selectedIds.value.size === total.value;
 });
 
 // 是否部分选中
 const isIndeterminate = computed(() => {
-  if (data.value.length === 0) return false;
-  const selectedInPage = data.value.filter((row) => selectedIds.value.has(row.id)).length;
-  return selectedInPage > 0 && selectedInPage < data.value.length;
+  return selectedIds.value.size > 0 && selectedIds.value.size < total.value;
 });
 
 // ==================== 监听器 ====================
@@ -1291,8 +1291,6 @@ async function loadDevices() {
     total.value = result.total;
     totalPages.value = result.totalPages;
 
-    // 清空当前页选择（数据变化后）
-    selectedIds.value.clear();
   } catch (err) {
     console.error("加载设备列表失败:", err);
     data.value = [];
@@ -1619,11 +1617,18 @@ async function saveBatchEdit() {
   isBatchSaving.value = true;
 
   try {
-    // 获取选中的设备
-    const selectedDevices = data.value.filter((device) => selectedIds.value.has(device.id));
+    // 获取全量设备，并筛选当前选中的 ID（支持跨页选择）
+    const allDevices = (await DeviceAPI.listDevices()) as Device[];
+    const selectedDevices = allDevices.filter((device: Device) =>
+      selectedIds.value.has(device.id),
+    );
+    if (selectedDevices.length === 0) {
+      batchErrorMessage.value = "没有可修改的设备";
+      return;
+    }
     
     // 修改选中设备
-    const updatedDevices = selectedDevices.map((d) => {
+    const updatedDevices = selectedDevices.map((d: Device) => {
       const newDevice = { ...d };
       if (batchField.value === "protocol") {
         const newProtocol = batchValue.value as string;
@@ -1732,17 +1737,23 @@ function toggleSelect(id: number) {
   pageNotice.value = "";
 }
 
-function toggleSelectAll() {
-  const next = new Set<number>();
+async function toggleSelectAll() {
   if (isAllSelected.value) {
-    selectedIds.value = next;
-  } else {
-    data.value.forEach((row) => {
-      next.add(row.id);
-    });
-    selectedIds.value = next;
+    selectedIds.value = new Set<number>();
+    pageNotice.value = "";
+    return;
   }
-  pageNotice.value = "";
+
+  isSelectingAll.value = true;
+  try {
+    const allDevices = (await DeviceAPI.listDevices()) as Device[];
+    selectedIds.value = new Set<number>(allDevices.map((d: Device) => d.id));
+    pageNotice.value = "";
+  } catch (e: any) {
+    pageNotice.value = e?.message || "全选全部设备失败";
+  } finally {
+    isSelectingAll.value = false;
+  }
 }
 
 function clearSelection() {
