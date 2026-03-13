@@ -1,30 +1,35 @@
 <template>
-  <div class="animate-slide-in space-y-6">
+  <div class="settings-page animate-slide-in">
     <!-- 页面标题 -->
-    <div>
-      <p class="text-sm text-text-muted">管理应用程序全局运行参数</p>
+    <div class="settings-page-header">
+      <div class="space-y-1">
+        <h2 class="settings-page-title">系统设置</h2>
+        <p class="settings-page-subtitle">管理应用全局参数、日志策略与 SSH 安全策略</p>
+      </div>
+      <div class="settings-page-badge">Global Preferences</div>
     </div>
 
     <!-- 加载状态 -->
-    <div v-if="loading" class="flex items-center justify-center py-12">
+    <div v-if="loading" class="settings-loading">
       <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
       <span class="ml-3 text-text-muted">加载设置中...</span>
     </div>
 
     <!-- 设置表单 -->
-    <div v-else class="space-y-6">
+    <div v-else class="settings-content">
+      <div class="global-settings-panels-flow">
       <!-- 执行参数 -->
-      <div class="bg-bg-card border border-border rounded-xl p-5 shadow-card">
+      <div class="settings-card bg-bg-card border border-border rounded-xl p-5 shadow-card settings-panel-card">
         <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
           执行参数
         </h3>
-        <div class="grid grid-cols-2 gap-4">
+        <div class="settings-auto-grid">
           <!-- 最大并发数 -->
           <div class="space-y-2">
-            <label class="text-xs font-medium text-text-secondary">最大并发数</label>
+            <label class="settings-label">最大并发数 <HelpTip text="控制全局并发上限。若运行时配置设置了工作协程数，执行链会优先采用运行时配置。" /></label>
           <input
             type="number"
             v-model.number="settings.maxWorkers"
@@ -32,12 +37,11 @@
             max="256"
             class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
           />
-            <p class="text-xs text-text-muted">兼容配置入口；若下方运行时配置设置了工作协程数，执行链将优先采用运行时配置</p>
           </div>
 
           <!-- 错误处理模式 -->
           <div class="space-y-2">
-            <label class="text-xs font-medium text-text-secondary">错误处理模式</label>
+            <label class="settings-label">错误处理模式 <HelpTip text="命令执行出错时的处理策略：挂起询问、跳过继续或终止执行。" /></label>
           <select
             v-model="settings.errorMode"
             class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
@@ -46,83 +50,78 @@
               <option value="skip">跳过继续</option>
               <option value="abort">终止执行</option>
             </select>
-            <p class="text-xs text-text-muted">命令执行出错时的处理策略</p>
           </div>
         </div>
       </div>
 
       <!-- 超时设置 -->
-      <div class="bg-bg-card border border-border rounded-xl p-5 shadow-card">
+      <div class="settings-card bg-bg-card border border-border rounded-xl p-5 shadow-card settings-panel-card">
         <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
           超时设置
         </h3>
-        <div class="grid grid-cols-2 gap-4">
+        <div class="settings-auto-grid">
           <!-- 连接超时 -->
           <div class="space-y-2">
-            <label class="text-xs font-medium text-text-secondary">连接超时</label>
+            <label class="settings-label">连接超时 <HelpTip text="SSH/SFTP 连接阶段允许等待的最长时间，例如 10s。" /></label>
           <input
             type="text"
             v-model="settings.connectTimeout"
             placeholder="如: 10s"
             class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
           />
-            <p class="text-xs text-text-muted">SSH/SFTP 连接阶段超时时间</p>
           </div>
 
           <!-- 命令超时 -->
           <div class="space-y-2">
-            <label class="text-xs font-medium text-text-secondary">命令超时</label>
+            <label class="settings-label">命令超时 <HelpTip text="单条命令执行允许持续的最长时间，例如 30s。" /></label>
           <input
             type="text"
             v-model="settings.commandTimeout"
             placeholder="如: 30s"
             class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
           />
-            <p class="text-xs text-text-muted">单条命令执行超时时间</p>
           </div>
         </div>
       </div>
 
       <!-- 存储路径 -->
-      <div class="bg-bg-card border border-border rounded-xl p-5 shadow-card">
+      <div class="settings-card bg-bg-card border border-border rounded-xl p-5 shadow-card settings-panel-card">
         <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
           存储路径
         </h3>
-        <div class="grid grid-cols-2 gap-4">
+        <div class="settings-auto-grid">
           <!-- 输出目录 -->
           <div class="space-y-2">
-            <label class="text-xs font-medium text-text-secondary">输出目录</label>
+            <label class="settings-label">输出目录 <HelpTip text="回显输出与配置备份文件的保存目录。" /></label>
           <input
             type="text"
             v-model="settings.outputDir"
             placeholder="如: output"
             class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
           />
-            <p class="text-xs text-text-muted">回显输出与配置备份的存放目录</p>
           </div>
 
           <!-- 日志目录 -->
           <div class="space-y-2">
-            <label class="text-xs font-medium text-text-secondary">日志目录</label>
+            <label class="settings-label">日志目录 <HelpTip text="系统运行日志文件保存目录，默认 logs。" /></label>
           <input
             type="text"
             v-model="settings.logDir"
             placeholder="如: logs"
             class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
           />
-            <p class="text-xs text-text-muted">系统运行日志存放目录</p>
           </div>
         </div>
       </div>
 
       <!-- 调试日志设置 -->
-      <div class="bg-bg-card border border-border rounded-xl p-5 shadow-card">
+      <div class="settings-card bg-bg-card border border-border rounded-xl p-5 shadow-card settings-panel-card">
         <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -139,9 +138,9 @@
             <div class="space-y-1">
               <div class="flex items-center gap-2">
                 <span class="text-sm font-medium text-text-primary">启用 Debug 日志</span>
+                <HelpTip text="输出一般调试信息，适用于常规问题排查。" />
                 <span class="px-2 py-0.5 text-xs bg-info/20 text-info rounded">Debug</span>
               </div>
-              <p class="text-xs text-text-muted">输出一般调试信息，适用于常规问题排查</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input
@@ -158,9 +157,9 @@
             <div class="space-y-1">
               <div class="flex items-center gap-2">
                 <span class="text-sm font-medium text-text-primary">启用 DebugAll 日志</span>
+                <HelpTip text="输出全量详细日志，包含底层通信数据，日志体积会显著增加。" />
                 <span class="px-2 py-0.5 text-xs bg-warning/20 text-warning rounded">Verbose</span>
               </div>
-              <p class="text-xs text-text-muted">输出全量详细日志，包含底层通信数据，数据量较大</p>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input
@@ -190,7 +189,7 @@
       </div>
 
       <!-- SSH 算法配置 -->
-      <div class="bg-bg-card border border-border rounded-xl p-5 shadow-card">
+      <div class="settings-card bg-bg-card border border-border rounded-xl p-5 shadow-card settings-panel-card">
         <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -201,7 +200,7 @@
 
         <!-- 预设模式选择 -->
         <div class="space-y-2 mb-4">
-          <label class="text-xs font-medium text-text-secondary">预设模式</label>
+          <label class="settings-label">预设模式 <HelpTip :text="presetModeDescription || '选择 SSH 算法策略：安全优先、兼容模式或自定义。'" /></label>
           <select
             v-model="settings.sshAlgorithms.presetMode"
             class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
@@ -210,7 +209,6 @@
             <option value="compatible">兼容模式（推荐）</option>
             <option value="custom">自定义</option>
           </select>
-          <p class="text-xs text-text-muted">{{ presetModeDescription }}</p>
         </div>
 
         <!-- 预设模式说明 -->
@@ -246,7 +244,7 @@
 
           <!-- 加密算法 -->
           <div class="space-y-2">
-            <label class="text-xs font-medium text-text-secondary">加密算法 (Ciphers)</label>
+            <label class="settings-label">加密算法 (Ciphers) <HelpTip text="SSH 会话加密算法列表，多个算法使用英文逗号分隔。" /></label>
             <input
               type="text"
               :value="arrayToString(settings.sshAlgorithms.ciphers)"
@@ -254,12 +252,11 @@
               placeholder="如: aes128-ctr,aes192-ctr,aes256-ctr"
               class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
             />
-            <p class="text-xs text-text-muted">SSH 会话加密算法，多个算法用逗号分隔</p>
           </div>
 
           <!-- 密钥交换算法 -->
           <div class="space-y-2">
-            <label class="text-xs font-medium text-text-secondary">密钥交换算法 (Key Exchanges)</label>
+            <label class="settings-label">密钥交换算法 (Key Exchanges) <HelpTip text="SSH 密钥交换算法列表，多个算法使用英文逗号分隔。" /></label>
             <input
               type="text"
               :value="arrayToString(settings.sshAlgorithms.keyExchanges)"
@@ -267,12 +264,11 @@
               placeholder="如: curve25519-sha256,ecdh-sha2-nistp256"
               class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
             />
-            <p class="text-xs text-text-muted">SSH 密钥交换算法，多个算法用逗号分隔</p>
           </div>
 
           <!-- MAC 算法 -->
           <div class="space-y-2">
-            <label class="text-xs font-medium text-text-secondary">MAC 算法 (Message Authentication Codes)</label>
+            <label class="settings-label">MAC 算法 (Message Authentication Codes) <HelpTip text="SSH 消息认证码算法列表，多个算法使用英文逗号分隔。" /></label>
             <input
               type="text"
               :value="arrayToString(settings.sshAlgorithms.macs)"
@@ -280,12 +276,11 @@
               placeholder="如: hmac-sha2-256,hmac-sha2-512"
               class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
             />
-            <p class="text-xs text-text-muted">SSH 消息认证码算法，多个算法用逗号分隔</p>
           </div>
 
           <!-- 主机密钥算法 -->
           <div class="space-y-2">
-            <label class="text-xs font-medium text-text-secondary">主机密钥算法 (Host Key Algorithms)</label>
+            <label class="settings-label">主机密钥算法 (Host Key Algorithms) <HelpTip text="主机密钥验证算法列表，多个算法使用英文逗号分隔。" /></label>
             <input
               type="text"
               :value="arrayToString(settings.sshAlgorithms.hostKeyAlgorithms)"
@@ -293,13 +288,13 @@
               placeholder="如: ssh-ed25519,ecdsa-sha2-nistp256"
               class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
             />
-            <p class="text-xs text-text-muted">SSH 主机密钥验证算法，多个算法用逗号分隔</p>
           </div>
         </div>
       </div>
+      </div>
 
       <!-- 全局设置操作按钮 -->
-      <div class="flex items-center justify-end gap-3 pt-2 pb-2">
+      <div class="settings-actions">
         <button
           @click="resetSettings"
           :disabled="saving"
@@ -321,13 +316,15 @@
       </div>
 
       <!-- 运行时配置面板 -->
-      <RuntimeConfigPanel />
+      <div class="runtime-panel-wrap">
+        <RuntimeConfigPanel />
+      </div>
     </div>
 
     <!-- Toast 提示 -->
     <div
       v-if="toast.show"
-      class="fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-sm font-medium animate-slide-up"
+      class="fixed top-20 left-1/2 -translate-x-1/2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium animate-slide-up z-50"
       :class="toast.type === 'success' ? 'bg-success text-white' : 'bg-error text-white'"
     >
       {{ toast.message }}
@@ -340,6 +337,7 @@ import { ref, computed, onMounted } from 'vue'
 import { SettingsAPI } from '../services/api'
 import type { GlobalSettings as BackendSettings } from '../services/api'
 import RuntimeConfigPanel from '../components/settings/RuntimeConfigPanel.vue'
+import HelpTip from '../components/common/HelpTip.vue'
 
 // SSH 算法配置接口
 interface SSHAlgorithmSettings {
@@ -518,3 +516,166 @@ onMounted(() => {
   loadSettings()
 })
 </script>
+
+<style scoped>
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding-bottom: 1rem;
+}
+
+.settings-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0.25rem 0;
+}
+
+.settings-page-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+
+.settings-page-subtitle {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.settings-page-badge {
+  padding: 0.35rem 0.7rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.settings-loading {
+  min-height: 220px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 1rem;
+  background: var(--color-bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.global-settings-panels-flow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 1rem;
+}
+
+.settings-auto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem 1rem;
+  align-items: start;
+}
+
+.settings-auto-grid > * {
+  min-width: 0;
+}
+
+.settings-panel-card {
+  width: 100%;
+}
+
+.settings-card {
+  overflow: visible;
+  border-radius: 1rem;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-secondary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.settings-card:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  border-color: var(--color-border-focus);
+}
+
+.settings-panel-card :is(input:not([type="checkbox"]):not([type="radio"]), select) {
+  width: 100%;
+  min-height: 2.35rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-primary);
+  padding-inline: 0.8rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.settings-panel-card :is(input:not([type="checkbox"]):not([type="radio"]), select):focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+.settings-panel-card :is(label) {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.settings-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.settings-panel-card :is(p.text-xs) {
+  line-height: 1.45;
+}
+
+.settings-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-default);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--color-bg-primary) 84%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.runtime-panel-wrap {
+  border-top: 1px solid var(--color-border-default);
+  padding-top: 1rem;
+}
+
+@media (max-width: 960px) {
+  .settings-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .global-settings-panels-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-actions {
+    position: static;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+</style>
