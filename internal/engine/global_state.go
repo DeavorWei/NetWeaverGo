@@ -6,38 +6,36 @@ import (
 	"time"
 )
 
-// GlobalEngineState 全局引擎状态管理器
-// 用于统一管理所有引擎实例的运行状态，防止并发执行冲突
-// 使用读写锁优化并发读取性能
+// GlobalEngineState 重构后的全局引擎状态管理器
+// 核心改变：持有 Engine 实例指针，而不是状态副本
 type GlobalEngineState struct {
-	mu        sync.RWMutex // 改为读写锁，优化只读操作性能
-	isRunning bool
-	runnerID  string
-	runnerSrc string    // 运行来源：engine, taskgroup, backup
-	startedAt time.Time // 启动时间
+	mu           sync.RWMutex
+	activeEngine *Engine // 持有实例指针
+	runnerID     string
+	runnerSrc    string    // 运行来源：engine, taskgroup, backup
+	startedAt    time.Time // 启动时间
 }
 
 // 全局单例相关变量
 var (
-	globalEngine     *GlobalEngineState
-	globalEngineOnce sync.Once
+	globalState     *GlobalEngineState
+	globalStateOnce sync.Once
 )
 
-// getGlobalEngine 获取全局引擎状态实例（线程安全）
-func getGlobalEngine() *GlobalEngineState {
-	globalEngineOnce.Do(func() {
-		globalEngine = &GlobalEngineState{}
+// GetGlobalState 获取全局状态实例（线程安全）
+func GetGlobalState() *GlobalEngineState {
+	globalStateOnce.Do(func() {
+		globalState = &GlobalEngineState{}
 	})
-	return globalEngine
+	return globalState
 }
 
-// TryAcquire 尝试获取引擎运行锁
-// 如果引擎已在运行，返回错误；否则获取锁并返回 nil
-func (g *GlobalEngineState) TryAcquire(runnerSrc, runnerID string) error {
+// SetActiveEngine 设置当前活动的引擎实例
+func (g *GlobalEngineState) SetActiveEngine(engine *Engine, runnerSrc, runnerID string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	if g.isRunning {
+	if g.activeEngine != nil && g.activeEngine.IsRunning() {
 		if g.runnerSrc != "" && g.runnerID != "" {
 			return fmt.Errorf("引擎正在由 %s (ID: %s) 运行中，请等待当前任务完成", g.runnerSrc, g.runnerID)
 		}
@@ -47,28 +45,43 @@ func (g *GlobalEngineState) TryAcquire(runnerSrc, runnerID string) error {
 		return fmt.Errorf("引擎正在运行中，请等待当前任务完成")
 	}
 
-	g.isRunning = true
+	g.activeEngine = engine
 	g.runnerSrc = runnerSrc
 	g.runnerID = runnerID
 	g.startedAt = time.Now()
 	return nil
 }
 
-// Release 释放引擎运行锁
-func (g *GlobalEngineState) Release() {
+// ClearActiveEngine 清除活动引擎引用
+func (g *GlobalEngineState) ClearActiveEngine() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.isRunning = false
+	g.activeEngine = nil
 	g.runnerSrc = ""
 	g.runnerID = ""
 	g.startedAt = time.Time{}
 }
 
-// IsRunning 检查引擎是否正在运行
+// IsRunning 检查引擎是否正在运行 - 委托给实例
 func (g *GlobalEngineState) IsRunning() bool {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
-	return g.isRunning
+
+	if g.activeEngine == nil {
+		return false
+	}
+	return g.activeEngine.IsRunning()
+}
+
+// GetEngineState 获取引擎当前状态 - 委托给实例
+func (g *GlobalEngineState) GetEngineState() EngineState {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	if g.activeEngine == nil {
+		return StateIdle
+	}
+	return g.activeEngine.State()
 }
 
 // GetRunnerSource 获取当前运行来源
@@ -96,45 +109,62 @@ func (g *GlobalEngineState) GetStartedAt() time.Time {
 func (g *GlobalEngineState) GetStatus() map[string]interface{} {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
+
+	state := "Idle"
+	isRunning := false
+	// 在锁内复制指针并检查，防止并发修改
+	if engine := g.activeEngine; engine != nil {
+		state = engine.State().String()
+		isRunning = engine.IsRunning()
+	}
+
 	return map[string]interface{}{
-		"isRunning": g.isRunning,
+		"state":     state,
+		"isRunning": isRunning,
 		"runnerSrc": g.runnerSrc,
 		"runnerID":  g.runnerID,
 		"startedAt": g.startedAt,
 	}
 }
 
-// TryAcquireEngine 全局函数：尝试获取引擎锁（兼容旧接口）
+// 兼容性全局函数
 func TryAcquireEngine(runnerSrc string) error {
-	return getGlobalEngine().TryAcquire(runnerSrc, "")
+	return TryAcquireEngineWithID(runnerSrc, "")
 }
 
-// TryAcquireEngineWithID 全局函数：尝试获取引擎锁（带实例ID）
 func TryAcquireEngineWithID(runnerSrc, runnerID string) error {
-	return getGlobalEngine().TryAcquire(runnerSrc, runnerID)
+	// 检查是否有运行中的引擎
+	if GetGlobalState().IsRunning() {
+		g := GetGlobalState()
+		g.mu.RLock()
+		defer g.mu.RUnlock()
+		if g.runnerSrc != "" && g.runnerID != "" {
+			return fmt.Errorf("引擎正在由 %s (ID: %s) 运行中，请等待当前任务完成", g.runnerSrc, g.runnerID)
+		}
+		if g.runnerSrc != "" {
+			return fmt.Errorf("引擎正在由 %s 运行中，请等待当前任务完成", g.runnerSrc)
+		}
+		return fmt.Errorf("引擎正在运行中，请等待当前任务完成")
+	}
+	return nil
 }
 
-// ReleaseEngine 全局函数：释放引擎锁
 func ReleaseEngine() {
-	getGlobalEngine().Release()
+	GetGlobalState().ClearActiveEngine()
 }
 
-// IsEngineRunning 全局函数：检查引擎是否运行中
 func IsEngineRunning() bool {
-	return getGlobalEngine().IsRunning()
+	return GetGlobalState().IsRunning()
 }
 
-// GetEngineRunnerSource 全局函数：获取当前运行来源
 func GetEngineRunnerSource() string {
-	return getGlobalEngine().GetRunnerSource()
+	return GetGlobalState().GetRunnerSource()
 }
 
-// GetEngineRunnerID 全局函数：获取当前运行实例ID
 func GetEngineRunnerID() string {
-	return getGlobalEngine().GetRunnerID()
+	return GetGlobalState().GetRunnerID()
 }
 
-// GetEngineStatus 全局函数：获取完整状态信息
 func GetEngineStatus() map[string]interface{} {
-	return getGlobalEngine().GetStatus()
+	return GetGlobalState().GetStatus()
 }

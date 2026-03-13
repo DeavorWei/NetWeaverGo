@@ -263,17 +263,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  TaskGroupAPI,
-  EngineAPI
+  TaskGroupAPI
 } from '../services/api'
 import type { TaskGroup } from '../services/api'
-import { useEngineEvents } from '../composables/useEngineEvents'
-import type { ExecutionSnapshot, DeviceViewState } from '../types/events'
+import { useEngineStore } from '../stores/engineStore'
 
 const router = useRouter()
+const engineStore = useEngineStore()
 
 // ================== 状态定义 ==================
 const loading = ref(false)
@@ -281,10 +280,6 @@ const tasks = ref<TaskGroup[]>([])
 const searchQuery = ref('')
 const filterStatus = ref('')
 const filterMode = ref('')
-const isRunning = ref(false)
-
-// 执行快照状态 - 直接绑定后端推送
-const executionSnapshot = ref<ExecutionSnapshot | null>(null)
 
 // 执行视图状态
 const executionView = ref({
@@ -292,9 +287,6 @@ const executionView = ref({
   taskId: '',
   taskName: ''
 })
-
-// Suspend弹窗
-const suspendModal = ref({ show: false, sessionId: '', ip: '', content: '' })
 
 // 删除弹窗
 const deleteModal = ref({ show: false, taskId: '', taskName: '' })
@@ -320,22 +312,31 @@ function setTerminalRef(ip: string, el: any) {
   else terminalRefs.delete(ip)
 }
 
-// 组件卸载时清理资源
+// ================== 计算属性 - 从 Store 获取 ==================
+const isRunning = computed(() => engineStore.isRunning)
+const progressPercent = computed(() => engineStore.progressPercent)
+const execDevices = computed(() => engineStore.execDevices)
+const suspendModal = computed(() => engineStore.suspendModal)
+const executionSnapshot = computed(() => engineStore.executionSnapshot)
+
+// ================== 生命周期 ==================
+onMounted(() => {
+  // 初始化事件监听
+  engineStore.initListeners()
+  // 同步一次状态
+  engineStore.syncStateFromGo()
+  // 加载任务列表
+  loadTasks()
+})
+
 onUnmounted(() => {
+  engineStore.cleanupListeners()
   terminalRefs.clear()
   if (toastTimer) {
     clearTimeout(toastTimer)
     toastTimer = null
   }
 })
-
-// ================== 计算属性 - 直接使用快照数据 ==================
-
-/** 进度百分比 - 直接从快照获取 */
-const progressPercent = computed(() => executionSnapshot.value?.progress ?? 0)
-
-/** 设备列表 - 直接从快照获取 */
-const execDevices = computed<DeviceViewState[]>(() => executionSnapshot.value?.devices ?? [])
 
 // ================== 过滤逻辑（任务列表） ==================
 const filteredTasks = computed(() => {
@@ -357,6 +358,21 @@ const filteredTasks = computed(() => {
   return result
 })
 
+// 自动滚动终端到底部
+function scrollToBottom() {
+  nextTick(() => {
+    if (executionSnapshot.value?.devices) {
+      for (const dev of executionSnapshot.value.devices) {
+        const el = terminalRefs.get(dev.ip)
+        if (el) el.scrollTop = el.scrollHeight
+      }
+    }
+  })
+}
+
+// 监听设备列表变化，自动滚动
+watch(execDevices, scrollToBottom, { deep: true })
+
 // 加载任务列表
 async function loadTasks() {
   loading.value = true
@@ -376,7 +392,7 @@ async function executeTask(task: TaskGroup) {
   if (isRunning.value) return
 
   // 重置快照状态
-  executionSnapshot.value = null
+  engineStore.reset()
   
   // 设置执行视图
   executionView.value = {
@@ -384,16 +400,15 @@ async function executeTask(task: TaskGroup) {
     taskId: task.id,
     taskName: task.name
   }
-  isRunning.value = true
-
-  await nextTick()
+  engineStore.isConnecting = true
 
   try {
     await TaskGroupAPI.startTaskGroup(task.id)
+    // 成功后不立即改状态，等待后端事件
   } catch (err: any) {
     console.error('执行任务失败:', err)
     triggerToast(`执行失败: ${err?.message || err}`, 'error')
-    isRunning.value = false
+    engineStore.isConnecting = false
   }
 }
 
@@ -416,15 +431,13 @@ async function doDelete() {
 // 关闭执行视图
 function closeExecutionView() {
   executionView.value.active = false
-  executionSnapshot.value = null
+  engineStore.reset()
   loadTasks()
 }
 
 // Suspend 处理
 function resolveSuspend(action: 'C' | 'S' | 'A') {
-  const identifier = suspendModal.value.sessionId || suspendModal.value.ip
-  EngineAPI.resolveSuspend(identifier, action)
-  suspendModal.value.show = false
+  engineStore.resolveSuspend(action)
 }
 
 // 导航
@@ -506,45 +519,6 @@ function formatDate(dateStr: string) {
   if (isNaN(d.getTime())) return dateStr
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
-
-// ================== 事件监听 - 使用快照订阅模式 ==================
-useEngineEvents({
-  onFinished: () => {
-    isRunning.value = false
-    // 确保最终状态为 100%
-    if (executionSnapshot.value) {
-      executionSnapshot.value.progress = 100
-    }
-    setTimeout(() => loadTasks(), 500)
-  },
-  onSnapshot: (snapshot: ExecutionSnapshot) => {
-    // 直接使用后端推送的快照数据
-    executionSnapshot.value = snapshot
-    isRunning.value = snapshot.isRunning
-    
-    // 自动滚动到底部
-    nextTick(() => {
-      for (const dev of snapshot.devices) {
-        const el = terminalRefs.get(dev.ip)
-        if (el) el.scrollTop = el.scrollHeight
-      }
-    })
-  },
-  onSuspend: (data) => {
-    suspendModal.value = {
-      show: true,
-      sessionId: data.sessionId || '',
-      ip: data.ip,
-      content: `设备: ${data.ip}\n命令: ${data.command}\n\n错误详情:\n${data.error}`,
-    }
-  },
-  onSuspendTimeout: (data) => {
-    if (suspendModal.value.ip === data.ip || suspendModal.value.sessionId === data.sessionId) {
-      suspendModal.value.show = false
-    }
-    triggerToast(`设备 ${data.ip} 挂起超时，已自动终止`, 'error')
-  }
-})
 
 // 加载任务列表
 loadTasks()

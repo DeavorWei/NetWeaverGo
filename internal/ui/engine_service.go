@@ -99,14 +99,6 @@ func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGrou
 // runEngineWithConfig 统一的引擎执行方法
 // deviceIPs 为 nil 时使用全部设备，commandGroupID 为空时使用默认命令
 func (s *EngineService) runEngineWithConfig(deviceIPs []string, commandGroupID string) error {
-	// 使用全局引擎状态管理器尝试获取锁
-	if err := engine.TryAcquireEngine("engine_service"); err != nil {
-		return err
-	}
-
-	// 确保在函数退出时释放锁
-	defer engine.ReleaseEngine()
-
 	settings, _, err := config.LoadSettings()
 	if err != nil {
 		return err
@@ -125,6 +117,12 @@ func (s *EngineService) runEngineWithConfig(deviceIPs []string, commandGroupID s
 	// 初始化 Engine
 	ng := engine.NewEngine(assets, commands, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
+
+	// 【修改】设置到全局状态
+	if err := engine.GetGlobalState().SetActiveEngine(ng, "engine_service", ""); err != nil {
+		return err
+	}
+	defer engine.GetGlobalState().ClearActiveEngine()
 
 	// 创建并设置 Tracker
 	taskName := "批量执行"
@@ -172,6 +170,11 @@ func (s *EngineService) runEngineWithConfig(deviceIPs []string, commandGroupID s
 	s.cancelMu.Unlock()
 
 	return nil
+}
+
+// GetEngineState 获取引擎当前状态（供前端调用）
+func (s *EngineService) GetEngineState() map[string]interface{} {
+	return engine.GetGlobalState().GetStatus()
 }
 
 // prepareAssetsAndCommands 准备设备和命令
@@ -229,14 +232,6 @@ func (s *EngineService) listenEvents(frontendBus chan report.ExecutorEvent) {
 
 // StartBackup 启动核心备份动作
 func (s *EngineService) StartBackup() error {
-	// 使用全局引擎状态管理器尝试获取锁
-	if err := engine.TryAcquireEngine("backup_service"); err != nil {
-		return err
-	}
-
-	// 确保在函数退出时释放锁
-	defer engine.ReleaseEngine()
-
 	settings, _, err := config.LoadSettings()
 	if err != nil {
 		return err
@@ -254,6 +249,12 @@ func (s *EngineService) StartBackup() error {
 	// 初始化 Engine
 	ng := engine.NewEngine(assets, nil, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
+
+	// 【修改】设置到全局状态
+	if err := engine.GetGlobalState().SetActiveEngine(ng, "backup_service", ""); err != nil {
+		return err
+	}
+	defer engine.GetGlobalState().ClearActiveEngine()
 
 	// 创建并设置 Tracker
 	tracker := report.NewProgressTracker(len(assets))

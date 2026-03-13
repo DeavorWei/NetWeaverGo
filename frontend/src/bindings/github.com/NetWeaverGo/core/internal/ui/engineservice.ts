@@ -15,12 +15,21 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as report$0 from "../report/models.js";
 
 /**
+ * GetEngineState 获取引擎当前状态（供前端调用）
+ */
+export function GetEngineState(): $CancellablePromise<{ [_ in string]?: any }> {
+    return $Call.ByID(1636275504).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+/**
  * GetExecutionSnapshot 获取当前执行的快照
  * 前端调用此方法获取完整的执行状态，无需前端计算
  */
 export function GetExecutionSnapshot(): $CancellablePromise<report$0.ExecutionSnapshot | null> {
     return $Call.ByID(595539449).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType2($result);
     });
 }
 
@@ -68,5 +77,6 @@ export function StopEngine(): $CancellablePromise<void> {
 }
 
 // Private type creation functions
-const $$createType0 = report$0.ExecutionSnapshot.createFrom;
-const $$createType1 = $Create.Nullable($$createType0);
+const $$createType0 = $Create.Map($Create.Any, $Create.Any);
+const $$createType1 = report$0.ExecutionSnapshot.createFrom;
+const $$createType2 = $Create.Nullable($$createType1);
