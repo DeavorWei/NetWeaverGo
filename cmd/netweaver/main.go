@@ -1,17 +1,12 @@
 package main
 
 import (
-	"context"
-	"flag"
 	"fmt"
 	"io/fs"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/NetWeaverGo/core"
 	"github.com/NetWeaverGo/core/internal/config"
-	"github.com/NetWeaverGo/core/internal/engine"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/ui"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -21,36 +16,6 @@ func main() {
 	if err := logger.InitGlobalLogger(); err != nil {
 		fmt.Printf("日志系统初始化失败: %v\n", err)
 		os.Exit(1)
-	}
-
-	isCLI := flag.Bool("cli", false, "以纯命令行免 UI 模式运行 (用于服务器环境后台执行)")
-	isBackup := flag.Bool("b", false, "CLI模式：启动备份模式，自动下载交换机配置并忽略配置命令")
-	nonInteractive := flag.Bool("non-interactive", false, "CLI模式：无人值守模式：发生报错时自动执行 error_mode 策略且不挂起等待手动输入")
-	flag.BoolVar(nonInteractive, "ni", false, "CLI模式：同 --non-interactive，无人值守模式(简写)")
-
-	debugMode := flag.Bool("debug", false, "启用 DEBUG 级别日志输出到文件和控制台")
-	debugAllMode := flag.Bool("debugall", false, "启用全量且详细的 DEBUG 级别日志输出到文件和控制台")
-
-	flag.Parse()
-
-	// 记录命令行是否显式指定了调试参数（CLI 模式下优先级最高）
-	cliDebugSet := false
-	cliDebugValue := false
-	cliDebugAllSet := false
-	cliDebugAllValue := false
-
-	// 初始化日志全局状态
-	if *debugAllMode {
-		logger.EnableDebugAll = true
-		logger.EnableDebug = true
-		cliDebugAllSet = true
-		cliDebugAllValue = true
-		cliDebugSet = true
-		cliDebugValue = true
-	} else if *debugMode {
-		logger.EnableDebug = true
-		cliDebugSet = true
-		cliDebugValue = true
 	}
 
 	// 启动数据库并进行数据迁移校验
@@ -65,11 +30,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *isCLI || *isBackup || *nonInteractive {
-		runCLI(*isBackup, *nonInteractive, cliDebugSet, cliDebugValue, cliDebugAllSet, cliDebugAllValue)
-	} else {
-		runGUI()
-	}
+	runGUI()
 }
 
 func runGUI() {
@@ -139,87 +100,5 @@ func runGUI() {
 	logger.Info("System", "-", "正在启动 Wails 应用主循环...")
 	if err := app.Run(); err != nil {
 		logger.Error("System", "-", "GUI 应用程序崩溃或异常退出: %v", err)
-	}
-}
-
-func runCLI(isBackup bool, nonInteractive bool, cliDebugSet, cliDebugValue, cliDebugAllSet, cliDebugAllValue bool) {
-	settings, isNewSettings, err := config.LoadSettings()
-	if err != nil {
-		fmt.Printf("[配置/环境提示] %v\n", err)
-		os.Exit(0)
-	}
-
-	// CLI 模式下，命令行参数优先级高于数据库设置
-	if cliDebugAllSet {
-		settings.DebugAll = cliDebugAllValue
-		settings.Debug = cliDebugValue
-		// 重新应用调试设置
-		config.ApplyDebugSettings(settings.Debug, settings.DebugAll)
-	} else if cliDebugSet {
-		settings.Debug = cliDebugValue
-		// 重新应用调试设置
-		config.ApplyDebugSettings(settings.Debug, settings.DebugAll)
-	}
-
-	logger.Info("System", "-", `
-    _   __     __ _       __                           ______     
-   / | / /__  / /| |     / /__  ____ __   _____  _____/ ____/___  
-  /  |/ / _ \/ __/ | /| / / _ \/ __ '/ | / / _ \/ ___/ / __/ __ \ 
- / /|  /  __/ /_ | |/ |/ /  __/ /_/ /| |/ /  __/ /  / /_/ / /_/ / 
-/_/ |_/\___/\__/ |__/|__/\___/\__,_/ |___/\___/_/   \____/\____/  
-   
-              Go 并发网络自动化编排/配置集散部署工具
-                 NetWeaverGo - v1.0 CLI Engine`)
-
-	assets, err := config.LoadDeviceAssets()
-	if err != nil {
-		logger.Error("System", "-", "[系统错误] %v", err)
-		os.Exit(1)
-	}
-
-	var commands []string
-	if !isBackup {
-		commands, err = config.LoadDefaultCommands()
-		if err != nil {
-			logger.Error("System", "-", "[系统错误] %v", err)
-			os.Exit(1)
-		}
-	}
-
-	if isNewSettings {
-		logger.Info("System", "-", "[配置/环境提示] 初次运行，数据库中的默认全局设置已初始化，将按默认参数继续运行。")
-	}
-
-	if len(assets) == 0 {
-		logger.Error("System", "-", "[系统终止] 没有找到可执行的设备资产，请先在设备管理中添加设备。")
-		os.Exit(1)
-	}
-
-	if !isBackup {
-		if len(commands) == 0 {
-			logger.Error("System", "-", "[系统终止] 没有可执行的默认命令，请先配置默认命令组或使用任务组执行。")
-			os.Exit(1)
-		}
-	} else {
-		logger.Info("System", "-", "[!] 检测到 -b 标志，应用已经进入备份模式（备份操作中将忽略默认命令组内容）。")
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		logger.Warn("System", "-", "[!] 收到外界中断请求(CTRL+C), 正在广播取消命令以清理释放所有设备...")
-		cancel()
-	}()
-
-	ng := engine.NewEngine(assets, commands, settings, nonInteractive)
-
-	if isBackup {
-		ng.RunBackup(ctx)
-	} else {
-		ng.Run(ctx)
 	}
 }
