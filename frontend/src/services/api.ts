@@ -117,6 +117,12 @@ export const EngineAPI = {
   resolveSuspend: EngineServiceBinding.ResolveSuspend,
   /** 检查引擎是否正在运行 */
   isRunning: EngineServiceBinding.IsRunning,
+  /** 停止当前执行 */
+  stopEngine: EngineServiceBinding.StopEngine,
+  /** 获取引擎状态 */
+  getEngineState: EngineServiceBinding.GetEngineState,
+  /** 获取执行快照 */
+  getExecutionSnapshot: EngineServiceBinding.GetExecutionSnapshot,
 } as const
 
 // ==================== 任务组管理 API ====================
@@ -178,6 +184,11 @@ export type {
   IPsValidationResult,
   BindingPreview,
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
+
+export type {
+  DeviceViewState,
+  ExecutionSnapshot,
+} from '../bindings/github.com/NetWeaverGo/core/internal/report/models.js'
 
 // ==================== 查询服务 API ====================
 /**

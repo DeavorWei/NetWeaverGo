@@ -118,21 +118,20 @@ func (e *Engine) ensureTracker(taskName string) *report.ProgressTracker {
 
 // NewEngine 初始化并行执行引擎（重构后）
 func NewEngine(assets []config.DeviceAsset, commands []string, settings *config.GlobalSettings, nonInteractive bool) *Engine {
-	workers := settings.MaxWorkers
-	if workers <= 0 {
-		workers = 32
-	}
+	workers := config.ResolveEngineWorkerCount(settings)
+	eventBufferSize := config.ResolveEventBufferSize()
+	fallbackCapacity := config.ResolveFallbackEventCapacity()
 
 	return &Engine{
 		Devices:        assets,
 		Commands:       commands,
-		MaxWorkers:     workers, // 使用配置的并发限制
+		MaxWorkers:     workers,
 		Settings:       settings,
 		NonInteractive: nonInteractive,
-		EventBus:       make(chan report.ExecutorEvent, 1000), // 队列化 EventBus（内部 tracker 使用）
-		FrontendBus:    make(chan report.ExecutorEvent, 1000), // 前端事件通道（外部转发使用）
+		EventBus:       make(chan report.ExecutorEvent, eventBufferSize),
+		FrontendBus:    make(chan report.ExecutorEvent, eventBufferSize),
 		stateManager:   NewEngineStateManager(),
-		fallback:       NewRingBuffer(500), // 环形缓冲区
+		fallback:       NewRingBuffer(fallbackCapacity),
 	}
 }
 

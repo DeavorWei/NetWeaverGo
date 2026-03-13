@@ -32,7 +32,7 @@
             max="256"
             class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
           />
-            <p class="text-xs text-text-muted">同时执行的协程数量 (1-256)</p>
+            <p class="text-xs text-text-muted">兼容配置入口；若下方运行时配置设置了工作协程数，执行链将优先采用运行时配置</p>
           </div>
 
           <!-- 错误处理模式 -->

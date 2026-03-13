@@ -9,7 +9,7 @@
       </svg>
       <h2 class="text-base font-semibold text-text-primary">运行时配置（热更新）</h2>
     </div>
-    <p class="text-xs text-text-muted mb-5">修改这些配置将立即生效，无需重启应用。此配置独立于上方全局设置，需要单独保存。</p>
+    <p class="text-xs text-text-muted mb-5">修改这些配置将立即生效，无需重启应用。引擎工作协程数与事件缓冲会直接驱动执行链；上方全局最大并发数仅作为兼容回退值。</p>
 
     <!-- 超时配置 -->
     <div class="bg-bg-card border border-border rounded-xl p-5 shadow-card mb-5">

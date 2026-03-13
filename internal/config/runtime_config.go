@@ -340,6 +340,62 @@ func GetRuntimeManager() *RuntimeConfigManager {
 	return runtimeManager
 }
 
+// GetRuntimeManagerIfInitialized 获取已初始化的配置管理器；未初始化时返回 nil
+func GetRuntimeManagerIfInitialized() *RuntimeConfigManager {
+	return runtimeManager
+}
+
+// ResolveEngineWorkerCount 解析执行链最终使用的工作协程数。
+// 运行时配置优先生效，GlobalSettings.MaxWorkers 仅作为兼容兜底。
+func ResolveEngineWorkerCount(settings *GlobalSettings) int {
+	legacyWorkers := 0
+	if settings != nil {
+		legacyWorkers = settings.MaxWorkers
+	}
+
+	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
+		runtimeWorkers := manager.GetWorkerCount()
+		if runtimeWorkers > 0 {
+			if legacyWorkers > 0 && legacyWorkers != runtimeWorkers {
+				logger.Debug(
+					"Config",
+					"-",
+					"执行链工作协程数采用 runtime config=%d，覆盖 settings.maxWorkers=%d",
+					runtimeWorkers,
+					legacyWorkers,
+				)
+			}
+			return runtimeWorkers
+		}
+	}
+
+	if legacyWorkers > 0 {
+		return legacyWorkers
+	}
+
+	return DefaultWorkerCount
+}
+
+// ResolveEventBufferSize 解析执行链事件缓冲区大小。
+func ResolveEventBufferSize() int {
+	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
+		if size := manager.GetEventBufferSize(); size > 0 {
+			return size
+		}
+	}
+	return EventBufferSize
+}
+
+// ResolveFallbackEventCapacity 解析执行链后备事件容量。
+func ResolveFallbackEventCapacity() int {
+	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
+		if size := manager.GetFallbackEventCapacity(); size > 0 {
+			return size
+		}
+	}
+	return FallbackEventCapacity
+}
+
 // GetConfig 获取当前配置（只读副本）
 func (m *RuntimeConfigManager) GetConfig() RuntimeConfig {
 	m.mu.RLock()

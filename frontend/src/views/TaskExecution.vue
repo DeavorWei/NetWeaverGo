@@ -5,6 +5,14 @@
       <p class="text-sm text-text-muted">管理和执行已创建的任务绑定组合</p>
       <div class="flex gap-3">
         <button
+          v-if="executionView.active && isRunning"
+          @click="stopExecution"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-error/10 border border-error/30 text-error hover:bg-error hover:text-white"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+          停止任务
+        </button>
+        <button
           @click="goToTaskCreate"
           class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
         >
@@ -71,7 +79,7 @@
 
             <!-- 设备卡片网格 - 使用虚拟滚动优化 -->
       <div class="flex-1 overflow-auto scrollbar-custom min-h-0 relative" ref="devicesContainer">
-        <div v-if="execDevices.length === 0 && isRunning" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
+        <div v-if="execDevices.length === 0 && (isRunning || awaitingSnapshot)" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
           <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
           <p class="text-sm">正在初始化任务...</p>
         </div>
@@ -280,12 +288,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   TaskGroupAPI
 } from '../services/api'
-import type { TaskGroup } from '../services/api'
+import type { DeviceViewState, TaskGroup } from '../services/api'
 import { useEngineStore } from '../stores/engineStore'
 import VirtualLogTerminal from '../components/task/VirtualLogTerminal.vue'
 
@@ -305,6 +313,7 @@ const executionView = ref({
   taskId: '',
   taskName: ''
 })
+const awaitingSnapshot = ref(false)
 
 // 删除弹窗
 const deleteModal = ref({ show: false, taskId: '', taskName: '' })
@@ -328,9 +337,10 @@ function triggerToast(msg: string, type: 'success' | 'error' = 'success') {
 }
 
 // ================== 计算属性 - 从 Store 获取 ==================
+const executionSnapshot = computed(() => engineStore.executionSnapshot)
 const isRunning = computed(() => engineStore.isRunning)
-const progressPercent = computed(() => engineStore.progressPercent)
-const execDevices = computed(() => engineStore.execDevices)
+const progressPercent = computed(() => executionSnapshot.value?.progress ?? 0)
+const execDevices = computed(() => executionSnapshot.value?.devices ?? [])
 const suspendModal = computed(() => engineStore.suspendModal)
 
 // ================== 虚拟滚动优化计算属性 ==================
@@ -341,7 +351,7 @@ const visibleDeviceCount = computed(() =>
 
 // 可见设备列表（优先显示运行中和错误的设备）
 const visibleDevices = computed(() => {
-  const devices = execDevices.value
+  const devices = execDevices.value as DeviceViewState[]
   
   // 如果显示全部，直接返回
   if (showAllDevices.value) {
@@ -350,8 +360,8 @@ const visibleDevices = computed(() => {
   
   // 优先显示活跃设备（运行中、错误、等待）
   const activeStatuses = ['running', 'error', 'waiting']
-  const active = devices.filter(d => activeStatuses.includes(d.status))
-  const inactive = devices.filter(d => !activeStatuses.includes(d.status))
+  const active = devices.filter((d: DeviceViewState) => activeStatuses.includes(d.status))
+  const inactive = devices.filter((d: DeviceViewState) => !activeStatuses.includes(d.status))
   
   // 优先返回活跃设备，如果活跃设备不足限制数量，补充已完成设备
   if (active.length >= VISIBLE_DEVICE_LIMIT) {
@@ -363,12 +373,9 @@ const visibleDevices = computed(() => {
 
 // ================== 生命周期 ==================
 onMounted(() => {
-  // 初始化事件监听
   engineStore.initListeners()
-  // 同步一次状态
-  engineStore.syncStateFromGo()
-  // 加载任务列表
-  loadTasks()
+  void syncExecutionView()
+  void loadTasks()
 })
 
 onUnmounted(() => {
@@ -376,6 +383,22 @@ onUnmounted(() => {
   if (toastTimer) {
     clearTimeout(toastTimer)
     toastTimer = null
+  }
+})
+
+watch(executionSnapshot, (snapshot) => {
+  if (snapshot) {
+    awaitingSnapshot.value = false
+    executionView.value.active = true
+    if (snapshot.taskName) {
+      executionView.value.taskName = snapshot.taskName
+    }
+  }
+})
+
+watch(isRunning, (running, wasRunning) => {
+  if (!running && wasRunning && executionView.value.active) {
+    void loadTasks()
   }
 })
 
@@ -414,28 +437,38 @@ async function loadTasks() {
   }
 }
 
+async function syncExecutionView() {
+  const active = await engineStore.syncExecutionState()
+  const snapshot = engineStore.executionSnapshot
+  if (active || snapshot) {
+    executionView.value.active = true
+    executionView.value.taskName = snapshot?.taskName || '任务执行'
+  }
+}
+
 // 执行任务
 async function executeTask(task: TaskGroup) {
   if (isRunning.value) return
 
-  // 重置快照状态
   engineStore.reset()
+  awaitingSnapshot.value = true
   
-  // 设置执行视图
   executionView.value = {
     active: true,
     taskId: task.id,
     taskName: task.name
   }
-  engineStore.isConnecting = true
 
   try {
     await TaskGroupAPI.startTaskGroup(task.id)
-    // 成功后不立即改状态，等待后端事件
   } catch (err: any) {
     console.error('执行任务失败:', err)
     triggerToast(`执行失败: ${err?.message || err}`, 'error')
-    engineStore.isConnecting = false
+    executionView.value.active = false
+  } finally {
+    if (!executionSnapshot.value) {
+      awaitingSnapshot.value = false
+    }
   }
 }
 
@@ -458,8 +491,22 @@ async function doDelete() {
 // 关闭执行视图
 function closeExecutionView() {
   executionView.value.active = false
+  awaitingSnapshot.value = false
   engineStore.reset()
   loadTasks()
+}
+
+async function stopExecution() {
+  if (!confirm('确定要停止当前执行任务吗？')) {
+    return
+  }
+
+  try {
+    await engineStore.stopEngine()
+    triggerToast('已发送停止信号')
+  } catch (err: any) {
+    triggerToast(`停止失败: ${err?.message || err}`, 'error')
+  }
 }
 
 // Suspend 处理
@@ -537,9 +584,6 @@ function formatDate(dateStr: string) {
   if (isNaN(d.getTime())) return dateStr
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
 }
-
-// 加载任务列表
-loadTasks()
 </script>
 
 <style scoped>

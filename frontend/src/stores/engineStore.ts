@@ -1,33 +1,16 @@
 import { defineStore } from "pinia";
-import { ref, computed } from "vue";
+import { computed, ref } from "vue";
 import { Events } from "@wailsio/runtime";
+import { EngineAPI } from "../services/api";
+import { ExecutionSnapshot } from "../bindings/github.com/NetWeaverGo/core/internal/report/models";
 
-export type EngineState =
+type EngineState =
   | "Idle"
   | "Starting"
   | "Running"
   | "Paused"
   | "Closing"
   | "Closed";
-
-export interface DeviceViewState {
-  ip: string;
-  status: string;
-  logs: string[];
-  logCount: number;
-  truncated: boolean;
-  cmdIndex: number;
-  totalCmd: number;
-}
-
-export interface ExecutionSnapshot {
-  taskName: string;
-  totalDevices: number;
-  finishedCount: number;
-  progress: number;
-  isRunning: boolean;
-  devices: DeviceViewState[];
-}
 
 export interface SuspendRequiredEvent {
   sessionId?: string;
@@ -36,11 +19,15 @@ export interface SuspendRequiredEvent {
   command: string;
 }
 
+const ACTIVE_ENGINE_STATES = new Set<EngineState>([
+  "Starting",
+  "Running",
+  "Paused",
+  "Closing",
+]);
+
 export const useEngineStore = defineStore("engine", () => {
-  // ========== 状态定义 ==========
-  const currentState = ref<EngineState>("Idle");
   const executionSnapshot = ref<ExecutionSnapshot | null>(null);
-  const isConnecting = ref(false); // 纯前端 UI 状态
   const suspendModal = ref<{
     show: boolean;
     sessionId: string;
@@ -48,43 +35,49 @@ export const useEngineStore = defineStore("engine", () => {
     content: string;
   }>({ show: false, sessionId: "", ip: "", content: "" });
 
-  // ========== 计算属性 ==========
-  const isRunning = computed(() => currentState.value === "Running");
-  const progressPercent = computed(
-    () => executionSnapshot.value?.progress ?? 0
-  );
-  const execDevices = computed(() => executionSnapshot.value?.devices ?? []);
-
-  // ========== 事件监听初始化 ==========
+  const isRunning = computed(() => Boolean(executionSnapshot.value?.isRunning));
   let cleanupFns: (() => void)[] = [];
 
+  function applySnapshot(snapshot: ExecutionSnapshot | null) {
+    executionSnapshot.value = snapshot
+      ? ExecutionSnapshot.createFrom(snapshot)
+      : null;
+  }
+
+  function markExecutionFinished() {
+    if (!executionSnapshot.value) {
+      return;
+    }
+
+    applySnapshot(
+      ExecutionSnapshot.createFrom({
+        ...executionSnapshot.value,
+        isRunning: false,
+        progress: 100,
+      })
+    );
+  }
+
   function initListeners() {
-    // 清理之前的监听器
     cleanupListeners();
 
-    // 监听执行快照（200ms 定时推送）
     const unlistenSnapshot = Events.On("execution:snapshot", (ev: any) => {
-      const data = ev.data?.[0] as ExecutionSnapshot;
+      const data = ev.data?.[0];
       if (data) {
-        executionSnapshot.value = data;
-        currentState.value = data.isRunning ? "Running" : "Idle";
-        isConnecting.value = false;
+        applySnapshot(ExecutionSnapshot.createFrom(data));
       }
     });
-    if (typeof unlistenSnapshot === 'function') {
+    if (typeof unlistenSnapshot === "function") {
       cleanupFns.push(unlistenSnapshot);
     }
 
-    // 监听引擎完成
     const unlistenFinished = Events.On("engine:finished", () => {
-      currentState.value = "Idle";
-      isConnecting.value = false;
+      markExecutionFinished();
     });
-    if (typeof unlistenFinished === 'function') {
+    if (typeof unlistenFinished === "function") {
       cleanupFns.push(unlistenFinished);
     }
 
-    // 监听挂起请求
     const unlistenSuspend = Events.On("engine:suspend_required", (ev: any) => {
       const data = ev.data?.[0] as SuspendRequiredEvent;
       if (data) {
@@ -96,21 +89,19 @@ export const useEngineStore = defineStore("engine", () => {
         };
       }
     });
-    if (typeof unlistenSuspend === 'function') {
+    if (typeof unlistenSuspend === "function") {
       cleanupFns.push(unlistenSuspend);
     }
 
-    // 监听挂起超时
     const unlistenTimeout = Events.On("engine:suspend_timeout", (ev: any) => {
       const data = ev.data?.[0] as { ip: string; sessionId: string };
       if (data && suspendModal.value.ip === data.ip) {
         suspendModal.value.show = false;
       }
     });
-    if (typeof unlistenTimeout === 'function') {
+    if (typeof unlistenTimeout === "function") {
       cleanupFns.push(unlistenTimeout);
     }
-
   }
 
   function cleanupListeners() {
@@ -124,57 +115,72 @@ export const useEngineStore = defineStore("engine", () => {
     cleanupFns = [];
   }
 
-  // ========== 状态同步 ==========
-  async function syncStateFromGo() {
+  async function syncExecutionState() {
     try {
-      // 通过 Wails 绑定调用 Go 方法
-      const status = await (window as any).go?.ui?.EngineService?.GetEngineState?.();
-      if (status) {
-        currentState.value = (status.state as EngineState) || "Idle";
+      const [snapshot, status] = await Promise.all([
+        EngineAPI.getExecutionSnapshot().catch(() => null),
+        EngineAPI.getEngineState().catch(() => null),
+      ]);
+
+      if (snapshot) {
+        applySnapshot(snapshot);
+        return snapshot.isRunning;
       }
+
+      const state = (status?.state as EngineState | undefined) ?? "Idle";
+      if (ACTIVE_ENGINE_STATES.has(state)) {
+        applySnapshot(
+          new ExecutionSnapshot({
+            taskName: "任务执行",
+            totalDevices: 0,
+            finishedCount: 0,
+            progress: state === "Closing" ? 100 : 0,
+            isRunning: state !== "Closing",
+            startTime: "",
+            devices: [],
+          })
+        );
+        return true;
+      }
+
+      applySnapshot(null);
+      return false;
     } catch (err) {
-      console.error("Failed to sync engine state:", err);
+      console.error("Failed to sync execution state:", err);
+      return false;
     }
   }
 
-  // ========== 操作 ==========
   async function stopEngine() {
     try {
-      await (window as any).go?.ui?.EngineService?.StopEngine?.();
+      await EngineAPI.stopEngine();
     } catch (err) {
       console.error("停止引擎失败:", err);
+      throw err;
     }
   }
 
   function resolveSuspend(action: "C" | "S" | "A") {
     const identifier = suspendModal.value.sessionId || suspendModal.value.ip;
-    (window as any).go?.ui?.EngineService?.ResolveSuspend?.(identifier, action);
+    void EngineAPI.resolveSuspend(identifier, action);
     suspendModal.value.show = false;
   }
 
   function reset() {
-    currentState.value = "Idle";
-    executionSnapshot.value = null;
-    isConnecting.value = false;
+    applySnapshot(null);
     suspendModal.value.show = false;
+    suspendModal.value.sessionId = "";
+    suspendModal.value.ip = "";
+    suspendModal.value.content = "";
   }
 
   return {
-    // 状态
-    currentState,
     executionSnapshot,
-    isConnecting,
     suspendModal,
-
-    // 计算属性
     isRunning,
-    progressPercent,
-    execDevices,
-
-    // 方法
     initListeners,
     cleanupListeners,
-    syncStateFromGo,
+    syncExecutionState,
     stopEngine,
     resolveSuspend,
     reset,
