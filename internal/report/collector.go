@@ -72,20 +72,28 @@ type ProgressTracker struct {
 	// 新增：状态树管理
 	taskName   string
 	startTime  time.Time
-	deviceLogs map[string][]string // 设备日志存储
-	logCounts  map[string]int      // 原始日志计数
-	sortedIPs  []string            // 有序的 IP 列表
+	logStorage *LogStorage    // 磁盘日志存储
+	logCounts  map[string]int // 原始日志计数
+	sortedIPs  []string       // 有序的 IP 列表
 }
 
 func NewProgressTracker(totalDevices int) *ProgressTracker {
 	logger.DebugAll("Report", "-", "生成与编排新的终端任务信息收集进度板，目标设备总量规模: %d 台", totalDevices)
+
+	// 创建日志存储
+	storage, err := NewLogStorage()
+	if err != nil {
+		logger.Error("Report", "-", "创建日志存储失败: %v", err)
+		// 降级处理：storage 为 nil 时会在后续方法中处理
+	}
+
 	return &ProgressTracker{
 		EventBus:   make(chan ExecutorEvent, 1000), // 留足缓冲
 		status:     make(map[string]*DeviceSummary),
 		total:      totalDevices,
 		taskName:   "任务执行",
 		startTime:  time.Now(),
-		deviceLogs: make(map[string][]string),
+		logStorage: storage,
 		logCounts:  make(map[string]int),
 		sortedIPs:  make([]string, 0, totalDevices),
 	}
@@ -223,25 +231,18 @@ func (p *ProgressTracker) addDeviceLogLocked(ip string, message string) {
 		message = message[:maxLen] + "...[截断]"
 	}
 
-	// 初始化日志存储
-	if p.deviceLogs == nil {
-		p.deviceLogs = make(map[string][]string)
+	// 使用磁盘存储
+	if p.logStorage != nil {
+		if err := p.logStorage.AppendLog(ip, message); err != nil {
+			logger.Error("Report", ip, "写入日志失败: %v", err)
+		}
 	}
+
+	// 更新计数
 	if p.logCounts == nil {
 		p.logCounts = make(map[string]int)
 	}
-
-	// 添加日志
-	p.deviceLogs[ip] = append(p.deviceLogs[ip], message)
-	p.logCounts[ip]++
-
-	// 日志条数超过阈值时截断（保留最新的）
-	maxLogs := getMaxLogsPerDevice()
-	if len(p.deviceLogs[ip]) > maxLogs+50 {
-		// 移除旧的日志
-		removeCount := len(p.deviceLogs[ip]) - maxLogs
-		p.deviceLogs[ip] = p.deviceLogs[ip][removeCount:]
-	}
+	p.logCounts[ip] = p.logStorage.GetLogCount(ip)
 }
 
 // renderDisplay 简单的静态打印大盘（不再清屏）
@@ -506,19 +507,27 @@ func (p *ProgressTracker) GetDeviceSnapshot(ip string) *DeviceViewState {
 
 // getDeviceLogsLocked 获取设备日志（已截断），必须在持有锁时调用
 func (p *ProgressTracker) getDeviceLogsLocked(ip string) ([]string, bool) {
-	logs, exists := p.deviceLogs[ip]
-	if !exists {
+	// 从磁盘存储读取日志
+	if p.logStorage == nil {
 		return []string{}, false
 	}
 
-	// 返回截断后的日志
 	maxLogs := getMaxLogsPerDevice()
-	if len(logs) > maxLogs {
-		// 返回最新的 maxLogs 条日志
-		return logs[len(logs)-maxLogs:], true
+	totalCount := p.logStorage.GetLogCount(ip)
+
+	if totalCount == 0 {
+		return []string{}, false
 	}
 
-	return logs, false
+	// 读取最新的日志
+	logs, err := p.logStorage.GetLastLogs(ip, maxLogs)
+	if err != nil {
+		logger.Error("Report", ip, "读取日志失败: %v", err)
+		return []string{}, false
+	}
+
+	truncated := totalCount > maxLogs
+	return logs, truncated
 }
 
 // AddDeviceLog 添加日志到设备（带上限控制）
@@ -533,25 +542,18 @@ func (p *ProgressTracker) AddDeviceLog(ip string, message string) {
 		message = message[:maxLen] + "...[截断]"
 	}
 
-	// 初始化日志数组
-	if p.deviceLogs == nil {
-		p.deviceLogs = make(map[string][]string)
+	// 使用磁盘存储
+	if p.logStorage != nil {
+		if err := p.logStorage.AppendLog(ip, message); err != nil {
+			logger.Error("Report", ip, "写入日志失败: %v", err)
+		}
 	}
+
+	// 更新计数
 	if p.logCounts == nil {
 		p.logCounts = make(map[string]int)
 	}
-
-	// 添加日志
-	p.deviceLogs[ip] = append(p.deviceLogs[ip], message)
-	p.logCounts[ip]++
-
-	// 日志条数超过阈值时截断（保留最新的）
-	maxLogs := getMaxLogsPerDevice()
-	if len(p.deviceLogs[ip]) > maxLogs+50 {
-		// 移除旧的日志
-		removeCount := len(p.deviceLogs[ip]) - maxLogs
-		p.deviceLogs[ip] = p.deviceLogs[ip][removeCount:]
-	}
+	p.logCounts[ip] = p.logStorage.GetLogCount(ip)
 }
 
 // RegisterDevice 注册设备到有序列表
@@ -580,15 +582,25 @@ func (p *ProgressTracker) RegisterDevice(ip string, totalCmd int) {
 		}
 	}
 
-	// 初始化日志存储
-	if p.deviceLogs == nil {
-		p.deviceLogs = make(map[string][]string)
+	// 初始化磁盘日志存储
+	if p.logStorage != nil {
+		if err := p.logStorage.InitDevice(ip); err != nil {
+			logger.Error("Report", ip, "初始化设备日志存储失败: %v", err)
+		}
 	}
+
+	// 初始化计数
 	if p.logCounts == nil {
 		p.logCounts = make(map[string]int)
 	}
-	p.deviceLogs[ip] = make([]string, 0, 100)
 	p.logCounts[ip] = 0
+}
+
+// Close 关闭并清理资源
+func (p *ProgressTracker) Close() {
+	if p.logStorage != nil {
+		p.logStorage.Close()
+	}
 }
 
 // GetStats 获取当前统计信息
