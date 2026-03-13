@@ -1,5 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, watch } from "vue";
+import { ForgeAPI } from "../../services/api";
+
+type CalcRecord = { label: string; value: string };
+type IPv4SubnetRow = {
+  index: number;
+  network: string;
+  cidr: number;
+  firstUsable: string;
+  lastUsable: string;
+  broadcast: string;
+  mask: string;
+};
 
 const ipStr = ref("");
 const maskStr = ref("");
@@ -7,170 +19,71 @@ const hostCountStr = ref("");
 const subnetCountStr = ref("");
 const forceDisplayAllSubnets = ref(false);
 
-// —— Utilities ——
-const isValidIp = (ip: string) => {
-  const ipRegex =
-    /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-  return ipRegex.test(ip);
-};
-
-const ipToLong = (ip: string) => {
-  return (
-    ip
-      .split(".")
-      .reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0
-  );
-};
-
-const longToIp = (long: number) => {
-  return [
-    (long >>> 24) & 255,
-    (long >>> 16) & 255,
-    (long >>> 8) & 255,
-    long & 255,
-  ].join(".");
-};
-
-const cidrToMaskLong = (cidr: number) => {
-  if (cidr === 0) return 0;
-  return ~(Math.pow(2, 32 - cidr) - 1) >>> 0;
-};
-
-const ipToBinary = (ip: string) => {
-  return ip
-    .split(".")
-    .map((octet) => parseInt(octet, 10).toString(2).padStart(8, "0"))
-    .join("");
-};
-
-const parseMaskOrWildcard = (maskStrInput: string) => {
-  let potentialCidr = maskStrInput.startsWith("/")
-    ? maskStrInput.substring(1)
-    : maskStrInput;
-  const cidrNum = parseInt(potentialCidr, 10);
-
-  if (
-    !isNaN(cidrNum) &&
-    String(cidrNum) === potentialCidr &&
-    cidrNum >= 0 &&
-    cidrNum <= 32
-  ) {
-    return cidrNum;
-  }
-
-  if (isValidIp(maskStrInput)) {
-    const maskBinary = ipToBinary(maskStrInput);
-    if (/^1*0*$/.test(maskBinary)) {
-      return (maskBinary.match(/1/g) || []).length;
-    }
-    if (/^0*1*$/.test(maskBinary)) {
-      return (maskBinary.match(/0/g) || []).length;
-    }
-  }
-
-  return -1;
-};
-
-// —— Computed Results ——
-const calculateSubnetDetails = (ipStr: string, cidr: number) => {
-  const ipLong = ipToLong(ipStr);
-  const maskLong = cidrToMaskLong(cidr);
-  const networkLong = ipLong & maskLong;
-  const broadcastLong = networkLong | (~maskLong >>> 0);
-
-  const hostBits = 32 - cidr;
-  const totalHosts = Math.pow(2, hostBits);
-  const usableHosts = cidr < 31 ? totalHosts - 2 : cidr === 31 ? 2 : 1;
-
-  const firstUsableLong = cidr < 31 ? networkLong + 1 : networkLong;
-  const lastUsableLong = cidr < 31 ? broadcastLong - 1 : broadcastLong;
-
-  return [
-    { label: "网络地址", value: longToIp(networkLong) },
-    { label: "广播地址", value: longToIp(broadcastLong) },
-    { label: "子网掩码", value: longToIp(maskLong) },
-    { label: "反掩码", value: longToIp(~maskLong >>> 0) },
-    { label: "CIDR", value: `/${cidr}` },
-    {
-      label: "子网范围",
-      value: `${longToIp(networkLong)} - ${longToIp(broadcastLong)}`,
-    },
-    {
-      label: "可用主机数",
-      value: usableHosts > 0 ? usableHosts.toLocaleString() : "0",
-    },
-    {
-      label: "首个可用地址",
-      value: usableHosts > 0 ? longToIp(firstUsableLong) : "N/A",
-    },
-    {
-      label: "最后一个可用地址",
-      value: usableHosts > 0 ? longToIp(lastUsableLong) : "N/A",
-    },
-  ];
-};
-
-const getMaskOnlyResults = (cidr: number) => {
-  const maskLong = cidrToMaskLong(cidr);
-  return [
-    { label: "子网掩码", value: longToIp(maskLong) },
-    { label: "反掩码", value: longToIp(~maskLong >>> 0) },
-    { label: "CIDR", value: `/${cidr}` },
-  ];
-};
-
-const evaluation = computed(() => {
-  const ip = ipStr.value.trim();
-  const mask = maskStr.value.trim();
-
-  if (!mask) return { error: null, records: [] };
-
-  const cidr = parseMaskOrWildcard(mask);
-  if (cidr === -1) {
-    return {
-      error: "无效的掩码格式，请输入CIDR、子网掩码或反掩码",
-      records: [],
-    };
-  }
-
-  if (!ip) {
-    return { error: null, records: getMaskOnlyResults(cidr) };
-  }
-
-  if (!isValidIp(ip)) {
-    return { error: "无效的 IP 地址格式", records: [] };
-  }
-
-  return { error: null, records: calculateSubnetDetails(ip, cidr) };
+const evaluation = ref<{ error: string | null; records: CalcRecord[] }>({
+  error: null,
+  records: [],
 });
 
-// --- Subnetting Extension 计算逻辑 ---
-const getRequiredHostBits = (hosts: number) => {
-  let bits = 0;
-  while (Math.pow(2, bits) < hosts + 2) {
-    if (bits >= 32) break;
-    bits++;
-  }
-  return bits;
-};
+const subnettingEvaluation = ref<{
+  error: string | null;
+  warning: string | null;
+  showForceButton: boolean;
+  subnets: IPv4SubnetRow[];
+  totalSubnets: number;
+}>({
+  error: null,
+  warning: null,
+  showForceButton: false,
+  subnets: [],
+  totalSubnets: 0,
+});
 
-const getRequiredSubnetBits = (subnets: number) => {
-  let bits = 0;
-  while (Math.pow(2, bits) < subnets) {
-    if (bits >= 32) break;
-    bits++;
-  }
-  return bits;
-};
+let calcTicket = 0;
+const calculateFromBackend = async () => {
+  const ticket = ++calcTicket;
+  try {
+    const result = await ForgeAPI.calculateIPv4({
+      ip: ipStr.value,
+      mask: maskStr.value,
+      hostCount: hostCountStr.value,
+      subnetCount: subnetCountStr.value,
+      forceDisplayAllSubnets: forceDisplayAllSubnets.value,
+    });
 
-const subnettingEvaluation = computed(() => {
-  const ip = ipStr.value.trim();
-  const mask = maskStr.value.trim();
-  const hStr = hostCountStr.value.trim();
-  const sStr = subnetCountStr.value.trim();
+    if (ticket !== calcTicket) {
+      return;
+    }
 
-  if (!ip || !mask || (!hStr && !sStr)) {
-    return {
+    if (!result) {
+      evaluation.value = { error: null, records: [] };
+      subnettingEvaluation.value = {
+        error: null,
+        warning: null,
+        showForceButton: false,
+        subnets: [],
+        totalSubnets: 0,
+      };
+      return;
+    }
+
+    evaluation.value = {
+      error: result.baseError || null,
+      records: result.baseRecords || [],
+    };
+
+    subnettingEvaluation.value = {
+      error: result.subnetError || null,
+      warning: result.subnetWarning || null,
+      showForceButton: !!result.showForceButton,
+      subnets: result.subnets || [],
+      totalSubnets: result.totalSubnets || 0,
+    };
+  } catch {
+    if (ticket !== calcTicket) {
+      return;
+    }
+    evaluation.value = { error: "后端计算失败，请重试", records: [] };
+    subnettingEvaluation.value = {
       error: null,
       warning: null,
       showForceButton: false,
@@ -178,147 +91,23 @@ const subnettingEvaluation = computed(() => {
       totalSubnets: 0,
     };
   }
+};
 
-  const cidr = parseMaskOrWildcard(mask);
-  if (cidr === -1 || !isValidIp(ip)) {
-    return {
-      error: "请先完成上方基础网络信息的有效填写",
-      warning: null,
-      showForceButton: false,
-      subnets: [],
-      totalSubnets: 0,
-    };
-  }
-
-  let targetCidr = cidr;
-
-  if (hStr) {
-    const hosts = parseInt(hStr, 10);
-    if (isNaN(hosts) || hosts <= 0) {
-      return {
-        error: "请输入有效的主机数",
-        warning: null,
-        showForceButton: false,
-        subnets: [],
-        totalSubnets: 0,
-      };
-    }
-    const hostBits = getRequiredHostBits(hosts);
-    targetCidr = 32 - hostBits;
-    if (targetCidr < cidr) {
-      return {
-        error: `当前掩码 /${cidr} 的网络无法提供 ${hosts} 个连续主机的空间`,
-        warning: null,
-        showForceButton: false,
-        subnets: [],
-        totalSubnets: 0,
-      };
-    }
-  } else if (sStr) {
-    const subnets = parseInt(sStr, 10);
-    if (isNaN(subnets) || subnets <= 0) {
-      return {
-        error: "请输入有效的子网数",
-        warning: null,
-        showForceButton: false,
-        subnets: [],
-        totalSubnets: 0,
-      };
-    }
-    const subnetBits = getRequiredSubnetBits(subnets);
-    targetCidr = cidr + subnetBits;
-    if (targetCidr > 32) {
-      return {
-        error: `当前掩码 /${cidr} 无法划分出 ${subnets} 个子网，位空间不足`,
-        warning: null,
-        showForceButton: false,
-        subnets: [],
-        totalSubnets: 0,
-      };
-    }
-  }
-
-  const baseIpLong = ipToLong(ip);
-  const baseMaskLong = cidrToMaskLong(cidr);
-  const baseNetworkLong = baseIpLong & baseMaskLong;
-
-  const newMaskLong = cidrToMaskLong(targetCidr);
-
-  // Maximum subnets to avoid performance issues
-  const maxSubnetsToGenerate = 256;
-  const absoluteMaxSubnets = 65535; // Hard limit even on force display
-  const totalSubnets = Math.pow(2, targetCidr - cidr);
-
-  const subnetsList = [];
-  const step = Math.pow(2, 32 - targetCidr);
-
-  let generateCount = totalSubnets;
-  if (!forceDisplayAllSubnets.value) {
-    generateCount = Math.min(totalSubnets, maxSubnetsToGenerate);
-  } else {
-    generateCount = Math.min(totalSubnets, absoluteMaxSubnets);
-  }
-
-  for (let i = 0; i < generateCount; i++) {
-    const networkLong = baseNetworkLong + i * step;
-    const broadcastLong = networkLong | (~newMaskLong >>> 0);
-    const firstUsableLong = targetCidr < 31 ? networkLong + 1 : networkLong;
-    const lastUsableLong = targetCidr < 31 ? broadcastLong - 1 : broadcastLong;
-    const usableHosts =
-      targetCidr < 31
-        ? Math.pow(2, 32 - targetCidr) - 2
-        : targetCidr === 31
-          ? 2
-          : 1;
-
-    subnetsList.push({
-      index: i + 1,
-      network: longToIp(networkLong),
-      cidr: targetCidr,
-      firstUsable: usableHosts > 0 ? longToIp(firstUsableLong) : "N/A",
-      lastUsable: usableHosts > 0 ? longToIp(lastUsableLong) : "N/A",
-      broadcast: longToIp(broadcastLong),
-      mask: longToIp(newMaskLong),
-    });
-  }
-
-  let warning = null;
-  let showForceButton = false;
-  if (!forceDisplayAllSubnets.value && totalSubnets > maxSubnetsToGenerate) {
-    warning = `由于数据量过大，总计划分出 ${totalSubnets.toLocaleString()} 个子网，此处仅展示前 ${maxSubnetsToGenerate} 个保护浏览器性能。`;
-    showForceButton = true;
-  } else if (
-    forceDisplayAllSubnets.value &&
-    totalSubnets > absoluteMaxSubnets
-  ) {
-    warning = `数据量极其庞大！已强制展示前 ${absoluteMaxSubnets.toLocaleString()} 个子网。为防止浏览器崩溃，剩余数据不再渲染。`;
-    showForceButton = false;
-  } else if (
-    forceDisplayAllSubnets.value &&
-    totalSubnets > maxSubnetsToGenerate
-  ) {
-    warning = `已强制展示全部 ${totalSubnets.toLocaleString()} 个子网，由于节点众多，页面若有轻微卡顿属于正常现象。`;
-    showForceButton = false;
-  }
-
-  return {
-    error: null,
-    warning,
-    showForceButton,
-    subnets: subnetsList,
-    totalSubnets,
-  };
-});
-
-// 重置强制展示状态
 watch([ipStr, maskStr, hostCountStr, subnetCountStr], () => {
   forceDisplayAllSubnets.value = false;
 });
 
-// IP 自动格式化简化版 (限制输入字符)
+watch(
+  [ipStr, maskStr, hostCountStr, subnetCountStr, forceDisplayAllSubnets],
+  () => {
+    void calculateFromBackend();
+  },
+  { immediate: true },
+);
+
 watch(ipStr, (newVal) => {
   if (!newVal) return;
-  let sanitized = newVal.replace(/[^0-9.]/g, "");
+  const sanitized = newVal.replace(/[^0-9.]/g, "");
   if (sanitized !== newVal) {
     ipStr.value = sanitized;
   }
@@ -326,7 +115,7 @@ watch(ipStr, (newVal) => {
 
 watch(hostCountStr, (newVal) => {
   if (!newVal) return;
-  let sanitized = newVal.replace(/[^0-9]/g, "");
+  const sanitized = newVal.replace(/[^0-9]/g, "");
   if (sanitized !== newVal) {
     hostCountStr.value = sanitized;
   }
@@ -334,7 +123,7 @@ watch(hostCountStr, (newVal) => {
 
 watch(subnetCountStr, (newVal) => {
   if (!newVal) return;
-  let sanitized = newVal.replace(/[^0-9]/g, "");
+  const sanitized = newVal.replace(/[^0-9]/g, "");
   if (sanitized !== newVal) {
     subnetCountStr.value = sanitized;
   }
@@ -346,66 +135,42 @@ const copyText = (val: string) => {
   }
 };
 
-// 导出 CSV 功能
 const exportToCSV = () => {
-  const { subnets } = subnettingEvaluation.value;
-  if (!subnets || subnets.length === 0) return;
+  void (async () => {
+    try {
+      const exportResult = await ForgeAPI.exportIPv4SubnetsCSV({
+        ip: ipStr.value,
+        mask: maskStr.value,
+        hostCount: hostCountStr.value,
+        subnetCount: subnetCountStr.value,
+        forceDisplayAllSubnets: forceDisplayAllSubnets.value,
+      });
 
-  // 1. 准备 CSV 表头
-  const headers = [
-    "序号",
-    "网络号",
-    "CIDR",
-    "首个可用 IP",
-    "最后可用 IP",
-    "广播地址",
-    "子网掩码",
-  ];
+      if (!exportResult || !exportResult.content) {
+        return;
+      }
 
-  // 2. 准备 CSV 数据行
-  const csvRows = [];
-  csvRows.push(headers.join(",")); // 加入表头行
+      const blob = new Blob([exportResult.content], {
+        type: "text/csv;charset=utf-8;",
+      });
+      const url = URL.createObjectURL(blob);
 
-  subnets.forEach((item: any) => {
-    const row = [
-      item.index,
-      item.network,
-      item.cidr,
-      item.firstUsable,
-      item.lastUsable,
-      item.broadcast,
-      item.mask,
-    ];
-    // 使用双引号包裹每个字段，防止字段内部含有逗号破坏格式
-    const csvRow = row.map((val) => `"${val}"`).join(",");
-    csvRows.push(csvRow);
-  });
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute(
+        "download",
+        exportResult.fileName || "子网划分明细.csv",
+      );
+      link.style.visibility = "hidden";
 
-  const csvString = csvRows.join("\n");
-
-  // 3. 构建 Blob 和下载链接 (添加 \ufeff BOM 头防止 Excel 中文乱码)
-  const blobData: any[] = ["\ufeff" + csvString];
-  const blob = new Blob(blobData, { type: "text/csv;charset=utf-8;" });
-
-  // 绕过严格 TS 类型检查
-  const rawWindow: any = window;
-  const url = rawWindow.URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  // 动态文件名 (例如: 192.168.1.0_子网划分.csv)
-  const baseNet = subnets[0]?.network || "未知网络";
-  link.setAttribute(
-    "download",
-    `${baseNet.replace(/\./g, "_")}_子网划分明细.csv`,
-  );
-  link.style.visibility = "hidden";
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  // 释放内存
-  URL.revokeObjectURL(url);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch {
+      // 导出失败时静默处理，避免影响页面交互
+    }
+  })();
 };
 </script>
 

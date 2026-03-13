@@ -214,6 +214,363 @@ export class IPsValidationResult {
 }
 
 /**
+ * IPv4CalcRequest IPv4 计算请求。
+ */
+export class IPv4CalcRequest {
+    "ip": string;
+    "mask": string;
+    "hostCount": string;
+    "subnetCount": string;
+    "forceDisplayAllSubnets": boolean;
+
+    /** Creates a new IPv4CalcRequest instance. */
+    constructor($$source: Partial<IPv4CalcRequest> = {}) {
+        if (!("ip" in $$source)) {
+            this["ip"] = "";
+        }
+        if (!("mask" in $$source)) {
+            this["mask"] = "";
+        }
+        if (!("hostCount" in $$source)) {
+            this["hostCount"] = "";
+        }
+        if (!("subnetCount" in $$source)) {
+            this["subnetCount"] = "";
+        }
+        if (!("forceDisplayAllSubnets" in $$source)) {
+            this["forceDisplayAllSubnets"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new IPv4CalcRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): IPv4CalcRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new IPv4CalcRequest($$parsedSource as Partial<IPv4CalcRequest>);
+    }
+}
+
+/**
+ * IPv4CalcResult IPv4 计算结果。
+ */
+export class IPv4CalcResult {
+    "baseError": string;
+    "baseRecords": NetworkRecord[];
+    "subnetError": string;
+    "subnetWarning": string;
+    "showForceButton": boolean;
+    "subnets": IPv4SubnetItem[];
+    "totalSubnets": number;
+
+    /** Creates a new IPv4CalcResult instance. */
+    constructor($$source: Partial<IPv4CalcResult> = {}) {
+        if (!("baseError" in $$source)) {
+            this["baseError"] = "";
+        }
+        if (!("baseRecords" in $$source)) {
+            this["baseRecords"] = [];
+        }
+        if (!("subnetError" in $$source)) {
+            this["subnetError"] = "";
+        }
+        if (!("subnetWarning" in $$source)) {
+            this["subnetWarning"] = "";
+        }
+        if (!("showForceButton" in $$source)) {
+            this["showForceButton"] = false;
+        }
+        if (!("subnets" in $$source)) {
+            this["subnets"] = [];
+        }
+        if (!("totalSubnets" in $$source)) {
+            this["totalSubnets"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new IPv4CalcResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): IPv4CalcResult {
+        const $$createField1_0 = $$createType2;
+        const $$createField5_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("baseRecords" in $$parsedSource) {
+            $$parsedSource["baseRecords"] = $$createField1_0($$parsedSource["baseRecords"]);
+        }
+        if ("subnets" in $$parsedSource) {
+            $$parsedSource["subnets"] = $$createField5_0($$parsedSource["subnets"]);
+        }
+        return new IPv4CalcResult($$parsedSource as Partial<IPv4CalcResult>);
+    }
+}
+
+/**
+ * IPv4SubnetCSVResult IPv4 子网 CSV 导出结果。
+ */
+export class IPv4SubnetCSVResult {
+    "fileName": string;
+    "content": string;
+
+    /** Creates a new IPv4SubnetCSVResult instance. */
+    constructor($$source: Partial<IPv4SubnetCSVResult> = {}) {
+        if (!("fileName" in $$source)) {
+            this["fileName"] = "";
+        }
+        if (!("content" in $$source)) {
+            this["content"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new IPv4SubnetCSVResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): IPv4SubnetCSVResult {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new IPv4SubnetCSVResult($$parsedSource as Partial<IPv4SubnetCSVResult>);
+    }
+}
+
+/**
+ * IPv4SubnetItem IPv4 子网条目。
+ */
+export class IPv4SubnetItem {
+    "index": number;
+    "network": string;
+    "cidr": number;
+    "firstUsable": string;
+    "lastUsable": string;
+    "broadcast": string;
+    "mask": string;
+
+    /** Creates a new IPv4SubnetItem instance. */
+    constructor($$source: Partial<IPv4SubnetItem> = {}) {
+        if (!("index" in $$source)) {
+            this["index"] = 0;
+        }
+        if (!("network" in $$source)) {
+            this["network"] = "";
+        }
+        if (!("cidr" in $$source)) {
+            this["cidr"] = 0;
+        }
+        if (!("firstUsable" in $$source)) {
+            this["firstUsable"] = "";
+        }
+        if (!("lastUsable" in $$source)) {
+            this["lastUsable"] = "";
+        }
+        if (!("broadcast" in $$source)) {
+            this["broadcast"] = "";
+        }
+        if (!("mask" in $$source)) {
+            this["mask"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new IPv4SubnetItem instance from a string or object.
+     */
+    static createFrom($$source: any = {}): IPv4SubnetItem {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new IPv4SubnetItem($$parsedSource as Partial<IPv4SubnetItem>);
+    }
+}
+
+/**
+ * IPv6CalcRequest IPv6 计算请求。
+ */
+export class IPv6CalcRequest {
+    "ip": string;
+    "prefix": string;
+    "checkIp": string;
+    "newPrefix": string;
+
+    /** Creates a new IPv6CalcRequest instance. */
+    constructor($$source: Partial<IPv6CalcRequest> = {}) {
+        if (!("ip" in $$source)) {
+            this["ip"] = "";
+        }
+        if (!("prefix" in $$source)) {
+            this["prefix"] = "";
+        }
+        if (!("checkIp" in $$source)) {
+            this["checkIp"] = "";
+        }
+        if (!("newPrefix" in $$source)) {
+            this["newPrefix"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new IPv6CalcRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): IPv6CalcRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new IPv6CalcRequest($$parsedSource as Partial<IPv6CalcRequest>);
+    }
+}
+
+/**
+ * IPv6CalcResult IPv6 计算结果。
+ */
+export class IPv6CalcResult {
+    "baseError": string;
+    "baseRecords": NetworkRecord[];
+    "inclusionCheck"?: IPv6InclusionResult | null;
+    "subnetError": string;
+    "subnetWarning": string;
+    "subnets": IPv6SubnetItem[];
+    "totalSubnets": number;
+
+    /** Creates a new IPv6CalcResult instance. */
+    constructor($$source: Partial<IPv6CalcResult> = {}) {
+        if (!("baseError" in $$source)) {
+            this["baseError"] = "";
+        }
+        if (!("baseRecords" in $$source)) {
+            this["baseRecords"] = [];
+        }
+        if (!("subnetError" in $$source)) {
+            this["subnetError"] = "";
+        }
+        if (!("subnetWarning" in $$source)) {
+            this["subnetWarning"] = "";
+        }
+        if (!("subnets" in $$source)) {
+            this["subnets"] = [];
+        }
+        if (!("totalSubnets" in $$source)) {
+            this["totalSubnets"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new IPv6CalcResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): IPv6CalcResult {
+        const $$createField1_0 = $$createType2;
+        const $$createField2_0 = $$createType6;
+        const $$createField5_0 = $$createType8;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("baseRecords" in $$parsedSource) {
+            $$parsedSource["baseRecords"] = $$createField1_0($$parsedSource["baseRecords"]);
+        }
+        if ("inclusionCheck" in $$parsedSource) {
+            $$parsedSource["inclusionCheck"] = $$createField2_0($$parsedSource["inclusionCheck"]);
+        }
+        if ("subnets" in $$parsedSource) {
+            $$parsedSource["subnets"] = $$createField5_0($$parsedSource["subnets"]);
+        }
+        return new IPv6CalcResult($$parsedSource as Partial<IPv6CalcResult>);
+    }
+}
+
+/**
+ * IPv6InclusionResult IPv6 包含关系检查结果。
+ */
+export class IPv6InclusionResult {
+    "isIncluded": boolean;
+    "message": string;
+
+    /** Creates a new IPv6InclusionResult instance. */
+    constructor($$source: Partial<IPv6InclusionResult> = {}) {
+        if (!("isIncluded" in $$source)) {
+            this["isIncluded"] = false;
+        }
+        if (!("message" in $$source)) {
+            this["message"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new IPv6InclusionResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): IPv6InclusionResult {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new IPv6InclusionResult($$parsedSource as Partial<IPv6InclusionResult>);
+    }
+}
+
+/**
+ * IPv6SubnetItem IPv6 子网条目。
+ */
+export class IPv6SubnetItem {
+    "index": number;
+    "network": string;
+    "cidr": number;
+    "isIncluded": boolean;
+
+    /** Creates a new IPv6SubnetItem instance. */
+    constructor($$source: Partial<IPv6SubnetItem> = {}) {
+        if (!("index" in $$source)) {
+            this["index"] = 0;
+        }
+        if (!("network" in $$source)) {
+            this["network"] = "";
+        }
+        if (!("cidr" in $$source)) {
+            this["cidr"] = 0;
+        }
+        if (!("isIncluded" in $$source)) {
+            this["isIncluded"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new IPv6SubnetItem instance from a string or object.
+     */
+    static createFrom($$source: any = {}): IPv6SubnetItem {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new IPv6SubnetItem($$parsedSource as Partial<IPv6SubnetItem>);
+    }
+}
+
+/**
+ * NetworkRecord 通用标签值记录，供前端直接渲染。
+ */
+export class NetworkRecord {
+    "label": string;
+    "value": string;
+
+    /** Creates a new NetworkRecord instance. */
+    constructor($$source: Partial<NetworkRecord> = {}) {
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("value" in $$source)) {
+            this["value"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NetworkRecord instance from a string or object.
+     */
+    static createFrom($$source: any = {}): NetworkRecord {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new NetworkRecord($$parsedSource as Partial<NetworkRecord>);
+    }
+}
+
+/**
  * QueryOptions 通用查询条件
  * 用于设备列表、任务列表等分页查询
  */
@@ -390,3 +747,11 @@ export class RuntimeConfigData {
 
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
+const $$createType1 = NetworkRecord.createFrom;
+const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = IPv4SubnetItem.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = IPv6InclusionResult.createFrom;
+const $$createType6 = $Create.Nullable($$createType5);
+const $$createType7 = IPv6SubnetItem.createFrom;
+const $$createType8 = $Create.Array($$createType7);

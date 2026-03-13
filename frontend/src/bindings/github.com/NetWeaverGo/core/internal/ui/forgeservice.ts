@@ -29,6 +29,24 @@ export function BuildConfig(req: forge$0.BuildRequest | null): $CancellablePromi
 }
 
 /**
+ * CalculateIPv4 IPv4 网络信息与子网划分计算。
+ */
+export function CalculateIPv4(req: $models.IPv4CalcRequest): $CancellablePromise<$models.IPv4CalcResult | null> {
+    return $Call.ByID(325126253, req).then(($result: any) => {
+        return $$createType3($result);
+    });
+}
+
+/**
+ * CalculateIPv6 IPv6 网络信息、包含关系与子网划分计算。
+ */
+export function CalculateIPv6(req: $models.IPv6CalcRequest): $CancellablePromise<$models.IPv6CalcResult | null> {
+    return $Call.ByID(291571015, req).then(($result: any) => {
+        return $$createType5($result);
+    });
+}
+
+/**
  * DetectBindingMode 检测是否为绑定模式 (Wails Binding)
  * 模板第一行包含 [BindingDeviceIP] 时为绑定模式
  */
@@ -42,7 +60,16 @@ export function DetectBindingMode(template: string): $CancellablePromise<boolean
  */
 export function ExpandValues(req: forge$0.ExpandRequest | null): $CancellablePromise<forge$0.ExpandResult | null> {
     return $Call.ByID(3126028648, req).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType7($result);
+    });
+}
+
+/**
+ * ExportIPv4SubnetsCSV 导出 IPv4 子网划分 CSV（后端生成内容，前端仅触发下载）。
+ */
+export function ExportIPv4SubnetsCSV(req: $models.IPv4CalcRequest): $CancellablePromise<$models.IPv4SubnetCSVResult | null> {
+    return $Call.ByID(2255730601, req).then(($result: any) => {
+        return $$createType9($result);
     });
 }
 
@@ -51,7 +78,7 @@ export function ExpandValues(req: forge$0.ExpandRequest | null): $CancellablePro
  */
 export function GenerateBindingPreview(template: string, variables: forge$0.VarInput[]): $CancellablePromise<$models.BindingPreview[]> {
     return $Call.ByID(3138174978, template, variables).then(($result: any) => {
-        return $$createType5($result);
+        return $$createType11($result);
     });
 }
 
@@ -61,7 +88,7 @@ export function GenerateBindingPreview(template: string, variables: forge$0.VarI
  */
 export function ParseIPRange(ipRange: string): $CancellablePromise<$models.IPRangeResult | null> {
     return $Call.ByID(3033366997, ipRange).then(($result: any) => {
-        return $$createType7($result);
+        return $$createType13($result);
     });
 }
 
@@ -71,7 +98,7 @@ export function ParseIPRange(ipRange: string): $CancellablePromise<$models.IPRan
  */
 export function ValidateIP(ip: string): $CancellablePromise<$models.ForgeIPValidationResult | null> {
     return $Call.ByID(633841705, ip).then(($result: any) => {
-        return $$createType9($result);
+        return $$createType15($result);
     });
 }
 
@@ -81,20 +108,26 @@ export function ValidateIP(ip: string): $CancellablePromise<$models.ForgeIPValid
  */
 export function ValidateIPs(ipString: string): $CancellablePromise<$models.IPsValidationResult | null> {
     return $Call.ByID(3545105838, ipString).then(($result: any) => {
-        return $$createType11($result);
+        return $$createType17($result);
     });
 }
 
 // Private type creation functions
 const $$createType0 = forge$0.BuildResult.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = forge$0.ExpandResult.createFrom;
+const $$createType2 = $models.IPv4CalcResult.createFrom;
 const $$createType3 = $Create.Nullable($$createType2);
-const $$createType4 = $models.BindingPreview.createFrom;
-const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = $models.IPRangeResult.createFrom;
+const $$createType4 = $models.IPv6CalcResult.createFrom;
+const $$createType5 = $Create.Nullable($$createType4);
+const $$createType6 = forge$0.ExpandResult.createFrom;
 const $$createType7 = $Create.Nullable($$createType6);
-const $$createType8 = $models.ForgeIPValidationResult.createFrom;
+const $$createType8 = $models.IPv4SubnetCSVResult.createFrom;
 const $$createType9 = $Create.Nullable($$createType8);
-const $$createType10 = $models.IPsValidationResult.createFrom;
-const $$createType11 = $Create.Nullable($$createType10);
+const $$createType10 = $models.BindingPreview.createFrom;
+const $$createType11 = $Create.Array($$createType10);
+const $$createType12 = $models.IPRangeResult.createFrom;
+const $$createType13 = $Create.Nullable($$createType12);
+const $$createType14 = $models.ForgeIPValidationResult.createFrom;
+const $$createType15 = $Create.Nullable($$createType14);
+const $$createType16 = $models.IPsValidationResult.createFrom;
+const $$createType17 = $Create.Nullable($$createType16);

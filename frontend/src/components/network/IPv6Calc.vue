@@ -1,336 +1,108 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, watch } from "vue";
+import { ForgeAPI } from "../../services/api";
+
+type CalcRecord = { label: string; value: string };
+type InclusionState = { isIncluded: boolean; message: string } | null;
+type IPv6SubnetRow = {
+  index: number;
+  network: string;
+  cidr: number;
+  isIncluded: boolean;
+};
 
 const ipv6Str = ref("");
 const prefixStr = ref("");
-const v6CheckIpStr = ref(""); // 新增包含关系检查 IP
+const v6CheckIpStr = ref("");
+const v6NewPrefixStr = ref("");
 
-// —— IPv6 Utilities ——
+const evaluation = ref<{ error: string | null; records: CalcRecord[] }>({
+  error: null,
+  records: [],
+});
 
-// 验证 IPv6 地址格式 (支持压缩格式)
-const isValidIPv6 = (ip: string) => {
-  const ipv6Regex =
-    /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/;
-  return ipv6Regex.test(ip.trim());
-};
+const inclusionCheck = ref<InclusionState>(null);
 
-// 展开 IPv6 地址 (将 :: 替换为确切的 0000 块，确保 8 个块)
-const expandIPv6 = (ip: string) => {
-  if (!isValidIPv6(ip)) return null;
-  let full = ip.trim().toLowerCase();
+const v6SubnetEvaluation = ref<{
+  error: string | null;
+  warning: string | null;
+  subnets: IPv6SubnetRow[];
+  total: number;
+}>({
+  error: null,
+  warning: null,
+  subnets: [],
+  total: 0,
+});
 
-  if (full === "::") return "0000:0000:0000:0000:0000:0000:0000:0000";
+let calcTicket = 0;
+const calculateFromBackend = async () => {
+  const ticket = ++calcTicket;
+  try {
+    const result = await ForgeAPI.calculateIPv6({
+      ip: ipv6Str.value,
+      prefix: prefixStr.value,
+      checkIp: v6CheckIpStr.value,
+      newPrefix: v6NewPrefixStr.value,
+    });
 
-  let parts = full.split("::");
-  if (parts.length > 2) return null; // 错误格式：多个 ::
-
-  if (parts.length === 2) {
-    let left = parts[0] ? parts[0].split(":") : [];
-    let right = parts[1] ? parts[1].split(":") : [];
-    let missing = 8 - (left.length + right.length);
-    let middle = new Array(missing).fill("0000");
-    full = [...left, ...middle, ...right].join(":");
-  }
-
-  // 补齐每个块的 4 位 16 进制
-  return full
-    .split(":")
-    .map((block) => block.padStart(4, "0"))
-    .join(":");
-};
-
-// 压缩 IPv6 地址 (将最长的连续 0000 块替换为 ::)
-const compressIPv6 = (ip: string) => {
-  const expanded = expandIPv6(ip);
-  if (!expanded) return ip;
-
-  const blocks = expanded.split(":").map((b) => parseInt(b, 16).toString(16)); // 去除前导0
-  let maxZeroStart = -1;
-  let maxZeroLen = 0;
-  let currentZeroStart = -1;
-  let currentZeroLen = 0;
-
-  for (let i = 0; i < blocks.length; i++) {
-    if (blocks[i] === "0") {
-      if (currentZeroStart === -1) currentZeroStart = i;
-      currentZeroLen++;
-      if (currentZeroLen > maxZeroLen) {
-        maxZeroLen = currentZeroLen;
-        maxZeroStart = currentZeroStart;
-      }
-    } else {
-      currentZeroStart = -1;
-      currentZeroLen = 0;
+    if (ticket !== calcTicket) {
+      return;
     }
-  }
 
-  if (maxZeroLen > 1) {
-    // 只有连续两个及以上的 0 才压缩
-    blocks.splice(maxZeroStart, maxZeroLen, "");
-    let result = blocks.join(":");
-    if (result.startsWith(":")) result = ":" + result;
-    if (result.endsWith(":")) result = result + ":";
-    return result;
-  }
+    if (!result) {
+      evaluation.value = { error: null, records: [] };
+      inclusionCheck.value = null;
+      v6SubnetEvaluation.value = {
+        error: null,
+        warning: null,
+        subnets: [],
+        total: 0,
+      };
+      return;
+    }
 
-  return blocks.join(":");
-};
+    evaluation.value = {
+      error: result.baseError || null,
+      records: result.baseRecords || [],
+    };
 
-// 将 IPv6 转换为 128 位 BigInt
-const ipv6ToBigInt = (ip: string) => {
-  const expanded = expandIPv6(ip);
-  if (!expanded) return 0n;
-  const hex = expanded.replace(/:/g, "");
-  return BigInt("0x" + hex);
-};
+    inclusionCheck.value = result.inclusionCheck || null;
 
-// 将 BigInt 转换为展开的 IPv6 字符串
-const bigIntToIPv6 = (num: bigint) => {
-  let hex = num.toString(16).padStart(32, "0");
-  let blocks = [];
-  for (let i = 0; i < 32; i += 4) {
-    blocks.push(hex.substring(i, i + 4));
-  }
-  return blocks.join(":");
-};
-
-// 获取前缀长度掩码 (BigInt)
-const cidrToMaskBigInt = (prefix: number) => {
-  if (prefix === 0) return 0n;
-  if (prefix === 128) return (1n << 128n) - 1n; // 全 1
-  return ((1n << BigInt(prefix)) - 1n) << BigInt(128 - prefix);
-};
-
-// 根据前缀计算可用地址范围等
-const calculateIPv6Subnet = (ip: string, prefix: number) => {
-  const ipBigInt = ipv6ToBigInt(ip);
-  const maskBigInt = cidrToMaskBigInt(prefix);
-
-  const networkBigInt = ipBigInt & maskBigInt;
-  const broadcastBigInt = networkBigInt | (~maskBigInt & ((1n << 128n) - 1n)); // 128位取反
-
-  const networkStr = compressIPv6(bigIntToIPv6(networkBigInt));
-  const broadcastStr = compressIPv6(bigIntToIPv6(broadcastBigInt));
-
-  // 计算可用主机数 (2 ^ (128 - prefix))
-  // 注意：BigInt 运算，数量巨大，通常使用科学计数法或 2^n 表示
-  const hostBits = 128 - prefix;
-  let hostsStr = "";
-  if (hostBits === 0) {
-    hostsStr = "1 (表示单一地址)";
-  } else if (hostBits < 53) {
-    // 小于 Number.MAX_SAFE_INTEGER
-    hostsStr = Math.pow(2, hostBits).toLocaleString();
-  } else {
-    hostsStr = `2^${hostBits} (极其庞大)`;
-  }
-
-  return [
-    { label: "完整地址展示", value: expandIPv6(ip) || "" },
-    { label: "压缩地址展示", value: compressIPv6(ip) || "" },
-    { label: "网络前缀 / CIDR", value: `/${prefix}` },
-    { label: "网络地址", value: networkStr },
-    { label: "类型", value: getIPv6Type(expandIPv6(ip)) },
-    {
-      label: "可用 IP 范围",
-      value: hostBits === 0 ? networkStr : `${networkStr} - ${broadcastStr}`,
-    },
-    { label: "地址总数", value: hostsStr },
-  ];
-};
-
-const getIPv6Type = (expandedIp: string | null | undefined) => {
-  if (!expandedIp) return "未知";
-  const parts = expandedIp.split(":");
-  const firstBlockStr = parts[0];
-  if (!firstBlockStr) return "未知";
-  const firstBlock = parseInt(firstBlockStr, 16);
-
-  if (expandedIp === "0000:0000:0000:0000:0000:0000:0000:0000")
-    return "未指定地址 (Unspecified)";
-  if (expandedIp === "0000:0000:0000:0000:0000:0000:0000:0001")
-    return "环回地址 (Loopback)";
-
-  if ((firstBlock & 0xff00) === 0xff00) return "组播地址 (Multicast)";
-  if ((firstBlock & 0xfe80) === 0xfe80) return "链路本地单播 (Link-Local)";
-  if ((firstBlock & 0xfec0) === 0xfec0)
-    return "站点本地单播 (Site-Local) - 已废弃";
-  if ((firstBlock & 0xfc00) === 0xfc00 || (firstBlock & 0xfd00) === 0xfd00)
-    return "唯一本地地址 (ULA)";
-  if ((firstBlock & 0xe000) === 0x2000) return "全球单播地址 (Global Unicast)";
-
-  return "未知/保留地址";
-};
-
-const evaluation = computed(() => {
-  const ip = ipv6Str.value.trim();
-  const prefix = prefixStr.value.trim();
-
-  if (!ip) return { error: null, records: [] };
-  if (!isValidIPv6(ip)) return { error: "无效的 IPv6 地址格式", records: [] };
-
-  if (!prefix) {
-    return {
+    v6SubnetEvaluation.value = {
+      error: result.subnetError || null,
+      warning: result.subnetWarning || null,
+      subnets: result.subnets || [],
+      total: result.totalSubnets || 0,
+    };
+  } catch {
+    if (ticket !== calcTicket) {
+      return;
+    }
+    evaluation.value = { error: "后端计算失败，请重试", records: [] };
+    inclusionCheck.value = null;
+    v6SubnetEvaluation.value = {
       error: null,
-      records: [
-        { label: "完整地址展示", value: expandIPv6(ip) || "" },
-        { label: "压缩地址展示", value: compressIPv6(ip) || "" },
-        { label: "类型", value: getIPv6Type(expandIPv6(ip)) },
-      ],
+      warning: null,
+      subnets: [],
+      total: 0,
     };
   }
+};
 
-  const prefixNum = parseInt(
-    prefix.startsWith("/") ? prefix.substring(1) : prefix,
-    10,
-  );
-
-  if (isNaN(prefixNum) || prefixNum < 0 || prefixNum > 128) {
-    return { error: "前缀长度必须在 0 到 128 之间", records: [] };
-  }
-
-  return {
-    error: null,
-    records: calculateIPv6Subnet(ip, prefixNum).map((r) => ({
-      ...r,
-      value: r.value || "",
-    })),
-  };
-});
-
-// --- IPv6 包含关系检查逻辑 ---
-const inclusionCheck = computed(() => {
-  const ip = ipv6Str.value.trim();
-  const prefix = prefixStr.value.trim();
-  const checkIp = v6CheckIpStr.value.trim();
-
-  if (!ip || !prefix || !checkIp) return null;
-  if (!isValidIPv6(ip) || !isValidIPv6(checkIp)) return null;
-
-  const prefixNum = parseInt(
-    prefix.startsWith("/") ? prefix.substring(1) : prefix,
-    10,
-  );
-  if (isNaN(prefixNum) || prefixNum < 0 || prefixNum > 128) return null;
-
-  const baseIpBigInt = ipv6ToBigInt(ip);
-  const checkIpBigInt = ipv6ToBigInt(checkIp);
-  const maskBigInt = cidrToMaskBigInt(prefixNum);
-
-  const baseNetwork = baseIpBigInt & maskBigInt;
-  const checkNetwork = checkIpBigInt & maskBigInt;
-
-  const isIncluded = baseNetwork === checkNetwork;
-
-  return {
-    isIncluded,
-    message: isIncluded
-      ? `地址 ${checkIp} 包含在当前 ${compressIPv6(bigIntToIPv6(baseNetwork))}/${prefixNum} 网段内`
-      : `地址 ${checkIp} 不在此网段内`,
-  };
-});
+watch(
+  [ipv6Str, prefixStr, v6CheckIpStr, v6NewPrefixStr],
+  () => {
+    void calculateFromBackend();
+  },
+  { immediate: true },
+);
 
 const copyText = (val: string) => {
   if (val && val !== "N/A") {
     navigator.clipboard.writeText(val);
   }
 };
-
-// --- v6 Subnetting ---
-const v6NewPrefixStr = ref("");
-
-const v6SubnetEvaluation = computed(() => {
-  const ip = ipv6Str.value.trim();
-  const prefix = prefixStr.value.trim();
-  const newPrefixRaw = v6NewPrefixStr.value.trim();
-
-  if (!ip || !prefix || !newPrefixRaw) {
-    return { error: null, subnets: [], total: 0 };
-  }
-
-  if (!isValidIPv6(ip))
-    return { error: "请先完成上方有效 IPv6 填写", subnets: [], total: 0 };
-
-  const prefixNum = parseInt(
-    prefix.startsWith("/") ? prefix.substring(1) : prefix,
-    10,
-  );
-  if (isNaN(prefixNum) || prefixNum < 0 || prefixNum > 128)
-    return { error: "请填写正确的原前缀长度", subnets: [], total: 0 };
-
-  const newPrefixNum = parseInt(
-    newPrefixRaw.startsWith("/") ? newPrefixRaw.substring(1) : newPrefixRaw,
-    10,
-  );
-  if (isNaN(newPrefixNum) || newPrefixNum <= prefixNum || newPrefixNum > 128) {
-    return {
-      error: `新前缀必须大于原前缀 (${prefixNum}) 且不超过 128`,
-      subnets: [],
-      total: 0,
-    };
-  }
-
-  const diff = newPrefixNum - prefixNum;
-  if (diff > 16) {
-    return {
-      error: `单次最多仅支持下拨 16 位 (即 65536 个子网)，当前尝试下拨 ${diff} 位，数据过大导致浏览器越界。`,
-      subnets: [],
-      total: 0,
-    };
-  }
-
-  const totalSubnets = Math.pow(2, diff);
-  const maxSubnets = 256;
-
-  const subnets = [];
-  const baseIpBigInt = ipv6ToBigInt(ip);
-  const baseMaskBigInt = cidrToMaskBigInt(prefixNum);
-  const networkBigInt = baseIpBigInt & baseMaskBigInt;
-
-  const step = 1n << BigInt(128 - newPrefixNum); // 每次增加的步长
-
-  const limit = Math.min(totalSubnets, maxSubnets);
-  const checkIp = v6CheckIpStr.value.trim();
-  const isCheckValid = isValidIPv6(checkIp);
-  let checkIpBigInt = 0n;
-  let targetSubnetMask = 0n;
-  if (isCheckValid) {
-    checkIpBigInt = ipv6ToBigInt(checkIp);
-    targetSubnetMask = cidrToMaskBigInt(newPrefixNum);
-  }
-
-  for (let i = 0n; i < BigInt(limit); i++) {
-    const subNetInt = networkBigInt + i * step;
-    const subNetStr = compressIPv6(bigIntToIPv6(subNetInt));
-
-    // 检查用户输入的待检IP是否落在当前这个拆分的小子网内
-    let isIncluded = false;
-    if (isCheckValid) {
-      const currentSubNetwork = subNetInt & targetSubnetMask;
-      const checkIpNetwork = checkIpBigInt & targetSubnetMask;
-      if (
-        currentSubNetwork === checkIpNetwork &&
-        inclusionCheck.value?.isIncluded
-      ) {
-        isIncluded = true;
-      }
-    }
-
-    subnets.push({
-      index: Number(i) + 1,
-      network: subNetStr,
-      cidr: newPrefixNum,
-      isIncluded,
-    });
-  }
-
-  let warning = null;
-  if (totalSubnets > maxSubnets) {
-    warning = `总计划分出 ${totalSubnets.toLocaleString()} 个子网，为保护页面性能，此处仅展示前 ${maxSubnets} 个。`;
-  }
-
-  return { error: null, warning, subnets, total: totalSubnets };
-});
 </script>
 
 <template>
@@ -725,3 +497,4 @@ const v6SubnetEvaluation = computed(() => {
   transform: translateY(-10px);
 }
 </style>
+

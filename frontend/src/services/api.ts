@@ -167,6 +167,12 @@ export const ForgeAPI = {
   detectBindingMode: ForgeServiceBinding.DetectBindingMode,
   /** 生成绑定模式预览 */
   generateBindingPreview: ForgeServiceBinding.GenerateBindingPreview,
+  /** IPv4 子网计算（后端计算，前端只渲染） */
+  calculateIPv4: ForgeServiceBinding.CalculateIPv4,
+  /** 导出 IPv4 子网 CSV（后端生成） */
+  exportIPv4SubnetsCSV: ForgeServiceBinding.ExportIPv4SubnetsCSV,
+  /** IPv6 子网计算（后端计算，前端只渲染） */
+  calculateIPv6: ForgeServiceBinding.CalculateIPv6,
 } as const
 
 // 导出 Forge 相关类型（从正确的 models 文件导入）
