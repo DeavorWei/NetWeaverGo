@@ -13,7 +13,13 @@ import (
 )
 
 func main() {
-	if err := logger.InitGlobalLogger(); err != nil {
+	pm := config.GetPathManager()
+	if err := pm.EnsureDirectories(); err != nil {
+		fmt.Printf("存储目录初始化失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := logger.InitGlobalLogger(pm.GetAppLogPath()); err != nil {
 		fmt.Printf("日志系统初始化失败: %v\n", err)
 		os.Exit(1)
 	}

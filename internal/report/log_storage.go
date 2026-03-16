@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
 )
 
@@ -39,8 +40,7 @@ type LogIndex struct {
 
 // NewLogStorage 创建日志存储管理器
 func NewLogStorage() (*LogStorage, error) {
-	cwd, _ := os.Getwd()
-	storageDir := filepath.Join(cwd, "data", "logs")
+	storageDir := config.GetPathManager().GetExecutionLiveLogDir()
 
 	if err := os.MkdirAll(storageDir, 0755); err != nil {
 		return nil, fmt.Errorf("创建日志目录失败: %v", err)

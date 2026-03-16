@@ -243,7 +243,8 @@ func (e *Engine) emitEventDirect(ev report.ExecutorEvent) {
 func (e *Engine) Run(ctx context.Context) error {
 	logger.Debug("Engine", "-", "Run() 开始，将向 %d 台设备分发任务 (MaxWorkers=%d)", len(e.Devices), e.MaxWorkers)
 	logger.Info("Engine", "-", "控制台引擎启动，共准备向 %d 台设备下发 %d 条命令...", len(e.Devices), len(e.Commands))
-	logger.Info("Engine", "-", "当前已配置全局并发安全限制 (MaxWorkers=%d)。\n设备回显位于 output/ 目录，系统日志位于 logs/app.log，正在分批并发下发中...", e.MaxWorkers)
+	pm := config.GetPathManager()
+	logger.Info("Engine", "-", "当前已配置全局并发安全限制 (MaxWorkers=%d)。\n执行日志位于 %s，系统日志位于 %s，正在分批并发下发中...", e.MaxWorkers, pm.GetExecutionLiveLogDir(), pm.GetAppLogPath())
 
 	logger.ConsoleMuted = true
 	defer func() { logger.ConsoleMuted = false }()
@@ -321,7 +322,7 @@ func (e *Engine) Run(ctx context.Context) error {
 	e.gracefulCloseWithoutCancel()
 
 	if e.tracker != nil {
-		e.tracker.ExportCSV(e.Settings.OutputDir)
+		_, _ = e.tracker.ExportCSV()
 	}
 
 	// 最终谢幕，保留一条普通的记录
@@ -702,7 +703,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 	}
 
 	fileName := fmt.Sprintf("%s_%s%s", dev.IP, nowStr, ext)
-	localPath := filepath.Join("confBakup", dateDir, fileName)
+	localPath := config.GetPathManager().GetBackupFilePath(dateDir, fileName)
 
 	// 因为大多数华为/华三设备上的 SFTP 需要准确的 flash 位置：
 	// 根据 SFTP 子系统不同，"flash:/1.cfg" 需要作为 "1.cfg" 或 "/1.cfg" 来获取。

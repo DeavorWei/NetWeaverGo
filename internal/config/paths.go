@@ -1,30 +1,47 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
-// PathManager 统一管理应用的所有文件路径
+const (
+	defaultStorageRootName = "netWeaverGoData"
+	storageBootstrapFile   = "storage_root.json"
+	sqliteFileName         = "netweaver.db"
+)
+
+type storageRootBootstrap struct {
+	StorageRoot string `json:"storageRoot"`
+}
+
+// PathManager 统一管理应用所有运行时路径
 type PathManager struct {
 	mu sync.RWMutex
 
-	// 基础目录
-	WorkDir   string // 工作目录
-	DataDir   string // 数据目录
-	OutputDir string // 输出目录
-	LogDir    string // 日志目录
+	WorkDir            string
+	DefaultStorageRoot string
+	StorageRoot        string
 
-	// 数据库文件
-	DBPath string
+	DBDir                string
+	DBPath               string
+	AppLogDir            string
+	AppLogPath           string
+	ExecutionReportDir   string
+	ExecutionLiveLogDir  string
+	BackupConfigDir      string
+	LegacyInventoryFile  string
+	LegacyConfigFile     string
+	LegacyCommandGroups  string
+	LegacyTaskGroupsFile string
 
-	// 配置文件
-	SettingsFile string // settings.yaml
-
-	// 遗留文件（兼容旧版本）
-	InventoryFile string // inventory.csv
-	ConfigFile    string // config.txt
+	bootstrapPath string
 }
 
 // 全局路径管理器
@@ -41,98 +58,228 @@ func GetPathManager() *PathManager {
 	return pathManager
 }
 
-// newPathManager 创建路径管理器
-func newPathManager() *PathManager {
-	cwd, _ := os.Getwd()
+// NormalizeStorageRoot 将用户输入路径标准化为绝对路径；空字符串时回退默认根目录
+func NormalizeStorageRoot(candidate string) string {
+	pm := GetPathManager()
+	pm.mu.RLock()
+	workDir := pm.WorkDir
+	pm.mu.RUnlock()
+	return normalizeStorageRootCandidate(workDir, candidate)
+}
 
-	pm := &PathManager{
-		WorkDir:   cwd,
-		DataDir:   filepath.Join(cwd, "data"),
-		OutputDir: filepath.Join(cwd, "output"),
-		LogDir:    filepath.Join(cwd, "logs"),
-
-		// 遗留文件路径
-		InventoryFile: filepath.Join(cwd, "inventory.csv"),
-		ConfigFile:    filepath.Join(cwd, "config.txt"),
+// ValidateStorageRootWritable 校验目录可写
+func ValidateStorageRootWritable(candidate string) error {
+	normalized := NormalizeStorageRoot(candidate)
+	if err := os.MkdirAll(normalized, 0755); err != nil {
+		return fmt.Errorf("创建数据根目录失败: %w", err)
 	}
 
-	// 数据库路径
-	pm.DBPath = filepath.Join(pm.DataDir, "netweaver.db")
+	fp, err := os.CreateTemp(normalized, ".write-check-*")
+	if err != nil {
+		return fmt.Errorf("数据根目录不可写: %w", err)
+	}
+	path := fp.Name()
+	_ = fp.Close()
+	_ = os.Remove(path)
+	return nil
+}
 
-	// 配置文件路径
-	pm.SettingsFile = filepath.Join(pm.DataDir, "settings.yaml")
+// newPathManager 创建路径管理器
+func newPathManager() *PathManager {
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "."
+	}
 
+	defaultRoot := filepath.Join(cwd, defaultStorageRootName)
+	pm := &PathManager{
+		WorkDir:              cwd,
+		DefaultStorageRoot:   defaultRoot,
+		StorageRoot:          defaultRoot,
+		bootstrapPath:        filepath.Join(defaultRoot, storageBootstrapFile),
+		LegacyInventoryFile:  filepath.Join(cwd, "inventory.csv"),
+		LegacyConfigFile:     filepath.Join(cwd, "config.txt"),
+		LegacyCommandGroups:  filepath.Join(cwd, "commands", "groups.json"),
+		LegacyTaskGroupsFile: filepath.Join(cwd, "commands", "tasks.json"),
+	}
+
+	if storageRoot, loadErr := pm.loadBootstrapStorageRoot(); loadErr == nil && strings.TrimSpace(storageRoot) != "" {
+		pm.StorageRoot = normalizeStorageRootCandidate(cwd, storageRoot)
+	} else if loadErr != nil && !os.IsNotExist(loadErr) {
+		logger.Warn("Config", "-", "读取 storage root bootstrap 失败，回退默认目录: %v", loadErr)
+	}
+
+	pm.rebuildDerivedPathsLocked()
 	return pm
 }
 
-// EnsureDirectories 确保所有必要的目录存在
-func (pm *PathManager) EnsureDirectories() error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
-
-	dirs := []string{
-		pm.DataDir,
-		pm.OutputDir,
-		pm.LogDir,
+func normalizeStorageRootCandidate(workDir, candidate string) string {
+	trimmed := strings.TrimSpace(candidate)
+	if trimmed == "" {
+		trimmed = filepath.Join(workDir, defaultStorageRootName)
 	}
+	if !filepath.IsAbs(trimmed) {
+		trimmed = filepath.Join(workDir, trimmed)
+	}
+	return filepath.Clean(trimmed)
+}
 
+func (pm *PathManager) rebuildDerivedPathsLocked() {
+	pm.DBDir = filepath.Join(pm.StorageRoot, "db")
+	pm.DBPath = filepath.Join(pm.DBDir, sqliteFileName)
+	pm.AppLogDir = filepath.Join(pm.StorageRoot, "logs", "app")
+	pm.AppLogPath = filepath.Join(pm.AppLogDir, "app.log")
+	pm.ExecutionReportDir = filepath.Join(pm.StorageRoot, "execution", "reports")
+	pm.ExecutionLiveLogDir = filepath.Join(pm.StorageRoot, "execution", "live-logs")
+	pm.BackupConfigDir = filepath.Join(pm.StorageRoot, "backup", "config")
+}
+
+func (pm *PathManager) ensureDirectoriesLocked() error {
+	dirs := []string{
+		pm.DBDir,
+		pm.AppLogDir,
+		pm.ExecutionReportDir,
+		pm.ExecutionLiveLogDir,
+		pm.BackupConfigDir,
+		filepath.Dir(pm.bootstrapPath),
+	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
-// GetReportPath 获取报告文件路径
-func (pm *PathManager) GetReportPath(filename string) string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return filepath.Join(pm.OutputDir, filename)
+func (pm *PathManager) loadBootstrapStorageRoot() (string, error) {
+	data, err := os.ReadFile(pm.bootstrapPath)
+	if err != nil {
+		return "", err
+	}
+	var bootstrap storageRootBootstrap
+	if err := json.Unmarshal(data, &bootstrap); err != nil {
+		return "", err
+	}
+	return bootstrap.StorageRoot, nil
 }
 
-// GetBackupPath 获取备份文件路径
-func (pm *PathManager) GetBackupPath(subdir string) string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return filepath.Join(pm.OutputDir, "confBakup", subdir)
+func (pm *PathManager) persistBootstrapLocked() error {
+	if err := os.MkdirAll(filepath.Dir(pm.bootstrapPath), 0755); err != nil {
+		return err
+	}
+	payload := storageRootBootstrap{StorageRoot: pm.StorageRoot}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(pm.bootstrapPath, data, 0644)
 }
 
-// GetLogPath 获取日志文件路径
-func (pm *PathManager) GetLogPath(filename string) string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return filepath.Join(pm.LogDir, filename)
-}
-
-// SetOutputDir 设置输出目录（允许运行时修改）
-func (pm *PathManager) SetOutputDir(dir string) {
+// EnsureDirectories 确保所有必要目录存在
+func (pm *PathManager) EnsureDirectories() error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	pm.OutputDir = dir
+	return pm.ensureDirectoriesLocked()
 }
 
-// SetLogDir 设置日志目录
-func (pm *PathManager) SetLogDir(dir string) {
+// UpdateStorageRoot 更新数据根目录，并持久化 bootstrap
+func (pm *PathManager) UpdateStorageRoot(candidate string) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	pm.LogDir = dir
+
+	pm.StorageRoot = normalizeStorageRootCandidate(pm.WorkDir, candidate)
+	pm.rebuildDerivedPathsLocked()
+
+	if err := pm.ensureDirectoriesLocked(); err != nil {
+		return err
+	}
+	if err := pm.persistBootstrapLocked(); err != nil {
+		return err
+	}
+	return nil
 }
 
-// GetAllPaths 获取所有路径信息（用于调试）
+func (pm *PathManager) GetStorageRoot() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.StorageRoot
+}
+
+func (pm *PathManager) GetDBPath() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.DBPath
+}
+
+func (pm *PathManager) GetAppLogPath() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.AppLogPath
+}
+
+func (pm *PathManager) GetExecutionReportDir() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.ExecutionReportDir
+}
+
+func (pm *PathManager) GetExecutionLiveLogDir() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.ExecutionLiveLogDir
+}
+
+func (pm *PathManager) GetBackupDir() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.BackupConfigDir
+}
+
+func (pm *PathManager) GetBackupFilePath(subDir, fileName string) string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	if strings.TrimSpace(subDir) == "" {
+		return filepath.Join(pm.BackupConfigDir, fileName)
+	}
+	return filepath.Join(pm.BackupConfigDir, subDir, fileName)
+}
+
+func (pm *PathManager) GetLegacyInventoryFile() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.LegacyInventoryFile
+}
+
+func (pm *PathManager) GetLegacyConfigFile() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.LegacyConfigFile
+}
+
+func (pm *PathManager) GetLegacyCommandGroupsFile() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.LegacyCommandGroups
+}
+
+func (pm *PathManager) GetLegacyTaskGroupsFile() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.LegacyTaskGroupsFile
+}
+
+// GetAllPaths 获取全部路径（调试用）
 func (pm *PathManager) GetAllPaths() map[string]string {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
-
 	return map[string]string{
-		"workDir":       pm.WorkDir,
-		"dataDir":       pm.DataDir,
-		"outputDir":     pm.OutputDir,
-		"logDir":        pm.LogDir,
-		"dbPath":        pm.DBPath,
-		"settingsFile":  pm.SettingsFile,
-		"inventoryFile": pm.InventoryFile,
-		"configFile":    pm.ConfigFile,
+		"workDir":             pm.WorkDir,
+		"defaultStorageRoot":  pm.DefaultStorageRoot,
+		"storageRoot":         pm.StorageRoot,
+		"dbPath":              pm.DBPath,
+		"appLogPath":          pm.AppLogPath,
+		"executionReportDir":  pm.ExecutionReportDir,
+		"executionLiveLogDir": pm.ExecutionLiveLogDir,
+		"backupConfigDir":     pm.BackupConfigDir,
 	}
 }

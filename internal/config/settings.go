@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/NetWeaverGo/core/internal/logger"
 	"gorm.io/gorm"
@@ -28,8 +29,7 @@ type GlobalSettings struct {
 	MaxWorkers     int    `json:"maxWorkers"`     // 并发数 (当前硬编码为 32)
 	ConnectTimeout string `json:"connectTimeout"` // SSH/SFTP 连接超时 (如 "10s")
 	CommandTimeout string `json:"commandTimeout"` // 单条命令默认超时 (如 "30s")
-	OutputDir      string `json:"outputDir"`      // 回显输出与配置备份的根目录
-	LogDir         string `json:"logDir"`         // 系统运行日志存放目录
+	StorageRoot    string `json:"storageRoot"`    // 统一数据根目录
 	ErrorMode      string `json:"errorMode"`      // "pause" | "skip" | "abort"
 
 	// 调试日志开关
@@ -46,8 +46,7 @@ func DefaultSettings() GlobalSettings {
 		MaxWorkers:     32,
 		ConnectTimeout: "10s",
 		CommandTimeout: "30s",
-		OutputDir:      "output",
-		LogDir:         "logs",
+		StorageRoot:    GetPathManager().GetStorageRoot(),
 		ErrorMode:      "pause",
 		Debug:          false,
 		DebugAll:       false,
@@ -101,6 +100,10 @@ func LoadSettings() (*GlobalSettings, bool, error) {
 		return nil, false, err
 	}
 
+	if strings.TrimSpace(st.StorageRoot) == "" {
+		st.StorageRoot = GetPathManager().GetStorageRoot()
+	}
+
 	// 应用数据库中的调试设置
 	ApplyDebugSettings(st.Debug, st.DebugAll)
 
@@ -124,9 +127,9 @@ func ApplyDebugSettings(debug, debugAll bool) {
 // SaveSettings 保存全局设置到数据库
 func SaveSettings(settings GlobalSettings) error {
 	logger.Debug("Config", "-", "准备将更新后的全局参数覆盖保存至本地数据库...")
-	logger.DebugAll("Config", "-", "保存内容: workers=%d, connect=%s, cmd=%s, error=%s, debug=%v, debugAll=%v",
+	logger.DebugAll("Config", "-", "保存内容: workers=%d, connect=%s, cmd=%s, error=%s, storageRoot=%s, debug=%v, debugAll=%v",
 		settings.MaxWorkers, settings.ConnectTimeout, settings.CommandTimeout, settings.ErrorMode,
-		settings.Debug, settings.DebugAll)
+		settings.StorageRoot, settings.Debug, settings.DebugAll)
 	logger.DebugAll("Config", "-", "SSH算法配置: presetMode=%s, ciphers=%d, keyExchanges=%d, macs=%d, hostKeys=%d",
 		settings.SSHAlgorithms.PresetMode,
 		len(settings.SSHAlgorithms.Ciphers),
@@ -138,12 +141,40 @@ func SaveSettings(settings GlobalSettings) error {
 		logger.Error("Config", "-", "数据库未初始化，无法保存设置")
 		return fmt.Errorf("数据库未初始化")
 	}
+
+	normalizedStorageRoot := NormalizeStorageRoot(settings.StorageRoot)
+	if err := ValidateStorageRootWritable(normalizedStorageRoot); err != nil {
+		return err
+	}
+	settings.StorageRoot = normalizedStorageRoot
+
+	pm := GetPathManager()
+	currentStorageRoot := pm.GetStorageRoot()
+	currentDBPath := pm.GetDBPath()
+
 	settings.ID = 1
 	err := DB.Save(&settings).Error
 	if err != nil {
 		logger.Error("Config", "-", "全局配置保存产生错误: %v", err)
 		return err
 	}
+
+	if settings.StorageRoot != currentStorageRoot {
+		if err := pm.UpdateStorageRoot(settings.StorageRoot); err != nil {
+			return fmt.Errorf("更新存储根目录失败: %w", err)
+		}
+
+		if err := logger.ReconfigureGlobalLogger(pm.GetAppLogPath()); err != nil {
+			return fmt.Errorf("切换日志目录失败: %w", err)
+		}
+
+		newDBPath := pm.GetDBPath()
+		if err := MirrorDatabaseToPath(currentDBPath, newDBPath); err != nil {
+			return fmt.Errorf("迁移数据库到新存储目录失败: %w", err)
+		}
+		logger.Info("Config", "-", "存储根目录已更新: %s", settings.StorageRoot)
+	}
+
 	// 保存后立即应用调试设置
 	ApplyDebugSettings(settings.Debug, settings.DebugAll)
 	logger.DebugAll("Config", "-", "全局参数保存落库完毕，ID=%d", settings.ID)

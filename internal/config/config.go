@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -34,8 +35,8 @@ var ProtocolDefaultPorts = map[string]int{
 var ValidProtocols = []string{"SSH", "SNMP", "TELNET"}
 
 const (
-	inventoryFile = "inventory.csv"
-	configFile    = "config.txt"
+	defaultInventoryFile = "inventory.csv"
+	defaultConfigFile    = "config.txt"
 )
 
 // LoadExecutionResources 获取执行所需的设备资产和默认命令组
@@ -86,9 +87,12 @@ func LoadDefaultCommands() ([]string, error) {
 }
 
 // readInventoryLegacy 读取并解析旧版资产清单文件
-func readInventoryLegacy() ([]DeviceAsset, error) {
-	logger.DebugAll("Config", "-", "尝试打开文件: %s", inventoryFile)
-	file, err := os.Open(inventoryFile)
+func readInventoryLegacy(filePath string) ([]DeviceAsset, error) {
+	if strings.TrimSpace(filePath) == "" {
+		filePath = filepath.Join(GetPathManager().WorkDir, defaultInventoryFile)
+	}
+	logger.DebugAll("Config", "-", "尝试打开文件: %s", filePath)
+	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +176,12 @@ func readInventoryLegacy() ([]DeviceAsset, error) {
 
 // readCommandsLegacy 读取并解析旧版命令列表文件
 func readCommandsLegacy() ([]string, error) {
-	logger.DebugAll("Config", "-", "尝试打开文件: %s", configFile)
-	content, err := os.ReadFile(configFile)
+	configPath := GetPathManager().GetLegacyConfigFile()
+	if strings.TrimSpace(configPath) == "" {
+		configPath = filepath.Join(GetPathManager().WorkDir, defaultConfigFile)
+	}
+	logger.DebugAll("Config", "-", "尝试打开文件: %s", configPath)
+	content, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}

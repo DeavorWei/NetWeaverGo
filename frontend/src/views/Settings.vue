@@ -96,24 +96,12 @@
           存储路径
         </h3>
         <div class="settings-auto-grid">
-          <!-- 输出目录 -->
           <div class="space-y-2">
-            <label class="settings-label">输出目录 <HelpTip text="回显输出与配置备份文件的保存目录。" /></label>
+            <label class="settings-label">数据根目录 <HelpTip text="统一数据根目录，系统会在其下自动创建 db/logs/execution/backup 子目录。" /></label>
           <input
             type="text"
-            v-model="settings.outputDir"
-            placeholder="如: output"
-            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-          />
-          </div>
-
-          <!-- 日志目录 -->
-          <div class="space-y-2">
-            <label class="settings-label">日志目录 <HelpTip text="系统运行日志文件保存目录，默认 logs。" /></label>
-          <input
-            type="text"
-            v-model="settings.logDir"
-            placeholder="如: logs"
+            v-model="settings.storageRoot"
+            placeholder="如: ./netWeaverGoData"
             class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
           />
           </div>
@@ -181,7 +169,7 @@
                 <line x1="12" y1="8" x2="12.01" y2="8"/>
               </svg>
               <p class="text-xs text-info">
-                启用 DebugAll 会自动同时启用 Debug。日志文件保存在 <code class="bg-bg-panel px-1 py-0.5 rounded">{{ settings.logDir || 'logs' }}/app.log</code>
+                启用 DebugAll 会自动同时启用 Debug。日志文件保存在 <code class="bg-bg-panel px-1 py-0.5 rounded">{{ settings.storageRoot || './netWeaverGoData' }}/logs/app/app.log</code>
               </p>
             </div>
           </div>
@@ -242,62 +230,28 @@
             </div>
           </div>
 
-          <div
-            v-for="section in algorithmSections"
-            :key="section.key"
-            class="algo-section space-y-2"
-          >
-            <label class="settings-label">{{ section.label }} <HelpTip :text="section.help" /></label>
-
-            <div class="algo-toolbar">
-              <input
-                v-model="sshAlgorithmSearch[section.key]"
-                type="text"
-                :placeholder="section.searchPlaceholder"
-                class="algo-search-input"
-              />
-              <button
-                type="button"
-                class="algo-action-btn"
-                @click="selectAllAlgorithms(section.key)"
+          <div class="algo-custom-summary">
+            <div class="algo-summary-grid">
+              <div
+                v-for="section in algorithmSections"
+                :key="section.key"
+                class="algo-summary-item"
               >
-                全选
-              </button>
-              <button
-                type="button"
-                class="algo-action-btn"
-                @click="clearAllAlgorithms(section.key)"
-              >
-                清空
-              </button>
-            </div>
-
-            <div class="algo-count-line">
-              已选 {{ getSelectedCount(section.key) }} / {{ getAlgorithmOptions(section.key).length }}
-            </div>
-
-            <div class="algo-options-list">
-              <label
-                v-for="option in getFilteredAlgorithmOptions(section.key)"
-                :key="option.name"
-                class="algo-option-item"
-              >
-                <input
-                  type="checkbox"
-                  class="algo-option-checkbox"
-                  :checked="isAlgorithmSelected(section.key, option.name)"
-                  @change="toggleAlgorithm(section.key, option.name)"
-                />
-                <span class="algo-option-name">{{ option.name }}</span>
-                <span v-if="option.security === 'insecure'" class="algo-badge algo-badge-insecure">不安全</span>
-                <span v-else-if="option.security === 'legacy'" class="algo-badge algo-badge-legacy">历史</span>
-                <span v-else class="algo-badge algo-badge-secure">安全</span>
-              </label>
-
-              <div v-if="getFilteredAlgorithmOptions(section.key).length === 0" class="algo-empty">
-                未匹配到算法
+                <div class="algo-summary-title">
+                  {{ section.label }}
+                </div>
+                <div class="algo-summary-count">
+                  已选 {{ getSelectedCount(section.key) }} / {{ getAlgorithmOptions(section.key).length }}
+                </div>
               </div>
             </div>
+            <button
+              type="button"
+              class="algo-open-modal-btn"
+              @click="openCustomAlgorithmModal"
+            >
+              打开算法选择窗口
+            </button>
           </div>
         </div>
       </div>
@@ -331,6 +285,92 @@
       </div>
     </div>
 
+    <Transition name="algo-modal">
+      <div
+        v-if="showCustomAlgorithmModal && settings.sshAlgorithms.presetMode === 'custom'"
+        class="algo-modal-overlay"
+        @click.self="closeCustomAlgorithmModal"
+      >
+        <div class="algo-modal-panel settings-card" @click.stop>
+          <div class="algo-modal-header">
+            <div>
+              <h3 class="algo-modal-title">自定义 SSH 算法</h3>
+              <p class="algo-modal-subtitle">请按算法类别进行筛选与多选</p>
+            </div>
+            <button
+              type="button"
+              class="algo-modal-close"
+              @click="closeCustomAlgorithmModal"
+            >
+              关闭
+            </button>
+          </div>
+
+          <div class="algo-modal-body">
+            <div class="algo-modal-grid">
+              <div
+                v-for="section in algorithmSections"
+                :key="section.key"
+                class="algo-section space-y-2"
+              >
+                <label class="settings-label">{{ section.label }} <HelpTip :text="section.help" /></label>
+
+                <div class="algo-toolbar">
+                  <input
+                    v-model="sshAlgorithmSearch[section.key]"
+                    type="text"
+                    :placeholder="section.searchPlaceholder"
+                    class="algo-search-input"
+                  />
+                  <button
+                    type="button"
+                    class="algo-action-btn"
+                    @click="selectAllAlgorithms(section.key)"
+                  >
+                    全选
+                  </button>
+                  <button
+                    type="button"
+                    class="algo-action-btn"
+                    @click="clearAllAlgorithms(section.key)"
+                  >
+                    清空
+                  </button>
+                </div>
+
+                <div class="algo-count-line">
+                  已选 {{ getSelectedCount(section.key) }} / {{ getAlgorithmOptions(section.key).length }}
+                </div>
+
+                <div class="algo-options-list">
+                  <label
+                    v-for="option in getFilteredAlgorithmOptions(section.key)"
+                    :key="option.name"
+                    class="algo-option-item"
+                  >
+                    <input
+                      type="checkbox"
+                      class="algo-option-checkbox"
+                      :checked="isAlgorithmSelected(section.key, option.name)"
+                      @change="toggleAlgorithm(section.key, option.name)"
+                    />
+                    <span class="algo-option-name">{{ option.name }}</span>
+                    <span v-if="option.security === 'insecure'" class="algo-badge algo-badge-insecure">不安全</span>
+                    <span v-else-if="option.security === 'legacy'" class="algo-badge algo-badge-legacy">历史</span>
+                    <span v-else class="algo-badge algo-badge-secure">安全</span>
+                  </label>
+
+                  <div v-if="getFilteredAlgorithmOptions(section.key).length === 0" class="algo-empty">
+                    未匹配到算法
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Toast 提示 -->
     <div
       v-if="toast.show"
@@ -343,7 +383,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { SettingsAPI } from '../services/api'
 import type { GlobalSettings as BackendSettings } from '../services/api'
 import RuntimeConfigPanel from '../components/settings/RuntimeConfigPanel.vue'
@@ -387,8 +427,7 @@ interface GlobalSettings {
   maxWorkers: number
   connectTimeout: string
   commandTimeout: string
-  outputDir: string
-  logDir: string
+  storageRoot: string
   errorMode: string
   debug: boolean
   debugAll: boolean
@@ -397,6 +436,7 @@ interface GlobalSettings {
 
 const loading = ref(true)
 const saving = ref(false)
+const showCustomAlgorithmModal = ref(false)
 const sshAlgorithmOptions = ref<SSHAlgorithmOptions>({
   ciphers: [],
   keyExchanges: [],
@@ -450,8 +490,7 @@ const settings = ref<GlobalSettings>({
   maxWorkers: 32,
   connectTimeout: '10s',
   commandTimeout: '30s',
-  outputDir: 'output',
-  logDir: 'logs',
+  storageRoot: './netWeaverGoData',
   errorMode: 'pause',
   debug: false,
   debugAll: false,
@@ -462,8 +501,7 @@ const defaultSettings: GlobalSettings = {
   maxWorkers: 32,
   connectTimeout: '10s',
   commandTimeout: '30s',
-  outputDir: 'output',
-  logDir: 'logs',
+  storageRoot: './netWeaverGoData',
   errorMode: 'pause',
   debug: false,
   debugAll: false,
@@ -593,6 +631,14 @@ function getSelectedCount(field: AlgorithmField): number {
   return settings.value.sshAlgorithms[field].length
 }
 
+function openCustomAlgorithmModal() {
+  showCustomAlgorithmModal.value = true
+}
+
+function closeCustomAlgorithmModal() {
+  showCustomAlgorithmModal.value = false
+}
+
 function showToast(message: string, type: 'success' | 'error' = 'success') {
   toast.value = { show: true, message, type }
   setTimeout(() => {
@@ -611,8 +657,7 @@ async function loadSettings() {
         maxWorkers: result.maxWorkers || 32,
         connectTimeout: result.connectTimeout || '10s',
         commandTimeout: result.commandTimeout || '30s',
-        outputDir: result.outputDir || 'output',
-        logDir: result.logDir || 'logs',
+        storageRoot: rawResult.storageRoot || './netWeaverGoData',
         errorMode: result.errorMode || 'pause',
         debug: rawResult.debug || false,
         debugAll: rawResult.debugAll || false,
@@ -635,8 +680,7 @@ function toBackendSettings(frontend: GlobalSettings): BackendSettings {
     maxWorkers: frontend.maxWorkers,
     connectTimeout: frontend.connectTimeout,
     commandTimeout: frontend.commandTimeout,
-    outputDir: frontend.outputDir,
-    logDir: frontend.logDir,
+    storageRoot: frontend.storageRoot,
     errorMode: frontend.errorMode,
     debug: frontend.debug,
     debugAll: frontend.debugAll,
@@ -669,6 +713,22 @@ function resetSettings() {
   settings.value = { ...defaultSettings }
   showToast('已重置为默认设置')
 }
+
+watch(
+  () => settings.value.sshAlgorithms.presetMode,
+  (newMode, oldMode) => {
+    if (loading.value) {
+      return
+    }
+    if (newMode === 'custom' && oldMode && oldMode !== 'custom') {
+      openCustomAlgorithmModal()
+      return
+    }
+    if (newMode !== 'custom') {
+      closeCustomAlgorithmModal()
+    }
+  }
+)
 
 onMounted(() => {
   Promise.all([loadSettings(), loadSSHAlgorithmOptions()])
@@ -801,6 +861,57 @@ onMounted(() => {
   line-height: 1.45;
 }
 
+.algo-custom-summary {
+  border: 1px solid var(--color-border-default);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--color-bg-secondary) 70%, transparent);
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.algo-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem;
+}
+
+.algo-summary-item {
+  border: 1px solid var(--color-border-default);
+  border-radius: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  background: var(--color-bg-primary);
+}
+
+.algo-summary-title {
+  font-size: 0.74rem;
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+}
+
+.algo-summary-count {
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.algo-open-modal-btn {
+  align-self: flex-start;
+  border: 1px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+  border-radius: 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.algo-open-modal-btn:hover {
+  background: color-mix(in srgb, var(--color-accent) 24%, transparent);
+}
+
 .algo-section {
   border: 1px solid var(--color-border-default);
   border-radius: 0.75rem;
@@ -915,6 +1026,90 @@ onMounted(() => {
   color: var(--color-text-muted);
 }
 
+.algo-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 1rem;
+}
+
+.algo-modal-panel {
+  width: min(1120px, 96vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.algo-modal-panel:hover {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+  border-color: var(--color-border-default);
+}
+
+.algo-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.95rem 1rem;
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.algo-modal-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.algo-modal-subtitle {
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.algo-modal-close {
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  border-radius: 0.6rem;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.7rem;
+  transition: all 0.2s ease;
+}
+
+.algo-modal-close:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-focus);
+}
+
+.algo-modal-body {
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.algo-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.algo-modal-body .algo-options-list {
+  max-height: 15rem;
+}
+
+.algo-modal-enter-active,
+.algo-modal-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.algo-modal-enter-from,
+.algo-modal-leave-to {
+  opacity: 0;
+}
+
 .settings-actions {
   position: sticky;
   bottom: 0;
@@ -948,6 +1143,10 @@ onMounted(() => {
     position: static;
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  .algo-modal-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -3,8 +3,6 @@ package ui
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -395,9 +393,7 @@ func (s *managedExecution) persistExecutionRecord() {
 	}
 
 	// 生成CSV报告
-	cwd, _ := os.Getwd()
-	outputDir := filepath.Join(cwd, "output")
-	reportPath, _ := s.tracker.ExportCSV(outputDir)
+	reportPath, _ := s.tracker.ExportCSV()
 
 	// 构建执行摘要
 	summary := s.tracker.BuildExecutionSummary()

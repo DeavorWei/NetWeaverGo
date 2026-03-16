@@ -37,7 +37,6 @@ type DeviceExecutor struct {
 
 	Matcher *matcher.StreamMatcher
 	Client  *sshutil.SSHClient
-	Log     *logger.DeviceOutput
 
 	EventBus  chan report.ExecutorEvent
 	OnSuspend SuspendHandler
@@ -90,24 +89,7 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 		return execErr
 	}
 	e.Client = client
-
-	devOutput, err := logger.NewDeviceOutput(e.IP)
-	if err != nil {
-		logger.Debug("Executor", e.IP, "初始化日志文件失败: %v", err)
-		e.Client.Close()
-		// 使用统一错误处理
-		execErr := NewError(e.IP).
-			WithStage(StageConnect).
-			WithType(ErrorTypeWarning).
-			WithError(err).
-			WithContext("detail", "日志初始化失败").
-			Build()
-		handler := NewErrorHandler()
-		handler.Handle(ctx, execErr)
-		return execErr
-	}
-	e.Log = devOutput
-	logger.Debug("Executor", e.IP, "连接与日志挂载成功")
+	logger.Debug("Executor", e.IP, "连接初始化成功")
 
 	return nil
 }
@@ -115,14 +97,14 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 // ExecutePlaybook 核心引擎方法：对该设备步进发送命令队列，并支持局部阻塞等待（配合 SuspendHandler）
 func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string, cmdTimeout time.Duration) error {
 	logger.Debug("Executor", e.IP, "开始执行 Playbook (%d 条)", len(commands))
-	if e.Client == nil || e.Log == nil {
+	if e.Client == nil {
 		return fmt.Errorf("执行器未安全建连")
 	}
 
 	manager := config.GetRuntimeManager()
 	buf := make([]byte, manager.GetBufferSize())
-	outReader := io.TeeReader(e.Client.Stdout, e.Log)
-	errReader := io.TeeReader(e.Client.Stderr, e.Log)
+	outReader := e.Client.Stdout
+	errReader := e.Client.Stderr
 
 	// 丢弃并记录 stderr（因为 TeeReader 已经挂在流文件里了）
 	go func() {
@@ -426,9 +408,6 @@ func (e *DeviceExecutor) Close() {
 	if e.Client != nil {
 		e.Client.Close()
 	}
-	if e.Log != nil {
-		e.Log.Close()
-	}
 }
 
 // ExecuteCommandSync 同步执行单条命令并读取其输出
@@ -436,14 +415,13 @@ func (e *DeviceExecutor) Close() {
 // 像 `display startup` 这样的查询命令。
 func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, defaultTimeout time.Duration) (string, error) {
 	logger.Debug("Executor", e.IP, "进入同步交互模式: %s", cmd)
-	if e.Client == nil || e.Log == nil {
+	if e.Client == nil {
 		return "", fmt.Errorf("执行器未安全建连")
 	}
 
 	manager := config.GetRuntimeManager()
-	// 像正常执行一样准备 TeeReader
 	buf := make([]byte, manager.GetBufferSize())
-	outReader := io.TeeReader(e.Client.Stdout, e.Log)
+	outReader := e.Client.Stdout
 
 	var outputBuffer strings.Builder
 	var streamBuffer string

@@ -332,9 +332,9 @@ func renderProgressBar(current, total int) string {
 	return bar
 }
 
-// ExportCSV 生成小票结尾结算文档
-// 返回生成的报告路径
-func (p *ProgressTracker) ExportCSV(outputDir string) (string, error) {
+// ExportCSV 生成小票结尾结算文档并返回报告路径
+func (p *ProgressTracker) ExportCSV() (string, error) {
+	outputDir := config.GetPathManager().GetExecutionReportDir()
 	logger.Debug("Report", "-", "开始生成结算 CSV 报表 -> %s", outputDir)
 	p.mu.Lock()
 	defer p.mu.Unlock()

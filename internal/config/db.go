@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -17,14 +18,13 @@ var DB *gorm.DB
 
 // InitDB 初始化 SQLite 数据库
 func InitDB() error {
-	cwd, _ := os.Getwd()
-	dataDir := filepath.Join(cwd, "data")
-	logger.DebugAll("Config", "-", "开始初始化SQLite存储逻辑，锁定本地工作区: %s", dataDir)
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return fmt.Errorf("无法创建数据目录: %v", err)
+	pm := GetPathManager()
+	if err := pm.EnsureDirectories(); err != nil {
+		return fmt.Errorf("初始化存储目录失败: %v", err)
 	}
 
-	dbPath := filepath.Join(dataDir, "netweaver.db")
+	dbPath := pm.GetDBPath()
+	logger.DebugAll("Config", "-", "开始初始化SQLite存储逻辑，数据根目录: %s", pm.GetStorageRoot())
 
 	// SQLite 性能优化参数
 	// _journal=WAL: 使用 WAL 模式提升并发性能
@@ -76,8 +76,6 @@ func InitDB() error {
 	// 创建索引优化查询性能
 	createIndexes(db)
 
-	logger.DebugAll("Config", "-", "数据库结构检查完成，开始执行遗留数据迁移巡检")
-	MigrateLegacyDataIfNeeded()
 	logger.Info("Config", "-", "数据库初始化成功: %s", dbPath)
 
 	return nil
@@ -114,24 +112,25 @@ func createIndexes(db *gorm.DB) {
 func MigrateLegacyDataIfNeeded() {
 	var count int64
 	logger.DebugAll("Config", "-", "执行自检模块，侦测是否存在遗留旧文件待转换为数据库对象格式...")
+	pm := GetPathManager()
+	inventoryPath := pm.GetLegacyInventoryFile()
 
 	// 1. 迁移设备清单
-	if _, err := os.Stat(inventoryFile); err == nil {
+	if _, err := os.Stat(inventoryPath); err == nil {
 		DB.Model(&DeviceAsset{}).Count(&count)
 		if count == 0 {
-			if devs, err := readInventoryLegacy(); err == nil && len(devs) > 0 {
+			if devs, err := readInventoryLegacy(inventoryPath); err == nil && len(devs) > 0 {
 				DB.Create(&devs)
 				logger.Info("Config", "-", "成功迁移 %d 条设备记录到数据库", len(devs))
 			}
-			os.Rename(inventoryFile, inventoryFile+".bak")
+			_ = os.Rename(inventoryPath, inventoryPath+".bak")
 		}
 	}
 
 	// 2. [已移除] 迁移全局设置（因配置文件已被彻底删除不依赖）
 
 	// 3. 迁移命令组
-	cwd, _ := os.Getwd()
-	cmdPath := filepath.Join(cwd, "commands", "groups.json")
+	cmdPath := pm.GetLegacyCommandGroupsFile()
 	if data, err := os.ReadFile(cmdPath); err == nil {
 		DB.Model(&CommandGroup{}).Count(&count)
 		if count == 0 {
@@ -142,12 +141,12 @@ func MigrateLegacyDataIfNeeded() {
 				DB.Create(&file.Groups)
 				logger.Info("Config", "-", "成功迁移 %d 个命令组到数据库", len(file.Groups))
 			}
-			os.Rename(cmdPath, cmdPath+".bak")
+			_ = os.Rename(cmdPath, cmdPath+".bak")
 		}
 	}
 
 	// 4. 迁移任务组
-	tskPath := filepath.Join(cwd, "commands", "tasks.json")
+	tskPath := pm.GetLegacyTaskGroupsFile()
 	if data, err := os.ReadFile(tskPath); err == nil {
 		DB.Model(&TaskGroup{}).Count(&count)
 		if count == 0 {
@@ -158,7 +157,7 @@ func MigrateLegacyDataIfNeeded() {
 				DB.Create(&file.Groups)
 				logger.Info("Config", "-", "成功迁移 %d 个任务组到数据库", len(file.Groups))
 			}
-			os.Rename(tskPath, tskPath+".bak")
+			_ = os.Rename(tskPath, tskPath+".bak")
 		}
 	}
 
@@ -168,4 +167,55 @@ func MigrateLegacyDataIfNeeded() {
 	}
 
 	logger.DebugAll("Config", "-", "本地平滑升级巡检流程执行完毕！")
+}
+
+// MirrorDatabaseToPath 将当前数据库文件镜像到目标路径，供切换 storageRoot 后下次启动继续使用
+func MirrorDatabaseToPath(sourceDBPath, targetDBPath string) error {
+	if sourceDBPath == "" || targetDBPath == "" || sourceDBPath == targetDBPath {
+		return nil
+	}
+
+	if DB != nil {
+		// 先触发 checkpoint，尽量减少 WAL 未落盘造成的快照不一致
+		_ = DB.Exec("PRAGMA wal_checkpoint(FULL)").Error
+	}
+
+	if err := os.MkdirAll(filepath.Dir(targetDBPath), 0755); err != nil {
+		return err
+	}
+	if err := copyFile(sourceDBPath, targetDBPath); err != nil {
+		return err
+	}
+
+	for _, suffix := range []string{"-wal", "-shm"} {
+		src := sourceDBPath + suffix
+		if _, err := os.Stat(src); err != nil {
+			continue
+		}
+		if err := copyFile(src, targetDBPath+suffix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = out.Close()
+	}()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Sync()
 }

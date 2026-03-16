@@ -366,14 +366,9 @@ export class GlobalSettings {
     "commandTimeout": string;
 
     /**
-     * 回显输出与配置备份的根目录
+     * 统一数据根目录
      */
-    "outputDir": string;
-
-    /**
-     * 系统运行日志存放目录
-     */
-    "logDir": string;
+    "storageRoot": string;
 
     /**
      * "pause" | "skip" | "abort"
@@ -410,11 +405,8 @@ export class GlobalSettings {
         if (!("commandTimeout" in $$source)) {
             this["commandTimeout"] = "";
         }
-        if (!("outputDir" in $$source)) {
-            this["outputDir"] = "";
-        }
-        if (!("logDir" in $$source)) {
-            this["logDir"] = "";
+        if (!("storageRoot" in $$source)) {
+            this["storageRoot"] = "";
         }
         if (!("errorMode" in $$source)) {
             this["errorMode"] = "";
@@ -436,10 +428,10 @@ export class GlobalSettings {
      * Creates a new GlobalSettings instance from a string or object.
      */
     static createFrom($$source: any = {}): GlobalSettings {
-        const $$createField9_0 = $$createType3;
+        const $$createField8_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("sshAlgorithms" in $$parsedSource) {
-            $$parsedSource["sshAlgorithms"] = $$createField9_0($$parsedSource["sshAlgorithms"]);
+            $$parsedSource["sshAlgorithms"] = $$createField8_0($$parsedSource["sshAlgorithms"]);
         }
         return new GlobalSettings($$parsedSource as Partial<GlobalSettings>);
     }
