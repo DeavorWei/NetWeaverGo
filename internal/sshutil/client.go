@@ -52,6 +52,161 @@ type Config struct {
 	Algorithms *config.SSHAlgorithmSettings
 }
 
+// logSSHConfig 记录SSH配置信息用于调试
+func logSSHConfig(ip string, sshConfig *ssh.ClientConfig, cfg Config) {
+	if !logger.EnableVerbose && !logger.EnableDebug {
+		return
+	}
+
+	// 获取算法信息
+	ciphers := sshConfig.Config.Ciphers
+	keyExchanges := sshConfig.Config.KeyExchanges
+	macs := sshConfig.Config.MACs
+	hostKeyAlgorithms := sshConfig.HostKeyAlgorithms
+
+	// 获取预设模式
+	presetMode := "default"
+	if cfg.Algorithms != nil {
+		presetMode = cfg.Algorithms.PresetMode
+	}
+
+	logger.Verbose("SSH", ip, "准备SSH握手，算法配置:")
+	logger.Verbose("SSH", ip, "  - 预设模式: %s", presetMode)
+	logger.Verbose("SSH", ip, "  - 用户名: %s", cfg.Username)
+	logger.Verbose("SSH", ip, "  - 目标地址: %s:%d", cfg.IP, cfg.Port)
+	logger.Verbose("SSH", ip, "  - 超时时间: %v", cfg.Timeout)
+
+	if len(ciphers) > 0 {
+		logger.Verbose("SSH", ip, "  - Ciphers(%d): %v", len(ciphers), ciphers)
+	} else {
+		logger.Verbose("SSH", ip, "  - Ciphers: 使用Go默认配置")
+	}
+
+	if len(keyExchanges) > 0 {
+		logger.Verbose("SSH", ip, "  - KeyExchanges(%d): %v", len(keyExchanges), keyExchanges)
+	} else {
+		logger.Verbose("SSH", ip, "  - KeyExchanges: 使用Go默认配置")
+	}
+
+	if len(macs) > 0 {
+		logger.Verbose("SSH", ip, "  - MACs(%d): %v", len(macs), macs)
+	} else {
+		logger.Verbose("SSH", ip, "  - MACs: 使用Go默认配置")
+	}
+
+	if len(hostKeyAlgorithms) > 0 {
+		logger.Verbose("SSH", ip, "  - HostKeyAlgorithms(%d): %v", len(hostKeyAlgorithms), hostKeyAlgorithms)
+	} else {
+		logger.Verbose("SSH", ip, "  - HostKeyAlgorithms: 使用Go默认配置")
+	}
+}
+
+// logSSHHandshakeError 记录SSH握手失败的详细信息
+func logSSHHandshakeError(ip string, err error, sshConfig *ssh.ClientConfig, cfg Config) {
+	// 获取算法信息
+	ciphers := sshConfig.Config.Ciphers
+	keyExchanges := sshConfig.Config.KeyExchanges
+	macs := sshConfig.Config.MACs
+	hostKeyAlgorithms := sshConfig.HostKeyAlgorithms
+
+	// 获取预设模式
+	presetMode := "default"
+	if cfg.Algorithms != nil {
+		presetMode = cfg.Algorithms.PresetMode
+	}
+
+	logger.Error("SSH", ip, "SSH握手失败详情:")
+	logger.Error("SSH", ip, "  - 错误信息: %v", err)
+	logger.Error("SSH", ip, "  - 预设模式: %s", presetMode)
+	logger.Error("SSH", ip, "  - 用户名: %s", cfg.Username)
+	logger.Error("SSH", ip, "  - 目标地址: %s:%d", cfg.IP, cfg.Port)
+
+	// 分析错误类型并给出建议
+	errStr := err.Error()
+	switch {
+	case strings.Contains(errStr, "unable to authenticate"):
+		logger.Error("SSH", ip, "  - 错误类型: 认证失败")
+		logger.Error("SSH", ip, "  - 可能原因:")
+		logger.Error("SSH", ip, "    1. 用户名或密码错误")
+		logger.Error("SSH", ip, "    2. 设备配置了仅公钥认证(ssh server authentication-type publickey)")
+		logger.Error("SSH", ip, "    3. 设备禁用了密码认证")
+		logger.Error("SSH", ip, "  - 建议操作:")
+		logger.Error("SSH", ip, "    1. 检查用户名和密码是否正确")
+		logger.Error("SSH", ip, "    2. 使用命令行测试: ssh %s@%s", cfg.Username, cfg.IP)
+		logger.Error("SSH", ip, "    3. 检查设备SSH配置，确认允许密码认证")
+		logger.Error("SSH", ip, "    4. 如使用密钥认证，需在设备上配置公钥")
+
+	case strings.Contains(errStr, "handshake failed"):
+		logger.Error("SSH", ip, "  - 错误类型: 握手失败")
+		if strings.Contains(errStr, "no common algorithm") {
+			logger.Error("SSH", ip, "  - 可能原因: 客户端与服务器算法不匹配")
+			logger.Error("SSH", ip, "  - 建议操作:")
+			logger.Error("SSH", ip, "    1. 在设置中切换SSH算法预设为'兼容模式'")
+			logger.Error("SSH", ip, "    2. 使用自定义模式，勾选更多算法选项")
+		} else if strings.Contains(errStr, "exhausted") {
+			logger.Error("SSH", ip, "  - 可能原因: 密钥交换算法协商失败")
+			logger.Error("SSH", ip, "  - 建议操作:")
+			logger.Error("SSH", ip, "    1. 检查设备支持的密钥交换算法")
+			logger.Error("SSH", ip, "    2. 在设置中添加更多密钥交换算法")
+		} else {
+			logger.Error("SSH", ip, "  - 可能原因: 协议不兼容或网络问题")
+			logger.Error("SSH", ip, "  - 建议操作:")
+			logger.Error("SSH", ip, "    1. 检查设备SSH服务是否正常运行")
+			logger.Error("SSH", ip, "    2. 尝试使用标准SSH客户端连接测试")
+		}
+
+	case strings.Contains(errStr, "connection refused"):
+		logger.Error("SSH", ip, "  - 错误类型: 连接被拒绝")
+		logger.Error("SSH", ip, "  - 可能原因: SSH服务未运行或端口错误")
+		logger.Error("SSH", ip, "  - 建议操作:")
+		logger.Error("SSH", ip, "    1. 确认设备IP和端口(%d)正确", cfg.Port)
+		logger.Error("SSH", ip, "    2. 检查设备SSH服务是否已启动")
+		logger.Error("SSH", ip, "    3. 检查防火墙/ACL是否允许连接")
+
+	case strings.Contains(errStr, "forcibly closed") || strings.Contains(errStr, "reset"):
+		logger.Error("SSH", ip, "  - 错误类型: 连接被强制关闭")
+		logger.Error("SSH", ip, "  - 可能原因:")
+		logger.Error("SSH", ip, "    1. 设备SSH连接数限制")
+		logger.Error("SSH", ip, "    2. 设备安全策略阻止连接")
+		logger.Error("SSH", ip, "    3. 网络设备中间阻断")
+		logger.Error("SSH", ip, "  - 建议操作:")
+		logger.Error("SSH", ip, "    1. 减少并发连接数")
+		logger.Error("SSH", ip, "    2. 检查设备SSH会话限制配置")
+		logger.Error("SSH", ip, "    3. 检查网络安全策略")
+
+	case strings.Contains(errStr, "timeout"):
+		logger.Error("SSH", ip, "  - 错误类型: 连接超时")
+		logger.Error("SSH", ip, "  - 可能原因: 网络不可达或设备响应慢")
+		logger.Error("SSH", ip, "  - 建议操作:")
+		logger.Error("SSH", ip, "    1. 检查网络连通性: ping %s", cfg.IP)
+		logger.Error("SSH", ip, "    2. 增加连接超时时间")
+		logger.Error("SSH", ip, "    3. 检查设备负载是否过高")
+
+	default:
+		logger.Error("SSH", ip, "  - 错误类型: 未知错误")
+		logger.Error("SSH", ip, "  - 建议操作:")
+		logger.Error("SSH", ip, "    1. 开启Verbose日志获取更多信息")
+		logger.Error("SSH", ip, "    2. 使用标准SSH客户端测试连接")
+	}
+
+	// 输出算法配置（便于排查算法问题）
+	if len(ciphers) > 0 {
+		logger.Error("SSH", ip, "  - 客户端Ciphers(%d): %v", len(ciphers), ciphers)
+	}
+	if len(keyExchanges) > 0 {
+		logger.Error("SSH", ip, "  - 客户端KeyExchanges(%d): %v", len(keyExchanges), keyExchanges)
+	}
+	if len(macs) > 0 {
+		logger.Error("SSH", ip, "  - 客户端MACs(%d): %v", len(macs), macs)
+	}
+	if len(hostKeyAlgorithms) > 0 {
+		logger.Error("SSH", ip, "  - 客户端HostKeyAlgorithms(%d): %v", len(hostKeyAlgorithms), hostKeyAlgorithms)
+	}
+
+	// 记录认证方法
+	logger.Error("SSH", ip, "  - 认证方法: [password keyboard-interactive]")
+}
+
 // applyAlgorithmConfig 应用 SSH 算法配置到 ssh.ClientConfig
 // 如果提供了自定义算法配置，使用自定义配置；否则使用内置的兼容性配置
 func applyAlgorithmConfig(sshConfig *ssh.ClientConfig, algoSettings *config.SSHAlgorithmSettings) {
@@ -198,6 +353,9 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	// 应用算法配置（使用传入的配置或内置默认配置）
 	applyAlgorithmConfig(sshConfig, cfg.Algorithms)
 
+	// 记录SSH配置信息（用于调试）
+	logSSHConfig(cfg.IP, sshConfig, cfg)
+
 	target := fmt.Sprintf("%s:%d", cfg.IP, cfg.Port)
 	dialer := net.Dialer{Timeout: cfg.Timeout}
 
@@ -210,7 +368,8 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 
 	c, chans, reqs, err := ssh.NewClientConn(conn, target, sshConfig)
 	if err != nil {
-		logger.Debug("SSH", cfg.IP, "SSH握手(含算法协商)失败: %v", err)
+		// 记录详细的握手失败信息
+		logSSHHandshakeError(cfg.IP, err, sshConfig, cfg)
 		conn.Close()
 		return nil, fmt.Errorf("SSH握手失败: %w", err)
 	}
@@ -433,6 +592,9 @@ func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	// 应用算法配置（使用传入的配置或内置默认配置）
 	applyAlgorithmConfig(sshConfig, cfg.Algorithms)
 
+	// 记录SSH配置信息（用于调试）
+	logSSHConfig(cfg.IP, sshConfig, cfg)
+
 	target := fmt.Sprintf("%s:%d", cfg.IP, cfg.Port)
 	dialer := net.Dialer{Timeout: cfg.Timeout}
 
@@ -445,7 +607,8 @@ func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 
 	c, chans, reqs, err := ssh.NewClientConn(conn, target, sshConfig)
 	if err != nil {
-		logger.Debug("SSH", cfg.IP, "Raw SSH握手(含算法协商)失败: %v", err)
+		// 记录详细的握手失败信息
+		logSSHHandshakeError(cfg.IP, err, sshConfig, cfg)
 		conn.Close()
 		return nil, fmt.Errorf("SSH握手失败: %w", err)
 	}
