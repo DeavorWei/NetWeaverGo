@@ -2,15 +2,32 @@ package ui
 
 import (
 	"context"
+	"sort"
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"golang.org/x/crypto/ssh"
 )
 
 // SettingsService 设置管理服务 - 负责全局配置的加载和保存
 type SettingsService struct {
 	wailsApp *application.App
+}
+
+// SSHAlgorithmOption SSH 算法候选项
+type SSHAlgorithmOption struct {
+	Name     string `json:"name"`
+	Security string `json:"security"` // "secure" | "insecure"
+	Source   string `json:"source"`   // "supported" | "insecure"
+}
+
+// SSHAlgorithmOptions SSH 算法候选集合
+type SSHAlgorithmOptions struct {
+	Ciphers           []SSHAlgorithmOption `json:"ciphers"`
+	KeyExchanges      []SSHAlgorithmOption `json:"keyExchanges"`
+	MACs              []SSHAlgorithmOption `json:"macs"`
+	HostKeyAlgorithms []SSHAlgorithmOption `json:"hostKeyAlgorithms"`
 }
 
 // NewSettingsService 创建设置服务实例
@@ -72,6 +89,67 @@ func (s *SettingsService) GetAppInfo() map[string]string {
 		"name":    "NetWeaverGo",
 		"version": "1.0.0",
 	}
+}
+
+// GetSSHAlgorithmOptions 获取当前 Go SSH 库支持的算法候选列表
+func (s *SettingsService) GetSSHAlgorithmOptions() SSHAlgorithmOptions {
+	logger.DebugAll("SettingsService", "-", "收到前端 GetSSHAlgorithmOptions 调用请求")
+
+	supported := ssh.SupportedAlgorithms()
+	insecure := ssh.InsecureAlgorithms()
+
+	options := SSHAlgorithmOptions{
+		Ciphers:           buildAlgorithmOptions(supported.Ciphers, insecure.Ciphers),
+		KeyExchanges:      buildAlgorithmOptions(supported.KeyExchanges, insecure.KeyExchanges),
+		MACs:              buildAlgorithmOptions(supported.MACs, insecure.MACs),
+		HostKeyAlgorithms: buildAlgorithmOptions(supported.HostKeys, insecure.HostKeys),
+	}
+
+	logger.DebugAll("SettingsService", "-", "返回 SSH 算法候选: ciphers=%d, keyExchanges=%d, macs=%d, hostKeys=%d",
+		len(options.Ciphers), len(options.KeyExchanges), len(options.MACs), len(options.HostKeyAlgorithms))
+
+	return options
+}
+
+func buildAlgorithmOptions(secureList, insecureList []string) []SSHAlgorithmOption {
+	optionMap := make(map[string]SSHAlgorithmOption, len(secureList)+len(insecureList))
+
+	for _, name := range secureList {
+		optionMap[name] = SSHAlgorithmOption{
+			Name:     name,
+			Security: "secure",
+			Source:   "supported",
+		}
+	}
+
+	for _, name := range insecureList {
+		if _, exists := optionMap[name]; exists {
+			continue
+		}
+		optionMap[name] = SSHAlgorithmOption{
+			Name:     name,
+			Security: "insecure",
+			Source:   "insecure",
+		}
+	}
+
+	options := make([]SSHAlgorithmOption, 0, len(optionMap))
+	for _, item := range optionMap {
+		options = append(options, item)
+	}
+
+	sort.Slice(options, func(i, j int) bool {
+		left := options[i]
+		right := options[j]
+
+		if left.Security != right.Security {
+			return left.Security == "secure"
+		}
+
+		return left.Name < right.Name
+	})
+
+	return options
 }
 
 // ==================== 运行时配置管理接口 ====================

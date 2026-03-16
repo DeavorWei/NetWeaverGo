@@ -340,7 +340,7 @@ async function confirmCreate() {
       items: [{
         commandGroupId: selectedCommandGroupId.value,
         commands: [] as string[],
-        deviceIPs: selectedDevices.value.map((d: DeviceAsset) => d.ip)
+        deviceIDs: selectedDevices.value.map((d: DeviceAsset) => d.id)
       }],
       tags: createModal.value.tags,
       status: 'pending' as const,

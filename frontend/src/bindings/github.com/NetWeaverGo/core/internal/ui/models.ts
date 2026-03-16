@@ -842,6 +842,98 @@ export class RuntimeConfigData {
 }
 
 /**
+ * SSHAlgorithmOption SSH 算法候选项
+ */
+export class SSHAlgorithmOption {
+    "name": string;
+
+    /**
+     * "secure" | "insecure"
+     */
+    "security": string;
+
+    /**
+     * "supported" | "insecure"
+     */
+    "source": string;
+
+    /** Creates a new SSHAlgorithmOption instance. */
+    constructor($$source: Partial<SSHAlgorithmOption> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("security" in $$source)) {
+            this["security"] = "";
+        }
+        if (!("source" in $$source)) {
+            this["source"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SSHAlgorithmOption instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SSHAlgorithmOption {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SSHAlgorithmOption($$parsedSource as Partial<SSHAlgorithmOption>);
+    }
+}
+
+/**
+ * SSHAlgorithmOptions SSH 算法候选集合
+ */
+export class SSHAlgorithmOptions {
+    "ciphers": SSHAlgorithmOption[];
+    "keyExchanges": SSHAlgorithmOption[];
+    "macs": SSHAlgorithmOption[];
+    "hostKeyAlgorithms": SSHAlgorithmOption[];
+
+    /** Creates a new SSHAlgorithmOptions instance. */
+    constructor($$source: Partial<SSHAlgorithmOptions> = {}) {
+        if (!("ciphers" in $$source)) {
+            this["ciphers"] = [];
+        }
+        if (!("keyExchanges" in $$source)) {
+            this["keyExchanges"] = [];
+        }
+        if (!("macs" in $$source)) {
+            this["macs"] = [];
+        }
+        if (!("hostKeyAlgorithms" in $$source)) {
+            this["hostKeyAlgorithms"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SSHAlgorithmOptions instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SSHAlgorithmOptions {
+        const $$createField0_0 = $$createType12;
+        const $$createField1_0 = $$createType12;
+        const $$createField2_0 = $$createType12;
+        const $$createField3_0 = $$createType12;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("ciphers" in $$parsedSource) {
+            $$parsedSource["ciphers"] = $$createField0_0($$parsedSource["ciphers"]);
+        }
+        if ("keyExchanges" in $$parsedSource) {
+            $$parsedSource["keyExchanges"] = $$createField1_0($$parsedSource["keyExchanges"]);
+        }
+        if ("macs" in $$parsedSource) {
+            $$parsedSource["macs"] = $$createField2_0($$parsedSource["macs"]);
+        }
+        if ("hostKeyAlgorithms" in $$parsedSource) {
+            $$parsedSource["hostKeyAlgorithms"] = $$createField3_0($$parsedSource["hostKeyAlgorithms"]);
+        }
+        return new SSHAlgorithmOptions($$parsedSource as Partial<SSHAlgorithmOptions>);
+    }
+}
+
+/**
  * TaskCommandOverview 任务命令信息概览
  */
 export class TaskCommandOverview {
@@ -897,6 +989,7 @@ export class TaskCommandOverview {
  * TaskDeviceOverview 任务关联设备概览
  */
 export class TaskDeviceOverview {
+    "id": number;
     "ip": string;
     "group": string;
     "tags": string[];
@@ -904,6 +997,9 @@ export class TaskDeviceOverview {
 
     /** Creates a new TaskDeviceOverview instance. */
     constructor($$source: Partial<TaskDeviceOverview> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
         if (!("ip" in $$source)) {
             this["ip"] = "";
         }
@@ -924,10 +1020,10 @@ export class TaskDeviceOverview {
      * Creates a new TaskDeviceOverview instance from a string or object.
      */
     static createFrom($$source: any = {}): TaskDeviceOverview {
-        const $$createField2_0 = $$createType0;
+        const $$createField3_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tags" in $$parsedSource) {
-            $$parsedSource["tags"] = $$createField2_0($$parsedSource["tags"]);
+            $$parsedSource["tags"] = $$createField3_0($$parsedSource["tags"]);
         }
         return new TaskDeviceOverview($$parsedSource as Partial<TaskDeviceOverview>);
     }
@@ -943,7 +1039,7 @@ export class TaskGroupDetailViewModel {
     "canEdit": boolean;
     "editDisabledReason": string;
     "items": TaskGroupItemDetailViewModel[];
-    "missingDevices": string[];
+    "missingDevices": number[];
     "missingCommandIds": string[];
 
     /** Creates a new TaskGroupDetailViewModel instance. */
@@ -977,9 +1073,9 @@ export class TaskGroupDetailViewModel {
      * Creates a new TaskGroupDetailViewModel instance from a string or object.
      */
     static createFrom($$source: any = {}): TaskGroupDetailViewModel {
-        const $$createField0_0 = $$createType11;
-        const $$createField4_0 = $$createType13;
-        const $$createField5_0 = $$createType0;
+        const $$createField0_0 = $$createType13;
+        const $$createField4_0 = $$createType15;
+        const $$createField5_0 = $$createType16;
         const $$createField6_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("task" in $$parsedSource) {
@@ -1034,8 +1130,8 @@ export class TaskGroupItemDetailViewModel {
      * Creates a new TaskGroupItemDetailViewModel instance from a string or object.
      */
     static createFrom($$source: any = {}): TaskGroupItemDetailViewModel {
-        const $$createField3_0 = $$createType15;
-        const $$createField4_0 = $$createType17;
+        const $$createField3_0 = $$createType18;
+        const $$createField4_0 = $$createType20;
         const $$createField5_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("devices" in $$parsedSource) {
@@ -1063,10 +1159,13 @@ const $$createType7 = IPv6SubnetItem.createFrom;
 const $$createType8 = $Create.Array($$createType7);
 const $$createType9 = config$0.ExecutionRecord.createFrom;
 const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = config$0.TaskGroup.createFrom;
-const $$createType12 = TaskGroupItemDetailViewModel.createFrom;
-const $$createType13 = $Create.Array($$createType12);
-const $$createType14 = TaskDeviceOverview.createFrom;
+const $$createType11 = SSHAlgorithmOption.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = config$0.TaskGroup.createFrom;
+const $$createType14 = TaskGroupItemDetailViewModel.createFrom;
 const $$createType15 = $Create.Array($$createType14);
-const $$createType16 = TaskCommandOverview.createFrom;
-const $$createType17 = $Create.Nullable($$createType16);
+const $$createType16 = $Create.Array($Create.Any);
+const $$createType17 = TaskDeviceOverview.createFrom;
+const $$createType18 = $Create.Array($$createType17);
+const $$createType19 = TaskCommandOverview.createFrom;
+const $$createType20 = $Create.Nullable($$createType19);

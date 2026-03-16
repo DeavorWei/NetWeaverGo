@@ -237,57 +237,67 @@
                 <line x1="12" y1="17" x2="12.01" y2="17"/>
               </svg>
               <p class="text-xs text-warning">
-                自定义算法配置可能导致连接失败或安全风险。请确保输入正确的算法名称，多个算法用英文逗号分隔。
+                自定义算法配置可能导致连接失败或安全风险。不安全算法会被显式标注；历史算法会保留并标记。
               </p>
             </div>
           </div>
 
-          <!-- 加密算法 -->
-          <div class="space-y-2">
-            <label class="settings-label">加密算法 (Ciphers) <HelpTip text="SSH 会话加密算法列表，多个算法使用英文逗号分隔。" /></label>
-            <input
-              type="text"
-              :value="arrayToString(settings.sshAlgorithms.ciphers)"
-              @input="settings.sshAlgorithms.ciphers = stringToArray(($event.target as HTMLInputElement)?.value || '')"
-              placeholder="如: aes128-ctr,aes192-ctr,aes256-ctr"
-              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
-            />
-          </div>
+          <div
+            v-for="section in algorithmSections"
+            :key="section.key"
+            class="algo-section space-y-2"
+          >
+            <label class="settings-label">{{ section.label }} <HelpTip :text="section.help" /></label>
 
-          <!-- 密钥交换算法 -->
-          <div class="space-y-2">
-            <label class="settings-label">密钥交换算法 (Key Exchanges) <HelpTip text="SSH 密钥交换算法列表，多个算法使用英文逗号分隔。" /></label>
-            <input
-              type="text"
-              :value="arrayToString(settings.sshAlgorithms.keyExchanges)"
-              @input="settings.sshAlgorithms.keyExchanges = stringToArray(($event.target as HTMLInputElement)?.value || '')"
-              placeholder="如: curve25519-sha256,ecdh-sha2-nistp256"
-              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
-            />
-          </div>
+            <div class="algo-toolbar">
+              <input
+                v-model="sshAlgorithmSearch[section.key]"
+                type="text"
+                :placeholder="section.searchPlaceholder"
+                class="algo-search-input"
+              />
+              <button
+                type="button"
+                class="algo-action-btn"
+                @click="selectAllAlgorithms(section.key)"
+              >
+                全选
+              </button>
+              <button
+                type="button"
+                class="algo-action-btn"
+                @click="clearAllAlgorithms(section.key)"
+              >
+                清空
+              </button>
+            </div>
 
-          <!-- MAC 算法 -->
-          <div class="space-y-2">
-            <label class="settings-label">MAC 算法 (Message Authentication Codes) <HelpTip text="SSH 消息认证码算法列表，多个算法使用英文逗号分隔。" /></label>
-            <input
-              type="text"
-              :value="arrayToString(settings.sshAlgorithms.macs)"
-              @input="settings.sshAlgorithms.macs = stringToArray(($event.target as HTMLInputElement)?.value || '')"
-              placeholder="如: hmac-sha2-256,hmac-sha2-512"
-              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
-            />
-          </div>
+            <div class="algo-count-line">
+              已选 {{ getSelectedCount(section.key) }} / {{ getAlgorithmOptions(section.key).length }}
+            </div>
 
-          <!-- 主机密钥算法 -->
-          <div class="space-y-2">
-            <label class="settings-label">主机密钥算法 (Host Key Algorithms) <HelpTip text="主机密钥验证算法列表，多个算法使用英文逗号分隔。" /></label>
-            <input
-              type="text"
-              :value="arrayToString(settings.sshAlgorithms.hostKeyAlgorithms)"
-              @input="settings.sshAlgorithms.hostKeyAlgorithms = stringToArray(($event.target as HTMLInputElement)?.value || '')"
-              placeholder="如: ssh-ed25519,ecdsa-sha2-nistp256"
-              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all font-mono"
-            />
+            <div class="algo-options-list">
+              <label
+                v-for="option in getFilteredAlgorithmOptions(section.key)"
+                :key="option.name"
+                class="algo-option-item"
+              >
+                <input
+                  type="checkbox"
+                  class="algo-option-checkbox"
+                  :checked="isAlgorithmSelected(section.key, option.name)"
+                  @change="toggleAlgorithm(section.key, option.name)"
+                />
+                <span class="algo-option-name">{{ option.name }}</span>
+                <span v-if="option.security === 'insecure'" class="algo-badge algo-badge-insecure">不安全</span>
+                <span v-else-if="option.security === 'legacy'" class="algo-badge algo-badge-legacy">历史</span>
+                <span v-else class="algo-badge algo-badge-secure">安全</span>
+              </label>
+
+              <div v-if="getFilteredAlgorithmOptions(section.key).length === 0" class="algo-empty">
+                未匹配到算法
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -339,6 +349,16 @@ import type { GlobalSettings as BackendSettings } from '../services/api'
 import RuntimeConfigPanel from '../components/settings/RuntimeConfigPanel.vue'
 import HelpTip from '../components/common/HelpTip.vue'
 
+type AlgorithmField = 'ciphers' | 'keyExchanges' | 'macs' | 'hostKeyAlgorithms'
+type AlgorithmSecurity = 'secure' | 'insecure' | 'legacy'
+type AlgorithmSource = 'supported' | 'insecure' | 'legacy'
+
+interface SSHAlgorithmOption {
+  name: string
+  security: AlgorithmSecurity
+  source: AlgorithmSource
+}
+
 // SSH 算法配置接口
 interface SSHAlgorithmSettings {
   ciphers: string[]
@@ -346,6 +366,20 @@ interface SSHAlgorithmSettings {
   macs: string[]
   hostKeyAlgorithms: string[]
   presetMode: string
+}
+
+interface SSHAlgorithmOptions {
+  ciphers: SSHAlgorithmOption[]
+  keyExchanges: SSHAlgorithmOption[]
+  macs: SSHAlgorithmOption[]
+  hostKeyAlgorithms: SSHAlgorithmOption[]
+}
+
+interface AlgorithmSection {
+  key: AlgorithmField
+  label: string
+  help: string
+  searchPlaceholder: string
 }
 
 // 前端使用的设置接口（小写字段名，与后端绑定类保持一致）
@@ -363,6 +397,45 @@ interface GlobalSettings {
 
 const loading = ref(true)
 const saving = ref(false)
+const sshAlgorithmOptions = ref<SSHAlgorithmOptions>({
+  ciphers: [],
+  keyExchanges: [],
+  macs: [],
+  hostKeyAlgorithms: []
+})
+const sshAlgorithmSearch = ref<Record<AlgorithmField, string>>({
+  ciphers: '',
+  keyExchanges: '',
+  macs: '',
+  hostKeyAlgorithms: ''
+})
+
+const algorithmSections: AlgorithmSection[] = [
+  {
+    key: 'ciphers',
+    label: '加密算法 (Ciphers)',
+    help: 'SSH 会话加密算法，支持多选。',
+    searchPlaceholder: '搜索加密算法...'
+  },
+  {
+    key: 'keyExchanges',
+    label: '密钥交换算法 (Key Exchanges)',
+    help: 'SSH 密钥交换算法，支持多选。',
+    searchPlaceholder: '搜索密钥交换算法...'
+  },
+  {
+    key: 'macs',
+    label: 'MAC 算法 (Message Authentication Codes)',
+    help: 'SSH 消息认证码算法，支持多选。',
+    searchPlaceholder: '搜索 MAC 算法...'
+  },
+  {
+    key: 'hostKeyAlgorithms',
+    label: '主机密钥算法 (Host Key Algorithms)',
+    help: '主机密钥验证算法，支持多选。',
+    searchPlaceholder: '搜索主机密钥算法...'
+  }
+]
 
 // 默认 SSH 算法配置
 const defaultSSHAlgorithms: SSHAlgorithmSettings = {
@@ -424,15 +497,100 @@ function onDebugAllChange() {
   }
 }
 
-// 数组转逗号分隔字符串
-function arrayToString(arr: string[]): string {
-  return arr.join(', ')
+function normalizeAlgorithmOptions(raw: any): SSHAlgorithmOptions {
+  const normalizeList = (list: any): SSHAlgorithmOption[] => {
+    if (!Array.isArray(list)) return []
+    return list
+      .map(item => ({
+        name: String(item?.name || ''),
+        security: item?.security === 'insecure' ? 'insecure' : 'secure',
+        source: item?.source === 'insecure' ? 'insecure' : 'supported'
+      }) as SSHAlgorithmOption)
+      .filter(item => item.name.length > 0)
+  }
+
+  return {
+    ciphers: normalizeList(raw?.ciphers),
+    keyExchanges: normalizeList(raw?.keyExchanges),
+    macs: normalizeList(raw?.macs),
+    hostKeyAlgorithms: normalizeList(raw?.hostKeyAlgorithms)
+  }
 }
 
-// 逗号分隔字符串转数组
-function stringToArray(str: string): string[] {
-  if (!str || !str.trim()) return []
-  return str.split(',').map(s => s.trim()).filter(s => s.length > 0)
+async function loadSSHAlgorithmOptions() {
+  try {
+    const result = await SettingsAPI.getSSHAlgorithmOptions()
+    sshAlgorithmOptions.value = normalizeAlgorithmOptions(result)
+  } catch (err) {
+    console.error('Failed to load SSH algorithm options:', err)
+    showToast('加载 SSH 算法候选失败，将保留已有配置', 'error')
+  }
+}
+
+function getAlgorithmOptions(field: AlgorithmField): SSHAlgorithmOption[] {
+  const currentOptions = [...sshAlgorithmOptions.value[field]]
+  const selected = settings.value.sshAlgorithms[field] || []
+  const optionMap = new Map<string, SSHAlgorithmOption>()
+
+  for (const option of currentOptions) {
+    optionMap.set(option.name, option)
+  }
+
+  for (const name of selected) {
+    if (!optionMap.has(name)) {
+      optionMap.set(name, {
+        name,
+        security: 'legacy',
+        source: 'legacy'
+      })
+    }
+  }
+
+  const rank: Record<AlgorithmSecurity, number> = {
+    secure: 0,
+    insecure: 1,
+    legacy: 2
+  }
+
+  return Array.from(optionMap.values()).sort((a, b) => {
+    if (a.security !== b.security) {
+      return rank[a.security] - rank[b.security]
+    }
+    return a.name.localeCompare(b.name)
+  })
+}
+
+function getFilteredAlgorithmOptions(field: AlgorithmField): SSHAlgorithmOption[] {
+  const keyword = sshAlgorithmSearch.value[field].trim().toLowerCase()
+  const options = getAlgorithmOptions(field)
+  if (!keyword) return options
+  return options.filter(option => option.name.toLowerCase().includes(keyword))
+}
+
+function isAlgorithmSelected(field: AlgorithmField, name: string): boolean {
+  return settings.value.sshAlgorithms[field].includes(name)
+}
+
+function toggleAlgorithm(field: AlgorithmField, name: string) {
+  const current = new Set(settings.value.sshAlgorithms[field])
+  if (current.has(name)) {
+    current.delete(name)
+  } else {
+    current.add(name)
+  }
+  settings.value.sshAlgorithms[field] = Array.from(current)
+}
+
+function selectAllAlgorithms(field: AlgorithmField) {
+  settings.value.sshAlgorithms[field] = getAlgorithmOptions(field).map(item => item.name)
+}
+
+function clearAllAlgorithms(field: AlgorithmField) {
+  settings.value.sshAlgorithms[field] = []
+}
+
+function getSelectedCount(field: AlgorithmField): number {
+  return settings.value.sshAlgorithms[field].length
 }
 
 function showToast(message: string, type: 'success' | 'error' = 'success') {
@@ -513,7 +671,7 @@ function resetSettings() {
 }
 
 onMounted(() => {
-  loadSettings()
+  Promise.all([loadSettings(), loadSSHAlgorithmOptions()])
 })
 </script>
 
@@ -641,6 +799,120 @@ onMounted(() => {
 
 .settings-panel-card :is(p.text-xs) {
   line-height: 1.45;
+}
+
+.algo-section {
+  border: 1px solid var(--color-border-default);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--color-bg-secondary) 70%, transparent);
+}
+
+.algo-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.algo-search-input {
+  flex: 1;
+  min-height: 2rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+}
+
+.algo-action-btn {
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border-radius: 0.6rem;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem;
+  transition: all 0.2s ease;
+}
+
+.algo-action-btn:hover {
+  border-color: var(--color-border-focus);
+  color: var(--color-text-primary);
+}
+
+.algo-count-line {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.algo-options-list {
+  max-height: 11rem;
+  overflow-y: auto;
+  border: 1px solid var(--color-border-default);
+  border-radius: 0.65rem;
+  background: var(--color-bg-primary);
+}
+
+.algo-option-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border-default) 70%, transparent);
+  cursor: pointer;
+}
+
+.algo-option-item:last-child {
+  border-bottom: none;
+}
+
+.algo-option-item:hover {
+  background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+}
+
+.algo-option-checkbox {
+  width: 0.9rem;
+  height: 0.9rem;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.algo-option-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.78rem;
+  color: var(--color-text-primary);
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+}
+
+.algo-badge {
+  font-size: 0.65rem;
+  border-radius: 9999px;
+  padding: 0.1rem 0.45rem;
+  line-height: 1.3;
+}
+
+.algo-badge-secure {
+  background: color-mix(in srgb, var(--color-success) 15%, transparent);
+  color: var(--color-success);
+}
+
+.algo-badge-insecure {
+  background: color-mix(in srgb, var(--color-warning) 20%, transparent);
+  color: var(--color-warning);
+}
+
+.algo-badge-legacy {
+  background: color-mix(in srgb, var(--color-info) 18%, transparent);
+  color: var(--color-info);
+}
+
+.algo-empty {
+  padding: 0.75rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
 }
 
 .settings-actions {

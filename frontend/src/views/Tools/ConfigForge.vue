@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { CommandGroupAPI, TaskGroupAPI, ForgeAPI } from '../../services/api'
+import { CommandGroupAPI, TaskGroupAPI, ForgeAPI, DeviceAPI } from '../../services/api'
 import type { CommandGroup } from '../../services/api'
 import type { VarInput, BuildResult, ForgeIPValidationResult } from '../../services/api'
 
@@ -483,11 +483,22 @@ async function executeTaskSend() {
 
   taskModal.value.saving = true
   try {
-    const items = bindingPreview.value.map((b: {ip: string, commands: string}) => ({
-      commandGroupId: '',
-      commands: b.commands.split('\n').map((l: string) => l.trim()).filter((l: string) => l !== ''),
-      deviceIPs: [b.ip]
-    }))
+    // 注意：ConfigForge 的 BindingDeviceIP 模式使用的是 IP 字符串
+    // 需要先查询设备列表，将 IP 转换为设备 ID
+    const devices = await DeviceAPI.listDevices()
+    const deviceMap = new Map(devices.map((d: any) => [d.ip, d.id]))
+    
+    const items = bindingPreview.value.map((b: {ip: string, commands: string}) => {
+      const deviceID = deviceMap.get(b.ip)
+      if (!deviceID) {
+        throw new Error(`设备 ${b.ip} 不存在于设备列表中`)
+      }
+      return {
+        commandGroupId: '',
+        commands: b.commands.split('\n').map((l: string) => l.trim()).filter((l: string) => l !== ''),
+        deviceIDs: [deviceID as number]
+      }
+    })
 
     const taskGroup = {
       id: '',

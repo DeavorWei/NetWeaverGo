@@ -129,18 +129,18 @@
               <div class="rounded-xl border border-border bg-bg-panel p-4">
                 <div class="flex items-center justify-between mb-3">
                   <h4 class="text-sm font-semibold text-text-primary">选择设备</h4>
-                  <span class="text-xs text-text-muted">已选 {{ groupForm.deviceIPs.length }} 台</span>
+                  <span class="text-xs text-text-muted">已选 {{ groupForm.deviceIDs.length }} 台</span>
                 </div>
                 <div class="grid grid-cols-2 gap-2 max-h-[420px] overflow-y-auto scrollbar-custom">
                   <label
                     v-for="device in allDevices"
-                    :key="device.ip"
+                    :key="device.id"
                     class="flex items-start gap-3 rounded-lg border border-border bg-bg-card px-3 py-2 hover:border-accent/40 transition-colors cursor-pointer"
                   >
                     <input
                       type="checkbox"
-                      :checked="groupForm.deviceIPs.includes(device.ip)"
-                      @change="toggleGroupDevice(device.ip)"
+                      :checked="groupForm.deviceIDs.includes(device.id)"
+                      @change="toggleGroupDevice(device.id)"
                       class="mt-1"
                     />
                     <div class="min-w-0">
@@ -192,18 +192,18 @@
                   <div class="space-y-2">
                     <div class="flex items-center justify-between">
                       <label class="text-sm font-medium text-text-primary">设备概览</label>
-                      <span class="text-xs text-text-muted">已选 {{ item.deviceIPs.length }} 台</span>
+                      <span class="text-xs text-text-muted">已选 {{ item.deviceIDs.length }} 台</span>
                     </div>
                     <div class="max-h-64 overflow-y-auto scrollbar-custom grid grid-cols-1 gap-2">
                       <label
                         v-for="device in allDevices"
-                        :key="`${index}-${device.ip}`"
+                        :key="`${index}-${device.id}`"
                         class="flex items-start gap-3 rounded-lg border border-border bg-bg-card px-3 py-2 hover:border-accent/40 transition-colors cursor-pointer"
                       >
                         <input
                           type="checkbox"
-                          :checked="item.deviceIPs.includes(device.ip)"
-                          @change="toggleBindingDevice(index, device.ip)"
+                          :checked="item.deviceIDs.includes(device.id)"
+                          @change="toggleBindingDevice(index, device.id)"
                           class="mt-1"
                         />
                         <div class="min-w-0">
@@ -268,7 +268,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import type { CommandGroup, DeviceAsset, TaskGroup, TaskItem } from '../../services/api'
 
 type BindingItemForm = {
-  deviceIPs: string[]
+  deviceIDs: number[]
   commandsText: string
 }
 
@@ -294,7 +294,7 @@ const form = reactive({
 
 const groupForm = reactive({
   commandGroupId: '',
-  deviceIPs: [] as string[]
+  deviceIDs: [] as number[]
 })
 
 const bindingForm = reactive({
@@ -330,37 +330,37 @@ function hydrateForm(task: TaskGroup) {
   if (task.mode === 'group') {
     const normalized = normalizeGroupTask(task.items)
     groupForm.commandGroupId = normalized.commandGroupId
-    groupForm.deviceIPs = normalized.deviceIPs
+    groupForm.deviceIDs = normalized.deviceIDs
     bindingForm.items = []
     return
   }
 
   groupForm.commandGroupId = ''
-  groupForm.deviceIPs = []
+  groupForm.deviceIDs = []
   bindingForm.items = task.items.map((item) => ({
-    deviceIPs: [...item.deviceIPs],
+    deviceIDs: [...item.deviceIDs],
     commandsText: item.commands.join('\n')
   }))
 
   if (bindingForm.items.length === 0) {
-    bindingForm.items = [{ deviceIPs: [], commandsText: '' }]
+    bindingForm.items = [{ deviceIDs: [], commandsText: '' }]
   }
 }
 
 function normalizeGroupTask(items: TaskItem[]) {
-  const deviceSet = new Set<string>()
+  const deviceSet = new Set<number>()
   let commandGroupId = ''
 
   items.forEach((item) => {
     if (!commandGroupId && item.commandGroupId) {
       commandGroupId = item.commandGroupId
     }
-    item.deviceIPs.forEach((ip) => deviceSet.add(ip))
+    item.deviceIDs.forEach((id) => deviceSet.add(id))
   })
 
   return {
     commandGroupId,
-    deviceIPs: Array.from(deviceSet)
+    deviceIDs: Array.from(deviceSet)
   }
 }
 
@@ -380,36 +380,36 @@ function removeTag(index: number) {
   form.tags.splice(index, 1)
 }
 
-function toggleGroupDevice(ip: string) {
-  if (groupForm.deviceIPs.includes(ip)) {
-    groupForm.deviceIPs.splice(groupForm.deviceIPs.indexOf(ip), 1)
+function toggleGroupDevice(deviceID: number) {
+  if (groupForm.deviceIDs.includes(deviceID)) {
+    groupForm.deviceIDs.splice(groupForm.deviceIDs.indexOf(deviceID), 1)
     return
   }
-  groupForm.deviceIPs.push(ip)
+  groupForm.deviceIDs.push(deviceID)
 }
 
 function addBindingItem() {
-  bindingForm.items.push({ deviceIPs: [], commandsText: '' })
+  bindingForm.items.push({ deviceIDs: [], commandsText: '' })
 }
 
 function removeBindingItem(index: number) {
   if (bindingForm.items.length === 1) {
-    bindingForm.items[0] = { deviceIPs: [], commandsText: '' }
+    bindingForm.items[0] = { deviceIDs: [], commandsText: '' }
     return
   }
   bindingForm.items.splice(index, 1)
 }
 
-function toggleBindingDevice(index: number, ip: string) {
+function toggleBindingDevice(index: number, deviceID: number) {
   const item = bindingForm.items[index]
   if (!item) return
 
-  if (item.deviceIPs.includes(ip)) {
-    item.deviceIPs.splice(item.deviceIPs.indexOf(ip), 1)
+  if (item.deviceIDs.includes(deviceID)) {
+    item.deviceIDs.splice(item.deviceIDs.indexOf(deviceID), 1)
     return
   }
 
-  item.deviceIPs.push(ip)
+  item.deviceIDs.push(deviceID)
 }
 
 function submit() {
@@ -431,7 +431,7 @@ function submit() {
       formError.value = '请选择命令组'
       return
     }
-    if (groupForm.deviceIPs.length === 0) {
+    if (groupForm.deviceIDs.length === 0) {
       formError.value = '请至少选择一台设备'
       return
     }
@@ -439,7 +439,7 @@ function submit() {
     items = [{
       commandGroupId: groupForm.commandGroupId,
       commands: [],
-      deviceIPs: [...groupForm.deviceIPs]
+      deviceIDs: [...groupForm.deviceIDs]
     }]
   } else {
     items = bindingForm.items
@@ -449,9 +449,9 @@ function submit() {
           .split('\n')
           .map((line) => line.trim())
           .filter((line) => line !== ''),
-        deviceIPs: [...item.deviceIPs]
+        deviceIDs: [...item.deviceIDs]
       }))
-      .filter((item) => item.deviceIPs.length > 0 && item.commands.length > 0)
+      .filter((item) => item.deviceIDs.length > 0 && item.commands.length > 0)
 
     if (items.length === 0) {
       formError.value = '请至少保留一个包含设备和命令的任务项'

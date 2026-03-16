@@ -48,11 +48,20 @@ export function GetRuntimeConfig(): $CancellablePromise<$models.RuntimeConfigDat
 }
 
 /**
+ * GetSSHAlgorithmOptions 获取当前 Go SSH 库支持的算法候选列表
+ */
+export function GetSSHAlgorithmOptions(): $CancellablePromise<$models.SSHAlgorithmOptions> {
+    return $Call.ByID(2732086811).then(($result: any) => {
+        return $$createType5($result);
+    });
+}
+
+/**
  * LoadSettings 获取合并后的主配置
  */
 export function LoadSettings(): $CancellablePromise<config$0.GlobalSettings | null> {
     return $Call.ByID(3565402469).then(($result: any) => {
-        return $$createType6($result);
+        return $$createType7($result);
     });
 }
 
@@ -104,5 +113,6 @@ const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = $Create.Array($Create.Any);
 const $$createType3 = $Create.Map($Create.Any, $Create.Any);
 const $$createType4 = $models.RuntimeConfigData.createFrom;
-const $$createType5 = config$0.GlobalSettings.createFrom;
-const $$createType6 = $Create.Nullable($$createType5);
+const $$createType5 = $models.SSHAlgorithmOptions.createFrom;
+const $$createType6 = config$0.GlobalSettings.createFrom;
+const $$createType7 = $Create.Nullable($$createType6);

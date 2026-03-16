@@ -39,6 +39,8 @@ export {
     QueryOptions,
     QueryResult,
     RuntimeConfigData,
+    SSHAlgorithmOption,
+    SSHAlgorithmOptions,
     TaskCommandOverview,
     TaskDeviceOverview,
     TaskGroupDetailViewModel,

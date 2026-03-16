@@ -615,9 +615,9 @@ export class TaskItem {
     "commands": string[];
 
     /**
-     * 绑定的设备IP列表
+     * 绑定的设备ID列表
      */
-    "deviceIPs": string[];
+    "deviceIDs": number[];
 
     /** Creates a new TaskItem instance. */
     constructor($$source: Partial<TaskItem> = {}) {
@@ -627,8 +627,8 @@ export class TaskItem {
         if (!("commands" in $$source)) {
             this["commands"] = [];
         }
-        if (!("deviceIPs" in $$source)) {
-            this["deviceIPs"] = [];
+        if (!("deviceIDs" in $$source)) {
+            this["deviceIDs"] = [];
         }
 
         Object.assign(this, $$source);
@@ -639,13 +639,13 @@ export class TaskItem {
      */
     static createFrom($$source: any = {}): TaskItem {
         const $$createField1_0 = $$createType0;
-        const $$createField2_0 = $$createType0;
+        const $$createField2_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("commands" in $$parsedSource) {
             $$parsedSource["commands"] = $$createField1_0($$parsedSource["commands"]);
         }
-        if ("deviceIPs" in $$parsedSource) {
-            $$parsedSource["deviceIPs"] = $$createField2_0($$parsedSource["deviceIPs"]);
+        if ("deviceIDs" in $$parsedSource) {
+            $$parsedSource["deviceIDs"] = $$createField2_0($$parsedSource["deviceIDs"]);
         }
         return new TaskItem($$parsedSource as Partial<TaskItem>);
     }
@@ -658,3 +658,4 @@ const $$createType2 = $Create.Array($$createType1);
 const $$createType3 = SSHAlgorithmSettings.createFrom;
 const $$createType4 = TaskItem.createFrom;
 const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = $Create.Array($Create.Any);

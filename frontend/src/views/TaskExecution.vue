@@ -222,13 +222,13 @@
                     命令组: {{ item.commandGroupId.substring(0, 8) }}...
                   </span>
                   <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-text-muted flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                  <span class="text-text-secondary">{{ item.deviceIPs.length }} 台设备</span>
+                  <span class="text-text-secondary">{{ item.deviceIDs.length }} 台设备</span>
                 </div>
               </template>
               <template v-else>
                 <div class="space-y-1">
                   <div v-for="(item, idx) in task.items.slice(0, 3)" :key="idx" class="flex items-center gap-2 text-xs">
-                    <span class="font-mono text-text-secondary">{{ item.deviceIPs[0] }}</span>
+                    <span class="font-mono text-text-secondary">{{ item.deviceIDs[0] }}</span>
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 text-text-muted flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                     <span class="text-text-muted truncate">{{ item.commands.length }} 条命令</span>
                   </div>

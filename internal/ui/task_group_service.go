@@ -112,9 +112,9 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 		return err
 	}
 
-	assetMap := make(map[string]config.DeviceAsset, len(allAssets))
+	assetMap := make(map[uint]config.DeviceAsset, len(allAssets))
 	for _, asset := range allAssets {
-		assetMap[asset.IP] = asset
+		assetMap[asset.ID] = asset
 	}
 
 	var finalStatus string
@@ -138,18 +138,18 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 // executeModeA 模式A执行：一组命令发送给所有设备
 func (s *TaskGroupService) executeModeA(
 	taskGroup *config.TaskGroup,
-	assetMap map[string]config.DeviceAsset,
+	assetMap map[uint]config.DeviceAsset,
 	settings *config.GlobalSettings,
 ) (string, error) {
-	assetSet := make(map[string]bool)
+	assetSet := make(map[uint]bool)
 	var allSelectedAssets []config.DeviceAsset
 	var commands []string
 
 	for _, item := range taskGroup.Items {
-		for _, ip := range item.DeviceIPs {
-			if !assetSet[ip] {
-				assetSet[ip] = true
-				if asset, ok := assetMap[ip]; ok {
+		for _, deviceID := range item.DeviceIDs {
+			if !assetSet[deviceID] {
+				assetSet[deviceID] = true
+				if asset, ok := assetMap[deviceID]; ok {
 					allSelectedAssets = append(allSelectedAssets, asset)
 				}
 			}
@@ -202,7 +202,7 @@ func (s *TaskGroupService) executeModeA(
 // executeModeB 模式B执行：每台设备执行各自的独立命令
 func (s *TaskGroupService) executeModeB(
 	taskGroup *config.TaskGroup,
-	assetMap map[string]config.DeviceAsset,
+	assetMap map[uint]config.DeviceAsset,
 	settings *config.GlobalSettings,
 ) (string, error) {
 	logger.Info("TaskGroup", "-", "模式B执行: %d 个任务项", len(taskGroup.Items))
@@ -213,7 +213,7 @@ func (s *TaskGroupService) executeModeB(
 	}
 
 	var runs []taskRun
-	uniqueIPs := make(map[string]struct{})
+	uniqueIDs := make(map[uint]struct{})
 
 	for _, item := range taskGroup.Items {
 		var commands []string
@@ -229,10 +229,10 @@ func (s *TaskGroupService) executeModeB(
 		}
 
 		var itemAssets []config.DeviceAsset
-		for _, ip := range item.DeviceIPs {
-			if asset, ok := assetMap[ip]; ok {
+		for _, deviceID := range item.DeviceIDs {
+			if asset, ok := assetMap[deviceID]; ok {
 				itemAssets = append(itemAssets, asset)
-				uniqueIPs[asset.IP] = struct{}{}
+				uniqueIDs[deviceID] = struct{}{}
 			}
 		}
 		if len(itemAssets) == 0 {
@@ -250,7 +250,7 @@ func (s *TaskGroupService) executeModeB(
 		return "", fmt.Errorf("任务组中没有可执行的任务项")
 	}
 
-	totalDevices := len(uniqueIPs)
+	totalDevices := len(uniqueIDs)
 	if totalDevices == 0 {
 		return "", fmt.Errorf("任务组中没有可执行设备")
 	}
@@ -357,9 +357,9 @@ func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewMode
 		return nil, err
 	}
 
-	assetMap := make(map[string]config.DeviceAsset, len(assets))
+	assetMap := make(map[uint]config.DeviceAsset, len(assets))
 	for _, asset := range assets {
-		assetMap[asset.IP] = asset
+		assetMap[asset.ID] = asset
 	}
 
 	uniqueCommandIDs := make(map[string]struct{})
@@ -381,13 +381,14 @@ func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewMode
 	}
 
 	items := make([]TaskGroupItemDetailViewModel, 0, len(taskGroup.Items))
-	missingDeviceSet := make(map[string]struct{})
+	missingDeviceSet := make(map[uint]struct{})
 
 	for index, item := range taskGroup.Items {
-		devices := make([]TaskDeviceOverview, 0, len(item.DeviceIPs))
-		for _, ip := range item.DeviceIPs {
-			if asset, ok := assetMap[ip]; ok {
+		devices := make([]TaskDeviceOverview, 0, len(item.DeviceIDs))
+		for _, deviceID := range item.DeviceIDs {
+			if asset, ok := assetMap[deviceID]; ok {
 				devices = append(devices, TaskDeviceOverview{
+					ID:    asset.ID,
 					IP:    asset.IP,
 					Group: asset.Group,
 					Tags:  append([]string(nil), asset.Tags...),
@@ -395,9 +396,10 @@ func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewMode
 				continue
 			}
 
-			missingDeviceSet[ip] = struct{}{}
+			missingDeviceSet[deviceID] = struct{}{}
 			devices = append(devices, TaskDeviceOverview{
-				IP:      ip,
+				ID:      deviceID,
+				IP:      "",
 				Missing: true,
 				Tags:    []string{},
 			})
@@ -406,7 +408,7 @@ func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewMode
 		itemDetail := TaskGroupItemDetailViewModel{
 			Index:       index,
 			Mode:        taskGroup.Mode,
-			DeviceCount: len(item.DeviceIPs),
+			DeviceCount: len(item.DeviceIDs),
 			Devices:     devices,
 			Commands:    append([]string(nil), item.Commands...),
 		}
@@ -434,7 +436,7 @@ func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewMode
 		items = append(items, itemDetail)
 	}
 
-	missingDevices := sortedKeys(missingDeviceSet)
+	missingDevices := sortedUintKeys(missingDeviceSet)
 	missingCommandIDs := sortedKeys(missingCommandSet)
 	editDisabledReason := ""
 	if !canEditTaskGroup(taskGroup.Status) {
@@ -458,5 +460,16 @@ func sortedKeys(values map[string]struct{}) []string {
 		result = append(result, value)
 	}
 	sort.Strings(result)
+	return result
+}
+
+func sortedUintKeys(values map[uint]struct{}) []uint {
+	result := make([]uint, 0, len(values))
+	for value := range values {
+		result = append(result, value)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i] < result[j]
+	})
 	return result
 }

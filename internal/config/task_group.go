@@ -19,7 +19,7 @@ var validStatuses = map[string]bool{
 type TaskItem struct {
 	CommandGroupID string   `json:"commandGroupId"` // 命令组ID（模式A使用）
 	Commands       []string `json:"commands"`       // 直接命令列表（模式B使用）
-	DeviceIPs      []string `json:"deviceIPs"`      // 绑定的设备IP列表
+	DeviceIDs      []uint   `json:"deviceIDs"`      // 绑定的设备ID列表
 }
 
 // TaskGroup 任务组
@@ -27,10 +27,10 @@ type TaskGroup struct {
 	ID          string     `json:"id" gorm:"primaryKey"`
 	Name        string     `json:"name"`
 	Description string     `json:"description"`
-	Mode        string     `json:"mode"`                          // "group" 模式A | "binding" 模式B
-	Items       []TaskItem `json:"items" gorm:"serializer:json"`  // 任务项列表
-	Tags        []string   `json:"tags" gorm:"serializer:json"`   // 标签
-	Status      string     `json:"status"`                        // "pending" | "running" | "completed" | "failed"
+	Mode        string     `json:"mode"`                         // "group" 模式A | "binding" 模式B
+	Items       []TaskItem `json:"items" gorm:"serializer:json"` // 任务项列表
+	Tags        []string   `json:"tags" gorm:"serializer:json"`  // 标签
+	Status      string     `json:"status"`                       // "pending" | "running" | "completed" | "failed"
 	CreatedAt   string     `json:"createdAt"`
 	UpdatedAt   string     `json:"updatedAt"`
 }
@@ -166,7 +166,7 @@ func validateTaskGroup(group TaskGroup) error {
 		return fmt.Errorf("任务项不能为空")
 	}
 	for i, item := range group.Items {
-		if len(item.DeviceIPs) == 0 {
+		if len(item.DeviceIDs) == 0 {
 			return fmt.Errorf("第 %d 个任务项的设备列表不能为空", i+1)
 		}
 		if group.Mode == "group" && item.CommandGroupID == "" {

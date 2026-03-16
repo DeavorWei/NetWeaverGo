@@ -88,6 +88,8 @@ export const CommandGroupAPI = {
 export const SettingsAPI = {
   /** 加载设置 */
   loadSettings: SettingsServiceBinding.LoadSettings,
+  /** 获取 SSH 算法候选列表 */
+  getSSHAlgorithmOptions: SettingsServiceBinding.GetSSHAlgorithmOptions,
   /** 保存设置 */
   saveSettings: SettingsServiceBinding.SaveSettings,
   /** 确保配置文件存在 */

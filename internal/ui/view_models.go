@@ -169,7 +169,7 @@ type TaskGroupDetailViewModel struct {
 	CanEdit            bool                           `json:"canEdit"`
 	EditDisabledReason string                         `json:"editDisabledReason"`
 	Items              []TaskGroupItemDetailViewModel `json:"items"`
-	MissingDevices     []string                       `json:"missingDevices"`
+	MissingDevices     []uint                         `json:"missingDevices"`
 	MissingCommandIDs  []string                       `json:"missingCommandIds"`
 }
 
@@ -185,6 +185,7 @@ type TaskGroupItemDetailViewModel struct {
 
 // TaskDeviceOverview 任务关联设备概览
 type TaskDeviceOverview struct {
+	ID      uint     `json:"id"`
 	IP      string   `json:"ip"`
 	Group   string   `json:"group"`
 	Tags    []string `json:"tags"`
