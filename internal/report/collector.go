@@ -78,7 +78,7 @@ type ProgressTracker struct {
 }
 
 func NewProgressTracker(totalDevices int) *ProgressTracker {
-	logger.DebugAll("Report", "-", "生成与编排新的终端任务信息收集进度板，目标设备总量规模: %d 台", totalDevices)
+	logger.Verbose("Report", "-", "生成与编排新的终端任务信息收集进度板，目标设备总量规模: %d 台", totalDevices)
 
 	// 创建日志存储
 	storage, err := NewLogStorage()
@@ -125,7 +125,7 @@ func (p *ProgressTracker) Listen(ctx context.Context) {
 		case evt, ok := <-p.EventBus:
 			if !ok {
 				// 通道关闭，正常谢幕
-				logger.DebugAll("Report", "-", "EventBus 频道已经下播，触发最终报表渲染并退出监听循环...")
+				logger.Verbose("Report", "-", "EventBus 频道已经下播，触发最终报表渲染并退出监听循环...")
 				p.renderFinal()
 				return
 			}
@@ -138,7 +138,7 @@ func (p *ProgressTracker) Listen(ctx context.Context) {
 func (p *ProgressTracker) Suspend() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	logger.DebugAll("Report", "-", "用户触发了互动式阻断，现已挂起大盘信息收集的定时排版状态...")
+	logger.Verbose("Report", "-", "用户触发了互动式阻断，现已挂起大盘信息收集的定时排版状态...")
 	p.paused = true
 }
 
@@ -146,7 +146,7 @@ func (p *ProgressTracker) Suspend() {
 func (p *ProgressTracker) Resume() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	logger.DebugAll("Report", "-", "用户输入处置结束，大盘状态监控解封，业务继续推进执行.")
+	logger.Verbose("Report", "-", "用户输入处置结束，大盘状态监控解封，业务继续推进执行.")
 	p.paused = false
 }
 
@@ -166,7 +166,7 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 		summary = p.status[evt.IP]
 	}
 
-	logger.DebugAll("Report", evt.IP, "EventBus接收到事件: Type=%v, Message=%s", evt.Type, evt.Message)
+	logger.Verbose("Report", evt.IP, "EventBus接收到事件: Type=%v, Message=%s", evt.Type, evt.Message)
 
 	// 格式化日志消息
 	var logMessage string
@@ -220,7 +220,7 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 
 // registerDeviceLocked 内部注册设备（必须在持有锁时调用）
 func (p *ProgressTracker) registerDeviceLocked(ip string, totalCmd int) {
-	logger.DebugAll("Report", ip, "自动注册设备到进度追踪器")
+	logger.Verbose("Report", ip, "自动注册设备到进度追踪器")
 
 	// 添加到状态映射
 	p.status[ip] = &DeviceSummary{
@@ -279,7 +279,7 @@ func (p *ProgressTracker) renderDisplay() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	logger.DebugAll("Report", "-", "触发输出并生成新一期阶段设备态势与健康简报...")
+	logger.Verbose("Report", "-", "触发输出并生成新一期阶段设备态势与健康简报...")
 	logger.Info("Report", "-", "=== 终端汇总大盘: 完成 [%d/%d] ===", p.finished, p.total)
 
 	var ips []string

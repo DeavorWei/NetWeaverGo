@@ -24,7 +24,7 @@ func InitDB() error {
 	}
 
 	dbPath := pm.GetDBPath()
-	logger.DebugAll("Config", "-", "开始初始化SQLite存储逻辑，数据根目录: %s", pm.GetStorageRoot())
+	logger.Verbose("Config", "-", "开始初始化SQLite存储逻辑，数据根目录: %s", pm.GetStorageRoot())
 
 	// SQLite 性能优化参数
 	// _journal=WAL: 使用 WAL 模式提升并发性能
@@ -59,7 +59,7 @@ func InitDB() error {
 
 	DB = db
 
-	logger.DebugAll("Config", "-", "连接SQLite数据库引擎已建立！正在扫描并校验内部表结构约束...")
+	logger.Verbose("Config", "-", "连接SQLite数据库引擎已建立！正在扫描并校验内部表结构约束...")
 	// 自动迁移表结构
 	err = db.AutoMigrate(
 		&DeviceAsset{},
@@ -105,13 +105,13 @@ func createIndexes(db *gorm.DB) {
 		}
 	}
 
-	logger.DebugAll("Config", "-", "数据库索引创建完成")
+	logger.Verbose("Config", "-", "数据库索引创建完成")
 }
 
 // MigrateLegacyDataIfNeeded 从旧文件系统迁移数据到数据库
 func MigrateLegacyDataIfNeeded() {
 	var count int64
-	logger.DebugAll("Config", "-", "执行自检模块，侦测是否存在遗留旧文件待转换为数据库对象格式...")
+	logger.Verbose("Config", "-", "执行自检模块，侦测是否存在遗留旧文件待转换为数据库对象格式...")
 	pm := GetPathManager()
 	inventoryPath := pm.GetLegacyInventoryFile()
 
@@ -166,7 +166,7 @@ func MigrateLegacyDataIfNeeded() {
 		logger.Warn("Config", "-", "迁移 config.txt 失败: %v", err)
 	}
 
-	logger.DebugAll("Config", "-", "本地平滑升级巡检流程执行完毕！")
+	logger.Verbose("Config", "-", "本地平滑升级巡检流程执行完毕！")
 }
 
 // MirrorDatabaseToPath 将当前数据库文件镜像到目标路径，供切换 storageRoot 后下次启动继续使用

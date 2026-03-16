@@ -140,11 +140,11 @@
             </label>
           </div>
 
-          <!-- DebugAll 开关 -->
+          <!-- Verbose 开关 -->
           <div class="flex items-center justify-between p-3 rounded-lg bg-bg-panel/50 border border-border/50">
             <div class="space-y-1">
               <div class="flex items-center gap-2">
-                <span class="text-sm font-medium text-text-primary">启用 DebugAll 日志</span>
+                <span class="text-sm font-medium text-text-primary">启用 Verbose 日志</span>
                 <HelpTip text="输出全量详细日志，包含底层通信数据，日志体积会显著增加。" />
                 <span class="px-2 py-0.5 text-xs bg-warning/20 text-warning rounded">Verbose</span>
               </div>
@@ -152,8 +152,8 @@
             <label class="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                v-model="settings.debugAll"
-                @change="onDebugAllChange"
+                v-model="settings.verbose"
+                @change="onVerboseChange"
                 class="sr-only peer"
               />
               <div class="w-11 h-6 bg-bg-panel border border-border peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-warning/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-warning"></div>
@@ -169,7 +169,7 @@
                 <line x1="12" y1="8" x2="12.01" y2="8"/>
               </svg>
               <p class="text-xs text-info">
-                启用 DebugAll 会自动同时启用 Debug。日志文件保存在 <code class="bg-bg-panel px-1 py-0.5 rounded">{{ settings.storageRoot || './netWeaverGoData' }}/logs/app/app.log</code>
+                启用 Verbose 会自动同时启用 Debug。日志文件保存在 <code class="bg-bg-panel px-1 py-0.5 rounded">{{ settings.storageRoot || './netWeaverGoData' }}/logs/app/app.log</code>
               </p>
             </div>
           </div>
@@ -430,7 +430,7 @@ interface GlobalSettings {
   storageRoot: string
   errorMode: string
   debug: boolean
-  debugAll: boolean
+  verbose: boolean
   sshAlgorithms: SSHAlgorithmSettings
 }
 
@@ -493,7 +493,7 @@ const settings = ref<GlobalSettings>({
   storageRoot: './netWeaverGoData',
   errorMode: 'pause',
   debug: false,
-  debugAll: false,
+  verbose: false,
   sshAlgorithms: { ...defaultSSHAlgorithms }
 })
 
@@ -504,7 +504,7 @@ const defaultSettings: GlobalSettings = {
   storageRoot: './netWeaverGoData',
   errorMode: 'pause',
   debug: false,
-  debugAll: false,
+  verbose: false,
   sshAlgorithms: { ...defaultSSHAlgorithms }
 }
 
@@ -528,9 +528,9 @@ const presetModeDescription = computed(() => {
   }
 })
 
-// DebugAll 变更处理：启用 DebugAll 时自动启用 Debug
-function onDebugAllChange() {
-  if (settings.value.debugAll) {
+// Verbose 变更处理：启用 Verbose 时自动启用 Debug
+function onVerboseChange() {
+  if (settings.value.verbose) {
     settings.value.debug = true
   }
 }
@@ -660,7 +660,7 @@ async function loadSettings() {
         storageRoot: rawResult.storageRoot || './netWeaverGoData',
         errorMode: result.errorMode || 'pause',
         debug: rawResult.debug || false,
-        debugAll: rawResult.debugAll || false,
+        verbose: rawResult.verbose || false,
         sshAlgorithms: rawResult.sshAlgorithms || { ...defaultSSHAlgorithms }
       }
     }
@@ -683,7 +683,7 @@ function toBackendSettings(frontend: GlobalSettings): BackendSettings {
     storageRoot: frontend.storageRoot,
     errorMode: frontend.errorMode,
     debug: frontend.debug,
-    debugAll: frontend.debugAll,
+    verbose: frontend.verbose,
     sshAlgorithms: {
       presetMode: frontend.sshAlgorithms.presetMode,
       ciphers: frontend.sshAlgorithms.ciphers,

@@ -15,6 +15,15 @@ var (
 	ConsoleMuted bool
 )
 
+// 日志级别常量
+const (
+	LevelError   = "Error"
+	LevelWarn    = "Warn"
+	LevelInfo    = "Info"
+	LevelDebug   = "Debug"
+	LevelVerbose = "Verbose"
+)
+
 // InitGlobalLogger 初始化全局应用日志文件（首次启动调用）
 func InitGlobalLogger(logPath string) error {
 	return openGlobalLogFile(logPath, true)
@@ -102,23 +111,23 @@ func Error(module string, ip string, format string, args ...interface{}) {
 }
 
 var (
-	EnableDebug    bool // 普通调试日志开关
-	EnableDebugAll bool // 全量底细调试日志开关
+	EnableDebug   bool // 调试日志开关 (Debug级别)
+	EnableVerbose bool // 详细日志开关 (Verbose级别，包含所有Debug日志)
 )
 
 // Debug 输出调试级别日志
 func Debug(module string, ip string, format string, args ...interface{}) {
-	if !EnableDebug {
+	if !EnableDebug && !EnableVerbose {
 		return
 	}
-	writeGlobalLog("Debug", module, ip, format, args...)
+	writeGlobalLog(LevelDebug, module, ip, format, args...)
 }
 
-// DebugAll 输出全量调试级别日志（仅在 EnableDebugAll 为 true 时生效）
-func DebugAll(module string, ip string, format string, args ...interface{}) {
-	if !EnableDebugAll {
+// Verbose 输出详细级别日志（仅在 EnableVerbose 为 true 时生效）
+// Verbose 级别包含最详细的日志信息，如底层通信数据、完整输出内容等
+func Verbose(module string, ip string, format string, args ...interface{}) {
+	if !EnableVerbose {
 		return
 	}
-	// 为了在日志里区分，这里将前缀设为 Debug-All
-	writeGlobalLog("Debug-All", module, ip, format, args...)
+	writeGlobalLog(LevelVerbose, module, ip, format, args...)
 }

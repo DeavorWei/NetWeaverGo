@@ -169,7 +169,7 @@ func applyAlgorithmConfig(sshConfig *ssh.ClientConfig, algoSettings *config.SSHA
 
 // NewSSHClient 建立SSH连接并请求交互式 Shell 终端
 func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
-	logger.DebugAll("SSH", cfg.IP, "开始初始化带 Shell 的 SSH 连接 -> %s:%d", cfg.IP, cfg.Port)
+	logger.Verbose("SSH", cfg.IP, "开始初始化带 Shell 的 SSH 连接 -> %s:%d", cfg.IP, cfg.Port)
 	if cfg.Port == 0 {
 		cfg.Port = config.DefaultSSHPort
 	}
@@ -206,7 +206,7 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 		logger.Debug("SSH", cfg.IP, "拨号 %s 失败: %v", target, err)
 		return nil, fmt.Errorf("TCP连通失败: %w", err)
 	}
-	logger.DebugAll("SSH", cfg.IP, "TCP %s 拨号成功", target)
+	logger.Verbose("SSH", cfg.IP, "TCP %s 拨号成功", target)
 
 	c, chans, reqs, err := ssh.NewClientConn(conn, target, sshConfig)
 	if err != nil {
@@ -287,7 +287,7 @@ func (c *SSHClient) SendCommand(cmd string) error {
 		return fmt.Errorf("SSH 连接已关闭")
 	}
 
-	logger.DebugAll("SSH", c.IP, "向底层隧道投递命令行包含回车: %q", cmd)
+	logger.Verbose("SSH", c.IP, "向底层隧道投递命令行包含回车: %q", cmd)
 	if c.Stdin == nil {
 		return fmt.Errorf("SSHClient not fully initialized for terminal sending (Stdin is nil)")
 	}
@@ -306,7 +306,7 @@ func (c *SSHClient) SendRawBytes(data []byte) error {
 		return fmt.Errorf("SSH 连接已关闭")
 	}
 
-	logger.DebugAll("SSH", c.IP, "向底层隧道投递 Raw Bytes: %q", string(data))
+	logger.Verbose("SSH", c.IP, "向底层隧道投递 Raw Bytes: %q", string(data))
 	if c.Stdin == nil {
 		return fmt.Errorf("SSHClient not fully initialized for terminal sending (Stdin is nil)")
 	}
@@ -404,7 +404,7 @@ func (c *SSHClient) CancelRead() {
 // NewRawSSHClient 建立一个最基础的SSH连接，不请求任何 Session, PTY, 或 Shell。
 // 专供 SFTP 或其他只要求纯净底层子系统通道的应用（例如华为交换机的 sftp 子系统不能在包含 shell 的连接中打开）。
 func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
-	logger.DebugAll("SSH", cfg.IP, "开始初始化 Raw SSH 连接 -> %s:%d", cfg.IP, cfg.Port)
+	logger.Verbose("SSH", cfg.IP, "开始初始化 Raw SSH 连接 -> %s:%d", cfg.IP, cfg.Port)
 	if cfg.Port == 0 {
 		cfg.Port = config.DefaultSSHPort
 	}
@@ -441,7 +441,7 @@ func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 		logger.Debug("SSH", cfg.IP, "Raw 拨号 %s 失败: %v", target, err)
 		return nil, fmt.Errorf("TCP连通失败: %w", err)
 	}
-	logger.DebugAll("SSH", cfg.IP, "Raw TCP %s 拨号成功", target)
+	logger.Verbose("SSH", cfg.IP, "Raw TCP %s 拨号成功", target)
 
 	c, chans, reqs, err := ssh.NewClientConn(conn, target, sshConfig)
 	if err != nil {

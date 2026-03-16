@@ -91,7 +91,7 @@ func readInventoryLegacy(filePath string) ([]DeviceAsset, error) {
 	if strings.TrimSpace(filePath) == "" {
 		filePath = filepath.Join(GetPathManager().WorkDir, defaultInventoryFile)
 	}
-	logger.DebugAll("Config", "-", "尝试打开文件: %s", filePath)
+	logger.Verbose("Config", "-", "尝试打开文件: %s", filePath)
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func readCommandsLegacy() ([]string, error) {
 	if strings.TrimSpace(configPath) == "" {
 		configPath = filepath.Join(GetPathManager().WorkDir, defaultConfigFile)
 	}
-	logger.DebugAll("Config", "-", "尝试打开文件: %s", configPath)
+	logger.Verbose("Config", "-", "尝试打开文件: %s", configPath)
 	content, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
@@ -401,7 +401,7 @@ func UpdateDevice(id uint, device DeviceAsset) error {
 		if err := tx.First(&existing, id).Error; err != nil {
 			return fmt.Errorf("未找到设备: %d", id)
 		}
-		logger.DebugAll(
+		logger.Verbose(
 			"Config",
 			existing.IP,
 			"收到单设备更新请求: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q, tags=%q->%q",
@@ -425,7 +425,7 @@ func UpdateDevice(id uint, device DeviceAsset) error {
 		if err := tx.Save(&device).Error; err != nil {
 			return err
 		}
-		logger.DebugAll("Config", device.IP, "单设备更新完成: id=%d", id)
+		logger.Verbose("Config", device.IP, "单设备更新完成: id=%d", id)
 		return nil
 	})
 }
@@ -455,7 +455,7 @@ func UpdateDevices(devices []DeviceAsset) error {
 		idSet[device.ID] = struct{}{}
 	}
 
-	logger.DebugAll("Config", "-", "收到批量设备更新请求: count=%d", len(devices))
+	logger.Verbose("Config", "-", "收到批量设备更新请求: count=%d", len(devices))
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var existing []DeviceAsset
 		if err := tx.Where("id IN ?", ids).Find(&existing).Error; err != nil {
@@ -482,7 +482,7 @@ func UpdateDevices(devices []DeviceAsset) error {
 		for _, device := range devices {
 			old, ok := existingByID[device.ID]
 			if ok {
-				logger.DebugAll(
+				logger.Verbose(
 					"Config",
 					old.IP,
 					"批量更新设备: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q, tags=%q->%q",
@@ -498,7 +498,7 @@ func UpdateDevices(devices []DeviceAsset) error {
 				return err
 			}
 		}
-		logger.DebugAll("Config", "-", "批量设备更新完成: count=%d", len(devices))
+		logger.Verbose("Config", "-", "批量设备更新完成: count=%d", len(devices))
 		return nil
 	})
 }

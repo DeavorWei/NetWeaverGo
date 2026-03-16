@@ -47,7 +47,7 @@ type DeviceExecutor struct {
 
 // NewDeviceExecutor 初始化执行器
 func NewDeviceExecutor(ip string, port int, user, pass string, eb chan report.ExecutorEvent, onSuspend SuspendHandler) *DeviceExecutor {
-	logger.DebugAll("Executor", ip, "初始化 NewDeviceExecutor")
+	logger.Verbose("Executor", ip, "初始化 NewDeviceExecutor")
 	return &DeviceExecutor{
 		IP:        ip,
 		Port:      port,
@@ -236,7 +236,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 		case res, ok := <-readCh:
 			if !ok {
 				logger.Info("Executor", e.IP, "SSH 会话由于连接中断或完成已结束。")
-				logger.DebugAll("Executor", e.IP, "读取流 readCh 已关闭")
+				logger.Verbose("Executor", e.IP, "读取流 readCh 已关闭")
 				return nil
 			}
 
@@ -255,7 +255,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 
 				chunk := string(buf[:n])
 				streamBuffer += chunk
-				logger.DebugAll("Executor", e.IP, "Received chunk (len=%d) | streamBuffer_len=%d", n, len(streamBuffer))
+				logger.Verbose("Executor", e.IP, "Received chunk (len=%d) | streamBuffer_len=%d", n, len(streamBuffer))
 
 				lines := strings.Split(streamBuffer, "\n")
 				// 检查最后一行以外的完整回显行，查找 error 关键字
@@ -374,11 +374,11 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 							}
 						}
 						timer.Reset(customDelay)
-						logger.DebugAll("Executor", e.IP, "已执行发送动作，将 streamBuffer 人为清空防止污染。原长度=%d", len(streamBuffer))
+						logger.Verbose("Executor", e.IP, "已执行发送动作，将 streamBuffer 人为清空防止污染。原长度=%d", len(streamBuffer))
 						streamBuffer = "" // 发送命令后清空当前 Buffer，防止将上一步的提示符混到了接下来
 						currentCmdIndex++
 					} else {
-						logger.DebugAll("Executor", e.IP, "currentCmd=%d，还在等待匹配 Prompt, 当前 buff 末尾：%s", currentCmdIndex, streamBuffer)
+						logger.Verbose("Executor", e.IP, "currentCmd=%d，还在等待匹配 Prompt, 当前 buff 末尾：%s", currentCmdIndex, streamBuffer)
 					}
 				} else if currentCmdIndex >= len(commands) {
 					// 任务完成，判断最后一条命令结果是否已回显出提示符

@@ -33,8 +33,8 @@ type GlobalSettings struct {
 	ErrorMode      string `json:"errorMode"`      // "pause" | "skip" | "abort"
 
 	// 调试日志开关
-	Debug    bool `json:"debug"`    // 启用 DEBUG 级别日志
-	DebugAll bool `json:"debugAll"` // 启用全量 DEBUG 级别日志（包含 Debug）
+	Debug   bool `json:"debug"`   // 启用 DEBUG 级别日志
+	Verbose bool `json:"verbose"` // 启用 VERBOSE 级别日志（包含详细调试信息）
 
 	// SSH算法配置
 	SSHAlgorithms SSHAlgorithmSettings `json:"sshAlgorithms" gorm:"type:text;serializer:json"`
@@ -49,7 +49,7 @@ func DefaultSettings() GlobalSettings {
 		StorageRoot:    GetPathManager().GetStorageRoot(),
 		ErrorMode:      "pause",
 		Debug:          false,
-		DebugAll:       false,
+		Verbose:        false,
 		SSHAlgorithms: SSHAlgorithmSettings{
 			PresetMode: "compatible", // 默认使用兼容模式
 		},
@@ -79,7 +79,7 @@ func GetDefaultSSHAlgorithms(presetMode string) *SSHAlgorithmSettings {
 
 // LoadSettings 从数据库读取设置，如果不存在则自动创建默认模板
 func LoadSettings() (*GlobalSettings, bool, error) {
-	logger.DebugAll("Config", "-", "开始从数据库加载系统全局运行参数..")
+	logger.Verbose("Config", "-", "开始从数据库加载系统全局运行参数..")
 	if DB == nil {
 		return nil, false, fmt.Errorf("数据库未初始化")
 	}
@@ -93,7 +93,7 @@ func LoadSettings() (*GlobalSettings, bool, error) {
 			st.ID = 1
 			DB.Create(&st)
 			// 应用默认调试设置
-			ApplyDebugSettings(st.Debug, st.DebugAll)
+			ApplyDebugSettings(st.Debug, st.Verbose)
 			return &st, true, nil
 		}
 		logger.Error("Config", "-", "从数据库加载全局设置失败: %v", err)
@@ -105,32 +105,32 @@ func LoadSettings() (*GlobalSettings, bool, error) {
 	}
 
 	// 应用数据库中的调试设置
-	ApplyDebugSettings(st.Debug, st.DebugAll)
+	ApplyDebugSettings(st.Debug, st.Verbose)
 
-	logger.DebugAll("Config", "-", "成功将现有全局设置从数据库载入内存")
+	logger.Verbose("Config", "-", "成功将现有全局设置从数据库载入内存")
 	return &st, false, nil
 }
 
 // ApplyDebugSettings 应用调试日志设置到 logger 包
-func ApplyDebugSettings(debug, debugAll bool) {
-	logger.EnableDebug = debug || debugAll
-	logger.EnableDebugAll = debugAll
-	if debugAll {
-		logger.DebugAll("Config", "-", "DebugAll 模式已启用，将输出全量调试日志")
+func ApplyDebugSettings(debug, verbose bool) {
+	logger.EnableDebug = debug || verbose
+	logger.EnableVerbose = verbose
+	if verbose {
+		logger.Verbose("Config", "-", "Verbose 模式已启用，将输出详细调试日志")
 	} else if debug {
 		logger.Debug("Config", "-", "Debug 模式已启用，将输出调试日志")
 	} else {
-		logger.DebugAll("Config", "-", "调试日志已禁用")
+		logger.Verbose("Config", "-", "调试日志已禁用")
 	}
 }
 
 // SaveSettings 保存全局设置到数据库
 func SaveSettings(settings GlobalSettings) error {
 	logger.Debug("Config", "-", "准备将更新后的全局参数覆盖保存至本地数据库...")
-	logger.DebugAll("Config", "-", "保存内容: workers=%d, connect=%s, cmd=%s, error=%s, storageRoot=%s, debug=%v, debugAll=%v",
+	logger.Verbose("Config", "-", "保存内容: workers=%d, connect=%s, cmd=%s, error=%s, storageRoot=%s, debug=%v, verbose=%v",
 		settings.MaxWorkers, settings.ConnectTimeout, settings.CommandTimeout, settings.ErrorMode,
-		settings.StorageRoot, settings.Debug, settings.DebugAll)
-	logger.DebugAll("Config", "-", "SSH算法配置: presetMode=%s, ciphers=%d, keyExchanges=%d, macs=%d, hostKeys=%d",
+		settings.StorageRoot, settings.Debug, settings.Verbose)
+	logger.Verbose("Config", "-", "SSH算法配置: presetMode=%s, ciphers=%d, keyExchanges=%d, macs=%d, hostKeys=%d",
 		settings.SSHAlgorithms.PresetMode,
 		len(settings.SSHAlgorithms.Ciphers),
 		len(settings.SSHAlgorithms.KeyExchanges),
@@ -176,7 +176,7 @@ func SaveSettings(settings GlobalSettings) error {
 	}
 
 	// 保存后立即应用调试设置
-	ApplyDebugSettings(settings.Debug, settings.DebugAll)
-	logger.DebugAll("Config", "-", "全局参数保存落库完毕，ID=%d", settings.ID)
+	ApplyDebugSettings(settings.Debug, settings.Verbose)
+	logger.Verbose("Config", "-", "全局参数保存落库完毕，ID=%d", settings.ID)
 	return nil
 }

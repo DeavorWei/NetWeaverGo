@@ -286,7 +286,7 @@ func (e *Engine) Run(ctx context.Context) error {
 		// 添加 Context 感知，避免在 Context 取消后仍然阻塞等待令牌
 		select {
 		case sem <- struct{}{}:
-			logger.DebugAll("Engine", dev.IP, "获取到执行令牌，准备启动 worker")
+			logger.Verbose("Engine", dev.IP, "获取到执行令牌，准备启动 worker")
 		case <-e.ctx.Done():
 			wg.Done()
 			logger.Debug("Engine", dev.IP, "Context 已取消，跳过获取令牌")
@@ -298,7 +298,7 @@ func (e *Engine) Run(ctx context.Context) error {
 			defer func() {
 				// 执行完毕后，归还令牌
 				<-sem
-				logger.DebugAll("Engine", device.IP, "worker 执行完毕，已归还令牌")
+				logger.Verbose("Engine", device.IP, "worker 执行完毕，已归还令牌")
 			}()
 
 			// 增加抖动，平滑 SSH 突发连接压力 (Jitter Delay, 0-500ms)

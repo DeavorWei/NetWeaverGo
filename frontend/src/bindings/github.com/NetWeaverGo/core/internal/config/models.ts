@@ -382,9 +382,9 @@ export class GlobalSettings {
     "debug": boolean;
 
     /**
-     * 启用全量 DEBUG 级别日志（包含 Debug）
+     * 启用 VERBOSE 级别日志（包含详细调试信息）
      */
-    "debugAll": boolean;
+    "verbose": boolean;
 
     /**
      * SSH算法配置
@@ -414,8 +414,8 @@ export class GlobalSettings {
         if (!("debug" in $$source)) {
             this["debug"] = false;
         }
-        if (!("debugAll" in $$source)) {
-            this["debugAll"] = false;
+        if (!("verbose" in $$source)) {
+            this["verbose"] = false;
         }
         if (!("sshAlgorithms" in $$source)) {
             this["sshAlgorithms"] = (new SSHAlgorithmSettings());

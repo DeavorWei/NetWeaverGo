@@ -80,7 +80,7 @@ func (s *SFTPClient) DownloadFile(remotePath, localPath string) error {
 
 // Close 关闭 SFTP 客户端及其底层 SSH 连接，防止连接泄漏
 func (s *SFTPClient) Close() error {
-	logger.DebugAll("SFTP", s.ip, "正在关闭 SFTP Client 及底层 SSH 连接")
+	logger.Verbose("SFTP", s.ip, "正在关闭 SFTP Client 及底层 SSH 连接")
 	var firstErr error
 
 	// 先关闭 SFTP 协议层

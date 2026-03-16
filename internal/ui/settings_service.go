@@ -52,7 +52,7 @@ func (s *SettingsService) LoadSettings() (*config.GlobalSettings, error) {
 	if isNew {
 		logger.Debug("SettingsService", "-", "返回新创建的默认设置")
 	} else {
-		logger.DebugAll("SettingsService", "-", "返回已有设置: debug=%v, debugAll=%v", settings.Debug, settings.DebugAll)
+		logger.Verbose("SettingsService", "-", "返回已有设置: debug=%v, verbose=%v", settings.Debug, settings.Verbose)
 	}
 	return settings, err
 }
@@ -60,12 +60,12 @@ func (s *SettingsService) LoadSettings() (*config.GlobalSettings, error) {
 // SaveSettings 保存全局设置到配置文件
 func (s *SettingsService) SaveSettings(settings config.GlobalSettings) error {
 	logger.Debug("SettingsService", "-", "收到前端 SaveSettings 调用请求")
-	logger.DebugAll("SettingsService", "-", "接收到的设置: maxWorkers=%d, timeout=%s/%s, debug=%v, debugAll=%v, sshPreset=%s",
+	logger.Verbose("SettingsService", "-", "接收到的设置: maxWorkers=%d, timeout=%s/%s, debug=%v, verbose=%v, sshPreset=%s",
 		settings.MaxWorkers,
 		settings.ConnectTimeout,
 		settings.CommandTimeout,
 		settings.Debug,
-		settings.DebugAll,
+		settings.Verbose,
 		settings.SSHAlgorithms.PresetMode)
 
 	err := config.SaveSettings(settings)
@@ -93,7 +93,7 @@ func (s *SettingsService) GetAppInfo() map[string]string {
 
 // GetSSHAlgorithmOptions 获取当前 Go SSH 库支持的算法候选列表
 func (s *SettingsService) GetSSHAlgorithmOptions() SSHAlgorithmOptions {
-	logger.DebugAll("SettingsService", "-", "收到前端 GetSSHAlgorithmOptions 调用请求")
+	logger.Verbose("SettingsService", "-", "收到前端 GetSSHAlgorithmOptions 调用请求")
 
 	supported := ssh.SupportedAlgorithms()
 	insecure := ssh.InsecureAlgorithms()
@@ -105,7 +105,7 @@ func (s *SettingsService) GetSSHAlgorithmOptions() SSHAlgorithmOptions {
 		HostKeyAlgorithms: buildAlgorithmOptions(supported.HostKeys, insecure.HostKeys),
 	}
 
-	logger.DebugAll("SettingsService", "-", "返回 SSH 算法候选: ciphers=%d, keyExchanges=%d, macs=%d, hostKeys=%d",
+	logger.Verbose("SettingsService", "-", "返回 SSH 算法候选: ciphers=%d, keyExchanges=%d, macs=%d, hostKeys=%d",
 		len(options.Ciphers), len(options.KeyExchanges), len(options.MACs), len(options.HostKeyAlgorithms))
 
 	return options
@@ -211,7 +211,7 @@ func (s *SettingsService) GetRuntimeConfig() (RuntimeConfigData, error) {
 	response.Pagination.LineThreshold = cfg.Pagination.LineThreshold
 	response.Pagination.CheckInterval = cfg.Pagination.CheckInterval
 
-	logger.DebugAll("SettingsService", "-", "返回运行时配置: timeouts=[cmd=%d, conn=%d, hs=%d, short=%d, long=%d], "+
+	logger.Verbose("SettingsService", "-", "返回运行时配置: timeouts=[cmd=%d, conn=%d, hs=%d, short=%d, long=%d], "+
 		"limits=[logs=%d, len=%d, trunc=%d, dev=%d], engine=[workers=%d, buf=%d, fallback=%d], "+
 		"buffers=[def=%d, small=%d, large=%d], pagination=[lines=%d, interval=%d]",
 		response.Timeouts.Command, response.Timeouts.Connection, response.Timeouts.Handshake,
@@ -228,7 +228,7 @@ func (s *SettingsService) GetRuntimeConfig() (RuntimeConfigData, error) {
 // UpdateRuntimeConfig 更新运行时配置（热更新）
 func (s *SettingsService) UpdateRuntimeConfig(data RuntimeConfigData) error {
 	logger.Debug("SettingsService", "-", "收到前端 UpdateRuntimeConfig 调用请求")
-	logger.DebugAll("SettingsService", "-", "接收到的运行时配置: timeouts=[cmd=%d, conn=%d, hs=%d, short=%d, long=%d], "+
+	logger.Verbose("SettingsService", "-", "接收到的运行时配置: timeouts=[cmd=%d, conn=%d, hs=%d, short=%d, long=%d], "+
 		"limits=[logs=%d, len=%d, trunc=%d, dev=%d], engine=[workers=%d, buf=%d, fallback=%d], "+
 		"buffers=[def=%d, small=%d, large=%d], pagination=[lines=%d, interval=%d]",
 		data.Timeouts.Command, data.Timeouts.Connection, data.Timeouts.Handshake,
@@ -288,7 +288,7 @@ func (s *SettingsService) ResetRuntimeConfigToDefault() error {
 	// 更新内存配置
 	manager.UpdateConfig(cfg)
 
-	logger.DebugAll("SettingsService", "-", "重置后的运行时配置: timeouts=[cmd=%d, conn=%d, hs=%d, short=%d, long=%d], "+
+	logger.Verbose("SettingsService", "-", "重置后的运行时配置: timeouts=[cmd=%d, conn=%d, hs=%d, short=%d, long=%d], "+
 		"limits=[logs=%d, len=%d, trunc=%d, dev=%d], engine=[workers=%d, buf=%d, fallback=%d], "+
 		"buffers=[def=%d, small=%d, large=%d], pagination=[lines=%d, interval=%d]",
 		cfg.Timeouts.Command, cfg.Timeouts.Connection, cfg.Timeouts.Handshake,
