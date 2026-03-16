@@ -1,5 +1,7 @@
 package ui
 
+import "github.com/NetWeaverGo/core/internal/config"
+
 // ================== 视图模型定义 ==================
 // 本文件定义与前端直接对接的视图模型结构体
 // 前端无需任何计算，直接绑定渲染即可
@@ -155,4 +157,46 @@ func NewDeviceViewState(ip string, totalCmd int) *DeviceViewState {
 		TotalCmd:  totalCmd,
 		Message:   "",
 	}
+}
+
+// ================== 任务详情视图模型 ==================
+
+// TaskGroupDetailViewModel 任务详情聚合模型
+// 为执行大屏详情/编辑弹窗提供后端解析后的结构化数据
+type TaskGroupDetailViewModel struct {
+	Task               config.TaskGroup               `json:"task"`
+	ItemCount          int                            `json:"itemCount"`
+	CanEdit            bool                           `json:"canEdit"`
+	EditDisabledReason string                         `json:"editDisabledReason"`
+	Items              []TaskGroupItemDetailViewModel `json:"items"`
+	MissingDevices     []string                       `json:"missingDevices"`
+	MissingCommandIDs  []string                       `json:"missingCommandIds"`
+}
+
+// TaskGroupItemDetailViewModel 单个任务项详情
+type TaskGroupItemDetailViewModel struct {
+	Index       int                  `json:"index"`
+	Mode        string               `json:"mode"`
+	DeviceCount int                  `json:"deviceCount"`
+	Devices     []TaskDeviceOverview `json:"devices"`
+	CommandInfo *TaskCommandOverview `json:"commandInfo,omitempty"`
+	Commands    []string             `json:"commands"`
+}
+
+// TaskDeviceOverview 任务关联设备概览
+type TaskDeviceOverview struct {
+	IP      string   `json:"ip"`
+	Group   string   `json:"group"`
+	Tags    []string `json:"tags"`
+	Missing bool     `json:"missing"`
+}
+
+// TaskCommandOverview 任务命令信息概览
+type TaskCommandOverview struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	Commands    []string `json:"commands"`
+	Missing     bool     `json:"missing"`
 }

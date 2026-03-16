@@ -22,7 +22,8 @@
           "EngineService",
           "TaskGroupService",
           "ForgeService",
-          "QueryService"
+          "QueryService",
+          "ExecutionHistoryService"
         ]
       }
     ]

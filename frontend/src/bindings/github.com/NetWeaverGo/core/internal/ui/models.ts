@@ -841,6 +841,216 @@ export class RuntimeConfigData {
     }
 }
 
+/**
+ * TaskCommandOverview 任务命令信息概览
+ */
+export class TaskCommandOverview {
+    "id": string;
+    "name": string;
+    "description": string;
+    "tags": string[];
+    "commands": string[];
+    "missing": boolean;
+
+    /** Creates a new TaskCommandOverview instance. */
+    constructor($$source: Partial<TaskCommandOverview> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("description" in $$source)) {
+            this["description"] = "";
+        }
+        if (!("tags" in $$source)) {
+            this["tags"] = [];
+        }
+        if (!("commands" in $$source)) {
+            this["commands"] = [];
+        }
+        if (!("missing" in $$source)) {
+            this["missing"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskCommandOverview instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TaskCommandOverview {
+        const $$createField3_0 = $$createType0;
+        const $$createField4_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("tags" in $$parsedSource) {
+            $$parsedSource["tags"] = $$createField3_0($$parsedSource["tags"]);
+        }
+        if ("commands" in $$parsedSource) {
+            $$parsedSource["commands"] = $$createField4_0($$parsedSource["commands"]);
+        }
+        return new TaskCommandOverview($$parsedSource as Partial<TaskCommandOverview>);
+    }
+}
+
+/**
+ * TaskDeviceOverview 任务关联设备概览
+ */
+export class TaskDeviceOverview {
+    "ip": string;
+    "group": string;
+    "tags": string[];
+    "missing": boolean;
+
+    /** Creates a new TaskDeviceOverview instance. */
+    constructor($$source: Partial<TaskDeviceOverview> = {}) {
+        if (!("ip" in $$source)) {
+            this["ip"] = "";
+        }
+        if (!("group" in $$source)) {
+            this["group"] = "";
+        }
+        if (!("tags" in $$source)) {
+            this["tags"] = [];
+        }
+        if (!("missing" in $$source)) {
+            this["missing"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskDeviceOverview instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TaskDeviceOverview {
+        const $$createField2_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("tags" in $$parsedSource) {
+            $$parsedSource["tags"] = $$createField2_0($$parsedSource["tags"]);
+        }
+        return new TaskDeviceOverview($$parsedSource as Partial<TaskDeviceOverview>);
+    }
+}
+
+/**
+ * TaskGroupDetailViewModel 任务详情聚合模型
+ * 为执行大屏详情/编辑弹窗提供后端解析后的结构化数据
+ */
+export class TaskGroupDetailViewModel {
+    "task": config$0.TaskGroup;
+    "itemCount": number;
+    "canEdit": boolean;
+    "editDisabledReason": string;
+    "items": TaskGroupItemDetailViewModel[];
+    "missingDevices": string[];
+    "missingCommandIds": string[];
+
+    /** Creates a new TaskGroupDetailViewModel instance. */
+    constructor($$source: Partial<TaskGroupDetailViewModel> = {}) {
+        if (!("task" in $$source)) {
+            this["task"] = (new config$0.TaskGroup());
+        }
+        if (!("itemCount" in $$source)) {
+            this["itemCount"] = 0;
+        }
+        if (!("canEdit" in $$source)) {
+            this["canEdit"] = false;
+        }
+        if (!("editDisabledReason" in $$source)) {
+            this["editDisabledReason"] = "";
+        }
+        if (!("items" in $$source)) {
+            this["items"] = [];
+        }
+        if (!("missingDevices" in $$source)) {
+            this["missingDevices"] = [];
+        }
+        if (!("missingCommandIds" in $$source)) {
+            this["missingCommandIds"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskGroupDetailViewModel instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TaskGroupDetailViewModel {
+        const $$createField0_0 = $$createType11;
+        const $$createField4_0 = $$createType13;
+        const $$createField5_0 = $$createType0;
+        const $$createField6_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("task" in $$parsedSource) {
+            $$parsedSource["task"] = $$createField0_0($$parsedSource["task"]);
+        }
+        if ("items" in $$parsedSource) {
+            $$parsedSource["items"] = $$createField4_0($$parsedSource["items"]);
+        }
+        if ("missingDevices" in $$parsedSource) {
+            $$parsedSource["missingDevices"] = $$createField5_0($$parsedSource["missingDevices"]);
+        }
+        if ("missingCommandIds" in $$parsedSource) {
+            $$parsedSource["missingCommandIds"] = $$createField6_0($$parsedSource["missingCommandIds"]);
+        }
+        return new TaskGroupDetailViewModel($$parsedSource as Partial<TaskGroupDetailViewModel>);
+    }
+}
+
+/**
+ * TaskGroupItemDetailViewModel 单个任务项详情
+ */
+export class TaskGroupItemDetailViewModel {
+    "index": number;
+    "mode": string;
+    "deviceCount": number;
+    "devices": TaskDeviceOverview[];
+    "commandInfo"?: TaskCommandOverview | null;
+    "commands": string[];
+
+    /** Creates a new TaskGroupItemDetailViewModel instance. */
+    constructor($$source: Partial<TaskGroupItemDetailViewModel> = {}) {
+        if (!("index" in $$source)) {
+            this["index"] = 0;
+        }
+        if (!("mode" in $$source)) {
+            this["mode"] = "";
+        }
+        if (!("deviceCount" in $$source)) {
+            this["deviceCount"] = 0;
+        }
+        if (!("devices" in $$source)) {
+            this["devices"] = [];
+        }
+        if (!("commands" in $$source)) {
+            this["commands"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskGroupItemDetailViewModel instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TaskGroupItemDetailViewModel {
+        const $$createField3_0 = $$createType15;
+        const $$createField4_0 = $$createType17;
+        const $$createField5_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("devices" in $$parsedSource) {
+            $$parsedSource["devices"] = $$createField3_0($$parsedSource["devices"]);
+        }
+        if ("commandInfo" in $$parsedSource) {
+            $$parsedSource["commandInfo"] = $$createField4_0($$parsedSource["commandInfo"]);
+        }
+        if ("commands" in $$parsedSource) {
+            $$parsedSource["commands"] = $$createField5_0($$parsedSource["commands"]);
+        }
+        return new TaskGroupItemDetailViewModel($$parsedSource as Partial<TaskGroupItemDetailViewModel>);
+    }
+}
+
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = NetworkRecord.createFrom;
@@ -853,3 +1063,10 @@ const $$createType7 = IPv6SubnetItem.createFrom;
 const $$createType8 = $Create.Array($$createType7);
 const $$createType9 = config$0.ExecutionRecord.createFrom;
 const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = config$0.TaskGroup.createFrom;
+const $$createType12 = TaskGroupItemDetailViewModel.createFrom;
+const $$createType13 = $Create.Array($$createType12);
+const $$createType14 = TaskDeviceOverview.createFrom;
+const $$createType15 = $Create.Array($$createType14);
+const $$createType16 = TaskCommandOverview.createFrom;
+const $$createType17 = $Create.Nullable($$createType16);

@@ -38,5 +38,9 @@ export {
     NetworkRecord,
     QueryOptions,
     QueryResult,
-    RuntimeConfigData
+    RuntimeConfigData,
+    TaskCommandOverview,
+    TaskDeviceOverview,
+    TaskGroupDetailViewModel,
+    TaskGroupItemDetailViewModel
 } from "./models.js";

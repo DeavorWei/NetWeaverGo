@@ -136,6 +136,8 @@ export const TaskGroupAPI = {
   listTaskGroups: TaskGroupServiceBinding.ListTaskGroups,
   /** 获取单个任务组详情 */
   getTaskGroup: TaskGroupServiceBinding.GetTaskGroup,
+  /** 获取任务详情聚合数据 */
+  getTaskGroupDetail: TaskGroupServiceBinding.GetTaskGroupDetail,
   /** 创建任务组 */
   createTaskGroup: TaskGroupServiceBinding.CreateTaskGroup,
   /** 更新任务组 */
@@ -190,6 +192,10 @@ export type {
   IPRangeResult,
   IPsValidationResult,
   BindingPreview,
+  TaskCommandOverview,
+  TaskDeviceOverview,
+  TaskGroupDetailViewModel,
+  TaskGroupItemDetailViewModel,
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
 export type {

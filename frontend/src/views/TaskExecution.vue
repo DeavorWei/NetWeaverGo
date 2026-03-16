@@ -171,7 +171,23 @@
                 <p class="text-xs text-text-muted line-clamp-1 mt-1">{{ task.description || '暂无描述' }}</p>
               </div>
               <!-- 操作按钮 -->
-              <div class="flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity ml-2">
+              <div class="flex items-center gap-1 ml-2">
+                <button
+                  @click="openTaskDetail(task)"
+                  class="p-1.5 rounded-md text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
+                  title="查看详情"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button
+                  @click="openTaskEdit(task)"
+                  :disabled="task.status === 'running'"
+                  class="p-1.5 rounded-md text-text-muted transition-colors"
+                  :class="task.status !== 'running' ? 'hover:text-warning hover:bg-warning/10' : 'opacity-40 cursor-not-allowed'"
+                  :title="task.status !== 'running' ? '编辑任务' : '任务执行中不可编辑'"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
                 <button
                   @click="showExecutionHistory(task)"
                   class="p-1.5 rounded-md text-text-muted hover:text-info hover:bg-info/10 transition-colors"
@@ -298,6 +314,23 @@
       :task-group-id="historyDrawer.taskGroupId"
       :task-group-name="historyDrawer.taskGroupName"
     />
+
+    <TaskDetailModal
+      v-model="detailModal.show"
+      :loading="detailModal.loading"
+      :detail="detailModal.detail"
+      @edit="editFromDetail"
+    />
+
+    <TaskEditModal
+      v-model="editModal.show"
+      :task="editModal.task"
+      :loading="editModal.loading"
+      :saving="editModal.saving"
+      :all-devices="editReferences.devices"
+      :command-groups="editReferences.commandGroups"
+      @save="saveTaskEdit"
+    />
   </div>
 </template>
 
@@ -305,12 +338,22 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
+  CommandGroupAPI,
+  DeviceAPI,
   TaskGroupAPI
 } from '../services/api'
-import type { DeviceViewState, TaskGroup } from '../services/api'
+import type {
+  CommandGroup,
+  DeviceAsset,
+  DeviceViewState,
+  TaskGroup,
+  TaskGroupDetailViewModel
+} from '../services/api'
 import { useEngineStore } from '../stores/engineStore'
 import VirtualLogTerminal from '../components/task/VirtualLogTerminal.vue'
 import ExecutionHistoryDrawer from '../components/task/ExecutionHistoryDrawer.vue'
+import TaskDetailModal from '../components/task/TaskDetailModal.vue'
+import TaskEditModal from '../components/task/TaskEditModal.vue'
 
 const router = useRouter()
 const engineStore = useEngineStore()
@@ -340,6 +383,26 @@ const historyDrawer = ref({
   show: false,
   taskGroupId: '',
   taskGroupName: ''
+})
+
+// 任务详情弹窗
+const detailModal = ref({
+  show: false,
+  loading: false,
+  detail: null as TaskGroupDetailViewModel | null
+})
+
+// 任务编辑弹窗
+const editModal = ref({
+  show: false,
+  loading: false,
+  saving: false,
+  task: null as TaskGroup | null
+})
+
+const editReferences = ref({
+  devices: [] as DeviceAsset[],
+  commandGroups: [] as CommandGroup[]
 })
 
 // 虚拟滚动优化状态
@@ -540,7 +603,7 @@ async function doDelete() {
     await TaskGroupAPI.deleteTaskGroup(deleteModal.value.taskId)
     deleteModal.value.show = false
     triggerToast('任务已删除', 'success')
-    loadTasks()
+    void loadTasks()
   } catch (err: any) {
     triggerToast(`删除失败: ${err?.message || err}`, 'error')
   }
@@ -583,6 +646,100 @@ function showExecutionHistory(task: TaskGroup) {
     show: true,
     taskGroupId: task.id,
     taskGroupName: task.name
+  }
+}
+
+async function ensureEditReferences() {
+  if (editReferences.value.devices.length > 0 && editReferences.value.commandGroups.length > 0) {
+    return
+  }
+
+  const [devices, commandGroups] = await Promise.all([
+    DeviceAPI.listDevices(),
+    CommandGroupAPI.listCommandGroups()
+  ])
+
+  editReferences.value = {
+    devices: devices || [],
+    commandGroups: commandGroups || []
+  }
+}
+
+async function openTaskDetail(task: TaskGroup) {
+  detailModal.value.show = true
+  detailModal.value.loading = true
+  detailModal.value.detail = null
+
+  try {
+    detailModal.value.detail = await TaskGroupAPI.getTaskGroupDetail(task.id)
+  } catch (err: any) {
+    detailModal.value.show = false
+    triggerToast(`加载任务详情失败: ${err?.message || err}`, 'error')
+  } finally {
+    detailModal.value.loading = false
+  }
+}
+
+async function openTaskEdit(task: TaskGroup) {
+  if (task.status === 'running') {
+    triggerToast('任务执行中不可编辑', 'error')
+    return
+  }
+
+  editModal.value.show = true
+  editModal.value.loading = true
+  editModal.value.task = null
+
+  try {
+    const [freshTask] = await Promise.all([
+      TaskGroupAPI.getTaskGroup(task.id),
+      ensureEditReferences()
+    ])
+    editModal.value.task = freshTask
+  } catch (err: any) {
+    editModal.value.show = false
+    triggerToast(`加载编辑数据失败: ${err?.message || err}`, 'error')
+  } finally {
+    editModal.value.loading = false
+  }
+}
+
+async function editFromDetail() {
+  const currentTask = detailModal.value.detail?.task
+  if (!currentTask) return
+  detailModal.value.show = false
+  await openTaskEdit(currentTask)
+}
+
+async function saveTaskEdit(payload: TaskGroup) {
+  if (!editModal.value.task) return
+
+  editModal.value.saving = true
+  try {
+    const updated = await TaskGroupAPI.updateTaskGroup(editModal.value.task.id, payload)
+    editModal.value.task = updated || payload
+    editModal.value.show = false
+    triggerToast('任务更新成功', 'success')
+    await loadTasks()
+
+    if (detailModal.value.show && detailModal.value.detail?.task.id === payload.id) {
+      detailModal.value.loading = true
+      detailModal.value.detail = await TaskGroupAPI.getTaskGroupDetail(payload.id)
+      detailModal.value.loading = false
+    }
+  } catch (err: any) {
+    triggerToast(`保存失败: ${err?.message || err}`, 'error')
+    await loadTasks()
+
+    if (detailModal.value.show && detailModal.value.detail?.task.id === payload.id) {
+      try {
+        detailModal.value.detail = await TaskGroupAPI.getTaskGroupDetail(payload.id)
+      } catch (detailErr) {
+        console.error('刷新任务详情失败:', detailErr)
+      }
+    }
+  } finally {
+    editModal.value.saving = false
   }
 }
 

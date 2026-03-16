@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -42,6 +43,16 @@ func (s *TaskGroupService) GetTaskGroup(id string) (*config.TaskGroup, error) {
 	return config.GetTaskGroup(id)
 }
 
+// GetTaskGroupDetail 根据 ID 获取任务详情聚合信息
+func (s *TaskGroupService) GetTaskGroupDetail(id string) (*TaskGroupDetailViewModel, error) {
+	taskGroup, err := config.GetTaskGroup(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildTaskGroupDetail(taskGroup)
+}
+
 // CreateTaskGroup 创建新任务组
 func (s *TaskGroupService) CreateTaskGroup(group config.TaskGroup) (*config.TaskGroup, error) {
 	return config.CreateTaskGroup(group)
@@ -49,6 +60,21 @@ func (s *TaskGroupService) CreateTaskGroup(group config.TaskGroup) (*config.Task
 
 // UpdateTaskGroup 更新任务组
 func (s *TaskGroupService) UpdateTaskGroup(id string, group config.TaskGroup) (*config.TaskGroup, error) {
+	existing, err := config.GetTaskGroup(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if !canEditTaskGroup(existing.Status) {
+		return nil, fmt.Errorf("任务执行中不可编辑，当前状态为 %s", existing.Status)
+	}
+
+	// 任务编辑只允许修改基础信息和当前模式下的任务项。
+	group.ID = existing.ID
+	group.CreatedAt = existing.CreatedAt
+	group.Status = existing.Status
+	group.Mode = existing.Mode
+
 	return config.UpdateTaskGroup(id, group)
 }
 
@@ -315,4 +341,122 @@ func deriveTaskGroupStatus(tracker *report.ProgressTracker) string {
 	}
 
 	return "completed"
+}
+
+func canEditTaskGroup(status string) bool {
+	return status != "running"
+}
+
+func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewModel, error) {
+	if taskGroup == nil {
+		return nil, fmt.Errorf("任务组不能为空")
+	}
+
+	assets, err := config.LoadDeviceAssets()
+	if err != nil {
+		return nil, err
+	}
+
+	assetMap := make(map[string]config.DeviceAsset, len(assets))
+	for _, asset := range assets {
+		assetMap[asset.IP] = asset
+	}
+
+	uniqueCommandIDs := make(map[string]struct{})
+	for _, item := range taskGroup.Items {
+		if item.CommandGroupID != "" {
+			uniqueCommandIDs[item.CommandGroupID] = struct{}{}
+		}
+	}
+
+	commandMap := make(map[string]*config.CommandGroup, len(uniqueCommandIDs))
+	missingCommandSet := make(map[string]struct{})
+	for id := range uniqueCommandIDs {
+		group, getErr := config.GetCommandGroup(id)
+		if getErr != nil {
+			missingCommandSet[id] = struct{}{}
+			continue
+		}
+		commandMap[id] = group
+	}
+
+	items := make([]TaskGroupItemDetailViewModel, 0, len(taskGroup.Items))
+	missingDeviceSet := make(map[string]struct{})
+
+	for index, item := range taskGroup.Items {
+		devices := make([]TaskDeviceOverview, 0, len(item.DeviceIPs))
+		for _, ip := range item.DeviceIPs {
+			if asset, ok := assetMap[ip]; ok {
+				devices = append(devices, TaskDeviceOverview{
+					IP:    asset.IP,
+					Group: asset.Group,
+					Tags:  append([]string(nil), asset.Tags...),
+				})
+				continue
+			}
+
+			missingDeviceSet[ip] = struct{}{}
+			devices = append(devices, TaskDeviceOverview{
+				IP:      ip,
+				Missing: true,
+				Tags:    []string{},
+			})
+		}
+
+		itemDetail := TaskGroupItemDetailViewModel{
+			Index:       index,
+			Mode:        taskGroup.Mode,
+			DeviceCount: len(item.DeviceIPs),
+			Devices:     devices,
+			Commands:    append([]string(nil), item.Commands...),
+		}
+
+		if item.CommandGroupID != "" {
+			if commandGroup, ok := commandMap[item.CommandGroupID]; ok {
+				itemDetail.CommandInfo = &TaskCommandOverview{
+					ID:          commandGroup.ID,
+					Name:        commandGroup.Name,
+					Description: commandGroup.Description,
+					Tags:        append([]string(nil), commandGroup.Tags...),
+					Commands:    append([]string(nil), commandGroup.Commands...),
+				}
+			} else {
+				itemDetail.CommandInfo = &TaskCommandOverview{
+					ID:       item.CommandGroupID,
+					Name:     "命令组不存在",
+					Tags:     []string{},
+					Commands: []string{},
+					Missing:  true,
+				}
+			}
+		}
+
+		items = append(items, itemDetail)
+	}
+
+	missingDevices := sortedKeys(missingDeviceSet)
+	missingCommandIDs := sortedKeys(missingCommandSet)
+	editDisabledReason := ""
+	if !canEditTaskGroup(taskGroup.Status) {
+		editDisabledReason = fmt.Sprintf("任务执行中不可编辑，当前状态为 %s", taskGroup.Status)
+	}
+
+	return &TaskGroupDetailViewModel{
+		Task:               *taskGroup,
+		ItemCount:          len(taskGroup.Items),
+		CanEdit:            canEditTaskGroup(taskGroup.Status),
+		EditDisabledReason: editDisabledReason,
+		Items:              items,
+		MissingDevices:     missingDevices,
+		MissingCommandIDs:  missingCommandIDs,
+	}, nil
+}
+
+func sortedKeys(values map[string]struct{}) []string {
+	result := make([]string, 0, len(values))
+	for value := range values {
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
 }

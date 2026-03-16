@@ -14,6 +14,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 // @ts-ignore: Unused imports
 import * as config$0 from "../config/models.js";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as $models from "./models.js";
+
 /**
  * CreateTaskGroup 创建新任务组
  */
@@ -40,11 +44,20 @@ export function GetTaskGroup(id: string): $CancellablePromise<config$0.TaskGroup
 }
 
 /**
+ * GetTaskGroupDetail 根据 ID 获取任务详情聚合信息
+ */
+export function GetTaskGroupDetail(id: string): $CancellablePromise<$models.TaskGroupDetailViewModel | null> {
+    return $Call.ByID(759913924, id).then(($result: any) => {
+        return $$createType3($result);
+    });
+}
+
+/**
  * ListTaskGroups 获取所有任务组列表
  */
 export function ListTaskGroups(): $CancellablePromise<config$0.TaskGroup[]> {
     return $Call.ByID(3904305468).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType4($result);
     });
 }
 
@@ -75,4 +88,6 @@ export function UpdateTaskGroup(id: string, group: config$0.TaskGroup): $Cancell
 // Private type creation functions
 const $$createType0 = config$0.TaskGroup.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = $Create.Array($$createType0);
+const $$createType2 = $models.TaskGroupDetailViewModel.createFrom;
+const $$createType3 = $Create.Nullable($$createType2);
+const $$createType4 = $Create.Array($$createType0);
