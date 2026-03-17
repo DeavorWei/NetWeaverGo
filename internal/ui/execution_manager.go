@@ -331,7 +331,6 @@ func (m *executionManager) stopSnapshotTicker() {
 func (m *executionManager) emitFinishedEvent() {
 	snapshot := m.GetExecutionSnapshot()
 	if snapshot != nil {
-		snapshot.Progress = 100
 		snapshot.IsRunning = false
 		if app := m.getWailsApp(); app != nil {
 			app.Event.Emit(SnapshotEventName, snapshot)

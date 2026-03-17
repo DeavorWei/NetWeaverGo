@@ -90,15 +90,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import ThemeSwitch from "@/components/common/ThemeSwitch.vue";
 import TitleBar from "@/components/common/TitleBar.vue";
 import GlobalToast from "@/components/common/GlobalToast.vue";
 import { useTheme } from "@/composables/useTheme";
+import { useEngineStore } from "@/stores/engineStore";
 
 const router = useRouter();
 const route = useRoute();
+const engineStore = useEngineStore();
 
 // 初始化主题
 useTheme();
@@ -203,4 +205,13 @@ function handleNav(key: string) {
   activeKey.value = key;
   router.push({ name: key });
 }
+
+onMounted(() => {
+  engineStore.initListeners();
+  void engineStore.syncExecutionState();
+});
+
+onUnmounted(() => {
+  engineStore.cleanupListeners();
+});
 </script>

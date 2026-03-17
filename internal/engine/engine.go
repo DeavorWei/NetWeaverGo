@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
@@ -310,19 +311,15 @@ func (e *Engine) Run(ctx context.Context) error {
 
 	wg.Wait()
 
-	// 【修复】先取消 Context，让 Tracker 退出，然后再等待它完成
-	if e.cancel != nil {
-		e.cancel()
-	}
+	// 正常路径不提前 cancel，先关闭事件通道，让 Tracker 自然消费完并退出。
+	e.gracefulCloseWithoutCancel()
 
 	// 等待 Tracker 监听完成
 	trackerWg.Wait()
 
-	// 使用统一的优雅关闭方法（不再调用 cancel，因为已在上面的步骤取消）
-	e.gracefulCloseWithoutCancel()
-
-	if e.tracker != nil {
-		_, _ = e.tracker.ExportCSV()
+	// 到这里再 cancel，只用于释放 context 资源，不影响事件收尾。
+	if e.cancel != nil {
+		e.cancel()
 	}
 
 	// 最终谢幕，保留一条普通的记录
@@ -491,9 +488,25 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 
 	// 创建一个包装的 EventBus，同时发送到 tracker 和 FrontendBus
 	workerEventBus := make(chan report.ExecutorEvent, 100)
+	var forwarderWg sync.WaitGroup
+	var terminalSent atomic.Bool
+
+	forwardEvent := func(ev report.ExecutorEvent) {
+		if ev.Type == report.EventDeviceSuccess || ev.Type == report.EventDeviceAbort {
+			terminalSent.Store(true)
+		}
+		// 高优先级事件（如 Error/Abort）直接发送
+		if ev.Type == report.EventDeviceError || ev.Type == report.EventDeviceAbort {
+			e.emitEventDirect(ev)
+			return
+		}
+		e.emitEvent(ev)
+	}
 
 	// 启动事件转发器 - 带优先级处理和改进的排空逻辑
+	forwarderWg.Add(1)
 	go func() {
+		defer forwarderWg.Done()
 		defer func() {
 			// 确保排空 channel 中剩余的所有事件
 			for {
@@ -502,11 +515,7 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 					if !ok {
 						return
 					}
-					if ev.Type == report.EventDeviceError || ev.Type == report.EventDeviceAbort {
-						e.emitEventDirect(ev)
-					} else {
-						e.emitEvent(ev)
-					}
+					forwardEvent(ev)
 				default:
 					return
 				}
@@ -520,16 +529,33 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 					// channel 已关闭，defer 会处理剩余事件
 					return
 				}
-				// 高优先级事件（如 Error/Abort）直接发送
-				if ev.Type == report.EventDeviceError || ev.Type == report.EventDeviceAbort {
-					e.emitEventDirect(ev)
-				} else {
-					e.emitEvent(ev)
-				}
+				forwardEvent(ev)
 			case <-ctx.Done():
 				// Context 取消，defer 会处理剩余事件
 				return
 			}
+		}
+	}()
+
+	sendWorkerEvent := func(ev report.ExecutorEvent) {
+		if ev.Type == report.EventDeviceSuccess || ev.Type == report.EventDeviceAbort {
+			terminalSent.Store(true)
+		}
+		workerEventBus <- ev
+	}
+
+	defer func() {
+		close(workerEventBus)
+		forwarderWg.Wait()
+
+		// 兜底：如果整个 worker 退出时没有任何终态，补发 Abort，防止设备残留 Running。
+		if !terminalSent.Load() {
+			e.emitEventDirect(report.ExecutorEvent{
+				IP:       dev.IP,
+				Type:     report.EventDeviceAbort,
+				Message:  "执行链路异常结束（未确认终态）",
+				TotalCmd: len(e.Commands),
+			})
 		}
 	}()
 
@@ -538,7 +564,7 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 	defer exec.Close()
 
 	// 发送开始事件
-	workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceStart, TotalCmd: len(e.Commands), Message: "Connecting SSH..."}
+	sendWorkerEvent(report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceStart, TotalCmd: len(e.Commands), Message: "Connecting SSH..."})
 
 	if err := exec.Connect(ctx, connectTimeout); err != nil {
 		// 使用统一错误处理
@@ -546,8 +572,8 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 			// 已经是 ExecutionError，记录并发送事件
 			handler := executor.NewErrorHandler()
 			handler.Handle(ctx, execErr)
-			workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: execErr.Message}
-			workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: execErr.Message, TotalCmd: len(e.Commands)}
+			sendWorkerEvent(report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: execErr.Message})
+			sendWorkerEvent(report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: execErr.Message, TotalCmd: len(e.Commands)})
 		} else {
 			// 包装为 ExecutionError
 			execErr := executor.NewError(dev.IP).
@@ -557,19 +583,20 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 				Build()
 			handler := executor.NewErrorHandler()
 			handler.Handle(ctx, execErr)
-			workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: fmt.Sprintf("SSH 建连失败: %v", err)}
-			workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: fmt.Sprintf("连接失败: %v", err), TotalCmd: len(e.Commands)}
+			sendWorkerEvent(report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: fmt.Sprintf("SSH 建连失败: %v", err)})
+			sendWorkerEvent(report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: fmt.Sprintf("连接失败: %v", err), TotalCmd: len(e.Commands)})
 		}
-		close(workerEventBus)
 		return
 	}
 
 	if err := exec.ExecutePlaybook(ctx, e.Commands, commandTimeout); err != nil {
 		logger.Debug("Engine", dev.IP, "worker 播放命令集结束，返回了 error: %v", err)
+		errMsg := fmt.Sprintf("执行失败: %v", err)
 		// 使用统一错误处理
 		if execErr, ok := executor.IsExecutionError(err); ok {
 			handler := executor.NewErrorHandler()
 			shouldContinue := handler.Handle(ctx, execErr)
+			errMsg = execErr.Message
 			if !shouldContinue && !execErr.IsWarning() {
 				logger.Error("Engine", dev.IP, "严重错误，终止设备执行: %v", execErr.Message)
 			}
@@ -582,12 +609,15 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 				Build()
 			handler := executor.NewErrorHandler()
 			handler.Handle(ctx, execErr)
+			errMsg = execErr.Message
 		}
+		sendWorkerEvent(report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: errMsg, TotalCmd: len(e.Commands)})
+		sendWorkerEvent(report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: errMsg, TotalCmd: len(e.Commands)})
+		return
 	} else {
 		logger.Debug("Engine", dev.IP, "worker 播放命令集成功完成")
-		workerEventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceSuccess, Message: "执行完毕", TotalCmd: len(e.Commands)}
+		sendWorkerEvent(report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceSuccess, Message: "执行完毕", TotalCmd: len(e.Commands)})
 	}
-	close(workerEventBus)
 }
 
 // backupWorker 是基于单个设备进行交互的备份动作集散流

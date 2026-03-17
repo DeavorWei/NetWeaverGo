@@ -19,6 +19,14 @@ export interface SuspendRequiredEvent {
   command: string;
 }
 
+export interface SuspendSessionState {
+  sessionId: string;
+  ip: string;
+  content: string;
+  command: string;
+  error: string;
+}
+
 const ACTIVE_ENGINE_STATES = new Set<EngineState>([
   "Starting",
   "Running",
@@ -28,12 +36,7 @@ const ACTIVE_ENGINE_STATES = new Set<EngineState>([
 
 export const useEngineStore = defineStore("engine", () => {
   const executionSnapshot = ref<ExecutionSnapshot | null>(null);
-  const suspendModal = ref<{
-    show: boolean;
-    sessionId: string;
-    ip: string;
-    content: string;
-  }>({ show: false, sessionId: "", ip: "", content: "" });
+  const suspendSessions = ref<Record<string, SuspendSessionState>>({});
 
   const isRunning = computed(() => Boolean(executionSnapshot.value?.isRunning));
   let cleanupFns: (() => void)[] = [];
@@ -53,16 +56,25 @@ export const useEngineStore = defineStore("engine", () => {
       ExecutionSnapshot.createFrom({
         ...executionSnapshot.value,
         isRunning: false,
-        progress: 100,
       })
     );
+  }
+
+  function unwrapEventData<T = any>(ev: any): T | null {
+    if (!ev) {
+      return null;
+    }
+    if (Array.isArray(ev.data)) {
+      return (ev.data[0] ?? null) as T | null;
+    }
+    return (ev.data ?? null) as T | null;
   }
 
   function initListeners() {
     cleanupListeners();
 
     const unlistenSnapshot = Events.On("execution:snapshot", (ev: any) => {
-      const data = ev.data?.[0];
+      const data = unwrapEventData<ExecutionSnapshot>(ev);
       if (data) {
         applySnapshot(ExecutionSnapshot.createFrom(data));
       }
@@ -79,12 +91,13 @@ export const useEngineStore = defineStore("engine", () => {
     }
 
     const unlistenSuspend = Events.On("engine:suspend_required", (ev: any) => {
-      const data = ev.data?.[0] as SuspendRequiredEvent;
+      const data = unwrapEventData<SuspendRequiredEvent>(ev);
       if (data) {
-        suspendModal.value = {
-          show: true,
+        suspendSessions.value[data.ip] = {
           sessionId: data.sessionId || "",
           ip: data.ip,
+          command: data.command,
+          error: data.error,
           content: `设备: ${data.ip}\n命令: ${data.command}\n\n错误详情:\n${data.error}`,
         };
       }
@@ -94,9 +107,9 @@ export const useEngineStore = defineStore("engine", () => {
     }
 
     const unlistenTimeout = Events.On("engine:suspend_timeout", (ev: any) => {
-      const data = ev.data?.[0] as { ip: string; sessionId: string };
-      if (data && suspendModal.value.ip === data.ip) {
-        suspendModal.value.show = false;
+      const data = unwrapEventData<{ ip: string; sessionId: string }>(ev);
+      if (data) {
+        delete suspendSessions.value[data.ip];
       }
     });
     if (typeof unlistenTimeout === "function") {
@@ -129,13 +142,14 @@ export const useEngineStore = defineStore("engine", () => {
 
       const state = (status?.state as EngineState | undefined) ?? "Idle";
       if (ACTIVE_ENGINE_STATES.has(state)) {
+        const running = state === "Starting" || state === "Running" || state === "Paused";
         applySnapshot(
           new ExecutionSnapshot({
             taskName: "任务执行",
             totalDevices: 0,
             finishedCount: 0,
-            progress: state === "Closing" ? 100 : 0,
-            isRunning: state !== "Closing",
+            progress: 0,
+            isRunning: running,
             startTime: "",
             devices: [],
           })
@@ -160,23 +174,24 @@ export const useEngineStore = defineStore("engine", () => {
     }
   }
 
-  function resolveSuspend(action: "C" | "S" | "A") {
-    const identifier = suspendModal.value.sessionId || suspendModal.value.ip;
+  function resolveSuspend(ip: string, action: "C" | "S" | "A") {
+    const session = suspendSessions.value[ip];
+    if (!session) {
+      return;
+    }
+    const identifier = session.sessionId || session.ip;
     void EngineAPI.resolveSuspend(identifier, action);
-    suspendModal.value.show = false;
+    delete suspendSessions.value[ip];
   }
 
   function reset() {
     applySnapshot(null);
-    suspendModal.value.show = false;
-    suspendModal.value.sessionId = "";
-    suspendModal.value.ip = "";
-    suspendModal.value.content = "";
+    suspendSessions.value = {};
   }
 
   return {
     executionSnapshot,
-    suspendModal,
+    suspendSessions,
     isRunning,
     initListeners,
     cleanupListeners,

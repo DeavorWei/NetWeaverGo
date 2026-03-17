@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"strings"
 	"time"
 
@@ -119,6 +118,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 
 	currentCmdIndex := -1 // 初始化状态: -1 表示还在探测第一个提示符
 	var streamBuffer string
+	completedAllCommands := false
 
 	// 等待命令提示符的超时时间
 	timeoutDuration := cmdTimeout
@@ -131,10 +131,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 	}
 	readCh := make(chan readResult, 1)
 
-	// 创建一个 done channel 用于通知读取 goroutine 退出
-	done := make(chan struct{})
-
-	// 后台运行读操作，使用 SetReadDeadline 实现非阻塞读取
+	// 后台运行读操作，以便主流程能响应 timeout 和 ctx.Done()
 	go func() {
 		defer close(readCh)
 		// 添加 panic recover 防止 goroutine 泄漏
@@ -145,53 +142,17 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 		}()
 
 		for {
+			n, err := outReader.Read(buf)
 			select {
-			case <-done:
-				return
+			case readCh <- readResult{n: n, err: err}:
 			case <-ctx.Done():
-				// Context 被取消，立即退出
 				return
-			default:
-				// 设置读取超时，实现非阻塞读取
-				e.Client.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-				n, err := outReader.Read(buf)
-
-				if err != nil {
-					// 检查是否是超时错误
-					if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-						// 超时但不是真正的错误，继续检查 context 是否已取消
-						select {
-						case <-ctx.Done():
-							return
-						case <-done:
-							return
-						default:
-							continue // 超时但未取消，继续读取
-						}
-					}
-					// 其他错误（如 EOF），发送结果并退出
-					select {
-					case readCh <- readResult{n: n, err: err}:
-					case <-done:
-					case <-ctx.Done():
-					}
-					return
-				}
-
-				// 成功读取数据
-				select {
-				case readCh <- readResult{n: n, err: nil}:
-				case <-done:
-					return
-				case <-ctx.Done():
-					return
-				}
+			}
+			if err != nil {
+				return
 			}
 		}
 	}()
-
-	// 确保在函数退出时关闭 done channel，让读取 goroutine 能够正确退出
-	defer close(done)
 
 	readDelay := manager.GetPaginationCheckInterval()
 	for {
@@ -235,9 +196,13 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 			}
 		case res, ok := <-readCh:
 			if !ok {
-				logger.Info("Executor", e.IP, "SSH 会话由于连接中断或完成已结束。")
-				logger.Verbose("Executor", e.IP, "读取流 readCh 已关闭")
-				return nil
+				if completedAllCommands {
+					logger.Info("Executor", e.IP, "读取流已结束，命令执行已完成。")
+					logger.Verbose("Executor", e.IP, "读取流 readCh 已关闭（完成态）")
+					return nil
+				}
+				logger.Warn("Executor", e.IP, "读取流已结束，但命令尚未确认全部完成（index=%d）", currentCmdIndex)
+				return fmt.Errorf("设备 %s 执行未完成即终止（readCh closed, index=%d/%d）", e.IP, currentCmdIndex, len(commands))
 			}
 
 			n, err := res.n, res.err
@@ -261,6 +226,10 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 				// 检查最后一行以外的完整回显行，查找 error 关键字
 				for i, line := range lines {
 					if i < len(lines)-1 {
+						// 仅在命令执行阶段匹配错误规则，避免把登录横幅等初始化输出误判成命令告警/错误。
+						if currentCmdIndex < 0 {
+							continue
+						}
 						if matched, rule := e.Matcher.MatchErrorRule(line); matched {
 							var failedCmd string
 							if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
@@ -304,47 +273,65 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 					}
 				}
 
-				// 将没有换行符的最后一部分留到 Buffer 中进行提示符识别
-				streamBuffer = lines[len(lines)-1]
+				// 在裁剪到 lastSegment 前先判定 prompt，避免 "prompt+\r\n" 被裁成空串导致漏判。
+				lastSegment := lines[len(lines)-1]
+				lastNonEmptySegment := ""
+				for i := len(lines) - 1; i >= 0; i-- {
+					segment := strings.TrimSpace(lines[i])
+					if segment != "" {
+						lastNonEmptySegment = segment
+						break
+					}
+				}
+
+				promptDetected := e.Matcher.IsPrompt(streamBuffer)
+				if !promptDetected && lastNonEmptySegment != "" {
+					promptDetected = e.Matcher.IsPrompt(lastNonEmptySegment)
+				}
+
+				// 将没有换行符的最后一部分留到 Buffer 中进行下一轮累积
+				streamBuffer = lastSegment
 
 				// 检测是否由于回显过长触发了终端分页符（如 ---- More ----）
-				if e.Matcher.IsPaginationPrompt(streamBuffer) {
+				if e.Matcher.IsPaginationPrompt(streamBuffer) || (lastNonEmptySegment != "" && e.Matcher.IsPaginationPrompt(lastNonEmptySegment)) {
 					logger.Debug("Executor", e.IP, "[自动翻页] 截获终端分页拦截符(More)，自动下发空格放行...")
 					e.Client.SendRawBytes([]byte(" ")) // 向 SSH 隧道发送一个纯净空格
 					streamBuffer = ""                  // 清除已匹配的分页符避免残留污染
 					continue
 				}
 
-				// 处于等待主提示符阶段
-				if currentCmdIndex == -1 {
-					if e.Matcher.IsPrompt(streamBuffer) {
-						logger.Debug("Executor", e.IP, "等到首个提示符")
-						logger.Info("Executor", e.IP, "==== [连接成功] 获得首个提示符，下发预检探针(Wakeup Line) ====")
-						currentCmdIndex = -2     // -2 implies waiting for pre-flight check response
-						e.Client.SendCommand("") // Wakeup Line 以稳定状态
-
-						// 这里不暴力清空整个 streamBuffer，仅清除最后一段（即刚才匹配的提示符）及之前产生的杂质
-						lines := strings.Split(streamBuffer, "\n")
-						if len(lines) > 0 {
-							streamBuffer = strings.Replace(streamBuffer, lines[len(lines)-1], "", 1)
+				// 首个提示符仅表示登录完成，不代表交互式 shell 已完全稳定。
+				// 先发送一个空回车做终端预热，等下一个提示符回来后再正式下发业务命令。
+				if currentCmdIndex == -1 && promptDetected {
+					logger.Debug("Executor", e.IP, "等到首个提示符，发送预热空行稳定终端")
+					currentCmdIndex = -2
+					if err := e.Client.SendCommand(""); err != nil {
+						return fmt.Errorf("发送预热空行失败: %w", err)
+					}
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
 						}
 					}
-				} else if currentCmdIndex == -2 {
-					if e.Matcher.IsPrompt(streamBuffer) {
-						logger.Debug("Executor", e.IP, "预检完毕返回 Prompt")
-						logger.Info("Executor", e.IP, "==== [预检通过] 终端响应及时，正式进入配置下发循环 ====")
+					timer.Reset(timeoutDuration)
+					logger.Verbose("Executor", e.IP, "预热空行已发送，清空 streamBuffer 等待稳定提示符返回")
+					streamBuffer = ""
+					continue
+				}
+
+				if currentCmdIndex == -2 {
+					if promptDetected {
+						logger.Debug("Executor", e.IP, "预热完成，进入命令下发阶段")
 						currentCmdIndex = 0
-						// 严重 FIX：这里绝对不能清空 streamBuffer！
-						// 因为本次正好匹配到了 Prompt，清空后下一行的 if currentCmdIndex >= 0 判断中 e.Matcher.IsPrompt("") 将永远返回 false，
-						// 从而导致第一条指令(如 system-view)永远不被发送，最终引发 30s Timeout。
-						// streamBuffer = ""
-						logger.Debug("Executor", e.IP, "预检通过，状态切入0，保留的 streamBuffer 长度=%d", len(streamBuffer))
+					} else {
+						logger.Verbose("Executor", e.IP, "预热空行已发出，等待稳定提示符返回")
 					}
 				}
 
 				// 发送队列中的命令
 				if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
-					if e.Matcher.IsPrompt(streamBuffer) {
+					if promptDetected {
 						rawCmd := commands[currentCmdIndex]
 						cmdToSend := rawCmd
 						customDelay := timeoutDuration
@@ -382,9 +369,10 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 					}
 				} else if currentCmdIndex >= len(commands) {
 					// 任务完成，判断最后一条命令结果是否已回显出提示符
-					if e.Matcher.IsPrompt(streamBuffer) {
+					if promptDetected {
 						logger.Debug("Executor", e.IP, "命令全部下发完成")
 						// logger.Info("[%s] ==== [执行完成] 所有命令已下发完毕 ====", e.IP)
+						completedAllCommands = true
 						return nil
 					}
 				}
@@ -392,8 +380,12 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 
 			if err != nil {
 				if err == io.EOF {
-					logger.Info("Executor", e.IP, "SSH 会话已被远端安全断开。")
-					return nil
+					if completedAllCommands {
+						logger.Info("Executor", e.IP, "SSH 会话已被远端安全断开（完成态）。")
+						return nil
+					}
+					logger.Warn("Executor", e.IP, "SSH 会话在命令完成前被远端断开（index=%d）", currentCmdIndex)
+					return fmt.Errorf("设备 %s 在命令完成前断开连接（EOF, index=%d/%d）", e.IP, currentCmdIndex, len(commands))
 				}
 				return fmt.Errorf("读取SSH流时发生错误: %w", err)
 			}
@@ -453,9 +445,6 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 	}
 	readCh := make(chan readResult, 1)
 
-	// 创建 done channel 用于通知读取 goroutine 退出
-	doneSync := make(chan struct{})
-
 	go func() {
 		defer close(readCh)
 		// 添加 panic recover 防止 goroutine 泄漏
@@ -466,53 +455,17 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 		}()
 
 		for {
+			n, err := outReader.Read(buf)
 			select {
-			case <-doneSync:
-				return
+			case readCh <- readResult{n: n, err: err}:
 			case <-ctx.Done():
-				// Context 被取消，立即退出
 				return
-			default:
-				// 设置读取超时，实现非阻塞读取
-				e.Client.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-				n, err := outReader.Read(buf)
-
-				if err != nil {
-					// 检查是否是超时错误
-					if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-						// 超时但不是真正的错误，继续检查 context 是否已取消
-						select {
-						case <-ctx.Done():
-							return
-						case <-doneSync:
-							return
-						default:
-							continue // 超时但未取消，继续读取
-						}
-					}
-					// 其他错误（如 EOF），发送结果并退出
-					select {
-					case readCh <- readResult{n: n, err: err}:
-					case <-doneSync:
-					case <-ctx.Done():
-					}
-					return
-				}
-
-				// 成功读取数据
-				select {
-				case readCh <- readResult{n: n, err: nil}:
-				case <-doneSync:
-					return
-				case <-ctx.Done():
-					return
-				}
+			}
+			if err != nil {
+				return
 			}
 		}
 	}()
-
-	// 确保在函数退出时关闭 done channel，让读取 goroutine 能够正确退出
-	defer close(doneSync)
 
 	// 读取循环
 	for {

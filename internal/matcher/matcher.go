@@ -1,11 +1,14 @@
 package matcher
 
 import (
+	"regexp"
 	"strings"
 	"sync"
 
 	"github.com/NetWeaverGo/core/internal/logger"
 )
+
+var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 
 // DefaultPrompts 常见的网络设备提示符结尾
 var DefaultPrompts = []string{">", "#", "]"}
@@ -52,11 +55,15 @@ func (m *StreamMatcher) MatchErrorRule(line string) (bool, *ErrorRule) {
 
 // IsPrompt 检查字符流尾部是否为常见提示符（用于判读命令是否执行完毕）
 func (m *StreamMatcher) IsPrompt(chunk string) bool {
-	cleanChunk := strings.TrimSpace(chunk)
+	cleanChunk := normalizeTerminalChunk(chunk)
+	promptLine := extractLastNonEmptyLine(cleanChunk)
+	if promptLine == "" {
+		return false
+	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for _, prompt := range m.Prompts {
-		if strings.HasSuffix(cleanChunk, prompt) {
+		if strings.HasSuffix(promptLine, prompt) && looksLikePromptLine(promptLine, prompt) {
 			logger.Verbose("Matcher", "-", "Chunk 末缀匹配到了提示符: '%s'", prompt)
 			return true
 		}
@@ -66,13 +73,45 @@ func (m *StreamMatcher) IsPrompt(chunk string) bool {
 
 // IsPaginationPrompt 检查字符流中是否包含了分页拦截符 (如 ---- More ----)
 func (m *StreamMatcher) IsPaginationPrompt(chunk string) bool {
+	cleanChunk := normalizeTerminalChunk(chunk)
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for _, prompt := range m.PaginationPrompts {
-		if strings.Contains(chunk, prompt) {
+		if strings.Contains(cleanChunk, prompt) {
 			logger.Verbose("Matcher", "-", "探测到了分页拦截符: '%s'", prompt)
 			return true
 		}
 	}
 	return false
+}
+
+func normalizeTerminalChunk(chunk string) string {
+	chunk = ansiEscapePattern.ReplaceAllString(chunk, "")
+	chunk = strings.ReplaceAll(chunk, "\r", "")
+	return strings.TrimSpace(chunk)
+}
+
+func extractLastNonEmptyLine(chunk string) string {
+	lines := strings.Split(chunk, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line != "" {
+			return line
+		}
+	}
+	return ""
+}
+
+func looksLikePromptLine(line string, prompt string) bool {
+	trimmed := strings.TrimSpace(strings.TrimSuffix(line, prompt))
+	switch prompt {
+	case "#":
+		return trimmed != ""
+	case ">":
+		return trimmed != ""
+	case "]":
+		return trimmed != ""
+	default:
+		return trimmed != ""
+	}
 }

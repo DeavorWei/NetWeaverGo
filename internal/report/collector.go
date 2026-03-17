@@ -18,7 +18,7 @@ import (
 // DeviceSummary 存储单台设备的最终汇总信息
 type DeviceSummary struct {
 	IP        string
-	Status    string // "Success", "Failed", "Aborted", "Warning"
+	Status    string // "Success", "Error", "Aborted", "Warning", "Suspended", "Running", "Init"
 	TotalCmds int
 	ExecCmds  int
 	ErrorMsg  string
@@ -70,11 +70,12 @@ type ProgressTracker struct {
 	paused   bool                      // 是否因交互被挂起
 
 	// 新增：状态树管理
-	taskName   string
-	startTime  time.Time
-	logStorage *LogStorage    // 磁盘日志存储
-	logCounts  map[string]int // 原始日志计数
-	sortedIPs  []string       // 有序的 IP 列表
+	taskName    string
+	startTime   time.Time
+	logStorage  *LogStorage    // 磁盘日志存储
+	logCounts   map[string]int // 原始日志计数
+	sortedIPs   []string       // 有序的 IP 列表
+	finishedIPs map[string]bool
 }
 
 func NewProgressTracker(totalDevices int) *ProgressTracker {
@@ -88,14 +89,15 @@ func NewProgressTracker(totalDevices int) *ProgressTracker {
 	}
 
 	return &ProgressTracker{
-		EventBus:   make(chan ExecutorEvent, 1000), // 留足缓冲
-		status:     make(map[string]*DeviceSummary),
-		total:      totalDevices,
-		taskName:   "任务执行",
-		startTime:  time.Now(),
-		logStorage: storage,
-		logCounts:  make(map[string]int),
-		sortedIPs:  make([]string, 0, totalDevices),
+		EventBus:    make(chan ExecutorEvent, 1000), // 留足缓冲
+		status:      make(map[string]*DeviceSummary),
+		total:       totalDevices,
+		taskName:    "任务执行",
+		startTime:   time.Now(),
+		logStorage:  storage,
+		logCounts:   make(map[string]int),
+		sortedIPs:   make([]string, 0, totalDevices),
+		finishedIPs: make(map[string]bool),
 	}
 }
 
@@ -166,6 +168,12 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 		summary = p.status[evt.IP]
 	}
 
+	// 终态设备不再接受非终态更新，避免晚到事件把最终状态覆盖回 Running/Warning。
+	if p.finishedIPs[evt.IP] && evt.Type != EventDeviceSuccess && evt.Type != EventDeviceAbort {
+		logger.Verbose("Report", evt.IP, "设备已进入终态，忽略非终态事件: Type=%v", evt.Type)
+		return
+	}
+
 	logger.Verbose("Report", evt.IP, "EventBus接收到事件: Type=%v, Message=%s", evt.Type, evt.Message)
 
 	// 格式化日志消息
@@ -186,11 +194,14 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 		summary.Status = "Success"
 		summary.ExecCmds = summary.TotalCmds
 		summary.ErrorMsg = "ALL Done"
-		p.finished++
+		if !p.markFinishedLocked(evt.IP) {
+			logger.Verbose("Report", evt.IP, "检测到重复 Success 终态事件，忽略重复计数")
+		}
 		logMessage = "[SUCCESS] 执行完成"
 		logger.Info("Report", evt.IP, "设备任务执行成功")
 	case EventDeviceError:
-		summary.Status = "Error"
+		// Error 先标记为挂起等待人工决策，最终终态由 Abort/Success 决定。
+		summary.Status = "Suspended"
 		summary.ErrorMsg = evt.Message
 		logMessage = fmt.Sprintf("[ERROR] %s", evt.Message)
 		logger.Error("Report", evt.IP, "设备任务执行出错: %s", evt.Message)
@@ -207,7 +218,9 @@ func (p *ProgressTracker) handleEvent(evt ExecutorEvent) {
 	case EventDeviceAbort:
 		summary.Status = "Aborted"
 		summary.ErrorMsg = "Aborted: " + evt.Message
-		p.finished++
+		if !p.markFinishedLocked(evt.IP) {
+			logger.Verbose("Report", evt.IP, "检测到重复 Abort 终态事件，忽略重复计数")
+		}
 		logMessage = fmt.Sprintf("[ABORT] %s", evt.Message)
 		logger.Error("Report", evt.IP, "设备任务被终止: %s", evt.Message)
 	default:
@@ -274,6 +287,19 @@ func (p *ProgressTracker) addDeviceLogLocked(ip string, message string) {
 	}
 }
 
+// markFinishedLocked 仅在首次终态时计数，防止重复终态事件造成 finished 失真。
+func (p *ProgressTracker) markFinishedLocked(ip string) bool {
+	if p.finishedIPs == nil {
+		p.finishedIPs = make(map[string]bool)
+	}
+	if p.finishedIPs[ip] {
+		return false
+	}
+	p.finishedIPs[ip] = true
+	p.finished++
+	return true
+}
+
 // renderDisplay 简单的静态打印大盘（不再清屏）
 func (p *ProgressTracker) renderDisplay() {
 	p.mu.Lock()
@@ -296,6 +322,8 @@ func (p *ProgressTracker) renderDisplay() {
 			statusColor = "√ Success"
 		} else if s.Status == "Error" || s.Status == "Aborted" {
 			statusColor = "x " + s.Status
+		} else if s.Status == "Suspended" {
+			statusColor = "! Suspended"
 		}
 
 		dispMsg := strings.ReplaceAll(s.ErrorMsg, "\r", "")
@@ -434,14 +462,32 @@ func (p *ProgressTracker) GetSnapshot() *ExecutionSnapshot {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// 计算进度百分比
+	// 计算进度百分比（优先使用命令级聚合进度）
 	progress := 0
-	if p.total > 0 {
-		progress = int(float64(p.finished) / float64(p.total) * 100)
-		// 限制最大 95%，完成时由前端设置为 100
-		if progress > 95 {
-			progress = 95
+	totalCmds := 0
+	executedCmds := 0
+	for _, summary := range p.status {
+		if summary.TotalCmds <= 0 {
+			continue
 		}
+		totalCmds += summary.TotalCmds
+		cmdIndex := summary.ExecCmds
+		if cmdIndex < 0 {
+			cmdIndex = 0
+		}
+		if cmdIndex > summary.TotalCmds {
+			cmdIndex = summary.TotalCmds
+		}
+		// 终态成功/告警视为该设备命令全部完成。
+		if summary.Status == "Success" || summary.Status == "Warning" {
+			cmdIndex = summary.TotalCmds
+		}
+		executedCmds += cmdIndex
+	}
+	if totalCmds > 0 {
+		progress = int(float64(executedCmds) / float64(totalCmds) * 100)
+	} else if p.total > 0 {
+		progress = int(float64(p.finished) / float64(p.total) * 100)
 	}
 
 	// 构建设备视图状态列表
@@ -465,9 +511,11 @@ func (p *ProgressTracker) GetSnapshot() *ExecutionSnapshot {
 		case "error":
 			status = "error"
 		case "aborted":
-			status = "error"
+			status = "aborted"
 		case "warning":
 			status = "success" // Skip 视为成功
+		case "suspended":
+			status = "waiting"
 		case "init":
 			status = "waiting"
 		default:
@@ -492,7 +540,7 @@ func (p *ProgressTracker) GetSnapshot() *ExecutionSnapshot {
 		TotalDevices:  p.total,
 		FinishedCount: p.finished,
 		Progress:      progress,
-		IsRunning:     !p.paused,
+		IsRunning:     p.total > 0 && p.finished < p.total,
 		StartTime:     p.startTime.Format(time.RFC3339),
 		Devices:       devices,
 	}

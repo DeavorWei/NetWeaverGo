@@ -116,12 +116,8 @@ func (ls *LogStorage) AppendLog(ip string, message string) error {
 	idx.TotalCount++
 	idx.LastAccess = time.Now()
 
-	// 定期刷新（每100条）
-	if idx.TotalCount%100 == 0 {
-		return writer.Flush()
-	}
-
-	return nil
+	// 实时场景下前端会持续读取最新日志，需确保及时刷盘。
+	return writer.Flush()
 }
 
 // GetLogs 获取日志（支持分页）

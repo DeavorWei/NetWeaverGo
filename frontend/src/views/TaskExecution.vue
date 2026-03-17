@@ -114,6 +114,23 @@
                 :truncated="dev.truncated"
                 :device-ip="dev.ip"
               />
+              <div
+                v-if="suspendSessions[dev.ip]"
+                class="border-t border-warning/40 bg-warning/5 px-3 py-2"
+              >
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-xs text-warning font-medium">异常干预（当前设备已挂起）</div>
+                  <span
+                    class="w-5 h-5 rounded-full border border-warning/40 text-warning text-[11px] flex items-center justify-center cursor-help"
+                    title="继续下一条：忽略本次异常继续执行；放弃此指令：跳过当前报错命令进入下一条；切断连接：终止该设备后续执行。"
+                  >?</span>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                  <button @click="resolveSuspend(dev.ip, 'C')" class="py-1.5 text-xs font-medium rounded border border-success/40 text-success bg-success/10 hover:bg-success hover:text-white transition-all duration-200">继续下一条</button>
+                  <button @click="resolveSuspend(dev.ip, 'S')" class="py-1.5 text-xs font-medium rounded border border-accent/40 text-accent bg-accent/10 hover:bg-accent hover:text-white transition-all duration-200">放弃此指令</button>
+                  <button @click="resolveSuspend(dev.ip, 'A')" class="py-1.5 text-xs font-medium rounded border border-error/40 text-error bg-error/10 hover:bg-error hover:text-white transition-all duration-200">切断连接</button>
+                </div>
+              </div>
             </div>
           </div>
           
@@ -253,33 +270,6 @@
       </div>
     </template>
 
-    <!-- Suspend 弹窗 -->
-    <Transition name="modal">
-      <div v-if="suspendModal.show" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="suspendModal.show = false"></div>
-        <div class="relative bg-bg-card border border-warning/50 rounded-xl shadow-card max-w-md w-full mx-4 overflow-hidden animate-slide-in">
-          <div class="flex items-center gap-3 px-5 py-4 border-b border-border bg-warning/5">
-            <div class="w-9 h-9 rounded-lg bg-warning/15 flex items-center justify-center flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            </div>
-            <div>
-              <h3 class="text-sm font-semibold text-text-primary">异常干预（阻塞流）</h3>
-              <p class="text-xs text-text-muted mt-0.5">当前设备已被挂起，全局其余设备继续执行</p>
-            </div>
-          </div>
-          <div class="px-5 py-4 space-y-3">
-            <div class="bg-bg-panel border border-border rounded-lg p-3 font-mono text-xs text-text-secondary leading-relaxed whitespace-pre-wrap">{{ suspendModal.content }}</div>
-            <p class="text-xs text-text-muted">请选择如何处理该设备的挂起任务：</p>
-          </div>
-          <div class="flex gap-3 px-5 py-4 border-t border-border">
-            <button @click="resolveSuspend('C')" class="flex-1 py-2.5 text-sm font-medium rounded-lg bg-success/20 border border-success/40 text-success hover:bg-success hover:text-white transition-all duration-200">继续下一条 (Continue)</button>
-            <button @click="resolveSuspend('S')" class="flex-1 py-2.5 text-sm font-medium rounded-lg bg-accent/20 border border-accent/40 text-accent hover:bg-accent hover:text-white transition-all duration-200">放弃此指令 (Skip)</button>
-            <button @click="resolveSuspend('A')" class="flex-1 py-2.5 text-sm font-medium rounded-lg bg-error/20 border border-error/40 text-error hover:bg-error hover:text-white transition-all duration-200">切断连接 (Abort)</button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-
     <!-- 删除确认弹窗 -->
     <Transition name="modal">
       <div v-if="deleteModal.show" class="fixed inset-0 z-50 flex items-center justify-center">
@@ -374,6 +364,8 @@ const executionView = ref({
 const awaitingSnapshot = ref(false)
 let snapshotTimeoutTimer: ReturnType<typeof setTimeout> | null = null
 const SNAPSHOT_TIMEOUT = 10000 // 10秒超时
+let snapshotPollTimer: ReturnType<typeof setInterval> | null = null
+const SNAPSHOT_POLL_INTERVAL = 1000 // 1秒兜底拉取
 
 // 删除弹窗
 const deleteModal = ref({ show: false, taskId: '', taskName: '' })
@@ -428,7 +420,7 @@ const executionSnapshot = computed(() => engineStore.executionSnapshot)
 const isRunning = computed(() => engineStore.isRunning)
 const progressPercent = computed(() => executionSnapshot.value?.progress ?? 0)
 const execDevices = computed(() => executionSnapshot.value?.devices ?? [])
-const suspendModal = computed(() => engineStore.suspendModal)
+const suspendSessions = computed(() => engineStore.suspendSessions)
 
 // ================== 虚拟滚动优化计算属性 ==================
 // 可见设备数量限制
@@ -460,31 +452,22 @@ const visibleDevices = computed(() => {
 
 // ================== 生命周期 ==================
 onMounted(() => {
-  engineStore.initListeners()
   void syncExecutionView()
   void loadTasks()
 })
 
 onUnmounted(() => {
-  engineStore.cleanupListeners()
+  clearSnapshotTimeout()
+  stopSnapshotPolling()
   if (toastTimer) {
     clearTimeout(toastTimer)
     toastTimer = null
   }
 })
 
-watch(executionSnapshot, (snapshot) => {
-  if (snapshot) {
-    awaitingSnapshot.value = false
-    executionView.value.active = true
-    if (snapshot.taskName) {
-      executionView.value.taskName = snapshot.taskName
-    }
-  }
-})
-
 watch(isRunning, (running, wasRunning) => {
   if (!running && wasRunning && executionView.value.active) {
+    stopSnapshotPolling()
     void loadTasks()
   }
 })
@@ -533,18 +516,58 @@ async function syncExecutionView() {
   }
 }
 
+function startSnapshotPolling() {
+  if (snapshotPollTimer) return
+  snapshotPollTimer = setInterval(() => {
+    if (!executionView.value.active) {
+      stopSnapshotPolling()
+      return
+    }
+    // 仅在初始化等待窗口或运行窗口启用兜底拉取，避免额外负载。
+    if (!awaitingSnapshot.value && !isRunning.value) {
+      stopSnapshotPolling()
+      return
+    }
+    void syncExecutionView()
+  }, SNAPSHOT_POLL_INTERVAL)
+}
+
+function stopSnapshotPolling() {
+  if (snapshotPollTimer) {
+    clearInterval(snapshotPollTimer)
+    snapshotPollTimer = null
+  }
+}
+
+async function handleSnapshotTimeout() {
+  if (!awaitingSnapshot.value) return
+
+  // 二次确认：先同步后端状态，避免快照晚到导致误判超时失败。
+  const active = await engineStore.syncExecutionState()
+  const snapshot = engineStore.executionSnapshot
+  if (active || snapshot) {
+    awaitingSnapshot.value = false
+    clearSnapshotTimeout()
+    executionView.value.active = true
+    executionView.value.taskName = snapshot?.taskName || executionView.value.taskName || '任务执行'
+    startSnapshotPolling()
+    return
+  }
+
+  console.warn('[TaskExecution] 快照超时，重置UI状态')
+  awaitingSnapshot.value = false
+  triggerToast('任务执行超时，请检查设备连接配置', 'error')
+  executionView.value.active = false
+  stopSnapshotPolling()
+}
+
 // 设置快照超时保护
 function startSnapshotTimeout() {
   if (snapshotTimeoutTimer) {
     clearTimeout(snapshotTimeoutTimer)
   }
   snapshotTimeoutTimer = setTimeout(() => {
-    if (awaitingSnapshot.value) {
-      console.warn('[TaskExecution] 快照超时，重置UI状态')
-      awaitingSnapshot.value = false
-      triggerToast('任务执行超时，请检查设备连接配置', 'error')
-      executionView.value.active = false
-    }
+    void handleSnapshotTimeout()
   }, SNAPSHOT_TIMEOUT)
 }
 
@@ -564,6 +587,7 @@ async function executeTask(task: TaskGroup) {
   
   // 启动超时保护
   startSnapshotTimeout()
+  startSnapshotPolling()
   
   executionView.value = {
     active: true,
@@ -578,6 +602,7 @@ async function executeTask(task: TaskGroup) {
     triggerToast(`执行失败: ${err?.message || err}`, 'error')
     executionView.value.active = false
     clearSnapshotTimeout()
+    stopSnapshotPolling()
   }
 }
 
@@ -613,6 +638,8 @@ async function doDelete() {
 function closeExecutionView() {
   executionView.value.active = false
   awaitingSnapshot.value = false
+  clearSnapshotTimeout()
+  stopSnapshotPolling()
   engineStore.reset()
   loadTasks()
 }
@@ -631,8 +658,8 @@ async function stopExecution() {
 }
 
 // Suspend 处理
-function resolveSuspend(action: 'C' | 'S' | 'A') {
-  engineStore.resolveSuspend(action)
+function resolveSuspend(ip: string, action: 'C' | 'S' | 'A') {
+  engineStore.resolveSuspend(ip, action)
 }
 
 // 导航
