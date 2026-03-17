@@ -169,8 +169,6 @@ func (m *SuspendManager) Resolve(sessionIDOrIP string, action string) {
 
 	var errAction executor.ErrorAction
 	switch action {
-	case "C":
-		errAction = executor.ActionContinue
 	case "S":
 		errAction = executor.ActionSkip
 	case "A":

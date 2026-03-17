@@ -189,10 +189,6 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 					currentCmdIndex++
 				}
 				timer.Reset(timeoutDuration) // 为下一条命令或结束操作重启计时器
-			case ActionContinue:
-				logger.Warn("Executor", e.IP, "====== 用户选择继续 (Continue): 强制忽略并继续等待 ======")
-				// 继续等待
-				timer.Reset(timeoutDuration)
 			}
 		case res, ok := <-readCh:
 			if !ok {
@@ -262,11 +258,13 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 								if e.EventBus != nil {
 									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "放行异常指令", TotalCmd: len(commands)}
 								}
-							case ActionContinue:
-								// Nothing to broadcast for simple continue
+								// 跳过当前命令，进入下一条
+								streamBuffer = ""
+								if currentCmdIndex >= 0 {
+									currentCmdIndex++
+								}
 							}
-
-							// 继续后清空缓冲区，避免二次重复报错
+							// 清空缓冲区，避免二次重复报错
 							streamBuffer = ""
 							break
 						}

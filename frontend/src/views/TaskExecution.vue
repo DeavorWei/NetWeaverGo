@@ -122,13 +122,12 @@
                   <div class="text-xs text-warning font-medium">异常干预（当前设备已挂起）</div>
                   <span
                     class="w-5 h-5 rounded-full border border-warning/40 text-warning text-[11px] flex items-center justify-center cursor-help"
-                    title="继续下一条：忽略本次异常继续执行；放弃此指令：跳过当前报错命令进入下一条；切断连接：终止该设备后续执行。"
+                    title="继续执行：跳过当前命令，进入下一条；终止执行：停止该设备所有后续命令。"
                   >?</span>
                 </div>
-                <div class="grid grid-cols-3 gap-2">
-                  <button @click="resolveSuspend(dev.ip, 'C')" class="py-1.5 text-xs font-medium rounded border border-success/40 text-success bg-success/10 hover:bg-success hover:text-white transition-all duration-200">继续下一条</button>
-                  <button @click="resolveSuspend(dev.ip, 'S')" class="py-1.5 text-xs font-medium rounded border border-accent/40 text-accent bg-accent/10 hover:bg-accent hover:text-white transition-all duration-200">放弃此指令</button>
-                  <button @click="resolveSuspend(dev.ip, 'A')" class="py-1.5 text-xs font-medium rounded border border-error/40 text-error bg-error/10 hover:bg-error hover:text-white transition-all duration-200">切断连接</button>
+                <div class="grid grid-cols-2 gap-2">
+                  <button @click="resolveSuspend(dev.ip, 'S')" class="py-1.5 text-xs font-medium rounded border border-success/40 text-success bg-success/10 hover:bg-success hover:text-white transition-all duration-200">继续执行</button>
+                  <button @click="resolveSuspend(dev.ip, 'A')" class="py-1.5 text-xs font-medium rounded border border-error/40 text-error bg-error/10 hover:bg-error hover:text-white transition-all duration-200">终止执行</button>
                 </div>
               </div>
             </div>
@@ -658,7 +657,7 @@ async function stopExecution() {
 }
 
 // Suspend 处理
-function resolveSuspend(ip: string, action: 'C' | 'S' | 'A') {
+function resolveSuspend(ip: string, action: 'S' | 'A') {
   engineStore.resolveSuspend(ip, action)
 }
 
