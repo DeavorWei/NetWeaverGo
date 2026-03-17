@@ -11,7 +11,7 @@
     <div 
       v-for="(log, idx) in visibleLogs" 
       :key="startIndex + idx"
-      class="whitespace-nowrap overflow-hidden text-ellipsis leading-[20px]"
+      class="break-all leading-[20px] py-[2px]"
       :class="getLogColor(log)"
       :title="log"
     >
