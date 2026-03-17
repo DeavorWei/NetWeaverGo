@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,6 +28,9 @@ type SSHClient struct {
 	Stdout io.Reader
 	Stderr io.Reader
 
+	// transcriptSink 保存原始交互流，用于问题排查和执行回显审计。
+	transcriptSink *transcriptSink
+
 	// conn 保存底层的 TCP 连接，用于设置 deadline
 	conn net.Conn
 
@@ -38,6 +43,38 @@ type SSHClient struct {
 	// 新增：读取中断控制
 	readCancel context.CancelFunc
 	readCtx    context.Context
+}
+
+type transcriptSink struct {
+	mu   sync.Mutex
+	file *os.File
+}
+
+func (t *transcriptSink) Write(p []byte) (int, error) {
+	if t == nil || t.file == nil {
+		return len(p), nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.file.Write(p)
+}
+
+func (t *transcriptSink) WriteMarker(format string, args ...interface{}) {
+	if t == nil || t.file == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	_, _ = fmt.Fprintf(t.file, format, args...)
+}
+
+func (t *transcriptSink) Close() error {
+	if t == nil || t.file == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.file.Close()
 }
 
 // Config 包含了建连的基础凭证和超时参数
@@ -418,21 +455,35 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 		return nil, fmt.Errorf("Shell启动失败: %w", err)
 	}
 
+	sink, sinkErr := createTranscriptSink(cfg.IP)
+	if sinkErr != nil {
+		logger.Warn("SSH", cfg.IP, "创建原始回显日志文件失败，将继续执行但不保存回显: %v", sinkErr)
+	}
+
+	stdoutReader := io.Reader(stdout)
+	stderrReader := io.Reader(stderr)
+	if sink != nil {
+		sink.WriteMarker("========== SESSION START %s %s:%d ==========\n", time.Now().Format(time.RFC3339), cfg.IP, cfg.Port)
+		stdoutReader = io.TeeReader(stdout, sink)
+		stderrReader = io.TeeReader(stderr, sink)
+	}
+
 	// 初始化读取上下文，用于控制读取中断
 	readCtx, readCancel := context.WithCancel(context.Background())
 
 	logger.Debug("SSH", cfg.IP, "目标 %s SSH全特性挂载(PTY/Shell)成功", target)
 	return &SSHClient{
-		Client:     client,
-		Session:    session,
-		IP:         cfg.IP,
-		Port:       cfg.Port,
-		Stdin:      stdin,
-		Stdout:     stdout,
-		Stderr:     stderr,
-		conn:       conn,
-		readCtx:    readCtx,
-		readCancel: readCancel,
+		Client:         client,
+		Session:        session,
+		IP:             cfg.IP,
+		Port:           cfg.Port,
+		Stdin:          stdin,
+		Stdout:         stdoutReader,
+		Stderr:         stderrReader,
+		transcriptSink: sink,
+		conn:           conn,
+		readCtx:        readCtx,
+		readCancel:     readCancel,
 	}, nil
 }
 
@@ -449,6 +500,9 @@ func (c *SSHClient) SendCommand(cmd string) error {
 	logger.Verbose("SSH", c.IP, "向底层隧道投递命令行包含回车: %q", cmd)
 	if c.Stdin == nil {
 		return fmt.Errorf("SSHClient not fully initialized for terminal sending (Stdin is nil)")
+	}
+	if c.transcriptSink != nil {
+		c.transcriptSink.WriteMarker("\n[%s] >>> %s\n", time.Now().Format("15:04:05"), cmd)
 	}
 	// 恢复标准 \n。之前改为 \r\n 导致部分交换机将其解析为两下回车，严重干扰 Prompt 匹配缓冲流。
 	_, err := fmt.Fprintf(c.Stdin, "%s\n", cmd)
@@ -468,6 +522,9 @@ func (c *SSHClient) SendRawBytes(data []byte) error {
 	logger.Verbose("SSH", c.IP, "向底层隧道投递 Raw Bytes: %q", string(data))
 	if c.Stdin == nil {
 		return fmt.Errorf("SSHClient not fully initialized for terminal sending (Stdin is nil)")
+	}
+	if c.transcriptSink != nil {
+		c.transcriptSink.WriteMarker("\n[%s] >>> [RAW] %q\n", time.Now().Format("15:04:05"), string(data))
 	}
 	_, err := c.Stdin.Write(data)
 	return err
@@ -511,6 +568,13 @@ func (c *SSHClient) Close() error {
 		clientErr := c.Client.Close()
 		if err == nil {
 			err = clientErr
+		}
+	}
+	if c.transcriptSink != nil {
+		c.transcriptSink.WriteMarker("\n========== SESSION END %s ==========\n", time.Now().Format(time.RFC3339))
+		sinkErr := c.transcriptSink.Close()
+		if err == nil {
+			err = sinkErr
 		}
 	}
 	return err
@@ -619,4 +683,31 @@ func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 		IP:     cfg.IP,
 		Port:   cfg.Port,
 	}, nil
+}
+
+func createTranscriptSink(ip string) (*transcriptSink, error) {
+	storageDir := config.GetPathManager().GetExecutionLiveLogDir()
+	if err := os.MkdirAll(storageDir, 0755); err != nil {
+		return nil, err
+	}
+
+	filePath := filepath.Join(storageDir, fmt.Sprintf("%s_%d_raw.log", sanitizeIPForPath(ip), time.Now().UnixNano()))
+	file, err := os.Create(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &transcriptSink{file: file}, nil
+}
+
+func sanitizeIPForPath(ip string) string {
+	var b strings.Builder
+	for _, c := range ip {
+		if c >= '0' && c <= '9' {
+			b.WriteRune(c)
+			continue
+		}
+		b.WriteRune('_')
+	}
+	return b.String()
 }
