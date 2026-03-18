@@ -2,7 +2,7 @@ package engine
 
 import (
 	"bufio"
-	"context"
+	"context" /*  */
 	"fmt"
 	"math/rand"
 	"os"
@@ -664,6 +664,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 		e.failedBackups.Store(dev.IP, fmt.Sprintf("SSH连通信失败: %v", err))
 		if e.EventBus != nil {
 			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: fmt.Sprintf("SSH 建连失败: %v", err)}
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: fmt.Sprintf("SSH 建连失败: %v", err)}
 		}
 		return
 	}
@@ -694,6 +695,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 		e.failedBackups.Store(dev.IP, errMsg)
 		if e.EventBus != nil {
 			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: errMsg}
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: errMsg}
 		}
 		return
 	}
@@ -709,6 +711,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 		e.failedBackups.Store(dev.IP, errMsg)
 		if e.EventBus != nil {
 			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: errMsg}
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: errMsg}
 		}
 		return
 	}
@@ -721,6 +724,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 		e.failedBackups.Store(dev.IP, errMsg)
 		if e.EventBus != nil {
 			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: errMsg}
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: errMsg}
 		}
 		return
 	}
@@ -739,6 +743,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 		e.failedBackups.Store(dev.IP, errMsg)
 		if e.EventBus != nil {
 			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: errMsg}
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: errMsg}
 		}
 		return
 	}
@@ -765,6 +770,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *s
 		e.failedBackups.Store(dev.IP, errMsg)
 		if e.EventBus != nil {
 			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceError, Message: errMsg}
+			e.EventBus <- report.ExecutorEvent{IP: dev.IP, Type: report.EventDeviceAbort, Message: errMsg}
 		}
 		return
 	}

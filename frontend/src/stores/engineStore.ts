@@ -1,8 +1,9 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { Events } from "@wailsio/runtime";
-import { EngineAPI } from "../services/api";
+import { EngineAPI, DeviceAPI } from "../services/api";
 import { ExecutionSnapshot } from "../bindings/github.com/NetWeaverGo/core/internal/report/models";
+import type { DeviceAsset } from "../bindings/github.com/NetWeaverGo/core/internal/config/models";
 
 type EngineState =
   | "Idle"
@@ -39,6 +40,23 @@ export const useEngineStore = defineStore("engine", () => {
   const suspendSessions = ref<Record<string, SuspendSessionState>>({});
 
   const isRunning = computed(() => Boolean(executionSnapshot.value?.isRunning));
+
+  // ================== 备份相关状态 ==================
+  const backupState = ref<{
+    isRunning: boolean;
+    progress: number;
+    devices: DeviceAsset[];
+    startTime: string | null;
+  }>({
+    isRunning: false,
+    progress: 0,
+    devices: [],
+    startTime: null,
+  });
+
+  const isBackupRunning = computed(() => backupState.value.isRunning);
+  const backupProgress = computed(() => backupState.value.progress);
+  const backupDevices = computed(() => backupState.value.devices);
   let cleanupFns: (() => void)[] = [];
 
   function applySnapshot(snapshot: ExecutionSnapshot | null) {
@@ -85,6 +103,8 @@ export const useEngineStore = defineStore("engine", () => {
 
     const unlistenFinished = Events.On("engine:finished", () => {
       markExecutionFinished();
+      // 同时重置备份状态
+      backupState.value.isRunning = false;
     });
     if (typeof unlistenFinished === "function") {
       cleanupFns.push(unlistenFinished);
@@ -189,6 +209,59 @@ export const useEngineStore = defineStore("engine", () => {
     suspendSessions.value = {};
   }
 
+  // ================== 备份相关方法 ==================
+  async function loadBackupDevices() {
+    try {
+      const devices = await DeviceAPI.listDevices();
+      backupState.value.devices = devices || [];
+      return devices || [];
+    } catch (err) {
+      console.error("加载备份设备列表失败:", err);
+      backupState.value.devices = [];
+      return [];
+    }
+  }
+
+  async function startBackup(selectedDevices: DeviceAsset[]) {
+    if (backupState.value.isRunning) {
+      return;
+    }
+
+    backupState.value = {
+      isRunning: true,
+      progress: 0,
+      devices: selectedDevices,
+      startTime: new Date().toISOString(),
+    };
+
+    try {
+      // 调用后端 StartBackup API
+      await EngineAPI.startBackup();
+    } catch (err) {
+      console.error("启动备份失败:", err);
+      backupState.value.isRunning = false;
+      throw err;
+    }
+  }
+
+  function updateBackupSnapshot(snapshot: ExecutionSnapshot) {
+    backupState.value.progress = snapshot.progress;
+
+    // 检查是否完成
+    if (!snapshot.isRunning) {
+      backupState.value.isRunning = false;
+    }
+  }
+
+  function resetBackup() {
+    backupState.value = {
+      isRunning: false,
+      progress: 0,
+      devices: [],
+      startTime: null,
+    };
+  }
+
   return {
     executionSnapshot,
     suspendSessions,
@@ -199,5 +272,14 @@ export const useEngineStore = defineStore("engine", () => {
     stopEngine,
     resolveSuspend,
     reset,
+    // 备份相关
+    backupState,
+    isBackupRunning,
+    backupProgress,
+    backupDevices,
+    loadBackupDevices,
+    startBackup,
+    updateBackupSnapshot,
+    resetBackup,
   };
 });
