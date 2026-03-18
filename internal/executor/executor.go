@@ -19,7 +19,7 @@ type ErrorAction int
 
 const (
 	ActionContinue ErrorAction = iota // 忽略错误，继续发送下一条
-	ActionSkip                        // 跳过本条引发错误的命令，或者干脆直接完成
+	ActionSkip                        // 兼容旧动作码，当前与 Continue 等价
 	ActionAbort                       // 立即停止该设备的后续命令
 )
 
@@ -129,6 +129,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 	}()
 
 	currentCmdIndex := -1 // 初始化状态: -1 表示还在探测第一个提示符
+	lastSentCmdIndex := -1
 	var streamBuffer string
 	completedAllCommands := false
 
@@ -166,6 +167,16 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 		}
 	}()
 
+	resolveFailedCmd := func() string {
+		if lastSentCmdIndex >= 0 && lastSentCmdIndex < len(commands) {
+			return commands[lastSentCmdIndex]
+		}
+		if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
+			return commands[currentCmdIndex]
+		}
+		return ""
+	}
+
 	readDelay := manager.GetPaginationCheckInterval()
 	for {
 		select {
@@ -174,10 +185,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 		case <-timer.C:
 			logger.Debug("Executor", e.IP, "读取提示符超时 (index=%d)", currentCmdIndex)
 			// Timeout triggered
-			var failedCmd string
-			if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
-				failedCmd = commands[currentCmdIndex]
-			}
+			failedCmd := resolveFailedCmd()
 
 			if e.EventBus != nil {
 				e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceError, Message: "Waiting for prompt Timeout (30s)", TotalCmd: len(commands), CmdIndex: currentCmdIndex}
@@ -191,16 +199,13 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 					e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceAbort, Message: "因超时被手动中止", TotalCmd: len(commands)}
 				}
 				return fmt.Errorf("设备 %s 的执行因超时被用户中止", e.IP)
-			case ActionSkip:
+			case ActionContinue, ActionSkip:
 				if e.EventBus != nil {
-					e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "跳过超时步骤，进入下一条", TotalCmd: len(commands)}
+					e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "放行超时并继续执行", TotalCmd: len(commands)}
 				}
-				// 模拟接收到了提示符以便进入下一条命令，并清空缓冲区
+				// Continue/Skip 合并语义：不再推进命令索引，避免误跳过下一条命令
 				streamBuffer = ""
-				if currentCmdIndex >= 0 {
-					currentCmdIndex++
-				}
-				timer.Reset(timeoutDuration) // 为下一条命令或结束操作重启计时器
+				timer.Reset(timeoutDuration)
 			}
 		case res, ok := <-readCh:
 			if !ok {
@@ -242,10 +247,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 							continue
 						}
 						if matched, rule := e.Matcher.MatchErrorRule(line); matched {
-							var failedCmd string
-							if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
-								failedCmd = commands[currentCmdIndex]
-							}
+							failedCmd := resolveFailedCmd()
 
 							if rule.Severity == matcher.SeverityWarning {
 								// 仅抛出警告事件并放行
@@ -269,15 +271,12 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceAbort, Message: "执行异常被手动中止", TotalCmd: len(commands)}
 								}
 								return fmt.Errorf("设备 %s 的执行被用户手动中止", e.IP)
-							case ActionSkip:
+							case ActionContinue, ActionSkip:
 								if e.EventBus != nil {
-									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "放行异常指令", TotalCmd: len(commands)}
+									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "放行异常并继续执行", TotalCmd: len(commands)}
 								}
-								// 跳过当前命令，进入下一条
+								// Continue/Skip 合并语义：命令索引已经在发送时推进，此处只清理状态
 								streamBuffer = ""
-								if currentCmdIndex >= 0 {
-									currentCmdIndex++
-								}
 							}
 							// 清空缓冲区，避免二次重复报错
 							streamBuffer = ""
@@ -369,6 +368,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 						if err := e.writeDetailCommand(cmdToSend); err != nil {
 							logger.Warn("Executor", e.IP, "写入命令日志失败: %v", err)
 						}
+						lastSentCmdIndex = currentCmdIndex
 						e.Client.SendCommand(cmdToSend)
 
 						// 重置自定义计时器并清空 Buffer

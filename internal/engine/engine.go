@@ -788,9 +788,9 @@ func (e *Engine) handleSuspend(ctx context.Context, ip string, logLine string, c
 	if e.NonInteractive {
 		switch e.Settings.ErrorMode {
 		case "skip":
-			logger.Info("Engine", ip, "-> [Non-Interactive] 触发全局 skip 策略: 已跳过当前报错动作。")
-			e.writeDecisionLog(ip, "用户决策: Skip（无人值守策略）")
-			return executor.ActionSkip
+			logger.Info("Engine", ip, "-> [Non-Interactive] 触发全局 skip 策略: 已放行当前报错并继续执行。")
+			e.writeDecisionLog(ip, "用户决策: Continue（skip 策略合并）")
+			return executor.ActionContinue
 		case "abort":
 			logger.Warn("Engine", ip, "-> [Non-Interactive] 触发全局 abort 策略: 正在终止异常设备的运行流。")
 			e.writeDecisionLog(ip, "用户决策: Abort（无人值守策略）")
@@ -828,7 +828,7 @@ func (e *Engine) handleSuspend(ctx context.Context, ip string, logLine string, c
 	fmt.Printf("=> 触发指令: %s\n", cmd)
 	fmt.Printf("=> 回显日志: %s\n", strings.TrimSpace(logLine))
 	fmt.Print("\n==> (当前错误只挂起了这台设备，全局其他设备仍在继续运行中)\n")
-	fmt.Print("请选择动作:\n  [C] 继续发送下一条命令 (Continue)\n  [S] 放弃此报错动作强行放行 (Skip)\n  [A] 退下并切断此设备连接 (Abort)\n>> 请输入并回车[C/S/A]: ")
+	fmt.Print("请选择动作:\n  [C] 继续执行 (Continue)\n  [S] 兼容旧动作码（等同 Continue）\n  [A] 退下并切断此设备连接 (Abort)\n>> 请输入并回车[C/S/A]: ")
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -844,8 +844,8 @@ func (e *Engine) handleSuspend(ctx context.Context, ip string, logLine string, c
 			e.writeDecisionLog(ip, "用户决策: Continue")
 			return executor.ActionContinue
 		case "S":
-			e.writeDecisionLog(ip, "用户决策: Skip")
-			return executor.ActionSkip
+			e.writeDecisionLog(ip, "用户决策: Continue（由 S 触发）")
+			return executor.ActionContinue
 		case "A":
 			e.writeDecisionLog(ip, "用户决策: Abort")
 			return executor.ActionAbort

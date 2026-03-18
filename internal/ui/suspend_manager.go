@@ -169,8 +169,11 @@ func (m *SuspendManager) Resolve(sessionIDOrIP string, action string) {
 
 	var errAction executor.ErrorAction
 	switch action {
+	case "C":
+		errAction = executor.ActionContinue
 	case "S":
-		errAction = executor.ActionSkip
+		// 兼容旧前端，S 与 Continue 合并语义
+		errAction = executor.ActionContinue
 	case "A":
 		errAction = executor.ActionAbort
 	default:

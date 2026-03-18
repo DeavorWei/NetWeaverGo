@@ -174,7 +174,7 @@ export const useEngineStore = defineStore("engine", () => {
     }
   }
 
-  function resolveSuspend(ip: string, action: "S" | "A") {
+  function resolveSuspend(ip: string, action: "C" | "A") {
     const session = suspendSessions.value[ip];
     if (!session) {
       return;

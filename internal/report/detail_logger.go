@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	ansiEscapeRegex = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
-	paginationRegex = regexp.MustCompile(`(?i)-+\s*more(?:\s*\([^)]*\))?\s*-+`)
+	ansiEscapeRegex  = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+	paginationRegex  = regexp.MustCompile(`(?i)-+\s*more(?:\s*\([^)]*\))?\s*-+`)
+	promptTokenRegex = regexp.MustCompile(`^<[^<>\s]+>`)
 )
 
 // DetailLogger 记录清洗后的命令回显。
@@ -171,7 +172,8 @@ func (l *DetailLogger) writeLine(message string) error {
 }
 
 func (l *DetailLogger) writeLineLocked(message string) error {
-	normalized := strings.TrimSpace(message)
+	normalized := normalizePromptArtifacts(message)
+	normalized = strings.TrimSpace(normalized)
 	if normalized == "" {
 		return nil
 	}
@@ -213,4 +215,31 @@ func collapseBlankLines(content string) string {
 		result += "\n"
 	}
 	return result
+}
+
+func normalizePromptArtifacts(line string) string {
+	normalized := strings.TrimSpace(line)
+	if normalized == "" {
+		return ""
+	}
+
+	// 部分设备在报错或翻页后会输出连续重复提示符（如 <SW2><SW2>...）。
+	// 这里仅做展示层去重，不改变执行逻辑。
+	prompt := promptTokenRegex.FindString(normalized)
+	if prompt == "" {
+		return normalized
+	}
+
+	rest := strings.TrimPrefix(normalized, prompt)
+	for {
+		trimmed := strings.TrimLeft(rest, " \t")
+		if strings.HasPrefix(trimmed, prompt) {
+			rest = strings.TrimPrefix(trimmed, prompt)
+			continue
+		}
+		break
+	}
+
+	normalized = prompt + rest
+	return normalized
 }
