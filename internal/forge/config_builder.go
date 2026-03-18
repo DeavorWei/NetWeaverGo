@@ -133,13 +133,16 @@ func (b *ConfigBuilder) ExpandValues(req *ExpandRequest) (*ExpandResult, error) 
 		Warnings: []string{},
 	}
 
+	// 先计算原始值的数量（展开前），用于判断是否发生展开
+	originalParts := splitByCommaOrNewline(req.ValueString)
+	result.OriginalLen = len(originalParts)
+
 	// 解析并展开语法糖
 	values, err := ParseVariableValues(req.ValueString)
 	if err != nil {
 		return nil, err
 	}
 
-	result.OriginalLen = len(values)
 	result.HasExpanded = len(values) > result.OriginalLen
 
 	// 如果指定了目标长度且当前值数量不足，尝试等差数列补全
