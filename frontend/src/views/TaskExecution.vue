@@ -3,10 +3,6 @@
     <!-- 标题栏 + Tab 切换 -->
     <div class="flex items-center justify-between flex-shrink-0">
       <div class="flex items-center gap-4">
-        <p class="text-sm text-text-muted">
-          {{ activeTab === 'tasks' ? '管理和执行已创建的任务绑定组合' : '批量备份设备配置文件' }}
-        </p>
-        
         <!-- Tab 切换按钮 -->
         <div class="flex bg-bg-panel border border-border rounded-lg p-1">
           <button 
@@ -24,6 +20,10 @@
             💾 配置备份
           </button>
         </div>
+        
+        <p class="text-sm text-text-muted">
+          {{ activeTab === 'tasks' ? '管理和执行已创建的任务绑定组合' : '批量备份设备配置文件' }}
+        </p>
       </div>
       
       <!-- 操作按钮区域 -->
@@ -79,6 +79,13 @@
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             刷新设备
+          </button>
+          <button
+            @click="showBackupHelp = true"
+            class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            帮助
           </button>
         </template>
       </div>
@@ -382,76 +389,39 @@
 
       <!-- 备份配置视图（未备份时显示） -->
       <template v-else>
-        <div class="flex-1 flex gap-6 min-h-0">
-          <!-- 左侧：设备选择 -->
-          <div class="w-80 flex-shrink-0 bg-bg-card border border-border rounded-xl overflow-hidden flex flex-col">
-            <div class="px-4 py-3 border-b border-border bg-bg-panel">
+        <!-- 全屏设备选择 -->
+        <div class="flex-1 bg-bg-card border border-border rounded-xl overflow-hidden flex flex-col">
+          <div class="px-4 py-3 border-b border-border bg-bg-panel flex items-center justify-between">
+            <div>
               <h3 class="text-sm font-semibold text-text-primary">选择备份设备</h3>
               <p class="text-xs text-text-muted mt-0.5">已选 {{ selectedBackupDevices.length }} 台</p>
             </div>
-            <div class="flex-1 overflow-auto p-3">
-              <div v-if="backupLoading" class="flex items-center justify-center h-32">
-                <div class="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-              </div>
-              <div v-else-if="allBackupDevices.length === 0" class="flex flex-col items-center justify-center h-32 text-text-muted">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 opacity-30 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                <p class="text-xs">暂无设备</p>
-              </div>
-              <DeviceSelector 
-                v-else
-                :devices="allBackupDevices" 
-                @selectionChange="onBackupDeviceSelect" 
-              />
-            </div>
+            <button 
+              @click="startBackup" 
+              :disabled="selectedBackupDevices.length === 0 || isBackupRunning"
+              class="px-5 py-2 text-sm font-semibold text-white bg-accent rounded-lg hover:bg-accent-glow disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              开始备份
+            </button>
           </div>
-
-          <!-- 右侧：备份说明 -->
-          <div class="flex-1 bg-bg-card border border-border rounded-xl overflow-hidden flex flex-col">
-            <div class="px-4 py-3 border-b border-border bg-bg-panel">
-              <h3 class="text-sm font-semibold text-text-primary">备份说明</h3>
+          <div class="flex-1 overflow-auto p-4">
+            <div v-if="backupLoading" class="flex items-center justify-center h-32">
+              <div class="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
             </div>
-            <div class="flex-1 p-6 space-y-4">
-              <div class="p-4 rounded-lg bg-info/10 border border-info/30">
-                <h4 class="text-sm font-medium text-info mb-2">💡 备份流程</h4>
-                <ol class="text-xs text-text-secondary space-y-1.5 list-decimal list-inside">
-                  <li>工具作为 SFTP 客户端，主动登录设备</li>
-                  <li>执行 <code class="px-1 py-0.5 bg-bg-panel rounded">display startup</code> 获取配置文件路径</li>
-                  <li>通过 SFTP 下载配置文件到本地</li>
-                  <li>保存路径：<code class="px-1 py-0.5 bg-bg-panel rounded">./netWeaverGoData/backup/config/日期/</code></li>
-                </ol>
-              </div>
-
-              <div class="p-4 rounded-lg bg-warning/10 border border-warning/30">
-                <h4 class="text-sm font-medium text-warning mb-2">⚠️ 前置条件</h4>
-                <ul class="text-xs text-text-secondary space-y-1">
-                  <li>• 设备需开启 SFTP 服务 (<code class="px-1 py-0.5 bg-bg-panel rounded">sftp server enable</code>)</li>
-                  <li>• 设备需配置下次启动文件</li>
-                </ul>
-              </div>
-
-              <div class="p-4 rounded-lg bg-accent/10 border border-accent/30">
-                <h4 class="text-sm font-medium text-accent mb-2">✅ 支持的设备</h4>
-                <p class="text-xs text-text-secondary">
-                  华为、华三（H3C）、H3C 等支持 SFTP 子系统的网络设备
-                </p>
-              </div>
+            <div v-else-if="allBackupDevices.length === 0" class="flex flex-col items-center justify-center h-32 text-text-muted">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 opacity-30 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              <p class="text-xs">暂无设备</p>
             </div>
-
-            <!-- 操作按钮 -->
-            <div class="px-4 py-3 border-t border-border bg-bg-panel flex justify-end gap-3">
-              <button 
-                @click="startBackup" 
-                :disabled="selectedBackupDevices.length === 0 || isBackupRunning"
-                class="px-5 py-2 text-sm font-semibold text-white bg-accent rounded-lg hover:bg-accent-glow disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                开始备份
-              </button>
-            </div>
+            <DeviceSelector 
+              v-else
+              :devices="allBackupDevices" 
+              @selectionChange="onBackupDeviceSelect" 
+            />
           </div>
         </div>
       </template>
@@ -481,6 +451,50 @@
           :class="toastType === 'success' ? 'bg-success/10 border-success/30 text-success' : 'bg-error/10 border-error/30 text-error'"
         >
           <span class="text-sm font-medium">{{ toastMessage }}</span>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 备份帮助弹窗 -->
+    <Transition name="modal">
+      <div v-if="showBackupHelp" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showBackupHelp = false"></div>
+        <div class="relative bg-bg-card border border-border rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden animate-slide-in">
+          <div class="px-5 py-4 border-b border-border bg-bg-panel flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-text-primary">💾 配置备份说明</h3>
+            <button @click="showBackupHelp = false" class="text-text-muted hover:text-text-primary transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="px-5 py-4 space-y-4 max-h-[60vh] overflow-auto">
+            <div class="p-4 rounded-lg bg-info/10 border border-info/30">
+              <h4 class="text-sm font-medium text-info mb-2">💡 备份流程</h4>
+              <ol class="text-xs text-text-secondary space-y-1.5 list-decimal list-inside">
+                <li>工具作为 SFTP 客户端，主动登录设备</li>
+                <li>执行 <code class="px-1 py-0.5 bg-bg-panel rounded">display startup</code> 获取配置文件路径</li>
+                <li>通过 SFTP 下载配置文件到本地</li>
+                <li>保存路径：<code class="px-1 py-0.5 bg-bg-panel rounded">./netWeaverGoData/backup/config/日期/</code></li>
+              </ol>
+            </div>
+
+            <div class="p-4 rounded-lg bg-warning/10 border border-warning/30">
+              <h4 class="text-sm font-medium text-warning mb-2">⚠️ 前置条件</h4>
+              <ul class="text-xs text-text-secondary space-y-1">
+                <li>• 设备需开启 SFTP 服务 (<code class="px-1 py-0.5 bg-bg-panel rounded">sftp server enable</code>)</li>
+                <li>• 设备需配置下次启动文件</li>
+              </ul>
+            </div>
+
+            <div class="p-4 rounded-lg bg-accent/10 border border-accent/30">
+              <h4 class="text-sm font-medium text-accent mb-2">✅ 支持的设备</h4>
+              <p class="text-xs text-text-secondary">
+                华为、华三（H3C）、H3C 等支持 SFTP 子系统的网络设备
+              </p>
+            </div>
+          </div>
+          <div class="flex justify-end px-5 py-3 border-t border-border">
+            <button @click="showBackupHelp = false" class="px-4 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent-glow transition-all">我知道了</button>
+          </div>
         </div>
       </div>
     </Transition>
@@ -614,6 +628,7 @@ const backupView = ref({
 const backupLoading = ref(false)
 const allBackupDevices = ref<DeviceAsset[]>([])
 const selectedBackupDevices = ref<DeviceAsset[]>([])
+const showBackupHelp = ref(false)
 
 // ================== 计算属性 - 从 Store 获取 ==================
 const executionSnapshot = computed(() => engineStore.executionSnapshot)
