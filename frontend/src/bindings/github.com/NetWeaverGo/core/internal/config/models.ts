@@ -113,6 +113,27 @@ export class DeviceAsset {
      */
     "tags": string[];
 
+    /**
+     * 拓扑发现相关字段
+     * 设备厂商：huawei / h3c / cisco / server / unknown
+     */
+    "vendor": string;
+
+    /**
+     * 设备角色：core / aggregation / access / firewall / server
+     */
+    "role": string;
+
+    /**
+     * 站点/机房
+     */
+    "site": string;
+
+    /**
+     * 用户维护的显示名称
+     */
+    "displayName": string;
+
     /** Creates a new DeviceAsset instance. */
     constructor($$source: Partial<DeviceAsset> = {}) {
         if (!("id" in $$source)) {
@@ -138,6 +159,18 @@ export class DeviceAsset {
         }
         if (!("tags" in $$source)) {
             this["tags"] = [];
+        }
+        if (!("vendor" in $$source)) {
+            this["vendor"] = "";
+        }
+        if (!("role" in $$source)) {
+            this["role"] = "";
+        }
+        if (!("site" in $$source)) {
+            this["site"] = "";
+        }
+        if (!("displayName" in $$source)) {
+            this["displayName"] = "";
         }
 
         Object.assign(this, $$source);

@@ -41,6 +41,11 @@ type PathManager struct {
 	LegacyCommandGroups  string
 	LegacyTaskGroupsFile string
 
+	// 拓扑发现相关路径
+	TopologyRawDir    string // 原始 CLI 输出目录
+	TopologyExportDir string // 导出图谱目录
+	PlanImportDir     string // 规划文件导入目录
+
 	bootstrapPath string
 }
 
@@ -132,6 +137,11 @@ func (pm *PathManager) rebuildDerivedPathsLocked() {
 	pm.ExecutionReportDir = filepath.Join(pm.StorageRoot, "execution", "reports")
 	pm.ExecutionLiveLogDir = filepath.Join(pm.StorageRoot, "execution", "live-logs")
 	pm.BackupConfigDir = filepath.Join(pm.StorageRoot, "backup", "config")
+
+	// 拓扑发现相关路径
+	pm.TopologyRawDir = filepath.Join(pm.StorageRoot, "topology", "raw")
+	pm.TopologyExportDir = filepath.Join(pm.StorageRoot, "topology", "export")
+	pm.PlanImportDir = filepath.Join(pm.StorageRoot, "topology", "plans")
 }
 
 func (pm *PathManager) ensureDirectoriesLocked() error {
@@ -142,6 +152,10 @@ func (pm *PathManager) ensureDirectoriesLocked() error {
 		pm.ExecutionLiveLogDir,
 		pm.BackupConfigDir,
 		filepath.Dir(pm.bootstrapPath),
+		// 拓扑发现相关目录
+		pm.TopologyRawDir,
+		pm.TopologyExportDir,
+		pm.PlanImportDir,
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -266,6 +280,35 @@ func (pm *PathManager) GetLegacyTaskGroupsFile() string {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 	return pm.LegacyTaskGroupsFile
+}
+
+// GetTopologyRawDir 获取拓扑原始输出目录
+func (pm *PathManager) GetTopologyRawDir() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.TopologyRawDir
+}
+
+// GetTopologyExportDir 获取拓扑导出目录
+func (pm *PathManager) GetTopologyExportDir() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.TopologyExportDir
+}
+
+// GetPlanImportDir 获取规划文件导入目录
+func (pm *PathManager) GetPlanImportDir() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.PlanImportDir
+}
+
+// GetDiscoveryRawFilePath 获取发现任务原始输出文件路径
+// 格式: <TopologyRawDir>/<taskID>/<deviceIP>/<commandKey>.txt
+func (pm *PathManager) GetDiscoveryRawFilePath(taskID, deviceIP, commandKey string) string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return filepath.Join(pm.TopologyRawDir, taskID, deviceIP, commandKey+".txt")
 }
 
 // GetAllPaths 获取全部路径（调试用）

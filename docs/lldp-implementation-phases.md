@@ -32,13 +32,13 @@
 
 ## 🚀 分阶段实施计划
 
-### Phase 0：基础设施准备（预估 2-3 天）
+### Phase 0：基础设施准备（预估 2-3 天）✅ 已完成
 
 **目标**：为后续开发建立数据模型和目录结构基础
 
 #### 后端任务
 
-1. **扩展 DeviceAsset 模型**
+1. **扩展 DeviceAsset 模型** ✅
 
    ```go
    // 在 internal/config/config.go 中扩展
@@ -51,7 +51,7 @@
    }
    ```
 
-2. **新建领域包目录结构**
+2. **新建领域包目录结构** ✅
 
    ```
    internal/
@@ -62,13 +62,13 @@
    └── plancompare/    # 规划比对
    ```
 
-3. **新增数据库表模型**
+3. **新增数据库表模型** ✅
    - `DiscoveryTask` - 发现任务主表
    - `DiscoveryDevice` - 发现设备结果表
    - `RawCommandOutput` - 原始命令输出索引表
    - 在 `internal/config/db.go` 的 `AutoMigrate` 中注册
 
-4. **扩展路径管理器**
+4. **扩展路径管理器** ✅
    - 在 `internal/config/paths.go` 中添加：
      - `TopologyRawDir` - 原始 CLI 输出目录
      - `TopologyExportDir` - 导出图谱目录

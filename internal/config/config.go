@@ -22,6 +22,12 @@ type DeviceAsset struct {
 	Password string   `json:"password"`
 	Group    string   `json:"group" gorm:"column:group_name"` // 设备分组
 	Tags     []string `json:"tags" gorm:"serializer:json"`    // 设备标签列表
+
+	// 拓扑发现相关字段
+	Vendor      string `json:"vendor"`      // 设备厂商：huawei / h3c / cisco / server / unknown
+	Role        string `json:"role"`        // 设备角色：core / aggregation / access / firewall / server
+	Site        string `json:"site"`        // 站点/机房
+	DisplayName string `json:"displayName"` // 用户维护的显示名称
 }
 
 // 协议默认端口映射

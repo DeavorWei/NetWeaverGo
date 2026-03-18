@@ -133,8 +133,16 @@
                     @click="openBatchEditModal('group')"
                     :disabled="selectedCount === 0"
                     class="p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    :class="selectedCount > 0 ? 'text-text-muted hover:text-accent' : 'text-text-muted/60'"
-                    :title="selectedCount > 0 ? '批量修改分组' : '请先勾选设备后再批量修改分组'"
+                    :class="
+                      selectedCount > 0
+                        ? 'text-text-muted hover:text-accent'
+                        : 'text-text-muted/60'
+                    "
+                    :title="
+                      selectedCount > 0
+                        ? '批量修改分组'
+                        : '请先勾选设备后再批量修改分组'
+                    "
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -168,8 +176,16 @@
                     @click="openBatchEditModal('protocol')"
                     :disabled="selectedCount === 0"
                     class="p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    :class="selectedCount > 0 ? 'text-text-muted hover:text-accent' : 'text-text-muted/60'"
-                    :title="selectedCount > 0 ? '批量修改协议' : '请先勾选设备后再批量修改协议'"
+                    :class="
+                      selectedCount > 0
+                        ? 'text-text-muted hover:text-accent'
+                        : 'text-text-muted/60'
+                    "
+                    :title="
+                      selectedCount > 0
+                        ? '批量修改协议'
+                        : '请先勾选设备后再批量修改协议'
+                    "
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -198,8 +214,16 @@
                     @click="openBatchEditModal('port')"
                     :disabled="selectedCount === 0"
                     class="p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    :class="selectedCount > 0 ? 'text-text-muted hover:text-accent' : 'text-text-muted/60'"
-                    :title="selectedCount > 0 ? '批量修改端口' : '请先勾选设备后再批量修改端口'"
+                    :class="
+                      selectedCount > 0
+                        ? 'text-text-muted hover:text-accent'
+                        : 'text-text-muted/60'
+                    "
+                    :title="
+                      selectedCount > 0
+                        ? '批量修改端口'
+                        : '请先勾选设备后再批量修改端口'
+                    "
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -228,8 +252,16 @@
                     @click="openBatchEditModal('username')"
                     :disabled="selectedCount === 0"
                     class="p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    :class="selectedCount > 0 ? 'text-text-muted hover:text-accent' : 'text-text-muted/60'"
-                    :title="selectedCount > 0 ? '批量修改用户名' : '请先勾选设备后再批量修改用户名'"
+                    :class="
+                      selectedCount > 0
+                        ? 'text-text-muted hover:text-accent'
+                        : 'text-text-muted/60'
+                    "
+                    :title="
+                      selectedCount > 0
+                        ? '批量修改用户名'
+                        : '请先勾选设备后再批量修改用户名'
+                    "
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -258,8 +290,16 @@
                     @click="openBatchEditModal('password')"
                     :disabled="selectedCount === 0"
                     class="p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    :class="selectedCount > 0 ? 'text-text-muted hover:text-accent' : 'text-text-muted/60'"
-                    :title="selectedCount > 0 ? '批量修改密码' : '请先勾选设备后再批量修改密码'"
+                    :class="
+                      selectedCount > 0
+                        ? 'text-text-muted hover:text-accent'
+                        : 'text-text-muted/60'
+                    "
+                    :title="
+                      selectedCount > 0
+                        ? '批量修改密码'
+                        : '请先勾选设备后再批量修改密码'
+                    "
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -288,8 +328,16 @@
                     @click="openBatchEditModal('tag')"
                     :disabled="selectedCount === 0"
                     class="p-0.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    :class="selectedCount > 0 ? 'text-text-muted hover:text-accent' : 'text-text-muted/60'"
-                    :title="selectedCount > 0 ? '批量修改标签' : '请先勾选设备后再批量修改标签'"
+                    :class="
+                      selectedCount > 0
+                        ? 'text-text-muted hover:text-accent'
+                        : 'text-text-muted/60'
+                    "
+                    :title="
+                      selectedCount > 0
+                        ? '批量修改标签'
+                        : '请先勾选设备后再批量修改标签'
+                    "
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -320,9 +368,25 @@
             <tr v-if="loading">
               <td colspan="10" class="px-5 py-12 text-center text-text-muted">
                 <div class="flex flex-col items-center gap-3">
-                  <svg class="animate-spin w-8 h-8 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <svg
+                    class="animate-spin w-8 h-8 text-accent"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    ></circle>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                   <span class="text-sm">加载中...</span>
                 </div>
@@ -1104,17 +1168,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from "vue";
-import {
-  QueryAPI,
-  DeviceAPI,
-} from "../services/api";
+import { QueryAPI, DeviceAPI } from "../services/api";
 import type { DeviceAsset } from "../services/api";
 
 // 使用后端定义的类型
 type Device = DeviceAsset;
 
 // 新建设备时的类型（不含 id，由后端生成）
-type NewDevice = Omit<DeviceAsset, 'id'>;
+type NewDevice = Omit<DeviceAsset, "id">;
 
 interface IpRangeHint {
   count: number;
@@ -1125,12 +1186,12 @@ interface IpRangeHint {
 // ==================== 后端查询状态 ====================
 // data 现在直接存储当前页的数据（后端返回）
 const data = ref<Device[]>([]);
-const total = ref(0);           // 总记录数（后端返回）
-const totalPages = ref(1);      // 总页数（后端返回）
+const total = ref(0); // 总记录数（后端返回）
+const totalPages = ref(1); // 总页数（后端返回）
 const page = ref(1);
 const pageSize = 10;
 const jumpPageInput = ref("");
-const loading = ref(false);     // 加载状态
+const loading = ref(false); // 加载状态
 
 // 搜索相关
 const searchQuery = ref("");
@@ -1195,6 +1256,10 @@ const form = ref<NewDevice>({
   password: "",
   group: "",
   tags: [],
+  vendor: "",
+  role: "",
+  site: "",
+  displayName: "",
 });
 
 const newTag = ref("");
@@ -1290,7 +1355,6 @@ async function loadDevices() {
     data.value = result.data || [];
     total.value = result.total;
     totalPages.value = result.totalPages;
-
   } catch (err) {
     console.error("加载设备列表失败:", err);
     data.value = [];
@@ -1451,6 +1515,10 @@ function openAddModal() {
     password: "",
     group: "",
     tags: [],
+    vendor: "",
+    role: "",
+    site: "",
+    displayName: "",
   };
   newTag.value = "";
   lastProtocol.value = "SSH";
@@ -1472,6 +1540,10 @@ function openEditModal(device: Device) {
     password: device.password,
     group: device.group,
     tags: [...device.tags],
+    vendor: device.vendor || "",
+    role: device.role || "",
+    site: device.site || "",
+    displayName: device.displayName || "",
   };
   lastProtocol.value = device.protocol;
   errorMessage.value = "";
@@ -1548,6 +1620,10 @@ async function saveDevice() {
               password: form.value.password,
               group: form.value.group,
               tags: [...form.value.tags],
+              vendor: form.value.vendor,
+              role: form.value.role,
+              site: form.value.site,
+              displayName: form.value.displayName,
             });
           }
           await DeviceAPI.addDevices(newDevices);
@@ -1626,7 +1702,7 @@ async function saveBatchEdit() {
       batchErrorMessage.value = "没有可修改的设备";
       return;
     }
-    
+
     // 修改选中设备
     const updatedDevices = selectedDevices.map((d: Device) => {
       const newDevice = { ...d };

@@ -8,7 +8,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/discovery"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/plancompare"
+	"github.com/NetWeaverGo/core/internal/topology"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -62,12 +65,29 @@ func InitDB() error {
 	logger.Verbose("Config", "-", "连接SQLite数据库引擎已建立！正在扫描并校验内部表结构约束...")
 	// 自动迁移表结构
 	err = db.AutoMigrate(
+		// 原有表
 		&DeviceAsset{},
 		&GlobalSettings{},
 		&CommandGroup{},
 		&TaskGroup{},
 		&RuntimeSetting{},  // 运行时配置表
 		&ExecutionRecord{}, // 历史执行记录表
+		// 拓扑发现相关表
+		&discovery.DiscoveryTask{},
+		&discovery.DiscoveryDevice{},
+		&discovery.RawCommandOutput{},
+		&topology.TopologyEdge{},
+		&topology.TopologyInterface{},
+		&topology.TopologyLLDPNeighbor{},
+		&topology.TopologyFDBEntry{},
+		&topology.TopologyARPEntry{},
+		&topology.TopologyAggregateGroup{},
+		&topology.TopologyAggregateMember{},
+		// 规划比对相关表
+		&plancompare.PlanFile{},
+		&plancompare.PlannedLink{},
+		&plancompare.DiffReport{},
+		&plancompare.DiffItem{},
 	)
 	if err != nil {
 		return fmt.Errorf("自动迁移表结构失败: %v", err)
