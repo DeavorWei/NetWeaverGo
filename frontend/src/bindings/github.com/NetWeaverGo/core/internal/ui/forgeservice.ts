@@ -47,14 +47,6 @@ export function CalculateIPv6(req: $models.IPv6CalcRequest): $CancellablePromise
 }
 
 /**
- * DetectBindingMode 检测是否为绑定模式 (Wails Binding)
- * 模板第一行包含 [BindingDeviceIP] 时为绑定模式
- */
-export function DetectBindingMode(template: string): $CancellablePromise<boolean> {
-    return $Call.ByID(3072450605, template);
-}
-
-/**
  * ExpandValues 展开变量值 (Wails Binding)
  * 前端调用此方法预览语法糖展开结果
  */
@@ -75,9 +67,10 @@ export function ExportIPv4SubnetsCSV(req: $models.IPv4CalcRequest): $Cancellable
 
 /**
  * GenerateBindingPreview 生成绑定模式预览 (Wails Binding)
+ * isIPBinding: 是否启用IP绑定模式（由前端开关控制）
  */
-export function GenerateBindingPreview(template: string, variables: forge$0.VarInput[]): $CancellablePromise<$models.BindingPreview[]> {
-    return $Call.ByID(3138174978, template, variables).then(($result: any) => {
+export function GenerateBindingPreview(template: string, variables: forge$0.VarInput[], isIPBinding: boolean): $CancellablePromise<$models.BindingPreview[]> {
+    return $Call.ByID(3138174978, template, variables, isIPBinding).then(($result: any) => {
         return $$createType11($result);
     });
 }

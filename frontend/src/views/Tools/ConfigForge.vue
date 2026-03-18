@@ -92,6 +92,11 @@ const buildResult = ref<BuildResult | null>(null)
 const isBuilding = ref(false)
 const isCopied = ref(false)
 
+// ==================== IP绑定模式 ====================
+// 通过开关控制，而非模板检测
+
+const ipBindingEnabled = ref(false)
+
 // ==================== 后端调用 ====================
 
 // 防抖定时器
@@ -177,31 +182,21 @@ const addVariable = () => {
 }
 
 const removeVariable = (idx: number) => {
+  // 如果删除的是第一个变量且开启了IP绑定，关闭绑定模式
+  if (idx === 0 && ipBindingEnabled.value) {
+    ipBindingEnabled.value = false
+  }
   variables.value.splice(idx, 1)
 }
 
-// ==================== BindingDeviceIP 模式 ====================
-
-// 检测是否为绑定模式（前端简化检测，后端也会验证）
-const isBindingMode = computed(() => {
-  const firstLine = templateText.value.split('\n')[0]?.trim() || ''
-  return firstLine.includes('[BindingDeviceIP]')
-})
-
-// 当检测到 BindingDeviceIP 时，自动将第一个变量名设为 [BindingDeviceIP]
-watch(isBindingMode, (isBinding) => {
-  if (isBinding && variables.value.length > 0) {
-    const firstVar = variables.value[0]
-    if (firstVar) firstVar.name = '[BindingDeviceIP]'
-  }
-})
+// ==================== IP绑定逻辑 ====================
 
 // IP 列表验证结果缓存
 const ipValidationCache = ref<Map<string, ForgeIPValidationResult>>(new Map())
 
 // 获取无效的 IP 列表
 const invalidIPs = computed(() => {
-  if (!isBindingMode.value || variables.value.length === 0) return []
+  if (!ipBindingEnabled.value || variables.value.length === 0) return []
   const firstVar = variables.value[0]
   if (!firstVar) return []
   
@@ -220,7 +215,7 @@ const hasInvalidIP = computed(() => invalidIPs.value.length > 0)
 
 // 更新 IP 验证缓存
 watch(() => variables.value[0]?.valueString, async (newValue) => {
-  if (!isBindingMode.value || !newValue) return
+  if (!ipBindingEnabled.value || !newValue) return
   
   const ipValues = newValue
     .split(/,|\n/)
@@ -242,14 +237,14 @@ watch(() => variables.value[0]?.valueString, async (newValue) => {
 // 绑定预览（使用后端服务）
 const bindingPreview = ref<{ip: string, commands: string}[]>([])
 
-watch([isBindingMode, () => variables.value[0]?.valueString, templateText], async () => {
-  if (!isBindingMode.value || variables.value.length === 0) {
+watch([ipBindingEnabled, () => variables.value[0]?.valueString, templateText], async () => {
+  if (!ipBindingEnabled.value || variables.value.length === 0) {
     bindingPreview.value = []
     return
   }
   
   try {
-    const result = await ForgeAPI.generateBindingPreview(templateText.value, variables.value)
+    const result = await ForgeAPI.generateBindingPreview(templateText.value, variables.value, ipBindingEnabled.value)
     bindingPreview.value = result
   } catch (err) {
     console.error('生成绑定预览失败:', err)
@@ -448,8 +443,8 @@ function openTaskModal() {
     show: true,
     saving: false,
     name: `ConfigForge_${y}${m}${d}_${h}${mi}${s}`,
-    description: '从 ConfigForge (BindingDeviceIP) 生成的任务',
-    tags: ['ConfigForge', 'BindingDeviceIP'],
+    description: '从 ConfigForge (IP绑定) 生成的任务',
+    tags: ['ConfigForge', 'IPBinding'],
     newTag: ''
   }
 }
@@ -483,7 +478,7 @@ async function executeTaskSend() {
 
   taskModal.value.saving = true
   try {
-    // 注意：ConfigForge 的 BindingDeviceIP 模式使用的是 IP 字符串
+    // 注意：ConfigForge 的 IP绑定模式使用的是 IP 字符串
     // 需要先查询设备列表，将 IP 转换为设备 ID
     const devices = await DeviceAPI.listDevices()
     const deviceMap = new Map(devices.map((d: any) => [d.ip, d.id]))
@@ -730,7 +725,6 @@ const copyAll = async () => {
                 </svg>
               </button>
             </h2>
-            <p class="text-xs text-text-muted mt-0.5 ml-6">使用"英文逗号"分隔数值（后端处理语法糖展开）</p>
           </div>
           <button 
             @click="addVariable"
@@ -743,23 +737,31 @@ const copyAll = async () => {
           </button>
         </div>
         <div class="flex-1 overflow-y-auto p-4 space-y-4">
-          <div v-for="(v, index) in variables" :key="index" class="bg-bg-tertiary/40 border border-border backdrop-blur-sm flex flex-col rounded-xl shadow-sm hover:shadow-md transition-shadow group" :class="isBindingMode && index === 0 ? 'border-warning/40 ring-1 ring-warning/20' : ''">
+          <div v-for="(v, index) in variables" :key="index" class="bg-bg-tertiary/40 border border-border backdrop-blur-sm flex flex-col rounded-xl shadow-sm hover:shadow-md transition-shadow group" :class="ipBindingEnabled && index === 0 ? 'border-warning/40 ring-1 ring-warning/20' : ''">
             <div class="flex items-center justify-between px-3 py-2 border-b border-border bg-bg-tertiary/40 rounded-t-xl">
               <div class="relative flex items-center gap-2">
                 <input 
                   v-model="v.name"
-                  class="input input-sm input-mono w-20 text-center tracking-wider"
-                  :class="isBindingMode && index === 0 ? 'text-warning font-bold' : ''"
-                  :readonly="isBindingMode && index === 0"
+                  class="input input-sm input-mono text-center tracking-wider"
+                  style="width: 150px"
+                  :class="ipBindingEnabled && index === 0 ? 'text-warning font-bold' : ''"
+                  :readonly="ipBindingEnabled && index === 0"
                 />
-                <span v-if="isBindingMode && index === 0" class="text-xs px-1.5 py-0.5 rounded bg-warning/10 border border-warning/30 text-warning font-medium">IP绑定</span>
+                <!-- 第一个变量显示IP绑定开关 -->
+                <div v-if="index === 0" class="flex items-center gap-1.5">
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" v-model="ipBindingEnabled" class="sr-only peer" />
+                    <div class="w-8 h-4 bg-bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-warning peer-checked:after:bg-white"></div>
+                  </label>
+                  <span v-if="ipBindingEnabled" class="text-xs px-1.5 py-0.5 rounded bg-warning/10 border border-warning/30 text-warning font-medium">IP绑定</span>
+                </div>
               </div>
               <button 
                 @click="removeVariable(index)"
                 class="text-text-muted hover:text-error hover:bg-error-bg p-1.5 rounded-md transition-all"
                 title="删除变量"
-                :disabled="isBindingMode && index === 0"
-                :class="isBindingMode && index === 0 ? 'opacity-30 cursor-not-allowed' : ''"
+                :disabled="ipBindingEnabled && index === 0"
+                :class="ipBindingEnabled && index === 0 ? 'opacity-30 cursor-not-allowed' : ''"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -770,7 +772,7 @@ const copyAll = async () => {
               v-model="v.valueString"
               @blur="expandSyntaxSugar(v)"
               class="input textarea h-16 input-mono rounded-b-xl rounded-t-none border-0 border-t border-border bg-bg-tertiary/30"
-              :placeholder="isBindingMode && index === 0 ? '192.168.1.1, 192.168.1.2, ...' : index === 0 ? '1, 2, 3...' : index === 1 ? '1-3' : index === 2 ? 'vlan10-13' : index === 3 ? '192.168.1.1-3' : '...'"
+              :placeholder="ipBindingEnabled && index === 0 ? '192.168.1.1, 192.168.1.2, ...' : index === 0 ? '1, 2, 3...' : index === 1 ? '1-3' : index === 2 ? 'vlan10-13' : index === 3 ? '192.168.1.1-3' : '...'"
               spellcheck="false"
             ></textarea>
           </div>
@@ -803,9 +805,9 @@ const copyAll = async () => {
 
           <!-- 功能按钮区 -->
           <div class="flex space-x-2 items-center" v-if="outputBlocks.length > 0">
-            <!-- BindingDeviceIP 模式 -->
+            <!-- IP绑定模式 -->
             <button 
-              v-if="isBindingMode"
+              v-if="ipBindingEnabled"
               @click="openTaskModal"
               class="btn btn-sm btn-secondary group relative"
               title="发送到任务执行"

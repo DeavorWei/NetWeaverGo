@@ -168,8 +168,6 @@ export const ForgeAPI = {
   parseIPRange: ForgeServiceBinding.ParseIPRange,
   /** 批量验证IP */
   validateIPs: ForgeServiceBinding.ValidateIPs,
-  /** 检测是否为绑定模式 */
-  detectBindingMode: ForgeServiceBinding.DetectBindingMode,
   /** 生成绑定模式预览 */
   generateBindingPreview: ForgeServiceBinding.GenerateBindingPreview,
   /** IPv4 子网计算（后端计算，前端只渲染） */

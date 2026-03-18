@@ -207,17 +207,6 @@ func (s *ForgeService) ValidateIPs(ipString string) *IPsValidationResult {
 	}
 }
 
-// DetectBindingMode 检测是否为绑定模式 (Wails Binding)
-// 模板第一行包含 [BindingDeviceIP] 时为绑定模式
-func (s *ForgeService) DetectBindingMode(template string) bool {
-	lines := strings.Split(template, "\n")
-	if len(lines) == 0 {
-		return false
-	}
-	firstLine := strings.TrimSpace(lines[0])
-	return strings.Contains(firstLine, "[BindingDeviceIP]")
-}
-
 // BindingPreview 绑定预览结果
 type BindingPreview struct {
 	IP       string `json:"ip"`       // IP地址
@@ -225,7 +214,12 @@ type BindingPreview struct {
 }
 
 // GenerateBindingPreview 生成绑定模式预览 (Wails Binding)
-func (s *ForgeService) GenerateBindingPreview(template string, variables []forge.VarInput) ([]BindingPreview, error) {
+// isIPBinding: 是否启用IP绑定模式（由前端开关控制）
+func (s *ForgeService) GenerateBindingPreview(template string, variables []forge.VarInput, isIPBinding bool) ([]BindingPreview, error) {
+	// 如果未启用IP绑定模式，直接返回空结果
+	if !isIPBinding {
+		return []BindingPreview{}, nil
+	}
 	// 首先构建配置
 	req := &forge.BuildRequest{
 		Template:  template,
