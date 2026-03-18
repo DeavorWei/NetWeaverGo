@@ -170,6 +170,20 @@
                 <span v-if="selectedDevices.length > 10" class="text-xs text-text-muted">+{{ selectedDevices.length - 10 }} 台</span>
               </div>
             </div>
+
+            <div class="bg-bg-panel border border-border rounded-lg p-3">
+              <label class="flex items-start justify-between gap-4">
+                <div>
+                  <div class="text-xs font-medium text-text-secondary">原始日志</div>
+                  <p class="text-xs text-text-muted mt-1">默认关闭。开启后会额外保存完整 SSH 字节流。</p>
+                </div>
+                <input
+                  v-model="createModal.enableRawLog"
+                  type="checkbox"
+                  class="mt-1 h-4 w-4"
+                />
+              </label>
+            </div>
           </div>
 
           <!-- 弹窗底部 -->
@@ -295,7 +309,8 @@ const createModal = ref({
   name: '',
   description: '',
   tags: [] as string[],
-  newTag: ''
+  newTag: '',
+  enableRawLog: false
 })
 
 function generateDefaultName() {
@@ -316,7 +331,8 @@ function openCreateModal() {
     name: generateDefaultName(),
     description: '',
     tags: [],
-    newTag: ''
+    newTag: '',
+    enableRawLog: false
   }
 }
 
@@ -343,6 +359,7 @@ async function confirmCreate() {
         deviceIDs: selectedDevices.value.map((d: DeviceAsset) => d.id)
       }],
       tags: createModal.value.tags,
+      enableRawLog: createModal.value.enableRawLog,
       status: 'pending' as const,
       createdAt: '',
       updatedAt: ''

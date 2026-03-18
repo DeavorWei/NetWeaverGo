@@ -65,8 +65,10 @@ type Engine struct {
 	// EventBus 事件采集挂载（内部使用，由 tracker 消费）
 	EventBus chan report.ExecutorEvent
 	// FrontendBus 前端事件通道（外部使用，用于转发到 Wails 前端）
-	FrontendBus chan report.ExecutorEvent
-	tracker     *report.ProgressTracker
+	FrontendBus  chan report.ExecutorEvent
+	tracker      *report.ProgressTracker
+	logStore     *report.ExecutionLogStore
+	EnableRawLog bool
 
 	failedBackups sync.Map // 记录备份失败的设备和原因
 
@@ -98,7 +100,21 @@ func (e *Engine) SetTracker(tracker *report.ProgressTracker) {
 		return
 	}
 	e.tracker = tracker
+	e.logStore = tracker.GetLogStore()
 	e.tracker.EventBus = e.EventBus
+}
+
+// SetLogStore 设置共享日志存储（用于复合任务共享详细/原始日志）。
+func (e *Engine) SetLogStore(logStore *report.ExecutionLogStore) {
+	if logStore == nil {
+		return
+	}
+	e.logStore = logStore
+}
+
+// SetEnableRawLog 设置任务级原始日志开关。
+func (e *Engine) SetEnableRawLog(enable bool) {
+	e.EnableRawLog = enable
 }
 
 // TransitionTo 暴露状态转移能力，供编排层协调组合执行生命周期
@@ -114,6 +130,7 @@ func (e *Engine) ensureTracker(taskName string) *report.ProgressTracker {
 	if taskName != "" {
 		e.tracker.SetTaskName(taskName)
 	}
+	e.logStore = e.tracker.GetLogStore()
 	return e.tracker
 }
 
@@ -559,7 +576,10 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 		}
 	}()
 
+	logSession := e.ensureDeviceLogSession(dev.IP, len(e.Commands))
+
 	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, workerEventBus, suspendHandler)
+	exec.SetLogSession(logSession)
 	exec.SetAlgorithms(&e.Settings.SSHAlgorithms)
 	defer exec.Close()
 
@@ -769,16 +789,20 @@ func (e *Engine) handleSuspend(ctx context.Context, ip string, logLine string, c
 		switch e.Settings.ErrorMode {
 		case "skip":
 			logger.Info("Engine", ip, "-> [Non-Interactive] 触发全局 skip 策略: 已跳过当前报错动作。")
+			e.writeDecisionLog(ip, "用户决策: Skip（无人值守策略）")
 			return executor.ActionSkip
 		case "abort":
 			logger.Warn("Engine", ip, "-> [Non-Interactive] 触发全局 abort 策略: 正在终止异常设备的运行流。")
+			e.writeDecisionLog(ip, "用户决策: Abort（无人值守策略）")
 			return executor.ActionAbort
 		case "pause":
 			// Non-interactive 模式下 pause 应该导致整机中止，因为无人值守不会有人去按下继续
 			logger.Warn("Engine", ip, "-> [Non-Interactive] 触发全局 pause 策略: 无人值守状态下无法挂起，降级为 abort，正在终止异常设备。")
+			e.writeDecisionLog(ip, "用户决策: Abort（pause 在无人值守下回退）")
 			return executor.ActionAbort
 		default:
 			logger.Warn("Engine", "-", "-> [Non-Interactive] 未知全局策略 %s，回退采用 abort 流。", e.Settings.ErrorMode)
+			e.writeDecisionLog(ip, "用户决策: Abort（未知无人值守策略回退）")
 			return executor.ActionAbort
 		}
 	}
@@ -817,12 +841,48 @@ func (e *Engine) handleSuspend(ctx context.Context, ip string, logLine string, c
 		cleanStr = strings.TrimSpace(strings.ToUpper(input))
 		switch cleanStr {
 		case "C":
+			e.writeDecisionLog(ip, "用户决策: Continue")
 			return executor.ActionContinue
 		case "S":
+			e.writeDecisionLog(ip, "用户决策: Skip")
 			return executor.ActionSkip
 		case "A":
+			e.writeDecisionLog(ip, "用户决策: Abort")
 			return executor.ActionAbort
 		}
 		fmt.Print(">> 输入无效，仅支持 C、S 或 A: ")
+	}
+}
+
+func (e *Engine) ensureDeviceLogSession(ip string, totalCmd int) *report.DeviceLogSession {
+	if e.tracker != nil {
+		return e.tracker.EnsureDeviceLogSession(ip, totalCmd, e.EnableRawLog)
+	}
+	if e.logStore != nil {
+		session, err := e.logStore.EnsureDevice(ip, e.EnableRawLog)
+		if err != nil {
+			logger.Error("Engine", ip, "初始化设备日志会话失败: %v", err)
+			return nil
+		}
+		return session
+	}
+	return nil
+}
+
+func (e *Engine) writeDecisionLog(ip string, message string) {
+	if e.tracker != nil {
+		e.tracker.WriteDecisionLog(ip, message)
+		return
+	}
+	if e.logStore == nil {
+		return
+	}
+	session, err := e.logStore.EnsureDevice(ip, e.EnableRawLog)
+	if err != nil {
+		logger.Error("Engine", ip, "初始化决策日志会话失败: %v", err)
+		return
+	}
+	if err := session.WriteSummary(message); err != nil {
+		logger.Error("Engine", ip, "写入决策日志失败: %v", err)
 	}
 }

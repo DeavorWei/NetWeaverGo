@@ -83,6 +83,12 @@
                       {{ detail.canEdit ? '可编辑' : detail.editDisabledReason || '不可编辑' }}
                     </span>
                   </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-text-muted">原始日志</span>
+                    <span :class="detail.task.enableRawLog ? 'text-warning' : 'text-text-primary'">
+                      {{ detail.task.enableRawLog ? '已开启' : '已关闭' }}
+                    </span>
+                  </div>
                   <div class="pt-1 border-t border-border/60">
                     <p class="text-xs text-text-muted">编辑规则：除执行中（`running`）外均可编辑。</p>
                   </div>

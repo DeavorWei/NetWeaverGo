@@ -167,7 +167,14 @@ export class ExecutionDeviceRecord {
     "errorMsg": string;
     "logCount": number;
     "logTail": string[];
+
+    /**
+     * 兼容旧记录，默认指向 DetailLogPath
+     */
     "logFilePath": string;
+    "summaryLogPath": string;
+    "detailLogPath": string;
+    "rawLogPath": string;
 
     /** Creates a new ExecutionDeviceRecord instance. */
     constructor($$source: Partial<ExecutionDeviceRecord> = {}) {
@@ -194,6 +201,15 @@ export class ExecutionDeviceRecord {
         }
         if (!("logFilePath" in $$source)) {
             this["logFilePath"] = "";
+        }
+        if (!("summaryLogPath" in $$source)) {
+            this["summaryLogPath"] = "";
+        }
+        if (!("detailLogPath" in $$source)) {
+            this["detailLogPath"] = "";
+        }
+        if (!("rawLogPath" in $$source)) {
+            this["rawLogPath"] = "";
         }
 
         Object.assign(this, $$source);
@@ -534,6 +550,7 @@ export class TaskGroup {
      * 标签
      */
     "tags": string[];
+    "enableRawLog": boolean;
 
     /**
      * "pending" | "running" | "completed" | "failed"
@@ -561,6 +578,9 @@ export class TaskGroup {
         }
         if (!("tags" in $$source)) {
             this["tags"] = [];
+        }
+        if (!("enableRawLog" in $$source)) {
+            this["enableRawLog"] = false;
         }
         if (!("status" in $$source)) {
             this["status"] = "";

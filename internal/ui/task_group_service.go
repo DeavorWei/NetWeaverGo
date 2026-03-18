@@ -174,6 +174,7 @@ func (s *TaskGroupService) executeModeA(
 
 	ng := engine.NewEngine(allSelectedAssets, commands, settings, false)
 	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
+	ng.SetEnableRawLog(taskGroup.EnableRawLog)
 
 	// 构建执行元数据
 	meta := &ExecutionMeta{
@@ -295,6 +296,8 @@ func (s *TaskGroupService) executeModeB(
 
 		ng := engine.NewEngine(run.assets, run.commands, settings, false)
 		ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
+		ng.SetEnableRawLog(taskGroup.EnableRawLog)
+		ng.SetLogStore(session.Tracker().GetLogStore())
 
 		forwarders = append(forwarders, getExecutionManager().listenEvents(ng.FrontendBus, session.Tracker().TrackEvent))
 

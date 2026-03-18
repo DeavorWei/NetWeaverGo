@@ -72,8 +72,8 @@ type ProgressTracker struct {
 	// 新增：状态树管理
 	taskName    string
 	startTime   time.Time
-	logStorage  *LogStorage    // 磁盘日志存储
-	logCounts   map[string]int // 原始日志计数
+	logStore    *ExecutionLogStore
+	logCounts   map[string]int // 简略日志计数（用于大屏）
 	sortedIPs   []string       // 有序的 IP 列表
 	finishedIPs map[string]bool
 }
@@ -82,7 +82,8 @@ func NewProgressTracker(totalDevices int) *ProgressTracker {
 	logger.Verbose("Report", "-", "生成与编排新的终端任务信息收集进度板，目标设备总量规模: %d 台", totalDevices)
 
 	// 创建日志存储
-	storage, err := NewLogStorage()
+	startTime := time.Now()
+	storage, err := NewExecutionLogStore("任务执行", startTime)
 	if err != nil {
 		logger.Error("Report", "-", "创建日志存储失败: %v", err)
 		// 降级处理：storage 为 nil 时会在后续方法中处理
@@ -93,8 +94,8 @@ func NewProgressTracker(totalDevices int) *ProgressTracker {
 		status:      make(map[string]*DeviceSummary),
 		total:       totalDevices,
 		taskName:    "任务执行",
-		startTime:   time.Now(),
-		logStorage:  storage,
+		startTime:   startTime,
+		logStore:    storage,
 		logCounts:   make(map[string]int),
 		sortedIPs:   make([]string, 0, totalDevices),
 		finishedIPs: make(map[string]bool),
@@ -106,6 +107,9 @@ func (p *ProgressTracker) SetTaskName(name string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.taskName = name
+	if p.logStore != nil {
+		p.logStore.SetTaskName(name)
+	}
 }
 
 // GetStartTime 获取开始时间
@@ -248,8 +252,8 @@ func (p *ProgressTracker) registerDeviceLocked(ip string, totalCmd int) {
 	sort.Strings(p.sortedIPs)
 
 	// 初始化磁盘日志存储
-	if p.logStorage != nil {
-		if err := p.logStorage.InitDevice(ip); err != nil {
+	if p.logStore != nil {
+		if _, err := p.logStore.EnsureDevice(ip, false); err != nil {
 			logger.Error("Report", ip, "初始化设备日志存储失败: %v", err)
 		}
 	}
@@ -269,21 +273,82 @@ func (p *ProgressTracker) addDeviceLogLocked(ip string, message string) {
 		message = message[:maxLen] + "...[截断]"
 	}
 
-	// 【修复】添加 nil 检查
-	if p.logStorage != nil {
-		if err := p.logStorage.AppendLog(ip, message); err != nil {
-			logger.Error("Report", ip, "写入日志失败: %v", err)
+	if p.logStore != nil {
+		session, err := p.logStore.EnsureDevice(ip, false)
+		if err != nil {
+			logger.Error("Report", ip, "初始化简略日志失败: %v", err)
+		} else if session.Summary != nil {
+			if err := session.Summary.WriteLine(message); err != nil {
+				logger.Error("Report", ip, "写入简略日志失败: %v", err)
+			}
 		}
 	}
 
-	// 【修复】更新计数时添加 nil 检查
 	if p.logCounts == nil {
 		p.logCounts = make(map[string]int)
 	}
-	if p.logStorage != nil {
-		p.logCounts[ip] = p.logStorage.GetLogCount(ip)
+	if p.logStore != nil {
+		p.logCounts[ip] = p.logStore.GetSummaryLogCount(ip)
 	} else {
-		p.logCounts[ip] = 0 // 降级处理：无日志存储时计数为 0
+		p.logCounts[ip] = 0
+	}
+}
+
+// WriteDecisionLog 记录用户决策到简略日志。
+func (p *ProgressTracker) WriteDecisionLog(ip string, message string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.logStore == nil {
+		return
+	}
+
+	session, err := p.logStore.EnsureDevice(ip, false)
+	if err != nil {
+		logger.Error("Report", ip, "初始化决策日志失败: %v", err)
+		return
+	}
+
+	if session.Summary != nil {
+		if err := session.Summary.WriteLine(message); err != nil {
+			logger.Error("Report", ip, "写入决策日志失败: %v", err)
+		}
+	}
+}
+
+// EnsureDeviceLogSession 确保设备日志会话存在，并按需开启原始日志。
+func (p *ProgressTracker) EnsureDeviceLogSession(ip string, totalCmd int, enableRaw bool) *DeviceLogSession {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, exists := p.status[ip]; !exists {
+		p.registerDeviceLocked(ip, totalCmd)
+	}
+
+	if p.logStore == nil {
+		return nil
+	}
+
+	session, err := p.logStore.EnsureDevice(ip, enableRaw)
+	if err != nil {
+		logger.Error("Report", ip, "初始化设备日志会话失败: %v", err)
+		return nil
+	}
+
+	p.logCounts[ip] = p.logStore.GetSummaryLogCount(ip)
+	return session
+}
+
+// RefreshDeviceLogCount 更新设备简略日志行数。
+func (p *ProgressTracker) RefreshDeviceLogCount(ip string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.logCounts == nil {
+		p.logCounts = make(map[string]int)
+	}
+	if p.logStore != nil {
+		p.logCounts[ip] = p.logStore.GetSummaryLogCount(ip)
 	}
 }
 
@@ -522,11 +587,16 @@ func (p *ProgressTracker) GetSnapshot() *ExecutionSnapshot {
 			status = "waiting"
 		}
 
+		logCount := p.logCounts[ip]
+		if p.logStore != nil {
+			logCount = p.logStore.GetSummaryLogCount(ip)
+		}
+
 		deviceState := DeviceViewState{
 			IP:        summary.IP,
 			Status:    status,
 			Logs:      logs,
-			LogCount:  p.logCounts[ip],
+			LogCount:  logCount,
 			Truncated: truncated,
 			CmdIndex:  summary.ExecCmds,
 			TotalCmd:  summary.TotalCmds,
@@ -548,20 +618,19 @@ func (p *ProgressTracker) GetSnapshot() *ExecutionSnapshot {
 
 // getDeviceLogsLocked 获取设备日志（已截断），必须在持有锁时调用
 func (p *ProgressTracker) getDeviceLogsLocked(ip string) ([]string, bool) {
-	// 从磁盘存储读取日志
-	if p.logStorage == nil {
+	if p.logStore == nil {
 		return []string{}, false
 	}
 
 	maxLogs := getMaxLogsPerDevice()
-	totalCount := p.logStorage.GetLogCount(ip)
+	totalCount := p.logStore.GetSummaryLogCount(ip)
 
 	if totalCount == 0 {
 		return []string{}, false
 	}
 
 	// 读取最新的日志
-	logs, err := p.logStorage.GetLastLogs(ip, maxLogs)
+	logs, err := p.logStore.GetSummaryLastLogs(ip, maxLogs)
 	if err != nil {
 		logger.Error("Report", ip, "读取日志失败: %v", err)
 		return []string{}, false
@@ -580,8 +649,8 @@ func (p *ProgressTracker) RegisterDevice(ip string, totalCmd int) {
 
 // Close 关闭并清理资源
 func (p *ProgressTracker) Close() {
-	if p.logStorage != nil {
-		p.logStorage.Close()
+	if p.logStore != nil {
+		p.logStore.Close()
 	}
 }
 
@@ -628,14 +697,17 @@ type ExecutionSummaryData struct {
 
 // ExecutionDeviceData 设备执行数据
 type ExecutionDeviceData struct {
-	IP          string
-	Status      string
-	TotalCmd    int
-	ExecCmd     int
-	ErrorMsg    string
-	LogCount    int
-	LogTail     []string
-	LogFilePath string
+	IP             string
+	Status         string
+	TotalCmd       int
+	ExecCmd        int
+	ErrorMsg       string
+	LogCount       int
+	LogTail        []string
+	LogFilePath    string
+	SummaryLogPath string
+	DetailLogPath  string
+	RawLogPath     string
 }
 
 // BuildExecutionSummary 构建执行摘要
@@ -683,19 +755,27 @@ func (p *ProgressTracker) BuildExecutionDevices(maxLogTail int) []ExecutionDevic
 			continue
 		}
 
+		logCount := p.logCounts[ip]
+		if p.logStore != nil {
+			logCount = p.logStore.GetDetailLogCount(ip)
+		}
+
 		device := ExecutionDeviceData{
 			IP:       summary.IP,
 			Status:   summary.Status,
 			TotalCmd: summary.TotalCmds,
 			ExecCmd:  summary.ExecCmds,
 			ErrorMsg: summary.ErrorMsg,
-			LogCount: p.logCounts[ip],
+			LogCount: logCount,
 		}
 
-		// 获取日志尾部
-		if p.logStorage != nil {
-			device.LogTail, _ = p.logStorage.GetLastLogs(ip, maxLogTail)
-			device.LogFilePath = p.logStorage.GetDeviceLogPath(ip)
+		if p.logStore != nil {
+			device.LogTail, _ = p.logStore.GetDetailLastLogs(ip, maxLogTail)
+			paths := p.logStore.GetDeviceLogPaths(ip)
+			device.SummaryLogPath = paths.SummaryPath
+			device.DetailLogPath = paths.DetailPath
+			device.RawLogPath = paths.RawPath
+			device.LogFilePath = paths.DetailPath
 		}
 
 		devices = append(devices, device)
@@ -709,7 +789,7 @@ func (p *ProgressTracker) GetDeviceLogTail(ip string, maxLines int) ([]string, e
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.logStorage == nil {
+	if p.logStore == nil {
 		return []string{}, nil
 	}
 
@@ -717,12 +797,12 @@ func (p *ProgressTracker) GetDeviceLogTail(ip string, maxLines int) ([]string, e
 		maxLines = 30
 	}
 
-	return p.logStorage.GetLastLogs(ip, maxLines)
+	return p.logStore.GetDetailLastLogs(ip, maxLines)
 }
 
-// GetLogStorage 获取日志存储实例（用于获取日志路径等）
-func (p *ProgressTracker) GetLogStorage() *LogStorage {
+// GetLogStore 获取日志存储实例（用于获取日志路径等）。
+func (p *ProgressTracker) GetLogStore() *ExecutionLogStore {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.logStorage
+	return p.logStore
 }

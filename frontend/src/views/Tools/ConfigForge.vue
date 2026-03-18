@@ -507,6 +507,7 @@ async function executeTaskSend() {
       mode: 'binding' as const,
       items,
       tags: taskModal.value.tags,
+      enableRawLog: false,
       status: 'pending' as const,
       createdAt: '',
       updatedAt: ''

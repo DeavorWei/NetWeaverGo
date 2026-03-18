@@ -36,14 +36,17 @@ type ExecutionRecord struct {
 
 // ExecutionDeviceRecord 设备执行记录（嵌套在 ExecutionRecord 中）
 type ExecutionDeviceRecord struct {
-	IP          string   `json:"ip"`
-	Status      string   `json:"status"`
-	TotalCmd    int      `json:"totalCmd"`
-	ExecCmd     int      `json:"execCmd"`
-	ErrorMsg    string   `json:"errorMsg"`
-	LogCount    int      `json:"logCount"`
-	LogTail     []string `json:"logTail"`
-	LogFilePath string   `json:"logFilePath"`
+	IP             string   `json:"ip"`
+	Status         string   `json:"status"`
+	TotalCmd       int      `json:"totalCmd"`
+	ExecCmd        int      `json:"execCmd"`
+	ErrorMsg       string   `json:"errorMsg"`
+	LogCount       int      `json:"logCount"`
+	LogTail        []string `json:"logTail"`
+	LogFilePath    string   `json:"logFilePath"` // 兼容旧记录，默认指向 DetailLogPath
+	SummaryLogPath string   `json:"summaryLogPath"`
+	DetailLogPath  string   `json:"detailLogPath"`
+	RawLogPath     string   `json:"rawLogPath"`
 }
 
 // TableName 指定表名

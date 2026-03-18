@@ -24,15 +24,16 @@ type TaskItem struct {
 
 // TaskGroup 任务组
 type TaskGroup struct {
-	ID          string     `json:"id" gorm:"primaryKey"`
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	Mode        string     `json:"mode"`                         // "group" 模式A | "binding" 模式B
-	Items       []TaskItem `json:"items" gorm:"serializer:json"` // 任务项列表
-	Tags        []string   `json:"tags" gorm:"serializer:json"`  // 标签
-	Status      string     `json:"status"`                       // "pending" | "running" | "completed" | "failed"
-	CreatedAt   string     `json:"createdAt"`
-	UpdatedAt   string     `json:"updatedAt"`
+	ID           string     `json:"id" gorm:"primaryKey"`
+	Name         string     `json:"name"`
+	Description  string     `json:"description"`
+	Mode         string     `json:"mode"`                         // "group" 模式A | "binding" 模式B
+	Items        []TaskItem `json:"items" gorm:"serializer:json"` // 任务项列表
+	Tags         []string   `json:"tags" gorm:"serializer:json"`  // 标签
+	EnableRawLog bool       `json:"enableRawLog"`
+	Status       string     `json:"status"` // "pending" | "running" | "completed" | "failed"
+	CreatedAt    string     `json:"createdAt"`
+	UpdatedAt    string     `json:"updatedAt"`
 }
 
 // ========== 任务组管理 API ==========

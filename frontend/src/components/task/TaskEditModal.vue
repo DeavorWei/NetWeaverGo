@@ -80,6 +80,20 @@
                     </button>
                   </div>
                 </div>
+
+                <div class="rounded-xl border border-border bg-bg-panel p-4">
+                  <label class="flex items-start justify-between gap-4">
+                    <div>
+                      <div class="text-sm font-medium text-text-primary">原始日志</div>
+                      <p class="text-xs text-text-muted mt-1">开启后为每台设备额外保存完整 SSH 字节流，便于深度排障。</p>
+                    </div>
+                    <input
+                      v-model="form.enableRawLog"
+                      type="checkbox"
+                      class="mt-1 h-4 w-4"
+                    />
+                  </label>
+                </div>
               </div>
 
               <div class="rounded-xl border border-border bg-bg-panel p-4 space-y-3 h-fit">
@@ -289,7 +303,8 @@ const emit = defineEmits<{
 const form = reactive({
   name: '',
   description: '',
-  tags: [] as string[]
+  tags: [] as string[],
+  enableRawLog: false
 })
 
 const groupForm = reactive({
@@ -324,6 +339,7 @@ function hydrateForm(task: TaskGroup) {
   form.name = task.name
   form.description = task.description
   form.tags = [...task.tags]
+  form.enableRawLog = Boolean(task.enableRawLog)
   newTag.value = ''
   formError.value = ''
 
@@ -467,6 +483,7 @@ function submit() {
     mode: props.task.mode,
     items,
     tags,
+    enableRawLog: form.enableRawLog,
     status: props.task.status,
     createdAt: props.task.createdAt,
     updatedAt: props.task.updatedAt

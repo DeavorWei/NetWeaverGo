@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,6 +12,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/report"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -29,7 +28,7 @@ type SSHClient struct {
 	Stderr io.Reader
 
 	// transcriptSink 保存原始交互流，用于问题排查和执行回显审计。
-	transcriptSink *transcriptSink
+	transcriptSink report.RawTranscriptSink
 
 	// conn 保存底层的 TCP 连接，用于设置 deadline
 	conn net.Conn
@@ -45,38 +44,6 @@ type SSHClient struct {
 	readCtx    context.Context
 }
 
-type transcriptSink struct {
-	mu   sync.Mutex
-	file *os.File
-}
-
-func (t *transcriptSink) Write(p []byte) (int, error) {
-	if t == nil || t.file == nil {
-		return len(p), nil
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.file.Write(p)
-}
-
-func (t *transcriptSink) WriteMarker(format string, args ...interface{}) {
-	if t == nil || t.file == nil {
-		return
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	_, _ = fmt.Fprintf(t.file, format, args...)
-}
-
-func (t *transcriptSink) Close() error {
-	if t == nil || t.file == nil {
-		return nil
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.file.Close()
-}
-
 // Config 包含了建连的基础凭证和超时参数
 type Config struct {
 	IP       string
@@ -87,6 +54,9 @@ type Config struct {
 
 	// SSH 算法配置（可选）
 	Algorithms *config.SSHAlgorithmSettings
+
+	// RawSink 为可选的原始 SSH 字节流输出。
+	RawSink report.RawTranscriptSink
 }
 
 // logSSHConfig 记录SSH配置信息用于调试
@@ -455,13 +425,9 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 		return nil, fmt.Errorf("Shell启动失败: %w", err)
 	}
 
-	sink, sinkErr := createTranscriptSink(cfg.IP)
-	if sinkErr != nil {
-		logger.Warn("SSH", cfg.IP, "创建原始回显日志文件失败，将继续执行但不保存回显: %v", sinkErr)
-	}
-
 	stdoutReader := io.Reader(stdout)
 	stderrReader := io.Reader(stderr)
+	sink := cfg.RawSink
 	if sink != nil {
 		sink.WriteMarker("========== SESSION START %s %s:%d ==========\n", time.Now().Format(time.RFC3339), cfg.IP, cfg.Port)
 		stdoutReader = io.TeeReader(stdout, sink)
@@ -572,10 +538,6 @@ func (c *SSHClient) Close() error {
 	}
 	if c.transcriptSink != nil {
 		c.transcriptSink.WriteMarker("\n========== SESSION END %s ==========\n", time.Now().Format(time.RFC3339))
-		sinkErr := c.transcriptSink.Close()
-		if err == nil {
-			err = sinkErr
-		}
 	}
 	return err
 }
@@ -683,31 +645,4 @@ func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 		IP:     cfg.IP,
 		Port:   cfg.Port,
 	}, nil
-}
-
-func createTranscriptSink(ip string) (*transcriptSink, error) {
-	storageDir := config.GetPathManager().GetExecutionLiveLogDir()
-	if err := os.MkdirAll(storageDir, 0755); err != nil {
-		return nil, err
-	}
-
-	filePath := filepath.Join(storageDir, fmt.Sprintf("%s_%d_raw.log", sanitizeIPForPath(ip), time.Now().UnixNano()))
-	file, err := os.Create(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	return &transcriptSink{file: file}, nil
-}
-
-func sanitizeIPForPath(ip string) string {
-	var b strings.Builder
-	for _, c := range ip {
-		if c >= '0' && c <= '9' {
-			b.WriteRune(c)
-			continue
-		}
-		b.WriteRune('_')
-	}
-	return b.String()
 }

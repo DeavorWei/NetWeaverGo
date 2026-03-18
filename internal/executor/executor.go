@@ -42,6 +42,7 @@ type DeviceExecutor struct {
 
 	// SSH 算法配置
 	Algorithms *config.SSHAlgorithmSettings
+	LogSession *report.DeviceLogSession
 }
 
 // NewDeviceExecutor 初始化执行器
@@ -63,6 +64,11 @@ func (e *DeviceExecutor) SetAlgorithms(algorithms *config.SSHAlgorithmSettings) 
 	e.Algorithms = algorithms
 }
 
+// SetLogSession 设置设备日志会话。
+func (e *DeviceExecutor) SetLogSession(session *report.DeviceLogSession) {
+	e.LogSession = session
+}
+
 // Connect 创建SSH长连接并初始化日志审计
 func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) error {
 	logger.Debug("Executor", e.IP, "准备建立SSH连接 (Timeout: %v)", timeout)
@@ -73,6 +79,7 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 		Password:   e.Password,
 		Timeout:    timeout,
 		Algorithms: e.Algorithms,
+		RawSink:    e.rawSink(),
 	}
 
 	client, err := sshutil.NewSSHClient(ctx, cfg)
@@ -99,6 +106,11 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 	if e.Client == nil {
 		return fmt.Errorf("执行器未安全建连")
 	}
+	defer func() {
+		if err := e.flushDetailLog(); err != nil {
+			logger.Warn("Executor", e.IP, "刷新详细日志失败: %v", err)
+		}
+	}()
 
 	manager := config.GetRuntimeManager()
 	buf := make([]byte, manager.GetBufferSize())
@@ -215,6 +227,9 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 				timer.Reset(timeoutDuration)
 
 				chunk := string(buf[:n])
+				if err := e.writeDetailChunk(chunk); err != nil {
+					logger.Warn("Executor", e.IP, "写入详细日志失败: %v", err)
+				}
 				streamBuffer += chunk
 				logger.Verbose("Executor", e.IP, "Received chunk (len=%d) | streamBuffer_len=%d", n, len(streamBuffer))
 
@@ -295,6 +310,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 					logger.Debug("Executor", e.IP, "[自动翻页] 截获终端分页拦截符(More)，自动下发空格放行...")
 					e.Client.SendRawBytes([]byte(" ")) // 向 SSH 隧道发送一个纯净空格
 					streamBuffer = ""                  // 清除已匹配的分页符避免残留污染
+					_ = e.flushDetailLog()
 					continue
 				}
 
@@ -303,6 +319,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 				if currentCmdIndex == -1 && promptDetected {
 					logger.Debug("Executor", e.IP, "等到首个提示符，发送预热空行稳定终端")
 					currentCmdIndex = -2
+					_ = e.flushDetailLog()
 					if err := e.Client.SendCommand(""); err != nil {
 						return fmt.Errorf("发送预热空行失败: %w", err)
 					}
@@ -349,6 +366,9 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 							e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceCmd, Message: rawCmd, CmdIndex: currentCmdIndex + 1, TotalCmd: len(commands)}
 						}
 						// logger.Info("[%s] >>> [发送命令]: %s", e.IP, cmd) (Moved to GUI)
+						if err := e.writeDetailCommand(cmdToSend); err != nil {
+							logger.Warn("Executor", e.IP, "写入命令日志失败: %v", err)
+						}
 						e.Client.SendCommand(cmdToSend)
 
 						// 重置自定义计时器并清空 Buffer
@@ -371,6 +391,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 						logger.Debug("Executor", e.IP, "命令全部下发完成")
 						// logger.Info("[%s] ==== [执行完成] 所有命令已下发完毕 ====", e.IP)
 						completedAllCommands = true
+						_ = e.flushDetailLog()
 						return nil
 					}
 				}
@@ -408,6 +429,11 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 	if e.Client == nil {
 		return "", fmt.Errorf("执行器未安全建连")
 	}
+	defer func() {
+		if err := e.flushDetailLog(); err != nil {
+			logger.Warn("Executor", e.IP, "刷新同步详细日志失败: %v", err)
+		}
+	}()
 
 	manager := config.GetRuntimeManager()
 	buf := make([]byte, manager.GetBufferSize())
@@ -430,6 +456,9 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 	}
 
 	logger.Info("Executor", e.IP, ">>> [同步发送命令]: %s", cmdToSend)
+	if err := e.writeDetailCommand(cmdToSend); err != nil {
+		logger.Warn("Executor", e.IP, "写入同步命令日志失败: %v", err)
+	}
 	if err := e.Client.SendCommand(cmdToSend); err != nil {
 		return "", fmt.Errorf("发送命令失败: %w", err)
 	}
@@ -488,6 +517,9 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 				timer.Reset(customTimeout)
 
 				chunk := string(buf[:n])
+				if err := e.writeDetailChunk(chunk); err != nil {
+					logger.Warn("Executor", e.IP, "写入同步详细日志失败: %v", err)
+				}
 				outputBuffer.WriteString(chunk) // 追加以作为完整的返回值
 				streamBuffer += chunk
 
@@ -521,6 +553,7 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 
 				if e.Matcher.IsPrompt(lastSegment) {
 					// 找到提示符，命令执行完成
+					_ = e.flushDetailLog()
 					return outputBuffer.String(), nil
 				}
 
@@ -538,4 +571,32 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 
 		time.Sleep(manager.GetPaginationCheckInterval()) // 减少 CPU 忙等待
 	}
+}
+
+func (e *DeviceExecutor) rawSink() report.RawTranscriptSink {
+	if e.LogSession == nil {
+		return nil
+	}
+	return e.LogSession.RawSink()
+}
+
+func (e *DeviceExecutor) writeDetailCommand(command string) error {
+	if e.LogSession == nil {
+		return nil
+	}
+	return e.LogSession.WriteDetailCommand(command)
+}
+
+func (e *DeviceExecutor) writeDetailChunk(chunk string) error {
+	if e.LogSession == nil {
+		return nil
+	}
+	return e.LogSession.WriteDetailChunk(chunk)
+}
+
+func (e *DeviceExecutor) flushDetailLog() error {
+	if e.LogSession == nil {
+		return nil
+	}
+	return e.LogSession.FlushDetail()
 }

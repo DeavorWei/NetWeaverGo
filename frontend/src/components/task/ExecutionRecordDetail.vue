@@ -95,16 +95,24 @@
                     <span class="device-ip">{{ device.ip }}</span>
                     <div class="device-actions">
                       <button 
-                        v-if="device.logFilePath" 
+                        v-if="resolveDetailLogPath(device)" 
                         class="btn-open-log-icon" 
-                        @click="openDeviceLog(device)" 
-                        title="打开日志文件"
+                        @click="openDeviceDetailLog(device)" 
+                        title="打开详细日志"
                       >
                         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
                           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                           <polyline points="15 3 21 3 21 9"></polyline>
                           <line x1="10" y1="14" x2="21" y2="3"></line>
                         </svg>
+                      </button>
+                      <button
+                        v-if="device.rawLogPath"
+                        class="btn-open-log-icon"
+                        @click="openRawLog(device)"
+                        title="打开原始日志"
+                      >
+                        RAW
                       </button>
                       <span class="device-status" :class="`status-${getDeviceStatusClass(device.status)}`">
                         {{ device.status }}
@@ -169,14 +177,30 @@ const openReportFile = async () => {
   }
 }
 
-// 打开设备日志文件
-const openDeviceLog = async (device: ExecutionDeviceRecord) => {
-  if (!device.logFilePath) return
+const resolveDetailLogPath = (device: ExecutionDeviceRecord) => {
+  return device.detailLogPath || device.logFilePath
+}
+
+// 打开设备详细日志文件
+const openDeviceDetailLog = async (device: ExecutionDeviceRecord) => {
+  const detailLogPath = resolveDetailLogPath(device)
+  if (!detailLogPath) return
   
   try {
-    await OpenFileWithDefaultApp(device.logFilePath)
+    await OpenFileWithDefaultApp(detailLogPath)
   } catch (error) {
-    toast.error(`打开日志文件失败: ${error}`)
+    toast.error(`打开详细日志失败: ${error}`)
+  }
+}
+
+// 打开设备原始日志文件
+const openRawLog = async (device: ExecutionDeviceRecord) => {
+  if (!device.rawLogPath) return
+
+  try {
+    await OpenFileWithDefaultApp(device.rawLogPath)
+  } catch (error) {
+    toast.error(`打开原始日志失败: ${error}`)
   }
 }
 

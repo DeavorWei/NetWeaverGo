@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,255 +13,302 @@ import (
 	"github.com/NetWeaverGo/core/internal/logger"
 )
 
-// LogStorage 日志存储管理器（磁盘 + 内存索引）
-type LogStorage struct {
-	mu sync.RWMutex
+// RawTranscriptSink 为 SSH 原始流提供统一的写入接口。
+type RawTranscriptSink interface {
+	Write([]byte) (int, error)
+	WriteMarker(format string, args ...interface{})
+}
 
-	// 内存索引：只存储日志的行号和偏移量
-	index map[string]*LogIndex
+// DeviceLogPaths 记录单台设备的三类日志路径。
+type DeviceLogPaths struct {
+	SummaryPath string
+	DetailPath  string
+	RawPath     string
+}
 
-	// 日志文件句柄
-	logFiles map[string]*os.File
+// DeviceLogSession 表示单台设备的一次执行日志会话。
+type DeviceLogSession struct {
+	IP      string
+	Summary *SummaryLogger
+	Detail  *DetailLogger
+	Raw     *RawLogger
+}
 
-	// 写入缓冲区
-	writers map[string]*bufio.Writer
+// WriteSummary 追加简略日志。
+func (s *DeviceLogSession) WriteSummary(message string) error {
+	if s == nil || s.Summary == nil {
+		return nil
+	}
+	return s.Summary.WriteLine(message)
+}
 
-	// 临时文件目录
+// WriteDetailCommand 记录发送命令。
+func (s *DeviceLogSession) WriteDetailCommand(command string) error {
+	if s == nil || s.Detail == nil {
+		return nil
+	}
+	return s.Detail.WriteCommand(command)
+}
+
+// WriteDetailChunk 记录并清洗 SSH 输出块。
+func (s *DeviceLogSession) WriteDetailChunk(chunk string) error {
+	if s == nil || s.Detail == nil {
+		return nil
+	}
+	return s.Detail.WriteChunk(chunk)
+}
+
+// FlushDetail 刷新详细日志尾部缓冲。
+func (s *DeviceLogSession) FlushDetail() error {
+	if s == nil || s.Detail == nil {
+		return nil
+	}
+	return s.Detail.FlushPending()
+}
+
+// RawSink 返回原始日志 sink。
+func (s *DeviceLogSession) RawSink() RawTranscriptSink {
+	if s == nil {
+		return nil
+	}
+	return s.Raw
+}
+
+// ExecutionLogStore 统一管理单次执行中的所有设备日志。
+type ExecutionLogStore struct {
+	mu         sync.RWMutex
 	storageDir string
+	taskName   string
+	startTime  time.Time
+	sessions   map[string]*DeviceLogSession
 }
 
-// LogIndex 日志索引信息
-type LogIndex struct {
-	IP          string
-	TotalCount  int     // 总日志条数
-	LineOffsets []int64 // 每行在文件中的偏移量
-	FilePath    string
-	LastAccess  time.Time // 最后访问时间（用于清理）
-}
-
-// NewLogStorage 创建日志存储管理器
-func NewLogStorage() (*LogStorage, error) {
+// NewExecutionLogStore 创建日志存储管理器。
+func NewExecutionLogStore(taskName string, startTime time.Time) (*ExecutionLogStore, error) {
 	storageDir := config.GetPathManager().GetExecutionLiveLogDir()
-
 	if err := os.MkdirAll(storageDir, 0755); err != nil {
 		return nil, fmt.Errorf("创建日志目录失败: %v", err)
 	}
+	if startTime.IsZero() {
+		startTime = time.Now()
+	}
 
-	return &LogStorage{
-		index:      make(map[string]*LogIndex),
-		logFiles:   make(map[string]*os.File),
-		writers:    make(map[string]*bufio.Writer),
+	return &ExecutionLogStore{
 		storageDir: storageDir,
+		taskName:   strings.TrimSpace(taskName),
+		startTime:  startTime,
+		sessions:   make(map[string]*DeviceLogSession),
 	}, nil
 }
 
-// InitDevice 初始化设备日志文件
-func (ls *LogStorage) InitDevice(ip string) error {
+// SetTaskName 设置任务名称，用于后续创建的文件名。
+func (ls *ExecutionLogStore) SetTaskName(taskName string) {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	ls.taskName = strings.TrimSpace(taskName)
+}
+
+// EnsureDevice 初始化单台设备的日志会话。
+func (ls *ExecutionLogStore) EnsureDevice(ip string, enableRaw bool) (*DeviceLogSession, error) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
-	if _, exists := ls.index[ip]; exists {
-		return nil
+	if session, exists := ls.sessions[ip]; exists {
+		if enableRaw && session.Raw == nil {
+			rawLogger, err := NewRawLogger(ls.buildFilePath(ip, "raw"))
+			if err != nil {
+				return nil, err
+			}
+			session.Raw = rawLogger
+		}
+		return session, nil
 	}
 
-	// 创建日志文件
-	filePath := filepath.Join(ls.storageDir, fmt.Sprintf("%s_%d.log",
-		sanitizeIP(ip), time.Now().Unix()))
-
-	file, err := os.Create(filePath)
+	summaryLogger, err := NewSummaryLogger(ls.buildFilePath(ip, "summary"))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// 创建缓冲写入器
-	writer := bufio.NewWriterSize(file, 32*1024) // 32KB 缓冲区
-
-	ls.logFiles[ip] = file
-	ls.writers[ip] = writer
-	ls.index[ip] = &LogIndex{
-		IP:          ip,
-		TotalCount:  0,
-		LineOffsets: []int64{0}, // 第一行从0开始
-		FilePath:    filePath,
-		LastAccess:  time.Now(),
+	detailLogger, err := NewDetailLogger(ls.buildFilePath(ip, "detail"))
+	if err != nil {
+		_ = summaryLogger.Close()
+		return nil, err
 	}
 
-	return nil
+	session := &DeviceLogSession{
+		IP:      ip,
+		Summary: summaryLogger,
+		Detail:  detailLogger,
+	}
+
+	if enableRaw {
+		rawLogger, rawErr := NewRawLogger(ls.buildFilePath(ip, "raw"))
+		if rawErr != nil {
+			_ = detailLogger.Close()
+			_ = summaryLogger.Close()
+			return nil, rawErr
+		}
+		session.Raw = rawLogger
+	}
+
+	ls.sessions[ip] = session
+	return session, nil
 }
 
-// AppendLog 追加日志
-func (ls *LogStorage) AppendLog(ip string, message string) error {
-	ls.mu.Lock()
-	defer ls.mu.Unlock()
-
-	idx, exists := ls.index[ip]
-	if !exists {
-		return fmt.Errorf("设备 %s 未初始化", ip)
-	}
-
-	writer, ok := ls.writers[ip]
-	if !ok {
-		return fmt.Errorf("设备 %s 写入器未找到", ip)
-	}
-
-	// 记录当前偏移量
-	currentOffset, _ := ls.logFiles[ip].Seek(0, 1)
-	idx.LineOffsets = append(idx.LineOffsets, currentOffset)
-
-	// 写入日志
-	line := fmt.Sprintf("[%s] %s\n", time.Now().Format("15:04:05"), message)
-	if _, err := writer.WriteString(line); err != nil {
-		return err
-	}
-
-	idx.TotalCount++
-	idx.LastAccess = time.Now()
-
-	// 实时场景下前端会持续读取最新日志，需确保及时刷盘。
-	return writer.Flush()
-}
-
-// GetLogs 获取日志（支持分页）
-func (ls *LogStorage) GetLogs(ip string, offset int, limit int) ([]string, error) {
+// GetDeviceSession 获取设备日志会话。
+func (ls *ExecutionLogStore) GetDeviceSession(ip string) *DeviceLogSession {
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
+	return ls.sessions[ip]
+}
 
-	idx, exists := ls.index[ip]
-	if !exists {
+// GetDetailLogCount 获取详细日志总行数。
+func (ls *ExecutionLogStore) GetDetailLogCount(ip string) int {
+	ls.mu.RLock()
+	session := ls.sessions[ip]
+	ls.mu.RUnlock()
+	if session == nil || session.Detail == nil {
+		return 0
+	}
+	return session.Detail.LineCount()
+}
+
+// GetSummaryLogCount 获取简略日志总行数。
+func (ls *ExecutionLogStore) GetSummaryLogCount(ip string) int {
+	ls.mu.RLock()
+	session := ls.sessions[ip]
+	ls.mu.RUnlock()
+	if session == nil || session.Summary == nil {
+		return 0
+	}
+	return session.Summary.LineCount()
+}
+
+// GetDetailLastLogs 获取详细日志最后 N 条。
+func (ls *ExecutionLogStore) GetDetailLastLogs(ip string, n int) ([]string, error) {
+	ls.mu.RLock()
+	session := ls.sessions[ip]
+	ls.mu.RUnlock()
+	if session == nil || session.Detail == nil {
 		return []string{}, nil
 	}
+	return readLastLogLines(session.Detail.Path(), n)
+}
 
-	idx.LastAccess = time.Now()
+// GetSummaryLastLogs 获取简略日志最后 N 条。
+func (ls *ExecutionLogStore) GetSummaryLastLogs(ip string, n int) ([]string, error) {
+	ls.mu.RLock()
+	session := ls.sessions[ip]
+	ls.mu.RUnlock()
+	if session == nil || session.Summary == nil {
+		return []string{}, nil
+	}
+	return readLastLogLines(session.Summary.Path(), n)
+}
 
-	// 计算读取范围
-	startLine := offset
-	if startLine < 0 {
-		// 负数表示从末尾计算（如 -100 表示最后100条）
-		startLine = idx.TotalCount + offset
-		if startLine < 0 {
-			startLine = 0
+// GetDeviceLogPaths 获取设备日志路径集合。
+func (ls *ExecutionLogStore) GetDeviceLogPaths(ip string) DeviceLogPaths {
+	ls.mu.RLock()
+	session := ls.sessions[ip]
+	ls.mu.RUnlock()
+	if session == nil {
+		return DeviceLogPaths{}
+	}
+
+	paths := DeviceLogPaths{}
+	if session.Summary != nil {
+		paths.SummaryPath = session.Summary.Path()
+	}
+	if session.Detail != nil {
+		paths.DetailPath = session.Detail.Path()
+	}
+	if session.Raw != nil {
+		paths.RawPath = session.Raw.Path()
+	}
+	return paths
+}
+
+// Close 关闭全部日志句柄。
+func (ls *ExecutionLogStore) Close() {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+
+	for ip, session := range ls.sessions {
+		if session.Detail != nil {
+			if err := session.Detail.Close(); err != nil {
+				logger.Error("LogStore", ip, "关闭详细日志失败: %v", err)
+			}
+		}
+		if session.Summary != nil {
+			if err := session.Summary.Close(); err != nil {
+				logger.Error("LogStore", ip, "关闭简略日志失败: %v", err)
+			}
+		}
+		if session.Raw != nil {
+			if err := session.Raw.Close(); err != nil {
+				logger.Error("LogStore", ip, "关闭原始日志失败: %v", err)
+			}
 		}
 	}
 
-	endLine := startLine + limit
-	if endLine > idx.TotalCount {
-		endLine = idx.TotalCount
+	ls.sessions = make(map[string]*DeviceLogSession)
+}
+
+func (ls *ExecutionLogStore) buildFilePath(ip string, suffix string) string {
+	taskName := sanitizeLogName(ls.taskName)
+	if taskName == "" {
+		taskName = "task"
+	}
+	stem := fmt.Sprintf("%s_%s_%s", ls.startTime.Format("20060102_150405"), taskName, sanitizeLogName(ip))
+	return filepath.Join(ls.storageDir, fmt.Sprintf("%s_%s.log", stem, suffix))
+}
+
+func sanitizeLogName(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
 	}
 
-	if startLine >= endLine {
+	var builder strings.Builder
+	for _, r := range trimmed {
+		switch {
+		case r >= 'a' && r <= 'z':
+			builder.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			builder.WriteRune(r)
+		case r >= '0' && r <= '9':
+			builder.WriteRune(r)
+		case r == '-' || r == '_' || r == '.':
+			builder.WriteRune(r)
+		default:
+			builder.WriteRune('_')
+		}
+	}
+
+	return strings.Trim(builder.String(), "_")
+}
+
+func readLastLogLines(filePath string, n int) ([]string, error) {
+	if strings.TrimSpace(filePath) == "" || n <= 0 {
 		return []string{}, nil
 	}
 
-	// 打开文件读取
-	file, err := os.Open(idx.FilePath)
+	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var result []string
+	lines := make([]string, 0, n)
 	scanner := bufio.NewScanner(file)
-
-	currentLine := 0
 	for scanner.Scan() {
-		if currentLine >= startLine && currentLine < endLine {
-			result = append(result, scanner.Text())
-		}
-		if currentLine >= endLine {
-			break
-		}
-		currentLine++
-	}
-
-	return result, scanner.Err()
-}
-
-// GetLastLogs 获取最后N条日志
-func (ls *LogStorage) GetLastLogs(ip string, n int) ([]string, error) {
-	return ls.GetLogs(ip, -n, n)
-}
-
-// GetLogCount 获取日志总数
-func (ls *LogStorage) GetLogCount(ip string) int {
-	ls.mu.RLock()
-	defer ls.mu.RUnlock()
-
-	if idx, exists := ls.index[ip]; exists {
-		return idx.TotalCount
-	}
-	return 0
-}
-
-// GetDeviceLogPath 获取设备日志文件路径
-func (ls *LogStorage) GetDeviceLogPath(ip string) string {
-	ls.mu.RLock()
-	defer ls.mu.RUnlock()
-
-	if idx, exists := ls.index[ip]; exists {
-		return idx.FilePath
-	}
-	return ""
-}
-
-// Close 关闭并清理
-func (ls *LogStorage) Close() {
-	ls.mu.Lock()
-	defer ls.mu.Unlock()
-
-	// 刷新所有缓冲区
-	for ip, writer := range ls.writers {
-		if err := writer.Flush(); err != nil {
-			logger.Error("LogStorage", ip, "刷新日志失败: %v", err)
+		lines = append(lines, scanner.Text())
+		if len(lines) > n {
+			lines = lines[1:]
 		}
 	}
-
-	// 关闭文件
-	for ip, file := range ls.logFiles {
-		if err := file.Close(); err != nil {
-			logger.Error("LogStorage", ip, "关闭日志文件失败: %v", err)
-		}
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
-
-	ls.writers = nil
-	ls.logFiles = nil
-}
-
-// CleanupOldFiles 清理过期文件（可定期调用）
-func (ls *LogStorage) CleanupOldFiles(maxAge time.Duration) {
-	ls.mu.Lock()
-	defer ls.mu.Unlock()
-
-	cutoff := time.Now().Add(-maxAge)
-
-	for ip, idx := range ls.index {
-		if idx.LastAccess.Before(cutoff) {
-			// 关闭文件句柄
-			if file, ok := ls.logFiles[ip]; ok {
-				file.Close()
-				delete(ls.logFiles, ip)
-			}
-			if writer, ok := ls.writers[ip]; ok {
-				writer.Flush()
-				delete(ls.writers, ip)
-			}
-
-			// 可选：删除文件或归档
-			// os.Remove(idx.FilePath)
-
-			delete(ls.index, ip)
-		}
-	}
-}
-
-func sanitizeIP(ip string) string {
-	// 将 IP 中的特殊字符替换为安全字符
-	result := ""
-	for _, c := range ip {
-		if c >= '0' && c <= '9' {
-			result += string(c)
-		} else {
-			result += "_"
-		}
-	}
-	return result
+	return lines, nil
 }

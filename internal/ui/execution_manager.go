@@ -405,14 +405,17 @@ func (s *managedExecution) persistExecutionRecord() {
 	devices := make([]config.ExecutionDeviceRecord, 0, len(deviceData))
 	for _, d := range deviceData {
 		devices = append(devices, config.ExecutionDeviceRecord{
-			IP:          d.IP,
-			Status:      d.Status,
-			TotalCmd:    d.TotalCmd,
-			ExecCmd:     d.ExecCmd,
-			ErrorMsg:    d.ErrorMsg,
-			LogCount:    d.LogCount,
-			LogTail:     d.LogTail,
-			LogFilePath: d.LogFilePath,
+			IP:             d.IP,
+			Status:         d.Status,
+			TotalCmd:       d.TotalCmd,
+			ExecCmd:        d.ExecCmd,
+			ErrorMsg:       d.ErrorMsg,
+			LogCount:       d.LogCount,
+			LogTail:        d.LogTail,
+			LogFilePath:    d.LogFilePath,
+			SummaryLogPath: d.SummaryLogPath,
+			DetailLogPath:  d.DetailLogPath,
+			RawLogPath:     d.RawLogPath,
 		})
 	}
 
