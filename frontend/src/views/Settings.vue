@@ -168,8 +168,8 @@
                 <line x1="12" y1="16" x2="12" y2="12"/>
                 <line x1="12" y1="8" x2="12.01" y2="8"/>
               </svg>
-              <p class="text-xs text-info">
-                启用 Verbose 会自动同时启用 Debug。日志文件保存在 <code class="bg-bg-panel px-1 py-0.5 rounded">{{ settings.storageRoot || './netWeaverGoData' }}/logs/app/app.log</code>
+              <p class="text-xs text-info break-words">
+                启用 Verbose 会自动同时启用 Debug。日志文件保存在 <code class="bg-bg-panel px-1 py-0.5 rounded break-all">{{ settings.storageRoot || './netWeaverGoData' }}/logs/app/app.log</code>
               </p>
             </div>
           </div>
@@ -437,6 +437,7 @@ interface GlobalSettings {
 const loading = ref(true)
 const saving = ref(false)
 const showCustomAlgorithmModal = ref(false)
+const initialPresetMode = ref<string | null>(null)
 const sshAlgorithmOptions = ref<SSHAlgorithmOptions>({
   ciphers: [],
   keyExchanges: [],
@@ -653,6 +654,9 @@ async function loadSettings() {
     if (result) {
       // 后端返回小写字段名，直接赋值给前端（现在统一使用小写）
       const rawResult = result as any
+      const loadedPresetMode = rawResult.sshAlgorithms?.presetMode || 'compatible'
+      // 保存初始值，用于判断是否是用户主动切换
+      initialPresetMode.value = loadedPresetMode
       settings.value = {
         maxWorkers: result.maxWorkers || 32,
         connectTimeout: result.connectTimeout || '10s',
@@ -716,11 +720,17 @@ function resetSettings() {
 
 watch(
   () => settings.value.sshAlgorithms.presetMode,
-  (newMode, oldMode) => {
-    if (loading.value) {
+  (newMode) => {
+    // initialPresetMode.value 为 null 表示还没加载完成
+    if (initialPresetMode.value === null) {
       return
     }
-    if (newMode === 'custom' && oldMode && oldMode !== 'custom') {
+    // 如果新值和初始值相同，说明是数据恢复（页面加载），不弹窗
+    if (newMode === initialPresetMode.value) {
+      return
+    }
+    // 只有用户主动从其他模式切换到自定义时才弹窗
+    if (newMode === 'custom') {
       openCustomAlgorithmModal()
       return
     }
