@@ -44,13 +44,21 @@ func NewDetailLogger(filePath string) (*DetailLogger, error) {
 	}, nil
 }
 
-// WriteCommand 写入发送命令记录。
+// WriteCommand 写入发送命令记录（带时间戳）。
 func (l *DetailLogger) WriteCommand(cmd string) error {
 	normalized := strings.TrimSpace(cmd)
 	if normalized == "" {
 		normalized = "<enter>"
 	}
-	return l.writeLine(">>> " + normalized)
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	timestampedLine := fmt.Sprintf("[%s] >>> %s", time.Now().Format("15:04:05"), normalized)
+	if err := l.writeLineLocked(timestampedLine); err != nil {
+		return err
+	}
+	return l.writer.Flush()
 }
 
 // WriteChunk 写入原始输出块，并做清洗。
@@ -168,7 +176,8 @@ func (l *DetailLogger) writeLineLocked(message string) error {
 		return nil
 	}
 
-	if _, err := l.writer.WriteString(fmt.Sprintf("[%s] %s\n", time.Now().Format("15:04:05"), normalized)); err != nil {
+	// 输出行不再添加时间戳，保持原始内容
+	if _, err := l.writer.WriteString(normalized + "\n"); err != nil {
 		return err
 	}
 	l.lineCount++
