@@ -10,6 +10,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/engine"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -34,17 +35,17 @@ func (s *TaskGroupService) ServiceStartup(ctx context.Context, options applicati
 }
 
 // ListTaskGroups 获取所有任务组列表
-func (s *TaskGroupService) ListTaskGroups() ([]config.TaskGroup, error) {
+func (s *TaskGroupService) ListTaskGroups() ([]models.TaskGroup, error) {
 	return config.ListTaskGroups()
 }
 
 // GetTaskGroup 根据 ID 获取单个任务组
-func (s *TaskGroupService) GetTaskGroup(id string) (*config.TaskGroup, error) {
+func (s *TaskGroupService) GetTaskGroup(id uint) (*models.TaskGroup, error) {
 	return config.GetTaskGroup(id)
 }
 
 // GetTaskGroupDetail 根据 ID 获取任务详情聚合信息
-func (s *TaskGroupService) GetTaskGroupDetail(id string) (*TaskGroupDetailViewModel, error) {
+func (s *TaskGroupService) GetTaskGroupDetail(id uint) (*TaskGroupDetailViewModel, error) {
 	taskGroup, err := config.GetTaskGroup(id)
 	if err != nil {
 		return nil, err
@@ -54,12 +55,12 @@ func (s *TaskGroupService) GetTaskGroupDetail(id string) (*TaskGroupDetailViewMo
 }
 
 // CreateTaskGroup 创建新任务组
-func (s *TaskGroupService) CreateTaskGroup(group config.TaskGroup) (*config.TaskGroup, error) {
+func (s *TaskGroupService) CreateTaskGroup(group models.TaskGroup) (*models.TaskGroup, error) {
 	return config.CreateTaskGroup(group)
 }
 
 // UpdateTaskGroup 更新任务组
-func (s *TaskGroupService) UpdateTaskGroup(id string, group config.TaskGroup) (*config.TaskGroup, error) {
+func (s *TaskGroupService) UpdateTaskGroup(id uint, group models.TaskGroup) (*models.TaskGroup, error) {
 	existing, err := config.GetTaskGroup(id)
 	if err != nil {
 		return nil, err
@@ -79,7 +80,7 @@ func (s *TaskGroupService) UpdateTaskGroup(id string, group config.TaskGroup) (*
 }
 
 // DeleteTaskGroup 删除任务组
-func (s *TaskGroupService) DeleteTaskGroup(id string) error {
+func (s *TaskGroupService) DeleteTaskGroup(id uint) error {
 	return config.DeleteTaskGroup(id)
 }
 
@@ -90,7 +91,7 @@ func (s *TaskGroupService) ResolveSuspend(sessionIDOrIP string, action string) {
 }
 
 // StartTaskGroup 启动任务组执行（并行执行模式）
-func (s *TaskGroupService) StartTaskGroup(id string) error {
+func (s *TaskGroupService) StartTaskGroup(id uint) error {
 	taskGroup, err := config.GetTaskGroup(id)
 	if err != nil {
 		return fmt.Errorf("获取任务组失败: %v", err)
@@ -112,7 +113,7 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 		return err
 	}
 
-	assetMap := make(map[uint]config.DeviceAsset, len(allAssets))
+	assetMap := make(map[uint]models.DeviceAsset, len(allAssets))
 	for _, asset := range allAssets {
 		assetMap[asset.ID] = asset
 	}
@@ -137,12 +138,12 @@ func (s *TaskGroupService) StartTaskGroup(id string) error {
 
 // executeModeA 模式A执行：一组命令发送给所有设备
 func (s *TaskGroupService) executeModeA(
-	taskGroup *config.TaskGroup,
-	assetMap map[uint]config.DeviceAsset,
-	settings *config.GlobalSettings,
+	taskGroup *models.TaskGroup,
+	assetMap map[uint]models.DeviceAsset,
+	settings *models.GlobalSettings,
 ) (string, error) {
 	assetSet := make(map[uint]bool)
-	var allSelectedAssets []config.DeviceAsset
+	var allSelectedAssets []models.DeviceAsset
 	var commands []string
 
 	for _, item := range taskGroup.Items {
@@ -156,7 +157,7 @@ func (s *TaskGroupService) executeModeA(
 		}
 
 		if len(commands) == 0 && item.CommandGroupID != "" {
-			group, err := config.GetCommandGroup(item.CommandGroupID)
+			group, err := config.GetCommandGroup(uint(parseID(item.CommandGroupID)))
 			if err == nil && len(group.Commands) > 0 {
 				commands = group.Commands
 			}
@@ -179,8 +180,8 @@ func (s *TaskGroupService) executeModeA(
 	// 构建执行元数据
 	meta := &ExecutionMeta{
 		RunnerSource:  "task_group",
-		RunnerID:      taskGroup.ID,
-		TaskGroupID:   taskGroup.ID,
+		RunnerID:      fmt.Sprintf("%d", taskGroup.ID),
+		TaskGroupID:   fmt.Sprintf("%d", taskGroup.ID),
 		TaskGroupName: taskGroup.Name,
 		TaskName:      taskGroup.Name,
 		Mode:          "group",
@@ -202,14 +203,14 @@ func (s *TaskGroupService) executeModeA(
 
 // executeModeB 模式B执行：每台设备执行各自的独立命令
 func (s *TaskGroupService) executeModeB(
-	taskGroup *config.TaskGroup,
-	assetMap map[uint]config.DeviceAsset,
-	settings *config.GlobalSettings,
+	taskGroup *models.TaskGroup,
+	assetMap map[uint]models.DeviceAsset,
+	settings *models.GlobalSettings,
 ) (string, error) {
 	logger.Info("TaskGroup", "-", "模式B执行: %d 个任务项", len(taskGroup.Items))
 
 	type taskRun struct {
-		assets   []config.DeviceAsset
+		assets   []models.DeviceAsset
 		commands []string
 	}
 
@@ -229,7 +230,7 @@ func (s *TaskGroupService) executeModeB(
 			continue
 		}
 
-		var itemAssets []config.DeviceAsset
+		var itemAssets []models.DeviceAsset
 		for _, deviceID := range item.DeviceIDs {
 			if asset, ok := assetMap[deviceID]; ok {
 				itemAssets = append(itemAssets, asset)
@@ -259,8 +260,8 @@ func (s *TaskGroupService) executeModeB(
 	// 构建执行元数据
 	meta := &ExecutionMeta{
 		RunnerSource:  "task_group",
-		RunnerID:      taskGroup.ID,
-		TaskGroupID:   taskGroup.ID,
+		RunnerID:      fmt.Sprintf("%d", taskGroup.ID),
+		TaskGroupID:   fmt.Sprintf("%d", taskGroup.ID),
 		TaskGroupName: taskGroup.Name,
 		TaskName:      taskGroup.Name,
 		Mode:          "binding",
@@ -350,7 +351,7 @@ func canEditTaskGroup(status string) bool {
 	return status != "running"
 }
 
-func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewModel, error) {
+func buildTaskGroupDetail(taskGroup *models.TaskGroup) (*TaskGroupDetailViewModel, error) {
 	if taskGroup == nil {
 		return nil, fmt.Errorf("任务组不能为空")
 	}
@@ -360,20 +361,20 @@ func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewMode
 		return nil, err
 	}
 
-	assetMap := make(map[uint]config.DeviceAsset, len(assets))
+	assetMap := make(map[uint]models.DeviceAsset, len(assets))
 	for _, asset := range assets {
 		assetMap[asset.ID] = asset
 	}
 
-	uniqueCommandIDs := make(map[string]struct{})
+	uniqueCommandIDs := make(map[uint]struct{})
 	for _, item := range taskGroup.Items {
 		if item.CommandGroupID != "" {
-			uniqueCommandIDs[item.CommandGroupID] = struct{}{}
+			uniqueCommandIDs[parseID(item.CommandGroupID)] = struct{}{}
 		}
 	}
 
-	commandMap := make(map[string]*config.CommandGroup, len(uniqueCommandIDs))
-	missingCommandSet := make(map[string]struct{})
+	commandMap := make(map[uint]*models.CommandGroup, len(uniqueCommandIDs))
+	missingCommandSet := make(map[uint]struct{})
 	for id := range uniqueCommandIDs {
 		group, getErr := config.GetCommandGroup(id)
 		if getErr != nil {
@@ -394,7 +395,6 @@ func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewMode
 					ID:    asset.ID,
 					IP:    asset.IP,
 					Group: asset.Group,
-					Tags:  append([]string(nil), asset.Tags...),
 				})
 				continue
 			}
@@ -404,7 +404,6 @@ func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewMode
 				ID:      deviceID,
 				IP:      "",
 				Missing: true,
-				Tags:    []string{},
 			})
 		}
 
@@ -417,21 +416,19 @@ func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewMode
 		}
 
 		if item.CommandGroupID != "" {
-			if commandGroup, ok := commandMap[item.CommandGroupID]; ok {
+			cmdID := parseID(item.CommandGroupID)
+			if commandGroup, ok := commandMap[cmdID]; ok {
 				itemDetail.CommandInfo = &TaskCommandOverview{
 					ID:          commandGroup.ID,
 					Name:        commandGroup.Name,
 					Description: commandGroup.Description,
-					Tags:        append([]string(nil), commandGroup.Tags...),
-					Commands:    append([]string(nil), commandGroup.Commands...),
+					Commands:    commandGroup.Commands,
 				}
 			} else {
 				itemDetail.CommandInfo = &TaskCommandOverview{
-					ID:       item.CommandGroupID,
-					Name:     "命令组不存在",
-					Tags:     []string{},
-					Commands: []string{},
-					Missing:  true,
+					ID:      cmdID,
+					Name:    "命令组不存在",
+					Missing: true,
 				}
 			}
 		}
@@ -440,7 +437,7 @@ func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewMode
 	}
 
 	missingDevices := sortedUintKeys(missingDeviceSet)
-	missingCommandIDs := sortedKeys(missingCommandSet)
+	missingCommandIDs := sortedUintKeys(missingCommandSet)
 	editDisabledReason := ""
 	if !canEditTaskGroup(taskGroup.Status) {
 		editDisabledReason = fmt.Sprintf("任务执行中不可编辑，当前状态为 %s", taskGroup.Status)
@@ -457,13 +454,10 @@ func buildTaskGroupDetail(taskGroup *config.TaskGroup) (*TaskGroupDetailViewMode
 	}, nil
 }
 
-func sortedKeys(values map[string]struct{}) []string {
-	result := make([]string, 0, len(values))
-	for value := range values {
-		result = append(result, value)
-	}
-	sort.Strings(result)
-	return result
+func parseID(s string) uint {
+	var id uint
+	fmt.Sscanf(s, "%d", &id)
+	return id
 }
 
 func sortedUintKeys(values map[uint]struct{}) []uint {

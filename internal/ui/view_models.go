@@ -1,6 +1,8 @@
 package ui
 
-import "github.com/NetWeaverGo/core/internal/config"
+import (
+	"github.com/NetWeaverGo/core/internal/models"
+)
 
 // ================== 视图模型定义 ==================
 // 本文件定义与前端直接对接的视图模型结构体
@@ -164,13 +166,13 @@ func NewDeviceViewState(ip string, totalCmd int) *DeviceViewState {
 // TaskGroupDetailViewModel 任务详情聚合模型
 // 为执行大屏详情/编辑弹窗提供后端解析后的结构化数据
 type TaskGroupDetailViewModel struct {
-	Task               config.TaskGroup               `json:"task"`
+	Task               models.TaskGroup               `json:"task"`
 	ItemCount          int                            `json:"itemCount"`
 	CanEdit            bool                           `json:"canEdit"`
 	EditDisabledReason string                         `json:"editDisabledReason"`
 	Items              []TaskGroupItemDetailViewModel `json:"items"`
 	MissingDevices     []uint                         `json:"missingDevices"`
-	MissingCommandIDs  []string                       `json:"missingCommandIds"`
+	MissingCommandIDs  []uint                         `json:"missingCommandIds"`
 }
 
 // TaskGroupItemDetailViewModel 单个任务项详情
@@ -194,10 +196,9 @@ type TaskDeviceOverview struct {
 
 // TaskCommandOverview 任务命令信息概览
 type TaskCommandOverview struct {
-	ID          string   `json:"id"`
+	ID          uint     `json:"id"`
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
-	Tags        []string `json:"tags"`
 	Commands    []string `json:"commands"`
 	Missing     bool     `json:"missing"`
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/sftputil"
 	"github.com/NetWeaverGo/core/internal/sshutil"
@@ -53,10 +54,10 @@ func sanitizeMessage(msg string) string {
 // Engine 全局中央调度器，控制所有物理设备的并发执行流
 // 重构后：精简状态管理，使用 EngineStateManager + RingBuffer + Context
 type Engine struct {
-	Devices        []config.DeviceAsset
+	Devices        []models.DeviceAsset
 	Commands       []string
 	MaxWorkers     int // 最大并发协程数量
-	Settings       *config.GlobalSettings
+	Settings       *models.GlobalSettings
 	NonInteractive bool
 
 	// 用于在控制台同一时刻串行化"挂起询问"操作，避免终端文字输出错位混淆
@@ -135,7 +136,7 @@ func (e *Engine) ensureTracker(taskName string) *report.ProgressTracker {
 }
 
 // NewEngine 初始化并行执行引擎（重构后）
-func NewEngine(assets []config.DeviceAsset, commands []string, settings *config.GlobalSettings, nonInteractive bool) *Engine {
+func NewEngine(assets []models.DeviceAsset, commands []string, settings *models.GlobalSettings, nonInteractive bool) *Engine {
 	workers := config.ResolveEngineWorkerCount(settings)
 	eventBufferSize := config.ResolveEventBufferSize()
 	fallbackCapacity := config.ResolveFallbackEventCapacity()
@@ -312,7 +313,7 @@ func (e *Engine) Run(ctx context.Context) error {
 		}
 
 		// 将 dev 作为参数传递，避免在闭包内捕获循环变量
-		go func(device config.DeviceAsset) {
+		go func(device models.DeviceAsset) {
 			defer func() {
 				// 执行完毕后，归还令牌
 				<-sem
@@ -456,7 +457,7 @@ func (e *Engine) RunBackup(ctx context.Context) error {
 	for _, dev := range e.Devices {
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(device config.DeviceAsset) {
+		go func(device models.DeviceAsset) {
 			defer func() { <-sem }()
 			// 增加抖动，平滑 SSH 突发连接压力
 			time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
@@ -490,7 +491,7 @@ func (e *Engine) RunBackup(ctx context.Context) error {
 	return nil
 }
 
-func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.WaitGroup) {
+func (e *Engine) worker(ctx context.Context, dev models.DeviceAsset, wg *sync.WaitGroup) {
 	defer wg.Done()
 	logger.Debug("Worker", dev.IP, "worker 启动")
 
@@ -641,7 +642,7 @@ func (e *Engine) worker(ctx context.Context, dev config.DeviceAsset, wg *sync.Wa
 }
 
 // backupWorker 是基于单个设备进行交互的备份动作集散流
-func (e *Engine) backupWorker(ctx context.Context, dev config.DeviceAsset, wg *sync.WaitGroup) {
+func (e *Engine) backupWorker(ctx context.Context, dev models.DeviceAsset, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	manager := config.GetRuntimeManager()

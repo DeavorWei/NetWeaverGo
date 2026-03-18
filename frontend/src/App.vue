@@ -147,6 +147,15 @@ const menuItems = [
     </svg>`,
   },
   {
+    key: "Discovery",
+    label: "拓扑发现",
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
+      <path d="m4.93 4.93 2.83 2.83m8.48 8.48 2.83 2.83m0-14.14-2.83 2.83m-8.48 8.48-2.83 2.83"/>
+    </svg>`,
+  },
+  {
     key: "NetworkCalc",
     label: "子网计算",
     icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -184,6 +193,7 @@ const titleMap: Record<string, string> = {
   Commands: "命令组管理",
   Tasks: "任务创建",
   TaskExecution: "任务执行大屏",
+  Discovery: "网络拓扑发现",
   NetworkCalc: "子网计算器",
   ProtocolRef: "端口速查",
   ConfigForge: "配置生成",

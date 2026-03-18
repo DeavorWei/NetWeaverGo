@@ -8,10 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/NetWeaverGo/core/internal/discovery"
 	"github.com/NetWeaverGo/core/internal/logger"
-	"github.com/NetWeaverGo/core/internal/plancompare"
-	"github.com/NetWeaverGo/core/internal/topology"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -30,11 +28,6 @@ func InitDB() error {
 	logger.Verbose("Config", "-", "开始初始化SQLite存储逻辑，数据根目录: %s", pm.GetStorageRoot())
 
 	// SQLite 性能优化参数
-	// _journal=WAL: 使用 WAL 模式提升并发性能
-	// _busy_timeout=5000:  busy 超时 5 秒
-	// _cache_size=10000:  缓存 10000 页 (约 40MB)
-	// _foreign_keys=1:    启用外键约束
-	// _synchronous=NORMAL: 同步模式，平衡性能和安全性
 	dsn := dbPath + "?_journal=WAL&_busy_timeout=5000&_cache_size=10000&_foreign_keys=1&_synchronous=NORMAL"
 
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
@@ -55,39 +48,40 @@ func InitDB() error {
 	}
 
 	// 连接池配置 - SQLite 是单文件数据库，连接数不宜过多
-	sqlDB.SetMaxOpenConns(10)                  // 最大打开连接数
-	sqlDB.SetMaxIdleConns(5)                   // 最大空闲连接数
-	sqlDB.SetConnMaxLifetime(time.Hour)        // 连接最大生命周期
-	sqlDB.SetConnMaxIdleTime(10 * time.Minute) // 空闲连接超时
+	sqlDB.SetMaxOpenConns(10)
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 
 	DB = db
 
 	logger.Verbose("Config", "-", "连接SQLite数据库引擎已建立！正在扫描并校验内部表结构约束...")
 	// 自动迁移表结构
 	err = db.AutoMigrate(
-		// 原有表
-		&DeviceAsset{},
-		&GlobalSettings{},
-		&CommandGroup{},
-		&TaskGroup{},
-		&RuntimeSetting{},  // 运行时配置表
-		&ExecutionRecord{}, // 历史执行记录表
-		// 拓扑发现相关表
-		&discovery.DiscoveryTask{},
-		&discovery.DiscoveryDevice{},
-		&discovery.RawCommandOutput{},
-		&topology.TopologyEdge{},
-		&topology.TopologyInterface{},
-		&topology.TopologyLLDPNeighbor{},
-		&topology.TopologyFDBEntry{},
-		&topology.TopologyARPEntry{},
-		&topology.TopologyAggregateGroup{},
-		&topology.TopologyAggregateMember{},
+		// 基础表
+		&models.DeviceAsset{},
+		&models.GlobalSettings{},
+		&models.CommandGroup{},
+		&models.TaskGroup{},
+		&models.RuntimeSetting{},
+		&models.ExecutionRecord{},
+		// 发现任务相关表
+		&models.DiscoveryTask{},
+		&models.DiscoveryDevice{},
+		&models.RawCommandOutput{},
+		// 拓扑相关表
+		&models.TopologyEdge{},
+		&models.TopologyInterface{},
+		&models.TopologyLLDPNeighbor{},
+		&models.TopologyFDBEntry{},
+		&models.TopologyARPEntry{},
+		&models.TopologyAggregateGroup{},
+		&models.TopologyAggregateMember{},
 		// 规划比对相关表
-		&plancompare.PlanFile{},
-		&plancompare.PlannedLink{},
-		&plancompare.DiffReport{},
-		&plancompare.DiffItem{},
+		&models.PlanFile{},
+		&models.PlannedLink{},
+		&models.DiffReport{},
+		&models.DiffItem{},
 	)
 	if err != nil {
 		return fmt.Errorf("自动迁移表结构失败: %v", err)
@@ -137,7 +131,7 @@ func MigrateLegacyDataIfNeeded() {
 
 	// 1. 迁移设备清单
 	if _, err := os.Stat(inventoryPath); err == nil {
-		DB.Model(&DeviceAsset{}).Count(&count)
+		DB.Model(&models.DeviceAsset{}).Count(&count)
 		if count == 0 {
 			if devs, err := readInventoryLegacy(inventoryPath); err == nil && len(devs) > 0 {
 				DB.Create(&devs)
@@ -147,15 +141,13 @@ func MigrateLegacyDataIfNeeded() {
 		}
 	}
 
-	// 2. [已移除] 迁移全局设置（因配置文件已被彻底删除不依赖）
-
-	// 3. 迁移命令组
+	// 2. 迁移命令组
 	cmdPath := pm.GetLegacyCommandGroupsFile()
 	if data, err := os.ReadFile(cmdPath); err == nil {
-		DB.Model(&CommandGroup{}).Count(&count)
+		DB.Model(&models.CommandGroup{}).Count(&count)
 		if count == 0 {
 			var file struct {
-				Groups []CommandGroup `json:"groups"`
+				Groups []models.CommandGroup `json:"groups"`
 			}
 			if err := json.Unmarshal(data, &file); err == nil && len(file.Groups) > 0 {
 				DB.Create(&file.Groups)
@@ -165,13 +157,13 @@ func MigrateLegacyDataIfNeeded() {
 		}
 	}
 
-	// 4. 迁移任务组
+	// 3. 迁移任务组
 	tskPath := pm.GetLegacyTaskGroupsFile()
 	if data, err := os.ReadFile(tskPath); err == nil {
-		DB.Model(&TaskGroup{}).Count(&count)
+		DB.Model(&models.TaskGroup{}).Count(&count)
 		if count == 0 {
 			var file struct {
-				Groups []TaskGroup `json:"groups"`
+				Groups []models.TaskGroup `json:"groups"`
 			}
 			if err := json.Unmarshal(data, &file); err == nil && len(file.Groups) > 0 {
 				DB.Create(&file.Groups)
@@ -181,7 +173,7 @@ func MigrateLegacyDataIfNeeded() {
 		}
 	}
 
-	// 5. 迁移旧的 config.txt 到默认命令组
+	// 4. 迁移旧的 config.txt 到默认命令组
 	if err := MigrateLegacyCommands(); err != nil {
 		logger.Warn("Config", "-", "迁移 config.txt 失败: %v", err)
 	}

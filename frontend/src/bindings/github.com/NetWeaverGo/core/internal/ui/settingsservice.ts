@@ -12,7 +12,7 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as config$0 from "../config/models.js";
+import * as models$0 from "../models/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -21,7 +21,7 @@ import * as $models from "./models.js";
 /**
  * EnsureConfig 返回当前数据库中的设备资产和默认命令组，供首页展示概况
  */
-export function EnsureConfig(): $CancellablePromise<[config$0.DeviceAsset[], string[]]> {
+export function EnsureConfig(): $CancellablePromise<[models$0.DeviceAsset[], string[]]> {
     return $Call.ByID(2867805956).then(($result: any) => {
         $result[0] = $$createType1($result[0]);
         $result[1] = $$createType2($result[1]);
@@ -59,7 +59,7 @@ export function GetSSHAlgorithmOptions(): $CancellablePromise<$models.SSHAlgorit
 /**
  * LoadSettings 获取合并后的主配置
  */
-export function LoadSettings(): $CancellablePromise<config$0.GlobalSettings | null> {
+export function LoadSettings(): $CancellablePromise<models$0.GlobalSettings | null> {
     return $Call.ByID(3565402469).then(($result: any) => {
         return $$createType7($result);
     });
@@ -96,7 +96,7 @@ export function ResetRuntimeConfigToDefault(): $CancellablePromise<void> {
 /**
  * SaveSettings 保存全局设置到配置文件
  */
-export function SaveSettings(settings: config$0.GlobalSettings): $CancellablePromise<void> {
+export function SaveSettings(settings: models$0.GlobalSettings): $CancellablePromise<void> {
     return $Call.ByID(3400930556, settings);
 }
 
@@ -108,11 +108,11 @@ export function UpdateRuntimeConfig(data: $models.RuntimeConfigData): $Cancellab
 }
 
 // Private type creation functions
-const $$createType0 = config$0.DeviceAsset.createFrom;
+const $$createType0 = models$0.DeviceAsset.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = $Create.Array($Create.Any);
 const $$createType3 = $Create.Map($Create.Any, $Create.Any);
 const $$createType4 = $models.RuntimeConfigData.createFrom;
 const $$createType5 = $models.SSHAlgorithmOptions.createFrom;
-const $$createType6 = config$0.GlobalSettings.createFrom;
+const $$createType6 = models$0.GlobalSettings.createFrom;
 const $$createType7 = $Create.Nullable($$createType6);

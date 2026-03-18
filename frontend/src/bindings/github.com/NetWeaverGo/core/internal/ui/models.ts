@@ -8,6 +8,9 @@ import { Create as $Create } from "/wails/runtime.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as config$0 from "../config/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as models$0 from "../models/models.js";
 
 /**
  * BindingPreview 绑定预览结果
@@ -937,26 +940,22 @@ export class SSHAlgorithmOptions {
  * TaskCommandOverview 任务命令信息概览
  */
 export class TaskCommandOverview {
-    "id": string;
+    "id": number;
     "name": string;
     "description": string;
-    "tags": string[];
     "commands": string[];
     "missing": boolean;
 
     /** Creates a new TaskCommandOverview instance. */
     constructor($$source: Partial<TaskCommandOverview> = {}) {
         if (!("id" in $$source)) {
-            this["id"] = "";
+            this["id"] = 0;
         }
         if (!("name" in $$source)) {
             this["name"] = "";
         }
         if (!("description" in $$source)) {
             this["description"] = "";
-        }
-        if (!("tags" in $$source)) {
-            this["tags"] = [];
         }
         if (!("commands" in $$source)) {
             this["commands"] = [];
@@ -973,13 +972,9 @@ export class TaskCommandOverview {
      */
     static createFrom($$source: any = {}): TaskCommandOverview {
         const $$createField3_0 = $$createType0;
-        const $$createField4_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("tags" in $$parsedSource) {
-            $$parsedSource["tags"] = $$createField3_0($$parsedSource["tags"]);
-        }
         if ("commands" in $$parsedSource) {
-            $$parsedSource["commands"] = $$createField4_0($$parsedSource["commands"]);
+            $$parsedSource["commands"] = $$createField3_0($$parsedSource["commands"]);
         }
         return new TaskCommandOverview($$parsedSource as Partial<TaskCommandOverview>);
     }
@@ -1034,18 +1029,18 @@ export class TaskDeviceOverview {
  * 为执行大屏详情/编辑弹窗提供后端解析后的结构化数据
  */
 export class TaskGroupDetailViewModel {
-    "task": config$0.TaskGroup;
+    "task": models$0.TaskGroup;
     "itemCount": number;
     "canEdit": boolean;
     "editDisabledReason": string;
     "items": TaskGroupItemDetailViewModel[];
     "missingDevices": number[];
-    "missingCommandIds": string[];
+    "missingCommandIds": number[];
 
     /** Creates a new TaskGroupDetailViewModel instance. */
     constructor($$source: Partial<TaskGroupDetailViewModel> = {}) {
         if (!("task" in $$source)) {
-            this["task"] = (new config$0.TaskGroup());
+            this["task"] = (new models$0.TaskGroup());
         }
         if (!("itemCount" in $$source)) {
             this["itemCount"] = 0;
@@ -1076,7 +1071,7 @@ export class TaskGroupDetailViewModel {
         const $$createField0_0 = $$createType13;
         const $$createField4_0 = $$createType15;
         const $$createField5_0 = $$createType16;
-        const $$createField6_0 = $$createType0;
+        const $$createField6_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("task" in $$parsedSource) {
             $$parsedSource["task"] = $$createField0_0($$parsedSource["task"]);
@@ -1161,7 +1156,7 @@ const $$createType9 = config$0.ExecutionRecord.createFrom;
 const $$createType10 = $Create.Array($$createType9);
 const $$createType11 = SSHAlgorithmOption.createFrom;
 const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = config$0.TaskGroup.createFrom;
+const $$createType13 = models$0.TaskGroup.createFrom;
 const $$createType14 = TaskGroupItemDetailViewModel.createFrom;
 const $$createType15 = $Create.Array($$createType14);
 const $$createType16 = $Create.Array($Create.Any);

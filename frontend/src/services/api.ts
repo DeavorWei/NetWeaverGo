@@ -25,6 +25,7 @@ import * as TaskGroupServiceBinding from '../bindings/github.com/NetWeaverGo/cor
 import * as ForgeServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice.js'
 import * as QueryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/queryservice.js'
 import * as ExecutionHistoryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/executionhistoryservice.js'
+import * as DiscoveryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/discoveryservice.js'
 
 // ==================== 设备管理 API ====================
 /**
@@ -291,11 +292,52 @@ export type {
   QueryResult as QueryResultBinding,
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
+// ==================== 发现任务 API ====================
+/**
+ * 发现任务 API
+ * @description 提供网络拓扑发现任务的管理
+ */
+export const DiscoveryAPI = {
+  /** 启动发现任务 */
+  startDiscovery: DiscoveryServiceBinding.StartDiscovery,
+  /** 取消发现任务 */
+  cancelDiscovery: DiscoveryServiceBinding.CancelDiscovery,
+  /** 重试失败的设备 */
+  retryFailedDevices: DiscoveryServiceBinding.RetryFailedDevices,
+  /** 获取任务状态 */
+  getTaskStatus: DiscoveryServiceBinding.GetTaskStatus,
+  /** 列出所有发现任务 */
+  listDiscoveryTasks: DiscoveryServiceBinding.ListDiscoveryTasks,
+  /** 获取任务下的设备列表 */
+  getTaskDevices: DiscoveryServiceBinding.GetTaskDevices,
+  /** 获取原始命令输出 */
+  getRawOutput: DiscoveryServiceBinding.GetRawOutput,
+  /** 检查是否有发现任务在运行 */
+  isDiscoveryRunning: DiscoveryServiceBinding.IsDiscoveryRunning,
+  /** 获取当前运行的任务ID */
+  getCurrentDiscoveryTask: DiscoveryServiceBinding.GetCurrentDiscoveryTask,
+  /** 获取所有厂商命令配置 */
+  getVendorProfiles: DiscoveryServiceBinding.GetVendorProfiles,
+  /** 获取支持的厂商列表 */
+  getSupportedVendors: DiscoveryServiceBinding.GetSupportedVendors,
+} as const
+
+// 导出发现任务相关类型
+export type {
+  CommandSpec,
+  VendorCommandProfile,
+} from '../bindings/github.com/NetWeaverGo/core/internal/discovery/models.js'
+
 // ==================== 类型导出 ====================
 export type { 
   DeviceAsset, 
   GlobalSettings,
   CommandGroup,
   TaskGroup,
-  TaskItem
-} from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
+  TaskItem,
+  SSHAlgorithmSettings,
+  StartDiscoveryRequest,
+  TaskStartResponse,
+  DiscoveryTaskView,
+  DiscoveryDeviceView,
+} from '../bindings/github.com/NetWeaverGo/core/internal/models/models.js'

@@ -9,19 +9,9 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/google/uuid"
 )
-
-// CommandGroup 命令组定义
-type CommandGroup struct {
-	ID          string   `json:"id" gorm:"primaryKey"`            // 唯一标识（UUID）
-	Name        string   `json:"name" gorm:"uniqueIndex"`         // 命令组名称
-	Description string   `json:"description"`                     // 描述信息
-	Commands    []string `json:"commands" gorm:"serializer:json"` // 命令列表
-	CreatedAt   string   `json:"createdAt"`                       // 创建时间
-	UpdatedAt   string   `json:"updatedAt"`                       // 更新时间
-	Tags        []string `json:"tags" gorm:"serializer:json"`     // 标签（用于分类）
-}
 
 // 时间格式
 const TimeFormat = "2006-01-02T15:04:05"
@@ -39,11 +29,11 @@ func generateID() string {
 // ========== 命令组管理 API ==========
 
 // ListCommandGroups 获取所有命令组列表
-func ListCommandGroups() ([]CommandGroup, error) {
+func ListCommandGroups() ([]models.CommandGroup, error) {
 	if DB == nil {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
-	var groups []CommandGroup
+	var groups []models.CommandGroup
 	if err := DB.Find(&groups).Error; err != nil {
 		return nil, err
 	}
@@ -51,33 +41,30 @@ func ListCommandGroups() ([]CommandGroup, error) {
 }
 
 // GetCommandGroup 根据 ID 获取单个命令组
-func GetCommandGroup(id string) (*CommandGroup, error) {
+func GetCommandGroup(id uint) (*models.CommandGroup, error) {
 	if DB == nil {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
-	var group CommandGroup
-	if err := DB.First(&group, "id = ?", id).Error; err != nil {
-		return nil, fmt.Errorf("未找到命令组: %s", id)
+	var group models.CommandGroup
+	if err := DB.First(&group, id).Error; err != nil {
+		return nil, fmt.Errorf("未找到命令组: %d", id)
 	}
 	return &group, nil
 }
 
 // CreateCommandGroup 创建新命令组
-func CreateCommandGroup(group CommandGroup) (*CommandGroup, error) {
+func CreateCommandGroup(group models.CommandGroup) (*models.CommandGroup, error) {
 	if DB == nil {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	group.ID = generateID()
-	group.CreatedAt = nowFormatted()
-	group.UpdatedAt = group.CreatedAt
-
-	if err := validateCommandGroup(group); err != nil {
-		return nil, err
+	group.Name = strings.TrimSpace(group.Name)
+	if group.Name == "" {
+		return nil, fmt.Errorf("命令组名称不能为空")
 	}
 
 	var count int64
-	DB.Model(&CommandGroup{}).Where("name = ?", group.Name).Count(&count)
+	DB.Model(&models.CommandGroup{}).Where("name = ?", group.Name).Count(&count)
 	if count > 0 {
 		return nil, fmt.Errorf("命令组名称已存在: %s", group.Name)
 	}
@@ -91,26 +78,24 @@ func CreateCommandGroup(group CommandGroup) (*CommandGroup, error) {
 }
 
 // UpdateCommandGroup 更新命令组
-func UpdateCommandGroup(id string, group CommandGroup) (*CommandGroup, error) {
+func UpdateCommandGroup(id uint, group models.CommandGroup) (*models.CommandGroup, error) {
 	if DB == nil {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	var existing CommandGroup
-	if err := DB.First(&existing, "id = ?", id).Error; err != nil {
-		return nil, fmt.Errorf("未找到命令组: %s", id)
+	var existing models.CommandGroup
+	if err := DB.First(&existing, id).Error; err != nil {
+		return nil, fmt.Errorf("未找到命令组: %d", id)
 	}
 
 	group.ID = id
-	group.CreatedAt = existing.CreatedAt
-	group.UpdatedAt = nowFormatted()
-
-	if err := validateCommandGroup(group); err != nil {
-		return nil, err
+	group.Name = strings.TrimSpace(group.Name)
+	if group.Name == "" {
+		return nil, fmt.Errorf("命令组名称不能为空")
 	}
 
 	var count int64
-	DB.Model(&CommandGroup{}).Where("name = ? AND id != ?", group.Name, id).Count(&count)
+	DB.Model(&models.CommandGroup{}).Where("name = ? AND id != ?", group.Name, id).Count(&count)
 	if count > 0 {
 		return nil, fmt.Errorf("命令组名称已存在: %s", group.Name)
 	}
@@ -124,41 +109,39 @@ func UpdateCommandGroup(id string, group CommandGroup) (*CommandGroup, error) {
 }
 
 // DeleteCommandGroup 删除命令组
-func DeleteCommandGroup(id string) error {
+func DeleteCommandGroup(id uint) error {
 	if DB == nil {
 		return fmt.Errorf("数据库未初始化")
 	}
 
-	if err := DB.Delete(&CommandGroup{}, "id = ?", id).Error; err != nil {
+	if err := DB.Delete(&models.CommandGroup{}, id).Error; err != nil {
 		return err
 	}
 
-	logger.Info("Config", "-", "成功删除命令组: %s", id)
+	logger.Info("Config", "-", "成功删除命令组: %d", id)
 	return nil
 }
 
 // DuplicateCommandGroup 复制命令组
-func DuplicateCommandGroup(id string) (*CommandGroup, error) {
+func DuplicateCommandGroup(id uint) (*models.CommandGroup, error) {
 	if DB == nil {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	var source CommandGroup
-	if err := DB.First(&source, "id = ?", id).Error; err != nil {
-		return nil, fmt.Errorf("未找到命令组: %s", id)
+	var source models.CommandGroup
+	if err := DB.First(&source, id).Error; err != nil {
+		return nil, fmt.Errorf("未找到命令组: %d", id)
 	}
 
 	newGroup := source
-	newGroup.ID = generateID()
-	newGroup.CreatedAt = nowFormatted()
-	newGroup.UpdatedAt = nowFormatted()
+	newGroup.ID = 0
 	newGroup.Name = source.Name + " - 副本"
 
 	baseName := newGroup.Name
 	counter := 1
 	for {
 		var count int64
-		DB.Model(&CommandGroup{}).Where("name = ?", newGroup.Name).Count(&count)
+		DB.Model(&models.CommandGroup{}).Where("name = ?", newGroup.Name).Count(&count)
 		if count == 0 {
 			break
 		}
@@ -175,7 +158,7 @@ func DuplicateCommandGroup(id string) (*CommandGroup, error) {
 }
 
 // ImportCommandGroup 从 JSON 文件导入命令组
-func ImportCommandGroup(filePath string) (*CommandGroup, error) {
+func ImportCommandGroup(filePath string) (*models.CommandGroup, error) {
 	if DB == nil {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
@@ -185,24 +168,21 @@ func ImportCommandGroup(filePath string) (*CommandGroup, error) {
 		return nil, fmt.Errorf("读取导入文件失败: %v", err)
 	}
 
-	var group CommandGroup
+	var group models.CommandGroup
 	if err := json.Unmarshal(data, &group); err != nil {
 		return nil, fmt.Errorf("解析导入文件失败: %v", err)
 	}
 
-	group.ID = generateID()
-	group.CreatedAt = nowFormatted()
-	group.UpdatedAt = nowFormatted()
-
-	if err := validateCommandGroup(group); err != nil {
-		return nil, err
+	group.Name = strings.TrimSpace(group.Name)
+	if group.Name == "" {
+		return nil, fmt.Errorf("命令组名称不能为空")
 	}
 
 	baseName := group.Name
 	counter := 1
 	for {
 		var count int64
-		DB.Model(&CommandGroup{}).Where("name = ?", group.Name).Count(&count)
+		DB.Model(&models.CommandGroup{}).Where("name = ?", group.Name).Count(&count)
 		if count == 0 {
 			break
 		}
@@ -219,14 +199,14 @@ func ImportCommandGroup(filePath string) (*CommandGroup, error) {
 }
 
 // ExportCommandGroup 导出命令组到 JSON 文件
-func ExportCommandGroup(id string, filePath string) error {
+func ExportCommandGroup(id uint, filePath string) error {
 	if DB == nil {
 		return fmt.Errorf("数据库未初始化")
 	}
 
-	var group CommandGroup
-	if err := DB.First(&group, "id = ?", id).Error; err != nil {
-		return fmt.Errorf("未找到命令组: %s", id)
+	var group models.CommandGroup
+	if err := DB.First(&group, id).Error; err != nil {
+		return fmt.Errorf("未找到命令组: %d", id)
 	}
 
 	jsonData, err := json.MarshalIndent(group, "", "  ")
@@ -249,30 +229,6 @@ func ExportCommandGroup(id string, filePath string) error {
 	return nil
 }
 
-// validateCommandGroup 校验命令组
-func validateCommandGroup(group CommandGroup) error {
-	if strings.TrimSpace(group.Name) == "" {
-		return fmt.Errorf("命令组名称不能为空")
-	}
-
-	if len(group.Commands) == 0 {
-		return fmt.Errorf("命令列表不能为空")
-	}
-
-	var validCommands []string
-	for _, cmd := range group.Commands {
-		trimmed := strings.TrimSpace(cmd)
-		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
-			validCommands = append(validCommands, trimmed)
-		}
-	}
-
-	if len(validCommands) == 0 {
-		return fmt.Errorf("命令列表不能为空")
-	}
-	return nil
-}
-
 // MigrateLegacyCommands 将 config.txt 迁移到命令组（已简化，由 db.go 调用）
 func MigrateLegacyCommands() error {
 	commands, err := readCommandsLegacy()
@@ -281,19 +237,15 @@ func MigrateLegacyCommands() error {
 	}
 
 	var count int64
-	DB.Model(&CommandGroup{}).Where("name = ?", "默认命令组").Count(&count)
+	DB.Model(&models.CommandGroup{}).Where("name = ?", "默认命令组").Count(&count)
 	if count > 0 {
 		return nil
 	}
 
-	defaultGroup := CommandGroup{
-		ID:          generateID(),
+	defaultGroup := models.CommandGroup{
 		Name:        "默认命令组",
 		Description: "从 config.txt 自动迁移的默认命令组",
 		Commands:    commands,
-		CreatedAt:   nowFormatted(),
-		UpdatedAt:   nowFormatted(),
-		Tags:        []string{"系统默认"},
 	}
 
 	return DB.Create(&defaultGroup).Error

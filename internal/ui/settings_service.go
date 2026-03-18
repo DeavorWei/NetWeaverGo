@@ -6,6 +6,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"golang.org/x/crypto/ssh"
 )
@@ -42,7 +43,7 @@ func (s *SettingsService) ServiceStartup(ctx context.Context, options applicatio
 }
 
 // LoadSettings 获取合并后的主配置
-func (s *SettingsService) LoadSettings() (*config.GlobalSettings, error) {
+func (s *SettingsService) LoadSettings() (*models.GlobalSettings, error) {
 	logger.Debug("SettingsService", "-", "收到前端 LoadSettings 调用请求")
 	settings, isNew, err := config.LoadSettings()
 	if err != nil {
@@ -58,7 +59,7 @@ func (s *SettingsService) LoadSettings() (*config.GlobalSettings, error) {
 }
 
 // SaveSettings 保存全局设置到配置文件
-func (s *SettingsService) SaveSettings(settings config.GlobalSettings) error {
+func (s *SettingsService) SaveSettings(settings models.GlobalSettings) error {
 	logger.Debug("SettingsService", "-", "收到前端 SaveSettings 调用请求")
 	logger.Verbose("SettingsService", "-", "接收到的设置: maxWorkers=%d, timeout=%s/%s, debug=%v, verbose=%v, sshPreset=%s",
 		settings.MaxWorkers,
@@ -79,7 +80,7 @@ func (s *SettingsService) SaveSettings(settings config.GlobalSettings) error {
 }
 
 // EnsureConfig 返回当前数据库中的设备资产和默认命令组，供首页展示概况
-func (s *SettingsService) EnsureConfig() ([]config.DeviceAsset, []string, error) {
+func (s *SettingsService) EnsureConfig() ([]models.DeviceAsset, []string, error) {
 	return config.LoadExecutionResources()
 }
 

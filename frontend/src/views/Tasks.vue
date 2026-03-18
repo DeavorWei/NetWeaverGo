@@ -2,14 +2,25 @@
   <div class="animate-slide-in space-y-5 h-full flex flex-col">
     <!-- 标题栏 -->
     <div class="flex items-center justify-between flex-shrink-0">
-      <p class="text-sm text-text-muted">选择设备和命令组，创建任务绑定到任务执行页</p>
+      <p class="text-sm text-text-muted">
+        选择设备和命令组，创建任务绑定到任务执行页
+      </p>
       <div class="flex gap-3">
         <button
           @click="goToTaskExecution"
           class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="5 3 19 12 5 21 5 3"/>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polygon points="5 3 19 12 5 21 5 3" />
           </svg>
           前往任务执行
         </button>
@@ -17,12 +28,24 @@
           @click="openCreateModal"
           :disabled="!canCreate"
           class="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-card"
-          :class="!canCreate
-            ? 'bg-bg-card border border-border text-text-muted cursor-not-allowed'
-            : 'bg-accent hover:bg-accent-glow text-white border border-accent/30 hover:shadow-glow'"
+          :class="
+            !canCreate
+              ? 'bg-bg-card border border-border text-text-muted cursor-not-allowed'
+              : 'bg-accent hover:bg-accent-glow text-white border border-accent/30 hover:shadow-glow'
+          "
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
           创建任务
         </button>
@@ -33,14 +56,26 @@
     <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
       <div class="flex-1 overflow-y-auto scrollbar-custom pr-1">
         <!-- 步骤1: 选择目标设备 -->
-        <div 
+        <div
           class="bg-bg-card border border-border rounded-xl overflow-hidden"
           :style="{ height: devicePanelHeight + 'px', minHeight: '200px' }"
         >
-          <div class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel">
-            <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">1</div>
-            <span class="text-sm font-medium text-text-primary">选择目标设备</span>
-            <span v-if="selectedDevices.length > 0" class="ml-2 text-xs text-accent font-mono">已选 {{ selectedDevices.length }} 台</span>
+          <div
+            class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel"
+          >
+            <div
+              class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent"
+            >
+              1
+            </div>
+            <span class="text-sm font-medium text-text-primary"
+              >选择目标设备</span
+            >
+            <span
+              v-if="selectedDevices.length > 0"
+              class="ml-2 text-xs text-accent font-mono"
+              >已选 {{ selectedDevices.length }} 台</span
+            >
             <button
               @click="goToDevices"
               class="ml-auto text-xs text-accent hover:text-accent-glow transition-colors"
@@ -57,22 +92,36 @@
         </div>
 
         <!-- 可拖拽分隔条 -->
-        <div 
+        <div
           class="h-2 flex items-center justify-center cursor-row-resize group py-1"
           @mousedown="startResize"
         >
-          <div class="w-16 h-1.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors"></div>
+          <div
+            class="w-16 h-1.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors"
+          ></div>
         </div>
 
         <!-- 步骤2: 选择命令组 -->
-        <div 
+        <div
           class="bg-bg-card border border-border rounded-xl overflow-hidden mb-4"
           :style="{ minHeight: commandPanelMinHeight + 'px' }"
         >
-          <div class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel">
-            <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">2</div>
-            <span class="text-sm font-medium text-text-primary">选择命令组</span>
-            <span v-if="selectedCommandGroup" class="ml-2 text-xs text-accent font-mono">{{ selectedCommandGroup.name }}</span>
+          <div
+            class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel"
+          >
+            <div
+              class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent"
+            >
+              2
+            </div>
+            <span class="text-sm font-medium text-text-primary"
+              >选择命令组</span
+            >
+            <span
+              v-if="selectedCommandGroup"
+              class="ml-2 text-xs text-accent font-mono"
+              >{{ selectedCommandGroup.name }}</span
+            >
           </div>
           <div class="p-3">
             <CommandGroupSelector
@@ -86,27 +135,57 @@
 
     <!-- 底部提示 -->
     <div class="flex-shrink-0 text-center py-2">
-      <p class="text-sm text-text-muted">选择设备和命令组后，点击「创建任务」将绑定组合发送到任务执行页</p>
+      <p class="text-sm text-text-muted">
+        选择设备和命令组后，点击「创建任务」将绑定组合发送到任务执行页
+      </p>
     </div>
 
     <!-- 创建任务弹窗 -->
     <Transition name="modal">
-      <div v-if="createModal.show" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="createModal.show = false"></div>
-        <div class="relative bg-bg-card border border-border rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden animate-slide-in">
+      <div
+        v-if="createModal.show"
+        class="fixed inset-0 z-50 flex items-center justify-center"
+      >
+        <div
+          class="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          @click="createModal.show = false"
+        ></div>
+        <div
+          class="relative bg-bg-card border border-border rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden animate-slide-in"
+        >
           <!-- 弹窗头部 -->
-          <div class="flex items-center justify-between px-5 py-4 border-b border-border bg-bg-panel">
+          <div
+            class="flex items-center justify-between px-5 py-4 border-b border-border bg-bg-panel"
+          >
             <h3 class="text-sm font-semibold text-text-primary">创建任务</h3>
-            <button @click="createModal.show = false" class="text-text-muted hover:text-text-primary transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <button
+              @click="createModal.show = false"
+              class="text-text-muted hover:text-text-primary transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
           </div>
 
           <!-- 弹窗内容 -->
-          <div class="px-5 py-4 space-y-4 max-h-[60vh] overflow-auto scrollbar-custom">
+          <div
+            class="px-5 py-4 space-y-4 max-h-[60vh] overflow-auto scrollbar-custom"
+          >
             <!-- 任务名称 -->
             <div>
-              <label class="block text-xs font-medium text-text-secondary mb-1.5">任务名称</label>
+              <label
+                class="block text-xs font-medium text-text-secondary mb-1.5"
+                >任务名称</label
+              >
               <input
                 v-model="createModal.name"
                 type="text"
@@ -117,7 +196,10 @@
 
             <!-- 任务描述 -->
             <div>
-              <label class="block text-xs font-medium text-text-secondary mb-1.5">描述（可选）</label>
+              <label
+                class="block text-xs font-medium text-text-secondary mb-1.5"
+                >描述（可选）</label
+              >
               <textarea
                 v-model="createModal.description"
                 rows="2"
@@ -128,14 +210,32 @@
 
             <!-- 标签管理 -->
             <div>
-              <label class="block text-xs font-medium text-text-secondary mb-1.5">标签</label>
+              <label
+                class="block text-xs font-medium text-text-secondary mb-1.5"
+                >标签</label
+              >
               <div class="flex flex-wrap gap-2 mb-2">
-                <span v-for="(tag, idx) in createModal.tags" :key="idx"
+                <span
+                  v-for="(tag, idx) in createModal.tags"
+                  :key="idx"
                   class="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-accent/10 border border-accent/30 text-accent"
                 >
                   {{ tag }}
-                  <button @click="createModal.tags.splice(idx, 1)" class="hover:text-error transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  <button
+                    @click="createModal.tags.splice(idx, 1)"
+                    class="hover:text-error transition-colors"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="w-3 h-3"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
                   </button>
                 </span>
               </div>
@@ -147,35 +247,67 @@
                   placeholder="输入标签后按回车"
                   @keydown.enter.prevent="addTag"
                 />
-                <button @click="addTag" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white transition-all">
+                <button
+                  @click="addTag"
+                  class="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white transition-all"
+                >
                   添加
                 </button>
               </div>
             </div>
 
             <!-- 绑定预览 -->
-            <div class="bg-bg-panel border border-border rounded-lg p-3 space-y-2">
-              <h4 class="text-xs font-medium text-text-secondary mb-2">绑定预览</h4>
+            <div
+              class="bg-bg-panel border border-border rounded-lg p-3 space-y-2"
+            >
+              <h4 class="text-xs font-medium text-text-secondary mb-2">
+                绑定预览
+              </h4>
               <div class="flex items-center gap-2 text-xs">
-                <span class="px-2 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent font-mono">
-                  {{ selectedCommandGroup?.name || '未选择' }}
+                <span
+                  class="px-2 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent font-mono"
+                >
+                  {{ selectedCommandGroup?.name || "未选择" }}
                 </span>
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                <span class="text-text-secondary">{{ selectedDevices.length }} 台设备</span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="w-3.5 h-3.5 text-text-muted"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+                <span class="text-text-secondary"
+                  >{{ selectedDevices.length }} 台设备</span
+                >
               </div>
               <div class="flex flex-wrap gap-1 mt-1">
-                <span v-for="dev in selectedDevices.slice(0, 10)" :key="dev.ip"
+                <span
+                  v-for="dev in selectedDevices.slice(0, 10)"
+                  :key="dev.ip"
                   class="text-xs font-mono px-1.5 py-0.5 rounded bg-bg-card border border-border text-text-muted"
-                >{{ dev.ip }}</span>
-                <span v-if="selectedDevices.length > 10" class="text-xs text-text-muted">+{{ selectedDevices.length - 10 }} 台</span>
+                  >{{ dev.ip }}</span
+                >
+                <span
+                  v-if="selectedDevices.length > 10"
+                  class="text-xs text-text-muted"
+                  >+{{ selectedDevices.length - 10 }} 台</span
+                >
               </div>
             </div>
 
             <div class="bg-bg-panel border border-border rounded-lg p-3">
               <label class="flex items-start justify-between gap-4">
                 <div>
-                  <div class="text-xs font-medium text-text-secondary">原始日志</div>
-                  <p class="text-xs text-text-muted mt-1">默认关闭。开启后会额外保存完整 SSH 字节流。</p>
+                  <div class="text-xs font-medium text-text-secondary">
+                    原始日志
+                  </div>
+                  <p class="text-xs text-text-muted mt-1">
+                    默认关闭。开启后会额外保存完整 SSH 字节流。
+                  </p>
                 </div>
                 <input
                   v-model="createModal.enableRawLog"
@@ -191,15 +323,21 @@
             <button
               @click="createModal.show = false"
               class="px-4 py-2 rounded-lg text-sm font-medium bg-bg-panel border border-border text-text-secondary hover:text-text-primary transition-all"
-            >取消</button>
+            >
+              取消
+            </button>
             <button
               @click="confirmCreate"
               :disabled="!createModal.name.trim()"
               class="px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
-              :class="createModal.name.trim()
-                ? 'bg-accent hover:bg-accent-glow text-white border border-accent/30 hover:shadow-glow'
-                : 'bg-bg-card border border-border text-text-muted cursor-not-allowed'"
-            >确认创建</button>
+              :class="
+                createModal.name.trim()
+                  ? 'bg-accent hover:bg-accent-glow text-white border border-accent/30 hover:shadow-glow'
+                  : 'bg-bg-card border border-border text-text-muted cursor-not-allowed'
+              "
+            >
+              确认创建
+            </button>
           </div>
         </div>
       </div>
@@ -207,12 +345,42 @@
 
     <!-- Toast 通知 -->
     <Transition name="toast">
-      <div v-if="showToast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-        <div class="flex items-center gap-2 px-5 py-3 rounded-xl shadow-2xl border"
-          :class="toastType === 'success' ? 'bg-success/10 border-success/30 text-success' : 'bg-error/10 border-error/30 text-error'"
+      <div
+        v-if="showToast"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50"
+      >
+        <div
+          class="flex items-center gap-2 px-5 py-3 rounded-xl shadow-2xl border"
+          :class="
+            toastType === 'success'
+              ? 'bg-success/10 border-success/30 text-success'
+              : 'bg-error/10 border-error/30 text-error'
+          "
         >
-          <svg v-if="toastType === 'success'" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-          <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          <svg
+            v-if="toastType === 'success'"
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <svg
+            v-else
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="15" y1="9" x2="9" y2="15" />
+            <line x1="9" y1="9" x2="15" y2="15" />
+          </svg>
           <span class="text-sm font-medium">{{ toastMessage }}</span>
         </div>
       </div>
@@ -221,200 +389,207 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
-import {
-  DeviceAPI,
-  TaskGroupAPI
-} from '../services/api'
-import type { DeviceAsset, CommandGroup } from '../services/api'
-import DeviceSelector from '../components/task/DeviceSelector.vue'
-import CommandGroupSelector from '../components/task/CommandGroupSelector.vue'
+import { ref, computed, onMounted, onUnmounted } from "vue";
+import { useRouter } from "vue-router";
+import { DeviceAPI, TaskGroupAPI } from "../services/api";
+import type { DeviceAsset, CommandGroup } from "../services/api";
+import DeviceSelector from "../components/task/DeviceSelector.vue";
+import CommandGroupSelector from "../components/task/CommandGroupSelector.vue";
 
-const router = useRouter()
+const router = useRouter();
 
 // 设备列表和选择状态
-const deviceList = ref<DeviceAsset[]>([])
-const selectedDevices = ref<DeviceAsset[]>([])
-const selectedCommandGroupId = ref('')
-const selectedCommandGroup = ref<CommandGroup | null>(null)
+const deviceList = ref<DeviceAsset[]>([]);
+const selectedDevices = ref<DeviceAsset[]>([]);
+const selectedCommandGroupId = ref<number>(0);
+const selectedCommandGroup = ref<CommandGroup | null>(null);
 
 // 面板高度控制
-const devicePanelHeight = ref(280) // 设备选择面板默认高度
-const commandPanelMinHeight = 300 // 命令组面板最小高度
-const minHeight = 150 // 面板最小高度限制
+const devicePanelHeight = ref(280); // 设备选择面板默认高度
+const commandPanelMinHeight = 300; // 命令组面板最小高度
+const minHeight = 150; // 面板最小高度限制
 
 // 拖拽调整高度相关
-let isResizing = false
-let startY = 0
-let startHeight = 0
+let isResizing = false;
+let startY = 0;
+let startHeight = 0;
 
 function startResize(e: MouseEvent) {
-  isResizing = true
-  startY = e.clientY
-  startHeight = devicePanelHeight.value
-  document.addEventListener('mousemove', onResize)
-  document.addEventListener('mouseup', stopResize)
-  document.body.style.cursor = 'row-resize'
-  document.body.style.userSelect = 'none'
+  isResizing = true;
+  startY = e.clientY;
+  startHeight = devicePanelHeight.value;
+  document.addEventListener("mousemove", onResize);
+  document.addEventListener("mouseup", stopResize);
+  document.body.style.cursor = "row-resize";
+  document.body.style.userSelect = "none";
 }
 
 function onResize(e: MouseEvent) {
-  if (!isResizing) return
-  const deltaY = e.clientY - startY
-  const newHeight = startHeight + deltaY
-  
+  if (!isResizing) return;
+  const deltaY = e.clientY - startY;
+  const newHeight = startHeight + deltaY;
+
   // 限制高度范围
   if (newHeight >= minHeight) {
-    devicePanelHeight.value = newHeight
+    devicePanelHeight.value = newHeight;
   }
 }
 
 function stopResize() {
-  isResizing = false
-  document.removeEventListener('mousemove', onResize)
-  document.removeEventListener('mouseup', stopResize)
-  document.body.style.cursor = ''
-  document.body.style.userSelect = ''
+  isResizing = false;
+  document.removeEventListener("mousemove", onResize);
+  document.removeEventListener("mouseup", stopResize);
+  document.body.style.cursor = "";
+  document.body.style.userSelect = "";
 }
 
 // 组件卸载时清理事件监听
 onUnmounted(() => {
-  document.removeEventListener('mousemove', onResize)
-  document.removeEventListener('mouseup', stopResize)
-})
+  document.removeEventListener("mousemove", onResize);
+  document.removeEventListener("mouseup", stopResize);
+});
 
 // 是否可以创建任务
 const canCreate = computed(() => {
-  return selectedDevices.value.length > 0 && selectedCommandGroupId.value
-})
+  return selectedDevices.value.length > 0 && selectedCommandGroupId.value;
+});
 
 // Toast 通知
-const showToast = ref(false)
-const toastMessage = ref('')
-const toastType = ref<'success' | 'error'>('success')
-let toastTimer: ReturnType<typeof setTimeout> | null = null
+const showToast = ref(false);
+const toastMessage = ref("");
+const toastType = ref<"success" | "error">("success");
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
 
-function triggerToast(msg: string, type: 'success' | 'error' = 'success') {
-  toastMessage.value = msg
-  toastType.value = type
-  showToast.value = true
-  if (toastTimer) clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => { showToast.value = false }, 3000)
+function triggerToast(msg: string, type: "success" | "error" = "success") {
+  toastMessage.value = msg;
+  toastType.value = type;
+  showToast.value = true;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    showToast.value = false;
+  }, 3000);
 }
 
 // 创建任务弹窗
 const createModal = ref({
   show: false,
-  name: '',
-  description: '',
+  name: "",
+  description: "",
   tags: [] as string[],
-  newTag: '',
-  enableRawLog: false
-})
+  newTag: "",
+  enableRawLog: false,
+});
 
 function generateDefaultName() {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  const h = String(now.getHours()).padStart(2, '0')
-  const mi = String(now.getMinutes()).padStart(2, '0')
-  const s = String(now.getSeconds()).padStart(2, '0')
-  return `Task_${y}${m}${d}_${h}${mi}${s}`
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const h = String(now.getHours()).padStart(2, "0");
+  const mi = String(now.getMinutes()).padStart(2, "0");
+  const s = String(now.getSeconds()).padStart(2, "0");
+  return `Task_${y}${m}${d}_${h}${mi}${s}`;
 }
 
 function openCreateModal() {
-  if (!canCreate.value) return
+  if (!canCreate.value) return;
   createModal.value = {
     show: true,
     name: generateDefaultName(),
-    description: '',
+    description: "",
     tags: [],
-    newTag: '',
-    enableRawLog: false
-  }
+    newTag: "",
+    enableRawLog: false,
+  };
 }
 
 function addTag() {
-  const tag = createModal.value.newTag.trim()
+  const tag = createModal.value.newTag.trim();
   if (tag && !createModal.value.tags.includes(tag)) {
-    createModal.value.tags.push(tag)
+    createModal.value.tags.push(tag);
   }
-  createModal.value.newTag = ''
+  createModal.value.newTag = "";
 }
 
 async function confirmCreate() {
-  if (!createModal.value.name.trim() || !canCreate.value) return
+  if (!createModal.value.name.trim() || !canCreate.value) return;
 
   try {
     const taskGroup = {
-      id: '',
+      id: 0,
       name: createModal.value.name.trim(),
       description: createModal.value.description.trim(),
-      mode: 'group' as const,
-      items: [{
-        commandGroupId: selectedCommandGroupId.value,
-        commands: [] as string[],
-        deviceIDs: selectedDevices.value.map((d: DeviceAsset) => d.id)
-      }],
+      deviceGroup: "",
+      commandGroup: selectedCommandGroup.value?.name || "",
+      maxWorkers: 10,
+      timeout: 60,
+      mode: "group" as const,
+      items: [
+        {
+          commandGroupId: String(selectedCommandGroupId.value),
+          commands: [] as string[],
+          deviceIDs: selectedDevices.value.map((d: DeviceAsset) => d.id),
+        },
+      ],
       tags: createModal.value.tags,
       enableRawLog: createModal.value.enableRawLog,
-      status: 'pending' as const,
-      createdAt: '',
-      updatedAt: ''
-    }
+      status: "pending" as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
 
-    await TaskGroupAPI.createTaskGroup(taskGroup)
-    createModal.value.show = false
-    triggerToast('任务创建成功！可前往任务执行页查看', 'success')
+    await TaskGroupAPI.createTaskGroup(taskGroup);
+    createModal.value.show = false;
+    triggerToast("任务创建成功！可前往任务执行页查看", "success");
   } catch (err: any) {
-    console.error('创建任务失败:', err)
-    triggerToast(`创建失败: ${err?.message || err}`, 'error')
+    console.error("创建任务失败:", err);
+    triggerToast(`创建失败: ${err?.message || err}`, "error");
   }
 }
 
 // 设备选择变化
 function onDeviceSelectionChange(devs: DeviceAsset[]) {
-  selectedDevices.value = devs
+  selectedDevices.value = devs;
 }
 
 // 命令组选择变化
 function onCommandGroupChange(group: CommandGroup | null) {
-  selectedCommandGroup.value = group
+  selectedCommandGroup.value = group;
 }
 
 // 导航
 function goToDevices() {
-  router.push('/devices')
+  router.push("/devices");
 }
 
 function goToTaskExecution() {
-  router.push('/task-execution')
+  router.push("/task-execution");
 }
 
 // 加载设备列表
 async function loadDevices() {
   try {
-    const result = await DeviceAPI.listDevices()
+    const result = await DeviceAPI.listDevices();
     // 后端已统一使用小写字段名，前端组件也已适配
-    deviceList.value = result || []
+    deviceList.value = result || [];
   } catch (err) {
-    console.error('加载设备列表失败:', err)
-    deviceList.value = []
+    console.error("加载设备列表失败:", err);
+    deviceList.value = [];
   }
 }
 
 onMounted(() => {
-  loadDevices()
-})
+  loadDevices();
+});
 </script>
 
 <style scoped>
-.modal-enter-active, .modal-leave-active {
+.modal-enter-active,
+.modal-leave-active {
   transition: opacity 0.2s ease;
 }
-.modal-enter-from, .modal-leave-to {
+.modal-enter-from,
+.modal-leave-to {
   opacity: 0;
 }
 .toast-enter-active {

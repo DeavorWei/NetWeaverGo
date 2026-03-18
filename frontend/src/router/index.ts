@@ -8,6 +8,7 @@ import NetworkCalc from '../views/Tools/NetworkCalc.vue'
 import ProtocolRef from '../views/Tools/ProtocolRef.vue'
 import ConfigForge from '../views/Tools/ConfigForge.vue'
 import Settings from '../views/Settings.vue'
+import Discovery from '../views/Discovery.vue'
 
 const routes = [
   {
@@ -54,6 +55,11 @@ const routes = [
     path: '/settings',
     name: 'Settings',
     component: Settings
+  },
+  {
+    path: '/discovery',
+    name: 'Discovery',
+    component: Discovery
   }
 ]
 
@@ -63,4 +69,3 @@ const router = createRouter({
 })
 
 export default router
-

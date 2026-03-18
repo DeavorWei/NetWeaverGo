@@ -5,44 +5,19 @@ import (
 	"strings"
 
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"gorm.io/gorm"
 )
 
-// SSHAlgorithmSettings SSH算法配置
-type SSHAlgorithmSettings struct {
-	// 加密算法 (Ciphers)
-	Ciphers []string `json:"ciphers"`
-	// 密钥交换算法
-	KeyExchanges []string `json:"keyExchanges"`
-	// 消息认证码
-	MACs []string `json:"macs"`
-	// 主机密钥算法
-	HostKeyAlgorithms []string `json:"hostKeyAlgorithms"`
+// SSHAlgorithmSettings 是 models.SSHAlgorithmSettings 的别名，保持向后兼容
+type SSHAlgorithmSettings = models.SSHAlgorithmSettings
 
-	// 预设模式: "secure" | "compatible" | "custom"
-	PresetMode string `json:"presetMode"`
-}
-
-// GlobalSettings 全局运行参数
-type GlobalSettings struct {
-	ID             uint   `json:"id" gorm:"primaryKey"`
-	MaxWorkers     int    `json:"maxWorkers"`     // 并发数 (当前硬编码为 32)
-	ConnectTimeout string `json:"connectTimeout"` // SSH/SFTP 连接超时 (如 "10s")
-	CommandTimeout string `json:"commandTimeout"` // 单条命令默认超时 (如 "30s")
-	StorageRoot    string `json:"storageRoot"`    // 统一数据根目录
-	ErrorMode      string `json:"errorMode"`      // "pause" | "skip" | "abort"
-
-	// 调试日志开关
-	Debug   bool `json:"debug"`   // 启用 DEBUG 级别日志
-	Verbose bool `json:"verbose"` // 启用 VERBOSE 级别日志（包含详细调试信息）
-
-	// SSH算法配置
-	SSHAlgorithms SSHAlgorithmSettings `json:"sshAlgorithms" gorm:"type:text;serializer:json"`
-}
+// GlobalSettings 是 models.GlobalSettings 的别名，保持向后兼容
+type GlobalSettings = models.GlobalSettings
 
 // DefaultSettings 返回默认配置
-func DefaultSettings() GlobalSettings {
-	return GlobalSettings{
+func DefaultSettings() models.GlobalSettings {
+	return models.GlobalSettings{
 		MaxWorkers:     32,
 		ConnectTimeout: "10s",
 		CommandTimeout: "30s",
@@ -50,7 +25,7 @@ func DefaultSettings() GlobalSettings {
 		ErrorMode:      "pause",
 		Debug:          false,
 		Verbose:        false,
-		SSHAlgorithms: SSHAlgorithmSettings{
+		SSHAlgorithms: models.SSHAlgorithmSettings{
 			PresetMode: "compatible", // 默认使用兼容模式
 		},
 	}
@@ -58,18 +33,18 @@ func DefaultSettings() GlobalSettings {
 
 // GetDefaultSSHAlgorithms 根据预设模式返回对应的算法配置
 // 如果 presetMode 为空或 custom，返回 nil 表示使用代码内置的默认算法
-func GetDefaultSSHAlgorithms(presetMode string) *SSHAlgorithmSettings {
+func GetDefaultSSHAlgorithms(presetMode string) *models.SSHAlgorithmSettings {
 	switch presetMode {
 	case "secure":
-		return &SSHAlgorithmSettings{
+		return &models.SSHAlgorithmSettings{
 			PresetMode: "secure",
 		}
 	case "compatible":
-		return &SSHAlgorithmSettings{
+		return &models.SSHAlgorithmSettings{
 			PresetMode: "compatible",
 		}
 	case "custom":
-		return &SSHAlgorithmSettings{
+		return &models.SSHAlgorithmSettings{
 			PresetMode: "custom",
 		}
 	default:
@@ -78,13 +53,13 @@ func GetDefaultSSHAlgorithms(presetMode string) *SSHAlgorithmSettings {
 }
 
 // LoadSettings 从数据库读取设置，如果不存在则自动创建默认模板
-func LoadSettings() (*GlobalSettings, bool, error) {
+func LoadSettings() (*models.GlobalSettings, bool, error) {
 	logger.Verbose("Config", "-", "开始从数据库加载系统全局运行参数..")
 	if DB == nil {
 		return nil, false, fmt.Errorf("数据库未初始化")
 	}
 
-	var st GlobalSettings
+	var st models.GlobalSettings
 	err := DB.First(&st, 1).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -125,7 +100,7 @@ func ApplyDebugSettings(debug, verbose bool) {
 }
 
 // SaveSettings 保存全局设置到数据库
-func SaveSettings(settings GlobalSettings) error {
+func SaveSettings(settings models.GlobalSettings) error {
 	logger.Debug("Config", "-", "准备将更新后的全局参数覆盖保存至本地数据库...")
 	logger.Verbose("Config", "-", "保存内容: workers=%d, connect=%s, cmd=%s, error=%s, storageRoot=%s, debug=%v, verbose=%v",
 		settings.MaxWorkers, settings.ConnectTimeout, settings.CommandTimeout, settings.ErrorMode,

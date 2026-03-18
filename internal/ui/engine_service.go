@@ -7,6 +7,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/engine"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -55,17 +56,17 @@ func (s *EngineService) ResolveSuspend(sessionIDOrIP string, action string) {
 
 // StartEngine 启动核心下发动作
 func (s *EngineService) StartEngine() error {
-	return s.runEngineWithConfig(nil, "")
+	return s.runEngineWithConfig(nil, 0)
 }
 
 // StartEngineWithSelection 使用选定的设备和命令组启动引擎
-func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGroupID string) error {
+func (s *EngineService) StartEngineWithSelection(deviceIPs []string, commandGroupID uint) error {
 	return s.runEngineWithConfig(deviceIPs, commandGroupID)
 }
 
 // runEngineWithConfig 统一的引擎执行方法
-// deviceIPs 为 nil 时使用全部设备，commandGroupID 为空时使用默认命令
-func (s *EngineService) runEngineWithConfig(deviceIPs []string, commandGroupID string) error {
+// deviceIPs 为 nil 时使用全部设备，commandGroupID 为 0 时使用默认命令
+func (s *EngineService) runEngineWithConfig(deviceIPs []string, commandGroupID uint) error {
 	settings, _, err := config.LoadSettings()
 	if err != nil {
 		return err
@@ -87,7 +88,7 @@ func (s *EngineService) runEngineWithConfig(deviceIPs []string, commandGroupID s
 
 	taskName := "批量执行"
 	mode := "manual"
-	if commandGroupID != "" {
+	if commandGroupID > 0 {
 		if group, err := config.GetCommandGroup(commandGroupID); err == nil {
 			taskName = group.Name
 		}
@@ -119,14 +120,14 @@ func (s *EngineService) GetEngineState() map[string]interface{} {
 }
 
 // prepareAssetsAndCommands 准备设备和命令
-func (s *EngineService) prepareAssetsAndCommands(deviceIPs []string, commandGroupID string) ([]config.DeviceAsset, []string, error) {
+func (s *EngineService) prepareAssetsAndCommands(deviceIPs []string, commandGroupID uint) ([]models.DeviceAsset, []string, error) {
 	// 获取所有设备
 	allAssets, err := config.LoadDeviceAssets()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var assets []config.DeviceAsset
+	var assets []models.DeviceAsset
 	var commands []string
 
 	// 筛选设备
@@ -145,12 +146,14 @@ func (s *EngineService) prepareAssetsAndCommands(deviceIPs []string, commandGrou
 	}
 
 	// 获取命令
-	if commandGroupID != "" {
+	if commandGroupID > 0 {
 		group, err := config.GetCommandGroup(commandGroupID)
 		if err != nil {
 			return nil, nil, fmt.Errorf("获取命令组失败: %v", err)
 		}
-		commands = group.Commands
+		if len(group.Commands) > 0 {
+			commands = group.Commands
+		}
 	} else {
 		cmds, err := config.LoadDefaultCommands()
 		if err != nil {

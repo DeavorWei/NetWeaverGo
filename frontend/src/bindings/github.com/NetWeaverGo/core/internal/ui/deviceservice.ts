@@ -12,19 +12,19 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as config$0 from "../config/models.js";
+import * as models$0 from "../models/models.js";
 
 /**
  * AddDevice 新增设备
  */
-export function AddDevice(device: config$0.DeviceAsset): $CancellablePromise<void> {
+export function AddDevice(device: models$0.DeviceAsset): $CancellablePromise<void> {
     return $Call.ByID(728011368, device);
 }
 
 /**
  * AddDevices 批量新增设备
  */
-export function AddDevices(devices: config$0.DeviceAsset[]): $CancellablePromise<void> {
+export function AddDevices(devices: models$0.DeviceAsset[]): $CancellablePromise<void> {
     return $Call.ByID(1783758977, devices);
 }
 
@@ -63,7 +63,7 @@ export function GetValidProtocols(): $CancellablePromise<string[]> {
 /**
  * ListDevices 获取设备列表
  */
-export function ListDevices(): $CancellablePromise<config$0.DeviceAsset[]> {
+export function ListDevices(): $CancellablePromise<models$0.DeviceAsset[]> {
     return $Call.ByID(779205990).then(($result: any) => {
         return $$createType3($result);
     });
@@ -72,19 +72,19 @@ export function ListDevices(): $CancellablePromise<config$0.DeviceAsset[]> {
 /**
  * UpdateDevice 更新设备
  */
-export function UpdateDevice(id: number, device: config$0.DeviceAsset): $CancellablePromise<void> {
+export function UpdateDevice(id: number, device: models$0.DeviceAsset): $CancellablePromise<void> {
     return $Call.ByID(350852692, id, device);
 }
 
 /**
  * UpdateDevices 批量更新设备
  */
-export function UpdateDevices(devices: config$0.DeviceAsset[]): $CancellablePromise<void> {
+export function UpdateDevices(devices: models$0.DeviceAsset[]): $CancellablePromise<void> {
     return $Call.ByID(314007397, devices);
 }
 
 // Private type creation functions
 const $$createType0 = $Create.Map($Create.Any, $Create.Any);
 const $$createType1 = $Create.Array($Create.Any);
-const $$createType2 = config$0.DeviceAsset.createFrom;
+const $$createType2 = models$0.DeviceAsset.createFrom;
 const $$createType3 = $Create.Array($$createType2);

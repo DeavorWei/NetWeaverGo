@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -24,27 +25,27 @@ func (s *DeviceService) ServiceStartup(ctx context.Context, options application.
 }
 
 // ListDevices 获取设备列表
-func (s *DeviceService) ListDevices() ([]config.DeviceAsset, error) {
+func (s *DeviceService) ListDevices() ([]models.DeviceAsset, error) {
 	return config.LoadDeviceAssets()
 }
 
 // AddDevice 新增设备
-func (s *DeviceService) AddDevice(device config.DeviceAsset) error {
+func (s *DeviceService) AddDevice(device models.DeviceAsset) error {
 	return config.CreateDevice(device)
 }
 
 // AddDevices 批量新增设备
-func (s *DeviceService) AddDevices(devices []config.DeviceAsset) error {
+func (s *DeviceService) AddDevices(devices []models.DeviceAsset) error {
 	return config.CreateDevices(devices)
 }
 
 // UpdateDevice 更新设备
-func (s *DeviceService) UpdateDevice(id uint, device config.DeviceAsset) error {
+func (s *DeviceService) UpdateDevice(id uint, device models.DeviceAsset) error {
 	return config.UpdateDevice(id, device)
 }
 
 // UpdateDevices 批量更新设备
-func (s *DeviceService) UpdateDevices(devices []config.DeviceAsset) error {
+func (s *DeviceService) UpdateDevices(devices []models.DeviceAsset) error {
 	return config.UpdateDevices(devices)
 }
 

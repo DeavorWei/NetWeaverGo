@@ -65,7 +65,7 @@ export function StartEngine(): $CancellablePromise<void> {
 /**
  * StartEngineWithSelection 使用选定的设备和命令组启动引擎
  */
-export function StartEngineWithSelection(deviceIPs: string[], commandGroupID: string): $CancellablePromise<void> {
+export function StartEngineWithSelection(deviceIPs: string[], commandGroupID: number): $CancellablePromise<void> {
     return $Call.ByID(2776463903, deviceIPs, commandGroupID);
 }
 

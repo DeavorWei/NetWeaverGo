@@ -9,26 +9,9 @@ import (
 	"strings"
 
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"gorm.io/gorm"
 )
-
-// DeviceAsset 表示单台交换机的连接凭证信息
-type DeviceAsset struct {
-	ID       uint     `json:"id" gorm:"primaryKey"`
-	IP       string   `json:"ip" gorm:"uniqueIndex;not null"`
-	Port     int      `json:"port"`
-	Protocol string   `json:"protocol"` // 连接协议：SSH/SNMP/TELNET
-	Username string   `json:"username"`
-	Password string   `json:"password"`
-	Group    string   `json:"group" gorm:"column:group_name"` // 设备分组
-	Tags     []string `json:"tags" gorm:"serializer:json"`    // 设备标签列表
-
-	// 拓扑发现相关字段
-	Vendor      string `json:"vendor"`      // 设备厂商：huawei / h3c / cisco / server / unknown
-	Role        string `json:"role"`        // 设备角色：core / aggregation / access / firewall / server
-	Site        string `json:"site"`        // 站点/机房
-	DisplayName string `json:"displayName"` // 用户维护的显示名称
-}
 
 // 协议默认端口映射
 var ProtocolDefaultPorts = map[string]int{
@@ -46,7 +29,7 @@ const (
 )
 
 // LoadExecutionResources 获取执行所需的设备资产和默认命令组
-func LoadExecutionResources() ([]DeviceAsset, []string, error) {
+func LoadExecutionResources() ([]models.DeviceAsset, []string, error) {
 	devices, err := LoadDeviceAssets()
 	if err != nil {
 		return nil, nil, err
@@ -61,13 +44,13 @@ func LoadExecutionResources() ([]DeviceAsset, []string, error) {
 }
 
 // LoadDeviceAssets 从数据库加载全部设备资产
-func LoadDeviceAssets() ([]DeviceAsset, error) {
+func LoadDeviceAssets() ([]models.DeviceAsset, error) {
 	logger.Debug("Config", "-", "开始从数据库加载设备资产")
 	if DB == nil {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	var devices []DeviceAsset
+	var devices []models.DeviceAsset
 	if err := DB.Order("ip ASC").Find(&devices).Error; err != nil {
 		return nil, err
 	}
@@ -81,7 +64,7 @@ func LoadDefaultCommands() ([]string, error) {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	var defaultGroup CommandGroup
+	var defaultGroup models.CommandGroup
 	if err := DB.Where("name = ?", "默认命令组").First(&defaultGroup).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return []string{}, nil
@@ -89,11 +72,11 @@ func LoadDefaultCommands() ([]string, error) {
 		return nil, err
 	}
 
-	return append([]string(nil), defaultGroup.Commands...), nil
+	return defaultGroup.Commands, nil
 }
 
 // readInventoryLegacy 读取并解析旧版资产清单文件
-func readInventoryLegacy(filePath string) ([]DeviceAsset, error) {
+func readInventoryLegacy(filePath string) ([]models.DeviceAsset, error) {
 	if strings.TrimSpace(filePath) == "" {
 		filePath = filepath.Join(GetPathManager().WorkDir, defaultInventoryFile)
 	}
@@ -114,7 +97,7 @@ func readInventoryLegacy(filePath string) ([]DeviceAsset, error) {
 		return nil, fmt.Errorf("资产文件内容为空或只有表头")
 	}
 
-	var devices []DeviceAsset
+	var devices []models.DeviceAsset
 
 	for i, row := range records[1:] {
 		// 兼容新旧格式：
@@ -127,7 +110,7 @@ func readInventoryLegacy(filePath string) ([]DeviceAsset, error) {
 
 		ip := strings.TrimSpace(row[0])
 		portStr := strings.TrimSpace(row[1])
-		var protocol, username, password, group, tag string
+		var protocol, username, password, group string
 
 		// 判断是哪种格式
 		if len(row) >= 7 {
@@ -136,21 +119,19 @@ func readInventoryLegacy(filePath string) ([]DeviceAsset, error) {
 			username = strings.TrimSpace(row[3])
 			password = strings.TrimSpace(row[4])
 			group = strings.TrimSpace(row[5])
-			tag = strings.TrimSpace(row[6])
+			// tag 字段暂不使用
 		} else if len(row) >= 5 {
 			// 旧格式：IP,Port,Protocol,Username,Password
 			protocol = strings.ToUpper(strings.TrimSpace(row[2]))
 			username = strings.TrimSpace(row[3])
 			password = strings.TrimSpace(row[4])
 			group = ""
-			tag = ""
 		} else {
 			// 最旧格式：IP,Port,Username,Password (兼容)
 			protocol = "SSH"
 			username = strings.TrimSpace(row[2])
 			password = strings.TrimSpace(row[3])
 			group = ""
-			tag = ""
 		}
 
 		if ip == "" {
@@ -167,14 +148,13 @@ func readInventoryLegacy(filePath string) ([]DeviceAsset, error) {
 			port = GetDefaultPort(protocol)
 		}
 
-		devices = append(devices, DeviceAsset{
+		devices = append(devices, models.DeviceAsset{
 			IP:       ip,
 			Port:     port,
 			Protocol: protocol,
 			Username: username,
 			Password: password,
 			Group:    group,
-			Tags:     parseTags(tag),
 		})
 	}
 	return devices, nil
@@ -219,27 +199,6 @@ func isValidProtocol(protocol string) bool {
 	return false
 }
 
-// parseTags 从字符串解析标签数组（支持逗号或分号分隔）
-func parseTags(tagStr string) []string {
-	if tagStr == "" {
-		return []string{}
-	}
-	// 支持逗号或分号分隔
-	tags := strings.Split(strings.ReplaceAll(tagStr, ";", ","), ",")
-	result := make([]string, 0, len(tags))
-	for _, tag := range tags {
-		if t := strings.TrimSpace(tag); t != "" {
-			result = append(result, t)
-		}
-	}
-	return result
-}
-
-// joinTags 将标签数组合并为逗号分隔的字符串
-func joinTags(tags []string) string {
-	return strings.Join(tags, ",")
-}
-
 // GetDefaultPort 根据协议获取默认端口
 func GetDefaultPort(protocol string) int {
 	if port, ok := ProtocolDefaultPorts[strings.ToUpper(protocol)]; ok {
@@ -249,7 +208,7 @@ func GetDefaultPort(protocol string) int {
 }
 
 // ValidateDevice 校验设备信息合法性
-func ValidateDevice(device DeviceAsset) error {
+func ValidateDevice(device *models.DeviceAsset) error {
 	if device.IP == "" {
 		return fmt.Errorf("IP 地址不能为空")
 	}
@@ -274,46 +233,24 @@ func ValidateDevice(device DeviceAsset) error {
 		return fmt.Errorf("无效的协议类型: %s", device.Protocol)
 	}
 
-	// 用户名和密码可选，不再强制要求
-
 	return nil
 }
 
-func normalizeDevice(device *DeviceAsset) {
+func normalizeDevice(device *models.DeviceAsset) {
 	device.IP = strings.TrimSpace(device.IP)
 	device.Protocol = strings.ToUpper(strings.TrimSpace(device.Protocol))
 	device.Username = strings.TrimSpace(device.Username)
 	device.Password = strings.TrimSpace(device.Password)
 	device.Group = strings.TrimSpace(device.Group)
-
-	if len(device.Tags) == 0 {
-		device.Tags = []string{}
-		return
-	}
-
-	tags := make([]string, 0, len(device.Tags))
-	seen := make(map[string]struct{}, len(device.Tags))
-	for _, tag := range device.Tags {
-		trimmed := strings.TrimSpace(tag)
-		if trimmed == "" {
-			continue
-		}
-		if _, ok := seen[trimmed]; ok {
-			continue
-		}
-		seen[trimmed] = struct{}{}
-		tags = append(tags, trimmed)
-	}
-	device.Tags = tags
 }
 
-func validateDevicesForWrite(devices []DeviceAsset) error {
+func validateDevicesForWrite(devices []models.DeviceAsset) error {
 	ipSet := make(map[string]struct{}, len(devices))
 	idSet := make(map[uint]struct{}, len(devices))
 
 	for i := range devices {
 		normalizeDevice(&devices[i])
-		if err := ValidateDevice(devices[i]); err != nil {
+		if err := ValidateDevice(&devices[i]); err != nil {
 			return fmt.Errorf("第 %d 台设备: %v", i+1, err)
 		}
 
@@ -334,18 +271,18 @@ func validateDevicesForWrite(devices []DeviceAsset) error {
 }
 
 // CreateDevice 创建单台设备
-func CreateDevice(device DeviceAsset) error {
+func CreateDevice(device models.DeviceAsset) error {
 	if DB == nil {
 		return fmt.Errorf("数据库未初始化")
 	}
 
 	normalizeDevice(&device)
-	if err := ValidateDevice(device); err != nil {
+	if err := ValidateDevice(&device); err != nil {
 		return err
 	}
 
 	var count int64
-	if err := DB.Model(&DeviceAsset{}).Where("ip = ?", device.IP).Count(&count).Error; err != nil {
+	if err := DB.Model(&models.DeviceAsset{}).Where("ip = ?", device.IP).Count(&count).Error; err != nil {
 		return err
 	}
 	if count > 0 {
@@ -357,7 +294,7 @@ func CreateDevice(device DeviceAsset) error {
 }
 
 // CreateDevices 批量创建设备
-func CreateDevices(devices []DeviceAsset) error {
+func CreateDevices(devices []models.DeviceAsset) error {
 	if DB == nil {
 		return fmt.Errorf("数据库未初始化")
 	}
@@ -377,7 +314,7 @@ func CreateDevices(devices []DeviceAsset) error {
 		ips = append(ips, device.IP)
 	}
 
-	var existing []DeviceAsset
+	var existing []models.DeviceAsset
 	if err := DB.Where("ip IN ?", ips).Find(&existing).Error; err != nil {
 		return err
 	}
@@ -389,7 +326,7 @@ func CreateDevices(devices []DeviceAsset) error {
 }
 
 // UpdateDevice 更新单台设备
-func UpdateDevice(id uint, device DeviceAsset) error {
+func UpdateDevice(id uint, device models.DeviceAsset) error {
 	if DB == nil {
 		return fmt.Errorf("数据库未初始化")
 	}
@@ -398,28 +335,27 @@ func UpdateDevice(id uint, device DeviceAsset) error {
 	}
 
 	device.ID = id
-	if err := validateDevicesForWrite([]DeviceAsset{device}); err != nil {
+	if err := validateDevicesForWrite([]models.DeviceAsset{device}); err != nil {
 		return err
 	}
 
 	return DB.Transaction(func(tx *gorm.DB) error {
-		var existing DeviceAsset
+		var existing models.DeviceAsset
 		if err := tx.First(&existing, id).Error; err != nil {
 			return fmt.Errorf("未找到设备: %d", id)
 		}
 		logger.Verbose(
 			"Config",
 			existing.IP,
-			"收到单设备更新请求: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q, tags=%q->%q",
+			"收到单设备更新请求: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q",
 			id,
 			existing.Protocol, device.Protocol,
 			existing.Port, device.Port,
 			existing.Group, device.Group,
 			existing.Username, device.Username,
-			strings.Join(existing.Tags, ","), strings.Join(device.Tags, ","),
 		)
 
-		var conflict DeviceAsset
+		var conflict models.DeviceAsset
 		err := tx.Where("ip = ? AND id <> ?", device.IP, id).First(&conflict).Error
 		if err == nil {
 			return fmt.Errorf("IP 地址 %s 已被其他设备使用", device.IP)
@@ -437,7 +373,7 @@ func UpdateDevice(id uint, device DeviceAsset) error {
 }
 
 // UpdateDevices 批量更新设备
-func UpdateDevices(devices []DeviceAsset) error {
+func UpdateDevices(devices []models.DeviceAsset) error {
 	if DB == nil {
 		return fmt.Errorf("数据库未初始化")
 	}
@@ -463,19 +399,19 @@ func UpdateDevices(devices []DeviceAsset) error {
 
 	logger.Verbose("Config", "-", "收到批量设备更新请求: count=%d", len(devices))
 	return DB.Transaction(func(tx *gorm.DB) error {
-		var existing []DeviceAsset
+		var existing []models.DeviceAsset
 		if err := tx.Where("id IN ?", ids).Find(&existing).Error; err != nil {
 			return err
 		}
 		if len(existing) != len(ids) {
 			return fmt.Errorf("部分设备不存在，无法完成批量更新")
 		}
-		existingByID := make(map[uint]DeviceAsset, len(existing))
+		existingByID := make(map[uint]models.DeviceAsset, len(existing))
 		for _, item := range existing {
 			existingByID[item.ID] = item
 		}
 
-		var conflicts []DeviceAsset
+		var conflicts []models.DeviceAsset
 		if err := tx.Where("ip IN ?", ips).Find(&conflicts).Error; err != nil {
 			return err
 		}
@@ -491,13 +427,12 @@ func UpdateDevices(devices []DeviceAsset) error {
 				logger.Verbose(
 					"Config",
 					old.IP,
-					"批量更新设备: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q, tags=%q->%q",
+					"批量更新设备: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q",
 					device.ID,
 					old.Protocol, device.Protocol,
 					old.Port, device.Port,
 					old.Group, device.Group,
 					old.Username, device.Username,
-					strings.Join(old.Tags, ","), strings.Join(device.Tags, ","),
 				)
 			}
 			if err := tx.Save(&device).Error; err != nil {
@@ -518,7 +453,7 @@ func DeleteDevice(id uint) error {
 		return fmt.Errorf("无效的设备 ID")
 	}
 
-	result := DB.Delete(&DeviceAsset{}, id)
+	result := DB.Delete(&models.DeviceAsset{}, id)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -537,7 +472,7 @@ func DeleteDevices(ids []uint) error {
 		return nil
 	}
 
-	result := DB.Where("id IN ?", ids).Delete(&DeviceAsset{})
+	result := DB.Where("id IN ?", ids).Delete(&models.DeviceAsset{})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -553,18 +488,14 @@ func SaveCommands(commands []string) error {
 		return fmt.Errorf("数据库未初始化")
 	}
 
-	var group CommandGroup
+	var group models.CommandGroup
 	err := DB.Where("name = ?", "默认命令组").First(&group).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			group = CommandGroup{
-				ID:          generateID(),
+			group = models.CommandGroup{
 				Name:        "默认命令组",
 				Description: "自动生成的默认命令组",
 				Commands:    commands,
-				CreatedAt:   nowFormatted(),
-				UpdatedAt:   nowFormatted(),
-				Tags:        []string{"系统默认"},
 			}
 			return DB.Create(&group).Error
 		}
@@ -572,6 +503,5 @@ func SaveCommands(commands []string) error {
 	}
 
 	group.Commands = commands
-	group.UpdatedAt = nowFormatted()
 	return DB.Save(&group).Error
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -41,12 +42,12 @@ func (s *QueryService) queryDevicesFromDB(opts QueryOptions) *QueryResult {
 		return emptyDeviceQueryResult(opts)
 	}
 
-	var devices []config.DeviceAsset
+	var devices []models.DeviceAsset
 	var total int64
 	filterField := normalizeDeviceFilterField(opts.FilterField)
 
 	// 构建查询
-	query := config.DB.Model(&config.DeviceAsset{})
+	query := config.DB.Model(&models.DeviceAsset{})
 
 	// 应用搜索过滤
 	if opts.SearchQuery != "" {
@@ -137,7 +138,7 @@ func emptyDeviceQueryResult(opts QueryOptions) *QueryResult {
 	}
 
 	return &QueryResult{
-		Data:       []config.DeviceAsset{},
+		Data:       []models.DeviceAsset{},
 		Total:      0,
 		Page:       page,
 		PageSize:   pageSize,
@@ -197,7 +198,7 @@ func (s *QueryService) ListTaskGroups(opts QueryOptions) *QueryResult {
 	if err != nil {
 		logger.Error("Query", "-", "加载任务组列表失败: %v", err)
 		return &QueryResult{
-			Data:       []config.TaskGroup{},
+			Data:       []models.TaskGroup{},
 			Total:      0,
 			Page:       opts.Page,
 			PageSize:   opts.PageSize,
@@ -248,7 +249,7 @@ func (s *QueryService) ListTaskGroups(opts QueryOptions) *QueryResult {
 }
 
 // filterTaskGroups 过滤任务组列表
-func (s *QueryService) filterTaskGroups(groups []config.TaskGroup, opts QueryOptions) []config.TaskGroup {
+func (s *QueryService) filterTaskGroups(groups []models.TaskGroup, opts QueryOptions) []models.TaskGroup {
 	if opts.SearchQuery == "" && opts.FilterValue == "" {
 		return groups
 	}
@@ -256,7 +257,7 @@ func (s *QueryService) filterTaskGroups(groups []config.TaskGroup, opts QueryOpt
 	query := strings.ToLower(strings.TrimSpace(opts.SearchQuery))
 	filterVal := strings.ToLower(opts.FilterValue)
 
-	result := make([]config.TaskGroup, 0, len(groups))
+	result := make([]models.TaskGroup, 0, len(groups))
 
 	for _, group := range groups {
 		// 搜索过滤
@@ -292,7 +293,7 @@ func (s *QueryService) filterTaskGroups(groups []config.TaskGroup, opts QueryOpt
 }
 
 // sortTaskGroups 排序任务组列表
-func (s *QueryService) sortTaskGroups(groups []config.TaskGroup, sortBy, sortOrder string) []config.TaskGroup {
+func (s *QueryService) sortTaskGroups(groups []models.TaskGroup, sortBy, sortOrder string) []models.TaskGroup {
 	return groups // 数据库查询已排序
 }
 
@@ -303,7 +304,7 @@ func (s *QueryService) ListCommandGroups(opts QueryOptions) *QueryResult {
 	if err != nil {
 		logger.Error("Query", "-", "加载命令组列表失败: %v", err)
 		return &QueryResult{
-			Data:       []config.CommandGroup{},
+			Data:       []models.CommandGroup{},
 			Total:      0,
 			Page:       opts.Page,
 			PageSize:   opts.PageSize,
@@ -350,22 +351,19 @@ func (s *QueryService) ListCommandGroups(opts QueryOptions) *QueryResult {
 }
 
 // filterCommandGroups 过滤命令组列表
-func (s *QueryService) filterCommandGroups(groups []config.CommandGroup, opts QueryOptions) []config.CommandGroup {
+func (s *QueryService) filterCommandGroups(groups []models.CommandGroup, opts QueryOptions) []models.CommandGroup {
 	if opts.SearchQuery == "" && opts.FilterValue == "" {
 		return groups
 	}
 
 	query := strings.ToLower(strings.TrimSpace(opts.SearchQuery))
 
-	result := make([]config.CommandGroup, 0, len(groups))
+	result := make([]models.CommandGroup, 0, len(groups))
 
 	for _, group := range groups {
 		// 搜索过滤
 		if query != "" {
 			searchTarget := strings.ToLower(group.Name + " " + group.Description)
-			for _, tag := range group.Tags {
-				searchTarget += " " + strings.ToLower(tag)
-			}
 
 			if !strings.Contains(searchTarget, query) {
 				continue
@@ -385,7 +383,7 @@ func (s *QueryService) GetDeviceGroups() []string {
 	}
 
 	var groups []string
-	if err := config.DB.Model(&config.DeviceAsset{}).
+	if err := config.DB.Model(&models.DeviceAsset{}).
 		Where("group_name != ''").
 		Distinct("group_name").
 		Pluck("group_name", &groups).Error; err != nil {
@@ -405,7 +403,7 @@ func (s *QueryService) GetDeviceTags() []string {
 	}
 
 	var tagStrings []string
-	if err := config.DB.Model(&config.DeviceAsset{}).
+	if err := config.DB.Model(&models.DeviceAsset{}).
 		Where("tags IS NOT NULL AND tags != ''").
 		Pluck("tags", &tagStrings).Error; err != nil {
 		logger.Error("Query", "-", "加载设备标签失败: %v", err)

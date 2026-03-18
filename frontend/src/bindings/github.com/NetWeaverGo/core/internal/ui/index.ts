@@ -3,6 +3,7 @@
 
 import * as CommandGroupService from "./commandgroupservice.js";
 import * as DeviceService from "./deviceservice.js";
+import * as DiscoveryService from "./discoveryservice.js";
 import * as EngineService from "./engineservice.js";
 import * as ExecutionHistoryService from "./executionhistoryservice.js";
 import * as ForgeService from "./forgeservice.js";
@@ -12,6 +13,7 @@ import * as TaskGroupService from "./taskgroupservice.js";
 export {
     CommandGroupService,
     DeviceService,
+    DiscoveryService,
     EngineService,
     ExecutionHistoryService,
     ForgeService,

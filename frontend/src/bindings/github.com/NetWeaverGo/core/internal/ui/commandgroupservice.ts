@@ -12,12 +12,12 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as config$0 from "../config/models.js";
+import * as models$0 from "../models/models.js";
 
 /**
  * CreateCommandGroup 创建新命令组
  */
-export function CreateCommandGroup(group: config$0.CommandGroup): $CancellablePromise<config$0.CommandGroup | null> {
+export function CreateCommandGroup(group: models$0.CommandGroup): $CancellablePromise<models$0.CommandGroup | null> {
     return $Call.ByID(3085661725, group).then(($result: any) => {
         return $$createType1($result);
     });
@@ -26,14 +26,14 @@ export function CreateCommandGroup(group: config$0.CommandGroup): $CancellablePr
 /**
  * DeleteCommandGroup 删除命令组
  */
-export function DeleteCommandGroup(id: string): $CancellablePromise<void> {
+export function DeleteCommandGroup(id: number): $CancellablePromise<void> {
     return $Call.ByID(53539042, id);
 }
 
 /**
  * DuplicateCommandGroup 复制命令组
  */
-export function DuplicateCommandGroup(id: string): $CancellablePromise<config$0.CommandGroup | null> {
+export function DuplicateCommandGroup(id: number): $CancellablePromise<models$0.CommandGroup | null> {
     return $Call.ByID(1880070542, id).then(($result: any) => {
         return $$createType1($result);
     });
@@ -42,14 +42,14 @@ export function DuplicateCommandGroup(id: string): $CancellablePromise<config$0.
 /**
  * ExportCommandGroup 导出命令组到文件
  */
-export function ExportCommandGroup(id: string, filePath: string): $CancellablePromise<void> {
+export function ExportCommandGroup(id: number, filePath: string): $CancellablePromise<void> {
     return $Call.ByID(2675289651, id, filePath);
 }
 
 /**
  * GetCommandGroup 根据 ID 获取单个命令组
  */
-export function GetCommandGroup(id: string): $CancellablePromise<config$0.CommandGroup | null> {
+export function GetCommandGroup(id: number): $CancellablePromise<models$0.CommandGroup | null> {
     return $Call.ByID(566479847, id).then(($result: any) => {
         return $$createType1($result);
     });
@@ -67,7 +67,7 @@ export function GetCommands(): $CancellablePromise<string[]> {
 /**
  * ImportCommandGroup 从文件导入命令组
  */
-export function ImportCommandGroup(filePath: string): $CancellablePromise<config$0.CommandGroup | null> {
+export function ImportCommandGroup(filePath: string): $CancellablePromise<models$0.CommandGroup | null> {
     return $Call.ByID(1574742228, filePath).then(($result: any) => {
         return $$createType1($result);
     });
@@ -76,7 +76,7 @@ export function ImportCommandGroup(filePath: string): $CancellablePromise<config
 /**
  * ListCommandGroups 获取所有命令组列表
  */
-export function ListCommandGroups(): $CancellablePromise<config$0.CommandGroup[]> {
+export function ListCommandGroups(): $CancellablePromise<models$0.CommandGroup[]> {
     return $Call.ByID(1228011110).then(($result: any) => {
         return $$createType3($result);
     });
@@ -92,14 +92,14 @@ export function SaveCommands(commands: string[]): $CancellablePromise<void> {
 /**
  * UpdateCommandGroup 更新命令组
  */
-export function UpdateCommandGroup(id: string, group: config$0.CommandGroup): $CancellablePromise<config$0.CommandGroup | null> {
+export function UpdateCommandGroup(id: number, group: models$0.CommandGroup): $CancellablePromise<models$0.CommandGroup | null> {
     return $Call.ByID(4162611892, id, group).then(($result: any) => {
         return $$createType1($result);
     });
 }
 
 // Private type creation functions
-const $$createType0 = config$0.CommandGroup.createFrom;
+const $$createType0 = models$0.CommandGroup.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
 const $$createType2 = $Create.Array($Create.Any);
 const $$createType3 = $Create.Array($$createType0);
