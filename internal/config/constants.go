@@ -59,6 +59,18 @@ const (
 	DefaultTopologyMaxInferenceCandidates = 8
 )
 
+// ==================== 发现任务配置 ====================
+const (
+	// DefaultDiscoveryEventBufferSize 发现事件缓冲区大小
+	DefaultDiscoveryEventBufferSize = 200
+
+	// DefaultDiscoveryMaxWorkers 发现任务默认并发数
+	DefaultDiscoveryMaxWorkers = 32
+
+	// MaxDiscoveryWorkers 发现任务最大并发数
+	MaxDiscoveryWorkers = 100
+)
+
 // ==================== SSH配置 ====================
 const (
 	// DefaultSSHPort 默认SSH端口

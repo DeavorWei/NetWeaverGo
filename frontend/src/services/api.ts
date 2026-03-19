@@ -18,16 +18,16 @@
 
 // ==================== 服务命名空间导入 ====================
 import * as DeviceServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/deviceservice'
-import * as CommandGroupServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/commandgroupservice.js'
-import * as SettingsServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/settingsservice.js'
-import * as EngineServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/engineservice.js'
-import * as TaskGroupServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/taskgroupservice.js'
-import * as ForgeServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice.js'
-import * as QueryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/queryservice.js'
-import * as ExecutionHistoryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/executionhistoryservice.js'
-import * as DiscoveryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/discoveryservice.js'
-import * as TopologyServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/topologyservice.js'
-import * as PlanCompareServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/plancompareservice.js'
+import * as CommandGroupServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/commandgroupservice'
+import * as SettingsServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/settingsservice'
+import * as EngineServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/engineservice'
+import * as TaskGroupServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/taskgroupservice'
+import * as ForgeServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice'
+import * as QueryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/queryservice'
+import * as ExecutionHistoryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/executionhistoryservice'
+import * as DiscoveryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/discoveryservice'
+import * as TopologyServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/topologyservice'
+import * as PlanCompareServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/plancompareservice'
 
 // ==================== 设备管理 API ====================
 /**
@@ -207,6 +207,10 @@ export type {
   DeviceViewState,
   ExecutionSnapshot,
 } from '../bindings/github.com/NetWeaverGo/core/internal/report/models.js'
+
+export type {
+  DeviceAssetResponse,
+} from '../bindings/github.com/NetWeaverGo/core/internal/models/models'
 
 // ==================== 历史执行记录 API ====================
 /**

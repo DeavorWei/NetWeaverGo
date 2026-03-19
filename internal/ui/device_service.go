@@ -38,12 +38,12 @@ func (s *DeviceService) ListDevices() ([]models.DeviceAsset, error) {
 }
 
 // GetDeviceByID 根据 ID 获取单个设备详情（包含解密后的密码，用于编辑）
-func (s *DeviceService) GetDeviceByID(id uint) (*models.DeviceAsset, error) {
+func (s *DeviceService) GetDeviceByID(id uint) (*models.DeviceAssetResponse, error) {
 	device, err := config.LoadDeviceByID(id)
 	if err != nil {
 		return nil, err
 	}
-	return device, nil
+	return device.ToResponse(), nil
 }
 
 // AddDevice 新增设备

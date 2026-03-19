@@ -5,6 +5,7 @@ export {
     CommandGroup,
     CompareResult,
     DeviceAsset,
+    DeviceAssetResponse,
     DiffItem,
     DiffReportView,
     DiscoveryDeviceView,

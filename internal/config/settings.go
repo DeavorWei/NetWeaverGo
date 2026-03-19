@@ -28,7 +28,7 @@ func DefaultSettings() models.GlobalSettings {
 		SSHHostKeyPolicy:  "accept_new",
 		SSHKnownHostsPath: GetPathManager().GetSSHKnownHostsPath(),
 		SSHAlgorithms: models.SSHAlgorithmSettings{
-			PresetMode: "compatible", // 默认使用兼容模式
+			PresetMode: "secure", // 默认使用安全模式
 		},
 	}
 }

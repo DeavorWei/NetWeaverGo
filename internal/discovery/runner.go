@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/google/uuid"
@@ -64,9 +65,9 @@ type DiscoveryEvent struct {
 func NewRunner(db *gorm.DB) *Runner {
 	return &Runner{
 		db:          db,
-		EventBus:    make(chan DiscoveryEvent, 200),
-		FrontendBus: make(chan DiscoveryEvent, 200),
-		maxWorkers:  32,
+		EventBus:    make(chan DiscoveryEvent, config.DefaultDiscoveryEventBufferSize),
+		FrontendBus: make(chan DiscoveryEvent, config.DefaultDiscoveryEventBufferSize),
+		maxWorkers:  config.DefaultDiscoveryMaxWorkers,
 	}
 }
 
@@ -82,7 +83,7 @@ func (r *Runner) SetRuntimeProvider(p RuntimeConfigProvider) {
 
 // SetMaxWorkers 设置最大并发数
 func (r *Runner) SetMaxWorkers(workers int) {
-	if workers > 0 && workers <= 100 {
+	if workers > 0 && workers <= config.MaxDiscoveryWorkers {
 		r.maxWorkers = workers
 	}
 }

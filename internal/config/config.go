@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"strconv"
+	"net"
 	"strings"
 
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -110,16 +110,10 @@ func ValidateDevice(device *models.DeviceAsset) error {
 		return fmt.Errorf("IP 地址不能为空")
 	}
 
-	// 简单的 IP 格式校验
-	parts := strings.Split(device.IP, ".")
-	if len(parts) != 4 {
-		return fmt.Errorf("IP 地址格式不正确")
-	}
-	for _, part := range parts {
-		num, err := strconv.Atoi(part)
-		if err != nil || num < 0 || num > 255 {
-			return fmt.Errorf("IP 地址格式不正确")
-		}
+	// 使用 net.ParseIP 支持 IPv4 和 IPv6
+	ip := net.ParseIP(device.IP)
+	if ip == nil {
+		return fmt.Errorf("IP 地址格式不正确: %s", device.IP)
 	}
 
 	if device.Port <= 0 || device.Port > 65535 {

@@ -141,11 +141,6 @@ export class DeviceAsset {
     "ip": string;
     "port": number;
     "username": string;
-
-    /**
-     * JSON 可输入但不输出（omitempty 空值不输出）
-     */
-    "password"?: string;
     "protocol": string;
 
     /**
@@ -221,12 +216,105 @@ export class DeviceAsset {
      * Creates a new DeviceAsset instance from a string or object.
      */
     static createFrom($$source: any = {}): DeviceAsset {
-        const $$createField12_0 = $$createType0;
+        const $$createField11_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tags" in $$parsedSource) {
-            $$parsedSource["tags"] = $$createField12_0($$parsedSource["tags"]);
+            $$parsedSource["tags"] = $$createField11_0($$parsedSource["tags"]);
         }
         return new DeviceAsset($$parsedSource as Partial<DeviceAsset>);
+    }
+}
+
+/**
+ * DeviceAssetResponse 设备响应结构（包含密码，用于编辑场景）
+ */
+export class DeviceAssetResponse {
+    "id": number;
+    "ip": string;
+    "port": number;
+    "username": string;
+    "protocol": string;
+
+    /**
+     * 映射到数据库的 group_name 列
+     */
+    "group": string;
+    "displayName": string;
+    "vendor": string;
+    "role": string;
+    "site": string;
+    "description": string;
+
+    /**
+     * 标签列表
+     */
+    "tags": string[];
+    "lastSeen": time$0.Time;
+    "createdAt": time$0.Time;
+    "updatedAt": time$0.Time;
+    "password"?: string;
+
+    /** Creates a new DeviceAssetResponse instance. */
+    constructor($$source: Partial<DeviceAssetResponse> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("ip" in $$source)) {
+            this["ip"] = "";
+        }
+        if (!("port" in $$source)) {
+            this["port"] = 0;
+        }
+        if (!("username" in $$source)) {
+            this["username"] = "";
+        }
+        if (!("protocol" in $$source)) {
+            this["protocol"] = "";
+        }
+        if (!("group" in $$source)) {
+            this["group"] = "";
+        }
+        if (!("displayName" in $$source)) {
+            this["displayName"] = "";
+        }
+        if (!("vendor" in $$source)) {
+            this["vendor"] = "";
+        }
+        if (!("role" in $$source)) {
+            this["role"] = "";
+        }
+        if (!("site" in $$source)) {
+            this["site"] = "";
+        }
+        if (!("description" in $$source)) {
+            this["description"] = "";
+        }
+        if (!("tags" in $$source)) {
+            this["tags"] = [];
+        }
+        if (!("lastSeen" in $$source)) {
+            this["lastSeen"] = null;
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DeviceAssetResponse instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DeviceAssetResponse {
+        const $$createField11_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("tags" in $$parsedSource) {
+            $$parsedSource["tags"] = $$createField11_0($$parsedSource["tags"]);
+        }
+        return new DeviceAssetResponse($$parsedSource as Partial<DeviceAssetResponse>);
     }
 }
 

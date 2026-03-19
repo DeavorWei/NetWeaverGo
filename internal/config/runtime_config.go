@@ -395,22 +395,26 @@ func GetRuntimeManagerIfInitialized() *RuntimeConfigManager {
 	return runtimeManager
 }
 
-// ResolveEngineWorkerCount 解析执行链最终使用的工作协程数。
-// 运行时配置优先生效，GlobalSettings.MaxWorkers 仅作为兼容兜底。
-func ResolveEngineWorkerCount(settings *GlobalSettings) int {
+// resolveWorkerCount 通用的工作协程数解析函数
+func resolveWorkerCount(
+	settings *GlobalSettings,
+	getRuntimeValue func() int,
+	logPrefix string,
+) int {
 	legacyWorkers := 0
 	if settings != nil {
 		legacyWorkers = settings.MaxWorkers
 	}
 
 	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
-		runtimeWorkers := manager.GetWorkerCount()
+		runtimeWorkers := getRuntimeValue()
 		if runtimeWorkers > 0 {
 			if legacyWorkers > 0 && legacyWorkers != runtimeWorkers {
 				logger.Debug(
 					"Config",
 					"-",
-					"执行链工作协程数采用 runtime config=%d，覆盖 settings.maxWorkers=%d",
+					"%s工作协程数采用 runtime config=%d，覆盖 settings.maxWorkers=%d",
+					logPrefix,
 					runtimeWorkers,
 					legacyWorkers,
 				)
@@ -426,33 +430,33 @@ func ResolveEngineWorkerCount(settings *GlobalSettings) int {
 	return DefaultWorkerCount
 }
 
+// ResolveEngineWorkerCount 解析执行链最终使用的工作协程数。
+// 运行时配置优先生效，GlobalSettings.MaxWorkers 仅作为兼容兜底。
+func ResolveEngineWorkerCount(settings *GlobalSettings) int {
+	return resolveWorkerCount(
+		settings,
+		func() int {
+			if m := GetRuntimeManagerIfInitialized(); m != nil {
+				return m.GetWorkerCount()
+			}
+			return 0
+		},
+		"执行链",
+	)
+}
+
 // ResolveDiscoveryWorkerCount 解析发现任务工作协程数。
 func ResolveDiscoveryWorkerCount(settings *GlobalSettings) int {
-	legacyWorkers := 0
-	if settings != nil {
-		legacyWorkers = settings.MaxWorkers
-	}
-
-	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
-		runtimeWorkers := manager.GetDiscoveryWorkerCount()
-		if runtimeWorkers > 0 {
-			if legacyWorkers > 0 && legacyWorkers != runtimeWorkers {
-				logger.Debug(
-					"Config",
-					"-",
-					"发现任务工作协程数采用 runtime config=%d，覆盖 settings.maxWorkers=%d",
-					runtimeWorkers,
-					legacyWorkers,
-				)
+	return resolveWorkerCount(
+		settings,
+		func() int {
+			if m := GetRuntimeManagerIfInitialized(); m != nil {
+				return m.GetDiscoveryWorkerCount()
 			}
-			return runtimeWorkers
-		}
-	}
-
-	if legacyWorkers > 0 {
-		return legacyWorkers
-	}
-	return DefaultWorkerCount
+			return 0
+		},
+		"发现任务",
+	)
 }
 
 // ResolveDiscoveryPerDeviceTimeout 解析单设备发现超时时间。

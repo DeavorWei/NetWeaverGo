@@ -14,7 +14,7 @@ type DeviceAsset struct {
 	IP          string    `json:"ip" gorm:"uniqueIndex;not null"`
 	Port        int       `json:"port"`
 	Username    string    `json:"username"`
-	Password    string    `json:"password,omitempty" gorm:"column:password"` // JSON 可输入但不输出（omitempty 空值不输出）
+	Password    string    `json:"-" gorm:"column:password"` // JSON 完全不输出，仅用于数据库存储
 	Protocol    string    `json:"protocol"`
 	Group       string    `json:"group" gorm:"column:group_name"` // 映射到数据库的 group_name 列
 	DisplayName string    `json:"displayName"`
@@ -26,6 +26,20 @@ type DeviceAsset struct {
 	LastSeen    time.Time `json:"lastSeen"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// DeviceAssetResponse 设备响应结构（包含密码，用于编辑场景）
+type DeviceAssetResponse struct {
+	DeviceAsset
+	Password string `json:"password,omitempty"`
+}
+
+// ToResponse 将 DeviceAsset 转换为包含密码的响应结构
+func (d *DeviceAsset) ToResponse() *DeviceAssetResponse {
+	return &DeviceAssetResponse{
+		DeviceAsset: *d,
+		Password:    d.Password,
+	}
 }
 
 // TableName 指定表名
