@@ -14,7 +14,7 @@ type DeviceAsset struct {
 	IP          string    `json:"ip" gorm:"uniqueIndex;not null"`
 	Port        int       `json:"port"`
 	Username    string    `json:"username"`
-	Password    string    `json:"password"`
+	Password    string    `json:"password,omitempty" gorm:"column:password"` // JSON 可输入但不输出（omitempty 空值不输出）
 	Protocol    string    `json:"protocol"`
 	Group       string    `json:"group" gorm:"column:group_name"` // 映射到数据库的 group_name 列
 	DisplayName string    `json:"displayName"`

@@ -87,6 +87,24 @@ func (r *Runner) SetMaxWorkers(workers int) {
 	}
 }
 
+// setPhase 更新任务阶段
+func (r *Runner) setPhase(taskID string, phase models.DiscoveryTaskPhase) {
+	now := time.Now()
+	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+		"phase":            phase,
+		"phase_started_at": now,
+		"phase_progress":   0,
+	})
+}
+
+// setPhaseProgress 更新阶段进度
+func (r *Runner) setPhaseProgress(taskID string, progress int) {
+	if progress > 100 {
+		progress = 100
+	}
+	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Update("phase_progress", progress)
+}
+
 // Start 启动发现任务
 func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (string, error) {
 	r.mu.Lock()
@@ -181,6 +199,7 @@ func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (s
 	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status":     "running",
 		"started_at": now,
+		"phase":      models.PhaseCollecting,
 	})
 
 	// 启动后台任务执行
@@ -206,6 +225,7 @@ func (r *Runner) Cancel(taskID string) error {
 	now := time.Now()
 	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status":      "cancelled",
+		"phase":       models.PhaseCancelled,
 		"finished_at": now,
 	})
 
@@ -259,6 +279,7 @@ func (r *Runner) RetryFailed(ctx context.Context, taskID string) error {
 	// 更新任务状态为运行中
 	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status": "running",
+		"phase":  models.PhaseCollecting,
 	})
 
 	// 启动后台任务执行
@@ -299,7 +320,9 @@ func (r *Runner) runDiscovery(ctx context.Context, taskID string, devices []mode
 	// 统计计数
 	var successCount int
 	var failedCount int
+	var completedCount int
 	var countMu sync.Mutex
+	totalDevices := len(devices)
 
 dispatchLoop:
 	for _, dev := range devices {
@@ -340,33 +363,47 @@ dispatchLoop:
 			} else {
 				successCount++
 			}
+			completedCount++
+			// 更新采集阶段进度
+			if totalDevices > 0 {
+				progress := int(float64(completedCount) / float64(totalDevices) * 100)
+				r.setPhaseProgress(taskID, progress)
+			}
 			countMu.Unlock()
 		}(dev)
 	}
 
 	wg.Wait()
 
+	// 切换到解析阶段
+	r.setPhase(taskID, models.PhaseParsing)
+
 	// 更新任务状态
 	now := time.Now()
 	status := "completed"
+	phase := models.PhaseCompleted
 	if failedCount > 0 && successCount == 0 {
 		status = "failed"
+		phase = models.PhaseFailed
 	} else if failedCount > 0 {
 		status = "partial"
 	}
 	if ctx.Err() != nil {
 		status = "cancelled"
+		phase = models.PhaseCancelled
 	}
 
 	var currentTask models.DiscoveryTask
 	if err := r.db.Select("status").Where("id = ?", taskID).Take(&currentTask).Error; err == nil {
 		if strings.EqualFold(currentTask.Status, "cancelled") {
 			status = "cancelled"
+			phase = models.PhaseCancelled
 		}
 	}
 
 	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status":        status,
+		"phase":         phase,
 		"finished_at":   now,
 		"success_count": successCount,
 		"failed_count":  failedCount,

@@ -419,7 +419,9 @@
                 class="mt-2 flex items-center justify-between text-xs text-text-muted"
               >
                 <span>成功: {{ progressModal.success }}</span>
-                <span class="text-warning">部分成功: {{ progressModal.partial }}</span>
+                <span class="text-warning"
+                  >部分成功: {{ progressModal.partial }}</span
+                >
                 <span>失败: {{ progressModal.failed }}</span>
               </div>
             </div>
@@ -672,6 +674,8 @@ const progressModal = ref({
   show: false,
   taskId: "",
   status: "",
+  phase: "",
+  phaseProgress: 0,
   total: 0,
   finished: 0,
   success: 0,
@@ -706,6 +710,8 @@ async function confirmStart() {
       show: true,
       taskId: result.taskId,
       status: "running",
+      phase: "collecting",
+      phaseProgress: 0,
       total: selectedDevices.value.length,
       finished: 0,
       success: 0,
@@ -775,9 +781,9 @@ async function pollTaskStatus() {
         // 获取设备列表
         const devices = await DiscoveryAPI.getTaskDevices(currentTaskId.value);
         progressModal.value.devices = devices || [];
-        progressModal.value.partial = (
-          devices || []
-        ).filter((d: { status: string }) => d.status === "partial").length;
+        progressModal.value.partial = (devices || []).filter(
+          (d: { status: string }) => d.status === "partial",
+        ).length;
 
         // 检查是否完成
         if (
@@ -804,10 +810,14 @@ async function viewTaskDetail(task: DiscoveryTaskView) {
       show: true,
       taskId: task.id,
       status: task.status,
+      phase: (task as any).phase || "completed",
+      phaseProgress: (task as any).phaseProgress || 100,
       total: task.totalCount,
       finished: task.successCount + task.failedCount,
       success: task.successCount,
-      partial: (devices || []).filter((d: { status: string }) => d.status === "partial").length,
+      partial: (devices || []).filter(
+        (d: { status: string }) => d.status === "partial",
+      ).length,
       failed: task.failedCount,
       devices: devices || [],
     };
@@ -916,7 +926,10 @@ async function loadDiscoveryDefaults() {
     if (runtime?.discovery?.workerCount && runtime.discovery.workerCount > 0) {
       maxWorkers.value = runtime.discovery.workerCount;
     }
-    if (runtime?.discovery?.commandTimeout && runtime.discovery.commandTimeout > 0) {
+    if (
+      runtime?.discovery?.commandTimeout &&
+      runtime.discovery.commandTimeout > 0
+    ) {
       timeoutSec.value = Math.max(
         1,
         Math.round(runtime.discovery.commandTimeout / 1000),
@@ -954,6 +967,8 @@ async function checkRunningStatus() {
             show: true,
             taskId: taskId,
             status: status.status,
+            phase: (status as any).phase || "collecting",
+            phaseProgress: (status as any).phaseProgress || 0,
             total: status.totalCount,
             finished: status.successCount + status.failedCount,
             success: status.successCount,

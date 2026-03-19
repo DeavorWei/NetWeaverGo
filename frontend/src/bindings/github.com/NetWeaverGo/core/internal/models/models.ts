@@ -141,7 +141,11 @@ export class DeviceAsset {
     "ip": string;
     "port": number;
     "username": string;
-    "password": string;
+
+    /**
+     * JSON 可输入但不输出（omitempty 空值不输出）
+     */
+    "password"?: string;
     "protocol": string;
 
     /**
@@ -175,9 +179,6 @@ export class DeviceAsset {
         }
         if (!("username" in $$source)) {
             this["username"] = "";
-        }
-        if (!("password" in $$source)) {
-            this["password"] = "";
         }
         if (!("protocol" in $$source)) {
             this["protocol"] = "";

@@ -1174,8 +1174,21 @@ import type { DeviceAsset } from "../services/api";
 // 使用后端定义的类型
 type Device = DeviceAsset;
 
-// 新建设备时的类型（不含 id 和时间戳字段，由后端生成）
-type NewDevice = Omit<DeviceAsset, "id" | "lastSeen" | "createdAt" | "updatedAt">;
+// 表单数据类型（包含密码字段，用于前端表单处理）
+interface DeviceFormData {
+  ip: string;
+  port: number;
+  protocol: string;
+  username: string;
+  password: string; // 密码字段仅用于前端表单，不会发送到后端
+  group: string;
+  tags: string[];
+  vendor: string;
+  role: string;
+  site: string;
+  displayName: string;
+  description: string;
+}
 
 interface IpRangeHint {
   count: number;
@@ -1248,7 +1261,7 @@ const protocolDefaultPorts = ref<Record<string, number>>({
 const validProtocols = ref<string[]>(["SSH", "SNMP", "TELNET"]);
 
 // 表单数据（新建设备不需要 id 和时间戳字段）
-const form = ref<NewDevice>({
+const form = ref<DeviceFormData>({
   ip: "",
   port: 22,
   protocol: "SSH",
@@ -1547,7 +1560,7 @@ function openEditModal(device: Device) {
     port: device.port,
     protocol: device.protocol,
     username: device.username,
-    password: device.password,
+    password: device.password || "",
     group: device.group,
     tags: [...device.tags],
     vendor: device.vendor || "",

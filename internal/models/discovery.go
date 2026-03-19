@@ -7,21 +7,38 @@ import "time"
 // 发现任务相关模型
 // ============================================================================
 
+// DiscoveryTaskPhase 发现任务阶段
+type DiscoveryTaskPhase string
+
+const (
+	PhasePending    DiscoveryTaskPhase = "pending"    // 等待启动
+	PhaseCollecting DiscoveryTaskPhase = "collecting" // SSH 采集中
+	PhaseParsing    DiscoveryTaskPhase = "parsing"    // 结构化解析中
+	PhaseBuilding   DiscoveryTaskPhase = "building"   // 拓扑构建中
+	PhaseCompleted  DiscoveryTaskPhase = "completed"  // 完成
+	PhaseFailed     DiscoveryTaskPhase = "failed"     // 失败
+	PhaseCancelled  DiscoveryTaskPhase = "cancelled"  // 已取消
+)
+
 // DiscoveryTask 发现任务主表
 type DiscoveryTask struct {
-	ID           string     `json:"id" gorm:"primaryKey"`
-	Name         string     `json:"name"`
-	Status       string     `json:"status"` // pending / running / partial / completed / failed / cancelled
-	TotalCount   int        `json:"totalCount"`
-	SuccessCount int        `json:"successCount"`
-	FailedCount  int        `json:"failedCount"`
-	StartedAt    *time.Time `json:"startedAt"`
-	FinishedAt   *time.Time `json:"finishedAt"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	UpdatedAt    time.Time  `json:"updatedAt"`
-	MaxWorkers   int        `json:"maxWorkers"`
-	TimeoutSec   int        `json:"timeoutSec"`
-	Vendor       string     `json:"vendor"`
+	ID             string             `json:"id" gorm:"primaryKey"`
+	Name           string             `json:"name"`
+	Status         string             `json:"status"`         // 终态：completed / failed / cancelled
+	Phase          DiscoveryTaskPhase `json:"phase"`          // 当前阶段
+	PhaseStartedAt *time.Time         `json:"phaseStartedAt"` // 当前阶段开始时间
+	PhaseProgress  int                `json:"phaseProgress"`  // 当前阶段进度 (0-100)
+	TotalCount     int                `json:"totalCount"`
+	SuccessCount   int                `json:"successCount"`
+	FailedCount    int                `json:"failedCount"`
+	StartedAt      *time.Time         `json:"startedAt"`
+	FinishedAt     *time.Time         `json:"finishedAt"`
+	CreatedAt      time.Time          `json:"createdAt"`
+	UpdatedAt      time.Time          `json:"updatedAt"`
+	MaxWorkers     int                `json:"maxWorkers"`
+	TimeoutSec     int                `json:"timeoutSec"`
+	Vendor         string             `json:"vendor"`
+	ParseErrors    string             `json:"parseErrors" gorm:"type:text"` // JSON 序列化的解析错误
 }
 
 // TableName 指定表名

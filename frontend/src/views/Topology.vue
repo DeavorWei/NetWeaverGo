@@ -69,14 +69,18 @@
           class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
         >
           <option value="all">全部角色</option>
-          <option v-for="role in roleOptions" :key="role" :value="role">{{ role }}</option>
+          <option v-for="role in roleOptions" :key="role" :value="role">
+            {{ role }}
+          </option>
         </select>
         <select
           v-model="siteFilter"
           class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
         >
           <option value="all">全部站点</option>
-          <option v-for="site in siteOptions" :key="site" :value="site">{{ site }}</option>
+          <option v-for="site in siteOptions" :key="site" :value="site">
+            {{ site }}
+          </option>
         </select>
       </div>
     </div>
@@ -84,29 +88,128 @@
     <div class="grid grid-cols-5 gap-3">
       <div class="bg-bg-card border border-border rounded-lg p-3">
         <div class="text-xs text-text-muted">可见链路</div>
-        <div class="text-xl font-semibold text-text-primary mt-1">{{ filteredEdges.length }}</div>
+        <div class="text-xl font-semibold text-text-primary mt-1">
+          {{ filteredEdges.length }}
+        </div>
       </div>
       <div class="bg-bg-card border border-border rounded-lg p-3">
         <div class="text-xs text-text-muted">confirmed</div>
-        <div class="text-xl font-semibold text-success mt-1">{{ countByStatus("confirmed") }}</div>
+        <div class="text-xl font-semibold text-success mt-1">
+          {{ countByStatus("confirmed") }}
+        </div>
       </div>
       <div class="bg-bg-card border border-border rounded-lg p-3">
         <div class="text-xs text-text-muted">semi_confirmed</div>
-        <div class="text-xl font-semibold text-warning mt-1">{{ countByStatus("semi_confirmed") }}</div>
+        <div class="text-xl font-semibold text-warning mt-1">
+          {{ countByStatus("semi_confirmed") }}
+        </div>
       </div>
       <div class="bg-bg-card border border-border rounded-lg p-3">
         <div class="text-xs text-text-muted">inferred</div>
-        <div class="text-xl font-semibold text-warning mt-1">{{ countByStatus("inferred") }}</div>
+        <div class="text-xl font-semibold text-warning mt-1">
+          {{ countByStatus("inferred") }}
+        </div>
       </div>
       <div class="bg-bg-card border border-border rounded-lg p-3">
         <div class="text-xs text-text-muted">conflict</div>
-        <div class="text-xl font-semibold text-error mt-1">{{ countByStatus("conflict") }}</div>
+        <div class="text-xl font-semibold text-error mt-1">
+          {{ countByStatus("conflict") }}
+        </div>
       </div>
     </div>
 
-    <div class="grid grid-cols-3 gap-4 items-start">
-      <div class="col-span-2 bg-bg-card border border-border rounded-xl overflow-hidden">
-        <div class="px-4 py-3 border-b border-border bg-bg-panel flex items-center justify-between">
+    <!-- 视图切换 -->
+    <div class="flex items-center gap-2">
+      <button
+        @click="viewType = 'graph'"
+        :class="
+          viewType === 'graph'
+            ? 'bg-accent text-white'
+            : 'bg-bg-panel text-text-secondary'
+        "
+        class="px-3 py-1.5 rounded-lg text-sm font-medium border border-border"
+      >
+        图形视图
+      </button>
+      <button
+        @click="viewType = 'table'"
+        :class="
+          viewType === 'table'
+            ? 'bg-accent text-white'
+            : 'bg-bg-panel text-text-secondary'
+        "
+        class="px-3 py-1.5 rounded-lg text-sm font-medium border border-border"
+      >
+        表格视图
+      </button>
+    </div>
+
+    <!-- 解析错误提示 -->
+    <div
+      v-if="summary.errors && summary.errors.length > 0"
+      class="bg-error/10 border border-error/30 rounded-lg p-3"
+    >
+      <div class="flex items-center gap-2 text-sm text-error font-medium">
+        <svg
+          class="w-4 h-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+        >
+          <circle cx="12" cy="12" r="10" stroke-width="2" />
+          <line
+            x1="12"
+            y1="8"
+            x2="12"
+            y2="12"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+          <line
+            x1="12"
+            y1="16"
+            x2="12.01"
+            y2="16"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        </svg>
+        拓扑构建完成，但存在 {{ summary.errors.length }} 个数据问题
+      </div>
+      <div class="mt-2 space-y-1 max-h-[120px] overflow-auto scrollbar-custom">
+        <div
+          v-for="(err, idx) in summary.errors"
+          :key="idx"
+          class="text-xs text-error/80 font-mono bg-error/5 px-2 py-1 rounded"
+        >
+          {{ err }}
+        </div>
+      </div>
+    </div>
+
+    <!-- 图形视图 -->
+    <div
+      v-if="viewType === 'graph'"
+      class="bg-bg-card border border-border rounded-xl overflow-hidden"
+    >
+      <div class="h-[60vh]">
+        <TopologyGraph
+          :nodes="graphNodes"
+          :edges="graphEdges"
+          @node-click="openDeviceDetail"
+          @edge-click="loadEdgeDetail"
+        />
+      </div>
+    </div>
+
+    <!-- 表格视图 -->
+    <div v-if="viewType === 'table'" class="grid grid-cols-3 gap-4 items-start">
+      <div
+        class="col-span-2 bg-bg-card border border-border rounded-xl overflow-hidden"
+      >
+        <div
+          class="px-4 py-3 border-b border-border bg-bg-panel flex items-center justify-between"
+        >
           <span class="text-sm font-medium text-text-primary">链路列表</span>
           <span class="text-xs text-text-muted"
             >节点 {{ graph.nodes.length }} / 边 {{ filteredEdges.length }}</span
@@ -139,7 +242,9 @@
                     {{ displayNodeLabel(edge.source) }}
                   </button>
                 </td>
-                <td class="px-3 py-2 font-mono text-text-muted">{{ edge.sourceIf }}</td>
+                <td class="px-3 py-2 font-mono text-text-muted">
+                  {{ edge.sourceIf }}
+                </td>
                 <td class="px-3 py-2 text-text-primary">
                   <button
                     class="hover:text-accent"
@@ -148,16 +253,25 @@
                     {{ displayNodeLabel(edge.target) }}
                   </button>
                 </td>
-                <td class="px-3 py-2 font-mono text-text-muted">{{ edge.targetIf }}</td>
-                <td class="px-3 py-2 text-text-secondary">{{ edge.edgeType }}</td>
+                <td class="px-3 py-2 font-mono text-text-muted">
+                  {{ edge.targetIf }}
+                </td>
+                <td class="px-3 py-2 text-text-secondary">
+                  {{ edge.edgeType }}
+                </td>
                 <td class="px-3 py-2">
-                  <span class="px-2 py-0.5 rounded text-xs" :class="statusClass(edge.status)">
+                  <span
+                    class="px-2 py-0.5 rounded text-xs"
+                    :class="statusClass(edge.status)"
+                  >
                     {{ edge.status }}
                   </span>
                 </td>
               </tr>
               <tr v-if="filteredEdges.length === 0">
-                <td colspan="6" class="px-3 py-8 text-center text-text-muted">暂无匹配的链路</td>
+                <td colspan="6" class="px-3 py-8 text-center text-text-muted">
+                  暂无匹配的链路
+                </td>
               </tr>
             </tbody>
           </table>
@@ -171,12 +285,17 @@
           </div>
           <div v-if="edgeDetail" class="p-4 space-y-2 text-sm">
             <div class="text-text-primary">
-              {{ edgeDetail.aDevice.label || edgeDetail.aDevice.id }}:{{ edgeDetail.aIf }}
+              {{ edgeDetail.aDevice.label || edgeDetail.aDevice.id }}:{{
+                edgeDetail.aIf
+              }}
               <span class="text-text-muted"> ↔ </span>
-              {{ edgeDetail.bDevice.label || edgeDetail.bDevice.id }}:{{ edgeDetail.bIf }}
+              {{ edgeDetail.bDevice.label || edgeDetail.bDevice.id }}:{{
+                edgeDetail.bIf
+              }}
             </div>
             <div class="text-xs text-text-muted">
-              {{ edgeDetail.edgeType }} / {{ edgeDetail.status }} / confidence={{ edgeDetail.confidence.toFixed(2) }}
+              {{ edgeDetail.edgeType }} / {{ edgeDetail.status }} /
+              confidence={{ edgeDetail.confidence.toFixed(2) }}
             </div>
             <div class="space-y-1 max-h-[220px] overflow-auto scrollbar-custom">
               <div
@@ -184,9 +303,13 @@
                 :key="idx"
                 class="text-xs bg-bg-panel border border-border rounded px-2 py-1"
               >
-                <div class="text-text-primary">{{ ev.type }} | {{ ev.summary || "-" }}</div>
+                <div class="text-text-primary">
+                  {{ ev.type }} | {{ ev.summary || "-" }}
+                </div>
                 <div class="text-text-muted font-mono">
-                  device={{ ev.deviceId }} cmd={{ ev.command }} raw={{ ev.rawRefId }}
+                  device={{ ev.deviceId }} cmd={{ ev.command }} raw={{
+                    ev.rawRefId
+                  }}
                 </div>
               </div>
             </div>
@@ -198,22 +321,35 @@
           <div class="px-4 py-3 border-b border-border bg-bg-panel">
             <span class="text-sm font-medium text-text-primary">设备详情</span>
           </div>
-          <div v-if="loadingDeviceDetail" class="p-4 text-xs text-text-muted">加载中...</div>
+          <div v-if="loadingDeviceDetail" class="p-4 text-xs text-text-muted">
+            加载中...
+          </div>
           <div v-else-if="deviceDetail" class="p-4 space-y-2 text-xs">
             <div class="text-text-primary font-semibold">
-              {{ deviceDetail.identity?.hostname || displayNodeLabel(selectedDeviceID) }}
+              {{
+                deviceDetail.identity?.hostname ||
+                displayNodeLabel(selectedDeviceID)
+              }}
             </div>
             <div class="text-text-muted">IP: {{ deviceDetail.deviceIp }}</div>
-            <div class="text-text-muted">厂商: {{ deviceDetail.identity?.vendor || "-" }}</div>
-            <div class="text-text-muted">型号: {{ deviceDetail.identity?.model || "-" }}</div>
-            <div class="text-text-muted">版本: {{ deviceDetail.identity?.version || "-" }}</div>
+            <div class="text-text-muted">
+              厂商: {{ deviceDetail.identity?.vendor || "-" }}
+            </div>
+            <div class="text-text-muted">
+              型号: {{ deviceDetail.identity?.model || "-" }}
+            </div>
+            <div class="text-text-muted">
+              版本: {{ deviceDetail.identity?.version || "-" }}
+            </div>
             <div class="pt-2 border-t border-border text-text-muted">
-              接口 {{ deviceDetail.interfaces?.length || 0 }} |
-              LLDP {{ deviceDetail.lldpNeighbors?.length || 0 }} |
-              聚合 {{ deviceDetail.aggregates?.length || 0 }}
+              接口 {{ deviceDetail.interfaces?.length || 0 }} | LLDP
+              {{ deviceDetail.lldpNeighbors?.length || 0 }} | 聚合
+              {{ deviceDetail.aggregates?.length || 0 }}
             </div>
           </div>
-          <div v-else class="p-4 text-xs text-text-muted">点击设备名称查看详情</div>
+          <div v-else class="p-4 text-xs text-text-muted">
+            点击设备名称查看详情
+          </div>
         </div>
       </div>
     </div>
@@ -230,6 +366,7 @@ import {
   type TopologyEdgeDetailView,
   type TopologyGraphView,
 } from "../services/api";
+import TopologyGraph from "../components/topology/TopologyGraph.vue";
 
 const tasks = ref<DiscoveryTaskView[]>([]);
 const selectedTaskID = ref("");
@@ -240,6 +377,7 @@ const statusFilter = ref("all");
 const viewMode = ref("all");
 const roleFilter = ref("all");
 const siteFilter = ref("all");
+const viewType = ref<"graph" | "table">("graph");
 
 const summary = ref<TopologyBuildResult>({
   taskId: "",
@@ -291,6 +429,28 @@ const siteOptions = computed(() => {
   return Array.from(values).sort();
 });
 
+// 转换数据格式供图形组件使用
+const graphNodes = computed(() =>
+  (graph.value.nodes || []).map((n) => ({
+    id: n.id,
+    label: n.label || n.id,
+    role: n.role,
+    site: n.site,
+  })),
+);
+
+const graphEdges = computed(() =>
+  (graph.value.edges || []).map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    sourceIf: e.sourceIf,
+    targetIf: e.targetIf,
+    status: e.status,
+    edgeType: e.edgeType,
+  })),
+);
+
 const filteredEdges = computed(() => {
   const kw = keyword.value.trim().toLowerCase();
   return (graph.value.edges || []).filter((edge) => {
@@ -301,7 +461,10 @@ const filteredEdges = computed(() => {
     if (viewMode.value === "logical" && edge.edgeType === "physical") {
       return false;
     }
-    if (viewMode.value === "physical" && edge.edgeType === "logical_aggregate") {
+    if (
+      viewMode.value === "physical" &&
+      edge.edgeType === "logical_aggregate"
+    ) {
       return false;
     }
 
@@ -369,7 +532,8 @@ function applySummaryFromGraph() {
     taskId: selectedTaskID.value,
     totalEdges: edges.length,
     confirmedEdges: edges.filter((e) => e.status === "confirmed").length,
-    semiConfirmedEdges: edges.filter((e) => e.status === "semi_confirmed").length,
+    semiConfirmedEdges: edges.filter((e) => e.status === "semi_confirmed")
+      .length,
     inferredEdges: edges.filter((e) => e.status === "inferred").length,
     conflictEdges: edges.filter((e) => e.status === "conflict").length,
     buildTime: summary.value.buildTime,
@@ -408,14 +572,21 @@ async function buildTopology() {
 
 async function loadEdgeDetail(edgeID: string) {
   if (!selectedTaskID.value) return;
-  edgeDetail.value = await DiscoveryAPI.getEdgeDetail(selectedTaskID.value, edgeID);
+  edgeDetail.value = await DiscoveryAPI.getEdgeDetail(
+    selectedTaskID.value,
+    edgeID,
+  );
 }
 
 async function openDeviceDetail(deviceID: string) {
   selectedDeviceID.value = deviceID;
   loadingDeviceDetail.value = true;
   try {
-    if (!selectedTaskID.value || deviceID.startsWith("server:") || deviceID.startsWith("unknown:")) {
+    if (
+      !selectedTaskID.value ||
+      deviceID.startsWith("server:") ||
+      deviceID.startsWith("unknown:")
+    ) {
       deviceDetail.value = {
         taskId: selectedTaskID.value,
         deviceIp: deviceID,
@@ -432,7 +603,10 @@ async function openDeviceDetail(deviceID: string) {
       } as ParsedResult;
       return;
     }
-    deviceDetail.value = await DiscoveryAPI.getDeviceTopologyDetail(selectedTaskID.value, deviceID);
+    deviceDetail.value = await DiscoveryAPI.getDeviceTopologyDetail(
+      selectedTaskID.value,
+      deviceID,
+    );
   } finally {
     loadingDeviceDetail.value = false;
   }
@@ -453,4 +627,3 @@ onMounted(() => {
   void loadTasks();
 });
 </script>
-
