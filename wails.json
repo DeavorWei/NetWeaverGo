@@ -23,7 +23,10 @@
           "TaskGroupService",
           "ForgeService",
           "QueryService",
-          "ExecutionHistoryService"
+          "ExecutionHistoryService",
+          "DiscoveryService",
+          "TopologyService",
+          "PlanCompareService"
         ]
       }
     ]

@@ -11,7 +11,7 @@ import "time"
 type DiscoveryTask struct {
 	ID           string     `json:"id" gorm:"primaryKey"`
 	Name         string     `json:"name"`
-	Status       string     `json:"status"` // pending / running / completed / failed / cancelled
+	Status       string     `json:"status"` // pending / running / partial / completed / failed / cancelled
 	TotalCount   int        `json:"totalCount"`
 	SuccessCount int        `json:"successCount"`
 	FailedCount  int        `json:"failedCount"`
@@ -31,20 +31,27 @@ func (DiscoveryTask) TableName() string {
 
 // DiscoveryDevice 发现设备结果表
 type DiscoveryDevice struct {
-	ID           uint       `json:"id" gorm:"primaryKey;autoIncrement"`
-	TaskID       string     `json:"taskId" gorm:"index;not null"`
-	DeviceIP     string     `json:"deviceIp" gorm:"index;not null"`
-	DeviceID     uint       `json:"deviceId"`
-	Status       string     `json:"status"` // pending / running / success / failed
-	ErrorMessage string     `json:"errorMessage"`
-	StartedAt    *time.Time `json:"startedAt"`
-	FinishedAt   *time.Time `json:"finishedAt"`
-	Vendor       string     `json:"vendor"`
-	Model        string     `json:"model"`
-	SerialNumber string     `json:"serialNumber"`
-	Version      string     `json:"version"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	UpdatedAt    time.Time  `json:"updatedAt"`
+	ID             uint       `json:"id" gorm:"primaryKey;autoIncrement"`
+	TaskID         string     `json:"taskId" gorm:"index;not null"`
+	DeviceIP       string     `json:"deviceIp" gorm:"index;not null"`
+	DeviceID       uint       `json:"deviceId"`
+	Status         string     `json:"status"` // pending / running / success / partial / failed
+	ErrorMessage   string     `json:"errorMessage"`
+	StartedAt      *time.Time `json:"startedAt"`
+	FinishedAt     *time.Time `json:"finishedAt"`
+	DisplayName    string     `json:"displayName"`
+	Role           string     `json:"role"`
+	Site           string     `json:"site"`
+	Vendor         string     `json:"vendor"`
+	Model          string     `json:"model"`
+	SerialNumber   string     `json:"serialNumber"`
+	Version        string     `json:"version"`
+	Hostname       string     `json:"hostname"`
+	NormalizedName string     `json:"normalizedName"`
+	MgmtIP         string     `json:"mgmtIp"`
+	ChassisID      string     `json:"chassisId"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
 }
 
 // TableName 指定表名
@@ -62,6 +69,8 @@ type RawCommandOutput struct {
 	FilePath     string    `json:"filePath"`
 	Status       string    `json:"status"` // pending / success / failed
 	ErrorMessage string    `json:"errorMessage"`
+	ParseStatus  string    `json:"parseStatus"` // pending / success / parse_failed / skipped
+	ParseError   string    `json:"parseError"`
 	OutputSize   int64     `json:"outputSize"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
@@ -114,18 +123,27 @@ type DiscoveryDeviceView struct {
 	ErrorMessage string     `json:"errorMessage"`
 	StartedAt    *time.Time `json:"startedAt"`
 	FinishedAt   *time.Time `json:"finishedAt"`
+	DisplayName  string     `json:"displayName"`
+	Role         string     `json:"role"`
+	Site         string     `json:"site"`
 	Vendor       string     `json:"vendor"`
 	Model        string     `json:"model"`
 	SerialNumber string     `json:"serialNumber"`
 	Version      string     `json:"version"`
+	Hostname     string     `json:"hostname"`
+	MgmtIP       string     `json:"mgmtIp"`
+	ChassisID    string     `json:"chassisId"`
 }
 
 // DeviceInfo 设备信息（用于任务执行）
 type DeviceInfo struct {
-	ID       uint
-	IP       string
-	Port     int
-	Username string
-	Password string
-	Vendor   string
+	ID          uint
+	IP          string
+	Port        int
+	Username    string
+	Password    string
+	Vendor      string
+	DisplayName string
+	Role        string
+	Site        string
 }

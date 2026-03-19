@@ -50,7 +50,9 @@ export function useIPBinding(
         if (!ipValidationCache.value.has(ip)) {
           try {
             const result = await ForgeAPI.validateIP(ip)
-            ipValidationCache.value.set(ip, result)
+            if (result) {
+              ipValidationCache.value.set(ip, result)
+            }
           } catch {
             // ignore
           }

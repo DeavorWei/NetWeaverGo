@@ -7,9 +7,11 @@ import * as DiscoveryService from "./discoveryservice.js";
 import * as EngineService from "./engineservice.js";
 import * as ExecutionHistoryService from "./executionhistoryservice.js";
 import * as ForgeService from "./forgeservice.js";
+import * as PlanCompareService from "./plancompareservice.js";
 import * as QueryService from "./queryservice.js";
 import * as SettingsService from "./settingsservice.js";
 import * as TaskGroupService from "./taskgroupservice.js";
+import * as TopologyService from "./topologyservice.js";
 export {
     CommandGroupService,
     DeviceService,
@@ -17,9 +19,11 @@ export {
     EngineService,
     ExecutionHistoryService,
     ForgeService,
+    PlanCompareService,
     QueryService,
     SettingsService,
-    TaskGroupService
+    TaskGroupService,
+    TopologyService
 };
 
 export {

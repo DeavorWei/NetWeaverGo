@@ -1,0 +1,72 @@
+package discovery
+
+import (
+	"testing"
+	"time"
+)
+
+func TestResolveDiscoveryVendor(t *testing.T) {
+	tests := []struct {
+		name           string
+		requested      string
+		deviceVendor   string
+		expectedVendor string
+	}{
+		{name: "explicit requested vendor", requested: "h3c", deviceVendor: "huawei", expectedVendor: "h3c"},
+		{name: "auto uses device vendor", requested: "auto", deviceVendor: "cisco", expectedVendor: "cisco"},
+		{name: "empty requested uses device vendor", requested: "", deviceVendor: "huawei", expectedVendor: "huawei"},
+		{name: "unsupported requested fallback default", requested: "juniper", deviceVendor: "cisco", expectedVendor: "huawei"},
+		{name: "auto with unsupported device fallback default", requested: "", deviceVendor: "juniper", expectedVendor: "huawei"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveDiscoveryVendor(tt.requested, tt.deviceVendor)
+			if got != tt.expectedVendor {
+				t.Fatalf("resolveDiscoveryVendor(%q,%q)=%q, expected=%q", tt.requested, tt.deviceVendor, got, tt.expectedVendor)
+			}
+		})
+	}
+}
+
+func TestDetectVendorFromVersion(t *testing.T) {
+	tests := []struct {
+		output   string
+		expected string
+	}{
+		{output: "Huawei Versatile Routing Platform", expected: "huawei"},
+		{output: "Comware Software, Version 7", expected: "h3c"},
+		{output: "Cisco IOS XE Software", expected: "cisco"},
+		{output: "Unknown text", expected: ""},
+	}
+
+	for _, tt := range tests {
+		if got := detectVendorFromVersion(tt.output); got != tt.expected {
+			t.Fatalf("detectVendorFromVersion(%q)=%q, expected=%q", tt.output, got, tt.expected)
+		}
+	}
+}
+
+func TestResolveCommandTimeout(t *testing.T) {
+	tests := []struct {
+		name           string
+		specTimeoutSec int
+		taskTimeout    time.Duration
+		expected       time.Duration
+	}{
+		{name: "spec timeout", specTimeoutSec: 30, taskTimeout: 0, expected: 30 * time.Second},
+		{name: "task cap smaller", specTimeoutSec: 60, taskTimeout: 45 * time.Second, expected: 45 * time.Second},
+		{name: "task cap larger", specTimeoutSec: 20, taskTimeout: 45 * time.Second, expected: 20 * time.Second},
+		{name: "spec missing uses task", specTimeoutSec: 0, taskTimeout: 40 * time.Second, expected: 40 * time.Second},
+		{name: "both missing fallback", specTimeoutSec: 0, taskTimeout: 0, expected: 60 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveCommandTimeout(tt.specTimeoutSec, tt.taskTimeout)
+			if got != tt.expected {
+				t.Fatalf("resolveCommandTimeout(%d,%s)=%s, expected=%s", tt.specTimeoutSec, tt.taskTimeout, got, tt.expected)
+			}
+		})
+	}
+}

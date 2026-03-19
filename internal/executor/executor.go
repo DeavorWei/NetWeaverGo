@@ -72,14 +72,17 @@ func (e *DeviceExecutor) SetLogSession(session *report.DeviceLogSession) {
 // Connect 创建SSH长连接并初始化日志审计
 func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) error {
 	logger.Debug("Executor", e.IP, "准备建立SSH连接 (Timeout: %v)", timeout)
+	hostKeyPolicy, knownHostsPath := config.ResolveSSHHostKeyPolicy()
 	cfg := sshutil.Config{
-		IP:         e.IP,
-		Port:       e.Port,
-		Username:   e.Username,
-		Password:   e.Password,
-		Timeout:    timeout,
-		Algorithms: e.Algorithms,
-		RawSink:    e.rawSink(),
+		IP:             e.IP,
+		Port:           e.Port,
+		Username:       e.Username,
+		Password:       e.Password,
+		Timeout:        timeout,
+		Algorithms:     e.Algorithms,
+		HostKeyPolicy:  hostKeyPolicy,
+		KnownHostsPath: knownHostsPath,
+		RawSink:        e.rawSink(),
 	}
 
 	client, err := sshutil.NewSSHClient(ctx, cfg)

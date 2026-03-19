@@ -60,6 +60,60 @@ func NormalizeInterfaceName(name string) string {
 	return name
 }
 
+// NormalizeLLDPRemotePort 归一化 LLDP 远端端口字段。
+func NormalizeLLDPRemotePort(port string) string {
+	port = strings.TrimSpace(port)
+	if port == "" {
+		return ""
+	}
+	switch strings.ToLower(port) {
+	case "-", "n/a", "unknown":
+		return ""
+	default:
+		return NormalizeInterfaceName(port)
+	}
+}
+
+// NormalizeAggregateName 归一化聚合口名称。
+func NormalizeAggregateName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+
+	lower := strings.ToLower(name)
+	digits := trailingDigits(name)
+	switch {
+	case strings.HasPrefix(lower, "eth-trunk"), strings.HasPrefix(lower, "trunk"),
+		strings.HasPrefix(lower, "bridge-aggregation"), strings.HasPrefix(lower, "route-aggregation"):
+		if digits != "" {
+			return "Trunk" + digits
+		}
+	case strings.HasPrefix(lower, "port-channel"), strings.HasPrefix(lower, "po"):
+		if digits != "" {
+			return "Po" + digits
+		}
+	}
+
+	return NormalizeInterfaceName(name)
+}
+
+func trailingDigits(s string) string {
+	end := len(s)
+	start := end
+	for start > 0 {
+		ch := s[start-1]
+		if ch < '0' || ch > '9' {
+			break
+		}
+		start--
+	}
+	if start == end {
+		return ""
+	}
+	return s[start:end]
+}
+
 // NormalizeDeviceName 归一化设备名
 // 统一转为大写，去除特殊字符
 func NormalizeDeviceName(name string) string {

@@ -74,6 +74,66 @@ export class CommandGroup {
 }
 
 /**
+ * CompareResult 比对结果
+ */
+export class CompareResult {
+    "reportId": string;
+    "totalPlanned": number;
+    "totalActual": number;
+    "matched": number;
+    "missingLinks": DiffItem[];
+    "unexpectedLinks": DiffItem[];
+    "inconsistentItems": DiffItem[];
+
+    /** Creates a new CompareResult instance. */
+    constructor($$source: Partial<CompareResult> = {}) {
+        if (!("reportId" in $$source)) {
+            this["reportId"] = "";
+        }
+        if (!("totalPlanned" in $$source)) {
+            this["totalPlanned"] = 0;
+        }
+        if (!("totalActual" in $$source)) {
+            this["totalActual"] = 0;
+        }
+        if (!("matched" in $$source)) {
+            this["matched"] = 0;
+        }
+        if (!("missingLinks" in $$source)) {
+            this["missingLinks"] = [];
+        }
+        if (!("unexpectedLinks" in $$source)) {
+            this["unexpectedLinks"] = [];
+        }
+        if (!("inconsistentItems" in $$source)) {
+            this["inconsistentItems"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CompareResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CompareResult {
+        const $$createField4_0 = $$createType2;
+        const $$createField5_0 = $$createType2;
+        const $$createField6_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("missingLinks" in $$parsedSource) {
+            $$parsedSource["missingLinks"] = $$createField4_0($$parsedSource["missingLinks"]);
+        }
+        if ("unexpectedLinks" in $$parsedSource) {
+            $$parsedSource["unexpectedLinks"] = $$createField5_0($$parsedSource["unexpectedLinks"]);
+        }
+        if ("inconsistentItems" in $$parsedSource) {
+            $$parsedSource["inconsistentItems"] = $$createField6_0($$parsedSource["inconsistentItems"]);
+        }
+        return new CompareResult($$parsedSource as Partial<CompareResult>);
+    }
+}
+
+/**
  * DeviceAsset 设备资产表
  */
 export class DeviceAsset {
@@ -170,6 +230,158 @@ export class DeviceAsset {
 }
 
 /**
+ * DiffItem 差异项
+ */
+export class DiffItem {
+    "id": number;
+    "reportId": string;
+
+    /**
+     * missing_link / unexpected_link / interface_mismatch / ...
+     */
+    "diffType": string;
+    "aDeviceName": string;
+    "aMgmtIp": string;
+    "aIf": string;
+    "bDeviceName": string;
+    "bMgmtIp": string;
+    "bIf": string;
+    "expectedIf": string;
+    "actualIf": string;
+    "reason": string;
+    "evidence": string[];
+    "createdAt": time$0.Time;
+    "updatedAt": time$0.Time;
+
+    /** Creates a new DiffItem instance. */
+    constructor($$source: Partial<DiffItem> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("reportId" in $$source)) {
+            this["reportId"] = "";
+        }
+        if (!("diffType" in $$source)) {
+            this["diffType"] = "";
+        }
+        if (!("aDeviceName" in $$source)) {
+            this["aDeviceName"] = "";
+        }
+        if (!("aMgmtIp" in $$source)) {
+            this["aMgmtIp"] = "";
+        }
+        if (!("aIf" in $$source)) {
+            this["aIf"] = "";
+        }
+        if (!("bDeviceName" in $$source)) {
+            this["bDeviceName"] = "";
+        }
+        if (!("bMgmtIp" in $$source)) {
+            this["bMgmtIp"] = "";
+        }
+        if (!("bIf" in $$source)) {
+            this["bIf"] = "";
+        }
+        if (!("expectedIf" in $$source)) {
+            this["expectedIf"] = "";
+        }
+        if (!("actualIf" in $$source)) {
+            this["actualIf"] = "";
+        }
+        if (!("reason" in $$source)) {
+            this["reason"] = "";
+        }
+        if (!("evidence" in $$source)) {
+            this["evidence"] = [];
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DiffItem instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DiffItem {
+        const $$createField12_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("evidence" in $$parsedSource) {
+            $$parsedSource["evidence"] = $$createField12_0($$parsedSource["evidence"]);
+        }
+        return new DiffItem($$parsedSource as Partial<DiffItem>);
+    }
+}
+
+/**
+ * DiffReportView 差异报告视图
+ */
+export class DiffReportView {
+    "id": string;
+    "taskId": string;
+    "planFileId": string;
+    "planFileName": string;
+    "totalPlanned": number;
+    "totalActual": number;
+    "matched": number;
+    "missingLinks": number;
+    "unexpectedLinks": number;
+    "inconsistentItems": number;
+    "createdAt": time$0.Time;
+
+    /** Creates a new DiffReportView instance. */
+    constructor($$source: Partial<DiffReportView> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("taskId" in $$source)) {
+            this["taskId"] = "";
+        }
+        if (!("planFileId" in $$source)) {
+            this["planFileId"] = "";
+        }
+        if (!("planFileName" in $$source)) {
+            this["planFileName"] = "";
+        }
+        if (!("totalPlanned" in $$source)) {
+            this["totalPlanned"] = 0;
+        }
+        if (!("totalActual" in $$source)) {
+            this["totalActual"] = 0;
+        }
+        if (!("matched" in $$source)) {
+            this["matched"] = 0;
+        }
+        if (!("missingLinks" in $$source)) {
+            this["missingLinks"] = 0;
+        }
+        if (!("unexpectedLinks" in $$source)) {
+            this["unexpectedLinks"] = 0;
+        }
+        if (!("inconsistentItems" in $$source)) {
+            this["inconsistentItems"] = 0;
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DiffReportView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DiffReportView {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DiffReportView($$parsedSource as Partial<DiffReportView>);
+    }
+}
+
+/**
  * DiscoveryDeviceView 发现设备视图
  */
 export class DiscoveryDeviceView {
@@ -180,10 +392,16 @@ export class DiscoveryDeviceView {
     "errorMessage": string;
     "startedAt": time$0.Time | null;
     "finishedAt": time$0.Time | null;
+    "displayName": string;
+    "role": string;
+    "site": string;
     "vendor": string;
     "model": string;
     "serialNumber": string;
     "version": string;
+    "hostname": string;
+    "mgmtIp": string;
+    "chassisId": string;
 
     /** Creates a new DiscoveryDeviceView instance. */
     constructor($$source: Partial<DiscoveryDeviceView> = {}) {
@@ -208,6 +426,15 @@ export class DiscoveryDeviceView {
         if (!("finishedAt" in $$source)) {
             this["finishedAt"] = null;
         }
+        if (!("displayName" in $$source)) {
+            this["displayName"] = "";
+        }
+        if (!("role" in $$source)) {
+            this["role"] = "";
+        }
+        if (!("site" in $$source)) {
+            this["site"] = "";
+        }
         if (!("vendor" in $$source)) {
             this["vendor"] = "";
         }
@@ -219,6 +446,15 @@ export class DiscoveryDeviceView {
         }
         if (!("version" in $$source)) {
             this["version"] = "";
+        }
+        if (!("hostname" in $$source)) {
+            this["hostname"] = "";
+        }
+        if (!("mgmtIp" in $$source)) {
+            this["mgmtIp"] = "";
+        }
+        if (!("chassisId" in $$source)) {
+            this["chassisId"] = "";
         }
 
         Object.assign(this, $$source);
@@ -298,6 +534,118 @@ export class DiscoveryTaskView {
 }
 
 /**
+ * EdgeEvidence 边证据
+ */
+export class EdgeEvidence {
+    /**
+     * 证据类型: lldp / fdb / arp / aggregate / identity
+     */
+    "type": string;
+
+    /**
+     * 证据来源设备
+     */
+    "deviceId": string;
+
+    /**
+     * 来源命令 key
+     */
+    "command": string;
+
+    /**
+     * 原始输出引用ID
+     */
+    "rawRefId": string;
+
+    /**
+     * 证据摘要
+     */
+    "summary": string;
+
+    /**
+     * 兼容字段: 来源
+     */
+    "source": string;
+
+    /**
+     * 本地接口
+     */
+    "localIf": string;
+
+    /**
+     * 远端名称
+     */
+    "remoteName": string;
+
+    /**
+     * 远端接口
+     */
+    "remoteIf": string;
+
+    /**
+     * 远端MAC
+     */
+    "remoteMac": string;
+
+    /**
+     * 远端IP
+     */
+    "remoteIp": string;
+
+    /**
+     * 时间戳
+     */
+    "timestamp"?: string;
+
+    /** Creates a new EdgeEvidence instance. */
+    constructor($$source: Partial<EdgeEvidence> = {}) {
+        if (!("type" in $$source)) {
+            this["type"] = "";
+        }
+        if (!("deviceId" in $$source)) {
+            this["deviceId"] = "";
+        }
+        if (!("command" in $$source)) {
+            this["command"] = "";
+        }
+        if (!("rawRefId" in $$source)) {
+            this["rawRefId"] = "";
+        }
+        if (!("summary" in $$source)) {
+            this["summary"] = "";
+        }
+        if (!("source" in $$source)) {
+            this["source"] = "";
+        }
+        if (!("localIf" in $$source)) {
+            this["localIf"] = "";
+        }
+        if (!("remoteName" in $$source)) {
+            this["remoteName"] = "";
+        }
+        if (!("remoteIf" in $$source)) {
+            this["remoteIf"] = "";
+        }
+        if (!("remoteMac" in $$source)) {
+            this["remoteMac"] = "";
+        }
+        if (!("remoteIp" in $$source)) {
+            this["remoteIp"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new EdgeEvidence instance from a string or object.
+     */
+    static createFrom($$source: any = {}): EdgeEvidence {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new EdgeEvidence($$parsedSource as Partial<EdgeEvidence>);
+    }
+}
+
+/**
  * GlobalSettings 全局运行参数
  */
 export class GlobalSettings {
@@ -344,6 +692,16 @@ export class GlobalSettings {
      */
     "sshAlgorithms": SSHAlgorithmSettings;
 
+    /**
+     * SSH主机密钥校验策略: strict / accept_new / insecure
+     */
+    "sshHostKeyPolicy": string;
+
+    /**
+     * known_hosts 文件路径（为空时使用默认路径）
+     */
+    "sshKnownHostsPath": string;
+
     /** Creates a new GlobalSettings instance. */
     constructor($$source: Partial<GlobalSettings> = {}) {
         if (!("id" in $$source)) {
@@ -373,6 +731,12 @@ export class GlobalSettings {
         if (!("sshAlgorithms" in $$source)) {
             this["sshAlgorithms"] = (new SSHAlgorithmSettings());
         }
+        if (!("sshHostKeyPolicy" in $$source)) {
+            this["sshHostKeyPolicy"] = "";
+        }
+        if (!("sshKnownHostsPath" in $$source)) {
+            this["sshKnownHostsPath"] = "";
+        }
 
         Object.assign(this, $$source);
     }
@@ -381,12 +745,202 @@ export class GlobalSettings {
      * Creates a new GlobalSettings instance from a string or object.
      */
     static createFrom($$source: any = {}): GlobalSettings {
-        const $$createField8_0 = $$createType1;
+        const $$createField8_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("sshAlgorithms" in $$parsedSource) {
             $$parsedSource["sshAlgorithms"] = $$createField8_0($$parsedSource["sshAlgorithms"]);
         }
         return new GlobalSettings($$parsedSource as Partial<GlobalSettings>);
+    }
+}
+
+/**
+ * GraphEdge 图边
+ */
+export class GraphEdge {
+    "id": string;
+    "source": string;
+    "target": string;
+    "sourceIf": string;
+    "targetIf": string;
+    "logicalSourceIf": string;
+    "logicalTargetIf": string;
+    "edgeType": string;
+    "status": string;
+    "confidence": number;
+
+    /** Creates a new GraphEdge instance. */
+    constructor($$source: Partial<GraphEdge> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("source" in $$source)) {
+            this["source"] = "";
+        }
+        if (!("target" in $$source)) {
+            this["target"] = "";
+        }
+        if (!("sourceIf" in $$source)) {
+            this["sourceIf"] = "";
+        }
+        if (!("targetIf" in $$source)) {
+            this["targetIf"] = "";
+        }
+        if (!("logicalSourceIf" in $$source)) {
+            this["logicalSourceIf"] = "";
+        }
+        if (!("logicalTargetIf" in $$source)) {
+            this["logicalTargetIf"] = "";
+        }
+        if (!("edgeType" in $$source)) {
+            this["edgeType"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("confidence" in $$source)) {
+            this["confidence"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new GraphEdge instance from a string or object.
+     */
+    static createFrom($$source: any = {}): GraphEdge {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new GraphEdge($$parsedSource as Partial<GraphEdge>);
+    }
+}
+
+/**
+ * GraphNode 图节点
+ */
+export class GraphNode {
+    "id": string;
+    "label": string;
+    "ip": string;
+    "vendor": string;
+    "model": string;
+    "role": string;
+    "site": string;
+    "serialNumber": string;
+
+    /** Creates a new GraphNode instance. */
+    constructor($$source: Partial<GraphNode> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("ip" in $$source)) {
+            this["ip"] = "";
+        }
+        if (!("vendor" in $$source)) {
+            this["vendor"] = "";
+        }
+        if (!("model" in $$source)) {
+            this["model"] = "";
+        }
+        if (!("role" in $$source)) {
+            this["role"] = "";
+        }
+        if (!("site" in $$source)) {
+            this["site"] = "";
+        }
+        if (!("serialNumber" in $$source)) {
+            this["serialNumber"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new GraphNode instance from a string or object.
+     */
+    static createFrom($$source: any = {}): GraphNode {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new GraphNode($$parsedSource as Partial<GraphNode>);
+    }
+}
+
+/**
+ * PlanImportResult 规划导入结果
+ */
+export class PlanImportResult {
+    "planFileId": string;
+    "totalLinks": number;
+    "warnings"?: string[];
+
+    /** Creates a new PlanImportResult instance. */
+    constructor($$source: Partial<PlanImportResult> = {}) {
+        if (!("planFileId" in $$source)) {
+            this["planFileId"] = "";
+        }
+        if (!("totalLinks" in $$source)) {
+            this["totalLinks"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PlanImportResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PlanImportResult {
+        const $$createField2_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("warnings" in $$parsedSource) {
+            $$parsedSource["warnings"] = $$createField2_0($$parsedSource["warnings"]);
+        }
+        return new PlanImportResult($$parsedSource as Partial<PlanImportResult>);
+    }
+}
+
+/**
+ * PlanUploadView 规划文件视图
+ */
+export class PlanUploadView {
+    "id": string;
+    "fileName": string;
+    "filePath": string;
+    "totalLinks": number;
+    "warnings"?: string[];
+    "importedAt": time$0.Time;
+
+    /** Creates a new PlanUploadView instance. */
+    constructor($$source: Partial<PlanUploadView> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("fileName" in $$source)) {
+            this["fileName"] = "";
+        }
+        if (!("filePath" in $$source)) {
+            this["filePath"] = "";
+        }
+        if (!("totalLinks" in $$source)) {
+            this["totalLinks"] = 0;
+        }
+        if (!("importedAt" in $$source)) {
+            this["importedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PlanUploadView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PlanUploadView {
+        const $$createField4_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("warnings" in $$parsedSource) {
+            $$parsedSource["warnings"] = $$createField4_0($$parsedSource["warnings"]);
+        }
+        return new PlanUploadView($$parsedSource as Partial<PlanUploadView>);
     }
 }
 
@@ -596,7 +1150,7 @@ export class TaskGroup {
      * Creates a new TaskGroup instance from a string or object.
      */
     static createFrom($$source: any = {}): TaskGroup {
-        const $$createField8_0 = $$createType3;
+        const $$createField8_0 = $$createType5;
         const $$createField10_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
@@ -648,7 +1202,7 @@ export class TaskItem {
      */
     static createFrom($$source: any = {}): TaskItem {
         const $$createField1_0 = $$createType0;
-        const $$createField2_0 = $$createType4;
+        const $$createField2_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("commands" in $$parsedSource) {
             $$parsedSource["commands"] = $$createField1_0($$parsedSource["commands"]);
@@ -684,9 +1238,290 @@ export class TaskStartResponse {
     }
 }
 
+/**
+ * TopologyBuildResult 拓扑构建结果
+ */
+export class TopologyBuildResult {
+    "taskId": string;
+    "totalEdges": number;
+    "confirmedEdges": number;
+    "semiConfirmedEdges": number;
+    "inferredEdges": number;
+    "conflictEdges": number;
+    "buildTime": time$0.Duration;
+    "errors"?: string[];
+
+    /** Creates a new TopologyBuildResult instance. */
+    constructor($$source: Partial<TopologyBuildResult> = {}) {
+        if (!("taskId" in $$source)) {
+            this["taskId"] = "";
+        }
+        if (!("totalEdges" in $$source)) {
+            this["totalEdges"] = 0;
+        }
+        if (!("confirmedEdges" in $$source)) {
+            this["confirmedEdges"] = 0;
+        }
+        if (!("semiConfirmedEdges" in $$source)) {
+            this["semiConfirmedEdges"] = 0;
+        }
+        if (!("inferredEdges" in $$source)) {
+            this["inferredEdges"] = 0;
+        }
+        if (!("conflictEdges" in $$source)) {
+            this["conflictEdges"] = 0;
+        }
+        if (!("buildTime" in $$source)) {
+            this["buildTime"] = time$0.Duration.$zero;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TopologyBuildResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TopologyBuildResult {
+        const $$createField7_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("errors" in $$parsedSource) {
+            $$parsedSource["errors"] = $$createField7_0($$parsedSource["errors"]);
+        }
+        return new TopologyBuildResult($$parsedSource as Partial<TopologyBuildResult>);
+    }
+}
+
+/**
+ * TopologyEdge 拓扑边（链路）
+ */
+export class TopologyEdge {
+    "id": string;
+    "taskId": string;
+    "aDeviceId": string;
+    "aIf": string;
+    "bDeviceId": string;
+    "bIf": string;
+    "logicalAIf": string;
+    "logicalBIf": string;
+
+    /**
+     * physical / logical_aggregate
+     */
+    "edgeType": string;
+
+    /**
+     * confirmed / semi_confirmed / inferred / conflict
+     */
+    "status": string;
+    "confidence": number;
+    "discoveryMethods": string[];
+    "evidence": EdgeEvidence[];
+    "createdAt": time$0.Time;
+    "updatedAt": time$0.Time;
+
+    /** Creates a new TopologyEdge instance. */
+    constructor($$source: Partial<TopologyEdge> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("taskId" in $$source)) {
+            this["taskId"] = "";
+        }
+        if (!("aDeviceId" in $$source)) {
+            this["aDeviceId"] = "";
+        }
+        if (!("aIf" in $$source)) {
+            this["aIf"] = "";
+        }
+        if (!("bDeviceId" in $$source)) {
+            this["bDeviceId"] = "";
+        }
+        if (!("bIf" in $$source)) {
+            this["bIf"] = "";
+        }
+        if (!("logicalAIf" in $$source)) {
+            this["logicalAIf"] = "";
+        }
+        if (!("logicalBIf" in $$source)) {
+            this["logicalBIf"] = "";
+        }
+        if (!("edgeType" in $$source)) {
+            this["edgeType"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("confidence" in $$source)) {
+            this["confidence"] = 0;
+        }
+        if (!("discoveryMethods" in $$source)) {
+            this["discoveryMethods"] = [];
+        }
+        if (!("evidence" in $$source)) {
+            this["evidence"] = [];
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TopologyEdge instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TopologyEdge {
+        const $$createField11_0 = $$createType0;
+        const $$createField12_0 = $$createType8;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("discoveryMethods" in $$parsedSource) {
+            $$parsedSource["discoveryMethods"] = $$createField11_0($$parsedSource["discoveryMethods"]);
+        }
+        if ("evidence" in $$parsedSource) {
+            $$parsedSource["evidence"] = $$createField12_0($$parsedSource["evidence"]);
+        }
+        return new TopologyEdge($$parsedSource as Partial<TopologyEdge>);
+    }
+}
+
+/**
+ * TopologyEdgeDetailView 边详情视图
+ */
+export class TopologyEdgeDetailView {
+    "id": string;
+    "aDevice": GraphNode;
+    "aIf": string;
+    "logicalAIf": string;
+    "bDevice": GraphNode;
+    "bIf": string;
+    "logicalBIf": string;
+    "edgeType": string;
+    "status": string;
+    "confidence": number;
+    "discoveryMethods": string[];
+    "evidence": EdgeEvidence[];
+
+    /** Creates a new TopologyEdgeDetailView instance. */
+    constructor($$source: Partial<TopologyEdgeDetailView> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("aDevice" in $$source)) {
+            this["aDevice"] = (new GraphNode());
+        }
+        if (!("aIf" in $$source)) {
+            this["aIf"] = "";
+        }
+        if (!("logicalAIf" in $$source)) {
+            this["logicalAIf"] = "";
+        }
+        if (!("bDevice" in $$source)) {
+            this["bDevice"] = (new GraphNode());
+        }
+        if (!("bIf" in $$source)) {
+            this["bIf"] = "";
+        }
+        if (!("logicalBIf" in $$source)) {
+            this["logicalBIf"] = "";
+        }
+        if (!("edgeType" in $$source)) {
+            this["edgeType"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("confidence" in $$source)) {
+            this["confidence"] = 0;
+        }
+        if (!("discoveryMethods" in $$source)) {
+            this["discoveryMethods"] = [];
+        }
+        if (!("evidence" in $$source)) {
+            this["evidence"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TopologyEdgeDetailView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TopologyEdgeDetailView {
+        const $$createField1_0 = $$createType9;
+        const $$createField4_0 = $$createType9;
+        const $$createField10_0 = $$createType0;
+        const $$createField11_0 = $$createType8;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("aDevice" in $$parsedSource) {
+            $$parsedSource["aDevice"] = $$createField1_0($$parsedSource["aDevice"]);
+        }
+        if ("bDevice" in $$parsedSource) {
+            $$parsedSource["bDevice"] = $$createField4_0($$parsedSource["bDevice"]);
+        }
+        if ("discoveryMethods" in $$parsedSource) {
+            $$parsedSource["discoveryMethods"] = $$createField10_0($$parsedSource["discoveryMethods"]);
+        }
+        if ("evidence" in $$parsedSource) {
+            $$parsedSource["evidence"] = $$createField11_0($$parsedSource["evidence"]);
+        }
+        return new TopologyEdgeDetailView($$parsedSource as Partial<TopologyEdgeDetailView>);
+    }
+}
+
+/**
+ * TopologyGraphView 拓扑图视图
+ */
+export class TopologyGraphView {
+    "taskId": string;
+    "nodes": GraphNode[];
+    "edges": GraphEdge[];
+
+    /** Creates a new TopologyGraphView instance. */
+    constructor($$source: Partial<TopologyGraphView> = {}) {
+        if (!("taskId" in $$source)) {
+            this["taskId"] = "";
+        }
+        if (!("nodes" in $$source)) {
+            this["nodes"] = [];
+        }
+        if (!("edges" in $$source)) {
+            this["edges"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TopologyGraphView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TopologyGraphView {
+        const $$createField1_0 = $$createType10;
+        const $$createField2_0 = $$createType12;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("nodes" in $$parsedSource) {
+            $$parsedSource["nodes"] = $$createField1_0($$parsedSource["nodes"]);
+        }
+        if ("edges" in $$parsedSource) {
+            $$parsedSource["edges"] = $$createField2_0($$parsedSource["edges"]);
+        }
+        return new TopologyGraphView($$parsedSource as Partial<TopologyGraphView>);
+    }
+}
+
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
-const $$createType1 = SSHAlgorithmSettings.createFrom;
-const $$createType2 = TaskItem.createFrom;
-const $$createType3 = $Create.Array($$createType2);
-const $$createType4 = $Create.Array($Create.Any);
+const $$createType1 = DiffItem.createFrom;
+const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = SSHAlgorithmSettings.createFrom;
+const $$createType4 = TaskItem.createFrom;
+const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = $Create.Array($Create.Any);
+const $$createType7 = EdgeEvidence.createFrom;
+const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = GraphNode.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = GraphEdge.createFrom;
+const $$createType12 = $Create.Array($$createType11);

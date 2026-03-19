@@ -1174,8 +1174,8 @@ import type { DeviceAsset } from "../services/api";
 // 使用后端定义的类型
 type Device = DeviceAsset;
 
-// 新建设备时的类型（不含 id，由后端生成）
-type NewDevice = Omit<DeviceAsset, "id">;
+// 新建设备时的类型（不含 id 和时间戳字段，由后端生成）
+type NewDevice = Omit<DeviceAsset, "id" | "lastSeen" | "createdAt" | "updatedAt">;
 
 interface IpRangeHint {
   count: number;
@@ -1247,7 +1247,7 @@ const protocolDefaultPorts = ref<Record<string, number>>({
 });
 const validProtocols = ref<string[]>(["SSH", "SNMP", "TELNET"]);
 
-// 表单数据（新建设备不需要 id）
+// 表单数据（新建设备不需要 id 和时间戳字段）
 const form = ref<NewDevice>({
   ip: "",
   port: 22,
@@ -1260,6 +1260,7 @@ const form = ref<NewDevice>({
   role: "",
   site: "",
   displayName: "",
+  description: "",
 });
 
 const newTag = ref("");
@@ -1352,9 +1353,9 @@ async function loadDevices() {
       sortOrder: "asc",
     });
 
-    data.value = result.data || [];
-    total.value = result.total;
-    totalPages.value = result.totalPages;
+    data.value = result?.data || [];
+    total.value = result?.total || 0;
+    totalPages.value = result?.totalPages || 1;
   } catch (err) {
     console.error("加载设备列表失败:", err);
     data.value = [];
@@ -1370,7 +1371,15 @@ async function loadProtocolConfig() {
   try {
     const ports = await DeviceAPI.getProtocolDefaultPorts();
     const protocols = await DeviceAPI.getValidProtocols();
-    if (ports) protocolDefaultPorts.value = ports;
+    if (ports) {
+      const normalized: Record<string, number> = {};
+      Object.entries(ports).forEach(([key, value]) => {
+        if (typeof value === "number") {
+          normalized[key] = value;
+        }
+      });
+      protocolDefaultPorts.value = normalized;
+    }
     if (protocols) validProtocols.value = protocols;
   } catch (e) {
     console.error("Failed to load protocol config", e);
@@ -1519,6 +1528,7 @@ function openAddModal() {
     role: "",
     site: "",
     displayName: "",
+    description: "",
   };
   newTag.value = "";
   lastProtocol.value = "SSH";
@@ -1544,6 +1554,7 @@ function openEditModal(device: Device) {
     role: device.role || "",
     site: device.site || "",
     displayName: device.displayName || "",
+    description: device.description || "",
   };
   lastProtocol.value = device.protocol;
   errorMessage.value = "";
@@ -1624,6 +1635,10 @@ async function saveDevice() {
               role: form.value.role,
               site: form.value.site,
               displayName: form.value.displayName,
+              description: form.value.description,
+              lastSeen: null as any,
+              createdAt: null as any,
+              updatedAt: null as any,
             });
           }
           await DeviceAPI.addDevices(newDevices);

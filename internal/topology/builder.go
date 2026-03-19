@@ -1,0 +1,870 @@
+package topology
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/normalize"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+const defaultMaxInferenceCandidates = 8
+
+// RuntimeConfigProvider 提供拓扑推理运行时配置。
+type RuntimeConfigProvider interface {
+	GetTopologyMaxInferenceCandidates() int
+}
+
+// Builder 拓扑构建器
+type Builder struct {
+	db              *gorm.DB
+	runtimeProvider RuntimeConfigProvider
+}
+
+func NewBuilder(db *gorm.DB) *Builder {
+	return &Builder{db: db}
+}
+
+// SetRuntimeProvider 设置运行时配置提供者。
+func (b *Builder) SetRuntimeProvider(p RuntimeConfigProvider) {
+	b.runtimeProvider = p
+}
+
+// Build 构建拓扑图（预加载 + 内存推理）
+func (b *Builder) Build(taskID string) (*models.TopologyBuildResult, error) {
+	startTime := time.Now()
+	b.clearOldTopology(taskID)
+
+	ctx, err := b.loadTaskContext(taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	edgeMap := b.buildLLDPEdges(taskID, ctx)
+	b.addAggregateLogicalEdges(taskID, ctx, edgeMap)
+	b.addFDBInferenceEdges(taskID, ctx, edgeMap)
+	b.addAggregateConflictMarkers(taskID, ctx, edgeMap)
+	b.applyInterfaceConflictDetection(edgeMap)
+
+	edges := flattenEdgeMap(edgeMap)
+	errors := make([]string, 0, 8)
+	for _, edge := range edges {
+		if err := b.db.Create(edge).Error; err != nil {
+			errors = append(errors, fmt.Sprintf("保存边 %s 失败: %v", edge.ID, err))
+		}
+	}
+
+	return &models.TopologyBuildResult{
+		TaskID:             taskID,
+		TotalEdges:         len(edges),
+		ConfirmedEdges:     countEdgesByStatus(edges, "confirmed"),
+		SemiConfirmedEdges: countEdgesByStatus(edges, "semi_confirmed"),
+		InferredEdges:      countEdgesByStatus(edges, "inferred"),
+		ConflictEdges:      countEdgesByStatus(edges, "conflict"),
+		BuildTime:          time.Since(startTime),
+		Errors:             errors,
+	}, nil
+}
+
+type taskContext struct {
+	Devices            []models.DiscoveryDevice
+	Interfaces         []models.TopologyInterface
+	Neighbors          []models.TopologyLLDPNeighbor
+	NeighborsByDevice  map[string][]models.TopologyLLDPNeighbor
+	FDBEntries         []models.TopologyFDBEntry
+	ARPEntries         []models.TopologyARPEntry
+	MemberToAgg        map[string]map[string]*aggregateInfo // device -> member -> agg
+	AggregateConflicts []aggregateMemberConflict
+	Identity           *IdentityResolver
+}
+
+type aggregateInfo struct {
+	DeviceIP      string
+	AggregateName string
+	CommandKey    string
+	RawRefID      string
+}
+
+type aggregateMemberConflict struct {
+	DeviceIP string
+	Member   string
+	AggA     string
+	AggB     string
+}
+
+func (b *Builder) loadTaskContext(taskID string) (*taskContext, error) {
+	ctx := &taskContext{
+		NeighborsByDevice: make(map[string][]models.TopologyLLDPNeighbor),
+		MemberToAgg:       make(map[string]map[string]*aggregateInfo),
+	}
+
+	if err := b.db.Where("task_id = ? AND status IN ?", taskID, []string{"success", "partial"}).Find(&ctx.Devices).Error; err != nil {
+		return nil, fmt.Errorf("收集设备信息失败: %v", err)
+	}
+	if err := b.db.Where("task_id = ?", taskID).Find(&ctx.Interfaces).Error; err != nil {
+		return nil, fmt.Errorf("收集接口信息失败: %v", err)
+	}
+	if err := b.db.Where("task_id = ?", taskID).Find(&ctx.Neighbors).Error; err != nil {
+		return nil, fmt.Errorf("收集LLDP邻居失败: %v", err)
+	}
+	if err := b.db.Where("task_id = ?", taskID).Find(&ctx.FDBEntries).Error; err != nil {
+		return nil, fmt.Errorf("收集FDB失败: %v", err)
+	}
+	if err := b.db.Where("task_id = ?", taskID).Find(&ctx.ARPEntries).Error; err != nil {
+		return nil, fmt.Errorf("收集ARP失败: %v", err)
+	}
+
+	var groups []models.TopologyAggregateGroup
+	if err := b.db.Where("task_id = ?", taskID).Find(&groups).Error; err != nil {
+		return nil, fmt.Errorf("收集聚合组失败: %v", err)
+	}
+	var members []models.TopologyAggregateMember
+	if err := b.db.Where("task_id = ?", taskID).Find(&members).Error; err != nil {
+		return nil, fmt.Errorf("收集聚合成员失败: %v", err)
+	}
+
+	groupIndex := make(map[string]models.TopologyAggregateGroup, len(groups))
+	for _, g := range groups {
+		groupIndex[g.DeviceIP+":"+g.AggregateName] = g
+	}
+	for _, m := range members {
+		if _, ok := ctx.MemberToAgg[m.DeviceIP]; !ok {
+			ctx.MemberToAgg[m.DeviceIP] = make(map[string]*aggregateInfo)
+		}
+		member := normalize.NormalizeInterfaceName(m.MemberPort)
+		g := groupIndex[m.DeviceIP+":"+m.AggregateName]
+		info := &aggregateInfo{
+			DeviceIP:      m.DeviceIP,
+			AggregateName: m.AggregateName,
+			CommandKey:    chooseNonEmpty(m.CommandKey, g.CommandKey, "eth_trunk"),
+			RawRefID:      chooseNonEmpty(m.RawRefID, g.RawRefID, ""),
+		}
+		if exist, ok := ctx.MemberToAgg[m.DeviceIP][member]; ok && exist.AggregateName != info.AggregateName {
+			ctx.AggregateConflicts = append(ctx.AggregateConflicts, aggregateMemberConflict{
+				DeviceIP: m.DeviceIP,
+				Member:   member,
+				AggA:     exist.AggregateName,
+				AggB:     info.AggregateName,
+			})
+			continue
+		}
+		ctx.MemberToAgg[m.DeviceIP][member] = info
+	}
+
+	for _, n := range ctx.Neighbors {
+		ctx.NeighborsByDevice[n.DeviceIP] = append(ctx.NeighborsByDevice[n.DeviceIP], n)
+	}
+	ctx.Identity = NewIdentityResolver(ctx.Devices)
+	return ctx, nil
+}
+
+func (b *Builder) buildLLDPEdges(taskID string, ctx *taskContext) map[string]*models.TopologyEdge {
+	edgeMap := make(map[string]*models.TopologyEdge)
+
+	for _, neighbor := range ctx.Neighbors {
+		localIf := normalize.NormalizeInterfaceName(neighbor.LocalInterface)
+		if localIf == "" {
+			continue
+		}
+
+		remoteDeviceID, identityConflict, candidates := ctx.Identity.ResolveLLDPNeighbor(neighbor)
+		if identityConflict {
+			key := makeDirectedEdgeKey(neighbor.DeviceIP, localIf, "identity_conflict", neighbor.NeighborPort)
+			edgeMap[key] = &models.TopologyEdge{
+				ID:               generateEdgeID(),
+				TaskID:           taskID,
+				ADeviceID:        neighbor.DeviceIP,
+				AIf:              localIf,
+				BDeviceID:        "identity_conflict",
+				BIf:              normalize.NormalizeInterfaceName(neighbor.NeighborPort),
+				EdgeType:         "physical",
+				Status:           "conflict",
+				Confidence:       0.30,
+				DiscoveryMethods: []string{"identity_conflict"},
+				Evidence: []models.EdgeEvidence{
+					{
+						Type:      "identity",
+						Source:    "identity",
+						DeviceID:  neighbor.DeviceIP,
+						Command:   chooseNonEmpty(neighbor.CommandKey, "lldp_neighbor"),
+						RawRefID:  neighbor.RawRefID,
+						LocalIf:   localIf,
+						RemoteIf:  normalize.NormalizeInterfaceName(neighbor.NeighborPort),
+						RemoteIP:  neighbor.NeighborIP,
+						RemoteMAC: neighbor.NeighborChassis,
+						Summary:   fmt.Sprintf("身份归并冲突: %s", strings.Join(candidates, ",")),
+					},
+				},
+			}
+			continue
+		}
+
+		if remoteDeviceID == "" {
+			key := makeDirectedEdgeKey(neighbor.DeviceIP, localIf, "", "")
+			edgeMap[key] = &models.TopologyEdge{
+				ID:               generateEdgeID(),
+				TaskID:           taskID,
+				ADeviceID:        neighbor.DeviceIP,
+				AIf:              localIf,
+				EdgeType:         "physical",
+				Status:           "semi_confirmed",
+				Confidence:       0.75,
+				DiscoveryMethods: []string{"lldp_single_side"},
+				Evidence: []models.EdgeEvidence{
+					newLLDPEvidence(neighbor, neighbor.DeviceIP),
+				},
+			}
+			continue
+		}
+
+		remoteIf, isMutual := findMutualLLDP(ctx, neighbor.DeviceIP, remoteDeviceID, localIf, neighbor.NeighborPort)
+		if !isMutual {
+			remoteIf = normalize.NormalizeInterfaceName(neighbor.NeighborPort)
+		}
+		if remoteIf == "" {
+			remoteIf = "unknown"
+		}
+
+		key := makeUndirectedEdgeKey(neighbor.DeviceIP, localIf, remoteDeviceID, remoteIf)
+		status := "semi_confirmed"
+		confidence := 0.75
+		method := "lldp_single_side"
+		if isMutual {
+			status = "confirmed"
+			confidence = 1.0
+			method = "lldp_bidirectional"
+		}
+
+		newEdge := &models.TopologyEdge{
+			ID:               generateEdgeID(),
+			TaskID:           taskID,
+			ADeviceID:        neighbor.DeviceIP,
+			AIf:              localIf,
+			BDeviceID:        remoteDeviceID,
+			BIf:              remoteIf,
+			EdgeType:         "physical",
+			Status:           status,
+			Confidence:       confidence,
+			DiscoveryMethods: []string{method},
+			Evidence:         []models.EdgeEvidence{newLLDPEvidence(neighbor, neighbor.DeviceIP)},
+		}
+
+		if exist, ok := edgeMap[key]; ok {
+			exist.Evidence = append(exist.Evidence, newEdge.Evidence...)
+			exist.DiscoveryMethods = appendUnique(exist.DiscoveryMethods, newEdge.DiscoveryMethods...)
+			if newEdge.Confidence > exist.Confidence {
+				exist.Confidence = newEdge.Confidence
+				exist.Status = newEdge.Status
+			}
+			continue
+		}
+		edgeMap[key] = newEdge
+	}
+	return edgeMap
+}
+
+func findMutualLLDP(ctx *taskContext, localDevice, remoteDevice, localIf, remotePort string) (string, bool) {
+	remoteExpectedIf := normalize.NormalizeInterfaceName(remotePort)
+	for _, rn := range ctx.NeighborsByDevice[remoteDevice] {
+		remoteLocalIf := normalize.NormalizeInterfaceName(rn.LocalInterface)
+		if remoteExpectedIf != "" && remoteLocalIf != remoteExpectedIf {
+			continue
+		}
+		backDevice, conflict, _ := ctx.Identity.ResolveLLDPNeighbor(rn)
+		if conflict || backDevice == "" {
+			continue
+		}
+		backPort := normalize.NormalizeInterfaceName(rn.NeighborPort)
+		if backDevice == localDevice && (backPort == localIf || backPort == "") {
+			return remoteLocalIf, true
+		}
+	}
+	return "", false
+}
+
+func newLLDPEvidence(neighbor models.TopologyLLDPNeighbor, sourceDevice string) models.EdgeEvidence {
+	localIf := normalize.NormalizeInterfaceName(neighbor.LocalInterface)
+	remoteIf := normalize.NormalizeInterfaceName(neighbor.NeighborPort)
+	return models.EdgeEvidence{
+		Type:       "lldp",
+		Source:     "lldp",
+		DeviceID:   sourceDevice,
+		Command:    chooseNonEmpty(neighbor.CommandKey, "lldp_neighbor"),
+		RawRefID:   neighbor.RawRefID,
+		LocalIf:    localIf,
+		RemoteName: neighbor.NeighborName,
+		RemoteIf:   remoteIf,
+		RemoteMAC:  neighbor.NeighborChassis,
+		RemoteIP:   neighbor.NeighborIP,
+		Summary:    fmt.Sprintf("LLDP %s -> %s(%s)", localIf, neighbor.NeighborName, remoteIf),
+	}
+}
+
+func (b *Builder) addAggregateLogicalEdges(taskID string, ctx *taskContext, edgeMap map[string]*models.TopologyEdge) {
+	logicalMap := make(map[string]*models.TopologyEdge)
+	for _, edge := range edgeMap {
+		if edge.EdgeType != "physical" || edge.BDeviceID == "" {
+			continue
+		}
+		aAgg := findAggregateByMember(ctx.MemberToAgg, edge.ADeviceID, edge.AIf)
+		bAgg := findAggregateByMember(ctx.MemberToAgg, edge.BDeviceID, edge.BIf)
+		if aAgg == nil || bAgg == nil {
+			continue
+		}
+
+		key := makeUndirectedEdgeKey(edge.ADeviceID, aAgg.AggregateName, edge.BDeviceID, bAgg.AggregateName)
+		if exist, ok := logicalMap[key]; ok {
+			exist.Evidence = append(exist.Evidence, models.EdgeEvidence{
+				Type:      "aggregate",
+				Source:    "aggregate",
+				DeviceID:  edge.ADeviceID,
+				Command:   chooseNonEmpty(aAgg.CommandKey, "eth_trunk"),
+				RawRefID:  chooseNonEmpty(aAgg.RawRefID, bAgg.RawRefID),
+				LocalIf:   edge.AIf,
+				RemoteIf:  edge.BIf,
+				Summary:   fmt.Sprintf("成员链路 %s<->%s 归并到 %s<->%s", edge.AIf, edge.BIf, aAgg.AggregateName, bAgg.AggregateName),
+				RemoteIP:  edge.BDeviceID,
+				RemoteMAC: "",
+			})
+			exist.DiscoveryMethods = appendUnique(exist.DiscoveryMethods, edge.DiscoveryMethods...)
+			if edge.Confidence > exist.Confidence {
+				exist.Confidence = edge.Confidence
+				exist.Status = edge.Status
+			}
+			continue
+		}
+
+		logicalMap[key] = &models.TopologyEdge{
+			ID:               generateEdgeID(),
+			TaskID:           taskID,
+			ADeviceID:        edge.ADeviceID,
+			AIf:              edge.AIf,
+			BDeviceID:        edge.BDeviceID,
+			BIf:              edge.BIf,
+			LogicalAIf:       aAgg.AggregateName,
+			LogicalBIf:       bAgg.AggregateName,
+			EdgeType:         "logical_aggregate",
+			Status:           edge.Status,
+			Confidence:       edge.Confidence,
+			DiscoveryMethods: appendUnique([]string{"aggregate_merge"}, edge.DiscoveryMethods...),
+			Evidence: []models.EdgeEvidence{
+				{
+					Type:     "aggregate",
+					Source:   "aggregate",
+					DeviceID: edge.ADeviceID,
+					Command:  chooseNonEmpty(aAgg.CommandKey, "eth_trunk"),
+					RawRefID: chooseNonEmpty(aAgg.RawRefID, bAgg.RawRefID),
+					LocalIf:  edge.AIf,
+					RemoteIf: edge.BIf,
+					Summary:  fmt.Sprintf("成员链路 %s<->%s 归并到 %s<->%s", edge.AIf, edge.BIf, aAgg.AggregateName, bAgg.AggregateName),
+				},
+			},
+		}
+	}
+	for k, edge := range logicalMap {
+		edgeMap[k] = edge
+	}
+}
+
+func findAggregateByMember(memberToAgg map[string]map[string]*aggregateInfo, deviceIP, port string) *aggregateInfo {
+	members := memberToAgg[deviceIP]
+	if members == nil {
+		return nil
+	}
+	return members[normalize.NormalizeInterfaceName(port)]
+}
+
+func (b *Builder) addFDBInferenceEdges(taskID string, ctx *taskContext, edgeMap map[string]*models.TopologyEdge) {
+	type ifaceKey struct {
+		Device string
+		IfName string
+	}
+	fdbByInterface := make(map[ifaceKey][]models.TopologyFDBEntry)
+	for _, entry := range ctx.FDBEntries {
+		key := ifaceKey{Device: entry.DeviceIP, IfName: normalize.NormalizeInterfaceName(entry.Interface)}
+		if key.IfName == "" {
+			continue
+		}
+		fdbByInterface[key] = append(fdbByInterface[key], entry)
+	}
+
+	arpByMAC := make(map[string][]models.TopologyARPEntry)
+	for _, arp := range ctx.ARPEntries {
+		mac := normalize.NormalizeMAC(arp.MACAddress)
+		if mac == "" {
+			continue
+		}
+		arpByMAC[mac] = append(arpByMAC[mac], arp)
+	}
+
+	ownerByMAC := make(map[string]map[string]struct{})
+	for _, iface := range ctx.Interfaces {
+		mac := normalize.NormalizeMAC(iface.MACAddress)
+		if mac == "" {
+			continue
+		}
+		if _, ok := ownerByMAC[mac]; !ok {
+			ownerByMAC[mac] = make(map[string]struct{})
+		}
+		ownerByMAC[mac][iface.DeviceIP] = struct{}{}
+	}
+
+	for key, entries := range fdbByInterface {
+		macs := uniqueMACs(entries)
+		if len(macs) == 0 || len(macs) > 2 {
+			if len(macs) == 0 {
+				continue
+			}
+		}
+
+		if hasStrongEdge(edgeMap, key.Device, key.IfName) {
+			continue
+		}
+
+		// 场景B：FDB 推断弱交换链路。
+		remoteDeviceID := inferRemoteDeviceByFDBMAC(ownerByMAC, key.Device, macs, b.getMaxInferenceCandidates())
+		if remoteDeviceID != "" {
+			edge := &models.TopologyEdge{
+				ID:               generateEdgeID(),
+				TaskID:           taskID,
+				ADeviceID:        key.Device,
+				AIf:              key.IfName,
+				BDeviceID:        remoteDeviceID,
+				BIf:              "unknown",
+				EdgeType:         "inferred",
+				Status:           "inferred",
+				Confidence:       0.50,
+				DiscoveryMethods: []string{"fdb_switch_inference"},
+				Evidence: []models.EdgeEvidence{
+					{
+						Type:      "fdb",
+						Source:    "fdb",
+						DeviceID:  key.Device,
+						Command:   chooseNonEmpty(entries[0].CommandKey, "mac_address"),
+						RawRefID:  entries[0].RawRefID,
+						LocalIf:   key.IfName,
+						RemoteIP:  remoteDeviceID,
+						RemoteMAC: strings.Join(macs, ","),
+						Summary:   "基于FDB学习MAC归属推断交换设备弱链路",
+					},
+				},
+			}
+			if markLLDPFDBConflict(edgeMap, edge) {
+				edge.Status = "conflict"
+				edge.Confidence = 0.40
+			}
+			edgeMap[makeUndirectedEdgeKey(edge.ADeviceID, edge.AIf, edge.BDeviceID, edge.BIf)] = edge
+			continue
+		}
+
+		// 场景A：服务器接入口推断。
+		if len(macs) > 2 {
+			continue
+		}
+		targetID := "server:mac:" + macs[0]
+		targetIf := "eth0"
+		if arps := arpByMAC[macs[0]]; len(arps) == 1 && strings.TrimSpace(arps[0].IPAddress) != "" {
+			targetID = "server:" + arps[0].IPAddress
+		}
+		edge := &models.TopologyEdge{
+			ID:               generateEdgeID(),
+			TaskID:           taskID,
+			ADeviceID:        key.Device,
+			AIf:              key.IfName,
+			BDeviceID:        targetID,
+			BIf:              targetIf,
+			EdgeType:         "server_access",
+			Status:           "inferred",
+			Confidence:       0.60,
+			DiscoveryMethods: []string{"fdb_arp_inference"},
+			Evidence: []models.EdgeEvidence{
+				{
+					Type:      "fdb",
+					Source:    "fdb",
+					DeviceID:  key.Device,
+					Command:   chooseNonEmpty(entries[0].CommandKey, "mac_address"),
+					RawRefID:  entries[0].RawRefID,
+					LocalIf:   key.IfName,
+					RemoteMAC: strings.Join(macs, ","),
+					Summary:   "基于FDB/ARP推断服务器接入",
+				},
+			},
+		}
+
+		conflicted := markLLDPFDBConflict(edgeMap, edge)
+		if conflicted {
+			edge.Status = "conflict"
+			edge.Confidence = 0.45
+		}
+
+		edgeMap[makeUndirectedEdgeKey(edge.ADeviceID, edge.AIf, edge.BDeviceID, edge.BIf)] = edge
+	}
+}
+
+func inferRemoteDeviceByFDBMAC(ownerByMAC map[string]map[string]struct{}, localDevice string, macs []string, maxCandidates int) string {
+	score := make(map[string]int)
+	for _, mac := range macs {
+		owners := ownerByMAC[mac]
+		for owner := range owners {
+			if owner == localDevice {
+				continue
+			}
+			score[owner]++
+		}
+	}
+	if len(score) == 0 {
+		return ""
+	}
+	if maxCandidates > 0 && len(score) > maxCandidates {
+		return ""
+	}
+
+	type candidate struct {
+		device string
+		score  int
+	}
+	candidates := make([]candidate, 0, len(score))
+	for device, s := range score {
+		candidates = append(candidates, candidate{device: device, score: s})
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score == candidates[j].score {
+			return candidates[i].device < candidates[j].device
+		}
+		return candidates[i].score > candidates[j].score
+	})
+	if len(candidates) > 1 && candidates[0].score == candidates[1].score {
+		return ""
+	}
+	return candidates[0].device
+}
+
+func (b *Builder) getMaxInferenceCandidates() int {
+	if b.runtimeProvider != nil {
+		if value := b.runtimeProvider.GetTopologyMaxInferenceCandidates(); value > 0 {
+			return value
+		}
+	}
+	return defaultMaxInferenceCandidates
+}
+
+func uniqueMACs(entries []models.TopologyFDBEntry) []string {
+	seen := make(map[string]struct{})
+	result := make([]string, 0, len(entries))
+	for _, e := range entries {
+		mac := normalize.NormalizeMAC(e.MACAddress)
+		if mac == "" {
+			continue
+		}
+		if _, ok := seen[mac]; ok {
+			continue
+		}
+		seen[mac] = struct{}{}
+		result = append(result, mac)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func hasStrongEdge(edgeMap map[string]*models.TopologyEdge, device, ifName string) bool {
+	for _, edge := range edgeMap {
+		if edge.Status == "confirmed" || edge.Status == "semi_confirmed" {
+			if edge.ADeviceID == device && normalize.NormalizeInterfaceName(edge.AIf) == ifName {
+				return true
+			}
+			if edge.BDeviceID == device && normalize.NormalizeInterfaceName(edge.BIf) == ifName {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func markLLDPFDBConflict(edgeMap map[string]*models.TopologyEdge, inferred *models.TopologyEdge) bool {
+	conflicted := false
+	for _, edge := range edgeMap {
+		if edge.ADeviceID == inferred.ADeviceID &&
+			normalize.NormalizeInterfaceName(edge.AIf) == normalize.NormalizeInterfaceName(inferred.AIf) &&
+			edge.BDeviceID != inferred.BDeviceID &&
+			(edge.Status == "confirmed" || edge.Status == "semi_confirmed") {
+			edge.Status = "conflict"
+			edge.Confidence = minFloat(edge.Confidence, 0.50)
+			edge.DiscoveryMethods = appendUnique(edge.DiscoveryMethods, "lldp_fdb_conflict")
+			edge.Evidence = append(edge.Evidence, models.EdgeEvidence{
+				Type:     "conflict",
+				Source:   "conflict",
+				DeviceID: inferred.ADeviceID,
+				LocalIf:  inferred.AIf,
+				Summary:  fmt.Sprintf("LLDP 与 FDB 推断冲突: %s vs %s", edge.BDeviceID, inferred.BDeviceID),
+			})
+			conflicted = true
+		}
+	}
+	return conflicted
+}
+
+func (b *Builder) addAggregateConflictMarkers(taskID string, ctx *taskContext, edgeMap map[string]*models.TopologyEdge) {
+	for _, c := range ctx.AggregateConflicts {
+		key := makeDirectedEdgeKey(c.DeviceIP, c.Member, "aggregate_conflict", c.Member)
+		edgeMap[key] = &models.TopologyEdge{
+			ID:               generateEdgeID(),
+			TaskID:           taskID,
+			ADeviceID:        c.DeviceIP,
+			AIf:              c.Member,
+			BDeviceID:        "aggregate_conflict",
+			BIf:              c.Member,
+			EdgeType:         "member_conflict",
+			Status:           "conflict",
+			Confidence:       0.20,
+			DiscoveryMethods: []string{"aggregate_member_conflict"},
+			Evidence: []models.EdgeEvidence{
+				{
+					Type:     "conflict",
+					Source:   "aggregate",
+					DeviceID: c.DeviceIP,
+					LocalIf:  c.Member,
+					Summary:  fmt.Sprintf("成员口 %s 同时归属聚合 %s / %s", c.Member, c.AggA, c.AggB),
+				},
+			},
+		}
+	}
+}
+
+func (b *Builder) applyInterfaceConflictDetection(edgeMap map[string]*models.TopologyEdge) {
+	interfaceTargets := make(map[string]map[string]struct{})
+	for _, edge := range edgeMap {
+		aKey := edge.ADeviceID + ":" + normalize.NormalizeInterfaceName(edge.AIf)
+		bTarget := edge.BDeviceID + ":" + normalize.NormalizeInterfaceName(edge.BIf)
+		addConflictKey(interfaceTargets, aKey, bTarget)
+
+		if edge.BDeviceID != "" {
+			bKey := edge.BDeviceID + ":" + normalize.NormalizeInterfaceName(edge.BIf)
+			aTarget := edge.ADeviceID + ":" + normalize.NormalizeInterfaceName(edge.AIf)
+			addConflictKey(interfaceTargets, bKey, aTarget)
+		}
+	}
+
+	for _, edge := range edgeMap {
+		aKey := edge.ADeviceID + ":" + normalize.NormalizeInterfaceName(edge.AIf)
+		if len(interfaceTargets[aKey]) > 1 {
+			edge.Status = "conflict"
+			edge.Confidence = minFloat(edge.Confidence, 0.40)
+			edge.DiscoveryMethods = appendUnique(edge.DiscoveryMethods, "multi_peer_conflict")
+		}
+		if edge.BDeviceID != "" {
+			bKey := edge.BDeviceID + ":" + normalize.NormalizeInterfaceName(edge.BIf)
+			if len(interfaceTargets[bKey]) > 1 {
+				edge.Status = "conflict"
+				edge.Confidence = minFloat(edge.Confidence, 0.40)
+				edge.DiscoveryMethods = appendUnique(edge.DiscoveryMethods, "multi_peer_conflict")
+			}
+		}
+	}
+}
+
+func addConflictKey(targets map[string]map[string]struct{}, key, target string) {
+	if strings.TrimSpace(key) == ":" || target == ":" {
+		return
+	}
+	if _, ok := targets[key]; !ok {
+		targets[key] = make(map[string]struct{})
+	}
+	targets[key][target] = struct{}{}
+}
+
+func flattenEdgeMap(edgeMap map[string]*models.TopologyEdge) []*models.TopologyEdge {
+	result := make([]*models.TopologyEdge, 0, len(edgeMap))
+	for _, edge := range edgeMap {
+		result = append(result, edge)
+	}
+	return result
+}
+
+// BuildGraphView 构建图视图
+func (b *Builder) BuildGraphView(taskID string) (*models.TopologyGraphView, error) {
+	var edges []models.TopologyEdge
+	if err := b.db.Where("task_id = ?", taskID).Find(&edges).Error; err != nil {
+		return nil, err
+	}
+
+	var devices []models.DiscoveryDevice
+	if err := b.db.Where("task_id = ?", taskID).Find(&devices).Error; err != nil {
+		return nil, err
+	}
+
+	deviceMap := make(map[string]models.DiscoveryDevice, len(devices))
+	for _, d := range devices {
+		deviceMap[d.DeviceIP] = d
+	}
+
+	nodeIDs := make(map[string]struct{})
+	for _, edge := range edges {
+		nodeIDs[edge.ADeviceID] = struct{}{}
+		targetID := edge.BDeviceID
+		if strings.TrimSpace(targetID) == "" {
+			targetID = unknownNodeID(edge)
+		}
+		nodeIDs[targetID] = struct{}{}
+	}
+
+	nodes := make([]models.GraphNode, 0, len(nodeIDs))
+	for nodeID := range nodeIDs {
+		node := models.GraphNode{ID: nodeID, Label: nodeID}
+		if d, ok := deviceMap[nodeID]; ok {
+			node.Label = chooseNonEmpty(d.DisplayName, d.Hostname, d.Model, d.DeviceIP)
+			node.IP = d.DeviceIP
+			node.Vendor = d.Vendor
+			node.Model = d.Model
+			node.Role = d.Role
+			node.Site = d.Site
+			node.SerialNumber = d.SerialNumber
+		} else if strings.HasPrefix(nodeID, "server:") {
+			node.Label = strings.TrimPrefix(nodeID, "server:")
+			node.Role = "server-inferred"
+		} else if strings.HasPrefix(nodeID, "unknown:") {
+			node.Label = "未知邻居"
+			node.Role = "unknown"
+		}
+		nodes = append(nodes, node)
+	}
+
+	graphEdges := make([]models.GraphEdge, 0, len(edges))
+	for _, edge := range edges {
+		targetID := edge.BDeviceID
+		if strings.TrimSpace(targetID) == "" {
+			targetID = unknownNodeID(edge)
+		}
+		graphEdges = append(graphEdges, models.GraphEdge{
+			ID:              edge.ID,
+			Source:          edge.ADeviceID,
+			Target:          targetID,
+			SourceIf:        edge.AIf,
+			TargetIf:        edge.BIf,
+			LogicalSourceIf: edge.LogicalAIf,
+			LogicalTargetIf: edge.LogicalBIf,
+			EdgeType:        edge.EdgeType,
+			Status:          edge.Status,
+			Confidence:      edge.Confidence,
+		})
+	}
+
+	return &models.TopologyGraphView{
+		TaskID: taskID,
+		Nodes:  nodes,
+		Edges:  graphEdges,
+	}, nil
+}
+
+func (b *Builder) GetEdgeDetail(taskID, edgeID string) (*models.TopologyEdgeDetailView, error) {
+	var edge models.TopologyEdge
+	if err := b.db.Where("task_id = ? AND id = ?", taskID, edgeID).First(&edge).Error; err != nil {
+		return nil, err
+	}
+
+	aDevice := b.getDeviceInfo(taskID, edge.ADeviceID)
+	bDevice := b.getDeviceInfo(taskID, edge.BDeviceID)
+	return &models.TopologyEdgeDetailView{
+		ID:               edge.ID,
+		ADevice:          aDevice,
+		AIf:              edge.AIf,
+		LogicalAIf:       edge.LogicalAIf,
+		BDevice:          bDevice,
+		BIf:              edge.BIf,
+		LogicalBIf:       edge.LogicalBIf,
+		EdgeType:         edge.EdgeType,
+		Status:           edge.Status,
+		Confidence:       edge.Confidence,
+		DiscoveryMethods: edge.DiscoveryMethods,
+		Evidence:         edge.Evidence,
+	}, nil
+}
+
+func (b *Builder) clearOldTopology(taskID string) {
+	b.db.Where("task_id = ?", taskID).Delete(&models.TopologyEdge{})
+}
+
+func (b *Builder) getDeviceInfo(taskID, deviceID string) models.GraphNode {
+	if strings.TrimSpace(deviceID) == "" {
+		return models.GraphNode{ID: "unknown", Label: "未知邻居", Role: "unknown"}
+	}
+	var device models.DiscoveryDevice
+	if err := b.db.Where("task_id = ? AND device_ip = ?", taskID, deviceID).First(&device).Error; err != nil {
+		return models.GraphNode{ID: deviceID, Label: deviceID}
+	}
+	return models.GraphNode{
+		ID:           deviceID,
+		Label:        chooseNonEmpty(device.DisplayName, device.Hostname, device.Model, device.DeviceIP),
+		IP:           device.DeviceIP,
+		Vendor:       device.Vendor,
+		Model:        device.Model,
+		Role:         device.Role,
+		Site:         device.Site,
+		SerialNumber: device.SerialNumber,
+	}
+}
+
+func makeDirectedEdgeKey(deviceA, ifA, deviceB, ifB string) string {
+	return deviceA + ":" + ifA + "->" + deviceB + ":" + ifB
+}
+
+func makeUndirectedEdgeKey(deviceA, ifA, deviceB, ifB string) string {
+	keys := []string{deviceA + ":" + ifA, deviceB + ":" + ifB}
+	sort.Strings(keys)
+	return strings.Join(keys, "<->")
+}
+
+func generateEdgeID() string {
+	return "edge_" + uuid.NewString()[:8]
+}
+
+func countEdgesByStatus(edges []*models.TopologyEdge, status string) int {
+	count := 0
+	for _, edge := range edges {
+		if edge.Status == status {
+			count++
+		}
+	}
+	return count
+}
+
+func appendUnique(base []string, values ...string) []string {
+	seen := make(map[string]struct{}, len(base))
+	for _, s := range base {
+		seen[s] = struct{}{}
+	}
+	for _, s := range values {
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		base = append(base, s)
+	}
+	return base
+}
+
+func chooseNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func minFloat(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func unknownNodeID(edge models.TopologyEdge) string {
+	return "unknown:" + edge.ID
+}

@@ -26,6 +26,8 @@ import * as ForgeServiceBinding from '../bindings/github.com/NetWeaverGo/core/in
 import * as QueryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/queryservice.js'
 import * as ExecutionHistoryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/executionhistoryservice.js'
 import * as DiscoveryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/discoveryservice.js'
+import * as TopologyServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/topologyservice.js'
+import * as PlanCompareServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/plancompareservice.js'
 
 // ==================== 设备管理 API ====================
 /**
@@ -320,6 +322,34 @@ export const DiscoveryAPI = {
   getVendorProfiles: DiscoveryServiceBinding.GetVendorProfiles,
   /** 获取支持的厂商列表 */
   getSupportedVendors: DiscoveryServiceBinding.GetSupportedVendors,
+  /** 构建拓扑图 */
+  buildTopology: TopologyServiceBinding.BuildTopology,
+  /** 获取拓扑图视图 */
+  getTopologyGraph: TopologyServiceBinding.GetTopologyGraph,
+  /** 获取链路详情 */
+  getEdgeDetail: TopologyServiceBinding.GetEdgeDetail,
+  /** 获取设备拓扑详情 */
+  getDeviceTopologyDetail: TopologyServiceBinding.GetDeviceTopologyDetail,
+} as const
+
+// ==================== 规划比对 API ====================
+/**
+ * 规划比对 API
+ * @description 提供 Excel 导入、拓扑比对、差异报告导出能力
+ */
+export const PlanCompareAPI = {
+  /** 导入规划 Excel */
+  importPlanExcel: PlanCompareServiceBinding.ImportPlanExcel,
+  /** 列出规划文件 */
+  listPlanFiles: PlanCompareServiceBinding.ListPlanFiles,
+  /** 执行规划比对 */
+  compare: PlanCompareServiceBinding.Compare,
+  /** 获取报告摘要 */
+  getDiffReport: PlanCompareServiceBinding.GetDiffReport,
+  /** 获取报告明细 */
+  getCompareResult: PlanCompareServiceBinding.GetCompareResult,
+  /** 导出报告 */
+  exportDiffReport: PlanCompareServiceBinding.ExportDiffReport,
 } as const
 
 // 导出发现任务相关类型
@@ -340,4 +370,14 @@ export type {
   TaskStartResponse,
   DiscoveryTaskView,
   DiscoveryDeviceView,
+  TopologyGraphView,
+  TopologyBuildResult,
+  TopologyEdgeDetailView,
+  PlanImportResult,
+  PlanUploadView,
+  CompareResult,
+  DiffReportView,
+  DiffItem,
 } from '../bindings/github.com/NetWeaverGo/core/internal/models/models.js'
+
+export type { ParsedResult } from '../bindings/github.com/NetWeaverGo/core/internal/parser/models.js'

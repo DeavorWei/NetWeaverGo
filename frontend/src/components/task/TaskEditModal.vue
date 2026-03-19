@@ -308,7 +308,7 @@ const form = reactive({
 })
 
 const groupForm = reactive({
-  commandGroupId: '',
+  commandGroupId: 0,
   deviceIDs: [] as number[]
 })
 
@@ -351,7 +351,7 @@ function hydrateForm(task: TaskGroup) {
     return
   }
 
-  groupForm.commandGroupId = ''
+  groupForm.commandGroupId = 0
   groupForm.deviceIDs = []
   bindingForm.items = task.items.map((item) => ({
     deviceIDs: [...item.deviceIDs],
@@ -365,11 +365,11 @@ function hydrateForm(task: TaskGroup) {
 
 function normalizeGroupTask(items: TaskItem[]) {
   const deviceSet = new Set<number>()
-  let commandGroupId = ''
+  let commandGroupId = 0
 
   items.forEach((item) => {
     if (!commandGroupId && item.commandGroupId) {
-      commandGroupId = item.commandGroupId
+      commandGroupId = parseInt(item.commandGroupId, 10) || 0
     }
     item.deviceIDs.forEach((id) => deviceSet.add(id))
   })
@@ -453,7 +453,7 @@ function submit() {
     }
 
     items = [{
-      commandGroupId: groupForm.commandGroupId,
+      commandGroupId: String(groupForm.commandGroupId),
       commands: [],
       deviceIDs: [...groupForm.deviceIDs]
     }]
@@ -480,6 +480,10 @@ function submit() {
     id: props.task.id,
     name,
     description: form.description.trim(),
+    deviceGroup: props.task.deviceGroup,
+    commandGroup: props.task.commandGroup,
+    maxWorkers: props.task.maxWorkers,
+    timeout: props.task.timeout,
     mode: props.task.mode,
     items,
     tags,

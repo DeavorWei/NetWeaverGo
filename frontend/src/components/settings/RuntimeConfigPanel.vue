@@ -175,6 +175,73 @@
       </div>
     </div>
 
+    <!-- 发现任务配置 -->
+    <div class="runtime-card bg-bg-card border border-border rounded-xl p-5 shadow-card settings-panel-card">
+      <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M3 12h18M3 18h18"/>
+        </svg>
+        发现任务设置
+      </h3>
+      <div class="settings-auto-grid">
+        <div class="space-y-2">
+          <label class="settings-label">发现并发数 <HelpTip text="发现任务默认并发设备数，未在任务启动时指定时生效。" /></label>
+          <input
+            v-model.number="config.discovery.workerCount"
+            type="number"
+            min="1"
+            max="200"
+            step="1"
+            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-warning focus:ring-1 focus:ring-warning/30 transition-all"
+          />
+        </div>
+        <div class="space-y-2">
+          <label class="settings-label">单设备超时（毫秒） <HelpTip text="单台设备从连接到采集完成的最长允许时间。" /></label>
+          <input
+            v-model.number="config.discovery.perDeviceTimeout"
+            type="number"
+            min="10000"
+            step="1000"
+            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-warning focus:ring-1 focus:ring-warning/30 transition-all"
+          />
+        </div>
+        <div class="space-y-2">
+          <label class="settings-label">命令超时上限（毫秒） <HelpTip text="发现命令执行超时上限，会约束命令 profile 超时配置。" /></label>
+          <input
+            v-model.number="config.discovery.commandTimeout"
+            type="number"
+            min="1000"
+            step="1000"
+            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-warning focus:ring-1 focus:ring-warning/30 transition-all"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- 拓扑推理配置 -->
+    <div class="runtime-card bg-bg-card border border-border rounded-xl p-5 shadow-card settings-panel-card">
+      <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4 17 10 11 14 15 20 9"/>
+          <polyline points="14 9 20 9 20 15"/>
+        </svg>
+        拓扑推理设置
+      </h3>
+      <div class="settings-auto-grid">
+        <div class="space-y-2">
+          <label class="settings-label">最大推断候选数 <HelpTip text="FDB 推断时候选设备超过该值将跳过推断，避免误判。" /></label>
+          <input
+            v-model.number="config.topology.maxInferenceCandidates"
+            type="number"
+            min="1"
+            max="100"
+            step="1"
+            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
+          />
+        </div>
+      </div>
+    </div>
+
     <!-- 缓冲区配置 -->
     <div class="runtime-card bg-bg-card border border-border rounded-xl p-5 shadow-card settings-panel-card">
       <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
@@ -342,6 +409,14 @@ const config = ref({
     eventBufferSize: 1000,
     fallbackEventCapacity: 500
   },
+  discovery: {
+    workerCount: 10,
+    perDeviceTimeout: 180000,
+    commandTimeout: 30000
+  },
+  topology: {
+    maxInferenceCandidates: 8
+  },
   buffers: {
     defaultSize: 4096,
     smallSize: 1024,
@@ -396,6 +471,14 @@ async function loadConfig() {
         eventBufferSize: data.engine?.eventBufferSize || 1000,
         fallbackEventCapacity: data.engine?.fallbackEventCapacity || 500
       },
+      discovery: {
+        workerCount: data.discovery?.workerCount || 10,
+        perDeviceTimeout: data.discovery?.perDeviceTimeout || 180000,
+        commandTimeout: data.discovery?.commandTimeout || 30000
+      },
+      topology: {
+        maxInferenceCandidates: data.topology?.maxInferenceCandidates || 8
+      },
       buffers: {
         defaultSize: data.buffers?.defaultSize || 4096,
         smallSize: data.buffers?.smallSize || 1024,
@@ -435,6 +518,14 @@ async function saveConfig() {
         workerCount: config.value.engine.workerCount,
         eventBufferSize: config.value.engine.eventBufferSize,
         fallbackEventCapacity: config.value.engine.fallbackEventCapacity
+      },
+      discovery: {
+        workerCount: config.value.discovery.workerCount,
+        perDeviceTimeout: config.value.discovery.perDeviceTimeout,
+        commandTimeout: config.value.discovery.commandTimeout
+      },
+      topology: {
+        maxInferenceCandidates: config.value.topology.maxInferenceCandidates
       },
       buffers: {
         defaultSize: config.value.buffers.defaultSize,

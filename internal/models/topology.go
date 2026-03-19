@@ -20,7 +20,7 @@ type TopologyEdge struct {
 	EdgeType         string         `json:"edgeType"` // physical / logical_aggregate
 	Status           string         `json:"status"`   // confirmed / semi_confirmed / inferred / conflict
 	Confidence       float64        `json:"confidence"`
-	DiscoveryMethods string         `json:"discoveryMethods" gorm:"serializer:json"`
+	DiscoveryMethods []string       `json:"discoveryMethods" gorm:"serializer:json"`
 	Evidence         []EdgeEvidence `json:"evidence" gorm:"serializer:json"`
 	CreatedAt        time.Time      `json:"createdAt"`
 	UpdatedAt        time.Time      `json:"updatedAt"`
@@ -33,13 +33,18 @@ func (TopologyEdge) TableName() string {
 
 // EdgeEvidence 边证据
 type EdgeEvidence struct {
-	Source     string `json:"source"`     // 来源：lldp / fdb / arp
-	LocalIf    string `json:"localIf"`    // 本地接口
-	RemoteName string `json:"remoteName"` // 远端名称
-	RemoteIf   string `json:"remoteIf"`   // 远端接口
-	RemoteMAC  string `json:"remoteMac"`  // 远端MAC
-	RemoteIP   string `json:"remoteIp"`   // 远端IP
-	Timestamp  string `json:"timestamp"`  // 时间戳
+	Type       string `json:"type"`                // 证据类型: lldp / fdb / arp / aggregate / identity
+	DeviceID   string `json:"deviceId"`            // 证据来源设备
+	Command    string `json:"command"`             // 来源命令 key
+	RawRefID   string `json:"rawRefId"`            // 原始输出引用ID
+	Summary    string `json:"summary"`             // 证据摘要
+	Source     string `json:"source"`              // 兼容字段: 来源
+	LocalIf    string `json:"localIf"`             // 本地接口
+	RemoteName string `json:"remoteName"`          // 远端名称
+	RemoteIf   string `json:"remoteIf"`            // 远端接口
+	RemoteMAC  string `json:"remoteMac"`           // 远端MAC
+	RemoteIP   string `json:"remoteIp"`            // 远端IP
+	Timestamp  string `json:"timestamp,omitempty"` // 时间戳
 }
 
 // TopologyInterface 拓扑接口信息
@@ -76,6 +81,8 @@ type TopologyLLDPNeighbor struct {
 	NeighborPort    string    `json:"neighborPort"`
 	NeighborIP      string    `json:"neighborIp"`
 	NeighborDesc    string    `json:"neighborDesc"`
+	CommandKey      string    `json:"commandKey"`
+	RawRefID        string    `json:"rawRefId"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
@@ -94,6 +101,8 @@ type TopologyFDBEntry struct {
 	VLAN       int       `json:"vlan"`
 	Interface  string    `json:"interface" gorm:"index"`
 	Type       string    `json:"type"` // dynamic / static
+	CommandKey string    `json:"commandKey"`
+	RawRefID   string    `json:"rawRefId"`
 	CreatedAt  time.Time `json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
@@ -112,6 +121,8 @@ type TopologyARPEntry struct {
 	MACAddress string    `json:"macAddress" gorm:"index"`
 	Interface  string    `json:"interface" gorm:"index"`
 	Type       string    `json:"type"`
+	CommandKey string    `json:"commandKey"`
+	RawRefID   string    `json:"rawRefId"`
 	CreatedAt  time.Time `json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
@@ -128,6 +139,8 @@ type TopologyAggregateGroup struct {
 	DeviceIP      string    `json:"deviceIp" gorm:"index;not null"`
 	AggregateName string    `json:"aggregateName" gorm:"index"`
 	Mode          string    `json:"mode"` // lacp / static
+	CommandKey    string    `json:"commandKey"`
+	RawRefID      string    `json:"rawRefId"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
@@ -144,6 +157,8 @@ type TopologyAggregateMember struct {
 	DeviceIP      string    `json:"deviceIp" gorm:"index;not null"`
 	AggregateName string    `json:"aggregateName" gorm:"index"`
 	MemberPort    string    `json:"memberPort" gorm:"index"`
+	CommandKey    string    `json:"commandKey"`
+	RawRefID      string    `json:"rawRefId"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }

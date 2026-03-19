@@ -108,7 +108,7 @@ export function useConfigBuilder() {
         valueString: v.valueString,
         maxLen: maxLen,
       })
-      if (result.hasExpanded || result.hasInferred) {
+      if (result && (result.hasExpanded || result.hasInferred)) {
         v.valueString = result.values.join(', ')
       }
     } catch (err) {

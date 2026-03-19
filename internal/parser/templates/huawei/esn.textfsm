@@ -1,0 +1,6 @@
+Value serial_number (\S+)
+
+Start
+  ^.*[Ee][Ss][Nn].*:\s*${serial_number}\s*$$ -> Record
+  ^\s*${serial_number}\s*$$ -> Record
+

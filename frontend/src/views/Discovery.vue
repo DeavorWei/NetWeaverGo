@@ -419,6 +419,7 @@
                 class="mt-2 flex items-center justify-between text-xs text-text-muted"
               >
                 <span>成功: {{ progressModal.success }}</span>
+                <span class="text-warning">部分成功: {{ progressModal.partial }}</span>
                 <span>失败: {{ progressModal.failed }}</span>
               </div>
             </div>
@@ -437,6 +438,7 @@
                     :class="{
                       'bg-warning animate-pulse': device.status === 'running',
                       'bg-success': device.status === 'success',
+                      'bg-warning': device.status === 'partial',
                       'bg-error': device.status === 'failed',
                       'bg-text-muted': device.status === 'pending',
                     }"
@@ -451,7 +453,9 @@
                 <span
                   class="text-xs"
                   :class="{
-                    'text-warning': device.status === 'running',
+                    'text-warning':
+                      device.status === 'running' ||
+                      device.status === 'partial',
                     'text-success': device.status === 'success',
                     'text-error': device.status === 'failed',
                     'text-text-muted': device.status === 'pending',
@@ -466,7 +470,21 @@
           <!-- 弹窗底部 -->
           <div class="flex justify-end gap-3 px-5 py-4 border-t border-border">
             <button
+              v-if="
+                (progressModal.status === 'completed' ||
+                  progressModal.status === 'partial' ||
+                  progressModal.status === 'failed') &&
+                progressModal.failed > 0 &&
+                !isRunning
+              "
+              @click="retryFailedDevices"
+              class="px-4 py-2 rounded-lg text-sm font-medium bg-warning/10 border border-warning/30 text-warning hover:bg-warning/20 transition-all"
+            >
+              重试失败设备
+            </button>
+            <button
               @click="cancelDiscovery"
+              :disabled="!isRunning"
               class="px-4 py-2 rounded-lg text-sm font-medium bg-error/10 border border-error/30 text-error hover:bg-error/20 transition-all"
             >
               取消任务
@@ -474,6 +492,7 @@
             <button
               v-if="
                 progressModal.status === 'completed' ||
+                progressModal.status === 'partial' ||
                 progressModal.status === 'failed'
               "
               @click="progressModal.show = false"
@@ -542,6 +561,7 @@ import {
   type DiscoveryDeviceView,
   type VendorCommandProfile,
 } from "../services/api";
+import { GetRuntimeConfig } from "../bindings/github.com/NetWeaverGo/core/internal/ui/settingsservice";
 import DeviceSelector from "../components/task/DeviceSelector.vue";
 
 const router = useRouter();
@@ -655,6 +675,7 @@ const progressModal = ref({
   total: 0,
   finished: 0,
   success: 0,
+  partial: 0,
   failed: 0,
   devices: [] as DiscoveryDeviceView[],
 });
@@ -688,6 +709,7 @@ async function confirmStart() {
       total: selectedDevices.value.length,
       finished: 0,
       success: 0,
+      partial: 0,
       failed: 0,
       devices: [],
     };
@@ -715,6 +737,21 @@ async function cancelDiscovery() {
   }
 }
 
+async function retryFailedDevices() {
+  if (!progressModal.value.taskId || isRunning.value) return;
+  try {
+    await DiscoveryAPI.retryFailedDevices(progressModal.value.taskId);
+    currentTaskId.value = progressModal.value.taskId;
+    isRunning.value = true;
+    progressModal.value.status = "running";
+    triggerToast("已启动失败设备重试", "success");
+    pollTaskStatus();
+  } catch (err: any) {
+    console.error("重试失败设备失败:", err);
+    triggerToast(`重试失败: ${err?.message || err}`, "error");
+  }
+}
+
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 async function pollTaskStatus() {
@@ -738,10 +775,14 @@ async function pollTaskStatus() {
         // 获取设备列表
         const devices = await DiscoveryAPI.getTaskDevices(currentTaskId.value);
         progressModal.value.devices = devices || [];
+        progressModal.value.partial = (
+          devices || []
+        ).filter((d: { status: string }) => d.status === "partial").length;
 
         // 检查是否完成
         if (
           status.status === "completed" ||
+          status.status === "partial" ||
           status.status === "failed" ||
           status.status === "cancelled"
         ) {
@@ -766,6 +807,7 @@ async function viewTaskDetail(task: DiscoveryTaskView) {
       total: task.totalCount,
       finished: task.successCount + task.failedCount,
       success: task.successCount,
+      partial: (devices || []).filter((d: { status: string }) => d.status === "partial").length,
       failed: task.failedCount,
       devices: devices || [],
     };
@@ -800,6 +842,7 @@ function getStatusClass(status: string): string {
     pending: "bg-text-muted/20 text-text-muted",
     running: "bg-warning/20 text-warning",
     completed: "bg-success/20 text-success",
+    partial: "bg-warning/20 text-warning",
     failed: "bg-error/20 text-error",
     cancelled: "bg-text-muted/20 text-text-muted",
   };
@@ -811,6 +854,7 @@ function getStatusText(status: string): string {
     pending: "等待中",
     running: "运行中",
     completed: "已完成",
+    partial: "部分成功",
     failed: "失败",
     cancelled: "已取消",
   };
@@ -822,6 +866,7 @@ function getDeviceStatusText(status: string): string {
     pending: "等待中",
     running: "采集ing...",
     success: "成功",
+    partial: "部分成功",
     failed: "失败",
   };
   return map[status] || status;
@@ -865,6 +910,23 @@ async function loadVendorProfiles() {
   }
 }
 
+async function loadDiscoveryDefaults() {
+  try {
+    const runtime = await GetRuntimeConfig();
+    if (runtime?.discovery?.workerCount && runtime.discovery.workerCount > 0) {
+      maxWorkers.value = runtime.discovery.workerCount;
+    }
+    if (runtime?.discovery?.commandTimeout && runtime.discovery.commandTimeout > 0) {
+      timeoutSec.value = Math.max(
+        1,
+        Math.round(runtime.discovery.commandTimeout / 1000),
+      );
+    }
+  } catch (err) {
+    console.error("加载发现默认配置失败:", err);
+  }
+}
+
 // 加载任务列表
 async function loadTaskList() {
   try {
@@ -895,6 +957,7 @@ async function checkRunningStatus() {
             total: status.totalCount,
             finished: status.successCount + status.failedCount,
             success: status.successCount,
+            partial: 0,
             failed: status.failedCount,
             devices: [],
           };
@@ -908,6 +971,7 @@ async function checkRunningStatus() {
 }
 
 onMounted(() => {
+  loadDiscoveryDefaults();
   loadDevices();
   loadVendorProfiles();
   loadTaskList();

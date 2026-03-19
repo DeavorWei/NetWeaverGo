@@ -1,0 +1,10 @@
+[
+  {
+    "aDeviceId": "10.9.0.1",
+    "aIf": "GE1/0/1",
+    "bDeviceId": "10.9.0.2",
+    "bIf": "GE1/0/24",
+    "edgeType": "physical",
+    "status": "confirmed"
+  }
+]

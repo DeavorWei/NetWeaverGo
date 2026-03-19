@@ -1,0 +1,6 @@
+Value model ([A-Za-z0-9\-_\/\.]+)
+
+Start
+  ^.*(S[0-9]{3,4}\S*|CE[0-9]{3,4}\S*|NE[0-9]{2,4}\S*).*$ -> Record
+  ^\s*${model}\s*$$ -> Record
+

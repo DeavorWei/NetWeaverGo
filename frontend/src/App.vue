@@ -156,6 +156,23 @@ const menuItems = [
     </svg>`,
   },
   {
+    key: "Topology",
+    label: "拓扑图谱",
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="5" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/>
+      <path d="M7 5h10M12 7v3M7 19h10M5 7v10M19 7v10"/>
+    </svg>`,
+  },
+  {
+    key: "PlanCompare",
+    label: "规划比对",
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <path d="M14 2v6h6"/>
+      <path d="M9 13h6M9 17h6"/>
+    </svg>`,
+  },
+  {
     key: "NetworkCalc",
     label: "子网计算",
     icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -194,6 +211,8 @@ const titleMap: Record<string, string> = {
   Tasks: "任务创建",
   TaskExecution: "任务执行大屏",
   Discovery: "网络拓扑发现",
+  Topology: "拓扑图谱",
+  PlanCompare: "规划比对",
   NetworkCalc: "子网计算器",
   ProtocolRef: "端口速查",
   ConfigForge: "配置生成",

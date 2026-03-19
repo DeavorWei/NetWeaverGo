@@ -480,7 +480,7 @@ const selectedTag = ref('')
 const editModal = ref({
   show: false,
   isCreate: true,
-  editingId: '',
+  editingId: 0 as number,
   form: {
     name: '',
     description: '',
@@ -495,7 +495,7 @@ const newTag = ref('')
 // 删除弹窗状态
 const deleteModal = ref({
   show: false,
-  groupId: '',
+  groupId: 0 as number,
   groupName: '',
   deleting: false
 })
@@ -619,10 +619,10 @@ async function loadGroups() {
 
 // 打开创建弹窗
 function openCreateModal() {
-  editModal.value = {
+    editModal.value = {
     show: true,
     isCreate: true,
-    editingId: '',
+    editingId: 0,
     form: {
       name: '',
       description: '',
@@ -718,7 +718,7 @@ async function saveGroup() {
 }
 
 // 复制命令组
-async function duplicateGroup(id: string) {
+async function duplicateGroup(id: number) {
   try {
     await CommandGroupAPI.duplicateCommandGroup(id)
     await loadGroups()

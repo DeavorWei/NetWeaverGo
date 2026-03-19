@@ -1,0 +1,8 @@
+Value interface (\S+)
+Value status (\S+)
+Value vlan (\S+)
+Value duplex (\S+)
+
+Start
+  ^${interface}\s+${status}\s+${vlan}\s+${duplex}.*$$ -> Record
+

@@ -11,20 +11,23 @@ type DeviceIdentity struct {
 	Hostname     string `json:"hostname"`     // 主机名
 	MgmtIP       string `json:"mgmtIp"`       // 管理IP
 	ChassisID    string `json:"chassisId"`    // 机箱ID（LLDP）
+	RawRefID     string `json:"rawRefId"`     // 原始输出引用ID
 }
 
 // InterfaceFact 接口信息
 type InterfaceFact struct {
-	Name        string `json:"name"`        // 接口名
-	Status      string `json:"status"`      // 状态：up / down
-	Protocol    string `json:"protocol"`    // 协议状态
-	Speed       string `json:"speed"`       // 速率
-	Duplex      string `json:"duplex"`      // 双工模式
-	Description string `json:"description"` // 描述
-	MACAddress  string `json:"macAddress"`  // MAC地址
-	IPAddress   string `json:"ipAddress"`   // IP地址
-	IsAggregate bool   `json:"isAggregate"` // 是否聚合口
-	AggregateID string `json:"aggregateId"` // 所属聚合组ID
+	Name        string `json:"name"`              // 接口名
+	Status      string `json:"status"`            // 状态：up / down
+	Protocol    string `json:"protocol"`          // 协议状态
+	Speed       string `json:"speed"`             // 速率
+	Duplex      string `json:"duplex"`            // 双工模式
+	Description string `json:"description"`       // 描述
+	MACAddress  string `json:"macAddress"`        // MAC地址
+	IPAddress   string `json:"ipAddress"`         // IP地址
+	IsAggregate bool   `json:"isAggregate"`       // 是否聚合口
+	AggregateID string `json:"aggregateId"`       // 所属聚合组ID
+	VLAN        string `json:"vlan,omitempty"`    // Cisco特有：VLAN或trunk
+	IsTrunk     bool   `json:"isTrunk,omitempty"` // Cisco特有：是否为trunk
 }
 
 // LLDPFact LLDP邻居信息
@@ -35,6 +38,8 @@ type LLDPFact struct {
 	NeighborPort    string `json:"neighborPort"`    // 邻居端口
 	NeighborIP      string `json:"neighborIp"`      // 邻居管理IP
 	NeighborDesc    string `json:"neighborDesc"`    // 邻居描述
+	CommandKey      string `json:"commandKey"`      // 来源命令
+	RawRefID        string `json:"rawRefId"`        // 原始输出引用ID
 }
 
 // FDBFact MAC地址表项
@@ -43,6 +48,8 @@ type FDBFact struct {
 	VLAN       int    `json:"vlan"`       // VLAN ID
 	Interface  string `json:"interface"`  // 接口
 	Type       string `json:"type"`       // 类型：dynamic / static
+	CommandKey string `json:"commandKey"` // 来源命令
+	RawRefID   string `json:"rawRefId"`   // 原始输出引用ID
 }
 
 // ARPFact ARP表项
@@ -51,6 +58,8 @@ type ARPFact struct {
 	MACAddress string `json:"macAddress"` // MAC地址
 	Interface  string `json:"interface"`  // 接口
 	Type       string `json:"type"`       // 类型
+	CommandKey string `json:"commandKey"` // 来源命令
+	RawRefID   string `json:"rawRefId"`   // 原始输出引用ID
 }
 
 // AggregateFact 聚合组信息
@@ -58,6 +67,8 @@ type AggregateFact struct {
 	AggregateName string   `json:"aggregateName"` // 聚合口名称
 	MemberPorts   []string `json:"memberPorts"`   // 成员端口列表
 	Mode          string   `json:"mode"`          // 模式：lacp / static
+	CommandKey    string   `json:"commandKey"`    // 来源命令
+	RawRefID      string   `json:"rawRefId"`      // 原始输出引用ID
 }
 
 // ParsedResult 解析结果

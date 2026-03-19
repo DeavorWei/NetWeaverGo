@@ -14,3 +14,4 @@ type DiffItem = models.DiffItem
 type PlanImportResult = models.PlanImportResult
 type CompareResult = models.CompareResult
 type DiffReportView = models.DiffReportView
+type PlanUploadView = models.PlanUploadView

@@ -86,9 +86,13 @@ const executeSend = async () => {
     );
 
     const taskGroup = {
-      id: "",
+      id: 0,
       name: name.value.trim(),
       description: description.value.trim(),
+      deviceGroup: "",
+      commandGroup: "",
+      maxWorkers: 10,
+      timeout: 60,
       mode: "binding" as const,
       items,
       tags: tags.value,

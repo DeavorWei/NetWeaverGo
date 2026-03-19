@@ -1,10 +1,14 @@
 package sshutil
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,6 +18,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/report"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // SSHClient 表示一个到设备的活跃 SSH 连接
@@ -54,10 +59,22 @@ type Config struct {
 
 	// SSH 算法配置（可选）
 	Algorithms *config.SSHAlgorithmSettings
+	// 主机密钥校验策略: strict / accept_new / insecure
+	HostKeyPolicy string
+	// known_hosts 文件路径（可选）
+	KnownHostsPath string
 
 	// RawSink 为可选的原始 SSH 字节流输出。
 	RawSink report.RawTranscriptSink
 }
+
+const (
+	hostKeyPolicyStrict    = "strict"
+	hostKeyPolicyAcceptNew = "accept_new"
+	hostKeyPolicyInsecure  = "insecure"
+)
+
+var knownHostsWriteMu sync.Mutex
 
 // logSSHConfig 记录SSH配置信息用于调试
 func logSSHConfig(ip string, sshConfig *ssh.ClientConfig, cfg Config) {
@@ -329,6 +346,118 @@ func applyAlgorithmConfig(sshConfig *ssh.ClientConfig, algoSettings *config.SSHA
 	}
 }
 
+func resolveHostKeyPolicy(cfg Config) (string, string) {
+	policy := strings.ToLower(strings.TrimSpace(cfg.HostKeyPolicy))
+	if policy == "" {
+		policy = hostKeyPolicyAcceptNew
+	}
+	knownHostsPath := strings.TrimSpace(cfg.KnownHostsPath)
+	if knownHostsPath == "" {
+		knownHostsPath = config.GetPathManager().GetSSHKnownHostsPath()
+	}
+	return policy, knownHostsPath
+}
+
+func buildHostKeyCallback(cfg Config) (ssh.HostKeyCallback, error) {
+	policy, knownHostsPath := resolveHostKeyPolicy(cfg)
+	switch policy {
+	case hostKeyPolicyStrict:
+		return strictKnownHostsCallback(knownHostsPath)
+	case hostKeyPolicyAcceptNew:
+		return acceptNewKnownHostsCallback(knownHostsPath)
+	case hostKeyPolicyInsecure:
+		logger.Warn("SSH", cfg.IP, "HostKeyPolicy=insecure，将跳过主机密钥校验（不推荐）")
+		return ssh.InsecureIgnoreHostKey(), nil
+	default:
+		return nil, fmt.Errorf("未知 HostKeyPolicy: %s", policy)
+	}
+}
+
+func strictKnownHostsCallback(path string) (ssh.HostKeyCallback, error) {
+	if err := ensureKnownHostsFile(path); err != nil {
+		return nil, err
+	}
+	cb, err := knownhosts.New(path)
+	if err != nil {
+		return nil, err
+	}
+	return cb, nil
+}
+
+func acceptNewKnownHostsCallback(path string) (ssh.HostKeyCallback, error) {
+	if err := ensureKnownHostsFile(path); err != nil {
+		return nil, err
+	}
+	strictCB, err := knownhosts.New(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		err := strictCB(hostname, remote, key)
+		if err == nil {
+			return nil
+		}
+
+		var keyErr *knownhosts.KeyError
+		if !errors.As(err, &keyErr) {
+			return err
+		}
+
+		// Want 为空表示未记录该主机，按 accept_new 策略写入并放行。
+		if len(keyErr.Want) == 0 {
+			if appendErr := appendKnownHost(path, hostname, key); appendErr != nil {
+				return fmt.Errorf("新增 known_hosts 失败: %w", appendErr)
+			}
+			logger.Info("SSH", hostname, "检测到新主机密钥，已写入 known_hosts")
+			return nil
+		}
+		return fmt.Errorf("主机密钥不匹配: %w", err)
+	}, nil
+}
+
+func ensureKnownHostsFile(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("known_hosts 路径为空")
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Clean(path)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	return file.Close()
+}
+
+func appendKnownHost(path string, hostname string, key ssh.PublicKey) error {
+	knownHostsWriteMu.Lock()
+	defer knownHostsWriteMu.Unlock()
+
+	normalizedHost := knownhosts.Normalize(hostname)
+	line := knownhosts.Line([]string{normalizedHost}, key)
+
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = file.Close() }()
+
+	writer := bufio.NewWriter(file)
+	if _, err := writer.WriteString(line + "\n"); err != nil {
+		return err
+	}
+	return writer.Flush()
+}
+
 // NewSSHClient 建立SSH连接并请求交互式 Shell 终端
 func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	logger.Verbose("SSH", cfg.IP, "开始初始化带 Shell 的 SSH 连接 -> %s:%d", cfg.IP, cfg.Port)
@@ -337,6 +466,10 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	}
 	if cfg.Timeout == 0 {
 		cfg.Timeout = config.GetRuntimeManager().GetConnectionTimeout()
+	}
+	hostKeyCallback, err := buildHostKeyCallback(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("初始化主机密钥校验失败: %w", err)
 	}
 
 	sshConfig := &ssh.ClientConfig{
@@ -353,7 +486,7 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 				return answers, nil
 			}),
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         cfg.Timeout,
 	}
 
@@ -596,6 +729,10 @@ func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	if cfg.Timeout == 0 {
 		cfg.Timeout = config.GetRuntimeManager().GetConnectionTimeout()
 	}
+	hostKeyCallback, err := buildHostKeyCallback(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("初始化主机密钥校验失败: %w", err)
+	}
 
 	sshConfig := &ssh.ClientConfig{
 		User: cfg.Username,
@@ -611,7 +748,7 @@ func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 				return answers, nil
 			}),
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         cfg.Timeout,
 	}
 

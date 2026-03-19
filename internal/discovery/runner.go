@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +24,9 @@ type PathProvider interface {
 // RuntimeConfigProvider 运行时配置提供者接口
 type RuntimeConfigProvider interface {
 	GetConnectionTimeout() time.Duration
+	GetDiscoveryWorkerCount() int
+	GetDiscoveryPerDeviceTimeout() time.Duration
+	GetDiscoveryCommandTimeout() time.Duration
 }
 
 // Runner 发现任务运行器
@@ -112,14 +116,14 @@ func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (s
 		TotalCount: len(devices),
 		MaxWorkers: req.MaxWorkers,
 		TimeoutSec: req.TimeoutSec,
-		Vendor:     req.Vendor,
+		Vendor:     normalizeTaskVendor(req.Vendor),
 	}
 
 	if task.MaxWorkers <= 0 {
-		task.MaxWorkers = r.maxWorkers
+		task.MaxWorkers = r.defaultDiscoveryWorkerCount()
 	}
 	if task.TimeoutSec <= 0 {
-		task.TimeoutSec = 60
+		task.TimeoutSec = durationToPositiveSeconds(r.defaultDiscoveryCommandTimeout(), 60)
 	}
 
 	// 保存任务到数据库
@@ -130,12 +134,16 @@ func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (s
 	// 创建设备发现记录
 	var discoveryDevices []models.DiscoveryDevice
 	for _, dev := range devices {
+		effectiveVendor := resolveDiscoveryVendor(req.Vendor, dev.Vendor)
 		discoveryDevices = append(discoveryDevices, models.DiscoveryDevice{
-			TaskID:   taskID,
-			DeviceIP: dev.IP,
-			DeviceID: dev.ID,
-			Status:   "pending",
-			Vendor:   dev.Vendor,
+			TaskID:      taskID,
+			DeviceIP:    dev.IP,
+			DeviceID:    dev.ID,
+			Status:      "pending",
+			DisplayName: dev.DisplayName,
+			Role:        dev.Role,
+			Site:        dev.Site,
+			Vendor:      effectiveVendor,
 		})
 	}
 
@@ -145,20 +153,17 @@ func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (s
 
 	// 创建原始命令输出记录
 	var rawOutputs []models.RawCommandOutput
-	vendor := req.Vendor
-	if vendor == "" {
-		vendor = DefaultVendor
-	}
-	profile := GetVendorProfile(vendor)
-
 	for _, dev := range devices {
+		effectiveVendor := resolveDiscoveryVendor(req.Vendor, dev.Vendor)
+		profile := GetVendorProfile(effectiveVendor)
 		for _, cmd := range profile.Commands {
 			rawOutputs = append(rawOutputs, models.RawCommandOutput{
-				TaskID:     taskID,
-				DeviceIP:   dev.IP,
-				CommandKey: cmd.CommandKey,
-				Command:    cmd.Command,
-				Status:     "pending",
+				TaskID:      taskID,
+				DeviceIP:    dev.IP,
+				CommandKey:  cmd.CommandKey,
+				Command:     cmd.Command,
+				Status:      "pending",
+				ParseStatus: "pending",
 			})
 		}
 	}
@@ -179,7 +184,7 @@ func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (s
 	})
 
 	// 启动后台任务执行
-	go r.runDiscovery(r.ctx, taskID, devices, vendor, task.TimeoutSec)
+	go r.runDiscovery(r.ctx, taskID, devices, req.Vendor, task.TimeoutSec, task.MaxWorkers)
 
 	return taskID, nil
 }
@@ -257,13 +262,13 @@ func (r *Runner) RetryFailed(ctx context.Context, taskID string) error {
 	})
 
 	// 启动后台任务执行
-	go r.runDiscovery(r.ctx, taskID, devices, task.Vendor, task.TimeoutSec)
+	go r.runDiscovery(r.ctx, taskID, devices, task.Vendor, task.TimeoutSec, task.MaxWorkers)
 
 	return nil
 }
 
 // runDiscovery 执行发现任务
-func (r *Runner) runDiscovery(ctx context.Context, taskID string, devices []models.DeviceInfo, vendor string, timeoutSec int) {
+func (r *Runner) runDiscovery(ctx context.Context, taskID string, devices []models.DeviceInfo, requestedVendor string, timeoutSec int, maxWorkers int) {
 	defer func() {
 		r.mu.Lock()
 		r.runningTask = ""
@@ -272,27 +277,35 @@ func (r *Runner) runDiscovery(ctx context.Context, taskID string, devices []mode
 
 	// 获取连接超时配置
 	connectTimeout := 30 * time.Second
+	perDeviceTimeout := 3 * time.Minute
 	if r.runtimeProvider != nil {
 		connectTimeout = r.runtimeProvider.GetConnectionTimeout()
+		if timeout := r.runtimeProvider.GetDiscoveryPerDeviceTimeout(); timeout > 0 {
+			perDeviceTimeout = timeout
+		}
 	}
-	cmdTimeout := time.Duration(timeoutSec) * time.Second
-
-	// 获取厂商命令配置
-	profile := GetVendorProfile(vendor)
+	taskCommandTimeout := time.Duration(timeoutSec) * time.Second
+	if taskCommandTimeout <= 0 {
+		taskCommandTimeout = r.defaultDiscoveryCommandTimeout()
+	}
 
 	// 并发控制
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, r.maxWorkers)
+	if maxWorkers <= 0 {
+		maxWorkers = r.defaultDiscoveryWorkerCount()
+	}
+	sem := make(chan struct{}, maxWorkers)
 
 	// 统计计数
 	var successCount int
 	var failedCount int
 	var countMu sync.Mutex
 
+dispatchLoop:
 	for _, dev := range devices {
 		select {
 		case <-ctx.Done():
-			break
+			break dispatchLoop
 		default:
 		}
 
@@ -308,8 +321,18 @@ func (r *Runner) runDiscovery(ctx context.Context, taskID string, devices []mode
 			// 增加抖动
 			time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 
+			effectiveVendor := resolveDiscoveryVendor(requestedVendor, device.Vendor)
+			profile := GetVendorProfile(effectiveVendor)
+
+			deviceCtx := ctx
+			cancel := func() {}
+			if perDeviceTimeout > 0 {
+				deviceCtx, cancel = context.WithTimeout(ctx, perDeviceTimeout)
+			}
+			defer cancel()
+
 			// 执行设备发现
-			err := r.discoverDevice(ctx, taskID, device, profile, connectTimeout, cmdTimeout)
+			err := r.discoverDevice(deviceCtx, taskID, device, effectiveVendor, profile, connectTimeout, taskCommandTimeout)
 
 			countMu.Lock()
 			if err != nil {
@@ -331,6 +354,16 @@ func (r *Runner) runDiscovery(ctx context.Context, taskID string, devices []mode
 	} else if failedCount > 0 {
 		status = "partial"
 	}
+	if ctx.Err() != nil {
+		status = "cancelled"
+	}
+
+	var currentTask models.DiscoveryTask
+	if err := r.db.Select("status").Where("id = ?", taskID).Take(&currentTask).Error; err == nil {
+		if strings.EqualFold(currentTask.Status, "cancelled") {
+			status = "cancelled"
+		}
+	}
 
 	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status":        status,
@@ -349,12 +382,13 @@ func (r *Runner) runDiscovery(ctx context.Context, taskID string, devices []mode
 }
 
 // discoverDevice 执行单设备发现
-func (r *Runner) discoverDevice(ctx context.Context, taskID string, device models.DeviceInfo, profile *VendorCommandProfile, connectTimeout time.Duration, cmdTimeout time.Duration) error {
+func (r *Runner) discoverDevice(ctx context.Context, taskID string, device models.DeviceInfo, vendor string, profile *VendorCommandProfile, connectTimeout time.Duration, taskCommandTimeout time.Duration) error {
 	// 更新设备状态
 	now := time.Now()
 	r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, device.IP).Updates(map[string]interface{}{
 		"status":     "running",
 		"started_at": now,
+		"vendor":     vendor,
 	})
 
 	// 发送开始事件
@@ -378,6 +412,8 @@ func (r *Runner) discoverDevice(ctx context.Context, taskID string, device model
 
 	// 执行命令并保存输出
 	var lastErr error
+	cmdSuccess := 0
+	cmdFailed := 0
 	for _, cmd := range profile.Commands {
 		select {
 		case <-ctx.Done():
@@ -396,40 +432,63 @@ func (r *Runner) discoverDevice(ctx context.Context, taskID string, device model
 		})
 
 		// 执行命令并收集输出 (使用 ExecuteCommandSync)
-		output, err := exec.ExecuteCommandSync(ctx, cmd.Command, cmdTimeout)
+		commandTimeout := resolveCommandTimeout(cmd.TimeoutSec, taskCommandTimeout)
+		output, err := exec.ExecuteCommandSync(ctx, cmd.Command, commandTimeout)
 		if err != nil {
 			lastErr = err
+			cmdFailed++
 			// 保存错误信息
 			r.saveRawOutput(taskID, device.IP, cmd.CommandKey, cmd.Command, "", "failed", err.Error(), 0)
 			continue
 		}
+		cmdSuccess++
 
 		// 保存原始输出
 		r.saveRawOutput(taskID, device.IP, cmd.CommandKey, cmd.Command, output, "success", "", int64(len(output)))
 
 		// 如果是 version 命令，尝试解析设备信息
 		if cmd.CommandKey == "version" {
-			r.parseAndUpdateDeviceInfo(taskID, device.IP, output)
+			r.parseAndUpdateDeviceInfo(taskID, device.IP, vendor, output)
 		}
 	}
 
-	// 更新设备状态为成功
+	// 更新设备状态
 	finishedAt := time.Now()
+	deviceStatus := "success"
+	deviceErr := ""
+	if cmdFailed > 0 && cmdSuccess > 0 {
+		deviceStatus = "partial"
+		if lastErr != nil {
+			deviceErr = lastErr.Error()
+		}
+	} else if cmdFailed > 0 && cmdSuccess == 0 {
+		deviceStatus = "failed"
+		if lastErr != nil {
+			deviceErr = lastErr.Error()
+		}
+	}
 	r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, device.IP).Updates(map[string]interface{}{
-		"status":      "success",
-		"finished_at": finishedAt,
+		"status":        deviceStatus,
+		"error_message": deviceErr,
+		"finished_at":   finishedAt,
 	})
 
 	// 发送成功事件
 	r.emitEvent(DiscoveryEvent{
 		TaskID:    taskID,
 		DeviceIP:  device.IP,
-		Type:      "success",
-		Message:   "设备发现完成",
+		Type:      map[bool]string{true: "success", false: "error"}[deviceStatus == "success"],
+		Message:   fmt.Sprintf("设备发现完成: status=%s success=%d failed=%d", deviceStatus, cmdSuccess, cmdFailed),
 		Timestamp: time.Now().UnixMilli(),
 	})
 
-	return lastErr
+	if deviceStatus == "success" {
+		return nil
+	}
+	if lastErr != nil {
+		return lastErr
+	}
+	return fmt.Errorf("设备发现失败: %s", deviceStatus)
 }
 
 // updateDeviceError 更新设备错误状态
@@ -457,10 +516,11 @@ func (r *Runner) saveRawOutput(taskID, deviceIP, commandKey, command, output, st
 	if output != "" && r.pathProvider != nil {
 		filePath = r.pathProvider.GetDiscoveryRawFilePath(taskID, deviceIP, commandKey)
 
-		// 确保目录存在
+		// 确保目录存在（权限0700：仅所有者可读写执行）
 		dir := filepath.Dir(filePath)
-		if err := os.MkdirAll(dir, 0755); err == nil {
-			os.WriteFile(filePath, []byte(output), 0644)
+		if err := os.MkdirAll(dir, 0700); err == nil {
+			// 文件权限0600：仅所有者可读写
+			os.WriteFile(filePath, []byte(output), 0600)
 		}
 	}
 
@@ -472,15 +532,21 @@ func (r *Runner) saveRawOutput(taskID, deviceIP, commandKey, command, output, st
 		"file_path":     filePath,
 		"status":        status,
 		"error_message": errMsg,
+		"parse_status":  "pending",
+		"parse_error":   "",
 		"output_size":   size,
 	})
 }
 
 // parseAndUpdateDeviceInfo 解析并更新设备信息（简单版本，后续由 parser 模块处理）
-func (r *Runner) parseAndUpdateDeviceInfo(taskID, deviceIP, output string) {
-	// 这里只是简单的占位实现，实际解析由 parser 模块完成
-	// 更新厂商信息
-	r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, deviceIP).Update("vendor", "huawei")
+func (r *Runner) parseAndUpdateDeviceInfo(taskID, deviceIP, vendor, output string) {
+	// 这里只是轻量预判，详细解析由 parser 模块完成。
+	effectiveVendor := resolveDiscoveryVendor(vendor, "")
+	detectedVendor := detectVendorFromVersion(output)
+	if detectedVendor != "" {
+		effectiveVendor = detectedVendor
+	}
+	r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, deviceIP).Update("vendor", effectiveVendor)
 }
 
 // getDevicesForDiscovery 获取用于发现的设备列表
@@ -489,13 +555,16 @@ func (r *Runner) getDevicesForDiscovery(req models.StartDiscoveryRequest) ([]mod
 
 	// 定义一个临时结构来接收数据库查询结果
 	type DeviceAssetRow struct {
-		ID       uint   `gorm:"column:id"`
-		IP       string `gorm:"column:ip"`
-		Port     int    `gorm:"column:port"`
-		Username string `gorm:"column:username"`
-		Password string `gorm:"column:password"`
-		Vendor   string `gorm:"column:vendor"`
-		Group    string `gorm:"column:group_name"`
+		ID          uint   `gorm:"column:id"`
+		IP          string `gorm:"column:ip"`
+		Port        int    `gorm:"column:port"`
+		Username    string `gorm:"column:username"`
+		Password    string `gorm:"column:password"`
+		Vendor      string `gorm:"column:vendor"`
+		DisplayName string `gorm:"column:display_name"`
+		Role        string `gorm:"column:role"`
+		Site        string `gorm:"column:site"`
+		Group       string `gorm:"column:group_name"`
 	}
 
 	var rows []DeviceAssetRow
@@ -517,19 +586,29 @@ func (r *Runner) getDevicesForDiscovery(req models.StartDiscoveryRequest) ([]mod
 		}
 	}
 
+	requestedVendor := normalizeTaskVendor(req.Vendor)
+
 	// 转换为 DeviceInfo
 	for _, row := range rows {
 		// 按厂商过滤
-		if req.Vendor != "" && row.Vendor != req.Vendor {
+		if requestedVendor != "auto" && IsVendorSupported(requestedVendor) {
+			if strings.ToLower(strings.TrimSpace(row.Vendor)) != requestedVendor {
+				continue
+			}
+		}
+		if strings.TrimSpace(row.IP) == "" {
 			continue
 		}
 		devices = append(devices, models.DeviceInfo{
-			ID:       row.ID,
-			IP:       row.IP,
-			Port:     row.Port,
-			Username: row.Username,
-			Password: row.Password,
-			Vendor:   row.Vendor,
+			ID:          row.ID,
+			IP:          row.IP,
+			Port:        row.Port,
+			Username:    row.Username,
+			Password:    row.Password,
+			Vendor:      row.Vendor,
+			DisplayName: row.DisplayName,
+			Role:        row.Role,
+			Site:        row.Site,
 		})
 	}
 
@@ -539,12 +618,15 @@ func (r *Runner) getDevicesForDiscovery(req models.StartDiscoveryRequest) ([]mod
 // getDevicesByIPs 根据IP列表获取设备信息
 func (r *Runner) getDevicesByIPs(ips []string) ([]models.DeviceInfo, error) {
 	type DeviceAssetRow struct {
-		ID       uint   `gorm:"column:id"`
-		IP       string `gorm:"column:ip"`
-		Port     int    `gorm:"column:port"`
-		Username string `gorm:"column:username"`
-		Password string `gorm:"column:password"`
-		Vendor   string `gorm:"column:vendor"`
+		ID          uint   `gorm:"column:id"`
+		IP          string `gorm:"column:ip"`
+		Port        int    `gorm:"column:port"`
+		Username    string `gorm:"column:username"`
+		Password    string `gorm:"column:password"`
+		Vendor      string `gorm:"column:vendor"`
+		DisplayName string `gorm:"column:display_name"`
+		Role        string `gorm:"column:role"`
+		Site        string `gorm:"column:site"`
 	}
 
 	var rows []DeviceAssetRow
@@ -555,12 +637,15 @@ func (r *Runner) getDevicesByIPs(ips []string) ([]models.DeviceInfo, error) {
 	devices := make([]models.DeviceInfo, len(rows))
 	for i, row := range rows {
 		devices[i] = models.DeviceInfo{
-			ID:       row.ID,
-			IP:       row.IP,
-			Port:     row.Port,
-			Username: row.Username,
-			Password: row.Password,
-			Vendor:   row.Vendor,
+			ID:          row.ID,
+			IP:          row.IP,
+			Port:        row.Port,
+			Username:    row.Username,
+			Password:    row.Password,
+			Vendor:      row.Vendor,
+			DisplayName: row.DisplayName,
+			Role:        row.Role,
+			Site:        row.Site,
 		}
 	}
 
@@ -579,6 +664,90 @@ func (r *Runner) emitEvent(ev DiscoveryEvent) {
 	case r.EventBus <- ev:
 	default:
 		// 通道已满，跳过
+	}
+}
+
+func (r *Runner) defaultDiscoveryWorkerCount() int {
+	if r.runtimeProvider != nil {
+		if workers := r.runtimeProvider.GetDiscoveryWorkerCount(); workers > 0 {
+			return workers
+		}
+	}
+	if r.maxWorkers > 0 {
+		return r.maxWorkers
+	}
+	return 32
+}
+
+func (r *Runner) defaultDiscoveryCommandTimeout() time.Duration {
+	if r.runtimeProvider != nil {
+		if timeout := r.runtimeProvider.GetDiscoveryCommandTimeout(); timeout > 0 {
+			return timeout
+		}
+	}
+	return 60 * time.Second
+}
+
+func durationToPositiveSeconds(timeout time.Duration, fallback int) int {
+	seconds := int(timeout.Seconds())
+	if seconds > 0 {
+		return seconds
+	}
+	return fallback
+}
+
+func resolveCommandTimeout(specTimeoutSec int, taskTimeout time.Duration) time.Duration {
+	specTimeout := time.Duration(specTimeoutSec) * time.Second
+	if specTimeout <= 0 {
+		if taskTimeout > 0 {
+			return taskTimeout
+		}
+		return 60 * time.Second
+	}
+	if taskTimeout <= 0 {
+		return specTimeout
+	}
+	if specTimeout > taskTimeout {
+		return taskTimeout
+	}
+	return specTimeout
+}
+
+func normalizeTaskVendor(vendor string) string {
+	v := strings.ToLower(strings.TrimSpace(vendor))
+	if v == "" {
+		return "auto"
+	}
+	return v
+}
+
+func resolveDiscoveryVendor(requestedVendor, deviceVendor string) string {
+	requested := strings.ToLower(strings.TrimSpace(requestedVendor))
+	device := strings.ToLower(strings.TrimSpace(deviceVendor))
+
+	if requested != "" && requested != "auto" {
+		if IsVendorSupported(requested) {
+			return requested
+		}
+		return DefaultVendor
+	}
+	if IsVendorSupported(device) {
+		return device
+	}
+	return DefaultVendor
+}
+
+func detectVendorFromVersion(output string) string {
+	text := strings.ToLower(output)
+	switch {
+	case strings.Contains(text, "huawei"):
+		return "huawei"
+	case strings.Contains(text, "h3c"), strings.Contains(text, "comware"):
+		return "h3c"
+	case strings.Contains(text, "cisco"):
+		return "cisco"
+	default:
+		return ""
 	}
 }
 
@@ -654,10 +823,16 @@ func (r *Runner) GetTaskDevices(taskID string) ([]models.DiscoveryDeviceView, er
 			ErrorMessage: d.ErrorMessage,
 			StartedAt:    d.StartedAt,
 			FinishedAt:   d.FinishedAt,
+			DisplayName:  d.DisplayName,
+			Role:         d.Role,
+			Site:         d.Site,
 			Vendor:       d.Vendor,
 			Model:        d.Model,
 			SerialNumber: d.SerialNumber,
 			Version:      d.Version,
+			Hostname:     d.Hostname,
+			MgmtIP:       d.MgmtIP,
+			ChassisID:    d.ChassisID,
 		}
 	}
 

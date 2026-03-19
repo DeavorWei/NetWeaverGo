@@ -1,0 +1,13 @@
+Value local_if ([^\]]+)
+Value neighbor_name (.+)
+Value neighbor_port (.+)
+Value chassis_id (.+)
+Value mgmt_ip (\S+)
+
+Start
+  ^\s*\[${local_if}\]\s*$$ -> Record
+  ^\s*System\s+name\s*:\s*${neighbor_name}\s*$$ -> Record
+  ^\s*Port\s+ID\s*:\s*${neighbor_port}\s*$$ -> Record
+  ^\s*Chassis\s+ID\s*:\s*${chassis_id}\s*$$ -> Record
+  ^\s*Management\s+address\s*:\s*${mgmt_ip}\s*$$ -> Record
+

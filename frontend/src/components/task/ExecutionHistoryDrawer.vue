@@ -151,8 +151,8 @@ const loadRecords = async () => {
     }
 
     const result = await ExecutionHistoryAPI.listExecutionRecords(req)
-    records.value = result.data
-    total.value = result.total
+    records.value = result?.data || []
+    total.value = result?.total || 0
     calculateTotalPages()
   } catch (error) {
     console.error('加载历史记录失败:', error)

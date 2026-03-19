@@ -166,15 +166,6 @@
                       </span>
                     </div>
                     <p class="text-xs text-text-muted mt-1">{{ item.commandInfo.description || '暂无描述' }}</p>
-                    <div class="flex flex-wrap gap-1 mt-2">
-                      <span
-                        v-for="tag in item.commandInfo.tags"
-                        :key="tag"
-                        class="px-1.5 py-0.5 rounded text-xs bg-accent/10 text-accent"
-                      >
-                        {{ tag }}
-                      </span>
-                    </div>
                     <div class="mt-3 rounded-lg bg-terminal-bg p-3 max-h-64 overflow-y-auto scrollbar-custom">
                       <div
                         v-for="(command, index) in item.commandInfo.commands"

@@ -1,0 +1,11 @@
+Value local_if (\S+)
+Value neighbor_name (.+)
+Value neighbor_port (.+)
+Value chassis_id (.+)
+
+Start
+  ^\s*Local\s+Intf:\s*${local_if}\s*$$ -> Record
+  ^\s*System\s+Name:\s*${neighbor_name}\s*$$ -> Record
+  ^\s*Port\s+id:\s*${neighbor_port}\s*$$ -> Record
+  ^\s*Chassis\s+id:\s*${chassis_id}\s*$$ -> Record
+

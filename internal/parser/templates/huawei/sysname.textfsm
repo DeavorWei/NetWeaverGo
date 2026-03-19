@@ -1,0 +1,5 @@
+Value hostname (\S+)
+
+Start
+  ^\s*sysname\s+${hostname}\s*$$ -> Record
+

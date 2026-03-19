@@ -16,6 +16,18 @@ import * as discovery$0 from "../discovery/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as models$0 from "../models/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as parser$0 from "../parser/models.js";
+
+/**
+ * BuildTopology 构建拓扑图
+ */
+export function BuildTopology(taskID: string): $CancellablePromise<models$0.TopologyBuildResult | null> {
+    return $Call.ByID(1234689032, taskID).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
 
 /**
  * CancelDiscovery 取消发现任务
@@ -32,6 +44,24 @@ export function GetCurrentDiscoveryTask(): $CancellablePromise<string> {
 }
 
 /**
+ * GetDeviceTopologyDetail 获取设备的拓扑详情
+ */
+export function GetDeviceTopologyDetail(taskID: string, deviceIP: string): $CancellablePromise<parser$0.ParsedResult | null> {
+    return $Call.ByID(3208315579, taskID, deviceIP).then(($result: any) => {
+        return $$createType3($result);
+    });
+}
+
+/**
+ * GetEdgeDetail 获取边详情
+ */
+export function GetEdgeDetail(taskID: string, edgeID: string): $CancellablePromise<models$0.TopologyEdgeDetailView | null> {
+    return $Call.ByID(1537747477, taskID, edgeID).then(($result: any) => {
+        return $$createType5($result);
+    });
+}
+
+/**
  * GetRawOutput 获取原始命令输出
  */
 export function GetRawOutput(taskID: string, deviceIP: string, commandKey: string): $CancellablePromise<string> {
@@ -43,7 +73,7 @@ export function GetRawOutput(taskID: string, deviceIP: string, commandKey: strin
  */
 export function GetSupportedVendors(): $CancellablePromise<string[]> {
     return $Call.ByID(3311268684).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType6($result);
     });
 }
 
@@ -52,7 +82,7 @@ export function GetSupportedVendors(): $CancellablePromise<string[]> {
  */
 export function GetTaskDevices(taskID: string): $CancellablePromise<discovery$0.DiscoveryDeviceView[]> {
     return $Call.ByID(870059783, taskID).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType8($result);
     });
 }
 
@@ -61,7 +91,16 @@ export function GetTaskDevices(taskID: string): $CancellablePromise<discovery$0.
  */
 export function GetTaskStatus(taskID: string): $CancellablePromise<discovery$0.DiscoveryTaskView | null> {
     return $Call.ByID(1710880238, taskID).then(($result: any) => {
-        return $$createType4($result);
+        return $$createType10($result);
+    });
+}
+
+/**
+ * GetTopologyGraph 获取拓扑图视图
+ */
+export function GetTopologyGraph(taskID: string): $CancellablePromise<models$0.TopologyGraphView | null> {
+    return $Call.ByID(3976830640, taskID).then(($result: any) => {
+        return $$createType12($result);
     });
 }
 
@@ -70,7 +109,7 @@ export function GetTaskStatus(taskID: string): $CancellablePromise<discovery$0.D
  */
 export function GetVendorProfiles(): $CancellablePromise<(discovery$0.VendorCommandProfile | null)[]> {
     return $Call.ByID(2906719573).then(($result: any) => {
-        return $$createType7($result);
+        return $$createType15($result);
     });
 }
 
@@ -86,8 +125,15 @@ export function IsDiscoveryRunning(): $CancellablePromise<boolean> {
  */
 export function ListDiscoveryTasks(limit: number): $CancellablePromise<discovery$0.DiscoveryTaskView[]> {
     return $Call.ByID(3407912979, limit).then(($result: any) => {
-        return $$createType8($result);
+        return $$createType16($result);
     });
+}
+
+/**
+ * ParseDiscoveryTask 解析发现任务的原始输出
+ */
+export function ParseDiscoveryTask(taskID: string): $CancellablePromise<void> {
+    return $Call.ByID(2963448101, taskID);
 }
 
 /**
@@ -102,18 +148,26 @@ export function RetryFailedDevices(taskID: string): $CancellablePromise<void> {
  */
 export function StartDiscovery(req: discovery$0.StartDiscoveryRequest): $CancellablePromise<discovery$0.TaskStartResponse> {
     return $Call.ByID(2474301625, req).then(($result: any) => {
-        return $$createType9($result);
+        return $$createType17($result);
     });
 }
 
 // Private type creation functions
-const $$createType0 = $Create.Array($Create.Any);
-const $$createType1 = models$0.DiscoveryDeviceView.createFrom;
-const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = models$0.DiscoveryTaskView.createFrom;
-const $$createType4 = $Create.Nullable($$createType3);
-const $$createType5 = discovery$0.VendorCommandProfile.createFrom;
-const $$createType6 = $Create.Nullable($$createType5);
-const $$createType7 = $Create.Array($$createType6);
-const $$createType8 = $Create.Array($$createType3);
-const $$createType9 = models$0.TaskStartResponse.createFrom;
+const $$createType0 = models$0.TopologyBuildResult.createFrom;
+const $$createType1 = $Create.Nullable($$createType0);
+const $$createType2 = parser$0.ParsedResult.createFrom;
+const $$createType3 = $Create.Nullable($$createType2);
+const $$createType4 = models$0.TopologyEdgeDetailView.createFrom;
+const $$createType5 = $Create.Nullable($$createType4);
+const $$createType6 = $Create.Array($Create.Any);
+const $$createType7 = models$0.DiscoveryDeviceView.createFrom;
+const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = models$0.DiscoveryTaskView.createFrom;
+const $$createType10 = $Create.Nullable($$createType9);
+const $$createType11 = models$0.TopologyGraphView.createFrom;
+const $$createType12 = $Create.Nullable($$createType11);
+const $$createType13 = discovery$0.VendorCommandProfile.createFrom;
+const $$createType14 = $Create.Nullable($$createType13);
+const $$createType15 = $Create.Array($$createType14);
+const $$createType16 = $Create.Array($$createType9);
+const $$createType17 = models$0.TaskStartResponse.createFrom;

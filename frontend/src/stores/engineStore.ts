@@ -2,8 +2,8 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { Events } from "@wailsio/runtime";
 import { EngineAPI, DeviceAPI } from "../services/api";
-import { ExecutionSnapshot } from "../bindings/github.com/NetWeaverGo/core/internal/report/models";
-import type { DeviceAsset } from "../bindings/github.com/NetWeaverGo/core/internal/config/models";
+import { ExecutionSnapshot } from "../bindings/github.com/NetWeaverGo/core/internal/report/models.js";
+import type { DeviceAsset } from "../services/api";
 
 type EngineState =
   | "Idle"
@@ -16,16 +16,16 @@ type EngineState =
 export interface SuspendRequiredEvent {
   sessionId?: string;
   ip: string;
-  error: string;
   command: string;
+  error: string;
 }
 
 export interface SuspendSessionState {
   sessionId: string;
   ip: string;
-  content: string;
   command: string;
   error: string;
+  content: string;
 }
 
 const ACTIVE_ENGINE_STATES = new Set<EngineState>([

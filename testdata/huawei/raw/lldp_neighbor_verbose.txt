@@ -1,0 +1,5 @@
+[GigabitEthernet1/0/1]
+System name : CORE-SW-1
+Port ID : GigabitEthernet1/0/24
+Chassis ID : 00e0-fc00-0001
+Management address : 10.0.0.1

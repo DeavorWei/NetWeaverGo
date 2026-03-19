@@ -18,13 +18,15 @@ type GlobalSettings = models.GlobalSettings
 // DefaultSettings 返回默认配置
 func DefaultSettings() models.GlobalSettings {
 	return models.GlobalSettings{
-		MaxWorkers:     32,
-		ConnectTimeout: "10s",
-		CommandTimeout: "30s",
-		StorageRoot:    GetPathManager().GetStorageRoot(),
-		ErrorMode:      "pause",
-		Debug:          false,
-		Verbose:        false,
+		MaxWorkers:        32,
+		ConnectTimeout:    "10s",
+		CommandTimeout:    "30s",
+		StorageRoot:       GetPathManager().GetStorageRoot(),
+		ErrorMode:         "pause",
+		Debug:             false,
+		Verbose:           false,
+		SSHHostKeyPolicy:  "accept_new",
+		SSHKnownHostsPath: GetPathManager().GetSSHKnownHostsPath(),
 		SSHAlgorithms: models.SSHAlgorithmSettings{
 			PresetMode: "compatible", // 默认使用兼容模式
 		},
@@ -78,6 +80,12 @@ func LoadSettings() (*models.GlobalSettings, bool, error) {
 	if strings.TrimSpace(st.StorageRoot) == "" {
 		st.StorageRoot = GetPathManager().GetStorageRoot()
 	}
+	if strings.TrimSpace(st.SSHHostKeyPolicy) == "" {
+		st.SSHHostKeyPolicy = "accept_new"
+	}
+	if strings.TrimSpace(st.SSHKnownHostsPath) == "" {
+		st.SSHKnownHostsPath = GetPathManager().GetSSHKnownHostsPath()
+	}
 
 	// 应用数据库中的调试设置
 	ApplyDebugSettings(st.Debug, st.Verbose)
@@ -105,6 +113,7 @@ func SaveSettings(settings models.GlobalSettings) error {
 	logger.Verbose("Config", "-", "保存内容: workers=%d, connect=%s, cmd=%s, error=%s, storageRoot=%s, debug=%v, verbose=%v",
 		settings.MaxWorkers, settings.ConnectTimeout, settings.CommandTimeout, settings.ErrorMode,
 		settings.StorageRoot, settings.Debug, settings.Verbose)
+	logger.Verbose("Config", "-", "SSH主机密钥策略: policy=%s, known_hosts=%s", settings.SSHHostKeyPolicy, settings.SSHKnownHostsPath)
 	logger.Verbose("Config", "-", "SSH算法配置: presetMode=%s, ciphers=%d, keyExchanges=%d, macs=%d, hostKeys=%d",
 		settings.SSHAlgorithms.PresetMode,
 		len(settings.SSHAlgorithms.Ciphers),
@@ -122,6 +131,12 @@ func SaveSettings(settings models.GlobalSettings) error {
 		return err
 	}
 	settings.StorageRoot = normalizedStorageRoot
+	if strings.TrimSpace(settings.SSHHostKeyPolicy) == "" {
+		settings.SSHHostKeyPolicy = "accept_new"
+	}
+	if strings.TrimSpace(settings.SSHKnownHostsPath) == "" {
+		settings.SSHKnownHostsPath = GetPathManager().GetSSHKnownHostsPath()
+	}
 
 	pm := GetPathManager()
 	currentStorageRoot := pm.GetStorageRoot()
@@ -154,4 +169,23 @@ func SaveSettings(settings models.GlobalSettings) error {
 	ApplyDebugSettings(settings.Debug, settings.Verbose)
 	logger.Verbose("Config", "-", "全局参数保存落库完毕，ID=%d", settings.ID)
 	return nil
+}
+
+// ResolveSSHHostKeyPolicy 解析 SSH 主机密钥校验策略与 known_hosts 路径。
+func ResolveSSHHostKeyPolicy() (policy string, knownHostsPath string) {
+	policy = "accept_new"
+	knownHostsPath = GetPathManager().GetSSHKnownHostsPath()
+
+	st, _, err := LoadSettings()
+	if err != nil || st == nil {
+		return policy, knownHostsPath
+	}
+
+	if p := strings.ToLower(strings.TrimSpace(st.SSHHostKeyPolicy)); p != "" {
+		policy = p
+	}
+	if path := strings.TrimSpace(st.SSHKnownHostsPath); path != "" {
+		knownHostsPath = path
+	}
+	return policy, knownHostsPath
 }

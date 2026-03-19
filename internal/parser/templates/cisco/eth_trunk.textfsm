@@ -1,0 +1,8 @@
+Value port_channel (\d+)
+Value protocol (\S+)
+Value member (\S+)
+
+Start
+  ^\s*${port_channel}\s+${protocol}\s+.*$$ -> Record
+  ^\s*${member}\s*\(.*\)\s*$$ -> Record
+

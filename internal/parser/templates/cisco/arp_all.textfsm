@@ -1,0 +1,9 @@
+Value ip (\d+\.\d+\.\d+\.\d+)
+Value mac ([0-9A-Fa-f:\.-]+)
+Value interface (\S+)
+Value type (\S+)
+
+Start
+  ^\s*${ip}\s+${mac}\s+\S+\s+${interface}.*$$ -> Record
+  ^\s*Internet\s+${ip}\s+\S+\s+${mac}\s+\S+\s+${interface}\s*$$ -> Record
+

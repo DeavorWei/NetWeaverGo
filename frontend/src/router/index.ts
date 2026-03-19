@@ -9,6 +9,8 @@ import ProtocolRef from '../views/Tools/ProtocolRef.vue'
 import ConfigForge from '../views/Tools/ConfigForge.vue'
 import Settings from '../views/Settings.vue'
 import Discovery from '../views/Discovery.vue'
+import Topology from '../views/Topology.vue'
+import PlanCompare from '../views/PlanCompare.vue'
 
 const routes = [
   {
@@ -60,6 +62,16 @@ const routes = [
     path: '/discovery',
     name: 'Discovery',
     component: Discovery
+  },
+  {
+    path: '/topology',
+    name: 'Topology',
+    component: Topology
+  },
+  {
+    path: '/plan-compare',
+    name: 'PlanCompare',
+    component: PlanCompare
   }
 ]
 

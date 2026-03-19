@@ -150,7 +150,7 @@ const executeSend = async () => {
         const result = await CommandGroupAPI.createCommandGroup(
           groupData as CommandGroup,
         );
-        createdIds.push(result?.id || "");
+        createdIds.push(String(result?.id ?? ""));
       }
 
       emit(

@@ -40,6 +40,9 @@ const (
 	// DefaultWorkerCount 默认工作协程数
 	DefaultWorkerCount = 10
 
+	// DefaultDiscoveryPerDeviceTimeout 默认单设备发现超时
+	DefaultDiscoveryPerDeviceTimeout = 3 * time.Minute
+
 	// EventBufferSize 事件缓冲区大小
 	EventBufferSize = 1000
 
@@ -48,6 +51,12 @@ const (
 
 	// MaxConcurrentDevices 最大并发设备数
 	MaxConcurrentDevices = 100
+)
+
+// ==================== 拓扑配置 ====================
+const (
+	// DefaultTopologyMaxInferenceCandidates FDB 推断允许的最大候选设备数
+	DefaultTopologyMaxInferenceCandidates = 8
 )
 
 // ==================== SSH配置 ====================

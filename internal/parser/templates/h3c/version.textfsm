@@ -1,0 +1,9 @@
+Value version (\S+)
+Value model ([A-Za-z0-9\-_\/\.]+)
+Value serial_number (\S+)
+
+Start
+  ^.*Version\s+${version}.*$$ -> Record
+  ^.*H3C\s+${model}.*$$ -> Record
+  ^.*[Ss]erial\s*[Nn]umber.*:\s*${serial_number}\s*$$ -> Record
+

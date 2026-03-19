@@ -36,6 +36,8 @@ type PathManager struct {
 	ExecutionReportDir   string
 	ExecutionLiveLogDir  string
 	BackupConfigDir      string
+	SSHDir               string
+	SSHKnownHostsPath    string
 	LegacyInventoryFile  string
 	LegacyConfigFile     string
 	LegacyCommandGroups  string
@@ -137,6 +139,8 @@ func (pm *PathManager) rebuildDerivedPathsLocked() {
 	pm.ExecutionReportDir = filepath.Join(pm.StorageRoot, "execution", "reports")
 	pm.ExecutionLiveLogDir = filepath.Join(pm.StorageRoot, "execution", "live-logs")
 	pm.BackupConfigDir = filepath.Join(pm.StorageRoot, "backup", "config")
+	pm.SSHDir = filepath.Join(pm.StorageRoot, "ssh")
+	pm.SSHKnownHostsPath = filepath.Join(pm.SSHDir, "known_hosts")
 
 	// 拓扑发现相关路径
 	pm.TopologyRawDir = filepath.Join(pm.StorageRoot, "topology", "raw")
@@ -151,6 +155,7 @@ func (pm *PathManager) ensureDirectoriesLocked() error {
 		pm.ExecutionReportDir,
 		pm.ExecutionLiveLogDir,
 		pm.BackupConfigDir,
+		pm.SSHDir,
 		filepath.Dir(pm.bootstrapPath),
 		// 拓扑发现相关目录
 		pm.TopologyRawDir,
@@ -249,6 +254,12 @@ func (pm *PathManager) GetBackupDir() string {
 	return pm.BackupConfigDir
 }
 
+func (pm *PathManager) GetSSHKnownHostsPath() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.SSHKnownHostsPath
+}
+
 func (pm *PathManager) GetBackupFilePath(subDir, fileName string) string {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
@@ -324,5 +335,6 @@ func (pm *PathManager) GetAllPaths() map[string]string {
 		"executionReportDir":  pm.ExecutionReportDir,
 		"executionLiveLogDir": pm.ExecutionLiveLogDir,
 		"backupConfigDir":     pm.BackupConfigDir,
+		"sshKnownHostsPath":   pm.SSHKnownHostsPath,
 	}
 }

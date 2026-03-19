@@ -118,6 +118,11 @@ func (s *QueryService) queryDevicesFromDB(opts QueryOptions) *QueryResult {
 		return emptyDeviceQueryResult(opts)
 	}
 
+	// 脱敏：清空密码字段
+	for i := range devices {
+		devices[i].Password = ""
+	}
+
 	return &QueryResult{
 		Data:       devices,
 		Total:      int(total),

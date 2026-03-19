@@ -45,6 +45,18 @@ type RuntimeConfig struct {
 		FallbackEventCapacity int `json:"fallbackEventCapacity"` // 后备事件容量
 	} `json:"engine"`
 
+	// 拓扑发现配置
+	Discovery struct {
+		WorkerCount      int `json:"workerCount"`      // 发现任务并发数
+		PerDeviceTimeout int `json:"perDeviceTimeout"` // 单设备发现超时（毫秒）
+		CommandTimeout   int `json:"commandTimeout"`   // 命令超时上限（毫秒）
+	} `json:"discovery"`
+
+	// 拓扑推理配置
+	Topology struct {
+		MaxInferenceCandidates int `json:"maxInferenceCandidates"` // FDB 推断候选阈值
+	} `json:"topology"`
+
 	// 缓冲区配置
 	Buffers struct {
 		DefaultSize int `json:"defaultSize"` // 默认缓冲区大小
@@ -80,6 +92,14 @@ func DefaultRuntimeConfig() RuntimeConfig {
 	cfg.Engine.WorkerCount = DefaultWorkerCount
 	cfg.Engine.EventBufferSize = EventBufferSize
 	cfg.Engine.FallbackEventCapacity = FallbackEventCapacity
+
+	// 发现配置
+	cfg.Discovery.WorkerCount = DefaultWorkerCount
+	cfg.Discovery.PerDeviceTimeout = int(DefaultDiscoveryPerDeviceTimeout.Milliseconds())
+	cfg.Discovery.CommandTimeout = int(DefaultCommandTimeout.Milliseconds())
+
+	// 拓扑推理配置
+	cfg.Topology.MaxInferenceCandidates = DefaultTopologyMaxInferenceCandidates
 
 	// 缓冲区配置
 	cfg.Buffers.DefaultSize = DefaultBufferSize
@@ -140,6 +160,14 @@ func ResetRuntimeSettingsToDefault(db *gorm.DB) error {
 		{Category: "engine", Key: "workerCount", Value: strconv.Itoa(defaults.Engine.WorkerCount)},
 		{Category: "engine", Key: "eventBufferSize", Value: strconv.Itoa(defaults.Engine.EventBufferSize)},
 		{Category: "engine", Key: "fallbackEventCapacity", Value: strconv.Itoa(defaults.Engine.FallbackEventCapacity)},
+
+		// 发现配置
+		{Category: "discovery", Key: "workerCount", Value: strconv.Itoa(defaults.Discovery.WorkerCount)},
+		{Category: "discovery", Key: "perDeviceTimeout", Value: strconv.Itoa(defaults.Discovery.PerDeviceTimeout)},
+		{Category: "discovery", Key: "commandTimeout", Value: strconv.Itoa(defaults.Discovery.CommandTimeout)},
+
+		// 拓扑推理配置
+		{Category: "topology", Key: "maxInferenceCandidates", Value: strconv.Itoa(defaults.Topology.MaxInferenceCandidates)},
 
 		// 缓冲区配置
 		{Category: "buffer", Key: "defaultSize", Value: strconv.Itoa(defaults.Buffers.DefaultSize)},
@@ -220,6 +248,20 @@ func applyRuntimeSetting(cfg *RuntimeConfig, setting RuntimeSetting) error {
 		case "fallbackEventCapacity":
 			cfg.Engine.FallbackEventCapacity = val
 		}
+	case "discovery":
+		switch setting.Key {
+		case "workerCount":
+			cfg.Discovery.WorkerCount = val
+		case "perDeviceTimeout":
+			cfg.Discovery.PerDeviceTimeout = val
+		case "commandTimeout":
+			cfg.Discovery.CommandTimeout = val
+		}
+	case "topology":
+		switch setting.Key {
+		case "maxInferenceCandidates":
+			cfg.Topology.MaxInferenceCandidates = val
+		}
 	case "buffer":
 		switch setting.Key {
 		case "defaultSize":
@@ -261,6 +303,14 @@ func SaveRuntimeConfig(db *gorm.DB, config RuntimeConfig) error {
 		{Category: "engine", Key: "workerCount", Value: strconv.Itoa(config.Engine.WorkerCount)},
 		{Category: "engine", Key: "eventBufferSize", Value: strconv.Itoa(config.Engine.EventBufferSize)},
 		{Category: "engine", Key: "fallbackEventCapacity", Value: strconv.Itoa(config.Engine.FallbackEventCapacity)},
+
+		// 发现配置
+		{Category: "discovery", Key: "workerCount", Value: strconv.Itoa(config.Discovery.WorkerCount)},
+		{Category: "discovery", Key: "perDeviceTimeout", Value: strconv.Itoa(config.Discovery.PerDeviceTimeout)},
+		{Category: "discovery", Key: "commandTimeout", Value: strconv.Itoa(config.Discovery.CommandTimeout)},
+
+		// 拓扑推理配置
+		{Category: "topology", Key: "maxInferenceCandidates", Value: strconv.Itoa(config.Topology.MaxInferenceCandidates)},
 
 		// 缓冲区配置
 		{Category: "buffer", Key: "defaultSize", Value: strconv.Itoa(config.Buffers.DefaultSize)},
@@ -376,6 +426,65 @@ func ResolveEngineWorkerCount(settings *GlobalSettings) int {
 	return DefaultWorkerCount
 }
 
+// ResolveDiscoveryWorkerCount 解析发现任务工作协程数。
+func ResolveDiscoveryWorkerCount(settings *GlobalSettings) int {
+	legacyWorkers := 0
+	if settings != nil {
+		legacyWorkers = settings.MaxWorkers
+	}
+
+	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
+		runtimeWorkers := manager.GetDiscoveryWorkerCount()
+		if runtimeWorkers > 0 {
+			if legacyWorkers > 0 && legacyWorkers != runtimeWorkers {
+				logger.Debug(
+					"Config",
+					"-",
+					"发现任务工作协程数采用 runtime config=%d，覆盖 settings.maxWorkers=%d",
+					runtimeWorkers,
+					legacyWorkers,
+				)
+			}
+			return runtimeWorkers
+		}
+	}
+
+	if legacyWorkers > 0 {
+		return legacyWorkers
+	}
+	return DefaultWorkerCount
+}
+
+// ResolveDiscoveryPerDeviceTimeout 解析单设备发现超时时间。
+func ResolveDiscoveryPerDeviceTimeout() time.Duration {
+	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
+		if timeout := manager.GetDiscoveryPerDeviceTimeout(); timeout > 0 {
+			return timeout
+		}
+	}
+	return DefaultDiscoveryPerDeviceTimeout
+}
+
+// ResolveDiscoveryCommandTimeout 解析发现命令超时时间上限。
+func ResolveDiscoveryCommandTimeout() time.Duration {
+	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
+		if timeout := manager.GetDiscoveryCommandTimeout(); timeout > 0 {
+			return timeout
+		}
+	}
+	return DefaultCommandTimeout
+}
+
+// ResolveTopologyMaxInferenceCandidates 解析拓扑推断候选阈值。
+func ResolveTopologyMaxInferenceCandidates() int {
+	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
+		if value := manager.GetTopologyMaxInferenceCandidates(); value > 0 {
+			return value
+		}
+	}
+	return DefaultTopologyMaxInferenceCandidates
+}
+
 // ResolveEventBufferSize 解析执行链事件缓冲区大小。
 func ResolveEventBufferSize() int {
 	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
@@ -452,6 +561,37 @@ func (m *RuntimeConfigManager) GetWorkerCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.config.Engine.WorkerCount
+}
+
+// GetDiscoveryWorkerCount 获取发现任务工作协程数
+func (m *RuntimeConfigManager) GetDiscoveryWorkerCount() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.config.Discovery.WorkerCount > 0 {
+		return m.config.Discovery.WorkerCount
+	}
+	return m.config.Engine.WorkerCount
+}
+
+// GetDiscoveryPerDeviceTimeout 获取单设备发现超时时间
+func (m *RuntimeConfigManager) GetDiscoveryPerDeviceTimeout() time.Duration {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return time.Duration(m.config.Discovery.PerDeviceTimeout) * time.Millisecond
+}
+
+// GetDiscoveryCommandTimeout 获取发现命令超时时间上限
+func (m *RuntimeConfigManager) GetDiscoveryCommandTimeout() time.Duration {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return time.Duration(m.config.Discovery.CommandTimeout) * time.Millisecond
+}
+
+// GetTopologyMaxInferenceCandidates 获取拓扑推断候选阈值
+func (m *RuntimeConfigManager) GetTopologyMaxInferenceCandidates() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.config.Topology.MaxInferenceCandidates
 }
 
 // GetEventBufferSize 获取事件缓冲区大小

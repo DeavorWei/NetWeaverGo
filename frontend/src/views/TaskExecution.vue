@@ -563,7 +563,7 @@ const filterMode = ref('')
 // 执行视图状态
 const executionView = ref({
   active: false,
-  taskId: '',
+  taskId: 0 as number,
   taskName: ''
 })
 const awaitingSnapshot = ref(false)
@@ -573,7 +573,7 @@ let snapshotPollTimer: ReturnType<typeof setInterval> | null = null
 const SNAPSHOT_POLL_INTERVAL = 1000
 
 // 删除弹窗
-const deleteModal = ref({ show: false, taskId: '', taskName: '' })
+const deleteModal = ref({ show: false, taskId: 0 as number, taskName: '' })
 
 // 执行历史抽屉
 const historyDrawer = ref({
@@ -958,7 +958,7 @@ function goToTaskCreate() {
 function showExecutionHistory(task: TaskGroup) {
   historyDrawer.value = {
     show: true,
-    taskGroupId: task.id,
+    taskGroupId: String(task.id),
     taskGroupName: task.name
   }
 }

@@ -67,6 +67,10 @@ type GlobalSettings struct {
 
 	// SSH算法配置
 	SSHAlgorithms SSHAlgorithmSettings `json:"sshAlgorithms" gorm:"type:text;serializer:json"`
+	// SSH主机密钥校验策略: strict / accept_new / insecure
+	SSHHostKeyPolicy string `json:"sshHostKeyPolicy"`
+	// known_hosts 文件路径（为空时使用默认路径）
+	SSHKnownHostsPath string `json:"sshKnownHostsPath"`
 }
 
 // TableName 指定表名

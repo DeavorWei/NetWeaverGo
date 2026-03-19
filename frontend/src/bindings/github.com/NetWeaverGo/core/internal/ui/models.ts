@@ -811,6 +811,8 @@ export class RuntimeConfigData {
     "timeouts": {"command": number, "connection": number, "handshake": number, "shortCmd": number, "longCmd": number};
     "limits": {"maxLogsPerDevice": number, "maxLogLength": number, "logTruncateThreshold": number, "maxConcurrentDevices": number};
     "engine": {"workerCount": number, "eventBufferSize": number, "fallbackEventCapacity": number};
+    "discovery": {"workerCount": number, "perDeviceTimeout": number, "commandTimeout": number};
+    "topology": {"maxInferenceCandidates": number};
     "buffers": {"defaultSize": number, "smallSize": number, "largeSize": number};
     "pagination": {"lineThreshold": number, "checkInterval": number};
 
@@ -824,6 +826,12 @@ export class RuntimeConfigData {
         }
         if (!("engine" in $$source)) {
             this["engine"] = {"workerCount": 0, "eventBufferSize": 0, "fallbackEventCapacity": 0};
+        }
+        if (!("discovery" in $$source)) {
+            this["discovery"] = {"workerCount": 0, "perDeviceTimeout": 0, "commandTimeout": 0};
+        }
+        if (!("topology" in $$source)) {
+            this["topology"] = {"maxInferenceCandidates": 0};
         }
         if (!("buffers" in $$source)) {
             this["buffers"] = {"defaultSize": 0, "smallSize": 0, "largeSize": 0};

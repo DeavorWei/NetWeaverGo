@@ -144,7 +144,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import type { DeviceAsset } from '../../bindings/github.com/NetWeaverGo/core/internal/config/models'
+import type { DeviceAsset } from '../../services/api'
 
 const props = defineProps<{
   devices: DeviceAsset[]

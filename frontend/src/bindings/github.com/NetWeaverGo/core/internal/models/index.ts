@@ -3,13 +3,25 @@
 
 export {
     CommandGroup,
+    CompareResult,
     DeviceAsset,
+    DiffItem,
+    DiffReportView,
     DiscoveryDeviceView,
     DiscoveryTaskView,
+    EdgeEvidence,
     GlobalSettings,
+    GraphEdge,
+    GraphNode,
+    PlanImportResult,
+    PlanUploadView,
     SSHAlgorithmSettings,
     StartDiscoveryRequest,
     TaskGroup,
     TaskItem,
-    TaskStartResponse
+    TaskStartResponse,
+    TopologyBuildResult,
+    TopologyEdge,
+    TopologyEdgeDetailView,
+    TopologyGraphView
 } from "./models.js";

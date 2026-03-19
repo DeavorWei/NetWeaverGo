@@ -175,6 +175,14 @@ type RuntimeConfigData struct {
 		EventBufferSize       int `json:"eventBufferSize"`
 		FallbackEventCapacity int `json:"fallbackEventCapacity"`
 	} `json:"engine"`
+	Discovery struct {
+		WorkerCount      int `json:"workerCount"`
+		PerDeviceTimeout int `json:"perDeviceTimeout"`
+		CommandTimeout   int `json:"commandTimeout"`
+	} `json:"discovery"`
+	Topology struct {
+		MaxInferenceCandidates int `json:"maxInferenceCandidates"`
+	} `json:"topology"`
 	Buffers struct {
 		DefaultSize int `json:"defaultSize"`
 		SmallSize   int `json:"smallSize"`
@@ -206,6 +214,10 @@ func (s *SettingsService) GetRuntimeConfig() (RuntimeConfigData, error) {
 	response.Engine.WorkerCount = cfg.Engine.WorkerCount
 	response.Engine.EventBufferSize = cfg.Engine.EventBufferSize
 	response.Engine.FallbackEventCapacity = cfg.Engine.FallbackEventCapacity
+	response.Discovery.WorkerCount = cfg.Discovery.WorkerCount
+	response.Discovery.PerDeviceTimeout = cfg.Discovery.PerDeviceTimeout
+	response.Discovery.CommandTimeout = cfg.Discovery.CommandTimeout
+	response.Topology.MaxInferenceCandidates = cfg.Topology.MaxInferenceCandidates
 	response.Buffers.DefaultSize = cfg.Buffers.DefaultSize
 	response.Buffers.SmallSize = cfg.Buffers.SmallSize
 	response.Buffers.LargeSize = cfg.Buffers.LargeSize
@@ -213,13 +225,15 @@ func (s *SettingsService) GetRuntimeConfig() (RuntimeConfigData, error) {
 	response.Pagination.CheckInterval = cfg.Pagination.CheckInterval
 
 	logger.Verbose("SettingsService", "-", "返回运行时配置: timeouts=[cmd=%d, conn=%d, hs=%d, short=%d, long=%d], "+
-		"limits=[logs=%d, len=%d, trunc=%d, dev=%d], engine=[workers=%d, buf=%d, fallback=%d], "+
+		"limits=[logs=%d, len=%d, trunc=%d, dev=%d], engine=[workers=%d, buf=%d, fallback=%d], discovery=[workers=%d, device=%d, cmd=%d], topology=[maxCandidates=%d], "+
 		"buffers=[def=%d, small=%d, large=%d], pagination=[lines=%d, interval=%d]",
 		response.Timeouts.Command, response.Timeouts.Connection, response.Timeouts.Handshake,
 		response.Timeouts.ShortCmd, response.Timeouts.LongCmd,
 		response.Limits.MaxLogsPerDevice, response.Limits.MaxLogLength,
 		response.Limits.LogTruncateThreshold, response.Limits.MaxConcurrentDevices,
 		response.Engine.WorkerCount, response.Engine.EventBufferSize, response.Engine.FallbackEventCapacity,
+		response.Discovery.WorkerCount, response.Discovery.PerDeviceTimeout, response.Discovery.CommandTimeout,
+		response.Topology.MaxInferenceCandidates,
 		response.Buffers.DefaultSize, response.Buffers.SmallSize, response.Buffers.LargeSize,
 		response.Pagination.LineThreshold, response.Pagination.CheckInterval)
 
@@ -230,13 +244,15 @@ func (s *SettingsService) GetRuntimeConfig() (RuntimeConfigData, error) {
 func (s *SettingsService) UpdateRuntimeConfig(data RuntimeConfigData) error {
 	logger.Debug("SettingsService", "-", "收到前端 UpdateRuntimeConfig 调用请求")
 	logger.Verbose("SettingsService", "-", "接收到的运行时配置: timeouts=[cmd=%d, conn=%d, hs=%d, short=%d, long=%d], "+
-		"limits=[logs=%d, len=%d, trunc=%d, dev=%d], engine=[workers=%d, buf=%d, fallback=%d], "+
+		"limits=[logs=%d, len=%d, trunc=%d, dev=%d], engine=[workers=%d, buf=%d, fallback=%d], discovery=[workers=%d, device=%d, cmd=%d], topology=[maxCandidates=%d], "+
 		"buffers=[def=%d, small=%d, large=%d], pagination=[lines=%d, interval=%d]",
 		data.Timeouts.Command, data.Timeouts.Connection, data.Timeouts.Handshake,
 		data.Timeouts.ShortCmd, data.Timeouts.LongCmd,
 		data.Limits.MaxLogsPerDevice, data.Limits.MaxLogLength,
 		data.Limits.LogTruncateThreshold, data.Limits.MaxConcurrentDevices,
 		data.Engine.WorkerCount, data.Engine.EventBufferSize, data.Engine.FallbackEventCapacity,
+		data.Discovery.WorkerCount, data.Discovery.PerDeviceTimeout, data.Discovery.CommandTimeout,
+		data.Topology.MaxInferenceCandidates,
 		data.Buffers.DefaultSize, data.Buffers.SmallSize, data.Buffers.LargeSize,
 		data.Pagination.LineThreshold, data.Pagination.CheckInterval)
 
@@ -253,6 +269,10 @@ func (s *SettingsService) UpdateRuntimeConfig(data RuntimeConfigData) error {
 	cfg.Engine.WorkerCount = data.Engine.WorkerCount
 	cfg.Engine.EventBufferSize = data.Engine.EventBufferSize
 	cfg.Engine.FallbackEventCapacity = data.Engine.FallbackEventCapacity
+	cfg.Discovery.WorkerCount = data.Discovery.WorkerCount
+	cfg.Discovery.PerDeviceTimeout = data.Discovery.PerDeviceTimeout
+	cfg.Discovery.CommandTimeout = data.Discovery.CommandTimeout
+	cfg.Topology.MaxInferenceCandidates = data.Topology.MaxInferenceCandidates
 	cfg.Buffers.DefaultSize = data.Buffers.DefaultSize
 	cfg.Buffers.SmallSize = data.Buffers.SmallSize
 	cfg.Buffers.LargeSize = data.Buffers.LargeSize
@@ -287,16 +307,21 @@ func (s *SettingsService) ResetRuntimeConfigToDefault() error {
 	}
 
 	// 更新内存配置
-	manager.UpdateConfig(cfg)
+	if err := manager.UpdateConfig(cfg); err != nil {
+		logger.Error("SettingsService", "-", "更新内存配置失败: %v", err)
+		return err
+	}
 
 	logger.Verbose("SettingsService", "-", "重置后的运行时配置: timeouts=[cmd=%d, conn=%d, hs=%d, short=%d, long=%d], "+
-		"limits=[logs=%d, len=%d, trunc=%d, dev=%d], engine=[workers=%d, buf=%d, fallback=%d], "+
+		"limits=[logs=%d, len=%d, trunc=%d, dev=%d], engine=[workers=%d, buf=%d, fallback=%d], discovery=[workers=%d, device=%d, cmd=%d], topology=[maxCandidates=%d], "+
 		"buffers=[def=%d, small=%d, large=%d], pagination=[lines=%d, interval=%d]",
 		cfg.Timeouts.Command, cfg.Timeouts.Connection, cfg.Timeouts.Handshake,
 		cfg.Timeouts.ShortCmd, cfg.Timeouts.LongCmd,
 		cfg.Limits.MaxLogsPerDevice, cfg.Limits.MaxLogLength,
 		cfg.Limits.LogTruncateThreshold, cfg.Limits.MaxConcurrentDevices,
 		cfg.Engine.WorkerCount, cfg.Engine.EventBufferSize, cfg.Engine.FallbackEventCapacity,
+		cfg.Discovery.WorkerCount, cfg.Discovery.PerDeviceTimeout, cfg.Discovery.CommandTimeout,
+		cfg.Topology.MaxInferenceCandidates,
 		cfg.Buffers.DefaultSize, cfg.Buffers.SmallSize, cfg.Buffers.LargeSize,
 		cfg.Pagination.LineThreshold, cfg.Pagination.CheckInterval)
 

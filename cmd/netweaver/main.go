@@ -52,6 +52,8 @@ func runGUI() {
 	forgeService := ui.NewForgeService()
 	executionHistoryService := ui.NewExecutionHistoryService()
 	discoveryService := ui.NewDiscoveryService()
+	topologyService := ui.NewTopologyService(config.DB)
+	planCompareService := ui.NewPlanCompareService()
 
 	// 修正：修正嵌入文件系统的路径级联问题
 	// core.FrontendAssets 包含了 "frontend/dist" 这一层，我们需要提取其子 FS
@@ -86,6 +88,8 @@ func runGUI() {
 			application.NewService(forgeService),
 			application.NewService(executionHistoryService),
 			application.NewService(discoveryService),
+			application.NewService(topologyService),
+			application.NewService(planCompareService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assetsFS),
