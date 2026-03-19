@@ -57,6 +57,20 @@ func LoadDeviceAssets() ([]models.DeviceAsset, error) {
 	return devices, nil
 }
 
+// LoadDeviceByID 根据 ID 加载单个设备资产（包含解密后的密码）
+func LoadDeviceByID(id uint) (*models.DeviceAsset, error) {
+	logger.Debug("Config", "-", "开始从数据库加载设备详情, ID: %d", id)
+	if DB == nil {
+		return nil, fmt.Errorf("数据库未初始化")
+	}
+
+	var device models.DeviceAsset
+	if err := DB.First(&device, id).Error; err != nil {
+		return nil, err
+	}
+	return &device, nil
+}
+
 // LoadDefaultCommands 从默认命令组加载命令列表
 func LoadDefaultCommands() ([]string, error) {
 	logger.Debug("Config", "-", "开始从数据库加载默认命令组")

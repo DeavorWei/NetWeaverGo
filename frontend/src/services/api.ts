@@ -17,7 +17,7 @@
  */
 
 // ==================== 服务命名空间导入 ====================
-import * as DeviceServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/deviceservice.js'
+import * as DeviceServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/deviceservice'
 import * as CommandGroupServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/commandgroupservice.js'
 import * as SettingsServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/settingsservice.js'
 import * as EngineServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/engineservice.js'
@@ -37,6 +37,8 @@ import * as PlanCompareServiceBinding from '../bindings/github.com/NetWeaverGo/c
 export const DeviceAPI = {
   /** 获取设备列表 */
   listDevices: DeviceServiceBinding.ListDevices,
+  /** 根据 ID 获取单个设备详情（包含密码，用于编辑） */
+  getDeviceById: DeviceServiceBinding.GetDeviceByID,
   /** 新增设备 */
   addDevice: DeviceServiceBinding.AddDevice,
   /** 批量新增设备 */

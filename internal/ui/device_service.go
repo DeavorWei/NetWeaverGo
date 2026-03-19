@@ -37,6 +37,15 @@ func (s *DeviceService) ListDevices() ([]models.DeviceAsset, error) {
 	return devices, nil
 }
 
+// GetDeviceByID 根据 ID 获取单个设备详情（包含解密后的密码，用于编辑）
+func (s *DeviceService) GetDeviceByID(id uint) (*models.DeviceAsset, error) {
+	device, err := config.LoadDeviceByID(id)
+	if err != nil {
+		return nil, err
+	}
+	return device, nil
+}
+
 // AddDevice 新增设备
 func (s *DeviceService) AddDevice(device models.DeviceAsset) error {
 	return config.CreateDevice(device)

@@ -1552,30 +1552,43 @@ function openAddModal() {
   showModal.value = true;
 }
 
-function openEditModal(device: Device) {
+async function openEditModal(device: Device) {
   isEditing.value = true;
   editingDeviceId.value = device.id;
-  form.value = {
-    ip: device.ip,
-    port: device.port,
-    protocol: device.protocol,
-    username: device.username,
-    password: device.password || "",
-    group: device.group,
-    tags: [...device.tags],
-    vendor: device.vendor || "",
-    role: device.role || "",
-    site: device.site || "",
-    displayName: device.displayName || "",
-    description: device.description || "",
-  };
-  lastProtocol.value = device.protocol;
   errorMessage.value = "";
   showPassword.value = false;
   ipRangeHint.value = null;
   ipValidationError.value = "";
   newTag.value = "";
   showModal.value = true;
+
+  // 从后端获取完整的设备信息（包含密码）
+  try {
+    const fullDevice = await DeviceAPI.getDeviceById(device.id);
+    if (!fullDevice) {
+      errorMessage.value = "获取设备详情失败：设备不存在";
+      return;
+    }
+    form.value = {
+      ip: fullDevice.ip,
+      port: fullDevice.port,
+      protocol: fullDevice.protocol,
+      username: fullDevice.username,
+      password: fullDevice.password || "",
+      group: fullDevice.group,
+      tags: [...fullDevice.tags],
+      vendor: fullDevice.vendor || "",
+      role: fullDevice.role || "",
+      site: fullDevice.site || "",
+      displayName: fullDevice.displayName || "",
+      description: fullDevice.description || "",
+    };
+    lastProtocol.value = fullDevice.protocol;
+  } catch (err) {
+    console.error("获取设备详情失败:", err);
+    errorMessage.value = "获取设备详情失败，请重试";
+    showModal.value = false;
+  }
 }
 
 function closeModal() {

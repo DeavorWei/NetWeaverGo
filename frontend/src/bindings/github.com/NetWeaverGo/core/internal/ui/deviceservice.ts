@@ -43,11 +43,20 @@ export function DeleteDevices(ids: number[]): $CancellablePromise<void> {
 }
 
 /**
+ * GetDeviceByID 根据 ID 获取单个设备详情（包含解密后的密码，用于编辑）
+ */
+export function GetDeviceByID(id: number): $CancellablePromise<models$0.DeviceAsset | null> {
+    return $Call.ByID(2763577531, id).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+/**
  * GetProtocolDefaultPorts 获取协议默认端口映射
  */
 export function GetProtocolDefaultPorts(): $CancellablePromise<{ [_ in string]?: number }> {
     return $Call.ByID(939599686).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType2($result);
     });
 }
 
@@ -56,7 +65,7 @@ export function GetProtocolDefaultPorts(): $CancellablePromise<{ [_ in string]?:
  */
 export function GetValidProtocols(): $CancellablePromise<string[]> {
     return $Call.ByID(1194827734).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType3($result);
     });
 }
 
@@ -65,7 +74,7 @@ export function GetValidProtocols(): $CancellablePromise<string[]> {
  */
 export function ListDevices(): $CancellablePromise<models$0.DeviceAsset[]> {
     return $Call.ByID(779205990).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType4($result);
     });
 }
 
@@ -84,7 +93,8 @@ export function UpdateDevices(devices: models$0.DeviceAsset[]): $CancellableProm
 }
 
 // Private type creation functions
-const $$createType0 = $Create.Map($Create.Any, $Create.Any);
-const $$createType1 = $Create.Array($Create.Any);
-const $$createType2 = models$0.DeviceAsset.createFrom;
-const $$createType3 = $Create.Array($$createType2);
+const $$createType0 = models$0.DeviceAsset.createFrom;
+const $$createType1 = $Create.Nullable($$createType0);
+const $$createType2 = $Create.Map($Create.Any, $Create.Any);
+const $$createType3 = $Create.Array($Create.Any);
+const $$createType4 = $Create.Array($$createType0);
