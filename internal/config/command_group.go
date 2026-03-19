@@ -228,25 +228,3 @@ func ExportCommandGroup(id uint, filePath string) error {
 	logger.Info("Config", "-", "成功导出命令组到: %s", filePath)
 	return nil
 }
-
-// MigrateLegacyCommands 将 config.txt 迁移到命令组（已简化，由 db.go 调用）
-func MigrateLegacyCommands() error {
-	commands, err := readCommandsLegacy()
-	if err != nil {
-		return nil
-	}
-
-	var count int64
-	DB.Model(&models.CommandGroup{}).Where("name = ?", "默认命令组").Count(&count)
-	if count > 0 {
-		return nil
-	}
-
-	defaultGroup := models.CommandGroup{
-		Name:        "默认命令组",
-		Description: "从 config.txt 自动迁移的默认命令组",
-		Commands:    commands,
-	}
-
-	return DB.Create(&defaultGroup).Error
-}

@@ -29,19 +29,15 @@ type PathManager struct {
 	DefaultStorageRoot string
 	StorageRoot        string
 
-	DBDir                string
-	DBPath               string
-	AppLogDir            string
-	AppLogPath           string
-	ExecutionReportDir   string
-	ExecutionLiveLogDir  string
-	BackupConfigDir      string
-	SSHDir               string
-	SSHKnownHostsPath    string
-	LegacyInventoryFile  string
-	LegacyConfigFile     string
-	LegacyCommandGroups  string
-	LegacyTaskGroupsFile string
+	DBDir               string
+	DBPath              string
+	AppLogDir           string
+	AppLogPath          string
+	ExecutionReportDir  string
+	ExecutionLiveLogDir string
+	BackupConfigDir     string
+	SSHDir              string
+	SSHKnownHostsPath   string
 
 	// 拓扑发现相关路径
 	TopologyRawDir    string // 原始 CLI 输出目录
@@ -100,14 +96,10 @@ func newPathManager() *PathManager {
 
 	defaultRoot := filepath.Join(cwd, defaultStorageRootName)
 	pm := &PathManager{
-		WorkDir:              cwd,
-		DefaultStorageRoot:   defaultRoot,
-		StorageRoot:          defaultRoot,
-		bootstrapPath:        filepath.Join(defaultRoot, storageBootstrapFile),
-		LegacyInventoryFile:  filepath.Join(cwd, "inventory.csv"),
-		LegacyConfigFile:     filepath.Join(cwd, "config.txt"),
-		LegacyCommandGroups:  filepath.Join(cwd, "commands", "groups.json"),
-		LegacyTaskGroupsFile: filepath.Join(cwd, "commands", "tasks.json"),
+		WorkDir:            cwd,
+		DefaultStorageRoot: defaultRoot,
+		StorageRoot:        defaultRoot,
+		bootstrapPath:      filepath.Join(defaultRoot, storageBootstrapFile),
 	}
 
 	if storageRoot, loadErr := pm.loadBootstrapStorageRoot(); loadErr == nil && strings.TrimSpace(storageRoot) != "" {
@@ -267,30 +259,6 @@ func (pm *PathManager) GetBackupFilePath(subDir, fileName string) string {
 		return filepath.Join(pm.BackupConfigDir, fileName)
 	}
 	return filepath.Join(pm.BackupConfigDir, subDir, fileName)
-}
-
-func (pm *PathManager) GetLegacyInventoryFile() string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return pm.LegacyInventoryFile
-}
-
-func (pm *PathManager) GetLegacyConfigFile() string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return pm.LegacyConfigFile
-}
-
-func (pm *PathManager) GetLegacyCommandGroupsFile() string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return pm.LegacyCommandGroups
-}
-
-func (pm *PathManager) GetLegacyTaskGroupsFile() string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return pm.LegacyTaskGroupsFile
 }
 
 // GetTopologyRawDir 获取拓扑原始输出目录

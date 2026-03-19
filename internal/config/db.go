@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -215,65 +214,6 @@ func createIndexes(db *gorm.DB) {
 	}
 
 	logger.Verbose("Config", "-", "数据库索引创建完成")
-}
-
-// MigrateLegacyDataIfNeeded 从旧文件系统迁移数据到数据库
-func MigrateLegacyDataIfNeeded() {
-	var count int64
-	logger.Verbose("Config", "-", "执行自检模块，侦测是否存在遗留旧文件待转换为数据库对象格式...")
-	pm := GetPathManager()
-	inventoryPath := pm.GetLegacyInventoryFile()
-
-	// 1. 迁移设备清单
-	if _, err := os.Stat(inventoryPath); err == nil {
-		DB.Model(&models.DeviceAsset{}).Count(&count)
-		if count == 0 {
-			if devs, err := readInventoryLegacy(inventoryPath); err == nil && len(devs) > 0 {
-				DB.Create(&devs)
-				logger.Info("Config", "-", "成功迁移 %d 条设备记录到数据库", len(devs))
-			}
-			_ = os.Rename(inventoryPath, inventoryPath+".bak")
-		}
-	}
-
-	// 2. 迁移命令组
-	cmdPath := pm.GetLegacyCommandGroupsFile()
-	if data, err := os.ReadFile(cmdPath); err == nil {
-		DB.Model(&models.CommandGroup{}).Count(&count)
-		if count == 0 {
-			var file struct {
-				Groups []models.CommandGroup `json:"groups"`
-			}
-			if err := json.Unmarshal(data, &file); err == nil && len(file.Groups) > 0 {
-				DB.Create(&file.Groups)
-				logger.Info("Config", "-", "成功迁移 %d 个命令组到数据库", len(file.Groups))
-			}
-			_ = os.Rename(cmdPath, cmdPath+".bak")
-		}
-	}
-
-	// 3. 迁移任务组
-	tskPath := pm.GetLegacyTaskGroupsFile()
-	if data, err := os.ReadFile(tskPath); err == nil {
-		DB.Model(&models.TaskGroup{}).Count(&count)
-		if count == 0 {
-			var file struct {
-				Groups []models.TaskGroup `json:"groups"`
-			}
-			if err := json.Unmarshal(data, &file); err == nil && len(file.Groups) > 0 {
-				DB.Create(&file.Groups)
-				logger.Info("Config", "-", "成功迁移 %d 个任务组到数据库", len(file.Groups))
-			}
-			_ = os.Rename(tskPath, tskPath+".bak")
-		}
-	}
-
-	// 4. 迁移旧的 config.txt 到默认命令组
-	if err := MigrateLegacyCommands(); err != nil {
-		logger.Warn("Config", "-", "迁移 config.txt 失败: %v", err)
-	}
-
-	logger.Verbose("Config", "-", "本地平滑升级巡检流程执行完毕！")
 }
 
 // MirrorDatabaseToPath 将当前数据库文件镜像到目标路径，供切换 storageRoot 后下次启动继续使用

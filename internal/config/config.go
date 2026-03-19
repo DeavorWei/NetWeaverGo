@@ -1,10 +1,7 @@
 package config
 
 import (
-	"encoding/csv"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -87,120 +84,6 @@ func LoadDefaultCommands() ([]string, error) {
 	}
 
 	return defaultGroup.Commands, nil
-}
-
-// readInventoryLegacy 读取并解析旧版资产清单文件
-func readInventoryLegacy(filePath string) ([]models.DeviceAsset, error) {
-	if strings.TrimSpace(filePath) == "" {
-		filePath = filepath.Join(GetPathManager().WorkDir, defaultInventoryFile)
-	}
-	logger.Verbose("Config", "-", "尝试打开文件: %s", filePath)
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
-	if err != nil {
-		return nil, err
-	}
-
-	if len(records) <= 1 {
-		return nil, fmt.Errorf("资产文件内容为空或只有表头")
-	}
-
-	var devices []models.DeviceAsset
-
-	for i, row := range records[1:] {
-		// 兼容新旧格式：
-		// 新格式7列(IP,Port,Protocol,Username,Password,Group,Tag)
-		// 旧格式5列(IP,Port,Protocol,Username,Password)
-		// 最旧格式4列(IP,Port,Username,Password)
-		if len(row) < 4 {
-			return nil, fmt.Errorf("资产文件第 %d 行格式不匹配", i+2)
-		}
-
-		ip := strings.TrimSpace(row[0])
-		portStr := strings.TrimSpace(row[1])
-		var protocol, username, password, group string
-
-		// 判断是哪种格式
-		if len(row) >= 7 {
-			// 最新格式：IP,Port,Protocol,Username,Password,Group,Tag
-			protocol = strings.ToUpper(strings.TrimSpace(row[2]))
-			username = strings.TrimSpace(row[3])
-			password = strings.TrimSpace(row[4])
-			group = strings.TrimSpace(row[5])
-			// tag 字段暂不使用
-		} else if len(row) >= 5 {
-			// 旧格式：IP,Port,Protocol,Username,Password
-			protocol = strings.ToUpper(strings.TrimSpace(row[2]))
-			username = strings.TrimSpace(row[3])
-			password = strings.TrimSpace(row[4])
-			group = ""
-		} else {
-			// 最旧格式：IP,Port,Username,Password (兼容)
-			protocol = "SSH"
-			username = strings.TrimSpace(row[2])
-			password = strings.TrimSpace(row[3])
-			group = ""
-		}
-
-		if ip == "" {
-			continue
-		}
-
-		// 校验协议有效性
-		if !isValidProtocol(protocol) {
-			protocol = "SSH"
-		}
-
-		port, err := strconv.Atoi(portStr)
-		if err != nil || port <= 0 {
-			port = GetDefaultPort(protocol)
-		}
-
-		devices = append(devices, models.DeviceAsset{
-			IP:       ip,
-			Port:     port,
-			Protocol: protocol,
-			Username: username,
-			Password: password,
-			Group:    group,
-		})
-	}
-	return devices, nil
-}
-
-// readCommandsLegacy 读取并解析旧版命令列表文件
-func readCommandsLegacy() ([]string, error) {
-	configPath := GetPathManager().GetLegacyConfigFile()
-	if strings.TrimSpace(configPath) == "" {
-		configPath = filepath.Join(GetPathManager().WorkDir, defaultConfigFile)
-	}
-	logger.Verbose("Config", "-", "尝试打开文件: %s", configPath)
-	content, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	lines := strings.Split(string(content), "\n")
-	var commands []string
-	for _, line := range lines {
-		cmd := strings.TrimRight(line, "\r\n")
-		// 忽略空行和注释
-		if strings.TrimSpace(cmd) == "" || strings.HasPrefix(strings.TrimSpace(cmd), "#") {
-			continue
-		}
-		commands = append(commands, cmd)
-	}
-
-	if len(commands) == 0 {
-		return nil, fmt.Errorf("命令文件为空")
-	}
-	return commands, nil
 }
 
 // isValidProtocol 检查协议是否有效

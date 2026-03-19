@@ -19,7 +19,6 @@ type ErrorAction int
 
 const (
 	ActionContinue ErrorAction = iota // 忽略错误，继续发送下一条
-	ActionSkip                        // 兼容旧动作码，当前与 Continue 等价
 	ActionAbort                       // 立即停止该设备的后续命令
 )
 
@@ -202,11 +201,11 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 					e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceAbort, Message: "因超时被手动中止", TotalCmd: len(commands)}
 				}
 				return fmt.Errorf("设备 %s 的执行因超时被用户中止", e.IP)
-			case ActionContinue, ActionSkip:
+			case ActionContinue:
 				if e.EventBus != nil {
 					e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "放行超时并继续执行", TotalCmd: len(commands)}
 				}
-				// Continue/Skip 合并语义：不再推进命令索引，避免误跳过下一条命令
+				// 不再推进命令索引，避免误跳过下一条命令
 				streamBuffer = ""
 				timer.Reset(timeoutDuration)
 			}
@@ -274,11 +273,11 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceAbort, Message: "执行异常被手动中止", TotalCmd: len(commands)}
 								}
 								return fmt.Errorf("设备 %s 的执行被用户手动中止", e.IP)
-							case ActionContinue, ActionSkip:
+							case ActionContinue:
 								if e.EventBus != nil {
 									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "放行异常并继续执行", TotalCmd: len(commands)}
 								}
-								// Continue/Skip 合并语义：命令索引已经在发送时推进，此处只清理状态
+								// 命令索引已经在发送时推进，此处只清理状态
 								streamBuffer = ""
 							}
 							// 清空缓冲区，避免二次重复报错
