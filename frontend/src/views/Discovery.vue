@@ -558,12 +558,12 @@ import { useRouter } from "vue-router";
 import {
   DeviceAPI,
   DiscoveryAPI,
+  SettingsAPI,
   type DeviceAsset,
   type DiscoveryTaskView,
   type DiscoveryDeviceView,
   type VendorCommandProfile,
 } from "../services/api";
-import { GetRuntimeConfig } from "../bindings/github.com/NetWeaverGo/core/internal/ui/settingsservice";
 import DeviceSelector from "../components/task/DeviceSelector.vue";
 
 const router = useRouter();
@@ -922,7 +922,7 @@ async function loadVendorProfiles() {
 
 async function loadDiscoveryDefaults() {
   try {
-    const runtime = await GetRuntimeConfig();
+    const runtime = await SettingsAPI.getRuntimeConfig();
     if (runtime?.discovery?.workerCount && runtime.discovery.workerCount > 0) {
       maxWorkers.value = runtime.discovery.workerCount;
     }

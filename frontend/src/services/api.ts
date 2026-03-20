@@ -1,18 +1,21 @@
 /**
  * 统一的后端 API 导出文件
- * 
+ *
  * 采用命名空间模式组织，提供类型安全的 API 调用
  * 每个命名空间对应后端的一个独立服务
- * 
+ *
+ * 类型来源规则：
+ * 1. 后端 DTO 类型：全部从 bindings 导出，不在本文件重复定义
+ * 2. 前端视图态/表单态类型：定义在 types/ 目录
+ * 3. 本文件仅负责聚合导出，保持类型来源唯一
+ *
  * @example
  * ```ts
- * import { DeviceAPI, EngineAPI } from './services/api'
- * 
- * // 获取设备列表
- * const devices = await DeviceAPI.listDevices()
- * 
- * // 启动引擎
- * await EngineAPI.startEngine()
+ * // 后端 DTO 从 api.ts 导入
+ * import type { DeviceAsset, CommandGroup } from './services/api'
+ *
+ * // 前端特有类型从 types/ 导入
+ * import type { DeviceFormData } from './types/command'
  * ```
  */
 
@@ -107,7 +110,16 @@ export const SettingsAPI = {
   logWarn: SettingsServiceBinding.LogWarn,
   /** 记录 ERROR 级别日志 */
   logError: SettingsServiceBinding.LogError,
+  /** 获取运行时配置 */
+  getRuntimeConfig: SettingsServiceBinding.GetRuntimeConfig,
+  /** 更新运行时配置 */
+  updateRuntimeConfig: SettingsServiceBinding.UpdateRuntimeConfig,
+  /** 重置运行时配置为默认值 */
+  resetRuntimeConfigToDefault: SettingsServiceBinding.ResetRuntimeConfigToDefault,
 } as const
+
+// 导出运行时配置类型（RuntimeConfigData 是类，需要作为值导出）
+export { RuntimeConfigData } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
 // ==================== 引擎控制 API ====================
 /**
@@ -203,9 +215,11 @@ export type {
   TaskGroupItemDetailViewModel,
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
+// ExecutionSnapshot 是类，需要作为值导出（有 createFrom 方法）
+export { ExecutionSnapshot } from '../bindings/github.com/NetWeaverGo/core/internal/report/models.js'
+
 export type {
   DeviceViewState,
-  ExecutionSnapshot,
 } from '../bindings/github.com/NetWeaverGo/core/internal/report/models.js'
 
 export type {
@@ -232,6 +246,8 @@ export const ExecutionHistoryAPI = {
   getModeList: ExecutionHistoryServiceBinding.GetModeList,
   /** 获取执行来源列表 */
   getRunnerSourceList: ExecutionHistoryServiceBinding.GetRunnerSourceList,
+  /** 使用系统默认应用打开文件 */
+  openFileWithDefaultApp: ExecutionHistoryServiceBinding.OpenFileWithDefaultApp,
 } as const
 
 // 导出历史执行记录相关类型
@@ -249,29 +265,9 @@ export type {
 /**
  * 查询服务 API
  * @description 提供带条件的列表查询，后端处理过滤、排序、分页
- * 
+ *
  * @note 所有过滤、分页逻辑已迁移至后端 QueryService
  */
-
-/** 查询选项类型 */
-export interface QueryOptions {
-  searchQuery?: string
-  filterField?: string
-  filterValue?: string
-  page?: number
-  pageSize?: number
-  sortBy?: string
-  sortOrder?: 'asc' | 'desc'
-}
-
-/** 查询结果类型 */
-export interface QueryResult<T> {
-  data: T[]
-  total: number
-  page: number
-  pageSize: number
-  totalPages: number
-}
 
 /**
  * QueryAPI - 后端查询实现
@@ -294,10 +290,10 @@ export const QueryAPI = {
   getDeviceTags: QueryServiceBinding.GetDeviceTags,
 } as const
 
-// 导出 Query 相关类型（从正确的 models 文件导入）
+// 导出 Query 相关类型（从 bindings 导入，保持类型来源唯一）
 export type {
-  QueryOptions as QueryOptionsBinding,
-  QueryResult as QueryResultBinding,
+  QueryOptions,
+  QueryResult,
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
 // ==================== 发现任务 API ====================

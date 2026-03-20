@@ -1,7 +1,11 @@
 <template>
   <Teleport to="body">
     <Transition name="modal">
-      <div v-if="modelValue && record" class="record-detail-modal" @click.self="closeModal">
+      <div
+        v-if="modelValue && record"
+        class="record-detail-modal"
+        @click.self="closeModal"
+      >
         <div class="modal-content" @click.stop>
           <!-- 头部 -->
           <div class="modal-header">
@@ -23,29 +27,53 @@
               </div>
               <div class="info-row">
                 <span class="info-label">执行状态</span>
-                <span class="info-value status" :class="`status-${record.status}`">
+                <span
+                  class="info-value status"
+                  :class="`status-${record.status}`"
+                >
                   {{ getStatusText(record.status) }}
                 </span>
               </div>
               <div class="info-row">
                 <span class="info-label">开始时间</span>
-                <span class="info-value">{{ formatTime(record.startedAt) }}</span>
+                <span class="info-value">{{
+                  formatTime(record.startedAt)
+                }}</span>
               </div>
               <div class="info-row">
                 <span class="info-label">结束时间</span>
-                <span class="info-value">{{ formatTime(record.finishedAt) }}</span>
+                <span class="info-value">{{
+                  formatTime(record.finishedAt)
+                }}</span>
               </div>
               <div class="info-row">
                 <span class="info-label">执行时长</span>
-                <span class="info-value">{{ formatDuration(record.durationMs) }}</span>
+                <span class="info-value">{{
+                  formatDuration(record.durationMs)
+                }}</span>
               </div>
               <div class="info-row" v-if="record.reportPath">
                 <span class="info-label">报告文件</span>
                 <div class="info-value-with-action">
-                  <span class="info-value report-path">{{ record.reportPath }}</span>
-                  <button class="btn-open" @click="openReportFile" title="打开报告">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <span class="info-value report-path">{{
+                    record.reportPath
+                  }}</span>
+                  <button
+                    class="btn-open"
+                    @click="openReportFile"
+                    title="打开报告"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                      ></path>
                       <polyline points="15 3 21 3 21 9"></polyline>
                       <line x1="10" y1="14" x2="21" y2="3"></line>
                     </svg>
@@ -82,7 +110,10 @@
             </div>
 
             <!-- 设备列表 -->
-            <div class="devices-section" v-if="record.devices && record.devices.length > 0">
+            <div
+              class="devices-section"
+              v-if="record.devices && record.devices.length > 0"
+            >
               <h4>设备执行明细</h4>
               <div class="device-list">
                 <div
@@ -94,14 +125,23 @@
                   <div class="device-header">
                     <span class="device-ip">{{ device.ip }}</span>
                     <div class="device-actions">
-                      <button 
-                        v-if="resolveDetailLogPath(device)" 
-                        class="btn-open-log-icon" 
-                        @click="openDeviceDetailLog(device)" 
+                      <button
+                        v-if="resolveDetailLogPath(device)"
+                        class="btn-open-log-icon"
+                        @click="openDeviceDetailLog(device)"
                         title="打开详细日志"
                       >
-                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <svg
+                          viewBox="0 0 24 24"
+                          width="12"
+                          height="12"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <path
+                            d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                          ></path>
                           <polyline points="15 3 21 3 21 9"></polyline>
                           <line x1="10" y1="14" x2="21" y2="3"></line>
                         </svg>
@@ -114,23 +154,40 @@
                       >
                         RAW
                       </button>
-                      <span class="device-status" :class="`status-${getDeviceStatusClass(device.status)}`">
+                      <span
+                        class="device-status"
+                        :class="`status-${getDeviceStatusClass(device.status)}`"
+                      >
                         {{ device.status }}
                       </span>
                     </div>
                   </div>
                   <div class="device-info">
-                    <span>命令: {{ device.execCmd }}/{{ device.totalCmd }}</span>
-                    <span v-if="device.logCount > 0">日志: {{ device.logCount }}条</span>
+                    <span
+                      >命令: {{ device.execCmd }}/{{ device.totalCmd }}</span
+                    >
+                    <span v-if="device.logCount > 0"
+                      >日志: {{ device.logCount }}条</span
+                    >
                   </div>
                   <div v-if="device.errorMsg" class="device-error">
                     {{ device.errorMsg }}
                   </div>
-                  <div class="device-logs-header" v-if="device.logTail && device.logTail.length > 0">
+                  <div
+                    class="device-logs-header"
+                    v-if="device.logTail && device.logTail.length > 0"
+                  >
                     <span class="logs-label">日志预览</span>
                   </div>
-                  <div v-if="device.logTail && device.logTail.length > 0" class="device-logs">
-                    <div v-for="(log, idx) in device.logTail" :key="idx" class="log-line">
+                  <div
+                    v-if="device.logTail && device.logTail.length > 0"
+                    class="device-logs"
+                  >
+                    <div
+                      v-for="(log, idx) in device.logTail"
+                      :key="idx"
+                      class="log-line"
+                    >
                       {{ log }}
                     </div>
                   </div>
@@ -145,122 +202,125 @@
 </template>
 
 <script setup lang="ts">
-import { OpenFileWithDefaultApp } from '../../bindings/github.com/NetWeaverGo/core/internal/ui/executionhistoryservice'
-import type { ExecutionRecord, ExecutionDeviceRecord } from '../../services/api'
-import { useToast } from '../../utils/useToast'
+import { ExecutionHistoryAPI } from "../../services/api";
+import type {
+  ExecutionRecord,
+  ExecutionDeviceRecord,
+} from "../../services/api";
+import { useToast } from "../../utils/useToast";
 
 const props = defineProps<{
-  modelValue: boolean
-  record: ExecutionRecord | null
-}>()
+  modelValue: boolean;
+  record: ExecutionRecord | null;
+}>();
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: boolean): void
-  (e: 'close'): void
-}>()
+  (e: "update:modelValue", value: boolean): void;
+  (e: "close"): void;
+}>();
 
-const toast = useToast()
+const toast = useToast();
 
 const closeModal = () => {
-  emit('update:modelValue', false)
-  emit('close')
-}
+  emit("update:modelValue", false);
+  emit("close");
+};
 
 // 打开报告文件
 const openReportFile = async () => {
-  if (!props.record?.reportPath) return
-  
+  if (!props.record?.reportPath) return;
+
   try {
-    await OpenFileWithDefaultApp(props.record.reportPath)
+    await ExecutionHistoryAPI.openFileWithDefaultApp(props.record.reportPath);
   } catch (error) {
-    toast.error(`打开报告文件失败: ${error}`)
+    toast.error(`打开报告文件失败: ${error}`);
   }
-}
+};
 
 const resolveDetailLogPath = (device: ExecutionDeviceRecord) => {
-  return device.detailLogPath || device.logFilePath
-}
+  return device.detailLogPath || device.logFilePath;
+};
 
 // 打开设备详细日志文件
 const openDeviceDetailLog = async (device: ExecutionDeviceRecord) => {
-  const detailLogPath = resolveDetailLogPath(device)
-  if (!detailLogPath) return
-  
+  const detailLogPath = resolveDetailLogPath(device);
+  if (!detailLogPath) return;
+
   try {
-    await OpenFileWithDefaultApp(detailLogPath)
+    await ExecutionHistoryAPI.openFileWithDefaultApp(detailLogPath);
   } catch (error) {
-    toast.error(`打开详细日志失败: ${error}`)
+    toast.error(`打开详细日志失败: ${error}`);
   }
-}
+};
 
 // 打开设备原始日志文件
 const openRawLog = async (device: ExecutionDeviceRecord) => {
-  if (!device.rawLogPath) return
+  if (!device.rawLogPath) return;
 
   try {
-    await OpenFileWithDefaultApp(device.rawLogPath)
+    await ExecutionHistoryAPI.openFileWithDefaultApp(device.rawLogPath);
   } catch (error) {
-    toast.error(`打开原始日志失败: ${error}`)
+    toast.error(`打开原始日志失败: ${error}`);
   }
-}
+};
 
 // 格式化时间
 const formatTime = (timeStr: string) => {
-  if (!timeStr) return '-'
-  const date = new Date(timeStr)
-  return date.toLocaleString('zh-CN')
-}
+  if (!timeStr) return "-";
+  const date = new Date(timeStr);
+  return date.toLocaleString("zh-CN");
+};
 
 // 格式化时长
 const formatDuration = (ms: number) => {
-  if (!ms || ms < 0) return '-'
-  const seconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
+  if (!ms || ms < 0) return "-";
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
 
   if (hours > 0) {
-    return `${hours}小时${minutes % 60}分${seconds % 60}秒`
+    return `${hours}小时${minutes % 60}分${seconds % 60}秒`;
   } else if (minutes > 0) {
-    return `${minutes}分${seconds % 60}秒`
+    return `${minutes}分${seconds % 60}秒`;
   } else {
-    return `${seconds}秒`
+    return `${seconds}秒`;
   }
-}
+};
 
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
-    completed: '成功',
-    partial: '部分成功',
-    failed: '失败',
-    cancelled: '已取消',
-  }
-  return statusMap[status] || status
-}
+    completed: "成功",
+    partial: "部分成功",
+    failed: "失败",
+    cancelled: "已取消",
+  };
+  return statusMap[status] || status;
+};
 
 // 获取模式文本
 const getModeText = (mode: string) => {
   const modeMap: Record<string, string> = {
-    group: '任务组模式A',
-    binding: '任务组模式B',
-    manual: '普通执行',
-    backup: '备份执行',
-  }
-  return modeMap[mode] || mode
-}
+    group: "任务组模式A",
+    binding: "任务组模式B",
+    manual: "普通执行",
+    backup: "备份执行",
+  };
+  return modeMap[mode] || mode;
+};
 
 // 获取设备状态样式类
 const getDeviceStatusClass = (status: string) => {
   const statusMap: Record<string, string> = {
-    Success: 'success',
-    Error: 'error',
-    Aborted: 'error',
-    Warning: 'warning',
-    Running: 'running',
-    Init: 'waiting',
-  }
-  return statusMap[status] || 'waiting'
-}
+    Success: "success",
+    Error: "error",
+    Aborted: "error",
+    Warning: "warning",
+    Running: "running",
+    Init: "waiting",
+  };
+  return statusMap[status] || "waiting";
+};
 </script>
 
 <style scoped>

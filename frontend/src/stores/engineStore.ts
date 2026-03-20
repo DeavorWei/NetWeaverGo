@@ -1,8 +1,7 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { Events } from "@wailsio/runtime";
-import { EngineAPI, DeviceAPI } from "../services/api";
-import { ExecutionSnapshot } from "../bindings/github.com/NetWeaverGo/core/internal/report/models.js";
+import { EngineAPI, DeviceAPI, ExecutionSnapshot } from "../services/api";
 import type { DeviceAsset } from "../services/api";
 
 type EngineState =
