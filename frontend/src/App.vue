@@ -80,7 +80,14 @@
 
         <!-- 内容主体 -->
         <main class="flex-1 overflow-auto scrollbar-custom bg-bg-primary p-6">
-          <router-view />
+          <Suspense>
+            <template #default>
+              <router-view />
+            </template>
+            <template #fallback>
+              <RouteLoading />
+            </template>
+          </Suspense>
         </main>
       </div>
     </div>
@@ -95,6 +102,7 @@ import { useRouter, useRoute } from "vue-router";
 import ThemeSwitch from "@/components/common/ThemeSwitch.vue";
 import TitleBar from "@/components/common/TitleBar.vue";
 import GlobalToast from "@/components/common/GlobalToast.vue";
+import RouteLoading from "@/components/common/RouteLoading.vue";
 import { useTheme } from "@/composables/useTheme";
 import { useEngineStore } from "@/stores/engineStore";
 
@@ -239,6 +247,13 @@ function handleNav(key: string) {
 onMounted(() => {
   engineStore.initListeners();
   void engineStore.syncExecutionState();
+
+  // 预加载高频页面，提升用户体验
+  setTimeout(() => {
+    import("@/views/Devices.vue");
+    import("@/views/Tasks.vue");
+    import("@/views/TaskExecution.vue");
+  }, 1000);
 });
 
 onUnmounted(() => {

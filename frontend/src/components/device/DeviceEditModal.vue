@@ -165,11 +165,13 @@
                 v-model="localForm.password"
                 :type="showPassword ? 'text' : 'password'"
                 placeholder="登录密码"
+                autocomplete="off"
                 class="w-full px-3 py-2 pr-10 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
               />
               <button
                 type="button"
                 @click="showPassword = !showPassword"
+                :title="showPassword ? '隐藏密码' : '查看密码'"
                 class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
               >
                 <svg
@@ -283,7 +285,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, watch, onUnmounted } from "vue";
 import type { DeviceFormData, IpRangeHint } from "@/composables/useDeviceForm";
 
 // Props
@@ -353,18 +355,26 @@ watch(
   { immediate: true },
 );
 
-// 监听 show 变化，重置状态
+// 监听 show 变化，重置状态并清空密码
 watch(
   () => props.show,
   (newShow) => {
     if (!newShow) {
+      // 关闭时清空敏感数据
+      localForm.value.password = "";
+      showPassword.value = false;
       errorMessage.value = "";
       ipValidationError.value = "";
       ipRangeHint.value = null;
-      showPassword.value = false;
     }
   },
 );
+
+// 组件卸载时清理密码
+onUnmounted(() => {
+  localForm.value.password = "";
+  showPassword.value = false;
+});
 
 // 监听 IP 输入，解析语法糖并验证
 watch(

@@ -346,8 +346,20 @@ async function openEditModal(device: Device) {
 
 function closeModal() {
   showModal.value = false;
+  // 显式清空密码，确保内存中不留痕迹
+  if (formData.value?.password) {
+    formData.value.password = "";
+  }
   formData.value = undefined;
 }
+
+// 监听弹窗关闭事件，确保密码清理
+watch(showModal, (newVal) => {
+  if (!newVal && formData.value?.password) {
+    // 弹窗关闭时清理密码
+    formData.value.password = "";
+  }
+});
 
 async function saveDevice(deviceData: DeviceFormData) {
   editModalRef.value?.setSaving(true);
@@ -461,18 +473,18 @@ async function saveBatchEdit(field: BatchField, value: string | number) {
         .filter((t) => t);
 
       // 字段级更新：只传递 tags 字段，不展开整个设备对象
-        for (const id of ids) {
-          await DeviceAPI.updateDevice(id, {
-            tags,
-          } as unknown as DeviceAsset);
-        }
-      } else {
-        // 其他字段批量更新 - 字段级更新，不展开整个设备对象
-        for (const id of ids) {
-          await DeviceAPI.updateDevice(id, {
-            [field]: value,
-          } as unknown as DeviceAsset);
-        }
+      for (const id of ids) {
+        await DeviceAPI.updateDevice(id, {
+          tags,
+        } as unknown as DeviceAsset);
+      }
+    } else {
+      // 其他字段批量更新 - 字段级更新，不展开整个设备对象
+      for (const id of ids) {
+        await DeviceAPI.updateDevice(id, {
+          [field]: value,
+        } as unknown as DeviceAsset);
+      }
     }
 
     showPageNotice(

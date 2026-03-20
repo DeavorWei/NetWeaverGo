@@ -1,16 +1,20 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+
+// 首屏页面 - 保持静态导入以确保首页快速加载
 import Dashboard from '../views/Dashboard.vue'
-import Devices from '../views/Devices.vue'
-import Commands from '../views/Commands.vue'
-import Tasks from '../views/Tasks.vue'
-import TaskExecution from '../views/TaskExecution.vue'
-import NetworkCalc from '../views/Tools/NetworkCalc.vue'
-import ProtocolRef from '../views/Tools/ProtocolRef.vue'
-import ConfigForge from '../views/Tools/ConfigForge.vue'
-import Settings from '../views/Settings.vue'
-import Discovery from '../views/Discovery.vue'
-import Topology from '../views/Topology.vue'
-import PlanCompare from '../views/PlanCompare.vue'
+
+// 其他页面 - 懒加载，降低首屏资源体积
+const Devices = () => import('../views/Devices.vue')
+const Commands = () => import('../views/Commands.vue')
+const Tasks = () => import('../views/Tasks.vue')
+const TaskExecution = () => import('../views/TaskExecution.vue')
+const NetworkCalc = () => import('../views/Tools/NetworkCalc.vue')
+const ProtocolRef = () => import('../views/Tools/ProtocolRef.vue')
+const ConfigForge = () => import('../views/Tools/ConfigForge.vue')
+const Settings = () => import('../views/Settings.vue')
+const Discovery = () => import('../views/Discovery.vue')
+const Topology = () => import('../views/Topology.vue')
+const PlanCompare = () => import('../views/PlanCompare.vue')
 
 const routes = [
   {

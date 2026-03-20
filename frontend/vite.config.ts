@@ -16,8 +16,18 @@ export default defineConfig({
       output: {
         globals: {
           '/wails/runtime.js': 'wailsRuntime'
+        },
+        manualChunks: (id) => {
+          // Vue 全家桶打包到 vendor
+          if (id.includes('node_modules/vue/') ||
+              id.includes('node_modules/vue-router/') ||
+              id.includes('node_modules/pinia/')) {
+            return 'vendor'
+          }
         }
       }
-    }
+    },
+    // chunk 大小警告阈值
+    chunkSizeWarningLimit: 500
   }
 })
