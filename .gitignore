@@ -1,4 +1,4 @@
 /dist/
 *.exe
 /.codex/
-/frontend/src/bindings
+/frontend/src/bindings/
