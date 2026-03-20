@@ -6,56 +6,13 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-// ExecutionRecord 历史执行记录
-type ExecutionRecord struct {
-	ID            string                  `json:"id" gorm:"primaryKey"`
-	RunnerSource  string                  `json:"runnerSource"`  // task_group / engine_service / backup_service
-	RunnerID      string                  `json:"runnerId"`      // 运行实例ID，可为空
-	TaskGroupID   string                  `json:"taskGroupId"`   // 任务组ID，非任务组执行时为空
-	TaskGroupName string                  `json:"taskGroupName"` // 任务组名称快照
-	TaskName      string                  `json:"taskName"`      // 执行任务名称快照
-	Mode          string                  `json:"mode"`          // group / binding / manual / backup
-	Status        string                  `json:"status"`        // completed / partial / failed / cancelled
-	TotalDevices  int                     `json:"totalDevices"`
-	FinishedCount int                     `json:"finishedCount"`
-	SuccessCount  int                     `json:"successCount"`
-	ErrorCount    int                     `json:"errorCount"`
-	AbortedCount  int                     `json:"abortedCount"`
-	WarningCount  int                     `json:"warningCount"`
-	StartedAt     string                  `json:"startedAt"`
-	FinishedAt    string                  `json:"finishedAt"`
-	DurationMs    int64                   `json:"durationMs"`
-	ReportPath    string                  `json:"reportPath"`
-	Devices       []ExecutionDeviceRecord `json:"devices" gorm:"serializer:json"`
-	CreatedAt     string                  `json:"createdAt"`
-}
-
-// ExecutionDeviceRecord 设备执行记录（嵌套在 ExecutionRecord 中）
-type ExecutionDeviceRecord struct {
-	IP             string   `json:"ip"`
-	Status         string   `json:"status"`
-	TotalCmd       int      `json:"totalCmd"`
-	ExecCmd        int      `json:"execCmd"`
-	ErrorMsg       string   `json:"errorMsg"`
-	LogCount       int      `json:"logCount"`
-	LogTail        []string `json:"logTail"`
-	LogFilePath    string   `json:"logFilePath"` // 兼容旧记录，默认指向 DetailLogPath
-	SummaryLogPath string   `json:"summaryLogPath"`
-	DetailLogPath  string   `json:"detailLogPath"`
-	RawLogPath     string   `json:"rawLogPath"`
-}
-
-// TableName 指定表名
-func (ExecutionRecord) TableName() string {
-	return "execution_records"
-}
-
 // CreateExecutionRecord 创建历史执行记录
-func CreateExecutionRecord(record ExecutionRecord) (*ExecutionRecord, error) {
+func CreateExecutionRecord(record models.ExecutionRecord) (*models.ExecutionRecord, error) {
 	if record.ID == "" {
 		record.ID = uuid.New().String()
 	}
@@ -73,8 +30,8 @@ func CreateExecutionRecord(record ExecutionRecord) (*ExecutionRecord, error) {
 }
 
 // GetExecutionRecord 根据 ID 获取历史执行记录
-func GetExecutionRecord(id string) (*ExecutionRecord, error) {
-	var record ExecutionRecord
+func GetExecutionRecord(id string) (*models.ExecutionRecord, error) {
+	var record models.ExecutionRecord
 	if err := DB.First(&record, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("历史执行记录不存在: %s", id)
@@ -84,7 +41,7 @@ func GetExecutionRecord(id string) (*ExecutionRecord, error) {
 	return &record, nil
 }
 
-// QueryOptions 查询选项
+// ExecutionQueryOptions 查询选项
 type ExecutionQueryOptions struct {
 	TaskGroupID  string
 	RunnerSource string
@@ -95,13 +52,13 @@ type ExecutionQueryOptions struct {
 	SortOrder    string // asc / desc
 }
 
-// QueryResult 查询结果
+// ExecutionQueryResult 查询结果
 type ExecutionQueryResult struct {
-	Data       []ExecutionRecord `json:"data"`
-	Total      int64             `json:"total"`
-	Page       int               `json:"page"`
-	PageSize   int               `json:"pageSize"`
-	TotalPages int               `json:"totalPages"`
+	Data       []models.ExecutionRecord `json:"data"`
+	Total      int64                    `json:"total"`
+	Page       int                      `json:"page"`
+	PageSize   int                      `json:"pageSize"`
+	TotalPages int                      `json:"totalPages"`
 }
 
 // ListExecutionRecords 查询历史执行记录列表
@@ -120,7 +77,7 @@ func ListExecutionRecords(opts ExecutionQueryOptions) (*ExecutionQueryResult, er
 		opts.SortOrder = "desc"
 	}
 
-	query := DB.Model(&ExecutionRecord{})
+	query := DB.Model(&models.ExecutionRecord{})
 
 	// 应用筛选条件
 	if opts.TaskGroupID != "" {
@@ -145,7 +102,7 @@ func ListExecutionRecords(opts ExecutionQueryOptions) (*ExecutionQueryResult, er
 
 	// 应用分页
 	offset := (opts.Page - 1) * opts.PageSize
-	var records []ExecutionRecord
+	var records []models.ExecutionRecord
 	if err := query.Offset(offset).Limit(opts.PageSize).Find(&records).Error; err != nil {
 		return nil, fmt.Errorf("查询历史记录列表失败: %v", err)
 	}
@@ -167,7 +124,7 @@ func ListExecutionRecords(opts ExecutionQueryOptions) (*ExecutionQueryResult, er
 
 // DeleteExecutionRecord 删除单条历史执行记录
 func DeleteExecutionRecord(id string) error {
-	if err := DB.Delete(&ExecutionRecord{}, "id = ?", id).Error; err != nil {
+	if err := DB.Delete(&models.ExecutionRecord{}, "id = ?", id).Error; err != nil {
 		return fmt.Errorf("删除历史执行记录失败: %v", err)
 	}
 	logger.Info("ExecutionRecord", "-", "删除历史执行记录: %s", id)
@@ -183,12 +140,12 @@ func DeleteOldExecutionRecords(keepCount int) error {
 
 	// 获取需要删除的记录ID
 	var idsToDelete []string
-	subQuery := DB.Model(&ExecutionRecord{}).
+	subQuery := DB.Model(&models.ExecutionRecord{}).
 		Select("id").
 		Order("started_at DESC").
 		Offset(keepCount)
 
-	if err := DB.Model(&ExecutionRecord{}).
+	if err := DB.Model(&models.ExecutionRecord{}).
 		Where("id IN (?)", subQuery).
 		Pluck("id", &idsToDelete).Error; err != nil {
 		return fmt.Errorf("查询待删除记录失败: %v", err)
@@ -199,7 +156,7 @@ func DeleteOldExecutionRecords(keepCount int) error {
 	}
 
 	// 批量删除
-	if err := DB.Delete(&ExecutionRecord{}, "id IN ?", idsToDelete).Error; err != nil {
+	if err := DB.Delete(&models.ExecutionRecord{}, "id IN ?", idsToDelete).Error; err != nil {
 		return fmt.Errorf("批量删除历史记录失败: %v", err)
 	}
 
@@ -209,7 +166,7 @@ func DeleteOldExecutionRecords(keepCount int) error {
 
 // DeleteExecutionRecordsByTaskGroup 删除指定任务组的所有历史记录
 func DeleteExecutionRecordsByTaskGroup(taskGroupID string) error {
-	if err := DB.Delete(&ExecutionRecord{}, "task_group_id = ?", taskGroupID).Error; err != nil {
+	if err := DB.Delete(&models.ExecutionRecord{}, "task_group_id = ?", taskGroupID).Error; err != nil {
 		return fmt.Errorf("删除任务组历史记录失败: %v", err)
 	}
 	logger.Info("ExecutionRecord", "-", "删除任务组历史记录: %s", taskGroupID)
@@ -218,7 +175,7 @@ func DeleteExecutionRecordsByTaskGroup(taskGroupID string) error {
 
 // GetExecutionRecordStats 获取执行记录统计信息
 func GetExecutionRecordStats(taskGroupID string) (map[string]interface{}, error) {
-	query := DB.Model(&ExecutionRecord{})
+	query := DB.Model(&models.ExecutionRecord{})
 	if taskGroupID != "" {
 		query = query.Where("task_group_id = ?", taskGroupID)
 	}
@@ -233,10 +190,10 @@ func GetExecutionRecordStats(taskGroupID string) (map[string]interface{}, error)
 		return nil, fmt.Errorf("统计总记录数失败: %v", err)
 	}
 
-	query.Model(&ExecutionRecord{}).Where("status = ?", "completed").Count(&completed)
-	query.Model(&ExecutionRecord{}).Where("status = ?", "partial").Count(&partial)
-	query.Model(&ExecutionRecord{}).Where("status = ?", "failed").Count(&failed)
-	query.Model(&ExecutionRecord{}).Where("status = ?", "cancelled").Count(&cancelled)
+	DB.Model(&models.ExecutionRecord{}).Where("status = ?", "completed").Count(&completed)
+	DB.Model(&models.ExecutionRecord{}).Where("status = ?", "partial").Count(&partial)
+	DB.Model(&models.ExecutionRecord{}).Where("status = ?", "failed").Count(&failed)
+	DB.Model(&models.ExecutionRecord{}).Where("status = ?", "cancelled").Count(&cancelled)
 
 	return map[string]interface{}{
 		"total":     total,
@@ -247,8 +204,8 @@ func GetExecutionRecordStats(taskGroupID string) (map[string]interface{}, error)
 	}, nil
 }
 
-// ToJSON 将记录转换为 JSON 字符串（用于调试）
-func (r *ExecutionRecord) ToJSON() string {
+// ExecutionRecordToJSON 将记录转换为 JSON 字符串（用于调试）
+func ExecutionRecordToJSON(r *models.ExecutionRecord) string {
 	data, _ := json.MarshalIndent(r, "", "  ")
 	return string(data)
 }

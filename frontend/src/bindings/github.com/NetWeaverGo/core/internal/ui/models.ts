@@ -7,9 +7,6 @@ import { Create as $Create } from "/wails/runtime.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as config$0 from "../config/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
 import * as models$0 from "../models/models.js";
 
 /**
@@ -601,7 +598,7 @@ export class ListExecutionRecordsRequest {
  * ListExecutionRecordsResponse 列表查询响应
  */
 export class ListExecutionRecordsResponse {
-    "data": config$0.ExecutionRecord[];
+    "data": models$0.ExecutionRecord[];
     "total": number;
     "page": number;
     "pageSize": number;
@@ -1160,7 +1157,7 @@ const $$createType5 = IPv6InclusionResult.createFrom;
 const $$createType6 = $Create.Nullable($$createType5);
 const $$createType7 = IPv6SubnetItem.createFrom;
 const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = config$0.ExecutionRecord.createFrom;
+const $$createType9 = models$0.ExecutionRecord.createFrom;
 const $$createType10 = $Create.Array($$createType9);
 const $$createType11 = SSHAlgorithmOption.createFrom;
 const $$createType12 = $Create.Array($$createType11);

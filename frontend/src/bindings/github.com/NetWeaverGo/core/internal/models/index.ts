@@ -11,6 +11,8 @@ export {
     DiscoveryDeviceView,
     DiscoveryTaskView,
     EdgeEvidence,
+    ExecutionDeviceRecord,
+    ExecutionRecord,
     GlobalSettings,
     GraphEdge,
     GraphNode,

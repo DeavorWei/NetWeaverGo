@@ -238,7 +238,7 @@ export const ExecutionHistoryAPI = {
 export type {
   ExecutionRecord,
   ExecutionDeviceRecord,
-} from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
+} from '../bindings/github.com/NetWeaverGo/core/internal/models/models.js'
 
 export type {
   ListExecutionRecordsRequest,

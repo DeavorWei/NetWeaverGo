@@ -735,6 +735,206 @@ export class EdgeEvidence {
 }
 
 /**
+ * ExecutionDeviceRecord 设备执行记录（嵌套在 ExecutionRecord 中）
+ */
+export class ExecutionDeviceRecord {
+    "ip": string;
+    "status": string;
+    "totalCmd": number;
+    "execCmd": number;
+    "errorMsg": string;
+    "logCount": number;
+    "logTail": string[];
+    "logFilePath": string;
+    "summaryLogPath": string;
+    "detailLogPath": string;
+    "rawLogPath": string;
+
+    /** Creates a new ExecutionDeviceRecord instance. */
+    constructor($$source: Partial<ExecutionDeviceRecord> = {}) {
+        if (!("ip" in $$source)) {
+            this["ip"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("totalCmd" in $$source)) {
+            this["totalCmd"] = 0;
+        }
+        if (!("execCmd" in $$source)) {
+            this["execCmd"] = 0;
+        }
+        if (!("errorMsg" in $$source)) {
+            this["errorMsg"] = "";
+        }
+        if (!("logCount" in $$source)) {
+            this["logCount"] = 0;
+        }
+        if (!("logTail" in $$source)) {
+            this["logTail"] = [];
+        }
+        if (!("logFilePath" in $$source)) {
+            this["logFilePath"] = "";
+        }
+        if (!("summaryLogPath" in $$source)) {
+            this["summaryLogPath"] = "";
+        }
+        if (!("detailLogPath" in $$source)) {
+            this["detailLogPath"] = "";
+        }
+        if (!("rawLogPath" in $$source)) {
+            this["rawLogPath"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ExecutionDeviceRecord instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ExecutionDeviceRecord {
+        const $$createField6_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("logTail" in $$parsedSource) {
+            $$parsedSource["logTail"] = $$createField6_0($$parsedSource["logTail"]);
+        }
+        return new ExecutionDeviceRecord($$parsedSource as Partial<ExecutionDeviceRecord>);
+    }
+}
+
+/**
+ * ExecutionRecord 历史执行记录表
+ */
+export class ExecutionRecord {
+    "id": string;
+
+    /**
+     * task_group / engine_service / backup_service / discovery_service
+     */
+    "runnerSource": string;
+
+    /**
+     * 运行实例ID，可为空
+     */
+    "runnerId": string;
+
+    /**
+     * 任务组ID，非任务组执行时为空
+     */
+    "taskGroupId": string;
+
+    /**
+     * 任务组名称快照
+     */
+    "taskGroupName": string;
+
+    /**
+     * 执行任务名称快照
+     */
+    "taskName": string;
+
+    /**
+     * group / binding / manual / backup / discovery
+     */
+    "mode": string;
+
+    /**
+     * completed / partial / failed / cancelled
+     */
+    "status": string;
+    "totalDevices": number;
+    "finishedCount": number;
+    "successCount": number;
+    "errorCount": number;
+    "abortedCount": number;
+    "warningCount": number;
+    "startedAt": string;
+    "finishedAt": string;
+    "durationMs": number;
+    "reportPath": string;
+    "devices": ExecutionDeviceRecord[];
+    "createdAt": string;
+
+    /** Creates a new ExecutionRecord instance. */
+    constructor($$source: Partial<ExecutionRecord> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("runnerSource" in $$source)) {
+            this["runnerSource"] = "";
+        }
+        if (!("runnerId" in $$source)) {
+            this["runnerId"] = "";
+        }
+        if (!("taskGroupId" in $$source)) {
+            this["taskGroupId"] = "";
+        }
+        if (!("taskGroupName" in $$source)) {
+            this["taskGroupName"] = "";
+        }
+        if (!("taskName" in $$source)) {
+            this["taskName"] = "";
+        }
+        if (!("mode" in $$source)) {
+            this["mode"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("totalDevices" in $$source)) {
+            this["totalDevices"] = 0;
+        }
+        if (!("finishedCount" in $$source)) {
+            this["finishedCount"] = 0;
+        }
+        if (!("successCount" in $$source)) {
+            this["successCount"] = 0;
+        }
+        if (!("errorCount" in $$source)) {
+            this["errorCount"] = 0;
+        }
+        if (!("abortedCount" in $$source)) {
+            this["abortedCount"] = 0;
+        }
+        if (!("warningCount" in $$source)) {
+            this["warningCount"] = 0;
+        }
+        if (!("startedAt" in $$source)) {
+            this["startedAt"] = "";
+        }
+        if (!("finishedAt" in $$source)) {
+            this["finishedAt"] = "";
+        }
+        if (!("durationMs" in $$source)) {
+            this["durationMs"] = 0;
+        }
+        if (!("reportPath" in $$source)) {
+            this["reportPath"] = "";
+        }
+        if (!("devices" in $$source)) {
+            this["devices"] = [];
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ExecutionRecord instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ExecutionRecord {
+        const $$createField18_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("devices" in $$parsedSource) {
+            $$parsedSource["devices"] = $$createField18_0($$parsedSource["devices"]);
+        }
+        return new ExecutionRecord($$parsedSource as Partial<ExecutionRecord>);
+    }
+}
+
+/**
  * GlobalSettings 全局运行参数
  */
 export class GlobalSettings {
@@ -834,7 +1034,7 @@ export class GlobalSettings {
      * Creates a new GlobalSettings instance from a string or object.
      */
     static createFrom($$source: any = {}): GlobalSettings {
-        const $$createField8_0 = $$createType3;
+        const $$createField8_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("sshAlgorithms" in $$parsedSource) {
             $$parsedSource["sshAlgorithms"] = $$createField8_0($$parsedSource["sshAlgorithms"]);
@@ -1239,7 +1439,7 @@ export class TaskGroup {
      * Creates a new TaskGroup instance from a string or object.
      */
     static createFrom($$source: any = {}): TaskGroup {
-        const $$createField8_0 = $$createType5;
+        const $$createField8_0 = $$createType7;
         const $$createField10_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
@@ -1291,7 +1491,7 @@ export class TaskItem {
      */
     static createFrom($$source: any = {}): TaskItem {
         const $$createField1_0 = $$createType0;
-        const $$createField2_0 = $$createType6;
+        const $$createField2_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("commands" in $$parsedSource) {
             $$parsedSource["commands"] = $$createField1_0($$parsedSource["commands"]);
@@ -1464,7 +1664,7 @@ export class TopologyEdge {
      */
     static createFrom($$source: any = {}): TopologyEdge {
         const $$createField11_0 = $$createType0;
-        const $$createField12_0 = $$createType8;
+        const $$createField12_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("discoveryMethods" in $$parsedSource) {
             $$parsedSource["discoveryMethods"] = $$createField11_0($$parsedSource["discoveryMethods"]);
@@ -1539,10 +1739,10 @@ export class TopologyEdgeDetailView {
      * Creates a new TopologyEdgeDetailView instance from a string or object.
      */
     static createFrom($$source: any = {}): TopologyEdgeDetailView {
-        const $$createField1_0 = $$createType9;
-        const $$createField4_0 = $$createType9;
+        const $$createField1_0 = $$createType11;
+        const $$createField4_0 = $$createType11;
         const $$createField10_0 = $$createType0;
-        const $$createField11_0 = $$createType8;
+        const $$createField11_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("aDevice" in $$parsedSource) {
             $$parsedSource["aDevice"] = $$createField1_0($$parsedSource["aDevice"]);
@@ -1587,8 +1787,8 @@ export class TopologyGraphView {
      * Creates a new TopologyGraphView instance from a string or object.
      */
     static createFrom($$source: any = {}): TopologyGraphView {
-        const $$createField1_0 = $$createType10;
-        const $$createField2_0 = $$createType12;
+        const $$createField1_0 = $$createType12;
+        const $$createField2_0 = $$createType14;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("nodes" in $$parsedSource) {
             $$parsedSource["nodes"] = $$createField1_0($$parsedSource["nodes"]);
@@ -1604,13 +1804,15 @@ export class TopologyGraphView {
 const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = DiffItem.createFrom;
 const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = SSHAlgorithmSettings.createFrom;
-const $$createType4 = TaskItem.createFrom;
-const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = $Create.Array($Create.Any);
-const $$createType7 = EdgeEvidence.createFrom;
-const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = GraphNode.createFrom;
+const $$createType3 = ExecutionDeviceRecord.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = SSHAlgorithmSettings.createFrom;
+const $$createType6 = TaskItem.createFrom;
+const $$createType7 = $Create.Array($$createType6);
+const $$createType8 = $Create.Array($Create.Any);
+const $$createType9 = EdgeEvidence.createFrom;
 const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = GraphEdge.createFrom;
+const $$createType11 = GraphNode.createFrom;
 const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = GraphEdge.createFrom;
+const $$createType14 = $Create.Array($$createType13);

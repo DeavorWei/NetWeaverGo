@@ -9,6 +9,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/engine"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -402,9 +403,9 @@ func (s *managedExecution) persistExecutionRecord() {
 	status := s.deriveExecutionStatus(summary)
 
 	// 构建设备记录
-	devices := make([]config.ExecutionDeviceRecord, 0, len(deviceData))
+	devices := make([]models.ExecutionDeviceRecord, 0, len(deviceData))
 	for _, d := range deviceData {
-		devices = append(devices, config.ExecutionDeviceRecord{
+		devices = append(devices, models.ExecutionDeviceRecord{
 			IP:             d.IP,
 			Status:         d.Status,
 			TotalCmd:       d.TotalCmd,
@@ -425,7 +426,7 @@ func (s *managedExecution) persistExecutionRecord() {
 	durationMs := finishedAt.Sub(startedAt).Milliseconds()
 
 	// 创建记录
-	record := config.ExecutionRecord{
+	record := models.ExecutionRecord{
 		RunnerSource:  s.meta.RunnerSource,
 		RunnerID:      s.meta.RunnerID,
 		TaskGroupID:   s.meta.TaskGroupID,

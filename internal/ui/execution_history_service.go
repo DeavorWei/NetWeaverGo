@@ -7,6 +7,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -39,7 +40,7 @@ type ListExecutionRecordsRequest struct {
 
 // ListExecutionRecordsResponse 列表查询响应
 type ListExecutionRecordsResponse struct {
-	Data       []config.ExecutionRecord `json:"data"`
+	Data       []models.ExecutionRecord `json:"data"`
 	Total      int64                    `json:"total"`
 	Page       int                      `json:"page"`
 	PageSize   int                      `json:"pageSize"`
@@ -73,7 +74,7 @@ func (s *ExecutionHistoryService) ListExecutionRecords(req ListExecutionRecordsR
 }
 
 // GetExecutionRecord 根据 ID 获取历史执行记录详情
-func (s *ExecutionHistoryService) GetExecutionRecord(id string) (*config.ExecutionRecord, error) {
+func (s *ExecutionHistoryService) GetExecutionRecord(id string) (*models.ExecutionRecord, error) {
 	return config.GetExecutionRecord(id)
 }
 

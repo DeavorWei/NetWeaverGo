@@ -12,7 +12,7 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as config$0 from "../config/models.js";
+import * as models$0 from "../models/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -28,7 +28,7 @@ export function DeleteExecutionRecord(id: string): $CancellablePromise<void> {
 /**
  * GetExecutionRecord 根据 ID 获取历史执行记录详情
  */
-export function GetExecutionRecord(id: string): $CancellablePromise<config$0.ExecutionRecord | null> {
+export function GetExecutionRecord(id: string): $CancellablePromise<models$0.ExecutionRecord | null> {
     return $Call.ByID(2763900808, id).then(($result: any) => {
         return $$createType1($result);
     });
@@ -87,7 +87,7 @@ export function OpenFileWithDefaultApp(filePath: string): $CancellablePromise<vo
 }
 
 // Private type creation functions
-const $$createType0 = config$0.ExecutionRecord.createFrom;
+const $$createType0 = models$0.ExecutionRecord.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
 const $$createType2 = $Create.Map($Create.Any, $Create.Any);
 const $$createType3 = $Create.Array($Create.Any);

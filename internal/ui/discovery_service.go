@@ -184,12 +184,12 @@ func (s *DiscoveryService) persistDiscoveryExecutionSummary(taskID string) {
 	}
 
 	warnings := 0
-	deviceRecords := make([]config.ExecutionDeviceRecord, 0, len(devices))
+	deviceRecords := make([]models.ExecutionDeviceRecord, 0, len(devices))
 	for _, d := range devices {
 		if d.Status == "partial" {
 			warnings++
 		}
-		deviceRecords = append(deviceRecords, config.ExecutionDeviceRecord{
+		deviceRecords = append(deviceRecords, models.ExecutionDeviceRecord{
 			IP:       d.DeviceIP,
 			Status:   d.Status,
 			ErrorMsg: d.ErrorMessage,
@@ -203,7 +203,7 @@ func (s *DiscoveryService) persistDiscoveryExecutionSummary(taskID string) {
 		durationMs = task.FinishedAt.Sub(*task.StartedAt).Milliseconds()
 	}
 
-	record := config.ExecutionRecord{
+	record := models.ExecutionRecord{
 		RunnerSource:  "discovery_service",
 		RunnerID:      task.ID,
 		TaskGroupID:   "",
