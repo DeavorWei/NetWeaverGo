@@ -145,7 +145,7 @@ echo [INFO] Cleaning Go build cache for icon refresh...
 
 :: Build backend, output to dist directory
 echo [INFO] Building backend program...
-go build -a -ldflags="-s -w" -o "dist\netWeaverGo.exe" ./cmd/netweaver
+go build -a -ldflags="-s -w -H windowsgui" -o "dist\netWeaverGo.exe" ./cmd/netweaver
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Backend build failed
     exit /b 1
