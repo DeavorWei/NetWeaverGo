@@ -73,6 +73,10 @@ func GetGlobalLogPath() string {
 // writeGlobalLog 写入全局日志，同时输出到终端
 func writeGlobalLog(level string, module string, ip string, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
+
+	// 统一脱敏处理：所有日志输出都经过脱敏器
+	msg = globalSanitizer.Sanitize(msg)
+
 	timestamp := time.Now().Format("2006/01/02 15:04:05")
 	if module == "" {
 		module = "-"

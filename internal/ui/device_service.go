@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/NetWeaverGo/core/internal/config"
-	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -36,9 +35,7 @@ func (s *DeviceService) GetDeviceByID(id uint) (*models.DeviceAssetResponse, err
 	if err != nil {
 		return nil, err
 	}
-	logger.Debug("DeviceService", "-", "GetDeviceByID: ID=%d, Password='%s'", id, device.Password)
 	resp := device.ToResponse()
-	logger.Debug("DeviceService", "-", "GetDeviceByID Response: Password='%s'", resp.Password)
 	return resp, nil
 }
 

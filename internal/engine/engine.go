@@ -22,35 +22,6 @@ import (
 	"github.com/NetWeaverGo/core/internal/sshutil"
 )
 
-// 敏感信息脱敏正则表达式
-var sensitivePatterns = []struct {
-	pattern *regexp.Regexp
-	replace string
-}{
-	// password xxx cipher/plain xxx -> password xxx cipher ****
-	{regexp.MustCompile(`(?i)(password\s+\S+\s+cipher\s+)(\S+)`), "${1}****"},
-	{regexp.MustCompile(`(?i)(password\s+\S+\s+plain\s+)(\S+)`), "${1}****"},
-	// password xxx xxx (简写形式) -> password xxx ****
-	{regexp.MustCompile(`(?i)(password\s+\S+\s+)(\S+)`), "${1}****"},
-	// cipher xxx -> cipher ****
-	{regexp.MustCompile(`(?i)(cipher\s+)(\S+)`), "${1}****"},
-	// key xxx xxx -> key xxx **** (密钥配置)
-	{regexp.MustCompile(`(?i)(key\s+\S+\s+)(\S+)`), "${1}****"},
-	// secret xxx -> secret ****
-	{regexp.MustCompile(`(?i)(secret\s+)(\S+)`), "${1}****"},
-	// credential xxx -> credential ****
-	{regexp.MustCompile(`(?i)(credential\s+)(\S+)`), "${1}****"},
-}
-
-// sanitizeMessage 脱敏消息中的敏感信息
-func sanitizeMessage(msg string) string {
-	sanitized := msg
-	for _, p := range sensitivePatterns {
-		sanitized = p.pattern.ReplaceAllString(sanitized, p.replace)
-	}
-	return sanitized
-}
-
 // Engine 全局中央调度器，控制所有物理设备的并发执行流
 // 重构后：精简状态管理，使用 EngineStateManager + RingBuffer + Context
 type Engine struct {
@@ -182,8 +153,8 @@ func (e *Engine) ClearFallbackEvents() {
 // emitEvent 重构后 - 消除 TOCTOU 竞态
 // 同时向 EventBus 和 FrontendBus 发送事件（广播）
 func (e *Engine) emitEvent(ev report.ExecutorEvent) {
-	// 脱敏处理
-	ev.Message = sanitizeMessage(ev.Message)
+	// 脱敏处理：使用统一脱敏器
+	ev.Message = logger.Sanitize(ev.Message)
 
 	// 【核心修复】：先占位，再检查。消除 TOCTOU 竞态
 	e.emitWg.Add(1)
@@ -227,7 +198,8 @@ func (e *Engine) emitEvent(ev report.ExecutorEvent) {
 
 // emitEventDirect 直接发送高优先级事件
 func (e *Engine) emitEventDirect(ev report.ExecutorEvent) {
-	ev.Message = sanitizeMessage(ev.Message)
+	// 脱敏处理：使用统一脱敏器
+	ev.Message = logger.Sanitize(ev.Message)
 
 	// 检查 Context 是否已初始化
 	if e.ctx == nil {

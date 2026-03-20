@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 // SummaryLogger 记录执行进度、关键事件与用户决策。
@@ -40,6 +42,9 @@ func NewSummaryLogger(filePath string) (*SummaryLogger, error) {
 func (l *SummaryLogger) WriteLine(message string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
+	// 统一脱敏处理：摘要日志中的敏感信息脱敏
+	message = logger.Sanitize(message)
 
 	if _, err := l.writer.WriteString(fmt.Sprintf("[%s] %s\n", time.Now().Format("15:04:05"), message)); err != nil {
 		return err

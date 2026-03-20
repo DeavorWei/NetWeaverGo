@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 var (
@@ -177,6 +179,9 @@ func (l *DetailLogger) writeLineLocked(message string) error {
 	if normalized == "" {
 		return nil
 	}
+
+	// 统一脱敏处理：设备回显中的敏感信息脱敏
+	normalized = logger.Sanitize(normalized)
 
 	// 输出行不再添加时间戳，保持原始内容
 	if _, err := l.writer.WriteString(normalized + "\n"); err != nil {
