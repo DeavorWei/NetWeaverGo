@@ -70,7 +70,7 @@ export function GetValidProtocols(): $CancellablePromise<string[]> {
 }
 
 /**
- * ListDevices 获取设备列表（返回脱敏数据，不含密码）
+ * ListDevices 获取设备列表
  */
 export function ListDevices(): $CancellablePromise<models$0.DeviceAsset[]> {
     return $Call.ByID(779205990).then(($result: any) => {

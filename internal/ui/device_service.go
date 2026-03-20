@@ -24,17 +24,9 @@ func (s *DeviceService) ServiceStartup(ctx context.Context, options application.
 	return nil
 }
 
-// ListDevices 获取设备列表（返回脱敏数据，不含密码）
+// ListDevices 获取设备列表
 func (s *DeviceService) ListDevices() ([]models.DeviceAsset, error) {
-	devices, err := config.LoadDeviceAssets()
-	if err != nil {
-		return nil, err
-	}
-	// 脱敏：清空密码字段
-	for i := range devices {
-		devices[i].Password = ""
-	}
-	return devices, nil
+	return config.LoadDeviceAssets()
 }
 
 // GetDeviceByID 根据 ID 获取单个设备详情（包含解密后的密码，用于编辑）

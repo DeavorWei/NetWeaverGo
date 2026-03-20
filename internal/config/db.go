@@ -14,11 +14,6 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-// 设备密码字段临时存储，用于 GORM 回调
-type devicePasswordContext struct {
-	password string
-}
-
 var DB *gorm.DB
 
 // InitDB 初始化 SQLite 数据库
@@ -94,84 +89,9 @@ func InitDB() error {
 	// 创建索引优化查询性能
 	createIndexes(db)
 
-	// 注册设备密码加密/解密回调
-	registerCredentialCallbacks(db)
-
 	logger.Info("Config", "-", "数据库初始化成功: %s", dbPath)
 
 	return nil
-}
-
-// registerCredentialCallbacks 注册设备凭据加密/解密的 GORM 回调
-func registerCredentialCallbacks(db *gorm.DB) {
-	// 初始化加密器（确保密钥已加载）
-	_ = GetCredentialCipher()
-
-	// Before Create: 加密密码
-	db.Callback().Create().Before("gorm:create").Register("credential:encrypt_create", func(d *gorm.DB) {
-		if device, ok := d.Statement.Model.(*models.DeviceAsset); ok {
-			if device.Password != "" && !IsEncrypted(device.Password) {
-				cipher := GetCredentialCipher()
-				encrypted, err := cipher.Encrypt(device.Password)
-				if err != nil {
-					logger.Error("Config", "-", "加密设备 %s 密码失败: %v", device.IP, err)
-					return
-				}
-				// 保存原始密码到上下文，用于后续可能的回滚
-				d.InstanceSet("credential:original_password", device.Password)
-				device.Password = encrypted
-			}
-		}
-	})
-
-	// Before Update: 加密密码（如果密码被修改）
-	db.Callback().Update().Before("gorm:update").Register("credential:encrypt_update", func(d *gorm.DB) {
-		if device, ok := d.Statement.Model.(*models.DeviceAsset); ok {
-			if device.Password != "" && !IsEncrypted(device.Password) {
-				cipher := GetCredentialCipher()
-				encrypted, err := cipher.Encrypt(device.Password)
-				if err != nil {
-					logger.Error("Config", "-", "加密设备 %s 密码失败: %v", device.IP, err)
-					return
-				}
-				d.InstanceSet("credential:original_password", device.Password)
-				device.Password = encrypted
-			}
-		}
-	})
-
-	// After Find: 解密密码
-	db.Callback().Query().After("gorm:query").Register("credential:decrypt", func(d *gorm.DB) {
-		// 处理单个设备
-		if device, ok := d.Statement.Model.(*models.DeviceAsset); ok {
-			if device.Password != "" && IsEncrypted(device.Password) {
-				cipher := GetCredentialCipher()
-				decrypted, err := cipher.Decrypt(device.Password)
-				if err != nil {
-					logger.Warn("Config", "-", "解密设备 %s 密码失败: %v", device.IP, err)
-					return
-				}
-				device.Password = decrypted
-			}
-		}
-
-		// 处理设备列表
-		if devices, ok := d.Statement.Dest.(*[]models.DeviceAsset); ok {
-			cipher := GetCredentialCipher()
-			for i := range *devices {
-				if (*devices)[i].Password != "" && IsEncrypted((*devices)[i].Password) {
-					decrypted, err := cipher.Decrypt((*devices)[i].Password)
-					if err != nil {
-						logger.Warn("Config", "-", "解密设备 %s 密码失败: %v", (*devices)[i].IP, err)
-						continue
-					}
-					(*devices)[i].Password = decrypted
-				}
-			}
-		}
-	})
-
-	logger.Verbose("Config", "-", "已注册设备凭据加密/解密回调")
 }
 
 // createIndexes 创建数据库索引优化查询性能
