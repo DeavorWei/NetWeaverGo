@@ -79,9 +79,20 @@ func (s *SettingsService) SaveSettings(settings models.GlobalSettings) error {
 	return nil
 }
 
-// EnsureConfig 返回当前数据库中的设备资产和默认命令组，供首页展示概况
-func (s *SettingsService) EnsureConfig() ([]models.DeviceAsset, []string, error) {
-	return config.LoadExecutionResources()
+// EnsureConfig 返回当前数据库中的设备资产（不含密码）和默认命令组，供首页展示概况
+// 遵循密码保护原则：列表/概览场景不返回密码
+func (s *SettingsService) EnsureConfig() ([]models.DeviceAssetListItem, []string, error) {
+	devices, commands, err := config.LoadExecutionResources()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// 转换为列表项，清除密码字段
+	items := make([]models.DeviceAssetListItem, len(devices))
+	for i, d := range devices {
+		items[i] = d.ToListItem()
+	}
+	return items, commands, nil
 }
 
 // GetAppInfo 获取应用信息

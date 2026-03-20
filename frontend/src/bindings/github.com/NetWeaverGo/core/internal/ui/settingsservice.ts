@@ -19,9 +19,10 @@ import * as models$0 from "../models/models.js";
 import * as $models from "./models.js";
 
 /**
- * EnsureConfig 返回当前数据库中的设备资产和默认命令组，供首页展示概况
+ * EnsureConfig 返回当前数据库中的设备资产（不含密码）和默认命令组，供首页展示概况
+ * 遵循密码保护原则：列表/概览场景不返回密码
  */
-export function EnsureConfig(): $CancellablePromise<[models$0.DeviceAsset[], string[]]> {
+export function EnsureConfig(): $CancellablePromise<[models$0.DeviceAssetListItem[], string[]]> {
     return $Call.ByID(2867805956).then(($result: any) => {
         $result[0] = $$createType1($result[0]);
         $result[1] = $$createType2($result[1]);
@@ -108,7 +109,7 @@ export function UpdateRuntimeConfig(data: $models.RuntimeConfigData): $Cancellab
 }
 
 // Private type creation functions
-const $$createType0 = models$0.DeviceAsset.createFrom;
+const $$createType0 = models$0.DeviceAssetListItem.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = $Create.Array($Create.Any);
 const $$createType3 = $Create.Map($Create.Any, $Create.Any);

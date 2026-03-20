@@ -70,9 +70,10 @@ export function GetValidProtocols(): $CancellablePromise<string[]> {
 }
 
 /**
- * ListDevices 获取设备列表
+ * ListDevices 获取设备列表（不含密码）
+ * 列表场景不返回密码，密码仅在单设备详情接口中返回
  */
-export function ListDevices(): $CancellablePromise<models$0.DeviceAsset[]> {
+export function ListDevices(): $CancellablePromise<models$0.DeviceAssetListItem[]> {
     return $Call.ByID(779205990).then(($result: any) => {
         return $$createType5($result);
     });
@@ -97,5 +98,5 @@ const $$createType0 = models$0.DeviceAssetResponse.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
 const $$createType2 = $Create.Map($Create.Any, $Create.Any);
 const $$createType3 = $Create.Array($Create.Any);
-const $$createType4 = models$0.DeviceAsset.createFrom;
+const $$createType4 = models$0.DeviceAssetListItem.createFrom;
 const $$createType5 = $Create.Array($$createType4);

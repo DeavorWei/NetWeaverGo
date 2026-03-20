@@ -230,6 +230,99 @@ export class DeviceAsset {
 }
 
 /**
+ * DeviceAssetListItem 设备列表项（不含敏感信息）
+ * 用于列表和分页查询接口返回，密码字段始终为空
+ */
+export class DeviceAssetListItem {
+    "id": number;
+    "ip": string;
+    "port": number;
+    "username": string;
+
+    /**
+     * 列表场景始终为空字符串
+     */
+    "password": string;
+    "protocol": string;
+    "group": string;
+    "displayName": string;
+    "vendor": string;
+    "role": string;
+    "site": string;
+    "description": string;
+    "tags": string[];
+    "lastSeen": time$0.Time;
+    "createdAt": time$0.Time;
+    "updatedAt": time$0.Time;
+
+    /** Creates a new DeviceAssetListItem instance. */
+    constructor($$source: Partial<DeviceAssetListItem> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("ip" in $$source)) {
+            this["ip"] = "";
+        }
+        if (!("port" in $$source)) {
+            this["port"] = 0;
+        }
+        if (!("username" in $$source)) {
+            this["username"] = "";
+        }
+        if (!("password" in $$source)) {
+            this["password"] = "";
+        }
+        if (!("protocol" in $$source)) {
+            this["protocol"] = "";
+        }
+        if (!("group" in $$source)) {
+            this["group"] = "";
+        }
+        if (!("displayName" in $$source)) {
+            this["displayName"] = "";
+        }
+        if (!("vendor" in $$source)) {
+            this["vendor"] = "";
+        }
+        if (!("role" in $$source)) {
+            this["role"] = "";
+        }
+        if (!("site" in $$source)) {
+            this["site"] = "";
+        }
+        if (!("description" in $$source)) {
+            this["description"] = "";
+        }
+        if (!("tags" in $$source)) {
+            this["tags"] = [];
+        }
+        if (!("lastSeen" in $$source)) {
+            this["lastSeen"] = null;
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = null;
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DeviceAssetListItem instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DeviceAssetListItem {
+        const $$createField12_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("tags" in $$parsedSource) {
+            $$parsedSource["tags"] = $$createField12_0($$parsedSource["tags"]);
+        }
+        return new DeviceAssetListItem($$parsedSource as Partial<DeviceAssetListItem>);
+    }
+}
+
+/**
  * DeviceAssetResponse 设备响应结构（包含密码，用于编辑场景）
  */
 export class DeviceAssetResponse {

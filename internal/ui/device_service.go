@@ -24,9 +24,19 @@ func (s *DeviceService) ServiceStartup(ctx context.Context, options application.
 	return nil
 }
 
-// ListDevices 获取设备列表
-func (s *DeviceService) ListDevices() ([]models.DeviceAsset, error) {
-	return config.LoadDeviceAssets()
+// ListDevices 获取设备列表（不含密码）
+// 列表场景不返回密码，密码仅在单设备详情接口中返回
+func (s *DeviceService) ListDevices() ([]models.DeviceAssetListItem, error) {
+	devices, err := config.LoadDeviceAssets()
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]models.DeviceAssetListItem, len(devices))
+	for i, d := range devices {
+		items[i] = d.ToListItem()
+	}
+	return items, nil
 }
 
 // GetDeviceByID 根据 ID 获取单个设备详情（包含解密后的密码，用于编辑）

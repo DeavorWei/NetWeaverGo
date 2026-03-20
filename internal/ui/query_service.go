@@ -118,8 +118,14 @@ func (s *QueryService) queryDevicesFromDB(opts QueryOptions) *QueryResult {
 		return emptyDeviceQueryResult(opts)
 	}
 
+	// 转换为列表项，清除密码字段
+	items := make([]models.DeviceAssetListItem, len(devices))
+	for i, d := range devices {
+		items[i] = d.ToListItem()
+	}
+
 	return &QueryResult{
-		Data:       devices,
+		Data:       items,
 		Total:      int(total),
 		Page:       page,
 		PageSize:   pageSize,
@@ -138,7 +144,7 @@ func emptyDeviceQueryResult(opts QueryOptions) *QueryResult {
 	}
 
 	return &QueryResult{
-		Data:       []models.DeviceAsset{},
+		Data:       []models.DeviceAssetListItem{},
 		Total:      0,
 		Page:       page,
 		PageSize:   pageSize,
