@@ -18,7 +18,7 @@ func NewHuaweiMapper() *HuaweiMapper {
 // ToDeviceInfo 将version解析结果映射为设备身份信息
 func (m *HuaweiMapper) ToDeviceInfo(rows []map[string]string) (*DeviceIdentity, error) {
 	if len(rows) == 0 {
-		return nil, fmt.Errorf("no version data found")
+		return nil, fmt.Errorf("未找到版本数据")
 	}
 
 	// 合并所有行数据

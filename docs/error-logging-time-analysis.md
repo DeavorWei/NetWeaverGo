@@ -170,12 +170,17 @@ logger.Info("Engine", "-", "控制台引擎启动，共准备向 %d 台设备下
 **英文日志消息示例**:
 
 ```go
-logger.Verbose("Matcher", "-", "行 `%s` 命中了错误规则 [%s]", line, rule.Name)
-logger.Debug("SFTP", cfg.IP, "开始初始化专门的 SFTP 连接")
-logger.Error("Report", ip, "初始化设备日志存储失败: %v", err)
+// internal/executor/error_handler.go:40-47
+logger.Warn("Executor", err.IP, "[%s] Device=%s Stage=%s Command=%s: %s",
+    err.Type, err.IP, err.Stage, err.Command, err.Message)
+logger.Error("Executor", err.IP, "[%s] Device=%s Stage=%s Command=%s: %s",
+    err.Type, err.IP, err.Stage, err.Command, err.Message)
+
+// internal/executor/executor.go:241
+logger.Verbose("Executor", e.IP, "Received chunk (len=%d) | streamBuffer_len=%d", n, len(streamBuffer))
 ```
 
-**统计**: 搜索结果显示项目中有 **223 处** 日志调用，语言混用情况严重。
+**统计**: 搜索结果显示项目中有 **220+ 处** 日志调用，其中绝大多数（约95%+）已使用中文，仅有少量英文日志消息（约5%以下），主要分布在 `error_handler.go` 和 `executor.go` 中。语言混用情况较轻微。
 
 #### 问题2: 日志格式细节不统一
 

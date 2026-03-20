@@ -124,7 +124,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 		defer func() {
 			// 防止 panic 导致 goroutine 泄漏
 			if r := recover(); r != nil {
-				logger.Warn("Executor", e.IP, "stderr copier panic recovered: %v", r)
+				logger.Warn("Executor", e.IP, "stderr 协程 panic 已恢复: %v", r)
 			}
 		}()
 		_, _ = io.Copy(io.Discard, errReader)
@@ -152,7 +152,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 		// 添加 panic recover 防止 goroutine 泄漏
 		defer func() {
 			if r := recover(); r != nil {
-				logger.Warn("Executor", e.IP, "reader goroutine panic recovered: %v", r)
+				logger.Warn("Executor", e.IP, "读取协程 panic 已恢复: %v", r)
 			}
 		}()
 
@@ -238,7 +238,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 					logger.Warn("Executor", e.IP, "写入详细日志失败: %v", err)
 				}
 				streamBuffer += chunk
-				logger.Verbose("Executor", e.IP, "Received chunk (len=%d) | streamBuffer_len=%d", n, len(streamBuffer))
+				logger.Verbose("Executor", e.IP, "收到数据块 (长度=%d) | 流缓冲区长度=%d", n, len(streamBuffer))
 
 				lines := strings.Split(streamBuffer, "\n")
 				// 检查最后一行以外的完整回显行，查找 error 关键字
@@ -358,8 +358,10 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 							timeoutStr := strings.TrimSpace(rawCmd[idx+len("// nw-timeout="):])
 							if pd, err := time.ParseDuration(timeoutStr); err == nil {
 								customDelay = pd
-								logger.Debug("Executor", e.IP, "命令拥有自定超时 %v => %s", customDelay, cmdToSend)
-								logger.Info("Executor", e.IP, "=== 检测到自定义长效命令超时控制 ===: %s -> %v", cmdToSend, customDelay)
+								logger.Debug("Executor", e.IP, "命令拥有自定义超时 %v => %s", customDelay, cmdToSend)
+								logger.Info("Executor", e.IP, "检测到自定义长效命令超时控制: %s -> %v", cmdToSend, customDelay)
+							} else {
+								logger.Warn("Executor", e.IP, "自定义超时时间格式无效: %s (期望格式如 30s, 1m30s), 使用默认值", timeoutStr)
 							}
 						}
 
@@ -453,7 +455,9 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 		timeoutStr := strings.TrimSpace(cmd[idx+len("// nw-timeout="):])
 		if pd, err := time.ParseDuration(timeoutStr); err == nil {
 			customTimeout = pd
-			logger.Info("Executor", e.IP, "=== 检测到同步交互命令超时自定义控制 ===: %s -> %v", cmdToSend, customTimeout)
+			logger.Info("Executor", e.IP, "检测到同步交互命令超时自定义控制: %s -> %v", cmdToSend, customTimeout)
+		} else {
+			logger.Warn("Executor", e.IP, "自定义超时时间格式无效: %s (期望格式如 30s, 1m30s), 使用默认值", timeoutStr)
 		}
 	}
 
@@ -479,7 +483,7 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 		// 添加 panic recover 防止 goroutine 泄漏
 		defer func() {
 			if r := recover(); r != nil {
-				logger.Warn("Executor", e.IP, "sync reader goroutine panic recovered: %v", r)
+				logger.Warn("Executor", e.IP, "同步读取协程 panic 已恢复: %v", r)
 			}
 		}()
 

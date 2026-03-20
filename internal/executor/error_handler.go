@@ -37,13 +37,13 @@ func (h *ErrorHandler) Handle(ctx context.Context, err *ExecutionError) bool {
 func (h *ErrorHandler) logError(err *ExecutionError) {
 	switch err.Type {
 	case ErrorTypeWarning:
-		logger.Warn("Executor", err.IP, "[%s] Device=%s Stage=%s Command=%s: %s",
+		logger.Warn("Executor", err.IP, "[%s] 设备=%s 阶段=%s 命令=%s: %s",
 			err.Type, err.IP, err.Stage, err.Command, err.Message)
 	case ErrorTypeCritical:
-		logger.Error("Executor", err.IP, "[%s] Device=%s Stage=%s Command=%s: %s",
+		logger.Error("Executor", err.IP, "[%s] 设备=%s 阶段=%s 命令=%s: %s",
 			err.Type, err.IP, err.Stage, err.Command, err.Message)
 	case ErrorTypeFatal:
-		logger.Error("Executor", err.IP, "[%s] Device=%s Stage=%s Command=%s: %s",
+		logger.Error("Executor", err.IP, "[%s] 设备=%s 阶段=%s 命令=%s: %s",
 			err.Type, err.IP, err.Stage, err.Command, err.Message)
 	}
 }

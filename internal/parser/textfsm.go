@@ -83,7 +83,7 @@ func (p *TextFSMParser) Parse(commandKey string, rawText string) ([]map[string]s
 	path, ok := p.registry[commandKey]
 	p.mu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("template not found for command key: %s", commandKey)
+		return nil, fmt.Errorf("未找到命令键对应的模板: %s", commandKey)
 	}
 
 	tpl, err := p.loadTemplate(path)
@@ -93,12 +93,12 @@ func (p *TextFSMParser) Parse(commandKey string, rawText string) ([]map[string]s
 
 	fsm := gotextfsm.TextFSM{}
 	if err := fsm.ParseString(tpl); err != nil {
-		return nil, fmt.Errorf("parse template %s failed: %w", path, err)
+		return nil, fmt.Errorf("解析模板 %s 失败: %w", path, err)
 	}
 
 	output := gotextfsm.ParserOutput{}
 	if err := output.ParseTextString(rawText, fsm, true); err != nil {
-		return nil, fmt.Errorf("parse raw text with %s failed: %w", commandKey, err)
+		return nil, fmt.Errorf("使用 %s 解析原始文本失败: %w", commandKey, err)
 	}
 
 	rows := make([]map[string]string, 0, len(output.Dict))

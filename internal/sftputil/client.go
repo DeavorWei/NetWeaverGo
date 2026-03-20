@@ -37,7 +37,7 @@ func NewSFTPClient(ctx context.Context, cfg sshutil.Config) (*SFTPClient, error)
 	if err != nil {
 		logger.Debug("SFTP", cfg.IP, "sftp.NewClient 初始化失败: %v", err)
 		sshClient.Close()
-		return nil, fmt.Errorf("failed to create sftp client: %w", err)
+		return nil, fmt.Errorf("创建 SFTP 客户端失败: %w", err)
 	}
 	logger.Debug("SFTP", cfg.IP, "SFTP 子系统挂载成功")
 
@@ -55,23 +55,23 @@ func (s *SFTPClient) DownloadFile(remotePath, localPath string) error {
 	remoteFile, err := s.client.Open(remotePath)
 	if err != nil {
 		logger.Debug("SFTP", s.ip, "打开远端文件 %s 失败: %v", remotePath, err)
-		return fmt.Errorf("failed to open remote file %s: %w", remotePath, err)
+		return fmt.Errorf("打开远端文件 %s 失败: %w", remotePath, err)
 	}
 	defer remoteFile.Close()
 
 	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
-		return fmt.Errorf("failed to create local directory for %s: %w", localPath, err)
+		return fmt.Errorf("创建本地目录 %s 失败: %w", localPath, err)
 	}
 
 	localFile, err := os.Create(localPath)
 	if err != nil {
-		return fmt.Errorf("failed to create local file %s: %w", localPath, err)
+		return fmt.Errorf("创建本地文件 %s 失败: %w", localPath, err)
 	}
 	defer localFile.Close()
 
 	bytesCopied, err := io.Copy(localFile, remoteFile)
 	if err != nil {
-		return fmt.Errorf("failed to download file (copied %d bytes): %w", bytesCopied, err)
+		return fmt.Errorf("下载文件失败 (已复制 %d 字节): %w", bytesCopied, err)
 	}
 
 	logger.Info("SFTP", s.ip, "成功下载文件: %s -> %s (大小: %d 字节)", remotePath, localPath, bytesCopied)
