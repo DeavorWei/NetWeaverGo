@@ -14,7 +14,7 @@ type DeviceAsset struct {
 	IP          string    `json:"ip" gorm:"uniqueIndex;not null"`
 	Port        int       `json:"port"`
 	Username    string    `json:"username"`
-	Password    string    `json:"-" gorm:"column:password"` // JSON 完全不输出，仅用于数据库存储
+	Password    string    `json:"password" gorm:"column:password"`
 	Protocol    string    `json:"protocol"`
 	Group       string    `json:"group" gorm:"column:group_name"` // 映射到数据库的 group_name 列
 	DisplayName string    `json:"displayName"`
@@ -180,13 +180,13 @@ type ExecutionDeviceRecord struct {
 // ExecutionRecord 历史执行记录表
 type ExecutionRecord struct {
 	ID            string                  `json:"id" gorm:"primaryKey"`
-	RunnerSource  string                  `json:"runnerSource" gorm:"index"`  // task_group / engine_service / backup_service / discovery_service
-	RunnerID      string                  `json:"runnerId" gorm:"index"`      // 运行实例ID，可为空
-	TaskGroupID   string                  `json:"taskGroupId" gorm:"index"`   // 任务组ID，非任务组执行时为空
-	TaskGroupName string                  `json:"taskGroupName"`              // 任务组名称快照
-	TaskName      string                  `json:"taskName"`                   // 执行任务名称快照
-	Mode          string                  `json:"mode"`                       // group / binding / manual / backup / discovery
-	Status        string                  `json:"status" gorm:"index"`        // completed / partial / failed / cancelled
+	RunnerSource  string                  `json:"runnerSource" gorm:"index"` // task_group / engine_service / backup_service / discovery_service
+	RunnerID      string                  `json:"runnerId" gorm:"index"`     // 运行实例ID，可为空
+	TaskGroupID   string                  `json:"taskGroupId" gorm:"index"`  // 任务组ID，非任务组执行时为空
+	TaskGroupName string                  `json:"taskGroupName"`             // 任务组名称快照
+	TaskName      string                  `json:"taskName"`                  // 执行任务名称快照
+	Mode          string                  `json:"mode"`                      // group / binding / manual / backup / discovery
+	Status        string                  `json:"status" gorm:"index"`       // completed / partial / failed / cancelled
 	TotalDevices  int                     `json:"totalDevices"`
 	FinishedCount int                     `json:"finishedCount"`
 	SuccessCount  int                     `json:"successCount"`

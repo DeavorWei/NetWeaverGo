@@ -141,6 +141,7 @@ export class DeviceAsset {
     "ip": string;
     "port": number;
     "username": string;
+    "password": string;
     "protocol": string;
 
     /**
@@ -174,6 +175,9 @@ export class DeviceAsset {
         }
         if (!("username" in $$source)) {
             this["username"] = "";
+        }
+        if (!("password" in $$source)) {
+            this["password"] = "";
         }
         if (!("protocol" in $$source)) {
             this["protocol"] = "";
@@ -216,10 +220,10 @@ export class DeviceAsset {
      * Creates a new DeviceAsset instance from a string or object.
      */
     static createFrom($$source: any = {}): DeviceAsset {
-        const $$createField11_0 = $$createType0;
+        const $$createField12_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tags" in $$parsedSource) {
-            $$parsedSource["tags"] = $$createField11_0($$parsedSource["tags"]);
+            $$parsedSource["tags"] = $$createField12_0($$parsedSource["tags"]);
         }
         return new DeviceAsset($$parsedSource as Partial<DeviceAsset>);
     }
