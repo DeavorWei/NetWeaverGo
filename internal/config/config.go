@@ -5,6 +5,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/NetWeaverGo/core/internal/forge"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"gorm.io/gorm"
@@ -185,6 +186,7 @@ func CreateDevice(device models.DeviceAsset) error {
 }
 
 // CreateDevices 批量创建设备
+// 支持IP范围语法糖展开，如 "192.168.1.1-3" 展开为 3 台设备
 func CreateDevices(devices []models.DeviceAsset) error {
 	if DB == nil {
 		return fmt.Errorf("数据库未初始化")
@@ -193,15 +195,30 @@ func CreateDevices(devices []models.DeviceAsset) error {
 		return nil
 	}
 
-	for i := range devices {
-		devices[i].ID = 0
+	// 展开IP范围语法糖
+	expandedDevices := make([]models.DeviceAsset, 0, len(devices))
+	for _, device := range devices {
+		// 使用 forge.ExpandSyntaxSugar 展开IP范围
+		ips, err := forge.ExpandSyntaxSugar(device.IP)
+		if err != nil {
+			return fmt.Errorf("IP 地址展开失败: %s, 错误: %v", device.IP, err)
+		}
+
+		// 为每个展开后的IP创建设备
+		for _, ip := range ips {
+			newDevice := device
+			newDevice.IP = ip
+			newDevice.ID = 0
+			expandedDevices = append(expandedDevices, newDevice)
+		}
 	}
-	if err := validateDevicesForWrite(devices); err != nil {
+
+	if err := validateDevicesForWrite(expandedDevices); err != nil {
 		return err
 	}
 
-	ips := make([]string, 0, len(devices))
-	for _, device := range devices {
+	ips := make([]string, 0, len(expandedDevices))
+	for _, device := range expandedDevices {
 		ips = append(ips, device.IP)
 	}
 
@@ -213,7 +230,7 @@ func CreateDevices(devices []models.DeviceAsset) error {
 		return fmt.Errorf("IP 地址 %s 已存在", existing[0].IP)
 	}
 
-	return DB.Create(&devices).Error
+	return DB.Create(&expandedDevices).Error
 }
 
 // UpdateDevice 更新单台设备
