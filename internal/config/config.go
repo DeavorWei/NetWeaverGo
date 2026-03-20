@@ -252,15 +252,26 @@ func UpdateDevice(id uint, device models.DeviceAsset) error {
 		if err := tx.First(&existing, id).Error; err != nil {
 			return fmt.Errorf("未找到设备: %d", id)
 		}
+
+		// 密码保护：如果新密码为空，保留原密码
+		passwordUpdated := false
+		if device.Password == "" {
+			device.Password = existing.Password
+			logger.Verbose("Config", existing.IP, "更新设备时密码为空，保留原密码: id=%d", id)
+		} else if device.Password != existing.Password {
+			passwordUpdated = true
+		}
+
 		logger.Verbose(
 			"Config",
 			existing.IP,
-			"收到单设备更新请求: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q",
+			"收到单设备更新请求: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q, password_updated=%v",
 			id,
 			existing.Protocol, device.Protocol,
 			existing.Port, device.Port,
 			existing.Group, device.Group,
 			existing.Username, device.Username,
+			passwordUpdated,
 		)
 
 		var conflict models.DeviceAsset
@@ -329,21 +340,30 @@ func UpdateDevices(devices []models.DeviceAsset) error {
 			}
 		}
 
-		for _, device := range devices {
-			old, ok := existingByID[device.ID]
+		for i := range devices {
+			old, ok := existingByID[devices[i].ID]
 			if ok {
+				// 密码保护：如果新密码为空，保留原密码
+				passwordUpdated := false
+				if devices[i].Password == "" {
+					devices[i].Password = old.Password
+					logger.Verbose("Config", old.IP, "批量更新设备时密码为空，保留原密码: id=%d", devices[i].ID)
+				} else if devices[i].Password != old.Password {
+					passwordUpdated = true
+				}
 				logger.Verbose(
 					"Config",
 					old.IP,
-					"批量更新设备: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q",
-					device.ID,
-					old.Protocol, device.Protocol,
-					old.Port, device.Port,
-					old.Group, device.Group,
-					old.Username, device.Username,
+					"批量更新设备: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q, password_updated=%v",
+					devices[i].ID,
+					old.Protocol, devices[i].Protocol,
+					old.Port, devices[i].Port,
+					old.Group, devices[i].Group,
+					old.Username, devices[i].Username,
+					passwordUpdated,
 				)
 			}
-			if err := tx.Save(&device).Error; err != nil {
+			if err := tx.Save(&devices[i]).Error; err != nil {
 				return err
 			}
 		}

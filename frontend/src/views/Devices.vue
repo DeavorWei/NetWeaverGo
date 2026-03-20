@@ -355,12 +355,13 @@ async function saveDevice(deviceData: DeviceFormData) {
 
   try {
     if (isEditing.value && editingDeviceId.value) {
-      // 编辑模式
+      // 编辑模式 - 包含密码字段
       await DeviceAPI.updateDevice(editingDeviceId.value, {
         ip: deviceData.ip,
         port: deviceData.port,
         protocol: deviceData.protocol,
         username: deviceData.username,
+        password: deviceData.password, // 传递密码字段
         group: deviceData.group,
         tags: deviceData.tags,
         vendor: deviceData.vendor,
@@ -368,16 +369,17 @@ async function saveDevice(deviceData: DeviceFormData) {
         site: deviceData.site,
         displayName: deviceData.displayName,
         description: deviceData.description,
-      } as DeviceAsset);
+      } as unknown as DeviceAsset);
       showPageNotice("设备更新成功");
     } else {
-      // 新增模式
+      // 新增模式 - 包含密码字段
       await DeviceAPI.addDevices([
         {
           ip: deviceData.ip,
           port: deviceData.port,
           protocol: deviceData.protocol,
           username: deviceData.username,
+          password: deviceData.password, // 传递密码字段
           group: deviceData.group,
           tags: deviceData.tags,
           vendor: deviceData.vendor,
@@ -385,7 +387,7 @@ async function saveDevice(deviceData: DeviceFormData) {
           site: deviceData.site,
           displayName: deviceData.displayName,
           description: deviceData.description,
-        } as DeviceAsset,
+        } as unknown as DeviceAsset,
       ]);
       showPageNotice("设备添加成功");
     }
@@ -458,26 +460,19 @@ async function saveBatchEdit(field: BatchField, value: string | number) {
         .map((t) => t.trim())
         .filter((t) => t);
 
-      for (const id of ids) {
-        const device = data.value.find((d) => d.id === id);
-        if (device) {
+      // 字段级更新：只传递 tags 字段，不展开整个设备对象
+        for (const id of ids) {
           await DeviceAPI.updateDevice(id, {
-            ...device,
             tags,
-          });
+          } as unknown as DeviceAsset);
         }
-      }
-    } else {
-      // 其他字段批量更新
-      for (const id of ids) {
-        const device = data.value.find((d) => d.id === id);
-        if (device) {
+      } else {
+        // 其他字段批量更新 - 字段级更新，不展开整个设备对象
+        for (const id of ids) {
           await DeviceAPI.updateDevice(id, {
-            ...device,
             [field]: value,
-          });
+          } as unknown as DeviceAsset);
         }
-      }
     }
 
     showPageNotice(
