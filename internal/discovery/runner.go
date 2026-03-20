@@ -590,21 +590,6 @@ func (r *Runner) parseAndUpdateDeviceInfo(taskID, deviceIP, vendor, output strin
 // getDevicesForDiscovery 获取用于发现的设备列表
 func (r *Runner) getDevicesForDiscovery(req models.StartDiscoveryRequest) ([]models.DeviceInfo, error) {
 	var devices []models.DeviceInfo
-
-	// 定义一个临时结构来接收数据库查询结果
-	type DeviceAssetRow struct {
-		ID          uint   `gorm:"column:id"`
-		IP          string `gorm:"column:ip"`
-		Port        int    `gorm:"column:port"`
-		Username    string `gorm:"column:username"`
-		Password    string `gorm:"column:password"`
-		Vendor      string `gorm:"column:vendor"`
-		DisplayName string `gorm:"column:display_name"`
-		Role        string `gorm:"column:role"`
-		Site        string `gorm:"column:site"`
-		Group       string `gorm:"column:group_name"`
-	}
-
 	var rows []DeviceAssetRow
 
 	if len(req.DeviceIDs) > 0 {
@@ -637,17 +622,7 @@ func (r *Runner) getDevicesForDiscovery(req models.StartDiscoveryRequest) ([]mod
 		if strings.TrimSpace(row.IP) == "" {
 			continue
 		}
-		devices = append(devices, models.DeviceInfo{
-			ID:          row.ID,
-			IP:          row.IP,
-			Port:        row.Port,
-			Username:    row.Username,
-			Password:    row.Password,
-			Vendor:      row.Vendor,
-			DisplayName: row.DisplayName,
-			Role:        row.Role,
-			Site:        row.Site,
-		})
+		devices = append(devices, row.ToDeviceInfo())
 	}
 
 	return devices, nil
@@ -655,18 +630,6 @@ func (r *Runner) getDevicesForDiscovery(req models.StartDiscoveryRequest) ([]mod
 
 // getDevicesByIPs 根据IP列表获取设备信息
 func (r *Runner) getDevicesByIPs(ips []string) ([]models.DeviceInfo, error) {
-	type DeviceAssetRow struct {
-		ID          uint   `gorm:"column:id"`
-		IP          string `gorm:"column:ip"`
-		Port        int    `gorm:"column:port"`
-		Username    string `gorm:"column:username"`
-		Password    string `gorm:"column:password"`
-		Vendor      string `gorm:"column:vendor"`
-		DisplayName string `gorm:"column:display_name"`
-		Role        string `gorm:"column:role"`
-		Site        string `gorm:"column:site"`
-	}
-
 	var rows []DeviceAssetRow
 	if err := r.db.Table("device_assets").Where("ip IN ?", ips).Find(&rows).Error; err != nil {
 		return nil, err
@@ -674,17 +637,7 @@ func (r *Runner) getDevicesByIPs(ips []string) ([]models.DeviceInfo, error) {
 
 	devices := make([]models.DeviceInfo, len(rows))
 	for i, row := range rows {
-		devices[i] = models.DeviceInfo{
-			ID:          row.ID,
-			IP:          row.IP,
-			Port:        row.Port,
-			Username:    row.Username,
-			Password:    row.Password,
-			Vendor:      row.Vendor,
-			DisplayName: row.DisplayName,
-			Role:        row.Role,
-			Site:        row.Site,
-		}
+		devices[i] = row.ToDeviceInfo()
 	}
 
 	return devices, nil

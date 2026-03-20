@@ -390,6 +390,29 @@ func buildHostKeyCallback(cfg Config) (ssh.HostKeyCallback, error) {
 	}
 }
 
+// createKeyboardInteractiveHandler 创建键盘交互认证处理器
+// 用于处理 SSH 键盘交互式认证，当问题包含 "password" 时返回密码
+func createKeyboardInteractiveHandler(password string) ssh.KeyboardInteractiveChallenge {
+	return func(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
+		answers = make([]string, len(questions))
+		for i, q := range questions {
+			if strings.Contains(strings.ToLower(q), "password") {
+				answers[i] = password
+			}
+		}
+		return answers, nil
+	}
+}
+
+// buildAuthMethods 构造 SSH 认证方法列表
+// 返回 Password 和 KeyboardInteractive 两种认证方法，支持大多数网络设备的 SSH 认证场景
+func buildAuthMethods(password string) []ssh.AuthMethod {
+	return []ssh.AuthMethod{
+		ssh.Password(password),
+		ssh.KeyboardInteractive(createKeyboardInteractiveHandler(password)),
+	}
+}
+
 func strictKnownHostsCallback(path string) (ssh.HostKeyCallback, error) {
 	if err := ensureKnownHostsFile(path); err != nil {
 		return nil, err
@@ -490,19 +513,8 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	}
 
 	sshConfig := &ssh.ClientConfig{
-		User: cfg.Username,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(cfg.Password),
-			ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
-				answers = make([]string, len(questions))
-				for i, q := range questions {
-					if strings.Contains(strings.ToLower(q), "password") {
-						answers[i] = cfg.Password
-					}
-				}
-				return answers, nil
-			}),
-		},
+		User:            cfg.Username,
+		Auth:            buildAuthMethods(cfg.Password),
 		HostKeyCallback: hostKeyCallback,
 		Timeout:         cfg.Timeout,
 	}
@@ -752,19 +764,8 @@ func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	}
 
 	sshConfig := &ssh.ClientConfig{
-		User: cfg.Username,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(cfg.Password),
-			ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
-				answers = make([]string, len(questions))
-				for i, q := range questions {
-					if strings.Contains(strings.ToLower(q), "password") {
-						answers[i] = cfg.Password
-					}
-				}
-				return answers, nil
-			}),
-		},
+		User:            cfg.Username,
+		Auth:            buildAuthMethods(cfg.Password),
 		HostKeyCallback: hostKeyCallback,
 		Timeout:         cfg.Timeout,
 	}

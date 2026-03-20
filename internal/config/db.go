@@ -16,6 +16,12 @@ import (
 
 var DB *gorm.DB
 
+// GetDB 获取数据库实例
+// 供 Repository 层使用，避免直接访问 DB 变量
+func GetDB() *gorm.DB {
+	return DB
+}
+
 // InitDB 初始化 SQLite 数据库
 func InitDB() error {
 	pm := GetPathManager()

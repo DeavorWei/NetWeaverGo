@@ -5,7 +5,6 @@ import (
 	"net"
 	"strings"
 
-	"github.com/NetWeaverGo/core/internal/forge"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"gorm.io/gorm"
@@ -26,47 +25,39 @@ const (
 	defaultConfigFile    = "config.txt"
 )
 
-// LoadExecutionResources 获取执行所需的设备资产和默认命令组
-func LoadExecutionResources() ([]models.DeviceAsset, []string, error) {
-	devices, err := LoadDeviceAssets()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	commands, err := LoadDefaultCommands()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return devices, commands, nil
+// PasswordMergeResult 密码合并结果
+// 用于统一单设备更新和批量更新的密码处理逻辑
+type PasswordMergeResult struct {
+	Password    string // 合并后的密码
+	Changed     bool   // 密码是否发生变化
+	OldPassword string // 原密码（用于审计日志脱敏）
 }
 
-// LoadDeviceAssets 从数据库加载全部设备资产
-func LoadDeviceAssets() ([]models.DeviceAsset, error) {
-	logger.Debug("Config", "-", "开始从数据库加载设备资产")
-	if DB == nil {
-		return nil, fmt.Errorf("数据库未初始化")
+// MergePassword 统一密码合并规则
+// 语义：空值不修改，非空值更新
+// 参数：
+//   - oldPassword: 原密码
+//   - newPassword: 新密码
+//
+// 返回：
+//   - PasswordMergeResult: 包含合并后的密码、是否变化、原密码
+func MergePassword(oldPassword, newPassword string) PasswordMergeResult {
+	// 空值不修改
+	if newPassword == "" {
+		return PasswordMergeResult{
+			Password:    oldPassword,
+			Changed:     false,
+			OldPassword: oldPassword,
+		}
 	}
 
-	var devices []models.DeviceAsset
-	if err := DB.Order("ip ASC").Find(&devices).Error; err != nil {
-		return nil, err
+	// 非空值更新
+	changed := newPassword != oldPassword
+	return PasswordMergeResult{
+		Password:    newPassword,
+		Changed:     changed,
+		OldPassword: oldPassword,
 	}
-	return devices, nil
-}
-
-// LoadDeviceByID 根据 ID 加载单个设备资产（包含解密后的密码）
-func LoadDeviceByID(id uint) (*models.DeviceAsset, error) {
-	logger.Debug("Config", "-", "开始从数据库加载设备详情, ID: %d", id)
-	if DB == nil {
-		return nil, fmt.Errorf("数据库未初始化")
-	}
-
-	var device models.DeviceAsset
-	if err := DB.First(&device, id).Error; err != nil {
-		return nil, err
-	}
-	return &device, nil
 }
 
 // LoadDefaultCommands 从默认命令组加载命令列表
@@ -128,332 +119,14 @@ func ValidateDevice(device *models.DeviceAsset) error {
 	return nil
 }
 
-func normalizeDevice(device *models.DeviceAsset) {
+// NormalizeDevice 标准化设备信息
+// 导出供 Service 层使用
+func NormalizeDevice(device *models.DeviceAsset) {
 	device.IP = strings.TrimSpace(device.IP)
 	device.Protocol = strings.ToUpper(strings.TrimSpace(device.Protocol))
 	device.Username = strings.TrimSpace(device.Username)
 	device.Password = strings.TrimSpace(device.Password)
 	device.Group = strings.TrimSpace(device.Group)
-}
-
-func validateDevicesForWrite(devices []models.DeviceAsset) error {
-	ipSet := make(map[string]struct{}, len(devices))
-	idSet := make(map[uint]struct{}, len(devices))
-
-	for i := range devices {
-		normalizeDevice(&devices[i])
-		if err := ValidateDevice(&devices[i]); err != nil {
-			return fmt.Errorf("第 %d 台设备: %v", i+1, err)
-		}
-
-		if _, exists := ipSet[devices[i].IP]; exists {
-			return fmt.Errorf("存在重复的 IP 地址: %s", devices[i].IP)
-		}
-		ipSet[devices[i].IP] = struct{}{}
-
-		if devices[i].ID != 0 {
-			if _, exists := idSet[devices[i].ID]; exists {
-				return fmt.Errorf("存在重复的设备 ID: %d", devices[i].ID)
-			}
-			idSet[devices[i].ID] = struct{}{}
-		}
-	}
-
-	return nil
-}
-
-// CreateDevice 创建单台设备
-func CreateDevice(device models.DeviceAsset) error {
-	if DB == nil {
-		return fmt.Errorf("数据库未初始化")
-	}
-
-	normalizeDevice(&device)
-	if err := ValidateDevice(&device); err != nil {
-		return err
-	}
-
-	var count int64
-	if err := DB.Model(&models.DeviceAsset{}).Where("ip = ?", device.IP).Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
-		return fmt.Errorf("IP 地址 %s 已存在", device.IP)
-	}
-
-	device.ID = 0
-	return DB.Create(&device).Error
-}
-
-// CreateDevices 批量创建设备
-// 支持IP范围语法糖展开，如 "192.168.1.1-3" 展开为 3 台设备
-func CreateDevices(devices []models.DeviceAsset) error {
-	if DB == nil {
-		return fmt.Errorf("数据库未初始化")
-	}
-	if len(devices) == 0 {
-		return nil
-	}
-
-	// 展开IP范围语法糖
-	expandedDevices := make([]models.DeviceAsset, 0, len(devices))
-	for _, device := range devices {
-		// 使用 forge.ExpandSyntaxSugar 展开IP范围
-		ips, err := forge.ExpandSyntaxSugar(device.IP)
-		if err != nil {
-			return fmt.Errorf("IP 地址展开失败: %s, 错误: %v", device.IP, err)
-		}
-
-		// 为每个展开后的IP创建设备
-		for _, ip := range ips {
-			newDevice := device
-			newDevice.IP = ip
-			newDevice.ID = 0
-			expandedDevices = append(expandedDevices, newDevice)
-		}
-	}
-
-	if err := validateDevicesForWrite(expandedDevices); err != nil {
-		return err
-	}
-
-	ips := make([]string, 0, len(expandedDevices))
-	for _, device := range expandedDevices {
-		ips = append(ips, device.IP)
-	}
-
-	var existing []models.DeviceAsset
-	if err := DB.Where("ip IN ?", ips).Find(&existing).Error; err != nil {
-		return err
-	}
-	if len(existing) > 0 {
-		return fmt.Errorf("IP 地址 %s 已存在", existing[0].IP)
-	}
-
-	return DB.Create(&expandedDevices).Error
-}
-
-// UpdateDevice 更新单台设备（支持部分字段更新）
-func UpdateDevice(id uint, device models.DeviceAsset) error {
-	if DB == nil {
-		return fmt.Errorf("数据库未初始化")
-	}
-	if id == 0 {
-		return fmt.Errorf("无效的设备 ID")
-	}
-
-	return DB.Transaction(func(tx *gorm.DB) error {
-		var existing models.DeviceAsset
-		if err := tx.First(&existing, id).Error; err != nil {
-			return fmt.Errorf("未找到设备: %d", id)
-		}
-
-		// 字段合并：非零值覆盖，零值保留原值
-		// IP
-		if device.IP != "" {
-			existing.IP = strings.TrimSpace(device.IP)
-		}
-		// Protocol
-		if device.Protocol != "" {
-			existing.Protocol = strings.ToUpper(strings.TrimSpace(device.Protocol))
-		}
-		// Port
-		if device.Port != 0 {
-			existing.Port = device.Port
-		}
-		// Username
-		if device.Username != "" {
-			existing.Username = strings.TrimSpace(device.Username)
-		}
-		// Password: 非空才更新（保留原密码保护逻辑）
-		passwordUpdated := false
-		if device.Password != "" {
-			if device.Password != existing.Password {
-				passwordUpdated = true
-			}
-			existing.Password = device.Password
-		}
-		// Group
-		if device.Group != "" {
-			existing.Group = strings.TrimSpace(device.Group)
-		}
-		// DisplayName
-		if device.DisplayName != "" {
-			existing.DisplayName = strings.TrimSpace(device.DisplayName)
-		}
-		// Vendor
-		if device.Vendor != "" {
-			existing.Vendor = strings.TrimSpace(device.Vendor)
-		}
-		// Role
-		if device.Role != "" {
-			existing.Role = strings.TrimSpace(device.Role)
-		}
-		// Site
-		if device.Site != "" {
-			existing.Site = strings.TrimSpace(device.Site)
-		}
-		// Description
-		if device.Description != "" {
-			existing.Description = strings.TrimSpace(device.Description)
-		}
-		// Tags: 非空才更新
-		if len(device.Tags) > 0 {
-			existing.Tags = device.Tags
-		}
-
-		logger.Verbose(
-			"Config",
-			existing.IP,
-			"收到单设备更新请求: id=%d, protocol=%s, port=%d, group=%q, username=%q, password_updated=%v",
-			id,
-			existing.Protocol,
-			existing.Port,
-			existing.Group,
-			existing.Username,
-			passwordUpdated,
-		)
-
-		// 合并后进行验证
-		if err := ValidateDevice(&existing); err != nil {
-			return err
-		}
-
-		// IP 冲突检查
-		var conflict models.DeviceAsset
-		err := tx.Where("ip = ? AND id <> ?", existing.IP, id).First(&conflict).Error
-		if err == nil {
-			return fmt.Errorf("IP 地址 %s 已被其他设备使用", existing.IP)
-		}
-		if err != nil && err != gorm.ErrRecordNotFound {
-			return err
-		}
-
-		if err := tx.Save(&existing).Error; err != nil {
-			return err
-		}
-		logger.Verbose("Config", existing.IP, "单设备更新完成: id=%d", id)
-		return nil
-	})
-}
-
-// UpdateDevices 批量更新设备
-func UpdateDevices(devices []models.DeviceAsset) error {
-	if DB == nil {
-		return fmt.Errorf("数据库未初始化")
-	}
-	if len(devices) == 0 {
-		return nil
-	}
-
-	if err := validateDevicesForWrite(devices); err != nil {
-		return err
-	}
-
-	ids := make([]uint, 0, len(devices))
-	ips := make([]string, 0, len(devices))
-	idSet := make(map[uint]struct{}, len(devices))
-	for _, device := range devices {
-		if device.ID == 0 {
-			return fmt.Errorf("批量更新时存在无效设备 ID")
-		}
-		ids = append(ids, device.ID)
-		ips = append(ips, device.IP)
-		idSet[device.ID] = struct{}{}
-	}
-
-	logger.Verbose("Config", "-", "收到批量设备更新请求: count=%d", len(devices))
-	return DB.Transaction(func(tx *gorm.DB) error {
-		var existing []models.DeviceAsset
-		if err := tx.Where("id IN ?", ids).Find(&existing).Error; err != nil {
-			return err
-		}
-		if len(existing) != len(ids) {
-			return fmt.Errorf("部分设备不存在，无法完成批量更新")
-		}
-		existingByID := make(map[uint]models.DeviceAsset, len(existing))
-		for _, item := range existing {
-			existingByID[item.ID] = item
-		}
-
-		var conflicts []models.DeviceAsset
-		if err := tx.Where("ip IN ?", ips).Find(&conflicts).Error; err != nil {
-			return err
-		}
-		for _, conflict := range conflicts {
-			if _, ok := idSet[conflict.ID]; !ok {
-				return fmt.Errorf("IP 地址 %s 已被其他设备使用", conflict.IP)
-			}
-		}
-
-		for i := range devices {
-			old, ok := existingByID[devices[i].ID]
-			if ok {
-				// 密码保护：如果新密码为空，保留原密码
-				passwordUpdated := false
-				if devices[i].Password == "" {
-					devices[i].Password = old.Password
-					logger.Verbose("Config", old.IP, "批量更新设备时密码为空，保留原密码: id=%d", devices[i].ID)
-				} else if devices[i].Password != old.Password {
-					passwordUpdated = true
-				}
-				logger.Verbose(
-					"Config",
-					old.IP,
-					"批量更新设备: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q, password_updated=%v",
-					devices[i].ID,
-					old.Protocol, devices[i].Protocol,
-					old.Port, devices[i].Port,
-					old.Group, devices[i].Group,
-					old.Username, devices[i].Username,
-					passwordUpdated,
-				)
-			}
-			if err := tx.Save(&devices[i]).Error; err != nil {
-				return err
-			}
-		}
-		logger.Verbose("Config", "-", "批量设备更新完成: count=%d", len(devices))
-		return nil
-	})
-}
-
-// DeleteDevice 删除单台设备
-func DeleteDevice(id uint) error {
-	if DB == nil {
-		return fmt.Errorf("数据库未初始化")
-	}
-	if id == 0 {
-		return fmt.Errorf("无效的设备 ID")
-	}
-
-	result := DB.Delete(&models.DeviceAsset{}, id)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("未找到设备: %d", id)
-	}
-	return nil
-}
-
-// DeleteDevices 批量删除设备
-func DeleteDevices(ids []uint) error {
-	if DB == nil {
-		return fmt.Errorf("数据库未初始化")
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-
-	result := DB.Where("id IN ?", ids).Delete(&models.DeviceAsset{})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("未找到可删除的设备")
-	}
-	return nil
 }
 
 // SaveCommands 保存命令列表到默认命令组

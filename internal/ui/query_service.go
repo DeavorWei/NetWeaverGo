@@ -2,13 +2,12 @@ package ui
 
 import (
 	"context"
-	"encoding/json"
-	"sort"
 	"strings"
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -16,11 +15,21 @@ import (
 // 前端无需本地过滤，直接调用后端查询接口
 type QueryService struct {
 	wailsApp *application.App
+	repo     repository.DeviceRepository
 }
 
 // NewQueryService 创建查询服务实例
 func NewQueryService() *QueryService {
-	return &QueryService{}
+	return &QueryService{
+		repo: repository.NewDeviceRepository(),
+	}
+}
+
+// NewQueryServiceWithRepo 使用指定 Repository 创建查询服务实例（用于测试）
+func NewQueryServiceWithRepo(repo repository.DeviceRepository) *QueryService {
+	return &QueryService{
+		repo: repo,
+	}
 }
 
 // ServiceStartup Wails 服务启动生命周期钩子
@@ -30,106 +39,36 @@ func (s *QueryService) ServiceStartup(ctx context.Context, options application.S
 	return nil
 }
 
-// ListDevices 查询设备列表（使用数据库分页查询）
+// ListDevices 查询设备列表（使用 Repository 分页查询）
 func (s *QueryService) ListDevices(opts QueryOptions) *QueryResult {
-	return s.queryDevicesFromDB(opts)
+	return s.queryDevicesFromRepo(opts)
 }
 
-// queryDevicesFromDB 从数据库查询设备列表
-func (s *QueryService) queryDevicesFromDB(opts QueryOptions) *QueryResult {
-	if config.DB == nil {
-		logger.Error("Query", "-", "数据库未初始化")
+// queryDevicesFromRepo 从 Repository 查询设备列表
+func (s *QueryService) queryDevicesFromRepo(opts QueryOptions) *QueryResult {
+	// 转换查询选项
+	repoOpts := repository.DeviceQueryOptions{
+		SearchQuery: opts.SearchQuery,
+		FilterField: opts.FilterField,
+		FilterValue: opts.FilterValue,
+		Page:        opts.Page,
+		PageSize:    opts.PageSize,
+		SortBy:      opts.SortBy,
+		SortOrder:   opts.SortOrder,
+	}
+
+	result, err := s.repo.Query(repoOpts)
+	if err != nil {
+		logger.Error("Query", "-", "查询设备失败: %v", err)
 		return emptyDeviceQueryResult(opts)
-	}
-
-	var devices []models.DeviceAsset
-	var total int64
-	filterField := normalizeDeviceFilterField(opts.FilterField)
-
-	// 构建查询
-	query := config.DB.Model(&models.DeviceAsset{})
-
-	// 应用搜索过滤
-	if opts.SearchQuery != "" {
-		searchPattern := "%" + strings.ToLower(opts.SearchQuery) + "%"
-		switch filterField {
-		case "group":
-			query = query.Where("LOWER(group_name) LIKE ?", searchPattern)
-		case "ip":
-			query = query.Where("LOWER(ip) LIKE ?", searchPattern)
-		case "tag":
-			query = query.Where("LOWER(tags) LIKE ?", searchPattern)
-		default:
-			// 默认搜索所有字段
-			query = query.Where(
-				"LOWER(ip) LIKE ? OR LOWER(group_name) LIKE ? OR LOWER(username) LIKE ? OR LOWER(tags) LIKE ?",
-				searchPattern, searchPattern, searchPattern, searchPattern,
-			)
-		}
-	}
-
-	// 应用状态/值过滤
-	if opts.FilterValue != "" {
-		switch filterField {
-		case "protocol":
-			query = query.Where("LOWER(protocol) = ?", strings.ToLower(opts.FilterValue))
-		case "group":
-			query = query.Where("LOWER(group_name) = ?", strings.ToLower(opts.FilterValue))
-		}
-	}
-
-	// 计算总数
-	if err := query.Count(&total).Error; err != nil {
-		logger.Error("Query", "-", "统计设备总数失败: %v", err)
-		return emptyDeviceQueryResult(opts)
-	}
-
-	// 应用排序
-	orderClause := s.buildOrderClause(opts.SortBy, opts.SortOrder)
-	if orderClause != "" {
-		query = query.Order(orderClause)
-	}
-
-	// 计算分页参数
-	pageSize := opts.PageSize
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-	page := opts.Page
-	if page <= 0 {
-		page = 1
-	}
-
-	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	if totalPages < 1 {
-		totalPages = 1
-	}
-
-	// 边界检查
-	offset := (page - 1) * pageSize
-	if offset >= int(total) {
-		offset = 0
-		page = 1
-	}
-
-	// 执行分页查询
-	if err := query.Offset(offset).Limit(pageSize).Find(&devices).Error; err != nil {
-		logger.Error("Query", "-", "分页查询设备失败: %v", err)
-		return emptyDeviceQueryResult(opts)
-	}
-
-	// 转换为列表项，清除密码字段
-	items := make([]models.DeviceAssetListItem, len(devices))
-	for i, d := range devices {
-		items[i] = d.ToListItem()
 	}
 
 	return &QueryResult{
-		Data:       items,
-		Total:      int(total),
-		Page:       page,
-		PageSize:   pageSize,
-		TotalPages: totalPages,
+		Data:       result.Data,
+		Total:      int(result.Total),
+		Page:       result.Page,
+		PageSize:   result.PageSize,
+		TotalPages: result.TotalPages,
 	}
 }
 
@@ -384,71 +323,20 @@ func (s *QueryService) filterCommandGroups(groups []models.CommandGroup, opts Qu
 
 // GetDeviceGroups 获取所有设备分组名称（用于前端下拉选项）
 func (s *QueryService) GetDeviceGroups() []string {
-	if config.DB == nil {
-		return []string{}
-	}
-
-	var groups []string
-	if err := config.DB.Model(&models.DeviceAsset{}).
-		Where("group_name != ''").
-		Distinct("group_name").
-		Pluck("group_name", &groups).Error; err != nil {
+	groups, err := s.repo.GetDistinctGroups()
+	if err != nil {
 		logger.Error("Query", "-", "加载设备分组失败: %v", err)
 		return []string{}
 	}
-
-	sort.Strings(groups)
-
 	return groups
 }
 
 // GetDeviceTags 获取所有设备标签（用于前端下拉选项）
 func (s *QueryService) GetDeviceTags() []string {
-	if config.DB == nil {
-		return []string{}
-	}
-
-	var tagStrings []string
-	if err := config.DB.Model(&models.DeviceAsset{}).
-		Where("tags IS NOT NULL AND tags != ''").
-		Pluck("tags", &tagStrings).Error; err != nil {
+	tags, err := s.repo.GetDistinctTags()
+	if err != nil {
 		logger.Error("Query", "-", "加载设备标签失败: %v", err)
 		return []string{}
-	}
-
-	// 解析并去重标签
-	tagSet := make(map[string]bool)
-	for _, ts := range tagStrings {
-		tags := extractTags(ts)
-		for _, tag := range tags {
-			if tag != "" {
-				tagSet[tag] = true
-			}
-		}
-	}
-
-	tags := make([]string, 0, len(tagSet))
-	for tag := range tagSet {
-		tags = append(tags, tag)
-	}
-	sort.Strings(tags)
-
-	return tags
-}
-
-func extractTags(raw string) []string {
-	var tags []string
-	if err := json.Unmarshal([]byte(raw), &tags); err == nil {
-		return tags
-	}
-
-	fallback := strings.Split(raw, ",")
-	tags = make([]string, 0, len(fallback))
-	for _, tag := range fallback {
-		tag = strings.TrimSpace(tag)
-		if tag != "" {
-			tags = append(tags, tag)
-		}
 	}
 	return tags
 }

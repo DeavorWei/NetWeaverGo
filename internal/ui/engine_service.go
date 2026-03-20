@@ -9,6 +9,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/engine"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
+	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -22,11 +23,21 @@ const (
 // EngineService 引擎控制服务 - 负责任务执行和状态管理
 type EngineService struct {
 	wailsApp *application.App
+	repo     repository.DeviceRepository
 }
 
 // NewEngineService 创建引擎服务实例
 func NewEngineService() *EngineService {
-	return &EngineService{}
+	return &EngineService{
+		repo: repository.NewDeviceRepository(),
+	}
+}
+
+// NewEngineServiceWithRepo 使用指定 Repository 创建引擎服务实例（用于测试）
+func NewEngineServiceWithRepo(repo repository.DeviceRepository) *EngineService {
+	return &EngineService{
+		repo: repo,
+	}
 }
 
 // ServiceStartup Wails 服务启动生命周期钩子
@@ -122,7 +133,7 @@ func (s *EngineService) GetEngineState() map[string]interface{} {
 // prepareAssetsAndCommands 准备设备和命令
 func (s *EngineService) prepareAssetsAndCommands(deviceIPs []string, commandGroupID uint) ([]models.DeviceAsset, []string, error) {
 	// 获取所有设备
-	allAssets, err := config.LoadDeviceAssets()
+	allAssets, err := s.repo.FindAll()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -172,7 +183,7 @@ func (s *EngineService) StartBackup() error {
 		return err
 	}
 
-	assets, err := config.LoadDeviceAssets()
+	assets, err := s.repo.FindAll()
 	if err != nil {
 		return err
 	}

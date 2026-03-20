@@ -12,17 +12,28 @@ import (
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
+	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // TaskGroupService 任务组管理服务 - 负责任务组的增删改查和执行
 type TaskGroupService struct {
 	wailsApp *application.App
+	repo     repository.DeviceRepository
 }
 
 // NewTaskGroupService 创建任务组服务实例
 func NewTaskGroupService() *TaskGroupService {
-	return &TaskGroupService{}
+	return &TaskGroupService{
+		repo: repository.NewDeviceRepository(),
+	}
+}
+
+// NewTaskGroupServiceWithRepo 使用指定 Repository 创建任务组服务实例（用于测试）
+func NewTaskGroupServiceWithRepo(repo repository.DeviceRepository) *TaskGroupService {
+	return &TaskGroupService{
+		repo: repo,
+	}
 }
 
 // ServiceStartup Wails 服务启动生命周期钩子
@@ -51,7 +62,7 @@ func (s *TaskGroupService) GetTaskGroupDetail(id uint) (*TaskGroupDetailViewMode
 		return nil, err
 	}
 
-	return buildTaskGroupDetail(taskGroup)
+	return s.buildTaskGroupDetail(taskGroup)
 }
 
 // CreateTaskGroup 创建新任务组
@@ -107,7 +118,7 @@ func (s *TaskGroupService) StartTaskGroup(id uint) error {
 		return err
 	}
 
-	allAssets, err := config.LoadDeviceAssets()
+	allAssets, err := s.repo.FindAll()
 	if err != nil {
 		config.UpdateTaskGroupStatus(id, "failed")
 		return err
@@ -351,12 +362,12 @@ func canEditTaskGroup(status string) bool {
 	return status != "running"
 }
 
-func buildTaskGroupDetail(taskGroup *models.TaskGroup) (*TaskGroupDetailViewModel, error) {
+func (s *TaskGroupService) buildTaskGroupDetail(taskGroup *models.TaskGroup) (*TaskGroupDetailViewModel, error) {
 	if taskGroup == nil {
 		return nil, fmt.Errorf("任务组不能为空")
 	}
 
-	assets, err := config.LoadDeviceAssets()
+	assets, err := s.repo.FindAll()
 	if err != nil {
 		return nil, err
 	}

@@ -43,7 +43,7 @@ export function ListCommandGroups(opts: $models.QueryOptions): $CancellablePromi
 }
 
 /**
- * ListDevices 查询设备列表（使用数据库分页查询）
+ * ListDevices 查询设备列表（使用 Repository 分页查询）
  */
 export function ListDevices(opts: $models.QueryOptions): $CancellablePromise<$models.QueryResult | null> {
     return $Call.ByID(2076140864, opts).then(($result: any) => {

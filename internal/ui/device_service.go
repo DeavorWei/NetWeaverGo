@@ -2,20 +2,33 @@ package ui
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/forge"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // DeviceService 设备管理服务 - 负责设备的增删改查
 type DeviceService struct {
 	wailsApp *application.App
+	repo     repository.DeviceRepository
 }
 
 // NewDeviceService 创建设备服务实例
 func NewDeviceService() *DeviceService {
-	return &DeviceService{}
+	return &DeviceService{
+		repo: repository.NewDeviceRepository(),
+	}
+}
+
+// NewDeviceServiceWithRepo 使用指定 Repository 创建设备服务实例（用于测试）
+func NewDeviceServiceWithRepo(repo repository.DeviceRepository) *DeviceService {
+	return &DeviceService{
+		repo: repo,
+	}
 }
 
 // ServiceStartup Wails 服务启动生命周期钩子
@@ -27,7 +40,7 @@ func (s *DeviceService) ServiceStartup(ctx context.Context, options application.
 // ListDevices 获取设备列表（不含密码）
 // 列表场景不返回密码，密码仅在单设备详情接口中返回
 func (s *DeviceService) ListDevices() ([]models.DeviceAssetListItem, error) {
-	devices, err := config.LoadDeviceAssets()
+	devices, err := s.repo.FindAll()
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +54,7 @@ func (s *DeviceService) ListDevices() ([]models.DeviceAssetListItem, error) {
 
 // GetDeviceByID 根据 ID 获取单个设备详情（包含解密后的密码，用于编辑）
 func (s *DeviceService) GetDeviceByID(id uint) (*models.DeviceAssetResponse, error) {
-	device, err := config.LoadDeviceByID(id)
+	device, err := s.repo.FindByID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -51,32 +64,192 @@ func (s *DeviceService) GetDeviceByID(id uint) (*models.DeviceAssetResponse, err
 
 // AddDevice 新增设备
 func (s *DeviceService) AddDevice(device models.DeviceAsset) error {
-	return config.CreateDevice(device)
+	// 标准化设备信息
+	config.NormalizeDevice(&device)
+
+	// 校验设备信息
+	if err := config.ValidateDevice(&device); err != nil {
+		return err
+	}
+
+	// 检查 IP 是否已存在
+	exists, err := s.repo.ExistsByIP(device.IP)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("IP 地址 %s 已存在", device.IP)
+	}
+
+	return s.repo.Create(&device)
 }
 
 // AddDevices 批量新增设备
 func (s *DeviceService) AddDevices(devices []models.DeviceAsset) error {
-	return config.CreateDevices(devices)
+	if len(devices) == 0 {
+		return nil
+	}
+
+	// 标准化和校验
+	for i := range devices {
+		config.NormalizeDevice(&devices[i])
+		if err := config.ValidateDevice(&devices[i]); err != nil {
+			return fmt.Errorf("第 %d 台设备: %v", i+1, err)
+		}
+	}
+
+	// 展开 IP 范围语法糖（如 "192.168.1.1-3" 展开为多个 IP）
+	expandedDevices := make([]models.DeviceAsset, 0)
+	for _, device := range devices {
+		ips, err := forge.ExpandSyntaxSugar(device.IP)
+		if err != nil {
+			return fmt.Errorf("IP 地址展开失败: %s, 错误: %v", device.IP, err)
+		}
+		for _, ip := range ips {
+			newDevice := device
+			newDevice.IP = ip
+			expandedDevices = append(expandedDevices, newDevice)
+		}
+	}
+
+	// 检查展开后的重复 IP
+	ipSet := make(map[string]struct{})
+	for _, d := range expandedDevices {
+		if _, exists := ipSet[d.IP]; exists {
+			return fmt.Errorf("存在重复的 IP 地址: %s", d.IP)
+		}
+		ipSet[d.IP] = struct{}{}
+	}
+
+	// 检查 IP 是否已存在数据库中
+	ips := make([]string, 0, len(expandedDevices))
+	for _, d := range expandedDevices {
+		ips = append(ips, d.IP)
+	}
+	existing, err := s.repo.FindByIPs(ips)
+	if err != nil {
+		return err
+	}
+	if len(existing) > 0 {
+		return fmt.Errorf("IP 地址 %s 已存在", existing[0].IP)
+	}
+
+	return s.repo.CreateBatch(expandedDevices)
 }
 
 // UpdateDevice 更新设备
 func (s *DeviceService) UpdateDevice(id uint, device models.DeviceAsset) error {
-	return config.UpdateDevice(id, device)
+	if id == 0 {
+		return fmt.Errorf("无效的设备 ID")
+	}
+
+	// 获取现有设备
+	existing, err := s.repo.FindByID(id)
+	if err != nil {
+		return fmt.Errorf("未找到设备: %d", id)
+	}
+
+	// 字段合并：非零值覆盖，零值保留原值
+	if device.IP != "" {
+		existing.IP = device.IP
+	}
+	if device.Protocol != "" {
+		existing.Protocol = device.Protocol
+	}
+	if device.Port != 0 {
+		existing.Port = device.Port
+	}
+	if device.Username != "" {
+		existing.Username = device.Username
+	}
+	// Password: 使用统一密码合并规则
+	pwdResult := config.MergePassword(existing.Password, device.Password)
+	existing.Password = pwdResult.Password
+	if device.Group != "" {
+		existing.Group = device.Group
+	}
+	if device.DisplayName != "" {
+		existing.DisplayName = device.DisplayName
+	}
+	if device.Vendor != "" {
+		existing.Vendor = device.Vendor
+	}
+	if device.Role != "" {
+		existing.Role = device.Role
+	}
+	if device.Site != "" {
+		existing.Site = device.Site
+	}
+	if device.Description != "" {
+		existing.Description = device.Description
+	}
+	if len(device.Tags) > 0 {
+		existing.Tags = device.Tags
+	}
+
+	// 标准化
+	config.NormalizeDevice(existing)
+
+	// 校验
+	if err := config.ValidateDevice(existing); err != nil {
+		return err
+	}
+
+	// IP 冲突检查
+	if device.IP != "" {
+		conflict, err := s.repo.FindByIP(device.IP)
+		if err == nil && conflict.ID != id {
+			return fmt.Errorf("IP 地址 %s 已被其他设备使用", device.IP)
+		}
+	}
+
+	return s.repo.Update(existing)
 }
 
 // UpdateDevices 批量更新设备
 func (s *DeviceService) UpdateDevices(devices []models.DeviceAsset) error {
-	return config.UpdateDevices(devices)
+	if len(devices) == 0 {
+		return nil
+	}
+
+	// 校验
+	for i := range devices {
+		config.NormalizeDevice(&devices[i])
+		if err := config.ValidateDevice(&devices[i]); err != nil {
+			return fmt.Errorf("第 %d 台设备: %v", i+1, err)
+		}
+		if devices[i].ID == 0 {
+			return fmt.Errorf("批量更新时存在无效设备 ID")
+		}
+	}
+
+	// 获取现有设备
+	ids := make([]uint, 0, len(devices))
+	for _, d := range devices {
+		ids = append(ids, d.ID)
+	}
+
+	// 处理密码合并
+	for i := range devices {
+		existing, err := s.repo.FindByID(devices[i].ID)
+		if err != nil {
+			return fmt.Errorf("未找到设备: %d", devices[i].ID)
+		}
+		pwdResult := config.MergePassword(existing.Password, devices[i].Password)
+		devices[i].Password = pwdResult.Password
+	}
+
+	return s.repo.UpdateBatch(devices)
 }
 
 // DeleteDevice 删除设备
 func (s *DeviceService) DeleteDevice(id uint) error {
-	return config.DeleteDevice(id)
+	return s.repo.Delete(id)
 }
 
 // DeleteDevices 批量删除设备
 func (s *DeviceService) DeleteDevices(ids []uint) error {
-	return config.DeleteDevices(ids)
+	return s.repo.DeleteBatch(ids)
 }
 
 // GetProtocolDefaultPorts 获取协议默认端口映射

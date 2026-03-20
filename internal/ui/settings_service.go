@@ -7,6 +7,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"golang.org/x/crypto/ssh"
 )
@@ -14,6 +15,7 @@ import (
 // SettingsService 设置管理服务 - 负责全局配置的加载和保存
 type SettingsService struct {
 	wailsApp *application.App
+	repo     repository.DeviceRepository
 }
 
 // SSHAlgorithmOption SSH 算法候选项
@@ -33,7 +35,16 @@ type SSHAlgorithmOptions struct {
 
 // NewSettingsService 创建设置服务实例
 func NewSettingsService() *SettingsService {
-	return &SettingsService{}
+	return &SettingsService{
+		repo: repository.NewDeviceRepository(),
+	}
+}
+
+// NewSettingsServiceWithRepo 使用指定 Repository 创建设置服务实例（用于测试）
+func NewSettingsServiceWithRepo(repo repository.DeviceRepository) *SettingsService {
+	return &SettingsService{
+		repo: repo,
+	}
 }
 
 // ServiceStartup Wails 服务启动生命周期钩子
@@ -82,7 +93,14 @@ func (s *SettingsService) SaveSettings(settings models.GlobalSettings) error {
 // EnsureConfig 返回当前数据库中的设备资产（不含密码）和默认命令组，供首页展示概况
 // 遵循密码保护原则：列表/概览场景不返回密码
 func (s *SettingsService) EnsureConfig() ([]models.DeviceAssetListItem, []string, error) {
-	devices, commands, err := config.LoadExecutionResources()
+	// 使用 Repository 获取设备
+	devices, err := s.repo.FindAll()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// 获取默认命令组
+	commands, err := config.LoadDefaultCommands()
 	if err != nil {
 		return nil, nil, err
 	}
