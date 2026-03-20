@@ -233,7 +233,7 @@ func CreateDevices(devices []models.DeviceAsset) error {
 	return DB.Create(&expandedDevices).Error
 }
 
-// UpdateDevice 更新单台设备
+// UpdateDevice 更新单台设备（支持部分字段更新）
 func UpdateDevice(id uint, device models.DeviceAsset) error {
 	if DB == nil {
 		return fmt.Errorf("数据库未初始化")
@@ -242,51 +242,97 @@ func UpdateDevice(id uint, device models.DeviceAsset) error {
 		return fmt.Errorf("无效的设备 ID")
 	}
 
-	device.ID = id
-	if err := validateDevicesForWrite([]models.DeviceAsset{device}); err != nil {
-		return err
-	}
-
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var existing models.DeviceAsset
 		if err := tx.First(&existing, id).Error; err != nil {
 			return fmt.Errorf("未找到设备: %d", id)
 		}
 
-		// 密码保护：如果新密码为空，保留原密码
+		// 字段合并：非零值覆盖，零值保留原值
+		// IP
+		if device.IP != "" {
+			existing.IP = strings.TrimSpace(device.IP)
+		}
+		// Protocol
+		if device.Protocol != "" {
+			existing.Protocol = strings.ToUpper(strings.TrimSpace(device.Protocol))
+		}
+		// Port
+		if device.Port != 0 {
+			existing.Port = device.Port
+		}
+		// Username
+		if device.Username != "" {
+			existing.Username = strings.TrimSpace(device.Username)
+		}
+		// Password: 非空才更新（保留原密码保护逻辑）
 		passwordUpdated := false
-		if device.Password == "" {
-			device.Password = existing.Password
-			logger.Verbose("Config", existing.IP, "更新设备时密码为空，保留原密码: id=%d", id)
-		} else if device.Password != existing.Password {
-			passwordUpdated = true
+		if device.Password != "" {
+			if device.Password != existing.Password {
+				passwordUpdated = true
+			}
+			existing.Password = device.Password
+		}
+		// Group
+		if device.Group != "" {
+			existing.Group = strings.TrimSpace(device.Group)
+		}
+		// DisplayName
+		if device.DisplayName != "" {
+			existing.DisplayName = strings.TrimSpace(device.DisplayName)
+		}
+		// Vendor
+		if device.Vendor != "" {
+			existing.Vendor = strings.TrimSpace(device.Vendor)
+		}
+		// Role
+		if device.Role != "" {
+			existing.Role = strings.TrimSpace(device.Role)
+		}
+		// Site
+		if device.Site != "" {
+			existing.Site = strings.TrimSpace(device.Site)
+		}
+		// Description
+		if device.Description != "" {
+			existing.Description = strings.TrimSpace(device.Description)
+		}
+		// Tags: 非空才更新
+		if len(device.Tags) > 0 {
+			existing.Tags = device.Tags
 		}
 
 		logger.Verbose(
 			"Config",
 			existing.IP,
-			"收到单设备更新请求: id=%d, protocol=%s->%s, port=%d->%d, group=%q->%q, username=%q->%q, password_updated=%v",
+			"收到单设备更新请求: id=%d, protocol=%s, port=%d, group=%q, username=%q, password_updated=%v",
 			id,
-			existing.Protocol, device.Protocol,
-			existing.Port, device.Port,
-			existing.Group, device.Group,
-			existing.Username, device.Username,
+			existing.Protocol,
+			existing.Port,
+			existing.Group,
+			existing.Username,
 			passwordUpdated,
 		)
 
+		// 合并后进行验证
+		if err := ValidateDevice(&existing); err != nil {
+			return err
+		}
+
+		// IP 冲突检查
 		var conflict models.DeviceAsset
-		err := tx.Where("ip = ? AND id <> ?", device.IP, id).First(&conflict).Error
+		err := tx.Where("ip = ? AND id <> ?", existing.IP, id).First(&conflict).Error
 		if err == nil {
-			return fmt.Errorf("IP 地址 %s 已被其他设备使用", device.IP)
+			return fmt.Errorf("IP 地址 %s 已被其他设备使用", existing.IP)
 		}
 		if err != nil && err != gorm.ErrRecordNotFound {
 			return err
 		}
 
-		if err := tx.Save(&device).Error; err != nil {
+		if err := tx.Save(&existing).Error; err != nil {
 			return err
 		}
-		logger.Verbose("Config", device.IP, "单设备更新完成: id=%d", id)
+		logger.Verbose("Config", existing.IP, "单设备更新完成: id=%d", id)
 		return nil
 	})
 }
