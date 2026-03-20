@@ -2,6 +2,7 @@ package sshutil
 
 import (
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/logger"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -156,8 +157,15 @@ func GetPreset(presetMode string) *config.SSHAlgorithmSettings {
 // GetEffectiveAlgorithms 获取实际生效的算法配置
 // 优先级：自定义配置 > 预设配置 > 内置默认配置
 func GetEffectiveAlgorithms(settings config.SSHAlgorithmSettings) (ciphers, keyExchanges, macs, hostKeyAlgorithms []string) {
+	logger.Debug("SSH", "-", "GetEffectiveAlgorithms 被调用: PresetMode=%s", settings.PresetMode)
+	logger.Debug("SSH", "-", "  - 输入 Ciphers(%d): %v", len(settings.Ciphers), settings.Ciphers)
+	logger.Debug("SSH", "-", "  - 输入 KeyExchanges(%d): %v", len(settings.KeyExchanges), settings.KeyExchanges)
+	logger.Debug("SSH", "-", "  - 输入 MACs(%d): %v", len(settings.MACs), settings.MACs)
+	logger.Debug("SSH", "-", "  - 输入 HostKeyAlgorithms(%d): %v", len(settings.HostKeyAlgorithms), settings.HostKeyAlgorithms)
+
 	// 如果是自定义模式且有配置，使用自定义配置
 	if settings.PresetMode == "custom" {
+		logger.Debug("SSH", "-", "  进入 custom 模式处理逻辑")
 		if len(settings.Ciphers) > 0 {
 			ciphers = settings.Ciphers
 		}
@@ -171,21 +179,28 @@ func GetEffectiveAlgorithms(settings config.SSHAlgorithmSettings) (ciphers, keyE
 			hostKeyAlgorithms = settings.HostKeyAlgorithms
 		}
 		// 如果自定义模式下有任何配置，直接返回
-		if len(ciphers) > 0 || len(keyExchanges) > 0 || len(macs) > 0 || len(hostKeyAlgorithms) > 0 {
+		hasConfig := len(ciphers) > 0 || len(keyExchanges) > 0 || len(macs) > 0 || len(hostKeyAlgorithms) > 0
+		logger.Debug("SSH", "-", "  custom 模式 hasConfig=%v", hasConfig)
+		if hasConfig {
+			logger.Debug("SSH", "-", "  使用自定义配置返回")
 			return
 		}
+		logger.Debug("SSH", "-", "  custom 模式无配置，继续向下执行")
 	}
 
 	// 尝试获取预设配置
 	preset := GetPreset(settings.PresetMode)
+	logger.Debug("SSH", "-", "  GetPreset(%s) 返回: %v", settings.PresetMode, preset != nil)
 	if preset != nil {
 		ciphers = preset.Ciphers
 		keyExchanges = preset.KeyExchanges
 		macs = preset.MACs
 		hostKeyAlgorithms = preset.HostKeyAlgorithms
+		logger.Debug("SSH", "-", "  使用预设配置返回: %s", settings.PresetMode)
 		return
 	}
 
 	// 返回空，表示使用内置默认配置
+	logger.Debug("SSH", "-", "  返回空(将使用内置默认配置)")
 	return nil, nil, nil, nil
 }

@@ -237,14 +237,25 @@ func applyAlgorithmConfig(sshConfig *ssh.ClientConfig, algoSettings *config.SSHA
 	// 获取有效的算法配置
 	var ciphers, keyExchanges, macs, hostKeyAlgorithms []string
 
+	logger.Debug("SSH", "-", "applyAlgorithmConfig 被调用, algoSettings=%v", algoSettings != nil)
 	if algoSettings != nil {
+		logger.Debug("SSH", "-", "  algoSettings.PresetMode=%s", algoSettings.PresetMode)
 		ciphers, keyExchanges, macs, hostKeyAlgorithms = GetEffectiveAlgorithms(*algoSettings)
+		logger.Debug("SSH", "-", "  GetEffectiveAlgorithms 返回:")
+		logger.Debug("SSH", "-", "    - Ciphers(%d): %v", len(ciphers), ciphers)
+		logger.Debug("SSH", "-", "    - KeyExchanges(%d): %v", len(keyExchanges), keyExchanges)
+		logger.Debug("SSH", "-", "    - MACs(%d): %v", len(macs), macs)
+		logger.Debug("SSH", "-", "    - HostKeyAlgorithms(%d): %v", len(hostKeyAlgorithms), hostKeyAlgorithms)
+	} else {
+		logger.Debug("SSH", "-", "  algoSettings 为 nil，将使用内置默认配置")
 	}
 
 	// 如果有配置，使用配置的算法；否则使用内置默认（兼容性）配置
 	if len(ciphers) > 0 {
+		logger.Debug("SSH", "-", "  使用返回的 Ciphers 配置(%d个)", len(ciphers))
 		sshConfig.Config.Ciphers = ciphers
 	} else {
+		logger.Debug("SSH", "-", "  使用内置默认 Ciphers 配置")
 		// 使用内置的兼容性配置
 		sshConfig.Config.Ciphers = []string{
 			// 1. 官方推荐的最安全的现代算法（AEAD）
@@ -269,8 +280,10 @@ func applyAlgorithmConfig(sshConfig *ssh.ClientConfig, algoSettings *config.SSHA
 	}
 
 	if len(keyExchanges) > 0 {
+		logger.Debug("SSH", "-", "  使用返回的 KeyExchanges 配置(%d个)", len(keyExchanges))
 		sshConfig.Config.KeyExchanges = keyExchanges
 	} else {
+		logger.Debug("SSH", "-", "  使用内置默认 KeyExchanges 配置")
 		sshConfig.Config.KeyExchanges = []string{
 			// 1. 官方推荐的最安全的现代算法（包含抗量子和椭圆曲线）
 			ssh.KeyExchangeMLKEM768X25519,
@@ -292,8 +305,10 @@ func applyAlgorithmConfig(sshConfig *ssh.ClientConfig, algoSettings *config.SSHA
 	}
 
 	if len(macs) > 0 {
+		logger.Debug("SSH", "-", "  使用返回的 MACs 配置(%d个)", len(macs))
 		sshConfig.Config.MACs = macs
 	} else {
+		logger.Debug("SSH", "-", "  使用内置默认 MACs 配置")
 		sshConfig.Config.MACs = []string{
 			// 1. 官方推荐的最安全的现代算法（AEAD 模式不需要 MAC，但以防万一也可配置）
 			ssh.HMACSHA256ETM,
@@ -310,8 +325,10 @@ func applyAlgorithmConfig(sshConfig *ssh.ClientConfig, algoSettings *config.SSHA
 	}
 
 	if len(hostKeyAlgorithms) > 0 {
+		logger.Debug("SSH", "-", "  使用返回的 HostKeyAlgorithms 配置(%d个)", len(hostKeyAlgorithms))
 		sshConfig.HostKeyAlgorithms = hostKeyAlgorithms
 	} else {
+		logger.Debug("SSH", "-", "  使用内置默认 HostKeyAlgorithms 配置")
 		sshConfig.HostKeyAlgorithms = []string{
 			// 1. 官方推荐的最安全的现代算法（椭圆曲线和 ED25519）
 			ssh.KeyAlgoED25519,
