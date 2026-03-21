@@ -55,6 +55,9 @@ type SessionMachine struct {
 	// pendingLines 待处理的逻辑行
 	pendingLines []string
 
+	// newCommittedLines 新提交的规范化行（用于 Detail 日志同步）
+	newCommittedLines []string
+
 	// pendingError 待处理的错误上下文
 	pendingError *ErrorContext
 
@@ -71,13 +74,14 @@ type SessionMachine struct {
 // NewSessionMachine 创建新的会话状态机
 func NewSessionMachine(width int, commands []string, m *matcher.StreamMatcher) *SessionMachine {
 	return &SessionMachine{
-		state:        StateWaitInitialPrompt,
-		replayer:     terminal.NewReplayer(width),
-		queue:        commands,
-		nextIndex:    0,
-		matcher:      m,
-		results:      make([]*CommandResult, 0),
-		pendingLines: make([]string, 0),
+		state:             StateWaitInitialPrompt,
+		replayer:          terminal.NewReplayer(width),
+		queue:             commands,
+		nextIndex:         0,
+		matcher:           m,
+		results:           make([]*CommandResult, 0),
+		pendingLines:      make([]string, 0),
+		newCommittedLines: make([]string, 0),
 	}
 }
 
@@ -104,6 +108,18 @@ func (m *SessionMachine) ActiveLine() string {
 // Lines 返回已提交的逻辑行
 func (m *SessionMachine) Lines() []string {
 	return m.replayer.Lines()
+}
+
+// GetNewCommittedLines 获取自上次调用以来新提交的规范化行
+// 用于同步写入 Detail 日志
+func (m *SessionMachine) GetNewCommittedLines() []string {
+	if len(m.newCommittedLines) == 0 {
+		return nil
+	}
+	lines := make([]string, len(m.newCommittedLines))
+	copy(lines, m.newCommittedLines)
+	m.newCommittedLines = m.newCommittedLines[:0]
+	return lines
 }
 
 // ClearInitResiduals 清空初始化阶段的残留数据
@@ -137,6 +153,8 @@ func (m *SessionMachine) Feed(chunk string) []Action {
 	for _, event := range events {
 		if event.Type == terminal.EventLineCommitted {
 			m.pendingLines = append(m.pendingLines, event.Line)
+			// 同时收集到 newCommittedLines 用于 Detail 日志同步
+			m.newCommittedLines = append(m.newCommittedLines, event.Line)
 		}
 	}
 

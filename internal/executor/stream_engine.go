@@ -290,15 +290,25 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 
 // processChunk 处理 chunk，返回需要执行的动作
 func (e *StreamEngine) processChunk(chunk string) []Action {
-	// 写入详细日志（使用原有逻辑）
-	if e.executor != nil {
-		if err := e.executor.writeDetailChunk(chunk); err != nil {
-			logger.Warn("StreamEngine", "-", "写入详细日志失败: %v", err)
+	// 喂给状态机（状态机内部使用 Replayer 处理 chunk）
+	actions := e.machine.Feed(chunk)
+
+	// 将规范化后的行同步写入 Detail 日志
+	if e.executor != nil && e.executor.LogSession != nil {
+		lines := e.machine.GetNewCommittedLines()
+		if len(lines) > 0 {
+			logger.Debug("StreamEngine", "-", "[修复调试] 准备写入 %d 行规范化行到 Detail 日志", len(lines))
+			if err := e.executor.LogSession.Detail.WriteNormalizedLines(lines); err != nil {
+				logger.Warn("StreamEngine", "-", "写入规范化日志失败: %v", err)
+			} else {
+				logger.Debug("StreamEngine", "-", "[修复调试] 成功写入 %d 行到 Detail 日志", len(lines))
+			}
 		}
+	} else {
+		logger.Debug("StreamEngine", "-", "[修复调试] 无法写入 Detail 日志: executor=%v, LogSession=%v", e.executor != nil, e.executor != nil && e.executor.LogSession != nil)
 	}
 
-	// 喂给状态机
-	return e.machine.Feed(chunk)
+	return actions
 }
 
 // executeAction 执行动作
