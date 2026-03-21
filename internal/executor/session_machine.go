@@ -186,7 +186,8 @@ func (m *SessionMachine) handleWarmup() []Action {
 	if m.matcher.IsPrompt(activeLine) {
 		m.state = StateReady
 		logger.Debug("SessionMachine", "-", "预热完成，进入就绪状态")
-		return nil
+		// 预热完成后立即触发发送第一条命令
+		return m.handleReady()
 	}
 
 	// 再检查最新提交行
@@ -195,7 +196,8 @@ func (m *SessionMachine) handleWarmup() []Action {
 		if m.matcher.IsPrompt(lastLine) {
 			m.state = StateReady
 			logger.Debug("SessionMachine", "-", "预热完成，进入就绪状态")
-			return nil
+			// 预热完成后立即触发发送第一条命令
+			return m.handleReady()
 		}
 	}
 

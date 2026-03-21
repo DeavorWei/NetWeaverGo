@@ -175,8 +175,8 @@ for %%A in ("dist\netWeaverGo.exe") do (
 :: ============================================
 echo.
 echo [INFO] Launching application...
-@REM cd /d "%PROJECT_ROOT%dist"
-@REM start "" "netWeaverGo.exe"
+cd /d "%PROJECT_ROOT%dist"
+start "" "netWeaverGo.exe"
 echo [SUCCESS] Application started
 echo.
 
