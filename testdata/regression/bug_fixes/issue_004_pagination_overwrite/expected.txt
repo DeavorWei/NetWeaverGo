@@ -1,0 +1,3 @@
+Interface                   PHY   Protocol  InUti OutUti   inErrors  outErrors
+Ethernet0/0/0               up    up        0.01%  0.01%          0          0
+Ethernet0/0/2               down  down         0%     0%          0          0

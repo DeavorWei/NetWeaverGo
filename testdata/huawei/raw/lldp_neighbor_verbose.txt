@@ -1,0 +1,23 @@
+[GE1/0/1]
+System name        : SW-Core-01
+Port ID            : GE0/0/24
+Chassis ID         : 00e0-fc00-5801
+Management address : 192.168.1.1
+
+[GE1/0/2]
+System name        : SW-Access-02
+Port ID            : GE0/0/1
+Chassis ID         : 00e0-fc00-5802
+Management address : 192.168.1.2
+
+[GE1/0/3]
+System name        : Router-Edge-01
+Port ID            : GE0/0/1
+Chassis ID         : 00e0-fc00-5803
+Management address : 192.168.1.3
+
+[XGE1/0/1]
+System name        : SW-Core-02
+Port ID            : XGE0/0/24
+Chassis ID         : 00e0-fc00-5804
+Management address : 192.168.1.4

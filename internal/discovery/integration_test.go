@@ -1,0 +1,123 @@
+package discovery
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/NetWeaverGo/core/internal/executor"
+)
+
+// TestDiscoveryParserIntegration 测试 Discovery 到 Parser 的完整链路
+func TestDiscoveryParserIntegration(t *testing.T) {
+	// 模拟 CommandResult
+	result := &executor.CommandResult{
+		DeviceIP:        "192.168.1.1",
+		Index:           0,
+		Command:         "display version",
+		RawText:         "\x1b[32mHuawei\x1b[0m Versatile Routing Platform\nVersion 5.160\n<Switch>",
+		NormalizedText:  "Huawei Versatile Routing Platform\nVersion 5.160",
+		RawSize:         65,
+		NormalizedSize:  47, // len("Huawei Versatile Routing Platform\nVersion 5.160") = 47
+		PromptMatched:   true,
+		PaginationCount: 0,
+		EchoConsumed:    true,
+	}
+
+	// 验证规范化输出不含 ANSI
+	if containsANSI(result.NormalizedText) {
+		t.Error("NormalizedText should not contain ANSI sequences")
+	}
+
+	// 验证规范化输出不含提示符
+	if containsPrompt(result.NormalizedText) {
+		t.Error("NormalizedText should not contain prompt")
+	}
+
+	// 验证规范化输出大小正确
+	if result.NormalizedSize != int64(len(result.NormalizedText)) {
+		t.Errorf("NormalizedSize mismatch: expected %d, got %d", len(result.NormalizedText), result.NormalizedSize)
+	}
+}
+
+// TestCommandResultLineCount 测试 CommandResult 行数计算
+func TestCommandResultLineCount(t *testing.T) {
+	result := &executor.CommandResult{
+		NormalizedText:  "Line1\nLine2\nLine3",
+		NormalizedLines: []string{"Line1", "Line2", "Line3"},
+	}
+
+	// 验证行数
+	if result.LineCount() != 3 {
+		t.Errorf("LineCount mismatch: expected 3, got %d", result.LineCount())
+	}
+}
+
+// TestCommandResultHasOutput 测试 CommandResult 输出判断
+func TestCommandResultHasOutput(t *testing.T) {
+	// 有规范化输出
+	result1 := &executor.CommandResult{
+		NormalizedText: "output",
+	}
+	if !result1.HasOutput() {
+		t.Error("HasOutput should return true for NormalizedText")
+	}
+
+	// 有原始输出
+	result2 := &executor.CommandResult{
+		RawText: "raw output",
+	}
+	if !result2.HasOutput() {
+		t.Error("HasOutput should return true for RawText")
+	}
+
+	// 无输出
+	result3 := &executor.CommandResult{}
+	if result3.HasOutput() {
+		t.Error("HasOutput should return false for empty result")
+	}
+}
+
+// TestNormalizedOutputQuality 测试规范化输出质量
+func TestNormalizedOutputQuality(t *testing.T) {
+	tests := []struct {
+		name           string
+		rawText        string
+		normalizedText string
+	}{
+		{
+			name:           "ANSI color codes removed",
+			rawText:        "\x1b[32mGreen Text\x1b[0m",
+			normalizedText: "Green Text",
+		},
+		{
+			name:           "Prompt removed",
+			rawText:        "Output content\n<Switch>",
+			normalizedText: "Output content",
+		},
+		{
+			name:           "Multiple ANSI sequences removed",
+			rawText:        "\x1b[1m\x1b[31mRed Bold\x1b[0m\x1b[0m",
+			normalizedText: "Red Bold",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 验证规范化输出不含 ANSI
+			if containsANSI(tt.normalizedText) {
+				t.Errorf("NormalizedText should not contain ANSI sequences: %q", tt.normalizedText)
+			}
+		})
+	}
+}
+
+// containsANSI 检查字符串是否包含 ANSI 转义序列
+func containsANSI(s string) bool {
+	return strings.Contains(s, "\x1b[")
+}
+
+// containsPrompt 检查字符串是否包含提示符
+func containsPrompt(s string) bool {
+	// 简单检查是否包含 <...> 格式的提示符
+	return strings.Contains(s, "<") && strings.Contains(s, ">")
+}

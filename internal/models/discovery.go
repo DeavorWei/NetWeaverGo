@@ -76,26 +76,49 @@ func (DiscoveryDevice) TableName() string {
 	return "discovery_devices"
 }
 
-// RawCommandOutput 原始命令输出索引表
+// RawCommandOutput 命令输出索引表
+// FilePath 存储 normalized output（规范化输出，供 parser 读取）
+// RawFilePath 存储原始审计输出（供审计和排障使用）
 type RawCommandOutput struct {
-	ID           uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	TaskID       string    `json:"taskId" gorm:"index;not null"`
-	DeviceIP     string    `json:"deviceIp" gorm:"index;not null"`
-	CommandKey   string    `json:"commandKey" gorm:"index;not null"` // version, lldp_neighbor, interface 等
-	Command      string    `json:"command"`
-	FilePath     string    `json:"filePath"`
-	Status       string    `json:"status"` // pending / success / failed
-	ErrorMessage string    `json:"errorMessage"`
-	ParseStatus  string    `json:"parseStatus"` // pending / success / parse_failed / skipped
-	ParseError   string    `json:"parseError"`
-	OutputSize   int64     `json:"outputSize"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID         uint   `json:"id" gorm:"primaryKey;autoIncrement"`
+	TaskID     string `json:"taskId" gorm:"index;not null"`
+	DeviceIP   string `json:"deviceIp" gorm:"index;not null"`
+	CommandKey string `json:"commandKey" gorm:"index;not null"` // version, lldp_neighbor, interface 等
+	Command    string `json:"command"`
+
+	FilePath    string `json:"filePath"`    // normalized output 路径（供 parser 读取）
+	RawFilePath string `json:"rawFilePath"` // 原始审计输出路径（供审计排障）
+
+	Status       string `json:"status"` // pending / success / failed
+	ErrorMessage string `json:"errorMessage"`
+
+	ParseStatus string `json:"parseStatus"` // pending / success / parse_failed / skipped
+	ParseError  string `json:"parseError"`
+
+	RawSize        int64 `json:"rawSize"`        // 原始输出大小
+	NormalizedSize int64 `json:"normalizedSize"` // 规范化输出大小
+	LineCount      int   `json:"lineCount"`      // 规范化输出行数
+	PagerCount     int   `json:"pagerCount"`     // 分页符处理次数
+	EchoConsumed   bool  `json:"echoConsumed"`   // 回显是否被消费
+	PromptMatched  bool  `json:"promptMatched"`  // 是否匹配到提示符
+
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // TableName 指定表名
 func (RawCommandOutput) TableName() string {
 	return "raw_command_outputs"
+}
+
+// GetParseFilePath 返回解析器应读取的文件路径（normalized output）
+func (r *RawCommandOutput) GetParseFilePath() string {
+	return r.FilePath
+}
+
+// GetAuditFilePath 返回审计用的原始输出路径
+func (r *RawCommandOutput) GetAuditFilePath() string {
+	return r.RawFilePath
 }
 
 // ============================================================================

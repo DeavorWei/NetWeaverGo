@@ -1,0 +1,5 @@
+display version
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.160 (S5700 V200R005C00SPC500)
+Copyright (C) 2003-2016 Huawei Technologies Co., Ltd.
+<Switch>

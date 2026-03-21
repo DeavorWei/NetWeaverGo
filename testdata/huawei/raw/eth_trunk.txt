@@ -1,0 +1,10 @@
+Eth-Trunk1
+  GigabitEthernet1/0/1
+  GigabitEthernet1/0/2
+Eth-Trunk2
+  XGigabitEthernet1/0/1
+  XGigabitEthernet1/0/2
+Eth-Trunk10
+  GigabitEthernet2/0/1
+  GigabitEthernet2/0/2
+  GigabitEthernet2/0/3

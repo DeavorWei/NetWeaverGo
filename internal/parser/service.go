@@ -54,12 +54,14 @@ func (s *Service) ParseTaskDevice(taskID, deviceIP, vendor string) (*ParsedResul
 	identity := &DeviceIdentity{Vendor: vendor, MgmtIP: deviceIP}
 
 	for _, output := range outputs {
-		if output.FilePath == "" {
-			s.updateRawParseStatus(output.ID, "skipped", "原始输出文件路径为空")
+		// 使用 GetParseFilePath() 获取规范化输出路径
+		parseFilePath := output.GetParseFilePath()
+		if parseFilePath == "" {
+			s.updateRawParseStatus(output.ID, "skipped", "规范化输出文件路径为空")
 			continue
 		}
 
-		rawText, err := os.ReadFile(output.FilePath)
+		rawText, err := os.ReadFile(parseFilePath)
 		if err != nil {
 			msg := fmt.Sprintf("读取 %s 失败: %v", output.CommandKey, err)
 			result.ParseErrors = append(result.ParseErrors, msg)
@@ -67,6 +69,7 @@ func (s *Service) ParseTaskDevice(taskID, deviceIP, vendor string) (*ParsedResul
 			continue
 		}
 
+		// 规范化输出已经由 terminal.Replayer 处理过，不再需要 ANSI 清理
 		rows, err := s.parser.Parse(output.CommandKey, string(rawText))
 		if err != nil {
 			msg := fmt.Sprintf("解析 %s 失败: %v", output.CommandKey, err)

@@ -12,6 +12,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/matcher"
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/sshutil"
+	"github.com/NetWeaverGo/core/internal/terminal"
 )
 
 // ErrorAction 描述了由引擎决定的继续行径
@@ -42,6 +43,10 @@ type DeviceExecutor struct {
 	// SSH 算法配置
 	Algorithms *config.SSHAlgorithmSettings
 	LogSession *report.DeviceLogSession
+
+	// Terminal Replayer - 实验性集成
+	// 用于将 SSH 字节流正确转换为规范化逻辑文本
+	replayer *terminal.Replayer
 }
 
 // NewDeviceExecutor 初始化执行器
@@ -55,6 +60,7 @@ func NewDeviceExecutor(ip string, port int, user, pass string, eb chan report.Ex
 		Matcher:   matcher.NewStreamMatcher(),
 		EventBus:  eb,
 		OnSuspend: onSuspend,
+		replayer:  terminal.NewReplayer(80), // 实验性：使用标准终端宽度 80
 	}
 }
 
@@ -70,7 +76,26 @@ func (e *DeviceExecutor) SetLogSession(session *report.DeviceLogSession) {
 
 // Connect 创建SSH长连接并初始化日志审计
 func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) error {
+	return e.ConnectWithProfile(ctx, timeout, nil)
+}
+
+// ConnectWithProfile 创建SSH长连接，支持设备画像配置
+func (e *DeviceExecutor) ConnectWithProfile(ctx context.Context, timeout time.Duration, profile *config.DeviceProfile) error {
 	logger.Debug("Executor", e.IP, "准备建立SSH连接 (Timeout: %v)", timeout)
+
+	// 获取 PTY 配置
+	var ptyConfig *sshutil.PTYConfig
+	if profile != nil {
+		ptyConfig = &sshutil.PTYConfig{
+			TermType: profile.PTY.TermType,
+			Width:    profile.PTY.Width,
+			Height:   profile.PTY.Height,
+			EchoMode: profile.PTY.EchoMode,
+			ISpeed:   profile.PTY.ISpeed,
+			OSpeed:   profile.PTY.OSpeed,
+		}
+	}
+
 	hostKeyPolicy, knownHostsPath := config.ResolveSSHHostKeyPolicy()
 	cfg := sshutil.Config{
 		IP:             e.IP,
@@ -82,6 +107,7 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 		HostKeyPolicy:  hostKeyPolicy,
 		KnownHostsPath: knownHostsPath,
 		RawSink:        e.rawSink(),
+		PTY:            ptyConfig,
 	}
 
 	client, err := sshutil.NewSSHClient(ctx, cfg)
@@ -103,6 +129,7 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 }
 
 // ExecutePlaybook 核心引擎方法：对该设备步进发送命令队列，并支持局部阻塞等待（配合 SuspendHandler）
+// 使用 StreamEngine 作为统一执行内核（Phase 2 设计要求）
 func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string, cmdTimeout time.Duration) error {
 	logger.Debug("Executor", e.IP, "开始执行 Playbook (%d 条)", len(commands))
 	if e.Client == nil {
@@ -114,308 +141,22 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 		}
 	}()
 
-	manager := config.GetRuntimeManager()
-	buf := make([]byte, manager.GetBufferSize())
-	outReader := e.Client.Stdout
-	errReader := e.Client.Stderr
+	// 创建 StreamEngine
+	engine := NewStreamEngine(e, e.Client, commands, 80)
 
-	// 丢弃并记录 stderr（因为 TeeReader 已经挂在流文件里了）
-	go func() {
-		defer func() {
-			// 防止 panic 导致 goroutine 泄漏
-			if r := recover(); r != nil {
-				logger.Warn("Executor", e.IP, "stderr 协程 panic 已恢复: %v", r)
-			}
-		}()
-		_, _ = io.Copy(io.Discard, errReader)
-	}()
-
-	currentCmdIndex := -1 // 初始化状态: -1 表示还在探测第一个提示符
-	lastSentCmdIndex := -1
-	var streamBuffer string
-	completedAllCommands := false
-
-	// 等待命令提示符的超时时间
-	timeoutDuration := cmdTimeout
-	timer := time.NewTimer(timeoutDuration)
-	defer timer.Stop()
-
-	type readResult struct {
-		n   int
-		err error
-	}
-	readCh := make(chan readResult, 1)
-
-	// 后台运行读操作，以便主流程能响应 timeout 和 ctx.Done()
-	go func() {
-		defer close(readCh)
-		// 添加 panic recover 防止 goroutine 泄漏
-		defer func() {
-			if r := recover(); r != nil {
-				logger.Warn("Executor", e.IP, "读取协程 panic 已恢复: %v", r)
-			}
-		}()
-
-		for {
-			n, err := outReader.Read(buf)
-			select {
-			case readCh <- readResult{n: n, err: err}:
-			case <-ctx.Done():
-				return
-			}
-			if err != nil {
-				return
-			}
-		}
-	}()
-
-	resolveFailedCmd := func() string {
-		if lastSentCmdIndex >= 0 && lastSentCmdIndex < len(commands) {
-			return commands[lastSentCmdIndex]
-		}
-		if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
-			return commands[currentCmdIndex]
-		}
-		return ""
+	// 设置挂起处理器
+	if e.OnSuspend != nil {
+		engine.SetSuspendHandler(e.OnSuspend)
 	}
 
-	readDelay := manager.GetPaginationCheckInterval()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
-			logger.Debug("Executor", e.IP, "读取提示符超时 (index=%d)", currentCmdIndex)
-			// Timeout triggered
-			failedCmd := resolveFailedCmd()
-
-			if e.EventBus != nil {
-				e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceError, Message: "Waiting for prompt Timeout (30s)", TotalCmd: len(commands), CmdIndex: currentCmdIndex}
-			}
-
-			// 汇报给拦截器
-			action := e.OnSuspend(ctx, e.IP, "Timeout Error: No prompt received within 30 seconds", failedCmd)
-			switch action {
-			case ActionAbort:
-				if e.EventBus != nil {
-					e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceAbort, Message: "因超时被手动中止", TotalCmd: len(commands)}
-				}
-				return fmt.Errorf("设备 %s 的执行因超时被用户中止", e.IP)
-			case ActionContinue:
-				if e.EventBus != nil {
-					e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "放行超时并继续执行", TotalCmd: len(commands)}
-				}
-				// 不再推进命令索引，避免误跳过下一条命令
-				streamBuffer = ""
-				timer.Reset(timeoutDuration)
-			}
-		case res, ok := <-readCh:
-			if !ok {
-				if completedAllCommands {
-					logger.Info("Executor", e.IP, "读取流已结束，命令执行已完成。")
-					logger.Verbose("Executor", e.IP, "读取流 readCh 已关闭（完成态）")
-					return nil
-				}
-				logger.Warn("Executor", e.IP, "读取流已结束，但命令尚未确认全部完成（index=%d）", currentCmdIndex)
-				return fmt.Errorf("设备 %s 执行未完成即终止（readCh closed, index=%d/%d）", e.IP, currentCmdIndex, len(commands))
-			}
-
-			n, err := res.n, res.err
-
-			if n > 0 {
-				// 接收到数据，重置空闲超时计时器
-				if !timer.Stop() {
-					// 如果计时器已触发但尚未消费，则排空通道
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-				timer.Reset(timeoutDuration)
-
-				chunk := string(buf[:n])
-				if err := e.writeDetailChunk(chunk); err != nil {
-					logger.Warn("Executor", e.IP, "写入详细日志失败: %v", err)
-				}
-				streamBuffer += chunk
-				logger.Verbose("Executor", e.IP, "收到数据块 (长度=%d) | 流缓冲区长度=%d", n, len(streamBuffer))
-
-				lines := strings.Split(streamBuffer, "\n")
-				// 检查最后一行以外的完整回显行，查找 error 关键字
-				for i, line := range lines {
-					if i < len(lines)-1 {
-						// 仅在命令执行阶段匹配错误规则，避免把登录横幅等初始化输出误判成命令告警/错误。
-						if currentCmdIndex < 0 {
-							continue
-						}
-						if matched, rule := e.Matcher.MatchErrorRule(line); matched {
-							failedCmd := resolveFailedCmd()
-
-							if rule.Severity == matcher.SeverityWarning {
-								// 仅抛出警告事件并放行
-								if e.EventBus != nil {
-									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "警告: " + rule.Message + " (" + line + ")", TotalCmd: len(commands)}
-								}
-								logger.Warn("Executor", e.IP, "[告警放行] %s: %s", rule.Name, rule.Message)
-								continue
-							}
-
-							// 如果是严重错误 (Critical)，则触发原始告警和阻断
-							if e.EventBus != nil {
-								e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceError, Message: "执行错误: " + line, TotalCmd: len(commands)}
-							}
-
-							// 触发外部回调执行暂停，将由外部引擎的通道控制该函数返回，形成单设备挂起效果
-							action := e.OnSuspend(ctx, e.IP, line, failedCmd)
-							switch action {
-							case ActionAbort:
-								if e.EventBus != nil {
-									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceAbort, Message: "执行异常被手动中止", TotalCmd: len(commands)}
-								}
-								return fmt.Errorf("设备 %s 的执行被用户手动中止", e.IP)
-							case ActionContinue:
-								if e.EventBus != nil {
-									e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceSkip, Message: "放行异常并继续执行", TotalCmd: len(commands)}
-								}
-								// 命令索引已经在发送时推进，此处只清理状态
-								streamBuffer = ""
-							}
-							// 清空缓冲区，避免二次重复报错
-							streamBuffer = ""
-							break
-						}
-					}
-				}
-
-				// 在裁剪到 lastSegment 前先判定 prompt，避免 "prompt+\r\n" 被裁成空串导致漏判。
-				lastSegment := lines[len(lines)-1]
-				lastNonEmptySegment := ""
-				for i := len(lines) - 1; i >= 0; i-- {
-					segment := strings.TrimSpace(lines[i])
-					if segment != "" {
-						lastNonEmptySegment = segment
-						break
-					}
-				}
-
-				promptDetected := e.Matcher.IsPrompt(streamBuffer)
-				if !promptDetected && lastNonEmptySegment != "" {
-					promptDetected = e.Matcher.IsPrompt(lastNonEmptySegment)
-				}
-
-				// 将没有换行符的最后一部分留到 Buffer 中进行下一轮累积
-				streamBuffer = lastSegment
-
-				// 检测是否由于回显过长触发了终端分页符（如 ---- More ----）
-				if e.Matcher.IsPaginationPrompt(streamBuffer) || (lastNonEmptySegment != "" && e.Matcher.IsPaginationPrompt(lastNonEmptySegment)) {
-					logger.Debug("Executor", e.IP, "[自动翻页] 截获终端分页拦截符(More)，自动下发空格放行...")
-					e.Client.SendRawBytes([]byte(" ")) // 向 SSH 隧道发送一个纯净空格
-					streamBuffer = ""                  // 清除已匹配的分页符避免残留污染
-					_ = e.flushDetailLog()
-					continue
-				}
-
-				// 首个提示符仅表示登录完成，不代表交互式 shell 已完全稳定。
-				// 先发送一个空回车做终端预热，等下一个提示符回来后再正式下发业务命令。
-				if currentCmdIndex == -1 && promptDetected {
-					logger.Debug("Executor", e.IP, "等到首个提示符，发送预热空行稳定终端")
-					currentCmdIndex = -2
-					_ = e.flushDetailLog()
-					if err := e.Client.SendCommand(""); err != nil {
-						return fmt.Errorf("发送预热空行失败: %w", err)
-					}
-					if !timer.Stop() {
-						select {
-						case <-timer.C:
-						default:
-						}
-					}
-					timer.Reset(timeoutDuration)
-					logger.Verbose("Executor", e.IP, "预热空行已发送，清空 streamBuffer 等待稳定提示符返回")
-					streamBuffer = ""
-					continue
-				}
-
-				if currentCmdIndex == -2 {
-					if promptDetected {
-						logger.Debug("Executor", e.IP, "预热完成，进入命令下发阶段")
-						currentCmdIndex = 0
-					} else {
-						logger.Verbose("Executor", e.IP, "预热空行已发出，等待稳定提示符返回")
-					}
-				}
-
-				// 发送队列中的命令
-				if currentCmdIndex >= 0 && currentCmdIndex < len(commands) {
-					if promptDetected {
-						rawCmd := commands[currentCmdIndex]
-						cmdToSend := rawCmd
-						customDelay := timeoutDuration
-
-						// 解析内联行尾注释以获取特殊命令超时设定
-						if idx := strings.Index(rawCmd, "// nw-timeout="); idx != -1 {
-							cmdToSend = strings.TrimSpace(rawCmd[:idx])
-							timeoutStr := strings.TrimSpace(rawCmd[idx+len("// nw-timeout="):])
-							if pd, err := time.ParseDuration(timeoutStr); err == nil {
-								customDelay = pd
-								logger.Debug("Executor", e.IP, "命令拥有自定义超时 %v => %s", customDelay, cmdToSend)
-								logger.Info("Executor", e.IP, "检测到自定义长效命令超时控制: %s -> %v", cmdToSend, customDelay)
-							} else {
-								logger.Warn("Executor", e.IP, "自定义超时时间格式无效: %s (期望格式如 30s, 1m30s), 使用默认值", timeoutStr)
-							}
-						}
-
-						if e.EventBus != nil {
-							e.EventBus <- report.ExecutorEvent{IP: e.IP, Type: report.EventDeviceCmd, Message: rawCmd, CmdIndex: currentCmdIndex + 1, TotalCmd: len(commands)}
-						}
-						// logger.Info("[%s] >>> [发送命令]: %s", e.IP, cmd) (Moved to GUI)
-						if err := e.writeDetailCommand(cmdToSend); err != nil {
-							logger.Warn("Executor", e.IP, "写入命令日志失败: %v", err)
-						}
-						lastSentCmdIndex = currentCmdIndex
-						e.Client.SendCommand(cmdToSend)
-
-						// 重置自定义计时器并清空 Buffer
-						if !timer.Stop() {
-							select {
-							case <-timer.C:
-							default:
-							}
-						}
-						timer.Reset(customDelay)
-						logger.Verbose("Executor", e.IP, "已执行发送动作，将 streamBuffer 人为清空防止污染。原长度=%d", len(streamBuffer))
-						streamBuffer = "" // 发送命令后清空当前 Buffer，防止将上一步的提示符混到了接下来
-						currentCmdIndex++
-					} else {
-						logger.Verbose("Executor", e.IP, "currentCmd=%d，还在等待匹配 Prompt, 当前 buff 末尾：%s", currentCmdIndex, streamBuffer)
-					}
-				} else if currentCmdIndex >= len(commands) {
-					// 任务完成，判断最后一条命令结果是否已回显出提示符
-					if promptDetected {
-						logger.Debug("Executor", e.IP, "命令全部下发完成")
-						// logger.Info("[%s] ==== [执行完成] 所有命令已下发完毕 ====", e.IP)
-						completedAllCommands = true
-						_ = e.flushDetailLog()
-						return nil
-					}
-				}
-			}
-
-			if err != nil {
-				if err == io.EOF {
-					if completedAllCommands {
-						logger.Info("Executor", e.IP, "SSH 会话已被远端安全断开（完成态）。")
-						return nil
-					}
-					logger.Warn("Executor", e.IP, "SSH 会话在命令完成前被远端断开（index=%d）", currentCmdIndex)
-					return fmt.Errorf("设备 %s 在命令完成前断开连接（EOF, index=%d/%d）", e.IP, currentCmdIndex, len(commands))
-				}
-				return fmt.Errorf("读取SSH流时发生错误: %w", err)
-			}
-		}
-
-		time.Sleep(readDelay)
+	// 使用执行器的匹配器（已配置设备画像）
+	if e.Matcher != nil {
+		engine.SetErrorMatcher(e.Matcher)
 	}
+
+	// 执行 Playbook
+	_, err := engine.RunPlaybook(ctx, cmdTimeout)
+	return err
 }
 
 // Close 断开所有的流和连接
@@ -526,6 +267,10 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 				if err := e.writeDetailChunk(chunk); err != nil {
 					logger.Warn("Executor", e.IP, "写入同步详细日志失败: %v", err)
 				}
+
+				// 使用 terminal.Replayer 处理 chunk（与 ExecutePlaybook 保持一致）
+				e.processWithReplayer(chunk)
+
 				outputBuffer.WriteString(chunk) // 追加以作为完整的返回值
 				streamBuffer += chunk
 
@@ -546,24 +291,38 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 					}
 				}
 
-				// 检查没有换行符的最后一段是否看起来像提示符
-				lastSegment := lines[len(lines)-1]
+				// 使用 terminal.Replayer 产出的逻辑行进行 prompt/pager 判断
+				// 这是 Phase 2 设计要求的正确实现方式
+				activeLine := e.replayer.ActiveLine()
+				replayerLines := e.replayer.Lines()
+
+				// 获取最后一个非空逻辑行
+				var lastNonEmptyLine string
+				for i := len(replayerLines) - 1; i >= 0; i-- {
+					if trimmed := strings.TrimSpace(replayerLines[i]); trimmed != "" {
+						lastNonEmptyLine = replayerLines[i]
+						break
+					}
+				}
 
 				// 对待同步交互，同样可能遇到分页符卡死
-				if e.Matcher.IsPaginationPrompt(lastSegment) {
+				// 基于逻辑行判断 pager（不再使用原始 lastSegment）
+				if e.Matcher.IsPaginationPrompt(activeLine) || (lastNonEmptyLine != "" && e.Matcher.IsPaginationPrompt(lastNonEmptyLine)) {
 					logger.Debug("Executor", e.IP, "[同步自动翻页] 截获终端分页拦截符(More)，自动下发空格放行...")
 					e.Client.SendRawBytes([]byte(" "))
-					streamBuffer = "" // 因为同步方法中 streamBuffer 的末尾就是 lastSegment
+					streamBuffer = "" // 清除已匹配的分页符避免残留污染
 					continue
 				}
 
-				if e.Matcher.IsPrompt(lastSegment) {
+				// 基于逻辑行判断 prompt（不再使用原始 lastSegment）
+				if e.Matcher.IsPrompt(activeLine) || (lastNonEmptyLine != "" && e.Matcher.IsPrompt(lastNonEmptyLine)) {
 					// 找到提示符，命令执行完成
 					_ = e.flushDetailLog()
 					return outputBuffer.String(), nil
 				}
 
-				// 可选：检查前面的行是否为提示符？但通常它出现在最后
+				// 保留 streamBuffer 的基本管理逻辑（用于错误规则匹配）
+				lastSegment := lines[len(lines)-1]
 				streamBuffer = lastSegment
 			}
 
@@ -577,6 +336,23 @@ func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, def
 
 		time.Sleep(manager.GetPaginationCheckInterval()) // 减少 CPU 忙等待
 	}
+}
+
+// ExecuteCommandSyncWithResult 执行单条命令并返回完整的 CommandResult
+// 这是 ExecuteCommandSync 的增强版本，返回规范化后的输出
+func (e *DeviceExecutor) ExecuteCommandSyncWithResult(ctx context.Context, cmd string, timeout time.Duration) (*CommandResult, error) {
+	if e.Client == nil {
+		return nil, fmt.Errorf("执行器未安全建连")
+	}
+
+	// 使用 StreamEngine 执行
+	engine := NewStreamEngine(e, e.Client, []string{cmd}, 80)
+	result, err := engine.RunSingle(ctx, cmd, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (e *DeviceExecutor) rawSink() report.RawTranscriptSink {
@@ -605,4 +381,43 @@ func (e *DeviceExecutor) flushDetailLog() error {
 		return nil
 	}
 	return e.LogSession.FlushDetail()
+}
+
+// processWithReplayer 实验性方法：使用 terminal.Replayer 处理原始 chunk
+// 第一版仅用于对比验证，不影响原有逻辑
+func (e *DeviceExecutor) processWithReplayer(chunk string) {
+	if e.replayer == nil {
+		return
+	}
+
+	// 处理 chunk，获取规范化事件
+	events := e.replayer.Process(chunk)
+
+	// 记录已提交的行
+	for _, event := range events {
+		if event.Type == terminal.EventLineCommitted {
+			logger.Verbose("Executor", e.IP, "[Replayer] 提交行: %q", event.Line)
+		}
+	}
+
+	// 记录未支持的 ANSI 序列计数（用于调试）
+	if count := e.replayer.UnknownCount(); count > 0 {
+		logger.Verbose("Executor", e.IP, "[Replayer] 未支持的 ANSI 序列计数: %d", count)
+	}
+}
+
+// GetReplayerLines 获取 Replayer 已提交的所有行（用于调试/测试）
+func (e *DeviceExecutor) GetReplayerLines() []string {
+	if e.replayer == nil {
+		return nil
+	}
+	return e.replayer.Lines()
+}
+
+// GetReplayerActiveLine 获取 Replayer 当前活动行（用于调试/测试）
+func (e *DeviceExecutor) GetReplayerActiveLine() string {
+	if e.replayer == nil {
+		return ""
+	}
+	return e.replayer.ActiveLine()
 }

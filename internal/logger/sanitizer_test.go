@@ -408,9 +408,10 @@ func TestSanitizer_GetRules(t *testing.T) {
 
 func TestGlobalSanitizer(t *testing.T) {
 	// 测试全局脱敏器函数
-	input := "password admin secret123"
+	// 注意：password <user> <secret> 格式需要 cipher/plain 关键字才会被脱敏
+	input := "password admin cipher secret123"
 	result := Sanitize(input)
-	expected := "password admin ****"
+	expected := "password admin cipher ****"
 	if result != expected {
 		t.Errorf("Global Sanitize() = %q, want %q", result, expected)
 	}

@@ -1,0 +1,6 @@
+display lldp neighbor brief
+Local Interface     Neighbor Interface     Neighbor Device      Neighbor PortId
+GE1/0/0             GE1/0/0                SwitchB              Ethernet1/0/0
+GE1/0/2             XGigabitEthernet0/0/1  SwitchC              Ethernet0/0/1
+Total neighbor entries: 2
+<SwitchA>

@@ -1,0 +1,10 @@
+display interface brief
+Brief information on interfaces in route mode:
+Interface            Link  Protocol   Primary IP      Description
+Loop0                Up    Up(s)      1.1.1.1         Loopback0
+Vlan1                Down  Down       --              --
+Brief information on interfaces in bridge mode:
+Interface            Link   Speed   Duplex   Link-type   PVID
+GE1/0/1              Down   Auto    Auto     Access      1
+GE1/0/2              Up     1G      Full     Trunk       1
+<SwitchB>

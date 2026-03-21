@@ -282,12 +282,23 @@ func (pm *PathManager) GetPlanImportDir() string {
 	return pm.PlanImportDir
 }
 
-// GetDiscoveryRawFilePath 获取发现任务原始输出文件路径
+// GetDiscoveryRawFilePath 获取发现任务原始审计输出文件路径
 // 格式: <TopologyRawDir>/<taskID>/<deviceIP>/<commandKey>.txt
+// 用于保存原始字节流，供审计和排障使用
 func (pm *PathManager) GetDiscoveryRawFilePath(taskID, deviceIP, commandKey string) string {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 	return filepath.Join(pm.TopologyRawDir, taskID, deviceIP, commandKey+".txt")
+}
+
+// GetDiscoveryNormalizedFilePath 获取发现任务规范化输出文件路径
+// 格式: <TopologyRawDir>/../normalized/<taskID>/<deviceIP>/<commandKey>.txt
+// 用于保存规范化后的输出，供 parser 读取
+func (pm *PathManager) GetDiscoveryNormalizedFilePath(taskID, deviceIP, commandKey string) string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	normalizedDir := filepath.Join(pm.StorageRoot, "topology", "normalized")
+	return filepath.Join(normalizedDir, taskID, deviceIP, commandKey+".txt")
 }
 
 // GetAllPaths 获取全部路径（调试用）

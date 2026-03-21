@@ -27,6 +27,7 @@ type StreamMatcher struct {
 	Rules             []ErrorRule
 	Prompts           []string
 	PaginationPrompts []string
+	PromptPatterns    []*regexp.Regexp // 正则模式（可选）
 	mu                sync.RWMutex
 }
 
@@ -36,6 +37,73 @@ func NewStreamMatcher() *StreamMatcher {
 		Rules:             DefaultRules,
 		Prompts:           DefaultPrompts,
 		PaginationPrompts: DefaultPaginationPrompts,
+		PromptPatterns:    nil,
+	}
+}
+
+// NewStreamMatcherWithConfig 使用配置创建匹配器
+func NewStreamMatcherWithConfig(prompts []string, paginationPrompts []string, promptPatterns []string) *StreamMatcher {
+	m := &StreamMatcher{
+		Rules:             DefaultRules,
+		Prompts:           prompts,
+		PaginationPrompts: paginationPrompts,
+		PromptPatterns:    make([]*regexp.Regexp, 0, len(promptPatterns)),
+	}
+
+	// 编译正则模式
+	for _, pattern := range promptPatterns {
+		if re, err := regexp.Compile(pattern); err == nil {
+			m.PromptPatterns = append(m.PromptPatterns, re)
+		}
+	}
+
+	return m
+}
+
+// SetPrompts 设置提示符后缀
+func (m *StreamMatcher) SetPrompts(prompts []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.Prompts = prompts
+}
+
+// SetPaginationPrompts 设置分页提示符
+func (m *StreamMatcher) SetPaginationPrompts(prompts []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.PaginationPrompts = prompts
+}
+
+// SetPromptPatterns 设置提示符正则模式
+func (m *StreamMatcher) SetPromptPatterns(patterns []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.PromptPatterns = make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		if re, err := regexp.Compile(pattern); err == nil {
+			m.PromptPatterns = append(m.PromptPatterns, re)
+		}
+	}
+}
+
+// ConfigureFromProfile 从设备画像配置匹配器
+func (m *StreamMatcher) ConfigureFromProfile(promptSuffixes []string, promptPatterns []string, paginationPatterns []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(promptSuffixes) > 0 {
+		m.Prompts = promptSuffixes
+	}
+	if len(paginationPatterns) > 0 {
+		m.PaginationPrompts = paginationPatterns
+	}
+	if len(promptPatterns) > 0 {
+		m.PromptPatterns = make([]*regexp.Regexp, 0, len(promptPatterns))
+		for _, pattern := range promptPatterns {
+			if re, err := regexp.Compile(pattern); err == nil {
+				m.PromptPatterns = append(m.PromptPatterns, re)
+			}
+		}
 	}
 }
 
@@ -62,12 +130,23 @@ func (m *StreamMatcher) IsPrompt(chunk string) bool {
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
+	// 首先检查后缀匹配
 	for _, prompt := range m.Prompts {
 		if strings.HasSuffix(promptLine, prompt) && looksLikePromptLine(promptLine, prompt) {
 			logger.Verbose("Matcher", "-", "Chunk 末缀匹配到了提示符: '%s'", prompt)
 			return true
 		}
 	}
+
+	// 然后检查正则模式匹配
+	for _, pattern := range m.PromptPatterns {
+		if pattern.MatchString(promptLine) {
+			logger.Verbose("Matcher", "-", "Chunk 正则匹配到了提示符: '%s'", pattern.String())
+			return true
+		}
+	}
+
 	return false
 }
 

@@ -1,0 +1,6 @@
+show interface brief
+Port      Name               Status       Vlan       Duplex  Speed Type
+Gi1/0/1                      connected    1          full    1000  Gi
+Gi1/0/2                      notconnect   1          auto    auto  Gi
+Gi1/0/3                      connected    trunk      full    10G   Te
+Switch#

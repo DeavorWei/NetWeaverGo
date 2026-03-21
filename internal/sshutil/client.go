@@ -49,6 +49,28 @@ type SSHClient struct {
 	readCtx    context.Context
 }
 
+// PTYConfig PTY 终端配置
+type PTYConfig struct {
+	TermType string // 终端类型：vt100, xterm 等
+	Width    int    // 终端宽度
+	Height   int    // 终端高度
+	EchoMode int    // 回显模式 (0=关闭)
+	ISpeed   int    // 输入速率
+	OSpeed   int    // 输出速率
+}
+
+// DefaultPTYConfig 返回默认 PTY 配置
+func DefaultPTYConfig() PTYConfig {
+	return PTYConfig{
+		TermType: "vt100",
+		Width:    256,
+		Height:   200,
+		EchoMode: 0,
+		ISpeed:   14400,
+		OSpeed:   14400,
+	}
+}
+
 // Config 包含了建连的基础凭证和超时参数
 type Config struct {
 	IP       string
@@ -63,6 +85,10 @@ type Config struct {
 	HostKeyPolicy string
 	// known_hosts 文件路径（可选）
 	KnownHostsPath string
+
+	// PTY 配置（可选，不设置则使用默认值）
+	// 注意：建议从 DeviceProfile 获取
+	PTY *PTYConfig
 
 	// RawSink 为可选的原始 SSH 字节流输出。
 	RawSink report.RawTranscriptSink
@@ -550,16 +576,24 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 		return nil, fmt.Errorf("会话创建失败: %w", err)
 	}
 
-	modes := ssh.TerminalModes{
-		ssh.ECHO:          0,
-		ssh.TTY_OP_ISPEED: 14400,
-		ssh.TTY_OP_OSPEED: 14400,
+	// 使用配置中的 PTY 参数，如果未配置则使用默认值
+	ptyConfig := cfg.PTY
+	if ptyConfig == nil || ptyConfig.Width == 0 || ptyConfig.Height == 0 {
+		defaultPTY := DefaultPTYConfig()
+		ptyConfig = &defaultPTY
 	}
-	if err := session.RequestPty("vt100", 80, 40, modes); err != nil {
+
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          uint32(ptyConfig.EchoMode),
+		ssh.TTY_OP_ISPEED: uint32(ptyConfig.ISpeed),
+		ssh.TTY_OP_OSPEED: uint32(ptyConfig.OSpeed),
+	}
+	if err := session.RequestPty(ptyConfig.TermType, ptyConfig.Width, ptyConfig.Height, modes); err != nil {
 		session.Close()
 		client.Close()
 		return nil, fmt.Errorf("挂载伪终端(PTY)失败: %w", err)
 	}
+	logger.Verbose("SSH", cfg.IP, "PTY 配置: %s %dx%d", ptyConfig.TermType, ptyConfig.Width, ptyConfig.Height)
 
 	stdin, err := session.StdinPipe()
 	if err != nil {

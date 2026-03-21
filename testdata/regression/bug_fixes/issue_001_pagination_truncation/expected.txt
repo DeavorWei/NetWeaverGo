@@ -1,0 +1,21 @@
+display interface brief
+PHY: Physical
+*down: administratively down
+^down: standby
+(l): loopback
+(s): spoofing
+(b): BFD down
+(d): Dampening Suppressed
+InUti/OutUti: input utility/output utility
+Interface                   PHY   Protocol  InUti OutUti   inErrors  outErrors
+Ethernet0/0/0               up    up        0.01%  0.01%          0          0
+Ethernet0/0/1               up    up        0.01%  0.01%          0          0
+Ethernet0/0/2               down  down         0%     0%          0          0
+  ---- More ----
+GigabitEthernet0/0/1        up    up        0.01%  0.01%          0          0
+GigabitEthernet0/0/2        up    up        0.01%  0.01%          0          0
+GigabitEthernet0/0/3        down  down         0%     0%          0          0
+  ---- More ----
+XGigabitEthernet0/0/1       up    up        0.01%  0.01%          0          0
+XGigabitEthernet0/0/2       up    up        0.01%  0.01%          0          0
+<Huawei>

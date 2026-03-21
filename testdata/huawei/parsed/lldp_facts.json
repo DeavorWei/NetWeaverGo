@@ -1,0 +1,30 @@
+[
+  {
+    "localInterface": "GE1/0/1",
+    "neighborName": "SW-CORE-01",
+    "neighborChassis": "00e0-fc00-5801",
+    "neighborPort": "GE0/0/24",
+    "neighborIp": "192.168.1.1"
+  },
+  {
+    "localInterface": "GE1/0/2",
+    "neighborName": "SW-ACCESS-02",
+    "neighborChassis": "00e0-fc00-5802",
+    "neighborPort": "GE0/0/1",
+    "neighborIp": "192.168.1.2"
+  },
+  {
+    "localInterface": "GE1/0/3",
+    "neighborName": "ROUTER-EDGE-01",
+    "neighborChassis": "00e0-fc00-5803",
+    "neighborPort": "GE0/0/1",
+    "neighborIp": "192.168.1.3"
+  },
+  {
+    "localInterface": "XGE1/0/1",
+    "neighborName": "SW-CORE-02",
+    "neighborChassis": "00e0-fc00-5804",
+    "neighborPort": "XGE0/0/24",
+    "neighborIp": "192.168.1.4"
+  }
+]

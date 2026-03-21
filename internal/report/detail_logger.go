@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -13,13 +12,19 @@ import (
 	"github.com/NetWeaverGo/core/internal/logger"
 )
 
-var (
-	ansiEscapeRegex  = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
-	paginationRegex  = regexp.MustCompile(`(?i)-+\s*more(?:\s*\([^)]*\))?\s*-+`)
-	promptTokenRegex = regexp.MustCompile(`^<[^<>\s]+>`)
-)
-
-// DetailLogger 记录清洗后的命令回显。
+// DetailLogger 记录规范化后的命令回显。
+//
+// 职责：
+// 1. 写命令头
+// 2. 写 normalized lines / text
+// 3. 换行标准化
+// 4. 脱敏
+//
+// 不得承担：
+// 1. ANSI 删除 - 由 terminal.Replayer 处理
+// 2. 分页删除 - 由 terminal.Replayer 处理
+// 3. 退格删除 - 由 terminal.Replayer 处理
+// 4. 终端语义修复 - 由 terminal.Replayer 处理
 type DetailLogger struct {
 	mu        sync.Mutex
 	file      *os.File
@@ -64,9 +69,56 @@ func (l *DetailLogger) WriteCommand(cmd string) error {
 	return l.writer.Flush()
 }
 
-// WriteChunk 写入原始输出块，并做清洗。
+// WriteNormalizedText 写入规范化后的文本。
+// 这是 detail.log 的主要写入方法，接收已经由 terminal.Replayer 处理过的规范化文本。
+func (l *DetailLogger) WriteNormalizedText(text string) error {
+	if text == "" {
+		return nil
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	// 直接按行写入，不做任何终端修复
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		if err := l.writeLineLocked(line); err != nil {
+			return err
+		}
+	}
+
+	return l.writer.Flush()
+}
+
+// WriteNormalizedLines 写入规范化后的行列表。
+func (l *DetailLogger) WriteNormalizedLines(lines []string) error {
+	if len(lines) == 0 {
+		return nil
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	for _, line := range lines {
+		if err := l.writeLineLocked(line); err != nil {
+			return err
+		}
+	}
+
+	return l.writer.Flush()
+}
+
+// WriteChunk 写入输出块。
+// 注意：此方法已废弃，仅保留向后兼容。
+// 新代码应使用 WriteNormalizedText 或 WriteNormalizedLines。
+//
+// Deprecated: 使用 WriteNormalizedText 代替
 func (l *DetailLogger) WriteChunk(chunk string) error {
-	cleaned := cleanDetailChunk(chunk)
+	// 不再做终端修复，只做基本的换行标准化
+	cleaned := strings.ReplaceAll(chunk, "\r\n", "\n")
+	cleaned = strings.ReplaceAll(cleaned, "\r", "\n")
+	cleaned = strings.ReplaceAll(cleaned, "\x00", "")
+
 	if cleaned == "" {
 		return nil
 	}
@@ -174,8 +226,7 @@ func (l *DetailLogger) writeLine(message string) error {
 }
 
 func (l *DetailLogger) writeLineLocked(message string) error {
-	normalized := normalizePromptArtifacts(message)
-	normalized = strings.TrimSpace(normalized)
+	normalized := strings.TrimSpace(message)
 	if normalized == "" {
 		return nil
 	}
@@ -189,62 +240,4 @@ func (l *DetailLogger) writeLineLocked(message string) error {
 	}
 	l.lineCount++
 	return nil
-}
-
-func cleanDetailChunk(chunk string) string {
-	cleaned := ansiEscapeRegex.ReplaceAllString(chunk, "")
-	cleaned = strings.ReplaceAll(cleaned, "\r\n", "\n")
-	cleaned = strings.ReplaceAll(cleaned, "\r", "\n")
-	cleaned = strings.ReplaceAll(cleaned, "\x00", "")
-	cleaned = paginationRegex.ReplaceAllString(cleaned, "")
-	cleaned = strings.ReplaceAll(cleaned, "\b", "")
-	return collapseBlankLines(cleaned)
-}
-
-func collapseBlankLines(content string) string {
-	if content == "" {
-		return ""
-	}
-
-	lines := strings.Split(content, "\n")
-	filtered := make([]string, 0, len(lines))
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		filtered = append(filtered, line)
-	}
-
-	result := strings.Join(filtered, "\n")
-	if strings.HasSuffix(content, "\n") && result != "" {
-		result += "\n"
-	}
-	return result
-}
-
-func normalizePromptArtifacts(line string) string {
-	normalized := strings.TrimSpace(line)
-	if normalized == "" {
-		return ""
-	}
-
-	// 部分设备在报错或翻页后会输出连续重复提示符（如 <SW2><SW2>...）。
-	// 这里仅做展示层去重，不改变执行逻辑。
-	prompt := promptTokenRegex.FindString(normalized)
-	if prompt == "" {
-		return normalized
-	}
-
-	rest := strings.TrimPrefix(normalized, prompt)
-	for {
-		trimmed := strings.TrimLeft(rest, " \t")
-		if strings.HasPrefix(trimmed, prompt) {
-			rest = strings.TrimPrefix(trimmed, prompt)
-			continue
-		}
-		break
-	}
-
-	normalized = prompt + rest
-	return normalized
 }

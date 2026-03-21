@@ -20,6 +20,7 @@ import (
 // PathProvider 路径提供者接口（避免循环导入）
 type PathProvider interface {
 	GetDiscoveryRawFilePath(taskID, deviceIP, commandKey string) string
+	GetDiscoveryNormalizedFilePath(taskID, deviceIP, commandKey string) string
 }
 
 // RuntimeConfigProvider 运行时配置提供者接口
@@ -469,24 +470,24 @@ func (r *Runner) discoverDevice(ctx context.Context, taskID string, device model
 			Timestamp: time.Now().UnixMilli(),
 		})
 
-		// 执行命令并收集输出 (使用 ExecuteCommandSync)
+		// 执行命令并收集输出 (使用 ExecuteCommandSyncWithResult)
 		commandTimeout := resolveCommandTimeout(cmd.TimeoutSec, taskCommandTimeout)
-		output, err := exec.ExecuteCommandSync(ctx, cmd.Command, commandTimeout)
+		result, err := exec.ExecuteCommandSyncWithResult(ctx, cmd.Command, commandTimeout)
 		if err != nil {
 			lastErr = err
 			cmdFailed++
 			// 保存错误信息
-			r.saveRawOutput(taskID, device.IP, cmd.CommandKey, cmd.Command, "", "failed", err.Error(), 0)
+			r.saveCommandOutput(taskID, device.IP, cmd.CommandKey, cmd.Command, nil, "failed", err.Error())
 			continue
 		}
 		cmdSuccess++
 
-		// 保存原始输出
-		r.saveRawOutput(taskID, device.IP, cmd.CommandKey, cmd.Command, output, "success", "", int64(len(output)))
+		// 保存命令输出（规范化输出 + 原始审计输出）
+		r.saveCommandOutput(taskID, device.IP, cmd.CommandKey, cmd.Command, result, "success", "")
 
 		// 如果是 version 命令，尝试解析设备信息
 		if cmd.CommandKey == "version" {
-			r.parseAndUpdateDeviceInfo(taskID, device.IP, vendor, output)
+			r.parseAndUpdateDeviceInfo(taskID, device.IP, vendor, result.NormalizedText)
 		}
 	}
 
@@ -547,18 +548,32 @@ func (r *Runner) updateDeviceError(taskID, deviceIP, errMsg string) {
 	})
 }
 
-// saveRawOutput 保存原始命令输出
-func (r *Runner) saveRawOutput(taskID, deviceIP, commandKey, command, output, status, errMsg string, size int64) {
-	// 保存到文件
+// saveCommandOutput 保存命令输出（规范化输出 + 原始审计输出）
+// result 包含 RawText（原始输出）和 NormalizedText（规范化输出）
+func (r *Runner) saveCommandOutput(taskID, deviceIP, commandKey, command string, result *executor.CommandResult, status, errMsg string) {
 	var filePath string
-	if output != "" && r.pathProvider != nil {
-		filePath = r.pathProvider.GetDiscoveryRawFilePath(taskID, deviceIP, commandKey)
+	var rawFilePath string
 
-		// 确保目录存在（权限0700：仅所有者可读写执行）
-		dir := filepath.Dir(filePath)
-		if err := os.MkdirAll(dir, 0700); err == nil {
-			// 文件权限0600：仅所有者可读写
-			os.WriteFile(filePath, []byte(output), 0600)
+	if r.pathProvider != nil {
+		// 原始审计输出路径
+		rawFilePath = r.pathProvider.GetDiscoveryRawFilePath(taskID, deviceIP, commandKey)
+		// 规范化输出路径
+		filePath = r.pathProvider.GetDiscoveryNormalizedFilePath(taskID, deviceIP, commandKey)
+
+		// 保存原始审计输出
+		if result.RawText != "" {
+			rawDir := filepath.Dir(rawFilePath)
+			if err := os.MkdirAll(rawDir, 0700); err == nil {
+				os.WriteFile(rawFilePath, []byte(result.RawText), 0600)
+			}
+		}
+
+		// 保存规范化输出
+		if result.NormalizedText != "" {
+			normalizedDir := filepath.Dir(filePath)
+			if err := os.MkdirAll(normalizedDir, 0700); err == nil {
+				os.WriteFile(filePath, []byte(result.NormalizedText), 0600)
+			}
 		}
 	}
 
@@ -567,12 +582,18 @@ func (r *Runner) saveRawOutput(taskID, deviceIP, commandKey, command, output, st
 		"task_id = ? AND device_ip = ? AND command_key = ?",
 		taskID, deviceIP, commandKey,
 	).Updates(map[string]interface{}{
-		"file_path":     filePath,
-		"status":        status,
-		"error_message": errMsg,
-		"parse_status":  "pending",
-		"parse_error":   "",
-		"output_size":   size,
+		"file_path":       filePath,
+		"raw_file_path":   rawFilePath,
+		"status":          status,
+		"error_message":   errMsg,
+		"parse_status":    "pending",
+		"parse_error":     "",
+		"raw_size":        result.RawSize,
+		"normalized_size": result.NormalizedSize,
+		"line_count":      result.LineCount(),
+		"pager_count":     result.PaginationCount,
+		"echo_consumed":   result.EchoConsumed,
+		"prompt_matched":  result.PromptMatched,
 	})
 }
 

@@ -1,0 +1,17 @@
+[
+  {
+    "aggregateName": "Trunk1",
+    "memberPorts": ["GE1/0/1", "GE1/0/2"],
+    "mode": "static"
+  },
+  {
+    "aggregateName": "Trunk2",
+    "memberPorts": ["XGE1/0/1", "XGE1/0/2"],
+    "mode": "static"
+  },
+  {
+    "aggregateName": "Trunk10",
+    "memberPorts": ["GE2/0/1", "GE2/0/2", "GE2/0/3"],
+    "mode": "static"
+  }
+]
