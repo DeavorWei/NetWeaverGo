@@ -63,6 +63,9 @@ type SessionMachine struct {
 
 	// errorContinue 错误决策结果：继续执行
 	errorContinue bool
+
+	// afterPager 分页后标志，用于强制使用严格提示符判定
+	afterPager bool
 }
 
 // NewSessionMachine 创建新的会话状态机
@@ -101,6 +104,25 @@ func (m *SessionMachine) ActiveLine() string {
 // Lines 返回已提交的逻辑行
 func (m *SessionMachine) Lines() []string {
 	return m.replayer.Lines()
+}
+
+// ClearInitResiduals 清空初始化阶段的残留数据
+// 在进入 Ready 或发送第一条命令前调用，避免登录噪声污染第一条命令
+func (m *SessionMachine) ClearInitResiduals() {
+	// 清空待处理行
+	m.pendingLines = m.pendingLines[:0]
+
+	// 清空 replayer 中的已提交行和活动行
+	m.replayer.Reset()
+
+	// 清空当前命令上下文
+	m.current = nil
+
+	// 清空错误上下文
+	m.pendingError = nil
+	m.errorDecided = false
+
+	logger.Debug("SessionMachine", "-", "已清空初始化残留数据")
 }
 
 // Feed 消费原始 chunk，更新状态机
@@ -206,6 +228,15 @@ func (m *SessionMachine) handleWarmup() []Action {
 
 // handleReady 处理就绪状态
 func (m *SessionMachine) handleReady() []Action {
+	// 首先检查活动行是否为分页符
+	// 这处理了分页符在提示符之后到达的情况（跨 chunk 时序竞争）
+	activeLine := m.replayer.ActiveLine()
+	if m.matcher.IsPaginationPrompt(activeLine) {
+		m.state = StateHandlingPager
+		logger.Debug("SessionMachine", "-", "就绪状态检测到未处理的分页符，进入分页处理")
+		return []Action{ActionSendSpace}
+	}
+
 	// 检查是否还有命令要执行
 	if m.nextIndex >= len(m.queue) {
 		m.state = StateCompleted
@@ -244,10 +275,18 @@ func (m *SessionMachine) handleSendCommand() []Action {
 func (m *SessionMachine) handleCollecting() []Action {
 	actions := make([]Action, 0)
 
+	// DEBUG: 打印当前上下文
+	activeLine := m.replayer.ActiveLine()
+	logger.Debug("SessionMachine", "-", "[DEBUG] handleCollecting 开始: pendingLines=%d, activeLine='%s'", len(m.pendingLines), truncateStringDebug(activeLine, 100))
+	for i, line := range m.pendingLines {
+		logger.Debug("SessionMachine", "-", "[DEBUG] pendingLine[%d]='%s'", i, truncateStringDebug(line, 100))
+	}
+
 	// 处理待处理的行
 	for len(m.pendingLines) > 0 {
 		line := m.pendingLines[0]
 		m.pendingLines = m.pendingLines[1:]
+		logger.Debug("SessionMachine", "-", "[DEBUG] 处理行: '%s'", truncateStringDebug(line, 100))
 
 		// 添加到当前命令的规范化行
 		if m.current != nil {
@@ -284,7 +323,8 @@ func (m *SessionMachine) handleCollecting() []Action {
 			return actions
 		}
 
-		// 检查是否为分页符
+		// 检查是否为分页符（优先于提示符检测）
+		// 分页符表示输出未完成，必须优先处理
 		if m.matcher.IsPaginationPrompt(line) {
 			m.state = StateHandlingPager
 			if m.current != nil {
@@ -296,16 +336,92 @@ func (m *SessionMachine) handleCollecting() []Action {
 		}
 
 		// 检查是否为提示符
-		if m.matcher.IsPrompt(line) {
-			// 进入等待最终提示符状态
-			m.state = StateWaitingFinalPrompt
-			logger.Debug("SessionMachine", "-", "检测到提示符候选，进入确认状态")
-			return actions
+		// 关键修复：检测顺序很重要！
+		// 1. 首先检查是否在分页中（跨 chunk 场景）
+		// 2. 然后检查当前 chunk 是否有分页符
+		// 3. 最后才完成命令
+		// 【方案四】分页后使用严格提示符判定
+		isPrompt := false
+		if m.afterPager {
+			isPrompt = m.matcher.IsPromptStrict(line)
+		} else {
+			isPrompt = m.matcher.IsPrompt(line)
+		}
+		if isPrompt {
+			// 关键修复1：首先检查是否正在分页中
+			// 这处理了分页符在前一个 chunk，提示符在当前 chunk 的情况
+			if m.current != nil && m.current.IsPaginationPending() {
+				// 检查剩余的 pendingLines 是否包含新的分页符
+				hasNewPager := false
+				for _, remainingLine := range m.pendingLines {
+					if m.matcher.IsPaginationPrompt(remainingLine) {
+						hasNewPager = true
+						break
+					}
+				}
+
+				// 如果还有新的分页符，继续处理
+				if hasNewPager {
+					logger.Debug("SessionMachine", "-", "分页中检测到提示符，但剩余行有新分页符，继续处理")
+					continue
+				}
+
+				// 检查活动行是否为新的分页符
+				activeLine := m.replayer.ActiveLine()
+				if m.matcher.IsPaginationPrompt(activeLine) {
+					m.state = StateHandlingPager
+					m.current.IncrementPagination()
+					logger.Debug("SessionMachine", "-", "分页中检测到提示符，但活动行是新分页符，进入分页处理")
+					actions = append(actions, ActionSendSpace)
+					return actions
+				}
+
+				// 没有新的分页符，进入等待确认状态
+				m.state = StateWaitingFinalPrompt
+				logger.Debug("SessionMachine", "-", "分页后检测到提示符，进入等待确认状态")
+				return nil
+			}
+
+			// 检查剩余的 pendingLines 是否包含分页符
+			hasPager := false
+			for _, remainingLine := range m.pendingLines {
+				if m.matcher.IsPaginationPrompt(remainingLine) {
+					hasPager = true
+					break
+				}
+			}
+
+			// 如果剩余行中有分页符，优先处理分页符
+			if hasPager {
+				// 不完成命令，继续处理剩余行
+				logger.Debug("SessionMachine", "-", "检测到提示符，但剩余行中有分页符，继续处理")
+				continue
+			}
+
+			// 检查活动行是否为分页符
+			activeLine := m.replayer.ActiveLine()
+			if m.matcher.IsPaginationPrompt(activeLine) {
+				m.state = StateHandlingPager
+				if m.current != nil {
+					m.current.IncrementPagination()
+				}
+				logger.Debug("SessionMachine", "-", "检测到提示符，但活动行是分页符，进入分页处理状态")
+				actions = append(actions, ActionSendSpace)
+				return actions
+			}
+
+			// 确认没有分页符，命令完成
+			m.completeCurrentCommand()
+			m.state = StateReady
+			logger.Debug("SessionMachine", "-", "检测到提示符，命令完成，回到就绪状态")
+			return nil
 		}
 	}
 
-	// 检查活动行是否为分页符
-	activeLine := m.replayer.ActiveLine()
+	// 检查活动行是否为分页符（优先于提示符检测）
+	// 分页符表示输出未完成，必须优先处理
+	activeLine = m.replayer.ActiveLine()
+	logger.Debug("SessionMachine", "-", "[DEBUG] 检查活动行(分页符): '%s'", truncateStringDebug(activeLine, 100))
 	if m.matcher.IsPaginationPrompt(activeLine) {
 		m.state = StateHandlingPager
 		if m.current != nil {
@@ -314,6 +430,34 @@ func (m *SessionMachine) handleCollecting() []Action {
 		logger.Debug("SessionMachine", "-", "活动行检测到分页符，进入分页处理状态")
 		actions = append(actions, ActionSendSpace)
 		return actions
+	}
+
+	// 检查活动行是否为提示符
+	// 注意：活动行提示符检测时直接完成命令，因为如果没有新数据，
+	// 状态机不会被再次驱动，WaitingFinalPrompt 状态会卡住
+	logger.Debug("SessionMachine", "-", "[DEBUG] 检查活动行(提示符): '%s'", truncateStringDebug(activeLine, 100))
+	// 【方案四】分页后使用严格提示符判定
+	isPromptActive := false
+	if m.afterPager {
+		isPromptActive = m.matcher.IsPromptStrict(activeLine)
+	} else {
+		isPromptActive = m.matcher.IsPrompt(activeLine)
+	}
+	if isPromptActive {
+		logger.Debug("SessionMachine", "-", "[DEBUG] 活动行被识别为提示符!")
+		// 清除分页后标志
+		m.afterPager = false
+		// 方案1+3：如果正在分页中，需要进入等待确认状态
+		if m.current != nil && m.current.IsPaginationPending() {
+			m.state = StateWaitingFinalPrompt
+			logger.Debug("SessionMachine", "-", "分页后活动行检测到提示符，进入等待确认状态")
+			return nil
+		}
+
+		m.completeCurrentCommand()
+		m.state = StateReady
+		logger.Debug("SessionMachine", "-", "活动行检测到提示符，命令完成，回到就绪状态")
+		return nil
 	}
 
 	return actions
@@ -343,13 +487,16 @@ func (m *SessionMachine) handleHandlingError() []Action {
 
 // handlePager 处理分页状态
 func (m *SessionMachine) handlePager() []Action {
+	// 设置分页后标志，后续必须使用严格提示符判定
+	m.afterPager = true
 	// 发送空格后，回到收集状态
 	m.state = StateCollecting
-	logger.Debug("SessionMachine", "-", "分页处理完成，回到收集状态")
+	logger.Debug("SessionMachine", "-", "分页处理完成，回到收集状态（启用严格提示符判定）")
 	return nil
 }
 
 // handleWaitingFinalPrompt 处理等待最终提示符状态
+// 方案3：分页后进入此状态，等待确认命令真正结束
 func (m *SessionMachine) handleWaitingFinalPrompt() []Action {
 	// 处理待处理的行
 	for len(m.pendingLines) > 0 {
@@ -358,29 +505,53 @@ func (m *SessionMachine) handleWaitingFinalPrompt() []Action {
 
 		// 如果还有更多行，说明之前的提示符是误判
 		// 回到收集状态继续处理
-		m.current.AddNormalizedLine(line)
+		if m.current != nil {
+			m.current.AddNormalizedLine(line)
+		}
 
+		// 如果又遇到分页符，需要继续翻页
 		if m.matcher.IsPaginationPrompt(line) {
 			m.state = StateHandlingPager
-			m.current.IncrementPagination()
-			logger.Debug("SessionMachine", "-", "确认分页符，进入分页处理状态")
+			if m.current != nil {
+				m.current.IncrementPagination()
+			}
+			logger.Debug("SessionMachine", "-", "等待确认时检测到分页符，进入分页处理状态")
 			return []Action{ActionSendSpace}
 		}
 
-		// 如果又遇到提示符，继续等待
+		// 如果遇到提示符，确认命令真正完成
 		if m.matcher.IsPrompt(line) {
-			// 保持当前状态
+			if m.current != nil {
+				m.current.ClearPaginationPending()
+			}
+			m.completeCurrentCommand()
+			m.state = StateReady
+			logger.Debug("SessionMachine", "-", "等待确认后检测到提示符，命令完成")
 			return nil
 		}
 	}
 
 	// 检查活动行
 	activeLine := m.replayer.ActiveLine()
+
+	// 优先检查分页符
+	if m.matcher.IsPaginationPrompt(activeLine) {
+		m.state = StateHandlingPager
+		if m.current != nil {
+			m.current.IncrementPagination()
+		}
+		logger.Debug("SessionMachine", "-", "等待确认时活动行检测到分页符，进入分页处理状态")
+		return []Action{ActionSendSpace}
+	}
+
 	if m.matcher.IsPrompt(activeLine) {
 		// 确认命令完成
+		if m.current != nil {
+			m.current.ClearPaginationPending()
+		}
 		m.completeCurrentCommand()
 		m.state = StateReady
-		logger.Debug("SessionMachine", "-", "命令完成，回到就绪状态")
+		logger.Debug("SessionMachine", "-", "等待确认后活动行检测到提示符，命令完成")
 		return nil
 	}
 
@@ -543,4 +714,12 @@ func extractPromptHint(line string) string {
 		return line[len(line)-20:]
 	}
 	return line
+}
+
+// truncateStringDebug 截断字符串用于调试日志
+func truncateStringDebug(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

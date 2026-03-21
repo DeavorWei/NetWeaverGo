@@ -3,7 +3,6 @@ package executor
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
@@ -221,18 +220,21 @@ func (i *Initializer) waitForPrompt(ctx context.Context, client *sshutil.SSHClie
 			// 使用状态机处理
 			machine.Feed(chunk)
 
-			// 检查是否检测到提示符
-			if i.matcher.IsPrompt(chunk) {
+			// 【关键修复】不再对原始 chunk 直接 IsPrompt(chunk)
+			// 只看规范化后的活动行/最后一行，使用严格判定
+			activeLine := machine.ActiveLine()
+			if activeLine != "" && i.matcher.IsPromptStrict(activeLine) {
+				logger.Debug("Initializer", "-", "严格模式检测到提示符（活动行）: '%s'", activeLine)
 				return true
 			}
 
-			// 也检查状态机的活动行
-			activeLine := machine.ActiveLine()
-			if activeLine != "" {
-				for _, suffix := range i.profile.Prompt.Suffixes {
-					if strings.HasSuffix(activeLine, suffix) {
-						return true
-					}
+			// 也检查已提交的最后一行
+			lines := machine.Lines()
+			if len(lines) > 0 {
+				lastLine := lines[len(lines)-1]
+				if i.matcher.IsPromptStrict(lastLine) {
+					logger.Debug("Initializer", "-", "严格模式检测到提示符（最后一行）: '%s'", lastLine)
+					return true
 				}
 			}
 		}

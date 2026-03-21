@@ -44,6 +44,9 @@ type StreamEngine struct {
 
 	// suspendHandler 错误/超时挂起处理器
 	suspendHandler SuspendHandler
+
+	// profile 设备画像（用于初始化）
+	profile *config.DeviceProfile
 }
 
 // NewStreamEngine 创建新的流处理引擎
@@ -68,6 +71,36 @@ func (e *StreamEngine) SetSuspendHandler(handler SuspendHandler) {
 func (e *StreamEngine) SetErrorMatcher(m *matcher.StreamMatcher) {
 	e.matcher = m
 	e.machine.matcher = m
+}
+
+// SetProfile 设置设备画像
+func (e *StreamEngine) SetProfile(profile *config.DeviceProfile) {
+	e.profile = profile
+}
+
+// RunInit 执行初始化流程
+// 在执行命令前调用，发送禁分页命令等
+func (e *StreamEngine) RunInit(ctx context.Context, timeout time.Duration) error {
+	if e.profile == nil {
+		logger.Debug("StreamEngine", "-", "无设备画像，跳过初始化流程")
+		return nil
+	}
+
+	// 创建初始化器
+	initializer := NewInitializerWithMatcher(e.profile, e.matcher)
+
+	// 执行初始化
+	logger.Info("StreamEngine", "-", "开始执行初始化流程...")
+	result := initializer.RunWithResult(ctx, e.client, e.machine)
+	if !result.Success {
+		return fmt.Errorf("初始化失败: %s", result.ErrorMessage)
+	}
+
+	// 清空初始化残留
+	e.machine.ClearInitResiduals()
+
+	logger.Info("StreamEngine", "-", "初始化流程完成 (禁分页: %v, 耗时: %v)", result.PagerDisabled, result.Duration)
+	return nil
 }
 
 // Run 运行流处理引擎

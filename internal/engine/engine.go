@@ -554,6 +554,16 @@ func (e *Engine) worker(ctx context.Context, dev models.DeviceAsset, wg *sync.Wa
 	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, workerEventBus, suspendHandler)
 	exec.SetLogSession(logSession)
 	exec.SetAlgorithms(&e.Settings.SSHAlgorithms)
+
+	// 【方案一】根据设备厂商设置设备画像
+	if dev.Vendor != "" {
+		profile := config.GetDeviceProfile(dev.Vendor)
+		if profile != nil {
+			exec.DeviceProfile = profile
+			logger.Debug("Engine", dev.IP, "已加载设备画像: %s", dev.Vendor)
+		}
+	}
+
 	defer exec.Close()
 
 	// 发送开始事件

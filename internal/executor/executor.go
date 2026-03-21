@@ -42,6 +42,9 @@ type DeviceExecutor struct {
 	Algorithms *config.SSHAlgorithmSettings
 	LogSession *report.DeviceLogSession
 
+	// DeviceProfile 设备画像（用于初始化流程）
+	DeviceProfile *config.DeviceProfile
+
 	// Terminal Replayer - 实验性集成
 	// 用于将 SSH 字节流正确转换为规范化逻辑文本
 	replayer *terminal.Replayer
@@ -150,6 +153,16 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 	// 使用执行器的匹配器（已配置设备画像）
 	if e.Matcher != nil {
 		engine.SetErrorMatcher(e.Matcher)
+	}
+
+	// 【方案一】设置设备画像并执行初始化流程
+	if e.DeviceProfile != nil {
+		engine.SetProfile(e.DeviceProfile)
+		if err := engine.RunInit(ctx, cmdTimeout); err != nil {
+			return fmt.Errorf("初始化失败: %w", err)
+		}
+	} else {
+		logger.Debug("Executor", e.IP, "无设备画像，跳过初始化流程")
 	}
 
 	// 执行 Playbook
