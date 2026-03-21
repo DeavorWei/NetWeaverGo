@@ -3,8 +3,6 @@ package executor
 import (
 	"context"
 	"fmt"
-	"io"
-	"strings"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
@@ -166,176 +164,16 @@ func (e *DeviceExecutor) Close() {
 	}
 }
 
-// ExecuteCommandSync 同步执行单条命令并读取其输出
-// 直到找到下一个提示符。这绕过了 Playbook 队列系统，用于
-// 像 `display startup` 这样的查询命令。
+// ExecuteCommandSync 同步执行单条命令并返回原始输出文本
+// 这是 ExecuteCommandSyncWithResult 的兼容性包装器，内部使用 StreamEngine 实现
+// 保持返回 string 类型以向后兼容现有调用方
 func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, defaultTimeout time.Duration) (string, error) {
-	logger.Debug("Executor", e.IP, "进入同步交互模式: %s", cmd)
-	if e.Client == nil {
-		return "", fmt.Errorf("执行器未安全建连")
+	result, err := e.ExecuteCommandSyncWithResult(ctx, cmd, defaultTimeout)
+	if err != nil {
+		return "", err
 	}
-	defer func() {
-		if err := e.flushDetailLog(); err != nil {
-			logger.Warn("Executor", e.IP, "刷新同步详细日志失败: %v", err)
-		}
-	}()
-
-	manager := config.GetRuntimeManager()
-	buf := make([]byte, manager.GetBufferSize())
-	outReader := e.Client.Stdout
-
-	var outputBuffer strings.Builder
-	var streamBuffer string
-
-	cmdToSend := cmd
-	customTimeout := defaultTimeout
-
-	// 解析内联行尾注释以获取特殊命令超时设定
-	if idx := strings.Index(cmd, "// nw-timeout="); idx != -1 {
-		cmdToSend = strings.TrimSpace(cmd[:idx])
-		timeoutStr := strings.TrimSpace(cmd[idx+len("// nw-timeout="):])
-		if pd, err := time.ParseDuration(timeoutStr); err == nil {
-			customTimeout = pd
-			logger.Info("Executor", e.IP, "检测到同步交互命令超时自定义控制: %s -> %v", cmdToSend, customTimeout)
-		} else {
-			logger.Warn("Executor", e.IP, "自定义超时时间格式无效: %s (期望格式如 30s, 1m30s), 使用默认值", timeoutStr)
-		}
-	}
-
-	logger.Info("Executor", e.IP, ">>> [同步发送命令]: %s", cmdToSend)
-	if err := e.writeDetailCommand(cmdToSend); err != nil {
-		logger.Warn("Executor", e.IP, "写入同步命令日志失败: %v", err)
-	}
-	if err := e.Client.SendCommand(cmdToSend); err != nil {
-		return "", fmt.Errorf("发送命令失败: %w", err)
-	}
-
-	timer := time.NewTimer(customTimeout)
-	defer timer.Stop()
-
-	type readResult struct {
-		n   int
-		err error
-	}
-	readCh := make(chan readResult, 1)
-
-	go func() {
-		defer close(readCh)
-		// 添加 panic recover 防止 goroutine 泄漏
-		defer func() {
-			if r := recover(); r != nil {
-				logger.Warn("Executor", e.IP, "同步读取协程 panic 已恢复: %v", r)
-			}
-		}()
-
-		for {
-			n, err := outReader.Read(buf)
-			select {
-			case readCh <- readResult{n: n, err: err}:
-			case <-ctx.Done():
-				return
-			}
-			if err != nil {
-				return
-			}
-		}
-	}()
-
-	// 读取循环
-	for {
-		select {
-		case <-ctx.Done():
-			return outputBuffer.String(), ctx.Err()
-		case <-timer.C:
-			return outputBuffer.String(), fmt.Errorf("同步命令执行超时: %s", cmd)
-		case res, ok := <-readCh:
-			if !ok {
-				return outputBuffer.String(), fmt.Errorf("SSH 流已关闭")
-			}
-			n, err := res.n, res.err
-
-			if n > 0 {
-				if !timer.Stop() {
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-				timer.Reset(customTimeout)
-
-				chunk := string(buf[:n])
-				if err := e.writeDetailChunk(chunk); err != nil {
-					logger.Warn("Executor", e.IP, "写入同步详细日志失败: %v", err)
-				}
-
-				// 使用 terminal.Replayer 处理 chunk（与 ExecutePlaybook 保持一致）
-				e.processWithReplayer(chunk)
-
-				outputBuffer.WriteString(chunk) // 追加以作为完整的返回值
-				streamBuffer += chunk
-
-				// 查找提示符以完成执行
-				lines := strings.Split(streamBuffer, "\n")
-
-				// Optional enhancement: During sync execution, verify if errors are warned vs critical.
-				for i, line := range lines {
-					if i < len(lines)-1 {
-						if matched, rule := e.Matcher.MatchErrorRule(line); matched {
-							if rule.Severity == matcher.SeverityWarning {
-								logger.Warn("Executor", e.IP, "[同步命令警告] %s: %s", rule.Name, rule.Message)
-							} else {
-								// Sync execution typically expects pure strings to be parsed back, but a truly critical error warrants early exit
-								return outputBuffer.String(), fmt.Errorf("同步指令遇到 Critical 异常: %s", line)
-							}
-						}
-					}
-				}
-
-				// 使用 terminal.Replayer 产出的逻辑行进行 prompt/pager 判断
-				// 这是 Phase 2 设计要求的正确实现方式
-				activeLine := e.replayer.ActiveLine()
-				replayerLines := e.replayer.Lines()
-
-				// 获取最后一个非空逻辑行
-				var lastNonEmptyLine string
-				for i := len(replayerLines) - 1; i >= 0; i-- {
-					if trimmed := strings.TrimSpace(replayerLines[i]); trimmed != "" {
-						lastNonEmptyLine = replayerLines[i]
-						break
-					}
-				}
-
-				// 对待同步交互，同样可能遇到分页符卡死
-				// 基于逻辑行判断 pager（不再使用原始 lastSegment）
-				if e.Matcher.IsPaginationPrompt(activeLine) || (lastNonEmptyLine != "" && e.Matcher.IsPaginationPrompt(lastNonEmptyLine)) {
-					logger.Debug("Executor", e.IP, "[同步自动翻页] 截获终端分页拦截符(More)，自动下发空格放行...")
-					e.Client.SendRawBytes([]byte(" "))
-					streamBuffer = "" // 清除已匹配的分页符避免残留污染
-					continue
-				}
-
-				// 基于逻辑行判断 prompt（不再使用原始 lastSegment）
-				if e.Matcher.IsPrompt(activeLine) || (lastNonEmptyLine != "" && e.Matcher.IsPrompt(lastNonEmptyLine)) {
-					// 找到提示符，命令执行完成
-					_ = e.flushDetailLog()
-					return outputBuffer.String(), nil
-				}
-
-				// 保留 streamBuffer 的基本管理逻辑（用于错误规则匹配）
-				lastSegment := lines[len(lines)-1]
-				streamBuffer = lastSegment
-			}
-
-			if err != nil {
-				if err == io.EOF {
-					return outputBuffer.String(), fmt.Errorf("SSH 会话已被远端安全断开")
-				}
-				return outputBuffer.String(), fmt.Errorf("读取SSH流时发生错误: %w", err)
-			}
-		}
-
-		time.Sleep(manager.GetPaginationCheckInterval()) // 减少 CPU 忙等待
-	}
+	// 返回原始文本以保持向后兼容
+	return result.RawText, nil
 }
 
 // ExecuteCommandSyncWithResult 执行单条命令并返回完整的 CommandResult
