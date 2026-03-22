@@ -61,6 +61,8 @@ func (l *LineBuffer) MoveRight(n int) {
 }
 
 // CarriageReturn 回车：光标移到行首
+// 注意：CR 只移动光标，不清空内容
+// 后续写入会覆盖现有内容，但不会清除尾部残留
 func (l *LineBuffer) CarriageReturn() {
 	l.cursor = 0
 }

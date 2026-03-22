@@ -89,11 +89,6 @@ func (e *Engine) SetEnableRawLog(enable bool) {
 	e.EnableRawLog = enable
 }
 
-// TransitionTo 暴露状态转移能力，供编排层协调组合执行生命周期
-func (e *Engine) TransitionTo(newState EngineState) error {
-	return e.stateManager.TransitionTo(newState)
-}
-
 func (e *Engine) ensureTracker(taskName string) *report.ProgressTracker {
 	if e.tracker == nil {
 		e.tracker = report.NewProgressTracker(len(e.Devices))

@@ -40,6 +40,18 @@ type executionManager struct {
 	stopMu         sync.Mutex
 }
 
+// ExecutionSession 轻量级执行会话 - 不依赖引擎壳
+// 用于复合任务执行场景，只管理会话上下文和进度追踪
+type ExecutionSession struct {
+	manager   *executionManager
+	tracker   *report.ProgressTracker
+	ctx       context.Context
+	cancel    context.CancelFunc
+	meta      *ExecutionMeta // 执行元数据
+	cancelled bool           // 是否被用户取消
+}
+
+// managedExecution 引擎执行 - 用于单引擎执行场景
 type managedExecution struct {
 	manager   *executionManager
 	lifecycle *engine.Engine
@@ -138,7 +150,23 @@ func (m *executionManager) RunEngineWithMeta(
 	return tracker, runErr
 }
 
-// BeginCompositeExecutionWithMeta 启动复合执行（带元数据）
+// BeginCompositeExecution 启动轻量级复合执行（不依赖引擎壳）
+// 用于多引擎协调执行场景，只管理会话上下文和进度追踪
+func (m *executionManager) BeginCompositeExecution(
+	meta *ExecutionMeta,
+	totalDevices int,
+) (*ExecutionSession, error) {
+	tracker := report.NewProgressTracker(totalDevices)
+	if meta != nil && meta.TaskName != "" {
+		tracker.SetTaskName(meta.TaskName)
+	} else {
+		tracker.SetTaskName("任务执行")
+	}
+
+	return m.beginLightweightSession(meta, tracker)
+}
+
+// BeginCompositeExecutionWithMeta 启动复合执行（带元数据）- 保留兼容性
 func (m *executionManager) BeginCompositeExecutionWithMeta(
 	lifecycle *engine.Engine,
 	meta *ExecutionMeta,
@@ -218,8 +246,39 @@ func (m *executionManager) RunEngine(
 	return m.RunEngineWithMeta(ng, meta, runFn)
 }
 
-// BeginCompositeExecution 启动复合执行（兼容旧接口）
-func (m *executionManager) BeginCompositeExecution(
+// beginLightweightSession 创建轻量级执行会话（不依赖引擎壳）
+func (m *executionManager) beginLightweightSession(
+	meta *ExecutionMeta,
+	tracker *report.ProgressTracker,
+) (*ExecutionSession, error) {
+	if tracker == nil {
+		return nil, fmt.Errorf("进度追踪器不能为空")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.setCancelFunc(cancel)
+	m.setCurrentTracker(tracker)
+	m.startSnapshotTicker(ctx)
+
+	// 立即推送一次初始快照，让前端知道执行已开始
+	if app := m.getWailsApp(); app != nil {
+		initialSnapshot := tracker.GetSnapshot()
+		if initialSnapshot != nil {
+			app.Event.Emit(SnapshotEventName, initialSnapshot)
+		}
+	}
+
+	return &ExecutionSession{
+		manager: m,
+		tracker: tracker,
+		ctx:     ctx,
+		cancel:  cancel,
+		meta:    meta,
+	}, nil
+}
+
+// BeginCompositeExecutionWithEngine 启动复合执行（兼容旧接口 - 带引擎）
+func (m *executionManager) BeginCompositeExecutionWithEngine(
 	lifecycle *engine.Engine,
 	runnerSrc string,
 	runnerID string,
@@ -343,6 +402,161 @@ func (m *executionManager) emitFinishedEvent() {
 	}
 }
 
+// ====== ExecutionSession 方法（轻量级会话）======
+
+func (s *ExecutionSession) Context() context.Context {
+	return s.ctx
+}
+
+func (s *ExecutionSession) Tracker() *report.ProgressTracker {
+	return s.tracker
+}
+
+func (s *ExecutionSession) SetCancelled(cancelled bool) {
+	s.cancelled = cancelled
+}
+
+func (s *ExecutionSession) Finish() {
+	// 保存历史记录
+	if s.meta != nil && s.tracker != nil {
+		s.persistExecutionRecord()
+	}
+
+	s.manager.stopSnapshotTicker()
+	s.manager.clearCancelFunc()
+	s.manager.emitFinishedEvent()
+	s.manager.clearCurrentTracker()
+
+	if s.tracker != nil {
+		s.tracker.Close()
+	}
+}
+
+// persistExecutionRecord 持久化执行记录到数据库
+func (s *ExecutionSession) persistExecutionRecord() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("ExecutionManager", "-", "保存历史记录时发生panic: %v", r)
+		}
+	}()
+
+	if s.tracker == nil || s.meta == nil {
+		return
+	}
+
+	// 生成CSV报告
+	reportPath, _ := s.tracker.ExportCSV()
+
+	// 构建执行摘要
+	summary := s.tracker.BuildExecutionSummary()
+	deviceData := s.tracker.BuildExecutionDevices(30) // 保留30条日志尾部
+
+	// 判定状态
+	status := s.deriveExecutionStatus(summary)
+
+	// 构建设备记录
+	devices := make([]models.ExecutionDeviceRecord, 0, len(deviceData))
+	for _, d := range deviceData {
+		devices = append(devices, models.ExecutionDeviceRecord{
+			IP:             d.IP,
+			Status:         d.Status,
+			TotalCmd:       d.TotalCmd,
+			ExecCmd:        d.ExecCmd,
+			ErrorMsg:       d.ErrorMsg,
+			LogCount:       d.LogCount,
+			LogTail:        d.LogTail,
+			LogFilePath:    d.LogFilePath,
+			SummaryLogPath: d.SummaryLogPath,
+			DetailLogPath:  d.DetailLogPath,
+			RawLogPath:     d.RawLogPath,
+		})
+	}
+
+	// 计算时长
+	finishedAt := time.Now()
+	startedAt := summary.StartedAt
+	durationMs := finishedAt.Sub(startedAt).Milliseconds()
+
+	// 创建记录
+	record := models.ExecutionRecord{
+		RunnerSource:  s.meta.RunnerSource,
+		RunnerID:      s.meta.RunnerID,
+		TaskGroupID:   s.meta.TaskGroupID,
+		TaskGroupName: s.meta.TaskGroupName,
+		TaskName:      summary.TaskName,
+		Mode:          s.meta.Mode,
+		Status:        status,
+		TotalDevices:  summary.TotalDevices,
+		FinishedCount: summary.FinishedCount,
+		SuccessCount:  summary.SuccessCount,
+		ErrorCount:    summary.ErrorCount,
+		AbortedCount:  summary.AbortedCount,
+		WarningCount:  summary.WarningCount,
+		StartedAt:     startedAt.Format(time.RFC3339),
+		FinishedAt:    finishedAt.Format(time.RFC3339),
+		DurationMs:    durationMs,
+		ReportPath:    reportPath,
+		Devices:       devices,
+	}
+
+	// 保存到数据库
+	if _, err := config.CreateExecutionRecord(record); err != nil {
+		logger.Error("ExecutionManager", "-", "保存历史执行记录失败: %v", err)
+	} else {
+		logger.Info("ExecutionManager", "-", "历史执行记录已保存: %s", record.ID)
+	}
+
+	// 执行保留策略清理（异步）
+	go func() {
+		if err := config.DeleteOldExecutionRecords(100); err != nil {
+			logger.Warn("ExecutionManager", "-", "清理旧历史记录失败: %v", err)
+		}
+	}()
+}
+
+// deriveExecutionStatus 根据执行结果判定历史记录状态
+func (s *ExecutionSession) deriveExecutionStatus(summary *report.ExecutionSummaryData) string {
+	// 如果用户取消，优先标记为 cancelled
+	if s.cancelled {
+		return "cancelled"
+	}
+
+	total := summary.TotalDevices
+	if total == 0 {
+		return "failed"
+	}
+
+	successAndWarning := summary.SuccessCount + summary.WarningCount
+	errorAndAborted := summary.ErrorCount + summary.AbortedCount
+
+	// 全部为成功/告警
+	if successAndWarning == total && errorAndAborted == 0 {
+		return "completed"
+	}
+
+	// 全部为失败/中止
+	if errorAndAborted == total {
+		return "failed"
+	}
+
+	// 部分成功，部分失败
+	if successAndWarning > 0 && errorAndAborted > 0 {
+		return "partial"
+	}
+
+	// 其他情况
+	if summary.FinishedCount < total {
+		if s.cancelled {
+			return "cancelled"
+		}
+		return "failed"
+	}
+
+	return "failed"
+}
+
+// ====== managedExecution 方法（引擎执行）======
+
 func (s *managedExecution) Context() context.Context {
 	return s.ctx
 }
@@ -355,11 +569,11 @@ func (s *managedExecution) SetCancelled(cancelled bool) {
 	s.cancelled = cancelled
 }
 
+// TransitionTo 已废弃 - 引擎自己管理生命周期
+// 保留此方法以兼容旧代码，但不再执行任何操作
 func (s *managedExecution) TransitionTo(state engine.EngineState) error {
-	if s.lifecycle == nil {
-		return nil
-	}
-	return s.lifecycle.TransitionTo(state)
+	// 引擎自己管理生命周期，外部不再推进状态
+	return nil
 }
 
 func (s *managedExecution) Finish() {
@@ -368,7 +582,6 @@ func (s *managedExecution) Finish() {
 		s.persistExecutionRecord()
 	}
 
-	s.finishLifecycle()
 	s.manager.stopSnapshotTicker()
 	s.manager.clearCancelFunc()
 	engine.GetGlobalState().ClearActiveEngine()
@@ -510,18 +723,5 @@ func (s *managedExecution) deriveExecutionStatus(summary *report.ExecutionSummar
 	return "failed"
 }
 
-func (s *managedExecution) finishLifecycle() {
-	if s.lifecycle == nil {
-		return
-	}
-
-	switch s.lifecycle.State() {
-	case engine.StateClosed:
-		return
-	case engine.StateClosing:
-		_ = s.lifecycle.TransitionTo(engine.StateClosed)
-	case engine.StateIdle, engine.StateStarting, engine.StateRunning, engine.StatePaused:
-		_ = s.lifecycle.TransitionTo(engine.StateClosing)
-		_ = s.lifecycle.TransitionTo(engine.StateClosed)
-	}
-}
+// finishLifecycle 已废弃 - 引擎自己管理生命周期
+// 引擎在 Run() 或 RunBackup() 结束时会自动完成状态转换

@@ -114,6 +114,7 @@ func UpdateTaskGroupStatus(id uint, status string) error {
 		return fmt.Errorf("任务组不存在: %d", id)
 	}
 
+	group.Status = status
 	return DB.Save(&group).Error
 }
 

@@ -278,9 +278,8 @@ func (s *TaskGroupService) executeModeB(
 		Mode:          "binding",
 	}
 
-	coordinator := engine.NewEngine(nil, nil, settings, false)
-	session, err := getExecutionManager().BeginCompositeExecutionWithMeta(
-		coordinator,
+	// 创建轻量级执行会话（不依赖空引擎壳）
+	session, err := getExecutionManager().BeginCompositeExecution(
 		meta,
 		totalDevices,
 	)
@@ -288,13 +287,6 @@ func (s *TaskGroupService) executeModeB(
 		return "", err
 	}
 	defer session.Finish()
-
-	if err := session.TransitionTo(engine.StateStarting); err != nil {
-		return "", err
-	}
-	if err := session.TransitionTo(engine.StateRunning); err != nil {
-		return "", err
-	}
 
 	var (
 		runWG       sync.WaitGroup

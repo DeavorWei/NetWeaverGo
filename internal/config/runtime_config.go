@@ -40,9 +40,10 @@ type RuntimeConfig struct {
 
 	// 引擎配置
 	Engine struct {
-		WorkerCount           int `json:"workerCount"`           // 工作协程数
-		EventBufferSize       int `json:"eventBufferSize"`       // 事件缓冲区大小
-		FallbackEventCapacity int `json:"fallbackEventCapacity"` // 后备事件容量
+		WorkerCount               int  `json:"workerCount"`               // 工作协程数
+		EventBufferSize           int  `json:"eventBufferSize"`           // 事件缓冲区大小
+		FallbackEventCapacity     int  `json:"fallbackEventCapacity"`     // 后备事件容量
+		UseNewSessionArchitecture bool `json:"useNewSessionArchitecture"` // 使用新会话架构（灰度开关）
 	} `json:"engine"`
 
 	// 拓扑发现配置
@@ -160,6 +161,7 @@ func ResetRuntimeSettingsToDefault(db *gorm.DB) error {
 		{Category: "engine", Key: "workerCount", Value: strconv.Itoa(defaults.Engine.WorkerCount)},
 		{Category: "engine", Key: "eventBufferSize", Value: strconv.Itoa(defaults.Engine.EventBufferSize)},
 		{Category: "engine", Key: "fallbackEventCapacity", Value: strconv.Itoa(defaults.Engine.FallbackEventCapacity)},
+		{Category: "engine", Key: "useNewSessionArchitecture", Value: strconv.FormatBool(defaults.Engine.UseNewSessionArchitecture)},
 
 		// 发现配置
 		{Category: "discovery", Key: "workerCount", Value: strconv.Itoa(defaults.Discovery.WorkerCount)},
@@ -209,13 +211,12 @@ func LoadRuntimeConfig(db *gorm.DB) (RuntimeConfig, error) {
 
 // applyRuntimeSetting 将单个设置应用到配置对象
 func applyRuntimeSetting(cfg *RuntimeConfig, setting RuntimeSetting) error {
-	val, err := strconv.Atoi(setting.Value)
-	if err != nil {
-		return fmt.Errorf("无效的配置值: %s", setting.Value)
-	}
-
 	switch setting.Category {
 	case "timeout":
+		val, err := strconv.Atoi(setting.Value)
+		if err != nil {
+			return fmt.Errorf("无效的配置值: %s", setting.Value)
+		}
 		switch setting.Key {
 		case "command":
 			cfg.Timeouts.Command = val
@@ -229,6 +230,10 @@ func applyRuntimeSetting(cfg *RuntimeConfig, setting RuntimeSetting) error {
 			cfg.Timeouts.LongCmd = val
 		}
 	case "limit":
+		val, err := strconv.Atoi(setting.Value)
+		if err != nil {
+			return fmt.Errorf("无效的配置值: %s", setting.Value)
+		}
 		switch setting.Key {
 		case "maxLogsPerDevice":
 			cfg.Limits.MaxLogsPerDevice = val
@@ -241,14 +246,33 @@ func applyRuntimeSetting(cfg *RuntimeConfig, setting RuntimeSetting) error {
 		}
 	case "engine":
 		switch setting.Key {
-		case "workerCount":
-			cfg.Engine.WorkerCount = val
-		case "eventBufferSize":
-			cfg.Engine.EventBufferSize = val
-		case "fallbackEventCapacity":
-			cfg.Engine.FallbackEventCapacity = val
+		case "useNewSessionArchitecture":
+			// 布尔值特殊处理
+			val, err := strconv.ParseBool(setting.Value)
+			if err != nil {
+				return fmt.Errorf("无效的布尔配置值: %s", setting.Value)
+			}
+			cfg.Engine.UseNewSessionArchitecture = val
+		default:
+			// 整数值处理
+			val, err := strconv.Atoi(setting.Value)
+			if err != nil {
+				return fmt.Errorf("无效的配置值: %s", setting.Value)
+			}
+			switch setting.Key {
+			case "workerCount":
+				cfg.Engine.WorkerCount = val
+			case "eventBufferSize":
+				cfg.Engine.EventBufferSize = val
+			case "fallbackEventCapacity":
+				cfg.Engine.FallbackEventCapacity = val
+			}
 		}
 	case "discovery":
+		val, err := strconv.Atoi(setting.Value)
+		if err != nil {
+			return fmt.Errorf("无效的配置值: %s", setting.Value)
+		}
 		switch setting.Key {
 		case "workerCount":
 			cfg.Discovery.WorkerCount = val
@@ -258,11 +282,19 @@ func applyRuntimeSetting(cfg *RuntimeConfig, setting RuntimeSetting) error {
 			cfg.Discovery.CommandTimeout = val
 		}
 	case "topology":
+		val, err := strconv.Atoi(setting.Value)
+		if err != nil {
+			return fmt.Errorf("无效的配置值: %s", setting.Value)
+		}
 		switch setting.Key {
 		case "maxInferenceCandidates":
 			cfg.Topology.MaxInferenceCandidates = val
 		}
 	case "buffer":
+		val, err := strconv.Atoi(setting.Value)
+		if err != nil {
+			return fmt.Errorf("无效的配置值: %s", setting.Value)
+		}
 		switch setting.Key {
 		case "defaultSize":
 			cfg.Buffers.DefaultSize = val
@@ -272,6 +304,10 @@ func applyRuntimeSetting(cfg *RuntimeConfig, setting RuntimeSetting) error {
 			cfg.Buffers.LargeSize = val
 		}
 	case "pagination":
+		val, err := strconv.Atoi(setting.Value)
+		if err != nil {
+			return fmt.Errorf("无效的配置值: %s", setting.Value)
+		}
 		switch setting.Key {
 		case "lineThreshold":
 			cfg.Pagination.LineThreshold = val
@@ -303,6 +339,7 @@ func SaveRuntimeConfig(db *gorm.DB, config RuntimeConfig) error {
 		{Category: "engine", Key: "workerCount", Value: strconv.Itoa(config.Engine.WorkerCount)},
 		{Category: "engine", Key: "eventBufferSize", Value: strconv.Itoa(config.Engine.EventBufferSize)},
 		{Category: "engine", Key: "fallbackEventCapacity", Value: strconv.Itoa(config.Engine.FallbackEventCapacity)},
+		{Category: "engine", Key: "useNewSessionArchitecture", Value: strconv.FormatBool(config.Engine.UseNewSessionArchitecture)},
 
 		// 发现配置
 		{Category: "discovery", Key: "workerCount", Value: strconv.Itoa(config.Discovery.WorkerCount)},

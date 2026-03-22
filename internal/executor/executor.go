@@ -155,14 +155,15 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 		engine.SetErrorMatcher(e.Matcher)
 	}
 
-	// 【方案一】设置设备画像并执行初始化流程
+	// 【修复】设置设备画像（如果有）
+	// 无论是否有设备画像，都必须执行初始化流程
+	// 无设备画像时，RunInit() 会执行简化初始化，清理登录残留
 	if e.DeviceProfile != nil {
 		engine.SetProfile(e.DeviceProfile)
-		if err := engine.RunInit(ctx, cmdTimeout); err != nil {
-			return fmt.Errorf("初始化失败: %w", err)
-		}
-	} else {
-		logger.Debug("Executor", e.IP, "无设备画像，跳过初始化流程")
+	}
+	// 始终调用 RunInit，由内部决定是否执行简化初始化
+	if err := engine.RunInit(ctx, cmdTimeout); err != nil {
+		return fmt.Errorf("初始化失败: %w", err)
 	}
 
 	// 执行 Playbook

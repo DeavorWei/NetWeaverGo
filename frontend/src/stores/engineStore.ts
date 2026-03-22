@@ -4,14 +4,6 @@ import { Events } from "@wailsio/runtime";
 import { EngineAPI, DeviceAPI, ExecutionSnapshot } from "../services/api";
 import type { DeviceAsset } from "../services/api";
 
-type EngineState =
-  | "Idle"
-  | "Starting"
-  | "Running"
-  | "Paused"
-  | "Closing"
-  | "Closed";
-
 export interface SuspendRequiredEvent {
   sessionId?: string;
   ip: string;
@@ -26,13 +18,6 @@ export interface SuspendSessionState {
   error: string;
   content: string;
 }
-
-const ACTIVE_ENGINE_STATES = new Set<EngineState>([
-  "Starting",
-  "Running",
-  "Paused",
-  "Closing",
-]);
 
 export const useEngineStore = defineStore("engine", () => {
   const executionSnapshot = ref<ExecutionSnapshot | null>(null);
@@ -149,31 +134,12 @@ export const useEngineStore = defineStore("engine", () => {
 
   async function syncExecutionState() {
     try {
-      const [snapshot, status] = await Promise.all([
-        EngineAPI.getExecutionSnapshot().catch(() => null),
-        EngineAPI.getEngineState().catch(() => null),
-      ]);
+      // 统一从 ExecutionSnapshot 获取运行态
+      const snapshot = await EngineAPI.getExecutionSnapshot().catch(() => null);
 
       if (snapshot) {
         applySnapshot(snapshot);
         return snapshot.isRunning;
-      }
-
-      const state = (status?.state as EngineState | undefined) ?? "Idle";
-      if (ACTIVE_ENGINE_STATES.has(state)) {
-        const running = state === "Starting" || state === "Running" || state === "Paused";
-        applySnapshot(
-          new ExecutionSnapshot({
-            taskName: "任务执行",
-            totalDevices: 0,
-            finishedCount: 0,
-            progress: 0,
-            isRunning: running,
-            startTime: "",
-            devices: [],
-          })
-        );
-        return true;
       }
 
       applySnapshot(null);

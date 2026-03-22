@@ -125,7 +125,9 @@ func (s *EngineService) runEngineWithConfig(deviceIPs []string, commandGroupID u
 	return err
 }
 
-// GetEngineState 获取引擎当前状态（供前端调用）
+// GetEngineState 获取引擎当前状态
+// 已废弃：前端应使用 GetExecutionSnapshot() 获取运行态信息
+// 此方法仅保留用于向后兼容
 func (s *EngineService) GetEngineState() map[string]interface{} {
 	return getExecutionManager().GetEngineState()
 }
