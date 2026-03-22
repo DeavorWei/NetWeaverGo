@@ -93,6 +93,7 @@ func DefaultRuntimeConfig() RuntimeConfig {
 	cfg.Engine.WorkerCount = DefaultWorkerCount
 	cfg.Engine.EventBufferSize = EventBufferSize
 	cfg.Engine.FallbackEventCapacity = FallbackEventCapacity
+	cfg.Engine.UseNewSessionArchitecture = true // 默认使用新架构（Phase 8 清理后）
 
 	// 发现配置
 	cfg.Discovery.WorkerCount = DefaultWorkerCount

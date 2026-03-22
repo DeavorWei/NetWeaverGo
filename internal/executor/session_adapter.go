@@ -40,15 +40,21 @@ type SessionAdapter struct {
 
 // NewSessionAdapter 创建新的会话适配器
 func NewSessionAdapter(width int, commands []string, m *matcher.StreamMatcher) *SessionAdapter {
-	return &SessionAdapter{
+	adapter := &SessionAdapter{
 		machine:            NewSessionMachine(width, commands, m),
 		replayer:           terminal.NewReplayer(width),
 		matcher:            m,
-		useNewArchitecture: false, // 默认使用旧架构
+		useNewArchitecture: true, // 默认使用新架构（Phase 8 清理后）
 		newState:           NewStateInitAwaitPrompt,
 		newContext:         NewSessionContext(commands),
 		newCommittedLines:  make([]string, 0),
 	}
+
+	// 初始化新架构组件（因为默认使用新架构）
+	adapter.detector = NewSessionDetector(m)
+	adapter.reducer = NewSessionReducer(commands, m)
+
+	return adapter
 }
 
 // SetUseNewArchitecture 设置是否使用新架构
