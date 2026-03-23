@@ -6,6 +6,8 @@ import (
 	"github.com/NetWeaverGo/core/internal/matcher"
 )
 
+const DefaultMaxPaginationCount = 100
+
 // ============================================================================
 // 新状态模型 (Phase 1 重构)
 // ============================================================================
@@ -140,6 +142,14 @@ type EvUserAbort struct {
 }
 
 func (e EvUserAbort) EventType() string { return "UserAbort" }
+
+// EvSuspendTimeout 挂起超时事件
+type EvSuspendTimeout struct {
+	CommandIndex int
+	Reason       string
+}
+
+func (e EvSuspendTimeout) EventType() string { return "SuspendTimeout" }
 
 // EvStreamClosed 流关闭事件
 type EvStreamClosed struct{}
@@ -284,15 +294,19 @@ type SessionContext struct {
 
 	// 待处理的错误上下文
 	PendingError *ErrorContext
+
+	// 分页次数上限
+	MaxPaginationCount int
 }
 
 // NewSessionContext 创建新的会话上下文
 func NewSessionContext(commands []string) *SessionContext {
 	return &SessionContext{
-		Queue:        commands,
-		NextIndex:    0,
-		PendingLines: make([]string, 0),
-		Results:      make([]*CommandResult, 0),
+		Queue:              commands,
+		NextIndex:          0,
+		PendingLines:       make([]string, 0),
+		Results:            make([]*CommandResult, 0),
+		MaxPaginationCount: DefaultMaxPaginationCount,
 	}
 }
 

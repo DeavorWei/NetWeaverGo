@@ -50,16 +50,20 @@ func TestAdapter_OutputCollection(t *testing.T) {
 }
 
 func TestAdapter_PaginationHandling(t *testing.T) {
-	input := "hostname# display interface\r\n" +
-		"GigabitEthernet0/0/1 current state: UP\r\n" +
+	input := "GigabitEthernet0/0/1 current state: UP\r\n" +
 		"GigabitEthernet0/0/2 current state: DOWN\r\n" +
 		"  ---- More ----"
 
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display interface"}, m)
 
-	_ = adapter.FeedSessionActions("hostname# ")
-	actions := adapter.FeedSessionActions(input)
+	actions := adapter.FeedSessionActions("hostname# ")
+	actions = adapter.FeedSessionActions("\r\nhostname# ")
+	if adapter.NewState() != NewStateRunning {
+		t.Fatalf("预热后应进入 Running，实际是 %s", adapter.NewState())
+	}
+
+	actions = adapter.FeedSessionActions(input)
 
 	hasPagerContinue := false
 	for _, action := range actions {
@@ -69,7 +73,7 @@ func TestAdapter_PaginationHandling(t *testing.T) {
 		}
 	}
 	if !hasPagerContinue {
-		t.Log("未检测到分页动作，当前输入可能不足以触发该路径")
+		t.Fatal("期望检测到分页动作")
 	}
 }
 
@@ -78,11 +82,27 @@ func TestAdapter_ErrorHandling(t *testing.T) {
 	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
 	_ = adapter.FeedSessionActions("hostname# ")
-	_ = adapter.FeedSessionActions("  Error: Unrecognized command\r\nhostname# ")
+	actions := adapter.FeedSessionActions("\r\nhostname# ")
+	if adapter.NewState() != NewStateRunning {
+		t.Fatalf("预热后应进入 Running，实际是 %s", adapter.NewState())
+	}
+
+	actions = adapter.FeedSessionActions("  Error: Unrecognized command\r\nhostname# ")
 
 	state := adapter.NewState()
-	if state == NewStateFailed {
-		t.Fatalf("普通命令错误不应直接进入 Failed: %s", state)
+	if state != NewStateSuspended {
+		t.Fatalf("命令错误应进入 Suspended，实际是 %s", state)
+	}
+
+	foundSuspend := false
+	for _, action := range actions {
+		if _, ok := action.(ActRequestSuspendDecision); ok {
+			foundSuspend = true
+			break
+		}
+	}
+	if !foundSuspend {
+		t.Fatal("期望产生挂起决策动作")
 	}
 }
 
@@ -91,9 +111,20 @@ func TestAdapter_MultipleCommands(t *testing.T) {
 	adapter := NewSessionAdapter(80, []string{"display version", "display interface", "display arp"}, m)
 
 	_ = adapter.FeedSessionActions("hostname# ")
+	_ = adapter.FeedSessionActions("\r\nhostname# ")
 	initialCount := len(adapter.Results())
 
-	_ = adapter.FeedSessionActions("display version\r\noutput\r\nhostname# ")
+	actions := adapter.FeedSessionActions("display version\r\noutput\r\nhostname# ")
+	foundNextCommand := false
+	for _, action := range actions {
+		if act, ok := action.(ActSendCommand); ok && act.Index == 1 {
+			foundNextCommand = true
+			break
+		}
+	}
+	if !foundNextCommand {
+		t.Fatal("第一条命令完成后应自动发送第二条命令")
+	}
 
 	if len(adapter.Results()) < initialCount {
 		t.Fatalf("结果数不应倒退: before=%d after=%d", initialCount, len(adapter.Results()))
@@ -137,5 +168,47 @@ func TestAdapter_MarkFailed(t *testing.T) {
 
 	if state := adapter.NewState(); state != NewStateFailed {
 		t.Fatalf("状态 = %s, 期望 Failed", state)
+	}
+}
+
+func TestAdapter_RuntimeEventsFromNormalizedOutput(t *testing.T) {
+	m := matcher.NewStreamMatcher()
+	adapter := NewSessionAdapter(80, []string{"display version"}, m)
+
+	actions := adapter.FeedSessionActions("hostname# ")
+	if len(actions) != 1 {
+		t.Fatalf("首次提示符应只产生预热动作，得到 %d 个动作", len(actions))
+	}
+	if _, ok := actions[0].(ActSendWarmup); !ok {
+		t.Fatalf("首次动作应为 ActSendWarmup，实际是 %T", actions[0])
+	}
+
+	actions = adapter.FeedSessionActions("\r\nhostname# ")
+	if adapter.NewState() != NewStateRunning {
+		t.Fatalf("预热后应进入 Running，实际是 %s", adapter.NewState())
+	}
+
+	foundCommand := false
+	for _, action := range actions {
+		if act, ok := action.(ActSendCommand); ok && act.Index == 0 && act.Command == "display version" {
+			foundCommand = true
+			break
+		}
+	}
+	if !foundCommand {
+		t.Fatal("预热后应发送第一条命令")
+	}
+
+	actions = adapter.FeedSessionActions("Huawei Versatile Routing Platform Software\r\nhostname# ")
+	if adapter.NewState() != NewStateCompleted {
+		t.Fatalf("命令完成后应进入 Completed，实际是 %s", adapter.NewState())
+	}
+
+	if len(adapter.Results()) != 1 {
+		t.Fatalf("应产生 1 条命令结果，实际是 %d", len(adapter.Results()))
+	}
+
+	if len(actions) != 0 {
+		t.Fatalf("最后一条命令完成后不应再有后续动作，实际有 %d 个", len(actions))
 	}
 }

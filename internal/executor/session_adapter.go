@@ -41,16 +41,22 @@ func NewSessionAdapter(width int, commands []string, m *matcher.StreamMatcher) *
 func (a *SessionAdapter) FeedSessionActions(chunk string) []SessionAction {
 	// 1. 使用 Replayer 处理 chunk
 	events := a.replayer.Process(chunk)
+	newLines := make([]string, 0)
+	activeLineUpdated := false
 
 	// 收集新提交的行
 	for _, event := range events {
-		if event.Type == terminal.EventLineCommitted {
+		switch event.Type {
+		case terminal.EventLineCommitted:
+			newLines = append(newLines, event.Line)
 			a.newCommittedLines = append(a.newCommittedLines, event.Line)
+		case terminal.EventActiveLineUpdated:
+			activeLineUpdated = true
 		}
 	}
 
 	// 2. 使用 Detector 检测协议事件
-	protocolEvents := a.detector.DetectFromChunk(chunk)
+	protocolEvents := a.detectSessionEvents(newLines, activeLineUpdated)
 
 	// 3. 使用 Reducer 进行状态归约
 	var sessionActions []SessionAction
@@ -139,6 +145,14 @@ func (a *SessionAdapter) ResolveErrorActions(continueExec bool) []SessionAction 
 	return actions
 }
 
+// ReduceEvent 注入一个外部事件并同步状态快照。
+func (a *SessionAdapter) ReduceEvent(event SessionEvent) []SessionAction {
+	actions := a.reducer.Reduce(event)
+	a.newState = a.reducer.State()
+	a.newContext = a.reducer.Context()
+	return actions
+}
+
 // ResolveError 兼容旧调用
 func (a *SessionAdapter) ResolveError(continueExec bool) {
 	_ = a.ResolveErrorActions(continueExec)
@@ -202,4 +216,20 @@ func (a *SessionAdapter) GetCurrentTimeout() time.Duration {
 		return a.newContext.Current.CustomTimeout
 	}
 	return 0
+}
+
+func (a *SessionAdapter) detectSessionEvents(newLines []string, activeLineUpdated bool) []SessionEvent {
+	activeLine := ""
+	if activeLineUpdated {
+		activeLine = a.replayer.ActiveLine()
+	}
+
+	switch a.reducer.State() {
+	case NewStateInitAwaitPrompt:
+		return a.detector.DetectInitPrompt(newLines, activeLine)
+	case NewStateInitAwaitWarmupPrompt:
+		return a.detector.DetectWarmupPrompt(newLines, activeLine)
+	default:
+		return a.detector.Detect(newLines, activeLine)
+	}
 }

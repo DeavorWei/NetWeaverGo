@@ -35,6 +35,24 @@ type DetectResult struct {
 	HasError bool
 }
 
+// DetectInitPrompt 从规范化输出中检测初始化阶段提示符。
+func (d *SessionDetector) DetectInitPrompt(lines []string, activeLine string) []SessionEvent {
+	if prompt, ok := d.findPrompt(lines, activeLine); ok {
+		logger.Debug("SessionDetector", "-", "检测到初始提示符: %s", truncateDebug(prompt, 50))
+		return []SessionEvent{EvInitPromptStable{Prompt: prompt}}
+	}
+	return nil
+}
+
+// DetectWarmupPrompt 从规范化输出中检测预热后的提示符。
+func (d *SessionDetector) DetectWarmupPrompt(lines []string, activeLine string) []SessionEvent {
+	if prompt, ok := d.findPrompt(lines, activeLine); ok {
+		logger.Debug("SessionDetector", "-", "检测到预热后提示符: %s", truncateDebug(prompt, 50))
+		return []SessionEvent{EvWarmupPromptSeen{Prompt: prompt}}
+	}
+	return nil
+}
+
 // Detect 从规范化行中提取协议事件
 // lines: 已提交的规范化行
 // activeLine: 当前活动行（未提交的行）
@@ -155,4 +173,18 @@ func truncateDebug(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s[:maxLen-3] + "..."
+}
+
+func (d *SessionDetector) findPrompt(lines []string, activeLine string) (string, bool) {
+	if activeLine != "" && d.matcher.IsPromptStrict(activeLine) {
+		return extractPromptHint(activeLine), true
+	}
+
+	for i := len(lines) - 1; i >= 0; i-- {
+		if d.matcher.IsPromptStrict(lines[i]) {
+			return extractPromptHint(lines[i]), true
+		}
+	}
+
+	return "", false
 }

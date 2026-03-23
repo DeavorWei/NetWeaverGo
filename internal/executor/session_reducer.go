@@ -82,6 +82,9 @@ func (r *SessionReducer) Reduce(event SessionEvent) []SessionAction {
 	case EvUserAbort:
 		return r.handleUserAbort(e)
 
+	case EvSuspendTimeout:
+		return r.handleSuspendTimeout(e)
+
 	case EvStreamClosed:
 		return r.handleStreamClosed(e)
 
@@ -132,8 +135,9 @@ func (r *SessionReducer) handleCommittedLine(e EvCommittedLine) []SessionAction 
 	// 添加到待处理行
 	r.ctx.AddPendingLine(e.Line)
 
-	// 在 Running 状态下处理待处理行
-	if r.state == NewStateRunning {
+	// 在运行相关状态下处理待处理行，避免分页后的输出滞留在 pendingLines 中
+	switch r.state {
+	case NewStateRunning, NewStateAwaitPagerContinueAck, NewStateAwaitFinalPromptConfirm:
 		return r.processPendingLines()
 	}
 
@@ -146,6 +150,9 @@ func (r *SessionReducer) handlePagerSeen(e EvPagerSeen) []SessionAction {
 	case NewStateRunning, NewStateReady, NewStateAwaitFinalPromptConfirm:
 		if r.ctx.Current != nil {
 			r.ctx.Current.IncrementPagination()
+			if actions := r.checkPaginationLimit(); actions != nil {
+				return actions
+			}
 		}
 		r.state = NewStateAwaitPagerContinueAck
 		logger.Debug("SessionReducer", "-", "检测到分页符，进入等待续页确认")
@@ -155,6 +162,9 @@ func (r *SessionReducer) handlePagerSeen(e EvPagerSeen) []SessionAction {
 		// 已经在等待续页确认，记录新的分页符
 		if r.ctx.Current != nil {
 			r.ctx.Current.IncrementPagination()
+			if actions := r.checkPaginationLimit(); actions != nil {
+				return actions
+			}
 		}
 		return []SessionAction{ActSendPagerContinue{}}
 	}
@@ -170,10 +180,9 @@ func (r *SessionReducer) handleActivePromptSeen(e EvActivePromptSeen) []SessionA
 		return r.completeCurrentCommand()
 
 	case NewStateAwaitPagerContinueAck:
-		// 分页续页后收到提示符
-		r.state = NewStateAwaitFinalPromptConfirm
-		logger.Debug("SessionReducer", "-", "分页续页后检测到提示符，进入等待确认")
-		return nil
+		// 真实设备通常只在分页结束后返回一次提示符，直接视为命令完成
+		logger.Debug("SessionReducer", "-", "分页续页后检测到提示符，命令完成")
+		return r.completeCurrentCommand()
 
 	case NewStateAwaitFinalPromptConfirm:
 		// 二次确认提示符，命令完成
@@ -245,6 +254,24 @@ func (r *SessionReducer) handleUserAbort(e EvUserAbort) []SessionAction {
 
 	logger.Debug("SessionReducer", "-", "用户选择中止，进入失败状态")
 	return []SessionAction{ActAbortSession{Reason: "user_abort"}}
+}
+
+// handleSuspendTimeout 处理挂起超时事件
+func (r *SessionReducer) handleSuspendTimeout(e EvSuspendTimeout) []SessionAction {
+	if r.state != NewStateSuspended {
+		return nil
+	}
+
+	reason := e.Reason
+	if reason == "" {
+		reason = "suspend_timeout"
+	}
+
+	r.ctx.FailCurrentCommand("挂起超时: " + reason)
+	r.state = NewStateFailed
+
+	logger.Warn("SessionReducer", "-", "挂起超时，进入失败状态: %s", reason)
+	return []SessionAction{ActAbortSession{Reason: "suspend_timeout"}}
 }
 
 // handleStreamClosed 处理流关闭事件
@@ -356,6 +383,9 @@ func (r *SessionReducer) processPendingLines() []SessionAction {
 		if r.matcher.IsPaginationPrompt(line) {
 			if r.ctx.Current != nil {
 				r.ctx.Current.IncrementPagination()
+				if limitActions := r.checkPaginationLimit(); limitActions != nil {
+					return limitActions
+				}
 			}
 			r.state = NewStateAwaitPagerContinueAck
 			actions = append(actions, ActSendPagerContinue{})
@@ -369,4 +399,26 @@ func (r *SessionReducer) processPendingLines() []SessionAction {
 	}
 
 	return actions
+}
+
+func (r *SessionReducer) checkPaginationLimit() []SessionAction {
+	if r.ctx == nil || r.ctx.Current == nil {
+		return nil
+	}
+
+	limit := r.ctx.MaxPaginationCount
+	if limit <= 0 {
+		return nil
+	}
+
+	if r.ctx.Current.PaginationCount <= limit {
+		return nil
+	}
+
+	reason := "pagination_limit_exceeded"
+	r.ctx.FailCurrentCommand("分页次数超限")
+	r.state = NewStateFailed
+
+	logger.Warn("SessionReducer", "-", "分页次数超限: current=%d limit=%d", r.ctx.Current.PaginationCount, limit)
+	return []SessionAction{ActAbortSession{Reason: reason}}
 }

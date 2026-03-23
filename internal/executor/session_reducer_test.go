@@ -274,6 +274,144 @@ func TestReducerPagerSeen(t *testing.T) {
 	}
 }
 
+func TestReducerPagerSeen_AbortWhenPaginationLimitExceeded(t *testing.T) {
+	m := NewMockMatcher()
+	reducer := NewSessionReducer([]string{"display version"}, m)
+
+	reducer.state = NewStateRunning
+	reducer.ctx.Current = NewCommandContext(0, "display version")
+	reducer.ctx.Current.SetCommand("display version")
+	reducer.ctx.MaxPaginationCount = 1
+	reducer.ctx.NextIndex = 1
+
+	actions := reducer.Reduce(EvPagerSeen{Line: "--More--"})
+	if reducer.State() != NewStateAwaitPagerContinueAck {
+		t.Fatalf("第一次分页后状态应为 AwaitPagerContinueAck，实际是 %s", reducer.State())
+	}
+	if len(actions) != 1 {
+		t.Fatalf("第一次分页应产生 1 个动作，实际是 %d", len(actions))
+	}
+	if _, ok := actions[0].(ActSendPagerContinue); !ok {
+		t.Fatalf("第一次分页动作应为 ActSendPagerContinue，实际是 %T", actions[0])
+	}
+
+	actions = reducer.Reduce(EvPagerSeen{Line: "--More--"})
+	if reducer.State() != NewStateFailed {
+		t.Fatalf("超出分页上限后状态应为 Failed，实际是 %s", reducer.State())
+	}
+	if len(actions) != 1 {
+		t.Fatalf("超出分页上限后应产生 1 个动作，实际是 %d", len(actions))
+	}
+	act, ok := actions[0].(ActAbortSession)
+	if !ok {
+		t.Fatalf("超出分页上限动作应为 ActAbortSession，实际是 %T", actions[0])
+	}
+	if act.Reason != "pagination_limit_exceeded" {
+		t.Fatalf("中止原因应为 pagination_limit_exceeded，实际是 %s", act.Reason)
+	}
+	if len(reducer.ctx.Results) != 1 {
+		t.Fatalf("超出分页上限后应记录失败结果，实际是 %d", len(reducer.ctx.Results))
+	}
+}
+
+func TestReducerPagerPromptCompletesCommand(t *testing.T) {
+	m := NewMockMatcher()
+	reducer := NewSessionReducer([]string{"cmd1", "cmd2"}, m)
+
+	reducer.state = NewStateAwaitPagerContinueAck
+	reducer.ctx.Current = NewCommandContext(0, "cmd1")
+	reducer.ctx.Current.SetCommand("cmd1")
+	reducer.ctx.Current.IncrementPagination()
+	reducer.ctx.NextIndex = 1
+
+	actions := reducer.Reduce(EvActivePromptSeen{Prompt: "<S1>"})
+	if reducer.State() != NewStateRunning {
+		t.Fatalf("分页结束后应直接完成当前命令并发送下一条，实际状态是 %s", reducer.State())
+	}
+	if len(reducer.ctx.Results) != 1 {
+		t.Fatalf("分页结束后应记录当前命令结果，实际是 %d", len(reducer.ctx.Results))
+	}
+
+	foundNextCommand := false
+	for _, action := range actions {
+		if act, ok := action.(ActSendCommand); ok && act.Index == 1 && act.Command == "cmd2" {
+			foundNextCommand = true
+			break
+		}
+	}
+	if !foundNextCommand {
+		t.Fatal("分页结束后应自动发送下一条命令")
+	}
+}
+
+func TestReducerCommittedLinesAfterPagerDoNotBlockNextCommand(t *testing.T) {
+	m := NewMockMatcher()
+	reducer := NewSessionReducer([]string{"cmd1", "cmd2"}, m)
+
+	reducer.state = NewStateAwaitPagerContinueAck
+	reducer.ctx.Current = NewCommandContext(0, "cmd1")
+	reducer.ctx.Current.SetCommand("cmd1")
+	reducer.ctx.Current.IncrementPagination()
+	reducer.ctx.NextIndex = 1
+
+	if actions := reducer.Reduce(EvCommittedLine{Line: "GE1/0/7 up up"}); len(actions) != 0 {
+		t.Fatalf("分页中间输出不应直接产生动作，实际是 %d 个", len(actions))
+	}
+	if reducer.ctx.HasPendingLines() {
+		t.Fatalf("分页中间输出应立即被消费，不应残留 pendingLines: %d", len(reducer.ctx.PendingLines))
+	}
+
+	actions := reducer.Reduce(EvActivePromptSeen{Prompt: "<S1>"})
+	if reducer.State() != NewStateRunning {
+		t.Fatalf("分页结束后应推进到下一条命令，实际状态是 %s", reducer.State())
+	}
+	if reducer.ctx.HasPendingLines() {
+		t.Fatalf("分页完成后不应残留 pendingLines: %d", len(reducer.ctx.PendingLines))
+	}
+
+	foundNextCommand := false
+	for _, action := range actions {
+		if act, ok := action.(ActSendCommand); ok && act.Index == 1 && act.Command == "cmd2" {
+			foundNextCommand = true
+			break
+		}
+	}
+	if !foundNextCommand {
+		t.Fatal("分页完成后应自动发送下一条命令")
+	}
+}
+
+func TestReducerProcessPendingLines_AbortWhenPaginationLimitExceeded(t *testing.T) {
+	m := NewMockMatcher()
+	reducer := NewSessionReducer([]string{"display version"}, m)
+
+	reducer.state = NewStateRunning
+	reducer.ctx.Current = NewCommandContext(0, "display version")
+	reducer.ctx.Current.SetCommand("display version")
+	reducer.ctx.MaxPaginationCount = 1
+	reducer.ctx.NextIndex = 1
+
+	actions := reducer.Reduce(EvCommittedLine{Line: "--More--"})
+	if reducer.State() != NewStateAwaitPagerContinueAck {
+		t.Fatalf("第一次分页后状态应为 AwaitPagerContinueAck，实际是 %s", reducer.State())
+	}
+	if len(actions) != 1 {
+		t.Fatalf("第一次分页应产生 1 个动作，实际是 %d", len(actions))
+	}
+
+	reducer.state = NewStateRunning
+	actions = reducer.Reduce(EvCommittedLine{Line: "--More--"})
+	if reducer.State() != NewStateFailed {
+		t.Fatalf("超出分页上限后状态应为 Failed，实际是 %s", reducer.State())
+	}
+	if len(actions) != 1 {
+		t.Fatalf("超出分页上限后应产生 1 个动作，实际是 %d", len(actions))
+	}
+	if _, ok := actions[0].(ActAbortSession); !ok {
+		t.Fatalf("超出分页上限动作应为 ActAbortSession，实际是 %T", actions[0])
+	}
+}
+
 // ============================================================================
 // 错误处理测试
 // ============================================================================
@@ -399,6 +537,34 @@ func TestReducerUserAbort(t *testing.T) {
 
 	if _, ok := actions[0].(ActAbortSession); !ok {
 		t.Errorf("动作应该是 ActAbortSession，实际是 %T", actions[0])
+	}
+}
+
+func TestReducerSuspendTimeout(t *testing.T) {
+	m := NewMockMatcher()
+	reducer := NewSessionReducer([]string{"cmd"}, m)
+
+	reducer.state = NewStateSuspended
+	reducer.ctx.Current = NewCommandContext(0, "cmd")
+	reducer.ctx.Current.SetCommand("cmd")
+
+	actions := reducer.Reduce(EvSuspendTimeout{
+		CommandIndex: 0,
+		Reason:       "5分钟超时",
+	})
+
+	if reducer.State() != NewStateFailed {
+		t.Fatalf("状态应该是 NewStateFailed，实际是 %s", reducer.State())
+	}
+	if len(actions) != 1 {
+		t.Fatalf("应该产生 1 个动作，实际产生了 %d 个", len(actions))
+	}
+	act, ok := actions[0].(ActAbortSession)
+	if !ok {
+		t.Fatalf("动作应该是 ActAbortSession，实际是 %T", actions[0])
+	}
+	if act.Reason != "suspend_timeout" {
+		t.Fatalf("中止原因应该是 suspend_timeout，实际是 %s", act.Reason)
 	}
 }
 

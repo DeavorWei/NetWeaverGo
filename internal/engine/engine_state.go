@@ -12,7 +12,6 @@ const (
 	StateIdle EngineState = iota
 	StateStarting
 	StateRunning
-	StatePaused
 	StateClosing
 	StateClosed
 )
@@ -26,8 +25,6 @@ func (s EngineState) String() string {
 		return "Starting"
 	case StateRunning:
 		return "Running"
-	case StatePaused:
-		return "Paused"
 	case StateClosing:
 		return "Closing"
 	case StateClosed:
@@ -49,11 +46,6 @@ var stateTransitionMatrix = map[EngineState]map[EngineState]bool{
 		StateClosing: true,
 	},
 	StateRunning: {
-		StatePaused:  true,
-		StateClosing: true,
-	},
-	StatePaused: {
-		StateRunning: true,
 		StateClosing: true,
 	},
 	StateClosing: {

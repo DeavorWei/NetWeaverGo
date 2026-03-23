@@ -19,6 +19,7 @@ type ErrorAction int
 const (
 	ActionContinue ErrorAction = iota // 忽略错误，继续发送下一条
 	ActionAbort                       // 立即停止该设备的后续命令
+	ActionAbortTimeout                // 挂起超时后自动停止
 )
 
 // SuspendHandler 定义一个回调函数，当 Executor 遇到错误时，将其抛弃给主线程引擎询问用户决策

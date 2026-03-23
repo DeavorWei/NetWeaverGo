@@ -131,7 +131,7 @@ func (m *SuspendManager) CreateHandler() executor.SuspendHandler {
 			}
 
 			logger.Warn("SuspendManager", ip, "挂起超时（5分钟），自动 Abort")
-			return executor.ActionAbort
+			return executor.ActionAbortTimeout
 		}
 	}
 }

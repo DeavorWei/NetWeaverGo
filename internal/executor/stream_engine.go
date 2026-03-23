@@ -117,6 +117,11 @@ func (e *StreamEngine) RunInit(ctx context.Context, timeout time.Duration) error
 // mode=playbook 时消费整队列
 // mode=single 时只消费一条命令并返回单结果
 func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout time.Duration) ([]*CommandResult, error) {
+	if e.client != nil {
+		// 初始化阶段可能设置过底层 TCP read deadline，这里统一清零，避免影响正式执行流。
+		_ = e.client.SetReadDeadline(time.Time{})
+	}
+
 	manager := config.GetRuntimeManager()
 	buf := make([]byte, manager.GetBufferSize())
 	outReader := e.client.Stdout
@@ -209,6 +214,8 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 				userAction := e.suspendHandler(ctx, e.executor.IP, "Timeout Error: No prompt received within timeout", failedCmd)
 				switch userAction {
 				case ActionAbort:
+					fallthrough
+				case ActionAbortTimeout:
 					// 用户选择中止
 					if e.executor != nil && e.executor.EventBus != nil {
 						e.executor.EventBus <- report.ExecutorEvent{
@@ -314,15 +321,10 @@ func (e *StreamEngine) processChunk(chunk string) []SessionAction {
 	if e.executor != nil && e.executor.LogSession != nil {
 		lines := e.adapter.GetNewCommittedLines()
 		if len(lines) > 0 {
-			logger.Debug("StreamEngine", "-", "[修复调试] 准备写入 %d 行规范化行到 Detail 日志", len(lines))
 			if err := e.executor.LogSession.Detail.WriteNormalizedLines(lines); err != nil {
 				logger.Warn("StreamEngine", "-", "写入规范化日志失败: %v", err)
-			} else {
-				logger.Debug("StreamEngine", "-", "[修复调试] 成功写入 %d 行到 Detail 日志", len(lines))
 			}
 		}
-	} else {
-		logger.Debug("StreamEngine", "-", "[修复调试] 无法写入 Detail 日志: executor=%v, LogSession=%v", e.executor != nil, e.executor != nil && e.executor.LogSession != nil)
 	}
 
 	return actions
@@ -439,6 +441,26 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 					}
 				}
 				return fmt.Errorf("设备 %s 的执行被用户手动中止", e.executor.IP)
+
+			case ActionAbortTimeout:
+				if e.executor != nil && e.executor.EventBus != nil {
+					e.executor.EventBus <- report.ExecutorEvent{
+						IP:       e.executor.IP,
+						Type:     report.EventDeviceAbort,
+						Message:  "执行异常挂起超时，自动中止",
+						TotalCmd: e.adapter.TotalCommands(),
+					}
+				}
+				followups := e.adapter.ReduceEvent(EvSuspendTimeout{
+					CommandIndex: act.ErrorContext.CmdIndex,
+					Reason:       "5分钟超时",
+				})
+				for _, next := range followups {
+					if err := e.executeSessionAction(next, currentTimeout, defaultTimeout, timer); err != nil {
+						return err
+					}
+				}
+				return fmt.Errorf("设备 %s 的执行因挂起超时被自动中止", e.executor.IP)
 
 			case ActionContinue:
 				// 用户选择继续
@@ -579,6 +601,12 @@ func NormalizeOutput(chunk string, width int) string {
 // waitAndClearInitResidual 等待并清理初始化残留（无设备画像时使用）
 // 关键修复：即使没有设备画像，也需要等待稳定提示符并清理登录欢迎信息
 func (e *StreamEngine) waitAndClearInitResidual(ctx context.Context, timeout time.Duration) error {
+	if e.client != nil {
+		defer func() {
+			_ = e.client.SetReadDeadline(time.Time{})
+		}()
+	}
+
 	deadline := time.Now().Add(timeout)
 	buf := make([]byte, 4096)
 
@@ -597,10 +625,9 @@ func (e *StreamEngine) waitAndClearInitResidual(ctx context.Context, timeout tim
 		n, err := e.client.Read(buf)
 		if err != nil {
 			if netErr, ok := err.(interface{ Timeout() bool }); ok && netErr.Timeout() {
-				// 检查状态机是否已经进入 Ready 状态且 pendingLines 为空
-				if e.adapter.NewState() == NewStateReady {
+				// 允许初始化在 Ready 或已成功发送首条命令后完成
+				if e.initResidualCleared() {
 					// 关键修复：清空残留数据后再返回
-					e.adapter.ClearInitResiduals()
 					logger.Debug("StreamEngine", "-", "简化初始化完成，状态机已就绪")
 					return nil
 				}
@@ -615,31 +642,17 @@ func (e *StreamEngine) waitAndClearInitResidual(ctx context.Context, timeout tim
 			actions := e.adapter.FeedSessionActions(chunk)
 
 			// 处理状态机返回的动作
-			for _, action := range actions {
-				switch action.(type) {
-				case ActSendWarmup:
-					// 发送预热空行
-					logger.Debug("StreamEngine", "-", "简化初始化发送预热空行...")
-					if err := e.client.SendCommand(""); err != nil {
-						logger.Warn("StreamEngine", "-", "发送预热空行失败: %v", err)
-					}
-					// 发送预热后，继续读取响应并驱动状态机
-					// 设置短暂超时读取响应
-					if err := e.client.SetReadDeadline(time.Now().Add(500 * time.Millisecond)); err == nil {
-						if n2, err2 := e.client.Read(buf); err2 == nil && n2 > 0 {
-							e.adapter.FeedSessionActions(string(buf[:n2]))
-						}
-					}
-				case ActSendCommand:
-					// 不应该在初始化阶段发送命令，忽略
-					logger.Debug("StreamEngine", "-", "简化初始化忽略 ActSendCommand")
-				}
+			done, execErr := e.executeInitActions(actions, buf)
+			if execErr != nil {
+				return execErr
+			}
+			if done {
+				return nil
 			}
 
 			// 检查状态机是否已经进入 Ready 状态
-			if e.adapter.NewState() == NewStateReady {
+			if e.initResidualCleared() {
 				// 关键修复：清空残留数据后再返回
-				e.adapter.ClearInitResiduals()
 				logger.Debug("StreamEngine", "-", "简化初始化完成，状态机已就绪")
 				return nil
 			}
@@ -650,4 +663,43 @@ func (e *StreamEngine) waitAndClearInitResidual(ctx context.Context, timeout tim
 	logger.Warn("StreamEngine", "-", "简化初始化超时，当前状态: %s", e.adapter.NewState())
 	e.adapter.ClearInitResiduals()
 	return fmt.Errorf("等待初始化提示符超时")
+}
+
+func (e *StreamEngine) initResidualCleared() bool {
+	return e.adapter.NewState() == NewStateReady
+}
+
+func (e *StreamEngine) executeInitActions(actions []SessionAction, buf []byte) (bool, error) {
+	for _, action := range actions {
+		switch act := action.(type) {
+		case ActSendWarmup:
+			logger.Debug("StreamEngine", "-", "简化初始化发送预热空行...")
+			if err := e.client.SendCommand(""); err != nil {
+				logger.Warn("StreamEngine", "-", "发送预热空行失败: %v", err)
+				continue
+			}
+
+			if err := e.client.SetReadDeadline(time.Now().Add(500 * time.Millisecond)); err == nil {
+				if n2, err2 := e.client.Read(buf); err2 == nil && n2 > 0 {
+					followups := e.adapter.FeedSessionActions(string(buf[:n2]))
+					done, execErr := e.executeInitActions(followups, buf)
+					if execErr != nil {
+						return false, execErr
+					}
+					if done {
+						return true, nil
+					}
+				}
+			}
+
+		case ActSendCommand:
+			logger.Debug("StreamEngine", "-", "简化初始化接管首条命令发送: %s", act.Command)
+			if err := e.client.SendCommand(act.Command); err != nil {
+				return false, fmt.Errorf("简化初始化发送首条命令失败: %w", err)
+			}
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
