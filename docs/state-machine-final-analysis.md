@@ -371,6 +371,27 @@ sequenceDiagram
     EM->>GE: ClearActiveEngine()
 ```
 
+### 7.2 实现态校正（2026-03-23 复核）
+
+> 本节用于修正文档前文的“设计态状态图”和“当前实现态”之间的偏差。
+
+当前 `SessionAdapter` 的实际行为并不是“Replayer 产出规范化行 -> Detector.Detect(lines, activeLine) -> Reducer 处理运行态事件”，而是：
+
+1. `replayer.Process(chunk)` 仅用于收集 `newCommittedLines` 供日志写入
+2. `detector` 当前调用的是 `DetectFromChunk(chunk)`，而不是 `Detect(lines, activeLine)`
+3. `DetectFromChunk(chunk)` 当前只会产出初始化阶段相关的 `EvInitPromptStable`
+
+对应代码位置：
+- [`internal/executor/session_adapter.go:41-60`](internal/executor/session_adapter.go:41)
+- [`internal/executor/session_detector.go:42-89`](internal/executor/session_detector.go:42)
+- [`internal/executor/session_detector.go:91-112`](internal/executor/session_detector.go:91)
+
+这意味着：
+
+- `EvCommittedLine` / `EvPagerSeen` / `EvActivePromptSeen` 这组运行态事件，在当前生产调用链中并未真正由 `SessionAdapter` 驱动
+- 因此，后续对 `SessionReducer` 的部分风险判断只能视为“设计态/潜在风险”，不能直接当作“当前实现态已触发的问题”
+- FIX-002 / FIX-003 / FIX-004 的优先级，都必须晚于“接通 Detector -> Reducer 运行态事件流”
+
 ---
 
 ## 八、风险点分析汇总
@@ -379,21 +400,30 @@ sequenceDiagram
 
 | 等级 | 说明 | 数量 |
 |------|------|------|
-| 🔴 高 | 可能导致 panic 或严重功能故障 | 1 |
-| 🟡 中 | 可能导致功能异常或阻塞 | 4 |
-| 🟢 低 | 设计问题或轻微影响 | 4 |
+| 🔴 高 | 可能导致 panic 或严重功能故障 | 0 |
+| 🟡 中 | 已确认的条件性/潜在功能风险 | 3 |
+| 🟢 低 | 设计问题、误判项或轻微影响 | 5 |
 
-### 8.2 高风险点
+### 8.2 已修复的高风险项
 
-#### 🔴 风险1: SuspendManager Channel Panic
+#### ✅ 已修复项1: SuspendManager Channel Panic
 
-**位置**: [`internal/ui/suspend_manager.go:183-188`](internal/ui/suspend_manager.go:183)
+**原始位置**: [`internal/ui/suspend_manager.go`](internal/ui/suspend_manager.go)
 
-**问题描述**:
-- 超时后 `actionCh` 在 defer 中关闭
-- 如果前端在超时后、关闭前响应，向已关闭 channel 发送会 panic
+**原问题描述**:
+- 旧实现通过 `close(actionCh)` 表示会话结束
+- `Resolve()` 在会话查找与发送之间已解锁，存在拿到旧会话指针后再向已关闭 channel 发送的竞态窗口
 
-**时序问题**:
+**已实施修复**:
+- 不再通过关闭 `actionCh` 表示结束
+- 会话结束时改为从 `sessions / sessionsByIP` 注销，并增加 `finished` 标记
+- `Resolve()` 在发送前检查 `finished / timedOut / resolved`
+
+**修复后结论**:
+- 该高风险项已不再成立
+- `recover` 不是主修复方案，主修复是调整会话生命周期协议
+
+**历史时序问题（已消除）**:
 ```
 t=0:  超时触发，返回 ActionAbort
 t=1:  执行 defer，关闭 actionCh
@@ -401,37 +431,18 @@ t=2:  前端收到超时事件，但用户已点击响应
 t=3:  Resolve() 被调用，尝试向已关闭 channel 发送 -> panic!
 ```
 
-**代码片段**:
-```go
-// suspend_manager.go:183-188
-select {
-case session.ActionCh <- errAction:
-    // ...
-default:
-    logger.Warn("SuspendManager", session.IP, "挂起信号通道已满，会话可能已结束")
-}
-```
-
-**修复建议**:
-```go
-defer func() {
-    if r := recover(); r != nil {
-        logger.Warn("SuspendManager", "-", "向已关闭channel发送被恢复: %v", r)
-    }
-}()
-```
-
 ---
 
-### 8.3 中风险点
+### 8.3 中风险点（含条件性风险）
 
 #### 🟡 风险2: 防串台门禁可能导致命令发送阻塞
 
 **位置**: [`internal/executor/session_reducer.go:280-285`](internal/executor/session_reducer.go:280)
 
-**问题描述**:
-- 如果设备输出持续产生行（如日志输出），`PendingLines` 始终非空
-- 新命令永远不会被发送，导致"假死"状态
+**复核结论（2026-03-23）**:
+- 在 `SessionReducer` 代码层面，这个风险是成立的
+- 但在当前实现态中，`SessionAdapter` 并未把运行态 `EvCommittedLine` 事件稳定送入 `Reducer`
+- 因此它目前更准确地属于“条件性潜在风险”，而不是已证实的生产故障
 
 **代码片段**:
 ```go
@@ -445,17 +456,23 @@ func (r *SessionReducer) trySendCommand() []SessionAction {
 }
 ```
 
-**建议修复**: 添加超时机制或强制推进逻辑
+**前置条件**:
+- 需先把 [`SessionAdapter`](internal/executor/session_adapter.go:41) 改为使用 [`SessionDetector.Detect(lines, activeLine)`](internal/executor/session_detector.go:42)
+
+**修复建议**:
+- 先修运行态事件接线
+- 接线完成后，再决定是否需要门禁超时或强制推进逻辑
 
 ---
 
-#### 🟡 风险3: AwaitFinalPromptConfirm 状态卡死
+#### 🟢 风险3: AwaitFinalPromptConfirm 状态卡死（当前实现态不成立）
 
 **位置**: [`internal/executor/session_reducer.go:178-180`](internal/executor/session_reducer.go:178)
 
-**问题描述**:
-- 分页续页后进入 `AwaitFinalPromptConfirm` 状态
-- 如果第二次提示符未到达（网络延迟/设备响应慢），状态永远卡在此状态
+**复核结论（2026-03-23）**:
+- 当前实现态下，这个问题不能作为已成立缺陷
+- 原因一：进入 `AwaitFinalPromptConfirm` 依赖 `EvPagerSeen -> EvActivePromptSeen` 这条运行态事件链，而该事件链当前未真正接通
+- 原因二：即使未来该状态可达，外层 [`StreamEngine`](internal/executor/stream_engine.go:184) 仍有读取超时兜底，因此“永远卡死”表述不准确
 
 **代码片段**:
 ```go
@@ -465,7 +482,9 @@ case NewStateAwaitFinalPromptConfirm:
     return r.completeCurrentCommand()
 ```
 
-**建议修复**: 添加超时回退机制
+**处理建议**:
+- 暂不作为独立修复项实施
+- 待运行态事件接线修复后，再根据真实设备行为决定是否需要状态级超时回退
 
 ---
 
@@ -473,9 +492,10 @@ case NewStateAwaitFinalPromptConfirm:
 
 **位置**: [`internal/executor/session_reducer.go:143-163`](internal/executor/session_reducer.go:143)
 
-**问题描述**:
-- 如果设备持续输出分页符，状态机会在循环中持续发送空格
-- 没有分页次数上限检查
+**复核结论（2026-03-23）**:
+- 在 `SessionReducer` 代码层面，这个风险成立
+- 但与风险2相同，它依赖 `EvPagerSeen` 真正进入 `Reducer`
+- 由于当前 `SessionAdapter` 尚未接通运行态分页事件，这属于“接线后需要优先补上的潜在风险”
 
 **代码片段**:
 ```go
@@ -505,6 +525,9 @@ func (r *SessionReducer) handlePagerSeen(e EvPagerSeen) []SessionAction {
     // ...
 }
 ```
+
+**前置条件**:
+- 先修 [`SessionAdapter`](internal/executor/session_adapter.go:41) 对运行态事件的接线
 
 ---
 
@@ -587,11 +610,18 @@ func (r *SessionReducer) handlePagerSeen(e EvPagerSeen) []SessionAction {
 
 ### 9.2 未覆盖的状态转换
 
-以下状态转换可能存在遗漏：
+以下条目经复核后，需要区分“真实缺陷”和“文档误判”：
 
-1. **Ready 状态收到 EvCommittedLine**: 当前返回 nil，可能导致行丢失
-2. **Suspended 状态收到 EvStreamClosed**: 当前未处理，可能导致状态不一致
-3. **AwaitPagerContinueAck 状态收到 EvErrorMatched**: 当前会进入 Suspended，但分页状态未清理
+1. **Ready 状态收到 EvCommittedLine**
+   当前并不会“丢行”，因为 [`handleCommittedLine()`](internal/executor/session_reducer.go:131) 会先把行写入 `PendingLines`
+2. **Suspended 状态收到 EvStreamClosed**
+   当前并非“未处理”，[`handleStreamClosed()`](internal/executor/session_reducer.go:250) 会统一将非终态推进到 `Failed`
+3. **AwaitPagerContinueAck 状态收到 EvErrorMatched**
+   当前也不构成独立缺陷，`Reducer` 会直接进入 `Suspended`；文档中提到的“分页状态未清理”目前没有额外状态字段需要复位
+
+结论：
+- FIX-006 中的 3 个子问题，在当前代码下均不足以构成独立修复项
+- 真正需要优先修的是运行态事件链未接通，导致文档中的多个状态转换只存在于设计层面
 
 ---
 
@@ -614,28 +644,20 @@ func (r *SessionReducer) handlePagerSeen(e EvPagerSeen) []SessionAction {
 
 ### 11.1 高优先级改进
 
-1. **修复 SuspendManager 的 channel panic 风险**
+1. **接通 SessionAdapter 的运行态事件链**
    ```go
-   // 在 Resolve 中添加 defer recover
-   defer func() {
-       if r := recover(); r != nil {
-           logger.Warn("SuspendManager", "-", "向已关闭channel发送被恢复: %v", r)
-       }
-   }()
+   // 目标方向：使用规范化后的 lines / activeLine 驱动 Detect(...)
+   protocolEvents := a.detector.Detect(a.replayer.Lines(), a.replayer.ActiveLine())
    ```
 
 ### 11.2 中优先级改进
 
-1. **添加防串台门禁超时机制**
+1. **在运行态事件接线完成后，再评估防串台门禁超时机制**
    ```go
-   type SessionReducer struct {
-       // ...
-       cmdStartTime time.Time
-       maxCmdDuration time.Duration
-   }
+   // 先验证 PendingLines 在真实链路中是否会持续积压
    ```
 
-2. **添加分页次数上限**
+2. **在运行态事件接线完成后，为分页增加上限**
    ```go
    const MaxPaginationCount = 100
    ```
@@ -686,9 +708,10 @@ logger.Info("SuspendManager", ip, "会话创建到决策耗时: %v", decisionTim
 | 状态机 | 设计质量 | 主要问题 |
 |--------|----------|----------|
 | EngineStateManager | 良好 | StatePaused 未实现 |
-| SessionReducer | 良好 | 防串台门禁可能阻塞 |
+| SessionAdapter | 需改进 | 运行态事件链未接通 |
+| SessionReducer | 良好 | 若接线完成，需重新验证门禁与分页保护 |
 | ProgressTracker | 良好 | 无显式问题 |
-| SuspendManager | **需改进** | channel panic 风险 |
+| SuspendManager | 良好 | channel panic 风险已修复 |
 | Discovery Runner | 良好 | 重试竞态 |
 
 ### 13.2 优点
@@ -700,10 +723,10 @@ logger.Info("SuspendManager", ip, "会话创建到决策耗时: %v", decisionTim
 
 ### 13.3 潜在风险
 
-- SuspendManager 存在 channel panic 风险（高）
-- 防串台门禁可能导致命令不推进（中）
-- 分页循环无上限检查（中）
-- 部分状态转换未覆盖（低）
+- SessionAdapter 运行态事件链未接通，导致文档中的部分状态转换仍停留在设计态
+- 防串台门禁是条件性风险，需在接线修复后复核
+- 分页循环无上限是条件性风险，需在接线修复后补保护
+- AwaitFinalPromptConfirm 卡死与状态转换遗漏两项，经复核不构成当前独立缺陷
 
 ---
 
