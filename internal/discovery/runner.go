@@ -293,10 +293,29 @@ func (r *Runner) RetryFailed(ctx context.Context, taskID string) error {
 // runDiscovery 执行发现任务
 func (r *Runner) runDiscovery(ctx context.Context, taskID string, devices []models.DeviceInfo, requestedVendor string, timeoutSec int, maxWorkers int) {
 	defer func() {
+		if p := recover(); p != nil {
+			r.emitEvent(DiscoveryEvent{
+				TaskID:    taskID,
+				Type:      "error",
+				Message:   fmt.Sprintf("发现任务内部错误: %v", p),
+				Timestamp: time.Now().UnixMilli(),
+			})
+			// 更新任务状态为失败
+			r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+				"status":      "failed",
+				"phase":       models.PhaseFailed,
+				"finished_at": time.Now(),
+			})
+		}
 		r.mu.Lock()
 		r.runningTask = ""
 		r.mu.Unlock()
 	}()
+
+	var algorithms *config.SSHAlgorithmSettings
+	if settings, _, err := config.LoadSettings(); err == nil && settings != nil {
+		algorithms = &settings.SSHAlgorithms
+	}
 
 	// 获取连接超时配置
 	connectTimeout := 30 * time.Second
@@ -339,6 +358,26 @@ dispatchLoop:
 
 		go func(device models.DeviceInfo) {
 			defer func() {
+				if p := recover(); p != nil {
+					// 记录 panic 信息并更新设备状态
+					errMsg := fmt.Sprintf("设备发现内部错误: %v", p)
+					r.updateDeviceError(taskID, device.IP, errMsg)
+					r.emitEvent(DiscoveryEvent{
+						TaskID:    taskID,
+						DeviceIP:  device.IP,
+						Type:      "error",
+						Message:   errMsg,
+						Timestamp: time.Now().UnixMilli(),
+					})
+					countMu.Lock()
+					failedCount++
+					completedCount++
+					if totalDevices > 0 {
+						progress := int(float64(completedCount) / float64(totalDevices) * 100)
+						r.setPhaseProgress(taskID, progress)
+					}
+					countMu.Unlock()
+				}
 				<-sem
 				wg.Done()
 			}()
@@ -357,7 +396,7 @@ dispatchLoop:
 			defer cancel()
 
 			// 执行设备发现
-			err := r.discoverDevice(deviceCtx, taskID, device, effectiveVendor, profile, connectTimeout, taskCommandTimeout)
+			err := r.discoverDevice(deviceCtx, taskID, device, effectiveVendor, profile, algorithms, connectTimeout, taskCommandTimeout)
 
 			countMu.Lock()
 			if err != nil {
@@ -421,7 +460,7 @@ dispatchLoop:
 }
 
 // discoverDevice 执行单设备发现
-func (r *Runner) discoverDevice(ctx context.Context, taskID string, device models.DeviceInfo, vendor string, profile *VendorCommandProfile, connectTimeout time.Duration, taskCommandTimeout time.Duration) error {
+func (r *Runner) discoverDevice(ctx context.Context, taskID string, device models.DeviceInfo, vendor string, profile *VendorCommandProfile, algorithms *config.SSHAlgorithmSettings, connectTimeout time.Duration, taskCommandTimeout time.Duration) error {
 	// 更新设备状态
 	now := time.Now()
 	r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, device.IP).Updates(map[string]interface{}{
@@ -440,7 +479,10 @@ func (r *Runner) discoverDevice(ctx context.Context, taskID string, device model
 	})
 
 	// 创建执行器
-	exec := executor.NewDeviceExecutor(device.IP, device.Port, device.Username, device.Password, nil, nil)
+	exec := executor.NewDeviceExecutor(device.IP, device.Port, device.Username, device.Password, executor.ExecutorOptions{
+		Algorithms: algorithms,
+		Vendor:     vendor,
+	})
 
 	// 连接设备
 	if err := exec.Connect(ctx, connectTimeout); err != nil {
@@ -550,6 +592,7 @@ func (r *Runner) updateDeviceError(taskID, deviceIP, errMsg string) {
 
 // saveCommandOutput 保存命令输出（规范化输出 + 原始审计输出）
 // result 包含 RawText（原始输出）和 NormalizedText（规范化输出）
+// 注意：result 可能为 nil（当命令执行失败时），需要做空指针检查
 func (r *Runner) saveCommandOutput(taskID, deviceIP, commandKey, command string, result *executor.CommandResult, status, errMsg string) {
 	var filePath string
 	var rawFilePath string
@@ -560,16 +603,16 @@ func (r *Runner) saveCommandOutput(taskID, deviceIP, commandKey, command string,
 		// 规范化输出路径
 		filePath = r.pathProvider.GetDiscoveryNormalizedFilePath(taskID, deviceIP, commandKey)
 
-		// 保存原始审计输出
-		if result.RawText != "" {
+		// 保存原始审计输出（仅当 result 不为 nil 时）
+		if result != nil && result.RawText != "" {
 			rawDir := filepath.Dir(rawFilePath)
 			if err := os.MkdirAll(rawDir, 0700); err == nil {
 				os.WriteFile(rawFilePath, []byte(result.RawText), 0600)
 			}
 		}
 
-		// 保存规范化输出
-		if result.NormalizedText != "" {
+		// 保存规范化输出（仅当 result 不为 nil 时）
+		if result != nil && result.NormalizedText != "" {
 			normalizedDir := filepath.Dir(filePath)
 			if err := os.MkdirAll(normalizedDir, 0700); err == nil {
 				os.WriteFile(filePath, []byte(result.NormalizedText), 0600)
@@ -578,23 +621,36 @@ func (r *Runner) saveCommandOutput(taskID, deviceIP, commandKey, command string,
 	}
 
 	// 更新数据库记录
+	updates := map[string]interface{}{
+		"file_path":     filePath,
+		"raw_file_path": rawFilePath,
+		"status":        status,
+		"error_message": errMsg,
+		"parse_status":  "pending",
+		"parse_error":   "",
+	}
+
+	// 处理 result 可能为 nil 的情况
+	if result != nil {
+		updates["raw_size"] = result.RawSize
+		updates["normalized_size"] = result.NormalizedSize
+		updates["line_count"] = result.LineCount()
+		updates["pager_count"] = result.PaginationCount
+		updates["echo_consumed"] = result.EchoConsumed
+		updates["prompt_matched"] = result.PromptMatched
+	} else {
+		updates["raw_size"] = 0
+		updates["normalized_size"] = 0
+		updates["line_count"] = 0
+		updates["pager_count"] = 0
+		updates["echo_consumed"] = false
+		updates["prompt_matched"] = false
+	}
+
 	r.db.Model(&models.RawCommandOutput{}).Where(
 		"task_id = ? AND device_ip = ? AND command_key = ?",
 		taskID, deviceIP, commandKey,
-	).Updates(map[string]interface{}{
-		"file_path":       filePath,
-		"raw_file_path":   rawFilePath,
-		"status":          status,
-		"error_message":   errMsg,
-		"parse_status":    "pending",
-		"parse_error":     "",
-		"raw_size":        result.RawSize,
-		"normalized_size": result.NormalizedSize,
-		"line_count":      result.LineCount(),
-		"pager_count":     result.PaginationCount,
-		"echo_consumed":   result.EchoConsumed,
-		"prompt_matched":  result.PromptMatched,
-	})
+	).Updates(updates)
 }
 
 // parseAndUpdateDeviceInfo 解析并更新设备信息（简单版本，后续由 parser 模块处理）

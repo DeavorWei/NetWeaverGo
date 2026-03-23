@@ -318,10 +318,10 @@ func (e *StreamEngine) processChunk(chunk string) []SessionAction {
 	actions := e.adapter.FeedSessionActions(chunk)
 
 	// 将规范化后的行同步写入 Detail 日志
-	if e.executor != nil && e.executor.LogSession != nil {
+	if e.executor != nil && e.executor.logSession != nil {
 		lines := e.adapter.GetNewCommittedLines()
 		if len(lines) > 0 {
-			if err := e.executor.LogSession.Detail.WriteNormalizedLines(lines); err != nil {
+			if err := e.executor.logSession.Detail.WriteNormalizedLines(lines); err != nil {
 				logger.Warn("StreamEngine", "-", "写入规范化日志失败: %v", err)
 			}
 		}

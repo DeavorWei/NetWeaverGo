@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
@@ -17,14 +18,24 @@ import (
 type ErrorAction int
 
 const (
-	ActionContinue ErrorAction = iota // 忽略错误，继续发送下一条
-	ActionAbort                       // 立即停止该设备的后续命令
-	ActionAbortTimeout                // 挂起超时后自动停止
+	ActionContinue     ErrorAction = iota // 忽略错误，继续发送下一条
+	ActionAbort                           // 立即停止该设备的后续命令
+	ActionAbortTimeout                    // 挂起超时后自动停止
 )
 
 // SuspendHandler 定义一个回调函数，当 Executor 遇到错误时，将其抛弃给主线程引擎询问用户决策
 // 引擎会阻塞在此，直到用户通过命令行或其他界面选定动作后返回，从而只影响该设备的 Goroutine 局部挂起
 type SuspendHandler func(ctx context.Context, ip string, deviceLog string, failedCmd string) ErrorAction
+
+// ExecutorOptions 描述执行器统一构造入口的可选配置。
+type ExecutorOptions struct {
+	EventBus       chan report.ExecutorEvent
+	SuspendHandler SuspendHandler
+	LogSession     *report.DeviceLogSession
+	Algorithms     *config.SSHAlgorithmSettings
+	Vendor         string
+	DeviceProfile  *config.DeviceProfile
+}
 
 // DeviceExecutor 封装特定设备的 SSH 数据流及命令步进下发生命周期
 type DeviceExecutor struct {
@@ -39,12 +50,10 @@ type DeviceExecutor struct {
 	EventBus  chan report.ExecutorEvent
 	OnSuspend SuspendHandler
 
-	// SSH 算法配置
-	Algorithms *config.SSHAlgorithmSettings
-	LogSession *report.DeviceLogSession
-
-	// DeviceProfile 设备画像（用于初始化流程）
-	DeviceProfile *config.DeviceProfile
+	// 构造阶段注入的连接与日志配置。
+	algorithms    *config.SSHAlgorithmSettings
+	logSession    *report.DeviceLogSession
+	deviceProfile *config.DeviceProfile
 
 	// Terminal Replayer - 实验性集成
 	// 用于将 SSH 字节流正确转换为规范化逻辑文本
@@ -52,49 +61,41 @@ type DeviceExecutor struct {
 }
 
 // NewDeviceExecutor 初始化执行器
-func NewDeviceExecutor(ip string, port int, user, pass string, eb chan report.ExecutorEvent, onSuspend SuspendHandler) *DeviceExecutor {
+func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOptions) *DeviceExecutor {
 	logger.Verbose("Executor", ip, "初始化 NewDeviceExecutor")
-	return &DeviceExecutor{
-		IP:        ip,
-		Port:      port,
-		Username:  user,
-		Password:  pass,
-		Matcher:   matcher.NewStreamMatcher(),
-		EventBus:  eb,
-		OnSuspend: onSuspend,
-		replayer:  terminal.NewReplayer(80), // 实验性：使用标准终端宽度 80
+	profile := opts.DeviceProfile
+	if profile == nil && strings.TrimSpace(opts.Vendor) != "" {
+		profile = config.GetDeviceProfile(opts.Vendor)
 	}
-}
-
-// SetAlgorithms 设置 SSH 算法配置
-func (e *DeviceExecutor) SetAlgorithms(algorithms *config.SSHAlgorithmSettings) {
-	e.Algorithms = algorithms
-}
-
-// SetLogSession 设置设备日志会话。
-func (e *DeviceExecutor) SetLogSession(session *report.DeviceLogSession) {
-	e.LogSession = session
+	return &DeviceExecutor{
+		IP:            ip,
+		Port:          port,
+		Username:      user,
+		Password:      pass,
+		Matcher:       matcher.NewStreamMatcher(),
+		EventBus:      opts.EventBus,
+		OnSuspend:     opts.SuspendHandler,
+		algorithms:    opts.Algorithms,
+		logSession:    opts.LogSession,
+		deviceProfile: profile,
+		replayer:      terminal.NewReplayer(80), // 实验性：使用标准终端宽度 80
+	}
 }
 
 // Connect 创建SSH长连接并初始化日志审计
 func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) error {
-	return e.ConnectWithProfile(ctx, timeout, nil)
-}
-
-// ConnectWithProfile 创建SSH长连接，支持设备画像配置
-func (e *DeviceExecutor) ConnectWithProfile(ctx context.Context, timeout time.Duration, profile *config.DeviceProfile) error {
 	logger.Debug("Executor", e.IP, "准备建立SSH连接 (Timeout: %v)", timeout)
 
 	// 获取 PTY 配置
 	var ptyConfig *sshutil.PTYConfig
-	if profile != nil {
+	if e.deviceProfile != nil {
 		ptyConfig = &sshutil.PTYConfig{
-			TermType: profile.PTY.TermType,
-			Width:    profile.PTY.Width,
-			Height:   profile.PTY.Height,
-			EchoMode: profile.PTY.EchoMode,
-			ISpeed:   profile.PTY.ISpeed,
-			OSpeed:   profile.PTY.OSpeed,
+			TermType: e.deviceProfile.PTY.TermType,
+			Width:    e.deviceProfile.PTY.Width,
+			Height:   e.deviceProfile.PTY.Height,
+			EchoMode: e.deviceProfile.PTY.EchoMode,
+			ISpeed:   e.deviceProfile.PTY.ISpeed,
+			OSpeed:   e.deviceProfile.PTY.OSpeed,
 		}
 	}
 
@@ -105,7 +106,7 @@ func (e *DeviceExecutor) ConnectWithProfile(ctx context.Context, timeout time.Du
 		Username:       e.Username,
 		Password:       e.Password,
 		Timeout:        timeout,
-		Algorithms:     e.Algorithms,
+		Algorithms:     e.algorithms,
 		HostKeyPolicy:  hostKeyPolicy,
 		KnownHostsPath: knownHostsPath,
 		RawSink:        e.rawSink(),
@@ -156,11 +157,10 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 		engine.SetErrorMatcher(e.Matcher)
 	}
 
-	// 【修复】设置设备画像（如果有）
-	// 无论是否有设备画像，都必须执行初始化流程
-	// 无设备画像时，RunInit() 会执行简化初始化，清理登录残留
-	if e.DeviceProfile != nil {
-		engine.SetProfile(e.DeviceProfile)
+	// 无论是否有设备画像，都必须执行初始化流程。
+	// 无设备画像时，RunInit() 会执行简化初始化，清理登录残留。
+	if e.deviceProfile != nil {
+		engine.SetProfile(e.deviceProfile)
 	}
 	// 始终调用 RunInit，由内部决定是否执行简化初始化
 	if err := engine.RunInit(ctx, cmdTimeout); err != nil {
@@ -209,31 +209,31 @@ func (e *DeviceExecutor) ExecuteCommandSyncWithResult(ctx context.Context, cmd s
 }
 
 func (e *DeviceExecutor) rawSink() report.RawTranscriptSink {
-	if e.LogSession == nil {
+	if e.logSession == nil {
 		return nil
 	}
-	return e.LogSession.RawSink()
+	return e.logSession.RawSink()
 }
 
 func (e *DeviceExecutor) writeDetailCommand(command string) error {
-	if e.LogSession == nil {
+	if e.logSession == nil {
 		return nil
 	}
-	return e.LogSession.WriteDetailCommand(command)
+	return e.logSession.WriteDetailCommand(command)
 }
 
 func (e *DeviceExecutor) writeDetailChunk(chunk string) error {
-	if e.LogSession == nil {
+	if e.logSession == nil {
 		return nil
 	}
-	return e.LogSession.WriteDetailChunk(chunk)
+	return e.logSession.WriteDetailChunk(chunk)
 }
 
 func (e *DeviceExecutor) flushDetailLog() error {
-	if e.LogSession == nil {
+	if e.logSession == nil {
 		return nil
 	}
-	return e.LogSession.FlushDetail()
+	return e.logSession.FlushDetail()
 }
 
 // processWithReplayer 实验性方法：使用 terminal.Replayer 处理原始 chunk

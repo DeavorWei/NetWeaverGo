@@ -555,18 +555,13 @@ func (e *Engine) worker(ctx context.Context, dev models.DeviceAsset, wg *sync.Wa
 
 	logSession := e.ensureDeviceLogSession(dev.IP, len(e.Commands))
 
-	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, workerEventBus, suspendHandler)
-	exec.SetLogSession(logSession)
-	exec.SetAlgorithms(&e.Settings.SSHAlgorithms)
-
-	// 【方案一】根据设备厂商设置设备画像
-	if dev.Vendor != "" {
-		profile := config.GetDeviceProfile(dev.Vendor)
-		if profile != nil {
-			exec.DeviceProfile = profile
-			logger.Debug("Engine", dev.IP, "已加载设备画像: %s", dev.Vendor)
-		}
-	}
+	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, executor.ExecutorOptions{
+		EventBus:       workerEventBus,
+		SuspendHandler: suspendHandler,
+		LogSession:     logSession,
+		Algorithms:     e.sshAlgorithms(),
+		Vendor:         dev.Vendor,
+	})
 
 	defer exec.Close()
 
@@ -635,8 +630,13 @@ func (e *Engine) backupWorker(ctx context.Context, dev models.DeviceAsset, wg *s
 
 	// 备份模块不初始化 ProgressTracker，因此 EventBus 必须设为 nil 以避免死锁。
 	// 修正：如果外部注入了 EventBus，则使用它。
-	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, e.EventBus, func(ctx context.Context, ip, log, cmd string) executor.ErrorAction {
-		return executor.ActionContinue
+	exec := executor.NewDeviceExecutor(dev.IP, dev.Port, dev.Username, dev.Password, executor.ExecutorOptions{
+		EventBus: e.EventBus,
+		SuspendHandler: func(ctx context.Context, ip, log, cmd string) executor.ErrorAction {
+			return executor.ActionContinue
+		},
+		Algorithms: e.sshAlgorithms(),
+		Vendor:     dev.Vendor,
 	})
 	defer exec.Close()
 
@@ -663,7 +663,7 @@ func (e *Engine) backupWorker(ctx context.Context, dev models.DeviceAsset, wg *s
 		Username:   dev.Username,
 		Password:   dev.Password,
 		Timeout:    connectTimeout,
-		Algorithms: &e.Settings.SSHAlgorithms,
+		Algorithms: e.sshAlgorithms(),
 	}
 	sftpClient, err := sftputil.NewSFTPClient(ctx, sftpCfg)
 	if err != nil {
@@ -860,6 +860,13 @@ func (e *Engine) ensureDeviceLogSession(ip string, totalCmd int) *report.DeviceL
 		return session
 	}
 	return nil
+}
+
+func (e *Engine) sshAlgorithms() *config.SSHAlgorithmSettings {
+	if e.Settings == nil {
+		return nil
+	}
+	return &e.Settings.SSHAlgorithms
 }
 
 func (e *Engine) writeDecisionLog(ip string, message string) {
