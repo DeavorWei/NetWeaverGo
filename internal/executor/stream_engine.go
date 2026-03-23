@@ -12,6 +12,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/matcher"
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/sshutil"
+	"github.com/NetWeaverGo/core/internal/terminal"
 )
 
 // RunMode 运行模式
@@ -26,9 +27,9 @@ const (
 
 // StreamEngine 统一流处理引擎
 // 为 ExecutePlaybook() 和 ExecuteCommandSync() 提供公共执行内核
-// 重构后：使用 SessionAdapter 支持新旧架构切换
+// 重构后：统一使用 SessionAdapter 驱动会话状态。
 type StreamEngine struct {
-	// adapter 会话适配器（支持新旧架构切换）
+	// adapter 会话适配器
 	adapter *SessionAdapter
 
 	// matcher 流匹配器
@@ -54,15 +55,7 @@ type StreamEngine struct {
 func NewStreamEngine(executor *DeviceExecutor, client *sshutil.SSHClient, commands []string, width int) *StreamEngine {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(width, commands, m)
-
-	// 从运行时配置读取灰度开关
-	if mgr := config.GetRuntimeManagerIfInitialized(); mgr != nil {
-		cfg := mgr.GetConfig()
-		adapter.SetUseNewArchitecture(cfg.Engine.UseNewSessionArchitecture)
-		if cfg.Engine.UseNewSessionArchitecture {
-			logger.Debug("StreamEngine", "-", "使用新会话架构 (Detector+Reducer+Driver)")
-		}
-	}
+	logger.Debug("StreamEngine", "-", "使用新会话架构 (Detector+Reducer+Driver)")
 
 	return &StreamEngine{
 		adapter:        adapter,
@@ -108,7 +101,7 @@ func (e *StreamEngine) RunInit(ctx context.Context, timeout time.Duration) error
 
 	// 执行初始化
 	logger.Info("StreamEngine", "-", "开始执行初始化流程...")
-	result := initializer.RunWithResult(ctx, e.client, e.adapter.machine)
+	result := initializer.RunWithResult(ctx, e.client, e.adapter)
 	if !result.Success {
 		return fmt.Errorf("初始化失败: %s", result.ErrorMessage)
 	}
@@ -190,7 +183,7 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 
 		case <-timer.C:
 			// 超时处理
-			logger.Debug("StreamEngine", "-", "读取超时，当前状态: %s", e.adapter.State())
+			logger.Debug("StreamEngine", "-", "读取超时，当前状态: %s", e.adapter.NewState())
 
 			// 获取当前命令信息
 			failedCmd := ""
@@ -206,7 +199,7 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 					IP:       e.executor.IP,
 					Type:     report.EventDeviceError,
 					Message:  "Timeout Error: No prompt received within timeout",
-					TotalCmd: len(e.adapter.machine.queue),
+					TotalCmd: e.adapter.TotalCommands(),
 					CmdIndex: cmdIndex + 1,
 				}
 			}
@@ -222,7 +215,7 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 							IP:       e.executor.IP,
 							Type:     report.EventDeviceAbort,
 							Message:  "因超时被手动中止",
-							TotalCmd: len(e.adapter.machine.queue),
+							TotalCmd: e.adapter.TotalCommands(),
 						}
 					}
 					e.adapter.MarkFailed("读取超时，用户中止")
@@ -235,7 +228,7 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 							IP:       e.executor.IP,
 							Type:     report.EventDeviceSkip,
 							Message:  "放行超时并继续执行",
-							TotalCmd: len(e.adapter.machine.queue),
+							TotalCmd: e.adapter.TotalCommands(),
 						}
 					}
 					// 重置计时器继续执行
@@ -251,7 +244,7 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 		case res, ok := <-readCh:
 			if !ok {
 				// 读取通道关闭
-				if e.adapter.State() == StateCompleted {
+				if e.adapter.NewState() == NewStateCompleted {
 					logger.Info("StreamEngine", "-", "读取流已结束，命令执行已完成")
 					return e.adapter.Results(), nil
 				}
@@ -279,27 +272,26 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 
 				// 执行动作
 				for _, action := range actions {
-					actionData := e.adapter.GetActionData(action)
-					if err := e.executeAction(actionData, &currentTimeout, defaultTimeout, timer); err != nil {
+					if err := e.executeSessionAction(action, &currentTimeout, defaultTimeout, timer); err != nil {
 						e.adapter.MarkFailed(err.Error())
 						return e.adapter.Results(), err
 					}
 				}
 
 				// 检查是否完成
-				if e.adapter.State() == StateCompleted {
+				if e.adapter.NewState() == NewStateCompleted {
 					return e.adapter.Results(), nil
 				}
 
 				// 单命令模式：检查当前命令是否完成
-				if mode == ModeSingle && e.adapter.State() == StateReady {
+				if mode == ModeSingle && e.adapter.NewState() == NewStateReady {
 					return e.adapter.Results(), nil
 				}
 			}
 
 			if err != nil {
 				if err == io.EOF {
-					if e.adapter.State() == StateCompleted {
+					if e.adapter.NewState() == NewStateCompleted {
 						return e.adapter.Results(), nil
 					}
 					e.adapter.MarkFailed("SSH 会话被远端断开")
@@ -314,10 +306,9 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 	}
 }
 
-// processChunk 处理 chunk，返回需要执行的动作
-func (e *StreamEngine) processChunk(chunk string) []Action {
-	// 喂给状态机（状态机内部使用 Replayer 处理 chunk）
-	actions := e.adapter.Feed(chunk)
+// processChunk 处理 chunk，返回需要执行的新动作
+func (e *StreamEngine) processChunk(chunk string) []SessionAction {
+	actions := e.adapter.FeedSessionActions(chunk)
 
 	// 将规范化后的行同步写入 Detail 日志
 	if e.executor != nil && e.executor.LogSession != nil {
@@ -337,28 +328,28 @@ func (e *StreamEngine) processChunk(chunk string) []Action {
 	return actions
 }
 
-// executeAction 执行动作
-func (e *StreamEngine) executeAction(action ActionData, currentTimeout *time.Duration, defaultTimeout time.Duration, timer *time.Timer) error {
-	switch action.Type {
-	case ActionSendCommand:
+// executeSessionAction 执行统一的新动作模型
+func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout *time.Duration, defaultTimeout time.Duration, timer *time.Timer) error {
+	switch act := action.(type) {
+	case ActSendCommand:
 		// 发送命令
-		logger.Info("StreamEngine", "-", ">>> [发送命令]: %s", action.Command)
+		logger.Info("StreamEngine", "-", ">>> [发送命令]: %s", act.Command)
 
 		// 写入命令日志
 		if e.executor != nil {
-			if err := e.executor.writeDetailCommand(action.Command); err != nil {
+			if err := e.executor.writeDetailCommand(act.Command); err != nil {
 				logger.Warn("StreamEngine", "-", "写入命令日志失败: %v", err)
 			}
 		}
 
 		// 发送命令
-		if err := e.client.SendCommand(action.Command); err != nil {
+		if err := e.client.SendCommand(act.Command); err != nil {
 			return fmt.Errorf("发送命令失败: %w", err)
 		}
 
 		// 设置超时
-		if action.Timeout > 0 {
-			*currentTimeout = action.Timeout
+		if cmd := e.adapter.CurrentCommand(); cmd != nil && cmd.CustomTimeout > 0 {
+			*currentTimeout = cmd.CustomTimeout
 		} else {
 			*currentTimeout = defaultTimeout
 		}
@@ -381,12 +372,12 @@ func (e *StreamEngine) executeAction(action ActionData, currentTimeout *time.Dur
 					Type:     report.EventDeviceCmd,
 					Message:  cmd.RawCommand,
 					CmdIndex: cmd.Index + 1,
-					TotalCmd: len(e.adapter.machine.queue),
+					TotalCmd: e.adapter.TotalCommands(),
 				}
 			}
 		}
 
-	case ActionSendSpace:
+	case ActSendPagerContinue:
 		// 发送空格（分页）
 		logger.Debug("StreamEngine", "-", "[自动翻页] 发送空格继续...")
 		if err := e.client.SendRawBytes([]byte(" ")); err != nil {
@@ -398,7 +389,7 @@ func (e *StreamEngine) executeAction(action ActionData, currentTimeout *time.Dur
 			_ = e.executor.flushDetailLog()
 		}
 
-	case ActionSendWarmup:
+	case ActSendWarmup:
 		// 发送预热空行
 		logger.Debug("StreamEngine", "-", "发送预热空行...")
 		if err := e.client.SendCommand(""); err != nil {
@@ -410,10 +401,10 @@ func (e *StreamEngine) executeAction(action ActionData, currentTimeout *time.Dur
 			_ = e.executor.flushDetailLog()
 		}
 
-	case ActionHandleError:
+	case ActRequestSuspendDecision:
 		// 处理错误 - 调用 SuspendHandler 等待用户决策
-		if action.ErrorCtx == nil {
-			logger.Warn("StreamEngine", "-", "ActionHandleError 但无错误上下文")
+		if act.ErrorContext == nil {
+			logger.Warn("StreamEngine", "-", "ActRequestSuspendDecision 但无错误上下文")
 			return nil
 		}
 
@@ -422,14 +413,14 @@ func (e *StreamEngine) executeAction(action ActionData, currentTimeout *time.Dur
 			e.executor.EventBus <- report.ExecutorEvent{
 				IP:       e.executor.IP,
 				Type:     report.EventDeviceError,
-				Message:  "执行错误: " + action.ErrorCtx.Line,
-				TotalCmd: len(e.adapter.machine.queue),
+				Message:  "执行错误: " + act.ErrorContext.Line,
+				TotalCmd: e.adapter.TotalCommands(),
 			}
 		}
 
 		// 调用挂起处理器等待用户决策
 		if e.suspendHandler != nil {
-			userAction := e.suspendHandler(context.Background(), e.executor.IP, action.ErrorCtx.Line, action.ErrorCtx.Cmd)
+			userAction := e.suspendHandler(context.Background(), e.executor.IP, act.ErrorContext.Line, act.ErrorContext.Cmd)
 			switch userAction {
 			case ActionAbort:
 				// 用户选择中止
@@ -438,10 +429,15 @@ func (e *StreamEngine) executeAction(action ActionData, currentTimeout *time.Dur
 						IP:       e.executor.IP,
 						Type:     report.EventDeviceAbort,
 						Message:  "执行异常被手动中止",
-						TotalCmd: len(e.adapter.machine.queue),
+						TotalCmd: e.adapter.TotalCommands(),
 					}
 				}
-				e.adapter.ResolveError(false) // 中止
+				followups := e.adapter.ResolveErrorActions(false)
+				for _, next := range followups {
+					if err := e.executeSessionAction(next, currentTimeout, defaultTimeout, timer); err != nil {
+						return err
+					}
+				}
 				return fmt.Errorf("设备 %s 的执行被用户手动中止", e.executor.IP)
 
 			case ActionContinue:
@@ -451,25 +447,88 @@ func (e *StreamEngine) executeAction(action ActionData, currentTimeout *time.Dur
 						IP:       e.executor.IP,
 						Type:     report.EventDeviceSkip,
 						Message:  "放行异常并继续执行",
-						TotalCmd: len(e.adapter.machine.queue),
+						TotalCmd: e.adapter.TotalCommands(),
 					}
 				}
-				e.adapter.ResolveError(true) // 继续
+				followups := e.adapter.ResolveErrorActions(true)
+				for _, next := range followups {
+					if err := e.executeSessionAction(next, currentTimeout, defaultTimeout, timer); err != nil {
+						return err
+					}
+				}
 				logger.Debug("StreamEngine", "-", "用户选择放行错误，继续执行")
 			}
 		} else {
 			// 没有挂起处理器，默认中止
-			e.adapter.ResolveError(false)
-			return fmt.Errorf("设备 %s 执行错误: %s", e.executor.IP, action.ErrorCtx.Line)
+			followups := e.adapter.ResolveErrorActions(false)
+			for _, next := range followups {
+				if err := e.executeSessionAction(next, currentTimeout, defaultTimeout, timer); err != nil {
+					return err
+				}
+			}
+			return fmt.Errorf("设备 %s 执行错误: %s", e.executor.IP, act.ErrorContext.Line)
 		}
 
-	case ActionAbortTask:
+	case ActAbortSession:
 		// 中止任务
-		return fmt.Errorf("任务被中止")
+		return fmt.Errorf("任务被中止: %s", act.Reason)
 
-	case ActionSkipError:
-		// 跳过错误继续执行
-		logger.Debug("StreamEngine", "-", "跳过错误继续执行")
+	case ActResetReadTimeout:
+		if act.Timeout > 0 {
+			*currentTimeout = act.Timeout
+		} else {
+			*currentTimeout = defaultTimeout
+		}
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timer.Reset(*currentTimeout)
+
+	case ActFlushDetailLog:
+		if e.executor != nil {
+			_ = e.executor.flushDetailLog()
+		}
+
+	case ActEmitCommandStart:
+		if e.executor != nil && e.executor.EventBus != nil {
+			e.executor.EventBus <- report.ExecutorEvent{
+				IP:       e.executor.IP,
+				Type:     report.EventDeviceCmd,
+				Message:  act.Command,
+				CmdIndex: act.Index + 1,
+				TotalCmd: e.adapter.TotalCommands(),
+			}
+		}
+
+	case ActEmitCommandDone:
+		if e.executor != nil && e.executor.EventBus != nil {
+			eventType := report.EventDeviceCmd
+			message := fmt.Sprintf("命令完成 (耗时: %v)", act.Duration)
+			if !act.Success {
+				eventType = report.EventDeviceError
+				message = fmt.Sprintf("命令执行失败 (耗时: %v)", act.Duration)
+			}
+			e.executor.EventBus <- report.ExecutorEvent{
+				IP:       e.executor.IP,
+				Type:     eventType,
+				Message:  message,
+				CmdIndex: act.Index + 1,
+				TotalCmd: e.adapter.TotalCommands(),
+			}
+		}
+
+	case ActEmitDeviceError:
+		if e.executor != nil && e.executor.EventBus != nil {
+			e.executor.EventBus <- report.ExecutorEvent{
+				IP:       e.executor.IP,
+				Type:     report.EventDeviceError,
+				Message:  act.Message,
+				TotalCmd: e.adapter.TotalCommands(),
+			}
+		}
 	}
 
 	return nil
@@ -492,21 +551,16 @@ func (e *StreamEngine) RunPlaybook(ctx context.Context, defaultTimeout time.Dura
 	return e.Run(ctx, ModePlaybook, defaultTimeout)
 }
 
-// GetMachine 获取状态机（用于调试）
-func (e *StreamEngine) GetMachine() *SessionMachine {
-	return e.adapter.machine
-}
-
 // GetAdapter 获取适配器（用于调试和新架构访问）
 func (e *StreamEngine) GetAdapter() *SessionAdapter {
 	return e.adapter
 }
 
 // NormalizeOutput 规范化输出
-// 用于对比验证新旧实现的输出一致性
+// 用于测试中复用终端重放后的规范化输出。
 func NormalizeOutput(chunk string, width int) string {
-	replayer := NewSessionMachine(width, nil, matcher.NewStreamMatcher())
-	replayer.Feed(chunk)
+	replayer := terminal.NewReplayer(width)
+	replayer.Process(chunk)
 
 	lines := replayer.Lines()
 	active := replayer.ActiveLine()
@@ -544,7 +598,7 @@ func (e *StreamEngine) waitAndClearInitResidual(ctx context.Context, timeout tim
 		if err != nil {
 			if netErr, ok := err.(interface{ Timeout() bool }); ok && netErr.Timeout() {
 				// 检查状态机是否已经进入 Ready 状态且 pendingLines 为空
-				if e.adapter.State() == StateReady {
+				if e.adapter.NewState() == NewStateReady {
 					// 关键修复：清空残留数据后再返回
 					e.adapter.ClearInitResiduals()
 					logger.Debug("StreamEngine", "-", "简化初始化完成，状态机已就绪")
@@ -558,12 +612,12 @@ func (e *StreamEngine) waitAndClearInitResidual(ctx context.Context, timeout tim
 		if n > 0 {
 			chunk := string(buf[:n])
 			// 喂给状态机
-			actions := e.adapter.Feed(chunk)
+			actions := e.adapter.FeedSessionActions(chunk)
 
 			// 处理状态机返回的动作
 			for _, action := range actions {
-				switch action {
-				case ActionSendWarmup:
+				switch action.(type) {
+				case ActSendWarmup:
 					// 发送预热空行
 					logger.Debug("StreamEngine", "-", "简化初始化发送预热空行...")
 					if err := e.client.SendCommand(""); err != nil {
@@ -573,17 +627,17 @@ func (e *StreamEngine) waitAndClearInitResidual(ctx context.Context, timeout tim
 					// 设置短暂超时读取响应
 					if err := e.client.SetReadDeadline(time.Now().Add(500 * time.Millisecond)); err == nil {
 						if n2, err2 := e.client.Read(buf); err2 == nil && n2 > 0 {
-							e.adapter.Feed(string(buf[:n2]))
+							e.adapter.FeedSessionActions(string(buf[:n2]))
 						}
 					}
-				case ActionSendCommand:
+				case ActSendCommand:
 					// 不应该在初始化阶段发送命令，忽略
-					logger.Debug("StreamEngine", "-", "简化初始化忽略 ActionSendCommand")
+					logger.Debug("StreamEngine", "-", "简化初始化忽略 ActSendCommand")
 				}
 			}
 
 			// 检查状态机是否已经进入 Ready 状态
-			if e.adapter.State() == StateReady {
+			if e.adapter.NewState() == NewStateReady {
 				// 关键修复：清空残留数据后再返回
 				e.adapter.ClearInitResiduals()
 				logger.Debug("StreamEngine", "-", "简化初始化完成，状态机已就绪")
@@ -593,7 +647,7 @@ func (e *StreamEngine) waitAndClearInitResidual(ctx context.Context, timeout tim
 	}
 
 	// 超时也清理残留，不阻断执行
-	logger.Warn("StreamEngine", "-", "简化初始化超时，当前状态: %s", e.adapter.State())
+	logger.Warn("StreamEngine", "-", "简化初始化超时，当前状态: %s", e.adapter.NewState())
 	e.adapter.ClearInitResiduals()
 	return fmt.Errorf("等待初始化提示符超时")
 }

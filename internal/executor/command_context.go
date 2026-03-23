@@ -34,11 +34,6 @@ type CommandContext struct {
 	// PaginationCount 分页次数
 	PaginationCount int
 
-	// PaginationPending 分页是否正在进行中
-	// 当检测到分页符并发送空格后设置为 true
-	// 当确认命令真正结束后设置为 false
-	PaginationPending bool
-
 	// PromptMatched 是否匹配到提示符
 	PromptMatched bool
 
@@ -92,25 +87,9 @@ func (c *CommandContext) MarkFailed(errMsg string) {
 	c.ErrorMessage = errMsg
 }
 
-// IncrementPagination 增加分页计数并标记分页正在进行
+// IncrementPagination 增加分页计数
 func (c *CommandContext) IncrementPagination() {
 	c.PaginationCount++
-	c.PaginationPending = true
-}
-
-// SetPaginationPending 设置分页正在进行状态
-func (c *CommandContext) SetPaginationPending(pending bool) {
-	c.PaginationPending = pending
-}
-
-// IsPaginationPending 检查是否正在分页中
-func (c *CommandContext) IsPaginationPending() bool {
-	return c.PaginationPending
-}
-
-// ClearPaginationPending 清除分页正在进行状态（命令确认完成后调用）
-func (c *CommandContext) ClearPaginationPending() {
-	c.PaginationPending = false
 }
 
 // ConsumeEcho 消费 echo 行

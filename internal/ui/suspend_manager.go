@@ -20,6 +20,7 @@ type SuspendSession struct {
 	ActionCh  chan executor.ErrorAction
 	timedOut  atomic.Bool // 超时标记，防止超时后前端响应向已关闭channel发送
 	resolved  atomic.Bool // 已响应标记，防止重复响应
+	finished  atomic.Bool // 已结束标记，防止会话结束后继续响应
 }
 
 // SuspendManager 全局挂起会话管理器
@@ -72,10 +73,12 @@ func (m *SuspendManager) CreateHandler() executor.SuspendHandler {
 		// 清理该 IP 的旧会话
 		if oldSessionID, exists := m.sessionsByIP[ip]; exists {
 			if oldSession, ok := m.sessions[oldSessionID]; ok {
-				select {
-				case oldSession.ActionCh <- executor.ActionAbort:
-					logger.Debug("SuspendManager", ip, "旧的挂起会话 %s 已被终止", oldSessionID)
-				default:
+				if !oldSession.finished.Load() && !oldSession.resolved.Load() {
+					select {
+					case oldSession.ActionCh <- executor.ActionAbort:
+						logger.Debug("SuspendManager", ip, "旧的挂起会话 %s 已被终止", oldSessionID)
+					default:
+					}
 				}
 			}
 		}
@@ -85,13 +88,14 @@ func (m *SuspendManager) CreateHandler() executor.SuspendHandler {
 		m.mu.Unlock()
 
 		defer func() {
+			session.finished.Store(true)
+
 			m.mu.Lock()
 			delete(m.sessions, sessionID)
 			if m.sessionsByIP[ip] == sessionID {
 				delete(m.sessionsByIP, ip)
 			}
 			m.mu.Unlock()
-			close(actionCh)
 		}()
 
 		// 发射事件到前端
@@ -152,6 +156,12 @@ func (m *SuspendManager) Resolve(sessionIDOrIP string, action string) {
 
 	if !exists || session == nil {
 		logger.Warn("SuspendManager", sessionIDOrIP, "找不到挂起会话，可能任务已结束或超时")
+		return
+	}
+
+	// 检查是否已结束
+	if session.finished.Load() {
+		logger.Warn("SuspendManager", session.IP, "挂起会话已结束，忽略用户响应")
 		return
 	}
 

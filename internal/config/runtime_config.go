@@ -40,10 +40,9 @@ type RuntimeConfig struct {
 
 	// 引擎配置
 	Engine struct {
-		WorkerCount               int  `json:"workerCount"`               // 工作协程数
-		EventBufferSize           int  `json:"eventBufferSize"`           // 事件缓冲区大小
-		FallbackEventCapacity     int  `json:"fallbackEventCapacity"`     // 后备事件容量
-		UseNewSessionArchitecture bool `json:"useNewSessionArchitecture"` // 使用新会话架构（灰度开关）
+		WorkerCount           int `json:"workerCount"`           // 工作协程数
+		EventBufferSize       int `json:"eventBufferSize"`       // 事件缓冲区大小
+		FallbackEventCapacity int `json:"fallbackEventCapacity"` // 后备事件容量
 	} `json:"engine"`
 
 	// 拓扑发现配置
@@ -93,7 +92,6 @@ func DefaultRuntimeConfig() RuntimeConfig {
 	cfg.Engine.WorkerCount = DefaultWorkerCount
 	cfg.Engine.EventBufferSize = EventBufferSize
 	cfg.Engine.FallbackEventCapacity = FallbackEventCapacity
-	cfg.Engine.UseNewSessionArchitecture = true // 默认使用新架构（Phase 8 清理后）
 
 	// 发现配置
 	cfg.Discovery.WorkerCount = DefaultWorkerCount
@@ -162,7 +160,6 @@ func ResetRuntimeSettingsToDefault(db *gorm.DB) error {
 		{Category: "engine", Key: "workerCount", Value: strconv.Itoa(defaults.Engine.WorkerCount)},
 		{Category: "engine", Key: "eventBufferSize", Value: strconv.Itoa(defaults.Engine.EventBufferSize)},
 		{Category: "engine", Key: "fallbackEventCapacity", Value: strconv.Itoa(defaults.Engine.FallbackEventCapacity)},
-		{Category: "engine", Key: "useNewSessionArchitecture", Value: strconv.FormatBool(defaults.Engine.UseNewSessionArchitecture)},
 
 		// 发现配置
 		{Category: "discovery", Key: "workerCount", Value: strconv.Itoa(defaults.Discovery.WorkerCount)},
@@ -247,27 +244,26 @@ func applyRuntimeSetting(cfg *RuntimeConfig, setting RuntimeSetting) error {
 		}
 	case "engine":
 		switch setting.Key {
-		case "useNewSessionArchitecture":
-			// 布尔值特殊处理
-			val, err := strconv.ParseBool(setting.Value)
-			if err != nil {
-				return fmt.Errorf("无效的布尔配置值: %s", setting.Value)
-			}
-			cfg.Engine.UseNewSessionArchitecture = val
-		default:
-			// 整数值处理
+		case "workerCount":
 			val, err := strconv.Atoi(setting.Value)
 			if err != nil {
 				return fmt.Errorf("无效的配置值: %s", setting.Value)
 			}
-			switch setting.Key {
-			case "workerCount":
-				cfg.Engine.WorkerCount = val
-			case "eventBufferSize":
-				cfg.Engine.EventBufferSize = val
-			case "fallbackEventCapacity":
-				cfg.Engine.FallbackEventCapacity = val
+			cfg.Engine.WorkerCount = val
+		case "eventBufferSize":
+			val, err := strconv.Atoi(setting.Value)
+			if err != nil {
+				return fmt.Errorf("无效的配置值: %s", setting.Value)
 			}
+			cfg.Engine.EventBufferSize = val
+		case "fallbackEventCapacity":
+			val, err := strconv.Atoi(setting.Value)
+			if err != nil {
+				return fmt.Errorf("无效的配置值: %s", setting.Value)
+			}
+			cfg.Engine.FallbackEventCapacity = val
+		default:
+			return nil
 		}
 	case "discovery":
 		val, err := strconv.Atoi(setting.Value)
@@ -340,7 +336,6 @@ func SaveRuntimeConfig(db *gorm.DB, config RuntimeConfig) error {
 		{Category: "engine", Key: "workerCount", Value: strconv.Itoa(config.Engine.WorkerCount)},
 		{Category: "engine", Key: "eventBufferSize", Value: strconv.Itoa(config.Engine.EventBufferSize)},
 		{Category: "engine", Key: "fallbackEventCapacity", Value: strconv.Itoa(config.Engine.FallbackEventCapacity)},
-		{Category: "engine", Key: "useNewSessionArchitecture", Value: strconv.FormatBool(config.Engine.UseNewSessionArchitecture)},
 
 		// 发现配置
 		{Category: "discovery", Key: "workerCount", Value: strconv.Itoa(config.Discovery.WorkerCount)},
@@ -362,6 +357,10 @@ func SaveRuntimeConfig(db *gorm.DB, config RuntimeConfig) error {
 
 	// 使用事务批量更新
 	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("category = ? AND key = ?", "engine", "useNewSessionArchitecture").Delete(&RuntimeSetting{}).Error; err != nil {
+			return fmt.Errorf("删除废弃配置失败 [engine.useNewSessionArchitecture]: %v", err)
+		}
+
 		for _, s := range settings {
 			result := tx.Model(&RuntimeSetting{}).
 				Where("category = ? AND key = ?", s.Category, s.Key).
