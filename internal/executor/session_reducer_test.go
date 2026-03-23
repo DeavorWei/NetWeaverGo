@@ -719,7 +719,6 @@ func TestNewSessionStateString(t *testing.T) {
 		{NewStateReady, "Ready"},
 		{NewStateRunning, "Running"},
 		{NewStateAwaitPagerContinueAck, "AwaitPagerContinueAck"},
-		{NewStateAwaitFinalPromptConfirm, "AwaitFinalPromptConfirm"},
 		{NewStateSuspended, "Suspended"},
 		{NewStateCompleted, "Completed"},
 		{NewStateFailed, "Failed"},
@@ -737,7 +736,7 @@ func TestNewSessionStateIsTerminal(t *testing.T) {
 	terminalStates := []NewSessionState{NewStateCompleted, NewStateFailed}
 	nonTerminalStates := []NewSessionState{
 		NewStateInitAwaitPrompt, NewStateInitAwaitWarmupPrompt, NewStateReady,
-		NewStateRunning, NewStateAwaitPagerContinueAck, NewStateAwaitFinalPromptConfirm,
+		NewStateRunning, NewStateAwaitPagerContinueAck,
 		NewStateSuspended,
 	}
 

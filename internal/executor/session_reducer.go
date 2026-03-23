@@ -137,7 +137,7 @@ func (r *SessionReducer) handleCommittedLine(e EvCommittedLine) []SessionAction 
 
 	// 在运行相关状态下处理待处理行，避免分页后的输出滞留在 pendingLines 中
 	switch r.state {
-	case NewStateRunning, NewStateAwaitPagerContinueAck, NewStateAwaitFinalPromptConfirm:
+	case NewStateRunning, NewStateAwaitPagerContinueAck:
 		return r.processPendingLines()
 	}
 
@@ -147,7 +147,7 @@ func (r *SessionReducer) handleCommittedLine(e EvCommittedLine) []SessionAction 
 // handlePagerSeen 处理分页符检测事件
 func (r *SessionReducer) handlePagerSeen(e EvPagerSeen) []SessionAction {
 	switch r.state {
-	case NewStateRunning, NewStateReady, NewStateAwaitFinalPromptConfirm:
+	case NewStateRunning, NewStateReady:
 		if r.ctx.Current != nil {
 			r.ctx.Current.IncrementPagination()
 			if actions := r.checkPaginationLimit(); actions != nil {
@@ -182,10 +182,6 @@ func (r *SessionReducer) handleActivePromptSeen(e EvActivePromptSeen) []SessionA
 	case NewStateAwaitPagerContinueAck:
 		// 真实设备通常只在分页结束后返回一次提示符，直接视为命令完成
 		logger.Debug("SessionReducer", "-", "分页续页后检测到提示符，命令完成")
-		return r.completeCurrentCommand()
-
-	case NewStateAwaitFinalPromptConfirm:
-		// 二次确认提示符，命令完成
 		return r.completeCurrentCommand()
 	}
 

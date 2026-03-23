@@ -423,7 +423,16 @@ func (e *Engine) RunBackup(ctx context.Context) error {
 
 	for _, dev := range e.Devices {
 		wg.Add(1)
-		sem <- struct{}{}
+
+		select {
+		case sem <- struct{}{}:
+			logger.Verbose("Engine", dev.IP, "获取到备份执行令牌，准备启动 worker")
+		case <-e.ctx.Done():
+			wg.Done()
+			logger.Debug("Engine", dev.IP, "Context 已取消，跳过获取备份令牌")
+			continue
+		}
+
 		go func(device models.DeviceAsset) {
 			defer func() { <-sem }()
 			// 增加抖动，平滑 SSH 突发连接压力

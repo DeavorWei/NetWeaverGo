@@ -33,9 +33,6 @@ const (
 	// NewStateAwaitPagerContinueAck 等待分页续页确认
 	NewStateAwaitPagerContinueAck
 
-	// NewStateAwaitFinalPromptConfirm 等待最终提示符确认
-	NewStateAwaitFinalPromptConfirm
-
 	// NewStateSuspended 挂起状态
 	NewStateSuspended
 
@@ -59,8 +56,6 @@ func (s NewSessionState) String() string {
 		return "Running"
 	case NewStateAwaitPagerContinueAck:
 		return "AwaitPagerContinueAck"
-	case NewStateAwaitFinalPromptConfirm:
-		return "AwaitFinalPromptConfirm"
 	case NewStateSuspended:
 		return "Suspended"
 	case NewStateCompleted:
