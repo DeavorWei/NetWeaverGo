@@ -66,11 +66,6 @@ func (a *SessionAdapter) FeedSessionActions(chunk string) []SessionAction {
 	return sessionActions
 }
 
-// State 返回兼容旧状态枚举的投影，供运行态和少量调试逻辑复用。
-func (a *SessionAdapter) State() SessionState {
-	return a.convertNewStateToOld(a.newState)
-}
-
 // NewState 返回当前状态（新架构）
 func (a *SessionAdapter) NewState() NewSessionState {
 	return a.newState
@@ -157,32 +152,6 @@ func (a *SessionAdapter) ClearError() {
 // ============================================================================
 // 状态转换辅助方法
 // ============================================================================
-
-// convertNewStateToOld 将新状态转换为旧状态（用于兼容）
-func (a *SessionAdapter) convertNewStateToOld(newState NewSessionState) SessionState {
-	switch newState {
-	case NewStateInitAwaitPrompt:
-		return StateWaitInitialPrompt
-	case NewStateInitAwaitWarmupPrompt:
-		return StateWarmup
-	case NewStateReady:
-		return StateReady
-	case NewStateRunning:
-		return StateCollecting
-	case NewStateAwaitPagerContinueAck:
-		return StateCollecting
-	case NewStateAwaitFinalPromptConfirm:
-		return StateWaitingFinalPrompt
-	case NewStateSuspended:
-		return StateCollecting
-	case NewStateCompleted:
-		return StateCompleted
-	case NewStateFailed:
-		return StateFailed
-	default:
-		return StateFailed
-	}
-}
 
 // InitNewArchitecture 初始化新架构组件
 // 供测试或重置场景重新初始化内部组件。

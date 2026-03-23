@@ -89,7 +89,7 @@ func (d *SessionDetector) Detect(lines []string, activeLine string) []SessionEve
 }
 
 // DetectFromChunk 从原始 chunk 检测初始化阶段的提示符
-// 用于 StateInitAwaitPrompt 和 StateWarmup 状态
+// 用于 NewStateInitAwaitPrompt 和 NewStateInitAwaitWarmupPrompt 状态
 func (d *SessionDetector) DetectFromChunk(chunk string) []SessionEvent {
 	events := make([]SessionEvent, 0)
 

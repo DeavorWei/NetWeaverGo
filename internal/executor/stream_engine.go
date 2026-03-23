@@ -183,7 +183,7 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 
 		case <-timer.C:
 			// 超时处理
-			logger.Debug("StreamEngine", "-", "读取超时，当前状态: %s", e.adapter.State())
+			logger.Debug("StreamEngine", "-", "读取超时，当前状态: %s", e.adapter.NewState())
 
 			// 获取当前命令信息
 			failedCmd := ""
@@ -244,7 +244,7 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 		case res, ok := <-readCh:
 			if !ok {
 				// 读取通道关闭
-				if e.adapter.State() == StateCompleted {
+				if e.adapter.NewState() == NewStateCompleted {
 					logger.Info("StreamEngine", "-", "读取流已结束，命令执行已完成")
 					return e.adapter.Results(), nil
 				}
@@ -279,19 +279,19 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 				}
 
 				// 检查是否完成
-				if e.adapter.State() == StateCompleted {
+				if e.adapter.NewState() == NewStateCompleted {
 					return e.adapter.Results(), nil
 				}
 
 				// 单命令模式：检查当前命令是否完成
-				if mode == ModeSingle && e.adapter.State() == StateReady {
+				if mode == ModeSingle && e.adapter.NewState() == NewStateReady {
 					return e.adapter.Results(), nil
 				}
 			}
 
 			if err != nil {
 				if err == io.EOF {
-					if e.adapter.State() == StateCompleted {
+					if e.adapter.NewState() == NewStateCompleted {
 						return e.adapter.Results(), nil
 					}
 					e.adapter.MarkFailed("SSH 会话被远端断开")
@@ -598,7 +598,7 @@ func (e *StreamEngine) waitAndClearInitResidual(ctx context.Context, timeout tim
 		if err != nil {
 			if netErr, ok := err.(interface{ Timeout() bool }); ok && netErr.Timeout() {
 				// 检查状态机是否已经进入 Ready 状态且 pendingLines 为空
-				if e.adapter.State() == StateReady {
+				if e.adapter.NewState() == NewStateReady {
 					// 关键修复：清空残留数据后再返回
 					e.adapter.ClearInitResiduals()
 					logger.Debug("StreamEngine", "-", "简化初始化完成，状态机已就绪")
@@ -637,7 +637,7 @@ func (e *StreamEngine) waitAndClearInitResidual(ctx context.Context, timeout tim
 			}
 
 			// 检查状态机是否已经进入 Ready 状态
-			if e.adapter.State() == StateReady {
+			if e.adapter.NewState() == NewStateReady {
 				// 关键修复：清空残留数据后再返回
 				e.adapter.ClearInitResiduals()
 				logger.Debug("StreamEngine", "-", "简化初始化完成，状态机已就绪")
@@ -647,7 +647,7 @@ func (e *StreamEngine) waitAndClearInitResidual(ctx context.Context, timeout tim
 	}
 
 	// 超时也清理残留，不阻断执行
-	logger.Warn("StreamEngine", "-", "简化初始化超时，当前状态: %s", e.adapter.State())
+	logger.Warn("StreamEngine", "-", "简化初始化超时，当前状态: %s", e.adapter.NewState())
 	e.adapter.ClearInitResiduals()
 	return fmt.Errorf("等待初始化提示符超时")
 }

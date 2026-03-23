@@ -30,11 +30,6 @@ func TestAdapter_StateProjection(t *testing.T) {
 	if newState != NewStateInitAwaitPrompt && newState != NewStateInitAwaitWarmupPrompt && newState != NewStateReady {
 		t.Fatalf("新状态异常: %s", newState)
 	}
-
-	oldState := adapter.State()
-	if oldState != StateWaitInitialPrompt && oldState != StateWarmup && oldState != StateReady {
-		t.Fatalf("旧状态投影异常: %s", oldState)
-	}
 }
 
 func TestAdapter_OutputCollection(t *testing.T) {
@@ -142,8 +137,5 @@ func TestAdapter_MarkFailed(t *testing.T) {
 
 	if state := adapter.NewState(); state != NewStateFailed {
 		t.Fatalf("状态 = %s, 期望 Failed", state)
-	}
-	if oldState := adapter.State(); oldState != StateFailed {
-		t.Fatalf("旧状态投影 = %s, 期望 Failed", oldState)
 	}
 }
