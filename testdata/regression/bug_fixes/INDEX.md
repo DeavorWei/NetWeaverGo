@@ -7,7 +7,7 @@
 | 编号                                          | 问题名称       | 状态      | 描述                         |
 | --------------------------------------------- | -------------- | --------- | ---------------------------- |
 | [issue_001](issue_001_pagination_truncation/) | 分页截断问题   | ✅ 已修复 | 分页提示符后的内容被错误处理 |
-| [issue_002](issue_002_prompt_misalignment/)   | 提示符错位问题 | ⏳ 待实现 | 提示符被错误拼接到正文末尾   |
+| [issue_002](issue_002_prompt_misalignment/)   | 提示符错位问题 | ✅ 已修复 | 提示符与正文边界已正确分离   |
 | [issue_003](issue_003_overwrite_corruption/)  | 覆盖写错乱问题 | ✅ 已修复 | 回车覆盖写导致内容错乱       |
 | [issue_004](issue_004_pagination_overwrite/)  | 分页覆盖写问题 | ✅ 已修复 | 分页后的 ANSI 覆盖写序列处理 |
 
@@ -55,11 +55,11 @@ go test ./internal/terminal/... -v -run TestRegression
 ## 修复进度
 
 - [x] issue_001: 分页截断问题
-- [ ] issue_002: 提示符错位问题（待 SessionMachine 重构）
+- [x] issue_002: 提示符错位问题
 - [x] issue_003: 覆盖写错乱问题
 - [x] issue_004: 分页覆盖写问题
 
 ## 相关文档
 
-- [分页竞态修复方案](../../docs/pagination-race-fix-plan.md)
-- [分页竞态修复实施计划](../../docs/pagination-race-fix-implementation-plan.md)
+- [项目实施进度总览](../../../docs/project-implementation-progress.md)
+- [状态迁移表文档](../../../docs/state-transition-table.md)

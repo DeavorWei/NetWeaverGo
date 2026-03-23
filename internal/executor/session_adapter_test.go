@@ -6,406 +6,144 @@ import (
 	"github.com/NetWeaverGo/core/internal/matcher"
 )
 
-// ============================================================================
-// SessionAdapter 集成测试 (Phase 7.4)
-// ============================================================================
-// 验证适配器模式正确桥接新旧架构
-
-// TestAdapter_DefaultNewArchitecture 测试默认使用新架构
-func TestAdapter_DefaultNewArchitecture(t *testing.T) {
+func TestAdapter_UsesSingleArchitecture(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
-	// 默认应该使用新架构（Phase 8 清理后）
-	if !adapter.UseNewArchitecture() {
-		t.Error("默认应该使用新架构 (Detector+Reducer+Driver)")
+	if got := adapter.GetArchitectureMode(); got != "single (Replayer+Detector+Reducer)" {
+		t.Fatalf("架构模式 = %q, 期望 single (Replayer+Detector+Reducer)", got)
 	}
 
-	// 应该能正常处理输入
-	actions := adapter.Feed("hostname# ")
-	// 新架构处理输入，验证没有 panic
-	_ = actions
+	_ = adapter.FeedSessionActions("hostname# ")
+	if state := adapter.NewState(); state != NewStateInitAwaitPrompt && state != NewStateInitAwaitWarmupPrompt && state != NewStateReady {
+		t.Fatalf("初始化后状态异常: %s", state)
+	}
 }
 
-// TestAdapter_SwitchToLegacyArchitecture 测试切换到旧架构
-func TestAdapter_SwitchToLegacyArchitecture(t *testing.T) {
+func TestAdapter_StateProjection(t *testing.T) {
 	m := matcher.NewStreamMatcher()
-	adapter := NewSessionAdapter(80, []string{"display version"}, m)
+	adapter := NewSessionAdapter(80, []string{"display version", "display interface"}, m)
 
-	// 默认是新架构，切换到旧架构
-	adapter.SetUseNewArchitecture(false)
-	if adapter.UseNewArchitecture() {
-		t.Error("应该使用旧架构")
+	_ = adapter.FeedSessionActions("hostname# ")
+
+	newState := adapter.NewState()
+	if newState != NewStateInitAwaitPrompt && newState != NewStateInitAwaitWarmupPrompt && newState != NewStateReady {
+		t.Fatalf("新状态异常: %s", newState)
 	}
 
-	// 旧架构也应该能正常处理输入
-	actions := adapter.Feed("hostname# ")
-	_ = actions
+	oldState := adapter.State()
+	if oldState != StateWaitInitialPrompt && oldState != StateWarmup && oldState != StateReady {
+		t.Fatalf("旧状态投影异常: %s", oldState)
+	}
 }
 
-// TestAdapter_StateConsistency 测试新旧架构状态一致性
-func TestAdapter_StateConsistency(t *testing.T) {
-	commands := []string{"display version", "display interface"}
-
-	t.Run("新架构状态（默认）", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		// 默认使用新架构
-
-		// 模拟初始化流程
-		_ = adapter.Feed("hostname# ")
-
-		// 新架构状态应该通过 NewState 获取
-		newState := adapter.NewState()
-		if newState != NewStateInitAwaitPrompt && newState != NewStateReady {
-			t.Errorf("期望新架构状态 InitAwaitPrompt 或 Ready，得到 %s", newState)
-		}
-	})
-
-	t.Run("旧架构状态", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		adapter.SetUseNewArchitecture(false)
-
-		// 模拟初始化流程
-		_ = adapter.Feed("hostname# ")
-
-		// 检查状态
-		state := adapter.State()
-		if state != StateWarmup && state != StateReady {
-			t.Errorf("期望状态 Warmup 或 Ready，得到 %s", state)
-		}
-	})
-}
-
-// TestAdapter_CommandQueueConsistency 测试命令队列一致性
-func TestAdapter_CommandQueueConsistency(t *testing.T) {
-	commands := []string{"display version", "display interface", "display arp"}
-
-	t.Run("新架构命令队列（默认）", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		// 默认使用新架构
-
-		// 新架构命令队列应该一致
-		current := adapter.CurrentCommand()
-		if current == nil {
-			t.Log("当前无命令上下文")
-		}
-	})
-
-	t.Run("旧架构命令队列", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		adapter.SetUseNewArchitecture(false)
-
-		// 检查命令队列（通过 CurrentCommand）
-		current := adapter.CurrentCommand()
-		if current == nil {
-			t.Log("当前无命令上下文")
-		}
-	})
-}
-
-// TestAdapter_OutputConsistency 测试输出一致性
-func TestAdapter_OutputConsistency(t *testing.T) {
-	commands := []string{"display version"}
-
-	// 使用相同的输入测试新旧架构
+func TestAdapter_OutputCollection(t *testing.T) {
 	input := "\r\nhostname# display version\r\n" +
 		"Huawei Versatile Routing Platform Software\r\n" +
 		"VRP (R) software, Version 5.160\r\n" +
 		"hostname# "
 
-	t.Run("新架构输出（默认）", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		// 默认使用新架构
+	m := matcher.NewStreamMatcher()
+	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
-		// 初始化
-		_ = adapter.Feed("hostname# ")
+	_ = adapter.FeedSessionActions("hostname# ")
+	_ = adapter.FeedSessionActions(input)
 
-		// 处理输出
-		_ = adapter.Feed(input)
-
-		// 获取输出行
-		lines := adapter.Lines()
-		if len(lines) == 0 {
-			t.Log("新架构暂无提交的行")
-		}
-	})
-
-	t.Run("旧架构输出", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		adapter.SetUseNewArchitecture(false)
-
-		// 初始化
-		_ = adapter.Feed("hostname# ")
-
-		// 处理输出
-		_ = adapter.Feed(input)
-
-		// 获取输出行
-		lines := adapter.Lines()
-		if len(lines) == 0 {
-			t.Log("旧架构暂无提交的行")
-		}
-	})
+	if len(adapter.Lines()) == 0 && adapter.ActiveLine() == "" {
+		t.Fatal("期望至少有已提交行或活动行")
+	}
 }
 
-// TestAdapter_PaginationHandling 测试分页处理一致性
 func TestAdapter_PaginationHandling(t *testing.T) {
-	commands := []string{"display interface"}
-
-	// 模拟分页输出
 	input := "hostname# display interface\r\n" +
 		"GigabitEthernet0/0/1 current state: UP\r\n" +
 		"GigabitEthernet0/0/2 current state: DOWN\r\n" +
 		"  ---- More ----"
 
-	t.Run("新架构分页检测（默认）", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		// 默认使用新架构
+	m := matcher.NewStreamMatcher()
+	adapter := NewSessionAdapter(80, []string{"display interface"}, m)
 
-		// 初始化
-		_ = adapter.Feed("hostname# ")
+	_ = adapter.FeedSessionActions("hostname# ")
+	actions := adapter.FeedSessionActions(input)
 
-		// 处理分页输出
-		actions := adapter.Feed(input)
-
-		// 新架构也应该检测到分页
-		hasPagerContinue := false
-		for _, action := range actions {
-			if action == ActionSendSpace {
-				hasPagerContinue = true
-				break
-			}
+	hasPagerContinue := false
+	for _, action := range actions {
+		if _, ok := action.(ActSendPagerContinue); ok {
+			hasPagerContinue = true
+			break
 		}
-		if !hasPagerContinue {
-			t.Log("新架构未检测到分页（可能需要更多输入）")
-		}
-	})
-
-	t.Run("旧架构分页检测", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		adapter.SetUseNewArchitecture(false)
-
-		// 初始化
-		_ = adapter.Feed("hostname# ")
-
-		// 处理分页输出
-		actions := adapter.Feed(input)
-
-		// 应该检测到分页并发送继续动作
-		hasPagerContinue := false
-		for _, action := range actions {
-			if action == ActionSendSpace {
-				hasPagerContinue = true
-				break
-			}
-		}
-		if !hasPagerContinue {
-			t.Log("新架构未检测到分页（可能需要更多输入）")
-		}
-	})
+	}
+	if !hasPagerContinue {
+		t.Log("未检测到分页动作，当前输入可能不足以触发该路径")
+	}
 }
 
-// TestAdapter_ErrorHandling 测试错误处理一致性
 func TestAdapter_ErrorHandling(t *testing.T) {
-	commands := []string{"display version"}
-
-	t.Run("新架构错误处理（默认）", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		// 默认使用新架构
-
-		// 初始化
-		_ = adapter.Feed("hostname# ")
-
-		// 模拟错误输出
-		_ = adapter.Feed("  Error: Unrecognized command\r\nhostname# ")
-
-		// 检查状态
-		state := adapter.NewState()
-		t.Logf("新架构错误后状态: %s", state)
-	})
-
-	t.Run("旧架构错误处理", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		adapter.SetUseNewArchitecture(false)
-
-		// 初始化
-		_ = adapter.Feed("hostname# ")
-
-		// 模拟错误输出
-		_ = adapter.Feed("  Error: Unrecognized command\r\nhostname# ")
-
-		// 检查状态
-		state := adapter.State()
-		t.Logf("旧架构错误后状态: %s", state)
-	})
-}
-
-// TestAdapter_MultipleCommands 测试多命令执行
-func TestAdapter_MultipleCommands(t *testing.T) {
-	commands := []string{"display version", "display interface", "display arp"}
-
-	t.Run("新架构多命令（默认）", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		// 默认使用新架构
-
-		// 初始化
-		_ = adapter.Feed("hostname# ")
-
-		// 检查结果列表
-		results := adapter.Results()
-		t.Logf("初始结果数: %d", len(results))
-
-		// 模拟第一个命令完成
-		_ = adapter.Feed("display version\r\noutput\r\nhostname# ")
-
-		// 检查结果
-		results = adapter.Results()
-		t.Logf("执行后结果数: %d", len(results))
-	})
-
-	t.Run("旧架构多命令", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		adapter.SetUseNewArchitecture(false)
-
-		// 初始化
-		_ = adapter.Feed("hostname# ")
-
-		// 检查结果列表
-		results := adapter.Results()
-		t.Logf("初始结果数: %d", len(results))
-
-		// 模拟第一个命令完成
-		_ = adapter.Feed("display version\r\noutput\r\nhostname# ")
-
-		// 检查结果
-		results = adapter.Results()
-		t.Logf("执行后结果数: %d", len(results))
-	})
-}
-
-// TestAdapter_ArchitectureMode 测试架构模式字符串
-func TestAdapter_ArchitectureMode(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
-	// 默认新架构（Phase 8 清理后）
-	mode := adapter.GetArchitectureMode()
-	if mode != "new (Detector+Reducer+Driver)" {
-		t.Errorf("期望 'new (Detector+Reducer+Driver)'，得到 '%s'", mode)
-	}
+	_ = adapter.FeedSessionActions("hostname# ")
+	_ = adapter.FeedSessionActions("  Error: Unrecognized command\r\nhostname# ")
 
-	// 切换到旧架构
-	adapter.SetUseNewArchitecture(false)
-	mode = adapter.GetArchitectureMode()
-	if mode != "legacy (SessionMachine)" {
-		t.Errorf("期望 'legacy (SessionMachine)'，得到 '%s'", mode)
+	state := adapter.NewState()
+	if state == NewStateFailed {
+		t.Fatalf("普通命令错误不应直接进入 Failed: %s", state)
 	}
 }
 
-// TestAdapter_Stats 测试统计信息
+func TestAdapter_MultipleCommands(t *testing.T) {
+	m := matcher.NewStreamMatcher()
+	adapter := NewSessionAdapter(80, []string{"display version", "display interface", "display arp"}, m)
+
+	_ = adapter.FeedSessionActions("hostname# ")
+	initialCount := len(adapter.Results())
+
+	_ = adapter.FeedSessionActions("display version\r\noutput\r\nhostname# ")
+
+	if len(adapter.Results()) < initialCount {
+		t.Fatalf("结果数不应倒退: before=%d after=%d", initialCount, len(adapter.Results()))
+	}
+}
+
 func TestAdapter_Stats(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
 	stats := adapter.GetStats()
 	if stats == nil {
-		t.Error("期望非空统计信息")
-		return
+		t.Fatal("期望非空统计信息")
 	}
-
-	// 检查必要字段
 	if _, ok := stats["mode"]; !ok {
-		t.Error("统计信息缺少 'mode' 字段")
+		t.Fatal("统计信息缺少 mode")
 	}
-	if _, ok := stats["useNewArchitecture"]; !ok {
-		t.Error("统计信息缺少 'useNewArchitecture' 字段")
+	if _, ok := stats["state"]; !ok {
+		t.Fatal("统计信息缺少 state")
+	}
+	if _, ok := stats["nextIndex"]; !ok {
+		t.Fatal("统计信息缺少 nextIndex")
 	}
 }
 
-// TestAdapter_ClearInitResiduals 测试清空初始化残留
 func TestAdapter_ClearInitResiduals(t *testing.T) {
-	commands := []string{"display version"}
+	m := matcher.NewStreamMatcher()
+	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
-	t.Run("旧架构清空残留", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		adapter.SetUseNewArchitecture(false)
-
-		// 初始化并处理一些输入
-		_ = adapter.Feed("hostname# ")
-		_ = adapter.Feed("some output\r\n")
-
-		// 清空残留
-		adapter.ClearInitResiduals()
-
-		// 验证清空成功（无错误即可）
-	})
-
-	t.Run("新架构清空残留", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		adapter.SetUseNewArchitecture(true)
-
-		// 初始化并处理一些输入
-		_ = adapter.Feed("hostname# ")
-		_ = adapter.Feed("some output\r\n")
-
-		// 清空残留
-		adapter.ClearInitResiduals()
-
-		// 验证清空成功（无错误即可）
-	})
+	_ = adapter.FeedSessionActions("hostname# ")
+	_ = adapter.FeedSessionActions("some output\r\n")
+	adapter.ClearInitResiduals()
 }
 
-// TestAdapter_MarkFailed 测试标记失败
 func TestAdapter_MarkFailed(t *testing.T) {
-	commands := []string{"display version"}
+	m := matcher.NewStreamMatcher()
+	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
-	t.Run("旧架构标记失败", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		adapter.SetUseNewArchitecture(false)
+	_ = adapter.FeedSessionActions("hostname# ")
+	adapter.MarkFailed("test failure")
 
-		// 初始化
-		_ = adapter.Feed("hostname# ")
-
-		// 标记失败
-		adapter.MarkFailed("test failure")
-
-		// 检查状态
-		state := adapter.State()
-		if state != StateFailed {
-			t.Errorf("期望状态 Failed，得到 %s", state)
-		}
-	})
-
-	t.Run("新架构标记失败", func(t *testing.T) {
-		m := matcher.NewStreamMatcher()
-		adapter := NewSessionAdapter(80, commands, m)
-		adapter.SetUseNewArchitecture(true)
-
-		// 初始化
-		_ = adapter.Feed("hostname# ")
-
-		// 标记失败
-		adapter.MarkFailed("test failure")
-
-		// 检查状态
-		state := adapter.NewState()
-		if state != NewStateFailed {
-			t.Errorf("期望状态 Failed，得到 %s", state)
-		}
-	})
+	if state := adapter.NewState(); state != NewStateFailed {
+		t.Fatalf("状态 = %s, 期望 Failed", state)
+	}
+	if oldState := adapter.State(); oldState != StateFailed {
+		t.Fatalf("旧状态投影 = %s, 期望 Failed", oldState)
+	}
 }

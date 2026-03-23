@@ -17,20 +17,12 @@ const (
 	// 预热完成，可以发送下一条命令
 	StateReady
 
-	// StateSendCommand 发送命令状态
-	// 正在发送命令（瞬时状态）
-	StateSendCommand
-
 	// StateCollecting 收集输出状态
 	// 命令已发送，正在收集输出
 	StateCollecting
 
-	// StateHandlingPager 处理分页状态
-	// 检测到分页符，准备发送空格继续
-	StateHandlingPager
-
 	// StateWaitingFinalPrompt 等待最终提示符状态
-	// 检测到结束提示符候选，需要二次确认
+	// 分页后或提示符候选场景，需要二次确认
 	StateWaitingFinalPrompt
 
 	// StateCompleted 完成状态
@@ -40,10 +32,6 @@ const (
 	// StateFailed 失败状态
 	// 执行失败（超时/异常/错误）
 	StateFailed
-
-	// StateHandlingError 错误处理状态
-	// 检测到错误规则命中，等待外部决策（中止/继续）
-	StateHandlingError
 )
 
 // String 返回状态的字符串表示
@@ -55,20 +43,14 @@ func (s SessionState) String() string {
 		return "Warmup"
 	case StateReady:
 		return "Ready"
-	case StateSendCommand:
-		return "SendCommand"
 	case StateCollecting:
 		return "Collecting"
-	case StateHandlingPager:
-		return "HandlingPager"
 	case StateWaitingFinalPrompt:
 		return "WaitingFinalPrompt"
 	case StateCompleted:
 		return "Completed"
 	case StateFailed:
 		return "Failed"
-	case StateHandlingError:
-		return "HandlingError"
 	default:
 		return "Unknown"
 	}

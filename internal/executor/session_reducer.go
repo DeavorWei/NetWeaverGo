@@ -166,13 +166,6 @@ func (r *SessionReducer) handlePagerSeen(e EvPagerSeen) []SessionAction {
 func (r *SessionReducer) handleActivePromptSeen(e EvActivePromptSeen) []SessionAction {
 	switch r.state {
 	case NewStateRunning:
-		// 检查是否有分页待续
-		if r.ctx.Current != nil && r.ctx.Current.IsPaginationPending() {
-			r.state = NewStateAwaitFinalPromptConfirm
-			logger.Debug("SessionReducer", "-", "分页后检测到提示符，进入等待确认")
-			return nil
-		}
-
 		// 命令完成
 		return r.completeCurrentCommand()
 

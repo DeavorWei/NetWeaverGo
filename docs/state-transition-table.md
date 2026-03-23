@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档记录 SessionMachine 的状态迁移规则，用于验证重构的正确性。
+本文档记录当前会话状态模型及其向旧状态枚举的投影规则，用于验证重构后的单一实现。
 
 ---
 
@@ -13,11 +13,8 @@
 | `StateWaitInitialPrompt`  | 等待初始提示符     | 稳态                   |
 | `StateWarmup`             | 预热状态           | 稳态                   |
 | `StateReady`              | 就绪状态           | 稳态                   |
-| `StateSendCommand`        | 发送命令状态       | **瞬时状态（待删除）** |
 | `StateCollecting`         | 收集输出状态       | 稳态                   |
-| `StateHandlingPager`      | 处理分页状态       | **待删除**             |
 | `StateWaitingFinalPrompt` | 等待最终提示符状态 | 稳态                   |
-| `StateHandlingError`      | 错误处理状态       | **待删除**             |
 | `StateCompleted`          | 完成状态           | 终态                   |
 | `StateFailed`             | 失败状态           | 终态                   |
 
@@ -188,10 +185,10 @@ if matcher.IsPromptStrict(line) {
 
 | 旧 Flag                     | 新状态/机制                                        |
 | --------------------------- | -------------------------------------------------- |
-| `afterPager`                | `NewStateAwaitPagerContinueAck`                    |
-| `errorDecided`              | `NewStateSuspended` + `EvUserContinue/EvUserAbort` |
-| `errorContinue`             | `EvUserContinue` 事件                              |
-| `current.PaginationPending` | `NewStateAwaitPagerContinueAck` 状态               |
+| `afterPager`                | 已删除，分页后确认改由阶段状态与分页计数表达       |
+| `errorDecided`              | 已删除，错误决策改由外部动作直接驱动               |
+| `errorContinue`             | 已删除，继续执行不再通过挂起 flag 表达             |
+| `current.PaginationPending` | 已删除，改由状态机阶段表达                         |
 
 ---
 
@@ -247,11 +244,11 @@ if matcher.IsPromptStrict(line) {
 
 ## 重构检查清单
 
-- [ ] 删除 `StateSendCommand` 状态
-- [ ] 删除 `StateHandlingPager` 状态
-- [ ] 删除 `StateHandlingError` 状态
-- [ ] 删除 `afterPager` flag
-- [ ] 删除 `errorDecided`/`errorContinue` flag
-- [ ] 删除 `current.PaginationPending` 字段
-- [ ] 更新所有状态迁移代码
-- [ ] 所有测试通过
+- [x] 删除 `StateSendCommand` 状态
+- [x] 删除 `StateHandlingPager` 状态
+- [x] 删除 `StateHandlingError` 状态
+- [x] 删除 `afterPager` flag
+- [x] 删除 `errorDecided`/`errorContinue` flag
+- [x] 删除 `current.PaginationPending` 字段
+- [x] 更新所有状态迁移代码
+- [x] 所有测试通过

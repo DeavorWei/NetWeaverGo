@@ -17,6 +17,13 @@ type Initializer struct {
 	matcher *matcher.StreamMatcher
 }
 
+// PromptTracker 初始化阶段的最小提示符跟踪接口
+type PromptTracker interface {
+	TrackChunk(chunk string)
+	ActiveLine() string
+	Lines() []string
+}
+
 // NewInitializer 创建初始化器
 func NewInitializer(profile *config.DeviceProfile) *Initializer {
 	if profile == nil {
@@ -83,8 +90,8 @@ type InitResult struct {
 // 3. 再次等待 prompt
 // 4. 发送禁分页命令
 // 5. 等待 prompt 恢复
-func (i *Initializer) Run(ctx context.Context, client *sshutil.SSHClient, machine *SessionMachine) error {
-	result := i.RunWithResult(ctx, client, machine)
+func (i *Initializer) Run(ctx context.Context, client *sshutil.SSHClient, tracker PromptTracker) error {
+	result := i.RunWithResult(ctx, client, tracker)
 	if !result.Success {
 		return fmt.Errorf("初始化失败: %s", result.ErrorMessage)
 	}
@@ -92,7 +99,7 @@ func (i *Initializer) Run(ctx context.Context, client *sshutil.SSHClient, machin
 }
 
 // RunWithResult 执行会话初始化流程并返回详细结果
-func (i *Initializer) RunWithResult(ctx context.Context, client *sshutil.SSHClient, machine *SessionMachine) *InitResult {
+func (i *Initializer) RunWithResult(ctx context.Context, client *sshutil.SSHClient, tracker PromptTracker) *InitResult {
 	start := time.Now()
 	result := &InitResult{
 		Success: false,
@@ -106,7 +113,7 @@ func (i *Initializer) RunWithResult(ctx context.Context, client *sshutil.SSHClie
 
 	// 步骤 1: 等待首个稳定 prompt
 	logger.Verbose("Initializer", client.IP, "步骤1: 等待首个提示符...")
-	if !i.waitForPrompt(ctx, client, machine, promptTimeout) {
+	if !i.waitForPrompt(ctx, client, tracker, promptTimeout) {
 		result.ErrorMessage = "等待首个提示符超时"
 		result.Duration = time.Since(start)
 		return result
@@ -124,7 +131,7 @@ func (i *Initializer) RunWithResult(ctx context.Context, client *sshutil.SSHClie
 
 	// 步骤 3: 再次等待 prompt
 	logger.Verbose("Initializer", client.IP, "步骤3: 等待提示符恢复...")
-	if !i.waitForPrompt(ctx, client, machine, promptTimeout) {
+	if !i.waitForPrompt(ctx, client, tracker, promptTimeout) {
 		result.ErrorMessage = "预热后等待提示符超时"
 		result.Duration = time.Since(start)
 		return result
@@ -142,7 +149,7 @@ func (i *Initializer) RunWithResult(ctx context.Context, client *sshutil.SSHClie
 			}
 
 			// 等待命令执行完成
-			if !i.waitForPrompt(ctx, client, machine, promptTimeout) {
+			if !i.waitForPrompt(ctx, client, tracker, promptTimeout) {
 				result.ErrorMessage = fmt.Sprintf("禁分页命令 '%s' 后等待提示符超时", cmd)
 				result.Duration = time.Since(start)
 				return result
@@ -164,7 +171,7 @@ func (i *Initializer) RunWithResult(ctx context.Context, client *sshutil.SSHClie
 				return result
 			}
 
-			if !i.waitForPrompt(ctx, client, machine, promptTimeout) {
+			if !i.waitForPrompt(ctx, client, tracker, promptTimeout) {
 				result.ErrorMessage = fmt.Sprintf("额外命令 '%s' 后等待提示符超时", cmd)
 				result.Duration = time.Since(start)
 				return result
@@ -179,7 +186,7 @@ func (i *Initializer) RunWithResult(ctx context.Context, client *sshutil.SSHClie
 }
 
 // waitForPrompt 等待提示符出现
-func (i *Initializer) waitForPrompt(ctx context.Context, client *sshutil.SSHClient, machine *SessionMachine, timeout time.Duration) bool {
+func (i *Initializer) waitForPrompt(ctx context.Context, client *sshutil.SSHClient, tracker PromptTracker, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 
 	// 创建读取缓冲区
@@ -217,19 +224,19 @@ func (i *Initializer) waitForPrompt(ctx context.Context, client *sshutil.SSHClie
 		if n > 0 {
 			chunk := string(buf[:n])
 
-			// 使用状态机处理
-			machine.Feed(chunk)
+			// 使用提示符跟踪器处理
+			tracker.TrackChunk(chunk)
 
 			// 【关键修复】不再对原始 chunk 直接 IsPrompt(chunk)
 			// 只看规范化后的活动行/最后一行，使用严格判定
-			activeLine := machine.ActiveLine()
+			activeLine := tracker.ActiveLine()
 			if activeLine != "" && i.matcher.IsPromptStrict(activeLine) {
 				logger.Debug("Initializer", "-", "严格模式检测到提示符（活动行）: '%s'", activeLine)
 				return true
 			}
 
 			// 也检查已提交的最后一行
-			lines := machine.Lines()
+			lines := tracker.Lines()
 			if len(lines) > 0 {
 				lastLine := lines[len(lines)-1]
 				if i.matcher.IsPromptStrict(lastLine) {
@@ -244,17 +251,22 @@ func (i *Initializer) waitForPrompt(ctx context.Context, client *sshutil.SSHClie
 }
 
 // QuickInit 快速初始化（仅等待提示符，不发送禁分页命令）
-func (i *Initializer) QuickInit(ctx context.Context, client *sshutil.SSHClient, machine *SessionMachine) error {
+func (i *Initializer) QuickInit(ctx context.Context, client *sshutil.SSHClient, tracker PromptTracker) error {
 	promptTimeout := time.Duration(i.profile.Init.PromptTimeoutSec) * time.Second
 	if promptTimeout == 0 {
 		promptTimeout = 30 * time.Second
 	}
 
-	if !i.waitForPrompt(ctx, client, machine, promptTimeout) {
+	if !i.waitForPrompt(ctx, client, tracker, promptTimeout) {
 		return fmt.Errorf("等待提示符超时")
 	}
 
 	return nil
+}
+
+// TrackChunk 将输入喂给适配器，仅用于初始化阶段的提示符跟踪
+func (a *SessionAdapter) TrackChunk(chunk string) {
+	a.FeedSessionActions(chunk)
 }
 
 // SendPagerContinue 发送分页续页字节
