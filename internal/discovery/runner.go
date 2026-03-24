@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -124,18 +125,23 @@ func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (s
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	logger.Info("Discovery", "-", "开始创建发现任务: deviceIDs=%d groupNames=%d vendor=%s", len(req.DeviceIDs), len(req.GroupNames), strings.TrimSpace(req.Vendor))
+
 	// 检查是否已有任务在运行
 	if r.runningTask != "" {
+		logger.Warn("Discovery", "-", "发现任务启动被拒绝，已有运行任务: %s", r.runningTask)
 		return "", fmt.Errorf("已有发现任务正在运行: %s", r.runningTask)
 	}
 
 	// 获取设备列表
 	devices, err := r.getDevicesForDiscovery(req)
 	if err != nil {
+		logger.Error("Discovery", "-", "获取设备列表失败: %v", err)
 		return "", fmt.Errorf("获取设备列表失败: %v", err)
 	}
 
 	if len(devices) == 0 {
+		logger.Warn("Discovery", "-", "没有可用设备: vendor=%s deviceIDs=%v groupNames=%v", normalizeTaskVendor(req.Vendor), req.DeviceIDs, req.GroupNames)
 		return "", fmt.Errorf("没有可用的设备进行发现")
 	}
 
@@ -160,6 +166,7 @@ func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (s
 
 	// 保存任务到数据库
 	if err := r.db.Create(&task).Error; err != nil {
+		logger.Error("Discovery", "-", "创建任务记录失败: %v", err)
 		return "", fmt.Errorf("创建任务记录失败: %v", err)
 	}
 
@@ -180,6 +187,7 @@ func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (s
 	}
 
 	if err := r.db.Create(&discoveryDevices).Error; err != nil {
+		logger.Error("Discovery", taskID, "创建设备发现记录失败: %v", err)
 		return "", fmt.Errorf("创建设备发现记录失败: %v", err)
 	}
 
@@ -201,6 +209,7 @@ func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (s
 	}
 
 	if err := r.db.Create(&rawOutputs).Error; err != nil {
+		logger.Error("Discovery", taskID, "创建原始输出记录失败: %v", err)
 		return "", fmt.Errorf("创建原始输出记录失败: %v", err)
 	}
 
@@ -221,6 +230,7 @@ func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (s
 
 	// 启动后台任务执行
 	go r.runDiscovery(r.ctx, taskID, devices, req.Vendor, task.TimeoutSec, task.MaxWorkers)
+	logger.Info("Discovery", taskID, "发现任务已启动: devices=%d workers=%d timeout=%ds", len(devices), task.MaxWorkers, task.TimeoutSec)
 
 	return taskID, nil
 }
@@ -699,15 +709,24 @@ func (r *Runner) handleDiscoveryReport(taskID string, device models.DeviceInfo, 
 	}
 
 	// 发送完成事件
+	eventType := "error"
+	if deviceStatus == "success" || deviceStatus == "partial" {
+		eventType = "success"
+	}
 	r.emitEvent(DiscoveryEvent{
 		TaskID:    taskID,
 		DeviceIP:  device.IP,
-		Type:      map[bool]string{true: "success", false: "error"}[deviceStatus == "success"],
+		Type:      eventType,
 		Message:   fmt.Sprintf("设备发现完成: status=%s success=%d failed=%d", deviceStatus, cmdSuccess, cmdFailed),
 		Timestamp: time.Now().UnixMilli(),
 	})
 
 	if deviceStatus == "success" {
+		return nil
+	}
+	if deviceStatus == "partial" {
+		// partial 代表设备有部分命令失败但仍获取到有效数据，按非致命处理，避免任务整体失败。
+		logger.Warn("Discovery", device.IP, "设备发现部分成功，继续任务: success=%d failed=%d", cmdSuccess, cmdFailed)
 		return nil
 	}
 	if execErr != nil {
@@ -822,38 +841,76 @@ func (r *Runner) getDevicesForDiscovery(req models.StartDiscoveryRequest) ([]mod
 	var devices []models.DeviceInfo
 	var rows []DeviceAssetRow
 
+	logger.Debug("Discovery", "-", "设备筛选入参: deviceIDs=%v groupNames=%v vendor=%s", req.DeviceIDs, req.GroupNames, req.Vendor)
+
 	if len(req.DeviceIDs) > 0 {
-		// 按设备ID查询
-		if err := r.db.Table("device_assets").Where("id IN ?", req.DeviceIDs).Find(&rows).Error; err != nil {
+		// 按设备ID查询（显式转换为整型，避免字符串ID在不同数据库驱动下匹配不稳定）
+		ids := make([]uint, 0, len(req.DeviceIDs))
+		invalid := make([]string, 0)
+		for _, raw := range req.DeviceIDs {
+			value := strings.TrimSpace(raw)
+			if value == "" {
+				continue
+			}
+			num, err := strconv.ParseUint(value, 10, 64)
+			if err != nil {
+				invalid = append(invalid, raw)
+				continue
+			}
+			ids = append(ids, uint(num))
+		}
+		if len(invalid) > 0 {
+			logger.Warn("Discovery", "-", "发现任务收到非法设备ID: %v", invalid)
+		}
+		if len(ids) == 0 {
+			logger.Warn("Discovery", "-", "发现任务设备ID列表为空或全部非法: raw=%v", req.DeviceIDs)
+			return nil, nil
+		}
+		if err := r.db.Table("device_assets").Where("id IN ?", ids).Find(&rows).Error; err != nil {
 			return nil, err
 		}
+		logger.Debug("Discovery", "-", "按设备ID查询命中: requested=%d hit=%d ids=%v", len(ids), len(rows), ids)
 	} else if len(req.GroupNames) > 0 {
 		// 按设备组查询
 		if err := r.db.Table("device_assets").Where("group_name IN ?", req.GroupNames).Find(&rows).Error; err != nil {
 			return nil, err
 		}
+		logger.Debug("Discovery", "-", "按设备组查询命中: groups=%v hit=%d", req.GroupNames, len(rows))
 	} else {
 		// 获取所有设备
 		if err := r.db.Table("device_assets").Find(&rows).Error; err != nil {
 			return nil, err
 		}
+		logger.Debug("Discovery", "-", "按全量设备查询命中: hit=%d", len(rows))
 	}
 
 	requestedVendor := normalizeTaskVendor(req.Vendor)
+	filteredByVendor := 0
+	filteredByIP := 0
 
 	// 转换为 DeviceInfo
 	for _, row := range rows {
 		// 按厂商过滤
 		if requestedVendor != "auto" && IsVendorSupported(requestedVendor) {
-			if strings.ToLower(strings.TrimSpace(row.Vendor)) != requestedVendor {
+			assetVendor := strings.ToLower(strings.TrimSpace(row.Vendor))
+			// 设备厂商未知时，不应被硬过滤掉；允许继续执行并在采集阶段自动识别。
+			if assetVendor != "" && assetVendor != requestedVendor {
+				filteredByVendor++
 				continue
 			}
 		}
 		if strings.TrimSpace(row.IP) == "" {
+			filteredByIP++
 			continue
 		}
 		devices = append(devices, row.ToDeviceInfo())
 	}
+	acceptedIPs := make([]string, 0, len(devices))
+	for _, d := range devices {
+		acceptedIPs = append(acceptedIPs, fmt.Sprintf("%d:%s", d.ID, d.IP))
+	}
+	logger.Info("Discovery", "-", "设备筛选结果: candidate=%d accepted=%d vendorFiltered=%d emptyIPFiltered=%d requestedVendor=%s", len(rows), len(devices), filteredByVendor, filteredByIP, requestedVendor)
+	logger.Verbose("Discovery", "-", "设备筛选明细: acceptedDevices=%v", acceptedIPs)
 
 	return devices, nil
 }
@@ -982,6 +1039,7 @@ func (r *Runner) GetTaskStatus(taskID string) (*models.DiscoveryTaskView, error)
 	view := &models.DiscoveryTaskView{
 		ID:           task.ID,
 		Name:         task.Name,
+		TaskGroupID:  task.TaskGroupID,
 		Status:       task.Status,
 		TotalCount:   task.TotalCount,
 		SuccessCount: task.SuccessCount,
@@ -1012,6 +1070,7 @@ func (r *Runner) ListTasks(limit int) ([]models.DiscoveryTaskView, error) {
 		views[i] = models.DiscoveryTaskView{
 			ID:           t.ID,
 			Name:         t.Name,
+			TaskGroupID:  t.TaskGroupID,
 			Status:       t.Status,
 			TotalCount:   t.TotalCount,
 			SuccessCount: t.SuccessCount,

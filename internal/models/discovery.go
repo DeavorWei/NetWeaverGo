@@ -24,6 +24,7 @@ const (
 type DiscoveryTask struct {
 	ID             string             `json:"id" gorm:"primaryKey"`
 	Name           string             `json:"name"`
+	TaskGroupID    *uint              `json:"taskGroupId,omitempty" gorm:"index"`
 	Status         string             `json:"status"`         // 终态：completed / failed / cancelled
 	Phase          DiscoveryTaskPhase `json:"phase"`          // 当前阶段
 	PhaseStartedAt *time.Time         `json:"phaseStartedAt"` // 当前阶段开始时间
@@ -143,6 +144,7 @@ type TaskStartResponse struct {
 type DiscoveryTaskView struct {
 	ID           string     `json:"id"`
 	Name         string     `json:"name"`
+	TaskGroupID  *uint      `json:"taskGroupId,omitempty"`
 	Status       string     `json:"status"`
 	TotalCount   int        `json:"totalCount"`
 	SuccessCount int        `json:"successCount"`

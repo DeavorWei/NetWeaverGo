@@ -6,8 +6,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/discovery"
 	"github.com/NetWeaverGo/core/internal/engine"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
@@ -18,8 +20,10 @@ import (
 
 // TaskGroupService 任务组管理服务 - 负责任务组的增删改查和执行
 type TaskGroupService struct {
-	wailsApp *application.App
-	repo     repository.DeviceRepository
+	wailsApp         *application.App
+	repo             repository.DeviceRepository
+	discoveryService *DiscoveryService
+	topologyService  *TopologyService
 }
 
 // NewTaskGroupService 创建任务组服务实例
@@ -29,11 +33,30 @@ func NewTaskGroupService() *TaskGroupService {
 	}
 }
 
+// NewTaskGroupServiceWithDeps 使用依赖创建任务组服务实例
+func NewTaskGroupServiceWithDeps(
+	repo repository.DeviceRepository,
+	discoveryService *DiscoveryService,
+	topologyService *TopologyService,
+) *TaskGroupService {
+	return &TaskGroupService{
+		repo:             repo,
+		discoveryService: discoveryService,
+		topologyService:  topologyService,
+	}
+}
+
 // NewTaskGroupServiceWithRepo 使用指定 Repository 创建任务组服务实例（用于测试）
 func NewTaskGroupServiceWithRepo(repo repository.DeviceRepository) *TaskGroupService {
 	return &TaskGroupService{
 		repo: repo,
 	}
+}
+
+// SetTopologyDeps 设置拓扑采集相关依赖
+func (s *TaskGroupService) SetTopologyDeps(discoveryService *DiscoveryService, topologyService *TopologyService) {
+	s.discoveryService = discoveryService
+	s.topologyService = topologyService
 }
 
 // ServiceStartup Wails 服务启动生命周期钩子
@@ -86,6 +109,9 @@ func (s *TaskGroupService) UpdateTaskGroup(id uint, group models.TaskGroup) (*mo
 	group.CreatedAt = existing.CreatedAt
 	group.Status = existing.Status
 	group.Mode = existing.Mode
+	group.TaskType = existing.TaskType
+	group.TopologyVendor = existing.TopologyVendor
+	group.AutoBuildTopology = existing.AutoBuildTopology
 
 	return config.UpdateTaskGroup(id, group)
 }
@@ -105,45 +131,56 @@ func (s *TaskGroupService) ResolveSuspend(sessionIDOrIP string, action string) {
 func (s *TaskGroupService) StartTaskGroup(id uint) error {
 	taskGroup, err := config.GetTaskGroup(id)
 	if err != nil {
+		logger.Error("TaskGroup", fmt.Sprintf("%d", id), "获取任务组失败: %v", err)
 		return fmt.Errorf("获取任务组失败: %v", err)
 	}
+	logger.Info("TaskGroup", fmt.Sprintf("%d", id), "开始执行任务组: name=%s type=%s mode=%s status=%s", taskGroup.Name, normalizeTaskType(taskGroup.TaskType), taskGroup.Mode, taskGroup.Status)
 
 	if err := config.UpdateTaskGroupStatus(id, "running"); err != nil {
+		logger.Error("TaskGroup", fmt.Sprintf("%d", id), "更新任务组状态为running失败: %v", err)
 		return err
-	}
-
-	settings, _, err := config.LoadSettings()
-	if err != nil {
-		config.UpdateTaskGroupStatus(id, "failed")
-		return err
-	}
-
-	allAssets, err := s.repo.FindAll()
-	if err != nil {
-		config.UpdateTaskGroupStatus(id, "failed")
-		return err
-	}
-
-	assetMap := make(map[uint]models.DeviceAsset, len(allAssets))
-	for _, asset := range allAssets {
-		assetMap[asset.ID] = asset
 	}
 
 	var finalStatus string
-	switch taskGroup.Mode {
-	case "group":
-		finalStatus, err = s.executeModeA(taskGroup, assetMap, settings)
-	case "binding":
-		finalStatus, err = s.executeModeB(taskGroup, assetMap, settings)
+	taskType := normalizeTaskType(taskGroup.TaskType)
+	switch taskType {
+	case "topology":
+		finalStatus, err = s.executeTopologyTask(taskGroup)
 	default:
-		err = fmt.Errorf("未知的任务组模式: %s", taskGroup.Mode)
+		settings, _, settingsErr := config.LoadSettings()
+		if settingsErr != nil {
+			config.UpdateTaskGroupStatus(id, "failed")
+			return settingsErr
+		}
+
+		allAssets, assetsErr := s.repo.FindAll()
+		if assetsErr != nil {
+			config.UpdateTaskGroupStatus(id, "failed")
+			return assetsErr
+		}
+
+		assetMap := make(map[uint]models.DeviceAsset, len(allAssets))
+		for _, asset := range allAssets {
+			assetMap[asset.ID] = asset
+		}
+
+		switch taskGroup.Mode {
+		case "group":
+			finalStatus, err = s.executeModeA(taskGroup, assetMap, settings)
+		case "binding":
+			finalStatus, err = s.executeModeB(taskGroup, assetMap, settings)
+		default:
+			err = fmt.Errorf("未知的任务组模式: %s", taskGroup.Mode)
+		}
 	}
 
 	if err != nil {
+		logger.Error("TaskGroup", fmt.Sprintf("%d", id), "任务组执行失败: %v", err)
 		config.UpdateTaskGroupStatus(id, "failed")
 		return err
 	}
 
+	logger.Info("TaskGroup", fmt.Sprintf("%d", id), "任务组执行完成: finalStatus=%s", finalStatus)
 	return config.UpdateTaskGroupStatus(id, finalStatus)
 }
 
@@ -329,6 +366,131 @@ func (s *TaskGroupService) executeModeB(
 	}
 
 	return deriveTaskGroupStatus(session.Tracker()), nil
+}
+
+// executeTopologyTask 执行拓扑采集任务
+func (s *TaskGroupService) executeTopologyTask(taskGroup *models.TaskGroup) (string, error) {
+	if s.discoveryService == nil {
+		logger.Error("TaskGroup", fmt.Sprintf("%d", taskGroup.ID), "拓扑采集依赖未初始化: discoveryService")
+		return "", fmt.Errorf("拓扑采集依赖未初始化: discoveryService")
+	}
+
+	deviceIDs := collectUniqueDeviceIDs(taskGroup.Items)
+	if len(deviceIDs) == 0 {
+		logger.Warn("TaskGroup", fmt.Sprintf("%d", taskGroup.ID), "拓扑采集任务设备为空")
+		return "", fmt.Errorf("拓扑采集任务中没有可执行设备")
+	}
+	logger.Info("TaskGroup", fmt.Sprintf("%d", taskGroup.ID), "准备启动拓扑采集: devices=%v vendor=%s autoBuild=%v", deviceIDs, strings.TrimSpace(taskGroup.TopologyVendor), taskGroup.AutoBuildTopology)
+
+	req := discovery.StartDiscoveryRequest{
+		DeviceIDs:  make([]string, 0, len(deviceIDs)),
+		Vendor:     strings.TrimSpace(taskGroup.TopologyVendor),
+		MaxWorkers: taskGroup.MaxWorkers,
+		TimeoutSec: taskGroup.Timeout,
+	}
+	for _, id := range deviceIDs {
+		req.DeviceIDs = append(req.DeviceIDs, fmt.Sprintf("%d", id))
+	}
+
+	resp, err := s.discoveryService.StartDiscovery(req)
+	if err != nil {
+		logger.Error("TaskGroup", fmt.Sprintf("%d", taskGroup.ID), "启动拓扑采集失败: %v", err)
+		return "", err
+	}
+
+	if err := config.BindDiscoveryTaskToTaskGroup(resp.TaskID, taskGroup.ID); err != nil {
+		logger.Warn("TaskGroup", fmt.Sprintf("%d", taskGroup.ID), "绑定发现任务与任务组失败: task=%s err=%v", resp.TaskID, err)
+	}
+
+	taskStatus, err := s.waitDiscoveryTaskCompleted(resp.TaskID)
+	if err != nil {
+		logger.Error("TaskGroup", fmt.Sprintf("%d", taskGroup.ID), "等待拓扑采集任务失败: task=%s err=%v", resp.TaskID, err)
+		return "", err
+	}
+
+	if taskGroup.AutoBuildTopology && s.topologyService != nil {
+		if _, err := s.topologyService.BuildTopology(context.Background(), resp.TaskID); err != nil {
+			return "failed", fmt.Errorf("拓扑构建失败: %v", err)
+		}
+	}
+
+	switch strings.ToLower(strings.TrimSpace(taskStatus)) {
+	case "completed":
+		return "completed", nil
+	case "partial":
+		logger.Warn("TaskGroup", fmt.Sprintf("%d", taskGroup.ID), "拓扑采集任务部分成功: discoveryTask=%s", resp.TaskID)
+		return "partial", nil
+	case "failed", "cancelled":
+		return "failed", fmt.Errorf("拓扑采集任务结束状态为 %s", taskStatus)
+	default:
+		return "failed", fmt.Errorf("拓扑采集任务结束状态未知: %s", taskStatus)
+	}
+}
+
+func (s *TaskGroupService) waitDiscoveryTaskCompleted(taskID string) (string, error) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	timeout := time.After(4 * time.Hour)
+	for {
+		select {
+		case <-timeout:
+			return "", fmt.Errorf("等待拓扑采集任务超时: %s", taskID)
+		case <-ticker.C:
+			task, err := s.discoveryService.GetTaskStatus(taskID)
+			if err != nil {
+				return "", err
+			}
+			if task == nil {
+				continue
+			}
+			if isTerminalDiscoveryTaskStatus(task.Status) {
+				return strings.ToLower(task.Status), nil
+			}
+		}
+	}
+}
+
+func isTerminalDiscoveryTaskStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "completed", "partial", "failed", "cancelled":
+		return true
+	default:
+		return false
+	}
+}
+
+func collectUniqueDeviceIDs(items []models.TaskItem) []uint {
+	if len(items) == 0 {
+		return nil
+	}
+
+	set := make(map[uint]struct{})
+	for _, item := range items {
+		for _, deviceID := range item.DeviceIDs {
+			if deviceID == 0 {
+				continue
+			}
+			set[deviceID] = struct{}{}
+		}
+	}
+
+	ids := make([]uint, 0, len(set))
+	for id := range set {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		return ids[i] < ids[j]
+	})
+	return ids
+}
+
+func normalizeTaskType(taskType string) string {
+	value := strings.ToLower(strings.TrimSpace(taskType))
+	if value == "" {
+		return "normal"
+	}
+	return value
 }
 
 func deriveTaskGroupStatus(tracker *report.ProgressTracker) string {

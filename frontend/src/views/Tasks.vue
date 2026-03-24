@@ -55,6 +55,37 @@
     <!-- 步骤选择区域 -->
     <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
       <div class="flex-1 overflow-y-auto scrollbar-custom pr-1">
+        <!-- 任务类型 -->
+        <div class="bg-bg-card border border-border rounded-xl overflow-hidden mb-3">
+          <div class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel">
+            <span class="text-sm font-medium text-text-primary">任务类型</span>
+          </div>
+          <div class="p-3 flex gap-2">
+            <button
+              @click="selectedTaskType = 'normal'"
+              class="px-3 py-1.5 rounded-lg text-sm border transition-all"
+              :class="
+                selectedTaskType === 'normal'
+                  ? 'bg-accent text-white border-accent/40'
+                  : 'bg-bg-panel border-border text-text-secondary hover:text-text-primary'
+              "
+            >
+              普通任务
+            </button>
+            <button
+              @click="selectedTaskType = 'topology'"
+              class="px-3 py-1.5 rounded-lg text-sm border transition-all"
+              :class="
+                selectedTaskType === 'topology'
+                  ? 'bg-accent text-white border-accent/40'
+                  : 'bg-bg-panel border-border text-text-secondary hover:text-text-primary'
+              "
+            >
+              拓扑采集任务
+            </button>
+          </div>
+        </div>
+
         <!-- 步骤1: 选择目标设备 -->
         <div
           class="bg-bg-card border border-border rounded-xl overflow-hidden"
@@ -101,8 +132,9 @@
           ></div>
         </div>
 
-        <!-- 步骤2: 选择命令组 -->
+        <!-- 步骤2: 普通任务命令组 -->
         <div
+          v-if="selectedTaskType === 'normal'"
           class="bg-bg-card border border-border rounded-xl overflow-hidden mb-4"
           :style="{ minHeight: commandPanelMinHeight + 'px' }"
         >
@@ -128,6 +160,51 @@
               v-model="selectedCommandGroupId"
               @selectionChange="onCommandGroupChange"
             />
+          </div>
+        </div>
+
+        <!-- 步骤2: 拓扑参数 -->
+        <div
+          v-else
+          class="bg-bg-card border border-border rounded-xl overflow-hidden mb-4"
+          :style="{ minHeight: commandPanelMinHeight + 'px' }"
+        >
+          <div
+            class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel"
+          >
+            <div
+              class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent"
+            >
+              2
+            </div>
+            <span class="text-sm font-medium text-text-primary">拓扑采集参数</span>
+          </div>
+          <div class="p-3 space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-text-secondary mb-1.5">目标厂商</label>
+              <select
+                v-model="topologyVendor"
+                class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
+              >
+                <option value="">自动识别</option>
+                <option v-for="vendor in supportedVendors" :key="vendor" :value="vendor">
+                  {{ vendor }}
+                </option>
+              </select>
+            </div>
+            <div class="rounded-lg border border-border bg-bg-panel p-3">
+              <label class="flex items-start justify-between gap-4">
+                <div>
+                  <div class="text-xs font-medium text-text-secondary">自动构建拓扑</div>
+                  <p class="text-xs text-text-muted mt-1">采集完成后自动触发拓扑构建。</p>
+                </div>
+                <input
+                  v-model="autoBuildTopology"
+                  type="checkbox"
+                  class="mt-1 h-4 w-4"
+                />
+              </label>
+            </div>
           </div>
         </div>
       </div>
@@ -267,7 +344,7 @@
                 <span
                   class="px-2 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent font-mono"
                 >
-                  {{ selectedCommandGroup?.name || "未选择" }}
+                  {{ selectedTaskType === "normal" ? (selectedCommandGroup?.name || "未选择命令组") : (topologyVendor || "自动识别厂商") }}
                 </span>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -391,7 +468,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
-import { DeviceAPI, TaskGroupAPI } from "../services/api";
+import { DeviceAPI, DiscoveryAPI, TaskGroupAPI } from "../services/api";
 import type { DeviceAsset, CommandGroup } from "../services/api";
 import DeviceSelector from "../components/task/DeviceSelector.vue";
 import CommandGroupSelector from "../components/task/CommandGroupSelector.vue";
@@ -401,8 +478,12 @@ const router = useRouter();
 // 设备列表和选择状态
 const deviceList = ref<DeviceAsset[]>([]);
 const selectedDevices = ref<DeviceAsset[]>([]);
+const selectedTaskType = ref<"normal" | "topology">("normal");
 const selectedCommandGroupId = ref<number>(0);
 const selectedCommandGroup = ref<CommandGroup | null>(null);
+const supportedVendors = ref<string[]>([]);
+const topologyVendor = ref("");
+const autoBuildTopology = ref(true);
 
 // 面板高度控制
 const devicePanelHeight = ref(280); // 设备选择面板默认高度
@@ -451,6 +532,9 @@ onUnmounted(() => {
 
 // 是否可以创建任务
 const canCreate = computed(() => {
+  if (selectedTaskType.value === "topology") {
+    return selectedDevices.value.length > 0;
+  }
   return selectedDevices.value.length > 0 && selectedCommandGroupId.value;
 });
 
@@ -515,7 +599,24 @@ async function confirmCreate() {
   if (!createModal.value.name.trim() || !canCreate.value) return;
 
   try {
-    const taskGroup = {
+    const taskItems =
+      selectedTaskType.value === "topology"
+        ? [
+            {
+              commandGroupId: "",
+              commands: [] as string[],
+              deviceIDs: selectedDevices.value.map((d: DeviceAsset) => d.id),
+            },
+          ]
+        : [
+            {
+              commandGroupId: String(selectedCommandGroupId.value),
+              commands: [] as string[],
+              deviceIDs: selectedDevices.value.map((d: DeviceAsset) => d.id),
+            },
+          ];
+
+    const taskGroup: any = {
       id: 0,
       name: createModal.value.name.trim(),
       description: createModal.value.description.trim(),
@@ -524,13 +625,10 @@ async function confirmCreate() {
       maxWorkers: 10,
       timeout: 60,
       mode: "group" as const,
-      items: [
-        {
-          commandGroupId: String(selectedCommandGroupId.value),
-          commands: [] as string[],
-          deviceIDs: selectedDevices.value.map((d: DeviceAsset) => d.id),
-        },
-      ],
+      taskType: selectedTaskType.value,
+      topologyVendor: selectedTaskType.value === "topology" ? topologyVendor.value : "",
+      autoBuildTopology: selectedTaskType.value === "topology" ? autoBuildTopology.value : false,
+      items: taskItems,
       tags: createModal.value.tags,
       enableRawLog: createModal.value.enableRawLog,
       status: "pending" as const,
@@ -544,6 +642,15 @@ async function confirmCreate() {
   } catch (err: any) {
     console.error("创建任务失败:", err);
     triggerToast(`创建失败: ${err?.message || err}`, "error");
+  }
+}
+
+async function loadTopologyVendors() {
+  try {
+    supportedVendors.value = (await DiscoveryAPI.getSupportedVendors()) || [];
+  } catch (err) {
+    console.error("加载拓扑厂商列表失败:", err);
+    supportedVendors.value = [];
   }
 }
 
@@ -580,6 +687,7 @@ async function loadDevices() {
 
 onMounted(() => {
   loadDevices();
+  loadTopologyVendors();
 });
 </script>
 

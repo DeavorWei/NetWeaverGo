@@ -14,7 +14,7 @@
         >
           <option value="">选择发现任务</option>
           <option v-for="task in tasks" :key="task.id" :value="task.id">
-            {{ task.name || task.id }} ({{ task.status }})
+            {{ task.name || task.id }} / TG:{{ task.taskGroupId || "-" }} ({{ task.status }})
           </option>
         </select>
         <button
@@ -542,7 +542,15 @@ function applySummaryFromGraph() {
 }
 
 async function loadTasks() {
-  tasks.value = (await DiscoveryAPI.listDiscoveryTasks(50)) || [];
+  const list = (await DiscoveryAPI.listDiscoveryTasks(50)) || [];
+  tasks.value = [...list].sort((a, b) => {
+    const aLinked = a.taskGroupId ? 1 : 0;
+    const bLinked = b.taskGroupId ? 1 : 0;
+    if (aLinked !== bLinked) {
+      return bLinked - aLinked;
+    }
+    return 0;
+  });
 }
 
 async function refreshGraph() {

@@ -57,10 +57,13 @@ func (s *DiscoveryService) StartDiscovery(req discovery.StartDiscoveryRequest) (
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	logger.Info("DiscoveryService", "-", "收到启动发现请求: deviceIDs=%d groupNames=%d vendor=%s maxWorkers=%d timeout=%d", len(req.DeviceIDs), len(req.GroupNames), req.Vendor, req.MaxWorkers, req.TimeoutSec)
 	taskID, err := s.runner.Start(context.Background(), req)
 	if err != nil {
+		logger.Error("DiscoveryService", "-", "启动发现任务失败: %v", err)
 		return discovery.TaskStartResponse{}, err
 	}
+	logger.Info("DiscoveryService", taskID, "启动发现任务成功")
 
 	return discovery.TaskStartResponse{TaskID: taskID}, nil
 }

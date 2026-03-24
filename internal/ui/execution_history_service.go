@@ -104,19 +104,22 @@ func (s *ExecutionHistoryService) GetStatusList() []string {
 // GetModeList 获取所有可用的执行模式列表
 func (s *ExecutionHistoryService) GetModeList() []string {
 	return []string{
-		"group",   // 任务组模式A
-		"binding", // 任务组模式B
-		"manual",  // 普通执行
-		"backup",  // 备份执行
+		"group",     // 任务组模式A
+		"binding",   // 任务组模式B
+		"topology",  // 任务组拓扑采集
+		"discovery", // 发现任务
+		"manual",    // 普通执行
+		"backup",    // 备份执行
 	}
 }
 
 // GetRunnerSourceList 获取所有可用的执行来源列表
 func (s *ExecutionHistoryService) GetRunnerSourceList() []string {
 	return []string{
-		"task_group",     // 任务组服务
-		"engine_service", // 引擎服务
-		"backup_service", // 备份服务
+		"task_group",        // 任务组服务
+		"discovery_service", // 发现服务
+		"engine_service",    // 引擎服务
+		"backup_service",    // 备份服务
 	}
 }
 

@@ -1,0 +1,5 @@
+[2026/03/24 17:05:46] [Info] [Config] [-] 数据库初始化成功: D:\Document\GO\NetWeaverGo\netWeaverGoData\db\netweaver.db
+[2026/03/24 17:05:46] [Info] [Config] [-] 运行时配置表为空，初始化默认值
+[2026/03/24 17:05:46] [Info] [Config] [-] 运行时配置默认值初始化完成，共 21 项
+[2026/03/24 17:05:46] [Info] [Config] [-] 运行时配置管理器初始化完成
+[2026/03/24 17:05:46] [Error] [TaskGroup] [2] 获取任务组失败: 未找到任务组: 2

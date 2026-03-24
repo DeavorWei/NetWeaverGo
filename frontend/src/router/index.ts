@@ -12,7 +12,6 @@ const NetworkCalc = () => import('../views/Tools/NetworkCalc.vue')
 const ProtocolRef = () => import('../views/Tools/ProtocolRef.vue')
 const ConfigForge = () => import('../views/Tools/ConfigForge.vue')
 const Settings = () => import('../views/Settings.vue')
-const Discovery = () => import('../views/Discovery.vue')
 const Topology = () => import('../views/Topology.vue')
 const PlanCompare = () => import('../views/PlanCompare.vue')
 
@@ -64,8 +63,7 @@ const routes = [
   },
   {
     path: '/discovery',
-    name: 'Discovery',
-    component: Discovery
+    redirect: '/tasks'
   },
   {
     path: '/topology',

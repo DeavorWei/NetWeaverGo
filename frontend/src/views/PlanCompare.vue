@@ -39,7 +39,7 @@
         >
           <option value="">选择发现任务</option>
           <option v-for="task in tasks" :key="task.id" :value="task.id">
-            {{ task.name || task.id }}
+            {{ task.name || task.id }} / TG:{{ task.taskGroupId || "-" }} ({{ task.status }})
           </option>
         </select>
         <select
@@ -214,7 +214,14 @@ async function loadBaseData() {
     DiscoveryAPI.listDiscoveryTasks(50),
     PlanCompareAPI.listPlanFiles(50),
   ]);
-  tasks.value = taskList || [];
+  tasks.value = [...(taskList || [])].sort((a, b) => {
+    const aLinked = a.taskGroupId ? 1 : 0;
+    const bLinked = b.taskGroupId ? 1 : 0;
+    if (aLinked !== bLinked) {
+      return bLinked - aLinked;
+    }
+    return 0;
+  });
   plans.value = planList || [];
 }
 

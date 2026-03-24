@@ -47,6 +47,8 @@ func CreateTaskGroup(group models.TaskGroup) (*models.TaskGroup, error) {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
 
+	normalizeTaskGroup(&group)
+
 	if err := validateTaskGroup(&group); err != nil {
 		return nil, err
 	}
@@ -72,6 +74,7 @@ func UpdateTaskGroup(id uint, group models.TaskGroup) (*models.TaskGroup, error)
 
 	group.ID = id
 	group.CreatedAt = existing.CreatedAt
+	normalizeTaskGroup(&group)
 
 	if err := DB.Save(&group).Error; err != nil {
 		return nil, err
@@ -124,4 +127,14 @@ func validateTaskGroup(group *models.TaskGroup) error {
 		return fmt.Errorf("任务组名称不能为空")
 	}
 	return nil
+}
+
+func normalizeTaskGroup(group *models.TaskGroup) {
+	if group == nil {
+		return
+	}
+
+	if group.TaskType == "" {
+		group.TaskType = "normal"
+	}
 }

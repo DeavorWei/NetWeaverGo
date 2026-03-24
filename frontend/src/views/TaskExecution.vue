@@ -112,6 +112,7 @@
           <option value="pending">待执行</option>
           <option value="running">执行中</option>
           <option value="completed">已完成</option>
+          <option value="partial">部分成功</option>
           <option value="failed">失败</option>
         </select>
         <select
@@ -126,6 +127,21 @@
 
       <!-- 执行视图（正在运行时显示） -->
       <template v-if="executionView.active">
+        <template v-if="executionView.taskType === 'topology'">
+          <div class="flex-1 flex items-center justify-center">
+            <div class="bg-bg-card border border-border rounded-xl p-8 text-center min-w-[420px]">
+              <div class="w-10 h-10 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <p class="mt-4 text-sm text-text-primary font-medium">
+                {{ topologyExecuting ? '拓扑采集执行中，请稍候...' : '拓扑采集任务已结束' }}
+              </p>
+              <p class="mt-2 text-xs text-text-muted">
+                {{ topologyExecuting ? '任务执行完成后将自动跳转到拓扑图谱页面。' : '可返回任务列表或前往拓扑图谱查看结果。' }}
+              </p>
+            </div>
+          </div>
+        </template>
+
+        <template v-else>
         <!-- 进度条 -->
         <div class="flex-shrink-0 space-y-1.5">
           <div class="flex items-center justify-between text-xs text-text-muted">
@@ -207,6 +223,7 @@
             ← 返回任务列表
           </button>
         </div>
+        </template>
       </template>
 
       <!-- 任务列表视图 -->
@@ -230,6 +247,14 @@
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
                     <h3 class="text-sm font-semibold text-text-primary truncate">{{ task.name }}</h3>
+                    <span
+                      class="flex-shrink-0 text-xs px-2 py-0.5 rounded-full border font-medium"
+                      :class="isTopologyTask(task)
+                        ? 'bg-accent/10 border-accent/30 text-accent'
+                        : 'bg-bg-panel border-border text-text-muted'"
+                    >
+                      {{ isTopologyTask(task) ? '拓扑采集' : '普通任务' }}
+                    </span>
                     <span
                       class="flex-shrink-0 text-xs px-2 py-0.5 rounded-full border font-medium"
                       :class="task.mode === 'group'
@@ -257,10 +282,10 @@
                   </button>
                   <button
                     @click="openTaskEdit(task)"
-                    :disabled="task.status === 'running'"
+                    :disabled="task.status === 'running' || isTopologyTask(task)"
                     class="p-1.5 rounded-md text-text-muted transition-colors"
-                    :class="task.status !== 'running' ? 'hover:text-warning hover:bg-warning/10' : 'opacity-40 cursor-not-allowed'"
-                    :title="task.status !== 'running' ? '编辑任务' : '任务执行中不可编辑'"
+                    :class="task.status !== 'running' && !isTopologyTask(task) ? 'hover:text-warning hover:bg-warning/10' : 'opacity-40 cursor-not-allowed'"
+                    :title="task.status === 'running' ? '任务执行中不可编辑' : (isTopologyTask(task) ? '拓扑任务暂不支持编辑' : '编辑任务')"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
@@ -273,9 +298,9 @@
                   </button>
                   <button
                     @click="executeTask(task)"
-                    :disabled="isRunning"
+                    :disabled="isRunning || topologyExecuting"
                     class="p-1.5 rounded-md text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
-                    :class="isRunning ? 'opacity-50 cursor-not-allowed' : ''"
+                    :class="isRunning || topologyExecuting ? 'opacity-50 cursor-not-allowed' : ''"
                     title="执行"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -292,7 +317,17 @@
 
               <!-- 绑定详情 -->
               <div class="px-4 py-3">
-                <template v-if="task.mode === 'group'">
+                <template v-if="isTopologyTask(task)">
+                  <div class="flex items-center gap-2 text-xs">
+                    <span class="px-2 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent font-mono">
+                      厂商: {{ topologyVendorLabel(task) }}
+                    </span>
+                    <span class="text-text-secondary">
+                      {{ topologyDeviceCount(task) }} 台设备
+                    </span>
+                  </div>
+                </template>
+                <template v-else-if="task.mode === 'group'">
                   <div v-for="(item, idx) in task.items" :key="idx" class="flex items-center gap-2 text-xs">
                     <span class="px-2 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent font-mono truncate max-w-[200px]">
                       命令组: {{ item.commandGroupId.substring(0, 8) }}...
@@ -564,9 +599,11 @@ const filterMode = ref('')
 const executionView = ref({
   active: false,
   taskId: 0 as number,
-  taskName: ''
+  taskName: '',
+  taskType: 'normal' as 'normal' | 'topology'
 })
 const awaitingSnapshot = ref(false)
+const topologyExecuting = ref(false)
 let snapshotTimeoutTimer: ReturnType<typeof setTimeout> | null = null
 const SNAPSHOT_TIMEOUT = 10000
 let snapshotPollTimer: ReturnType<typeof setInterval> | null = null
@@ -868,7 +905,31 @@ function clearSnapshotTimeout() {
 
 // 执行任务
 async function executeTask(task: TaskGroup) {
-  if (isRunning.value) return
+  if (isRunning.value || topologyExecuting.value) return
+
+  if (isTopologyTask(task)) {
+    executionView.value = {
+      active: true,
+      taskId: task.id,
+      taskName: task.name,
+      taskType: 'topology'
+    }
+    topologyExecuting.value = true
+    try {
+      await TaskGroupAPI.startTaskGroup(task.id)
+      triggerToast('拓扑采集任务已完成', 'success')
+      await loadTasks()
+      router.push('/topology')
+    } catch (err: any) {
+      console.error('执行拓扑任务失败:', err)
+      triggerToast(`执行失败: ${err?.message || err}`, 'error')
+      await loadTasks()
+      executionView.value.active = false
+    } finally {
+      topologyExecuting.value = false
+    }
+    return
+  }
 
   engineStore.reset()
   awaitingSnapshot.value = true
@@ -879,7 +940,8 @@ async function executeTask(task: TaskGroup) {
   executionView.value = {
     active: true,
     taskId: task.id,
-    taskName: task.name
+    taskName: task.name,
+    taskType: isTopologyTask(task) ? 'topology' : 'normal'
   }
 
   try {
@@ -923,6 +985,7 @@ async function doDelete() {
 
 // 关闭执行视图
 function closeExecutionView() {
+  if (topologyExecuting.value) return
   executionView.value.active = false
   awaitingSnapshot.value = false
   clearSnapshotTimeout()
@@ -952,6 +1015,25 @@ function resolveSuspend(ip: string, action: 'C' | 'A') {
 // 导航
 function goToTaskCreate() {
   router.push('/tasks')
+}
+
+function isTopologyTask(task: TaskGroup) {
+  return ((task as any).taskType || 'normal') === 'topology'
+}
+
+function topologyVendorLabel(task: TaskGroup) {
+  const vendor = ((task as any).topologyVendor || '').trim()
+  return vendor === '' ? '自动识别' : vendor
+}
+
+function topologyDeviceCount(task: TaskGroup) {
+  const set = new Set<number>()
+  for (const item of task.items || []) {
+    for (const id of item.deviceIDs || []) {
+      set.add(id)
+    }
+  }
+  return set.size
 }
 
 // 查看执行历史
@@ -997,6 +1079,10 @@ async function openTaskDetail(task: TaskGroup) {
 async function openTaskEdit(task: TaskGroup) {
   if (task.status === 'running') {
     triggerToast('任务执行中不可编辑', 'error')
+    return
+  }
+  if (isTopologyTask(task)) {
+    triggerToast('拓扑任务暂不支持编辑，请删除后重新创建', 'error')
     return
   }
 
@@ -1098,6 +1184,7 @@ function taskStatusBadge(s: string) {
     case 'pending':   return 'bg-bg-panel border-border text-text-muted'
     case 'running':   return 'bg-accent/10 border-accent/30 text-accent'
     case 'completed': return 'bg-success/10 border-success/30 text-success'
+    case 'partial':   return 'bg-warning/10 border-warning/30 text-warning'
     case 'failed':    return 'bg-error/10 border-error/30 text-error'
     default:          return 'bg-bg-panel border-border text-text-muted'
   }
@@ -1107,12 +1194,13 @@ function taskStatusDot(s: string) {
     case 'pending':   return 'bg-text-muted'
     case 'running':   return 'bg-accent animate-pulse'
     case 'completed': return 'bg-success'
+    case 'partial':   return 'bg-warning'
     case 'failed':    return 'bg-error'
     default:          return 'bg-text-muted'
   }
 }
 function taskStatusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待执行', running: '执行中', completed: '已完成', failed: '失败' }
+  const map: Record<string, string> = { pending: '待执行', running: '执行中', completed: '已完成', partial: '部分成功', failed: '失败' }
   return map[s] ?? s
 }
 

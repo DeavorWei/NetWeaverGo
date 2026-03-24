@@ -47,12 +47,13 @@ func runGUI() {
 	commandGroupService := ui.NewCommandGroupService()
 	settingsService := ui.NewSettingsService()
 	engineService := ui.NewEngineService()
-	taskGroupService := ui.NewTaskGroupService()
 	queryService := ui.NewQueryService()
 	forgeService := ui.NewForgeService()
 	executionHistoryService := ui.NewExecutionHistoryService()
 	discoveryService := ui.NewDiscoveryService()
 	topologyService := ui.NewTopologyService(config.DB)
+	taskGroupService := ui.NewTaskGroupService()
+	taskGroupService.SetTopologyDeps(discoveryService, topologyService)
 	planCompareService := ui.NewPlanCompareService()
 
 	// 修正：修正嵌入文件系统的路径级联问题

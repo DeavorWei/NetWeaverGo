@@ -62,7 +62,21 @@ func InitDB() error {
 
 	logger.Verbose("Config", "-", "连接SQLite数据库引擎已建立！正在扫描并校验内部表结构约束...")
 	// 自动迁移表结构
-	err = db.AutoMigrate(
+	err = autoMigrateAll(db)
+	if err != nil {
+		return fmt.Errorf("自动迁移表结构失败: %v", err)
+	}
+
+	// 创建索引优化查询性能
+	createIndexes(db)
+
+	logger.Info("Config", "-", "数据库初始化成功: %s", dbPath)
+
+	return nil
+}
+
+func autoMigrateAll(db *gorm.DB) error {
+	return db.AutoMigrate(
 		// 基础表
 		&models.DeviceAsset{},
 		&models.GlobalSettings{},
@@ -88,16 +102,6 @@ func InitDB() error {
 		&models.DiffReport{},
 		&models.DiffItem{},
 	)
-	if err != nil {
-		return fmt.Errorf("自动迁移表结构失败: %v", err)
-	}
-
-	// 创建索引优化查询性能
-	createIndexes(db)
-
-	logger.Info("Config", "-", "数据库初始化成功: %s", dbPath)
-
-	return nil
 }
 
 // createIndexes 创建数据库索引优化查询性能
@@ -118,6 +122,7 @@ func createIndexes(db *gorm.DB) {
 		"CREATE INDEX IF NOT EXISTS idx_execution_records_created_at ON execution_records(created_at)",
 		// 拓扑发现相关索引
 		"CREATE INDEX IF NOT EXISTS idx_discovery_tasks_status ON discovery_tasks(status)",
+		"CREATE INDEX IF NOT EXISTS idx_discovery_tasks_task_group_id ON discovery_tasks(task_group_id)",
 		"CREATE INDEX IF NOT EXISTS idx_discovery_devices_task_status ON discovery_devices(task_id, status)",
 		"CREATE INDEX IF NOT EXISTS idx_discovery_devices_mgmt_ip ON discovery_devices(mgmt_ip)",
 		"CREATE INDEX IF NOT EXISTS idx_discovery_devices_normalized_name ON discovery_devices(normalized_name)",
