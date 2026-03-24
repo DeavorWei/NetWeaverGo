@@ -14,6 +14,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -52,6 +53,10 @@ type Runner struct {
 	// 外部依赖注入
 	pathProvider    PathProvider
 	runtimeProvider RuntimeConfigProvider
+
+	// 日志存储（任务级）
+	logStore   *report.ExecutionLogStore
+	logStoreMu sync.Mutex
 }
 
 // DiscoveryEvent 发现事件
@@ -481,10 +486,20 @@ dispatchLoop:
 		Message:   fmt.Sprintf("发现任务完成: 成功 %d, 失败 %d", successCount, failedCount),
 		Timestamp: time.Now().UnixMilli(),
 	})
+
+	// 关闭日志存储
+	r.logStoreMu.Lock()
+	if r.logStore != nil {
+		r.logStore.Close()
+		r.logStore = nil
+		logger.Debug("Discovery", taskID, "日志存储已关闭")
+	}
+	r.logStoreMu.Unlock()
 }
 
 // discoverDevice 执行单设备发现 - 重构后版本
 // 使用 ExecutePlan 统一执行计划，修复会话状态丢失问题
+// 修复：添加 ExecutionLogStore 支持，生成 live-logs 日志
 func (r *Runner) discoverDevice(ctx context.Context, taskID string, device models.DeviceInfo, vendor string, algorithms *config.SSHAlgorithmSettings, connectTimeout time.Duration, taskCommandTimeout time.Duration) error {
 	logger.Debug("Discovery", device.IP, "开始发现设备, vendor=%s", vendor)
 
@@ -515,13 +530,43 @@ func (r *Runner) discoverDevice(ctx context.Context, taskID string, device model
 
 	logger.Debug("Discovery", device.IP, "构建执行计划: %s, 命令数=%d", plan.Name, len(plan.Commands))
 
-	// 3. 创建执行器
+	// 3. 初始化日志存储（如果尚未初始化）
+	r.logStoreMu.Lock()
+	if r.logStore == nil {
+		var err error
+		r.logStore, err = report.NewExecutionLogStore(
+			fmt.Sprintf("Discovery-%s", taskID),
+			time.Now(),
+		)
+		if err != nil {
+			logger.Warn("Discovery", taskID, "创建日志存储失败: %v", err)
+		}
+	}
+	r.logStoreMu.Unlock()
+
+	// 4. 创建设备日志会话
+	var logSession *report.DeviceLogSession
+	if r.logStore != nil {
+		var err error
+		// 获取命令数量用于日志会话初始化
+		cmdCount := len(plan.Commands)
+		logSession, err = r.logStore.EnsureDevice(device.IP, true) // enableRaw = true 启用原始日志
+		if err != nil {
+			logger.Warn("Discovery", device.IP, "创建设备日志会话失败: %v", err)
+		} else {
+			// 写入开始标记到日志
+			logSession.WriteSummary(fmt.Sprintf("=== 设备发现任务开始 | 任务ID: %s | 命令数: %d ===", taskID, cmdCount))
+		}
+	}
+
+	// 5. 创建执行器（传递 LogSession）
 	exec := executor.NewDeviceExecutor(device.IP, device.Port, device.Username, device.Password, executor.ExecutorOptions{
 		Algorithms: algorithms,
 		Vendor:     vendor,
+		LogSession: logSession, // 修复：传递日志会话，使执行器可以写入详细日志
 	})
 
-	// 4. 连接设备
+	// 6. 连接设备
 	if err := exec.Connect(ctx, connectTimeout); err != nil {
 		logger.Error("Discovery", device.IP, "SSH连接失败: %v", err)
 		r.updateDeviceError(taskID, device.IP, fmt.Sprintf("SSH连接失败: %v", err))
@@ -529,11 +574,20 @@ func (r *Runner) discoverDevice(ctx context.Context, taskID string, device model
 	}
 	defer exec.Close()
 
-	// 5. 执行统一计划（✅ 修复：只创建一次 StreamEngine，只初始化一次）
-	report, err := exec.ExecutePlan(ctx, plan)
+	// 7. 执行统一计划（✅ 修复：只创建一次 StreamEngine，只初始化一次）
+	execReport, err := exec.ExecutePlan(ctx, plan)
 
-	// 6. 处理结果
-	return r.handleDiscoveryReport(taskID, device, vendor, report, err)
+	// 8. 写入完成标记到日志
+	if logSession != nil {
+		status := "成功"
+		if err != nil {
+			status = "失败"
+		}
+		logSession.WriteSummary(fmt.Sprintf("=== 设备发现任务结束 | 状态: %s ===", status))
+	}
+
+	// 9. 处理结果
+	return r.handleDiscoveryReport(taskID, device, vendor, execReport, err)
 }
 
 // handleDiscoveryReport 处理发现执行报告
