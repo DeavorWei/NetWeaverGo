@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -206,11 +207,23 @@ func (s *DiscoveryService) persistDiscoveryExecutionSummary(taskID string) {
 		durationMs = task.FinishedAt.Sub(*task.StartedAt).Milliseconds()
 	}
 
+	// 获取 TaskGroupID 和 TaskGroupName
+	taskGroupID := ""
+	taskGroupName := ""
+	if task.TaskGroupID != nil {
+		taskGroupID = strconv.FormatUint(uint64(*task.TaskGroupID), 10)
+		// 查询任务组名称
+		var tg models.TaskGroup
+		if err := config.DB.First(&tg, *task.TaskGroupID).Error; err == nil {
+			taskGroupName = tg.Name
+		}
+	}
+
 	record := models.ExecutionRecord{
 		RunnerSource:  "discovery_service",
 		RunnerID:      task.ID,
-		TaskGroupID:   "",
-		TaskGroupName: "",
+		TaskGroupID:   taskGroupID,
+		TaskGroupName: taskGroupName,
 		TaskName:      task.Name,
 		Mode:          "discovery",
 		Status:        task.Status,
