@@ -125,28 +125,27 @@ func (m *StreamMatcher) MatchErrorRule(line string) (bool, *ErrorRule) {
 // 重要：如果 chunk 中包含分页符，返回 false（分页处理优先）
 func (m *StreamMatcher) IsPrompt(chunk string) bool {
 	// DEBUG: 打印原始输入
-	logger.Debug("Matcher", "-", "[DEBUG] IsPrompt 输入 chunk 长度=%d, 内容='%s'", len(chunk), truncateString(chunk, 200))
+	//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt 输入 chunk 长度=%d, 内容='%s'", len(chunk), truncateString(chunk, 200))
 
 	cleanChunk := normalizeTerminalChunk(chunk)
-	logger.Debug("Matcher", "-", "[DEBUG] IsPrompt cleanChunk='%s'", truncateString(cleanChunk, 200))
+	//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt cleanChunk='%s'", truncateString(cleanChunk, 200))
 
 	promptLine := extractLastNonEmptyLine(cleanChunk)
-	logger.Debug("Matcher", "-", "[DEBUG] IsPrompt promptLine='%s'", promptLine)
+	//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt promptLine='%s'", promptLine)
 
 	if promptLine == "" {
-		logger.Debug("Matcher", "-", "[DEBUG] IsPrompt promptLine 为空，返回 false")
+		//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt promptLine 为空，返回 false")
 		return false
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// 关键修复：优先检测分页符
 	// 如果 chunk 中包含分页符，说明命令输出未完成，不应该认为是提示符
 	// 这处理了分页符和提示符在同一 chunk 或相邻 chunk 的情况
 	for _, paginationPrompt := range m.PaginationPrompts {
 		if strings.Contains(cleanChunk, paginationPrompt) {
-			logger.Verbose("Matcher", "-", "Chunk 包含分页符 '%s'，跳过提示符检测", paginationPrompt)
-			logger.Debug("Matcher", "-", "[DEBUG] IsPrompt 检测到分页符，返回 false")
+			//logger.Verbose("Matcher", "-", "Chunk 包含分页符 '%s'，跳过提示符检测", paginationPrompt)
+			//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt 检测到分页符，返回 false")
 			return false
 		}
 	}
@@ -158,8 +157,8 @@ func (m *StreamMatcher) IsPrompt(chunk string) bool {
 		inner := strings.TrimPrefix(strings.TrimSuffix(promptLine, ">"), "<")
 		// 内部应该有内容（主机名）
 		if inner != "" && !strings.Contains(inner, " ") {
-			logger.Verbose("Matcher", "-", "检测到华为格式提示符: '%s'", promptLine)
-			logger.Debug("Matcher", "-", "[DEBUG] IsPrompt 华为格式匹配成功，返回 true")
+			//logger.Verbose("Matcher", "-", "检测到华为格式提示符: '%s'", promptLine)
+			//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt 华为格式匹配成功，返回 true")
 			return true
 		}
 	}
@@ -167,8 +166,8 @@ func (m *StreamMatcher) IsPrompt(chunk string) bool {
 	// 首先检查后缀匹配
 	for _, prompt := range m.Prompts {
 		if strings.HasSuffix(promptLine, prompt) && looksLikePromptLine(promptLine, prompt) {
-			logger.Verbose("Matcher", "-", "Chunk 末缀匹配到了提示符: '%s'", prompt)
-			logger.Debug("Matcher", "-", "[DEBUG] IsPrompt 后缀匹配成功 prompt='%s', promptLine='%s', 返回 true", prompt, promptLine)
+			//logger.Verbose("Matcher", "-", "Chunk 末缀匹配到了提示符: '%s'", prompt)
+			//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt 后缀匹配成功 prompt='%s', promptLine='%s', 返回 true", prompt, promptLine)
 			return true
 		}
 	}
@@ -176,7 +175,7 @@ func (m *StreamMatcher) IsPrompt(chunk string) bool {
 	// 然后检查正则模式匹配
 	for _, pattern := range m.PromptPatterns {
 		if pattern.MatchString(promptLine) {
-			logger.Verbose("Matcher", "-", "Chunk 正则匹配到了提示符: '%s'", pattern.String())
+			//logger.Verbose("Matcher", "-", "Chunk 正则匹配到了提示符: '%s'", pattern.String())
 			return true
 		}
 	}
@@ -201,7 +200,7 @@ func (m *StreamMatcher) IsPromptStrict(line string) bool {
 		inner := strings.TrimPrefix(strings.TrimSuffix(line, ">"), "<")
 		// 内部不能有空格（排除混合行）
 		if inner != "" && !strings.Contains(inner, " ") {
-			logger.Verbose("Matcher", "-", "严格模式检测到华为格式提示符: '%s'", line)
+			//logger.Verbose("Matcher", "-", "严格模式检测到华为格式提示符: '%s'", line)
 			return true
 		}
 	}
@@ -210,7 +209,7 @@ func (m *StreamMatcher) IsPromptStrict(line string) bool {
 	if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 		inner := strings.TrimPrefix(strings.TrimSuffix(line, "]"), "[")
 		if inner != "" && !strings.Contains(inner, " ") {
-			logger.Verbose("Matcher", "-", "严格模式检测到方括号格式提示符: '%s'", line)
+			//logger.Verbose("Matcher", "-", "严格模式检测到方括号格式提示符: '%s'", line)
 			return true
 		}
 	}
@@ -222,7 +221,7 @@ func (m *StreamMatcher) IsPromptStrict(line string) bool {
 			prefix := strings.TrimSuffix(line, suffix)
 			// 主机名不能包含空格，不能包含 <（排除华为格式的变体）
 			if prefix != "" && !strings.Contains(prefix, " ") && !strings.Contains(prefix, "<") {
-				logger.Verbose("Matcher", "-", "严格模式检测到特权模式提示符: '%s'", line)
+				//logger.Verbose("Matcher", "-", "严格模式检测到特权模式提示符: '%s'", line)
 				return true
 			}
 		}
@@ -233,7 +232,7 @@ func (m *StreamMatcher) IsPromptStrict(line string) bool {
 	defer m.mu.RUnlock()
 	for _, pattern := range m.PromptPatterns {
 		if pattern.MatchString(line) {
-			logger.Verbose("Matcher", "-", "严格模式正则匹配到了提示符: '%s'", pattern.String())
+			//logger.Verbose("Matcher", "-", "严格模式正则匹配到了提示符: '%s'", pattern.String())
 			return true
 		}
 	}
