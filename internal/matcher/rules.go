@@ -61,7 +61,7 @@ var DefaultRules = []ErrorRule{
 	},
 	{
 		Name:     "输入错误",
-		Pattern:  regexp.MustCompile(`(?i)(\bError:|% ?Error:|^\s*\^\s*$)`),
+		Pattern:  regexp.MustCompile(`(?i)(^Error:|^% ?Error:|^\s*\^\s*$)`),
 		Severity: SeverityCritical,
 		Vendor:   "generic",
 		Message:  "设备执行输入返回 Error",

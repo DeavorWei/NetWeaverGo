@@ -223,6 +223,13 @@ func (a *SessionAdapter) SetCommandKeys(keys []string) {
 	a.newContext.SetCommandKeys(keys)
 }
 
+// SetContinueOnCmdError 设置命令错误时是否继续执行
+func (a *SessionAdapter) SetContinueOnCmdError(continueOnError bool) {
+	a.newContext.SetContinueOnCmdError(continueOnError)
+	// 同时更新 Reducer 的上下文，确保两者一致
+	a.reducer.Context().SetContinueOnCmdError(continueOnError)
+}
+
 // GetCommandKey 获取指定索引的命令标识
 func (a *SessionAdapter) GetCommandKey(index int) string {
 	return a.newContext.GetCommandKey(index)

@@ -1,6 +1,8 @@
 package executor
 
 import (
+	"fmt"
+
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/matcher"
 )
@@ -198,6 +200,16 @@ func (r *SessionReducer) handleErrorMatched(e EvErrorMatched) []SessionAction {
 	if e.Rule.Severity == matcher.SeverityWarning {
 		logger.Warn("SessionReducer", "-", "[告警放行] %s: %s", e.Rule.Name, e.Rule.Message)
 		return nil
+	}
+
+	// 如果 ContinueOnCmdError=true，记录错误但继续执行下一条命令
+	if r.ctx.ContinueOnCmdError {
+		logger.Warn("SessionReducer", "-", "[错误放行] %s: %s (ContinueOnCmdError=true)",
+			e.Rule.Name, e.Rule.Message)
+		// 标记当前命令失败
+		r.ctx.FailCurrentCommand(fmt.Sprintf("%s: %s", e.Rule.Name, e.Line))
+		// 完成当前命令，继续下一条
+		return r.completeCurrentCommand()
 	}
 
 	// 严重错误，进入挂起状态

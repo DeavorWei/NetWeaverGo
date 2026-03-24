@@ -231,6 +231,9 @@ func (e *DeviceExecutor) executeInternal(
 	// 设置命令标识
 	engine.adapter.SetCommandKeys(commandKeys)
 
+	// 设置命令错误时是否继续执行
+	engine.adapter.SetContinueOnCmdError(plan.ContinueOnCmdError)
+
 	// 设置挂起处理器
 	if e.OnSuspend != nil {
 		engine.SetSuspendHandler(e.OnSuspend)

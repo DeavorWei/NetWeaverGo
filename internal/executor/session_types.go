@@ -295,6 +295,9 @@ type SessionContext struct {
 
 	// 分页次数上限
 	MaxPaginationCount int
+
+	// ContinueOnCmdError 命令错误时是否继续执行
+	ContinueOnCmdError bool
 }
 
 // NewSessionContext 创建新的会话上下文
@@ -357,6 +360,11 @@ func (c *SessionContext) SetCommandKeys(keys []string) {
 	if len(keys) == len(c.Queue) {
 		c.CommandKeys = keys
 	}
+}
+
+// SetContinueOnCmdError 设置命令错误时是否继续执行
+func (c *SessionContext) SetContinueOnCmdError(continueOnError bool) {
+	c.ContinueOnCmdError = continueOnError
 }
 
 // GetCommandKey 获取指定索引的命令标识
