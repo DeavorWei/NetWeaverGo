@@ -248,7 +248,7 @@ func (m *StreamMatcher) IsPaginationPrompt(chunk string) bool {
 	defer m.mu.RUnlock()
 	for _, prompt := range m.PaginationPrompts {
 		if strings.Contains(cleanChunk, prompt) {
-			logger.Verbose("Matcher", "-", "探测到了分页拦截符: '%s'", prompt)
+			//logger.Verbose("Matcher", "-", "探测到了分页拦截符: '%s'", prompt)
 			return true
 		}
 	}

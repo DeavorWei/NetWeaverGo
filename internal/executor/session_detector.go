@@ -5,9 +5,6 @@ import (
 	"github.com/NetWeaverGo/core/internal/matcher"
 )
 
-// ============================================================================
-// Session Detector (Phase 2 重构)
-// ============================================================================
 // 负责从 replayer 输出提取协议事件
 // 只负责"看见了什么"，不参与状态决策
 
@@ -38,7 +35,7 @@ type DetectResult struct {
 // DetectInitPrompt 从规范化输出中检测初始化阶段提示符。
 func (d *SessionDetector) DetectInitPrompt(lines []string, activeLine string) []SessionEvent {
 	if prompt, ok := d.findPrompt(lines, activeLine); ok {
-		logger.Debug("SessionDetector", "-", "检测到初始提示符: %s", truncateDebug(prompt, 50))
+		//logger.Debug("SessionDetector", "-", "检测到初始提示符: %s", truncateDebug(prompt, 50))
 		return []SessionEvent{EvInitPromptStable{Prompt: prompt}}
 	}
 	return nil
@@ -47,7 +44,7 @@ func (d *SessionDetector) DetectInitPrompt(lines []string, activeLine string) []
 // DetectWarmupPrompt 从规范化输出中检测预热后的提示符。
 func (d *SessionDetector) DetectWarmupPrompt(lines []string, activeLine string) []SessionEvent {
 	if prompt, ok := d.findPrompt(lines, activeLine); ok {
-		logger.Debug("SessionDetector", "-", "检测到预热后提示符: %s", truncateDebug(prompt, 50))
+		//logger.Debug("SessionDetector", "-", "检测到预热后提示符: %s", truncateDebug(prompt, 50))
 		return []SessionEvent{EvWarmupPromptSeen{Prompt: prompt}}
 	}
 	return nil
@@ -64,7 +61,7 @@ func (d *SessionDetector) Detect(lines []string, activeLine string) []SessionEve
 	for _, line := range lines {
 		// 检测分页符（优先级最高）
 		if d.matcher.IsPaginationPrompt(line) {
-			logger.Debug("SessionDetector", "-", "检测到分页符: %s", truncateDebug(line, 50))
+			//logger.Debug("SessionDetector", "-", "检测到分页符: %s", truncateDebug(line, 50))
 			events = append(events, EvPagerSeen{Line: line})
 			continue
 		}
@@ -81,7 +78,7 @@ func (d *SessionDetector) Detect(lines []string, activeLine string) []SessionEve
 
 		// 检测提示符
 		if d.matcher.IsPromptStrict(line) {
-			logger.Debug("SessionDetector", "-", "检测到提示符(已提交行): %s", truncateDebug(line, 50))
+			//logger.Debug("SessionDetector", "-", "检测到提示符(已提交行): %s", truncateDebug(line, 50))
 			events = append(events, EvCommittedLine{Line: line})
 			continue
 		}
@@ -94,11 +91,11 @@ func (d *SessionDetector) Detect(lines []string, activeLine string) []SessionEve
 	if activeLine != "" {
 		// 检测分页符
 		if d.matcher.IsPaginationPrompt(activeLine) {
-			logger.Debug("SessionDetector", "-", "检测到分页符(活动行): %s", truncateDebug(activeLine, 50))
+			//logger.Debug("SessionDetector", "-", "检测到分页符(活动行): %s", truncateDebug(activeLine, 50))
 			events = append(events, EvPagerSeen{Line: activeLine})
 		} else if d.matcher.IsPromptStrict(activeLine) {
 			// 检测提示符
-			logger.Debug("SessionDetector", "-", "检测到提示符(活动行): %s", truncateDebug(activeLine, 50))
+			//logger.Debug("SessionDetector", "-", "检测到提示符(活动行): %s", truncateDebug(activeLine, 50))
 			events = append(events, EvActivePromptSeen{Prompt: activeLine})
 		}
 	}
@@ -113,7 +110,7 @@ func (d *SessionDetector) DetectFromChunk(chunk string) []SessionEvent {
 
 	// 检测提示符（非严格模式，用于初始化阶段）
 	if d.matcher.IsPrompt(chunk) {
-		logger.Debug("SessionDetector", "-", "检测到初始提示符: %s", truncateDebug(chunk, 50))
+		//logger.Debug("SessionDetector", "-", "检测到初始提示符: %s", truncateDebug(chunk, 50))
 		// 提取提示符
 		prompt := extractPromptHint(chunk)
 		events = append(events, EvInitPromptStable{Prompt: prompt})
@@ -121,7 +118,7 @@ func (d *SessionDetector) DetectFromChunk(chunk string) []SessionEvent {
 
 	// 严格模式检测
 	if d.matcher.IsPromptStrict(chunk) {
-		logger.Debug("SessionDetector", "-", "严格模式检测到初始提示符: %s", truncateDebug(chunk, 50))
+		//logger.Debug("SessionDetector", "-", "严格模式检测到初始提示符: %s", truncateDebug(chunk, 50))
 		prompt := extractPromptHint(chunk)
 		events = append(events, EvInitPromptStable{Prompt: prompt})
 	}
