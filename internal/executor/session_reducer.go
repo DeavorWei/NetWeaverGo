@@ -196,6 +196,10 @@ func (r *SessionReducer) handleErrorMatched(e EvErrorMatched) []SessionAction {
 		return nil
 	}
 
+	if r.ctx.Current != nil {
+		r.ctx.Current.AddNormalizedLine(e.Line)
+	}
+
 	// 警告级别直接放行
 	if e.Rule.Severity == matcher.SeverityWarning {
 		logger.Warn("SessionReducer", "-", "[告警放行] %s: %s", e.Rule.Name, e.Rule.Message)
@@ -204,12 +208,15 @@ func (r *SessionReducer) handleErrorMatched(e EvErrorMatched) []SessionAction {
 
 	// 如果 ContinueOnCmdError=true，记录错误但继续执行下一条命令
 	if r.ctx.ContinueOnCmdError {
+		if r.ctx.Current != nil && r.ctx.Current.HasError() {
+			logger.Debug("SessionReducer", "-", "当前命令已标记失败，忽略同一错误块的后续错误行: %s", e.Line)
+			return nil
+		}
 		logger.Warn("SessionReducer", "-", "[错误放行] %s: %s (ContinueOnCmdError=true)",
 			e.Rule.Name, e.Rule.Message)
-		// 标记当前命令失败
-		r.ctx.FailCurrentCommand(fmt.Sprintf("%s: %s", e.Rule.Name, e.Line))
-		// 完成当前命令，继续下一条
-		return r.completeCurrentCommand()
+		// 标记当前命令失败，并等待设备返回提示符后再推进下一条命令。
+		r.ctx.MarkCurrentCommandFailed(fmt.Sprintf("%s: %s", e.Rule.Name, e.Line))
+		return nil
 	}
 
 	// 严重错误，进入挂起状态

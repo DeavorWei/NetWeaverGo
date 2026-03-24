@@ -74,3 +74,50 @@ func TestStreamEngineRunPlaybook_UnifiedPathSendsWarmupAndCommand(t *testing.T) 
 		t.Fatalf("命令结果异常: %+v", results[0])
 	}
 }
+
+func TestStreamEngineRunPlaybook_ContinueOnCmdErrorWaitsForPrompt(t *testing.T) {
+	reader := &scriptReader{
+		chunks: []string{
+			"<SW>",
+			"\r\n<SW>",
+			"display arp all\r\n^\r\nError: Too many parameters found at '^' position.\r\n<SW>",
+			"display device\r\nLSW's Device status:\r\nSlot  Card   Type\r\n1     -      LSW\r\n<SW>",
+		},
+	}
+	writer := &writeBuffer{}
+
+	client := &sshutil.SSHClient{
+		IP:     "192.168.58.200",
+		Stdin:  writer,
+		Stdout: reader,
+		Stderr: strings.NewReader(""),
+	}
+
+	engine := NewStreamEngine(nil, client, []string{"display arp all", "display device"}, 80)
+	engine.adapter.SetContinueOnCmdError(true)
+
+	results, err := engine.RunPlaybook(context.Background(), 2*time.Second)
+	if err != nil {
+		t.Fatalf("ContinueOnCmdError 场景不应失败: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("应返回 2 条命令结果，实际 %d", len(results))
+	}
+	if results[0].Success {
+		t.Fatalf("第一条命令应失败: %+v", results[0])
+	}
+	if !strings.Contains(results[0].NormalizedText, "Error: Too many parameters") {
+		t.Fatalf("第一条命令应保留设备错误输出，实际 %q", results[0].NormalizedText)
+	}
+	if !results[1].Success {
+		t.Fatalf("第二条命令应成功: %+v", results[1])
+	}
+	if !strings.Contains(results[1].NormalizedText, "LSW's Device status:") {
+		t.Fatalf("第二条命令应拿到 display device 回显，实际 %q", results[1].NormalizedText)
+	}
+
+	got := writer.String()
+	if !strings.Contains(got, "display arp all\n") || !strings.Contains(got, "display device\n") {
+		t.Fatalf("应按顺序发送两条命令，实际发送: %q", got)
+	}
+}

@@ -40,6 +40,9 @@ type CommandContext struct {
 	// ErrorMessage 错误信息
 	ErrorMessage string
 
+	// ResultRecorded 标记结果是否已经写入 SessionContext.Results，避免重复追加
+	ResultRecorded bool
+
 	// CustomTimeout 自定义超时时间（从内联注释解析）
 	CustomTimeout time.Duration
 }
@@ -85,6 +88,15 @@ func (c *CommandContext) MarkCompleted() {
 func (c *CommandContext) MarkFailed(errMsg string) {
 	c.CompletedAt = time.Now()
 	c.ErrorMessage = errMsg
+}
+
+// MarkPromptMatched 标记已经收到命令结束提示符。
+// 对已失败命令，仅补充提示符收尾信息，不覆盖失败状态。
+func (c *CommandContext) MarkPromptMatched() {
+	c.PromptMatched = true
+	if c.CompletedAt.IsZero() {
+		c.CompletedAt = time.Now()
+	}
 }
 
 // IncrementPagination 增加分页计数

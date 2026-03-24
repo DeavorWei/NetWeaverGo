@@ -393,8 +393,12 @@ func (c *SessionContext) HasPendingLines() bool {
 // CompleteCurrentCommand 完成当前命令
 func (c *SessionContext) CompleteCurrentCommand() {
 	if c.Current != nil {
-		c.Current.MarkCompleted()
-		c.Results = append(c.Results, c.Current.ToResult())
+		if c.Current.HasError() {
+			c.Current.MarkPromptMatched()
+		} else {
+			c.Current.MarkCompleted()
+		}
+		c.recordCurrentResult()
 	}
 }
 
@@ -402,6 +406,22 @@ func (c *SessionContext) CompleteCurrentCommand() {
 func (c *SessionContext) FailCurrentCommand(errMsg string) {
 	if c.Current != nil {
 		c.Current.MarkFailed(errMsg)
-		c.Results = append(c.Results, c.Current.ToResult())
+		c.recordCurrentResult()
 	}
+}
+
+// MarkCurrentCommandFailed 仅标记当前命令失败，不立即写入结果。
+// 用于 ContinueOnCmdError 这类需要等待设备返回提示符后再推进下一条命令的场景。
+func (c *SessionContext) MarkCurrentCommandFailed(errMsg string) {
+	if c.Current != nil {
+		c.Current.MarkFailed(errMsg)
+	}
+}
+
+func (c *SessionContext) recordCurrentResult() {
+	if c.Current == nil || c.Current.ResultRecorded {
+		return
+	}
+	c.Results = append(c.Results, c.Current.ToResult())
+	c.Current.ResultRecorded = true
 }

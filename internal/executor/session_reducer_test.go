@@ -66,6 +66,10 @@ func (m *MockMatcher) AddErrorLine(line string, rule *matcher.ErrorRule) {
 	m.errorLines[line] = rule
 }
 
+func (m *MockMatcher) AddPrompt(prompt string) {
+	m.prompts = append(m.prompts, prompt)
+}
+
 // ============================================================================
 // 基础测试
 // ============================================================================
@@ -483,6 +487,84 @@ func TestReducerWarningPass(t *testing.T) {
 	// 验证没有产生动作
 	if len(actions) != 0 {
 		t.Errorf("警告级别不应该产生动作，但产生了 %d 个", len(actions))
+	}
+}
+
+func TestReducerContinueOnCmdErrorWaitsForPromptAndIgnoresDuplicateErrorLines(t *testing.T) {
+	m := NewMockMatcher()
+	m.AddPrompt("<SW>")
+
+	reducer := NewSessionReducer([]string{"display arp all", "display device"}, m)
+	reducer.state = NewStateRunning
+	reducer.ctx.SetContinueOnCmdError(true)
+	reducer.ctx.Current = NewCommandContext(0, "display arp all")
+	reducer.ctx.Current.SetCommand("display arp all")
+	reducer.ctx.NextIndex = 1
+
+	firstActions := reducer.Reduce(EvErrorMatched{
+		Line: "^",
+		Rule: &matcher.ErrorRule{
+			Name:     "输入错误",
+			Severity: matcher.SeverityCritical,
+			Message:  "设备执行输入返回 Error",
+		},
+	})
+	if reducer.State() != NewStateRunning {
+		t.Fatalf("首次命令错误后应继续保持 Running，实际是 %s", reducer.State())
+	}
+	if len(firstActions) != 0 {
+		t.Fatalf("首次命令错误后在提示符到达前不应立即发送下一条命令，实际有 %d 个动作", len(firstActions))
+	}
+	if reducer.ctx.Current == nil || !reducer.ctx.Current.HasError() {
+		t.Fatal("当前命令应已标记为失败")
+	}
+
+	secondActions := reducer.Reduce(EvErrorMatched{
+		Line: "Error: Too many parameters found at '^' position.",
+		Rule: &matcher.ErrorRule{
+			Name:     "输入错误",
+			Severity: matcher.SeverityCritical,
+			Message:  "设备执行输入返回 Error",
+		},
+	})
+	if len(secondActions) != 0 {
+		t.Fatalf("同一错误块的后续错误行不应再产生动作，实际有 %d 个动作", len(secondActions))
+	}
+	if len(reducer.ctx.Results) != 0 {
+		t.Fatalf("提示符到达前不应提前写入结果，实际结果数 %d", len(reducer.ctx.Results))
+	}
+
+	promptActions := reducer.Reduce(EvCommittedLine{Line: "<SW>"})
+	if reducer.State() != NewStateRunning {
+		t.Fatalf("错误命令收尾后应自动发送下一条命令并保持 Running，实际是 %s", reducer.State())
+	}
+	if len(reducer.ctx.Results) != 1 {
+		t.Fatalf("错误命令结果应只记录一次，实际记录了 %d 次", len(reducer.ctx.Results))
+	}
+	if reducer.ctx.Results[0].Success {
+		t.Fatal("第一条命令应标记为失败")
+	}
+	if got := reducer.ctx.Results[0].ErrorMessage; got == "" {
+		t.Fatal("第一条命令应保留错误信息")
+	}
+	if len(reducer.ctx.Results[0].NormalizedLines) != 3 {
+		t.Fatalf("错误命令结果应包含两行错误输出和一个收尾提示符，实际 %d 行", len(reducer.ctx.Results[0].NormalizedLines))
+	}
+	if reducer.ctx.Results[0].NormalizedLines[0] != "^" ||
+		reducer.ctx.Results[0].NormalizedLines[1] != "Error: Too many parameters found at '^' position." ||
+		reducer.ctx.Results[0].NormalizedLines[2] != "<SW>" {
+		t.Fatalf("错误命令规范化输出不符合预期: %#v", reducer.ctx.Results[0].NormalizedLines)
+	}
+
+	if len(promptActions) != 1 {
+		t.Fatalf("提示符到达后应只产生 1 个动作，实际是 %d", len(promptActions))
+	}
+	act, ok := promptActions[0].(ActSendCommand)
+	if !ok {
+		t.Fatalf("提示符到达后应发送下一条命令，实际动作是 %T", promptActions[0])
+	}
+	if act.Index != 1 || act.Command != "display device" {
+		t.Fatalf("下一条命令错误: index=%d command=%q", act.Index, act.Command)
 	}
 }
 
