@@ -3,8 +3,12 @@ package executor
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/sshutil"
 )
 
 // ============================================================================
@@ -111,6 +115,245 @@ func TestProcessResultsWithKeys(t *testing.T) {
 			t.Error("nil 结果应该被替换为失败结果")
 		}
 	})
+}
+
+func TestBuildUnifiedPlanCommands(t *testing.T) {
+	basePlan := []PlannedCommand{
+		{Key: "version", Command: "display version", Timeout: 30 * time.Second},
+		{Key: "lldp", Command: "display lldp neighbor", Timeout: 60 * time.Second},
+	}
+
+	t.Run("无设备画像时不前置初始化命令", func(t *testing.T) {
+		e := &DeviceExecutor{IP: "192.168.1.1"}
+		merged, initCount := e.buildUnifiedPlanCommands(basePlan)
+
+		if initCount != 0 {
+			t.Fatalf("initCount 预期为 0，实际 %d", initCount)
+		}
+		if len(merged) != len(basePlan) {
+			t.Fatalf("合并后命令数量错误: 预期 %d，实际 %d", len(basePlan), len(merged))
+		}
+	})
+
+	t.Run("有设备画像时前置禁分页命令和额外命令", func(t *testing.T) {
+		e := &DeviceExecutor{
+			IP: "192.168.1.1",
+			deviceProfile: &config.DeviceProfile{
+				Init: config.InitConfig{
+					DisablePagerCommands: []string{"screen-length 0 temporary"},
+					ExtraCommands:        []string{"display clock"},
+					PromptTimeoutSec:     20,
+				},
+			},
+		}
+
+		merged, initCount := e.buildUnifiedPlanCommands(basePlan)
+		if initCount != 2 {
+			t.Fatalf("initCount 预期为 2，实际 %d", initCount)
+		}
+		if len(merged) != len(basePlan)+2 {
+			t.Fatalf("合并后命令数量错误: 预期 %d，实际 %d", len(basePlan)+2, len(merged))
+		}
+		if merged[0].Command != "screen-length 0 temporary" || merged[1].Command != "display clock" {
+			t.Fatalf("前置初始化命令顺序错误: got[0]=%q got[1]=%q", merged[0].Command, merged[1].Command)
+		}
+		if merged[2].Command != basePlan[0].Command || merged[3].Command != basePlan[1].Command {
+			t.Fatalf("业务命令顺序错误")
+		}
+	})
+}
+
+func TestDropInitResultsAndKeys(t *testing.T) {
+	e := &DeviceExecutor{IP: "192.168.1.1"}
+
+	results := []*CommandResult{
+		{Index: 0, Command: "screen-length 0 temporary"},
+		{Index: 1, Command: "display version"},
+		{Index: 2, Command: "display lldp neighbor"},
+	}
+	keys := []string{"__init_disable_pager_0", "version", "lldp"}
+
+	trimmedResults := e.dropInitResults(results, 1)
+	trimmedKeys := e.dropInitKeys(keys, 1)
+
+	if len(trimmedResults) != 2 {
+		t.Fatalf("trimmedResults 长度错误: 预期 2，实际 %d", len(trimmedResults))
+	}
+	if len(trimmedKeys) != 2 {
+		t.Fatalf("trimmedKeys 长度错误: 预期 2，实际 %d", len(trimmedKeys))
+	}
+	if trimmedResults[0].Command != "display version" || trimmedKeys[0] != "version" {
+		t.Fatalf("剥离初始化结果后首条业务命令不正确")
+	}
+
+	emptyResults := e.dropInitResults(results, 10)
+	emptyKeys := e.dropInitKeys(keys, 10)
+	if len(emptyResults) != 0 || len(emptyKeys) != 0 {
+		t.Fatalf("initCount 超过长度时应返回空切片")
+	}
+}
+
+func TestExecutePlan_UnifiedInitCommandsNotInBusinessResults(t *testing.T) {
+	reader := &scriptReader{
+		chunks: []string{
+			"<SW>",
+			"\r\n<SW>",
+			"screen-length 0 temporary\r\nInfo: ok\r\n<SW>",
+			"display version\r\nVersion: VRP\r\n<SW>",
+			"display lldp neighbor verbose\r\nLLDP: 1\r\n<SW>",
+		},
+	}
+	writer := &writeBuffer{}
+
+	e := &DeviceExecutor{
+		IP: "192.168.58.200",
+		Client: &sshutil.SSHClient{
+			IP:     "192.168.58.200",
+			Stdin:  writer,
+			Stdout: reader,
+			Stderr: strings.NewReader(""),
+		},
+		deviceProfile: &config.DeviceProfile{
+			Init: config.InitConfig{
+				DisablePagerCommands: []string{"screen-length 0 temporary"},
+				PromptTimeoutSec:     30,
+			},
+		},
+	}
+
+	plan := ExecutionPlan{
+		Name: "discovery-huawei",
+		Commands: []PlannedCommand{
+			{Key: "version", Command: "display version", Timeout: 30 * time.Second},
+			{Key: "lldp_neighbor", Command: "display lldp neighbor verbose", Timeout: 30 * time.Second},
+		},
+		ContinueOnCmdError: true,
+	}
+
+	report, err := e.ExecutePlan(context.Background(), plan)
+	if err != nil {
+		t.Fatalf("ExecutePlan 不应失败: %v", err)
+	}
+	if report == nil {
+		t.Fatalf("ExecutePlan 返回 report 为空")
+	}
+	if len(report.Results) != 2 {
+		t.Fatalf("业务结果应仅包含计划命令 2 条，实际 %d", len(report.Results))
+	}
+	if report.Results[0].CommandKey != "version" || report.Results[1].CommandKey != "lldp_neighbor" {
+		t.Fatalf("业务结果命令键回填错误: got=%q,%q", report.Results[0].CommandKey, report.Results[1].CommandKey)
+	}
+
+	sent := writer.String()
+	if !strings.Contains(sent, "screen-length 0 temporary\n") {
+		t.Fatalf("应发送初始化禁分页命令，实际发送: %q", sent)
+	}
+	if !strings.Contains(sent, "display version\n") || !strings.Contains(sent, "display lldp neighbor verbose\n") {
+		t.Fatalf("应发送业务命令，实际发送: %q", sent)
+	}
+}
+
+func TestExecutePlan_UnifiedInitCommands_MultiVendorReplay(t *testing.T) {
+	tests := []struct {
+		name   string
+		vendor string
+		prompt string
+	}{
+		{name: "Huawei", vendor: "huawei", prompt: "<SW>"},
+		{name: "H3C", vendor: "h3c", prompt: "<H3C>"},
+		{name: "Cisco", vendor: "cisco", prompt: "SW1#"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			profile := config.GetDeviceProfile(tt.vendor)
+			if profile == nil {
+				t.Fatalf("设备画像为空: vendor=%s", tt.vendor)
+			}
+			if len(profile.Commands) < 2 {
+				t.Fatalf("设备画像业务命令不足: vendor=%s, count=%d", tt.vendor, len(profile.Commands))
+			}
+
+			plan := ExecutionPlan{
+				Name: tt.vendor + "-plan",
+				Commands: []PlannedCommand{
+					{
+						Key:     profile.Commands[0].CommandKey,
+						Command: profile.Commands[0].Command,
+						Timeout: 30 * time.Second,
+					},
+					{
+						Key:     profile.Commands[1].CommandKey,
+						Command: profile.Commands[1].Command,
+						Timeout: 30 * time.Second,
+					},
+				},
+				ContinueOnCmdError: true,
+			}
+
+			chunks := []string{
+				tt.prompt,
+				"\r\n" + tt.prompt,
+			}
+			for _, initCmd := range profile.Init.DisablePagerCommands {
+				chunks = append(chunks, initCmd+"\r\ninit-ok\r\n"+tt.prompt)
+			}
+			for _, extra := range profile.Init.ExtraCommands {
+				chunks = append(chunks, extra+"\r\nextra-ok\r\n"+tt.prompt)
+			}
+			for _, cmd := range plan.Commands {
+				chunks = append(chunks, cmd.Command+"\r\ncmd-ok\r\n"+tt.prompt)
+			}
+
+			reader := &scriptReader{chunks: chunks}
+			writer := &writeBuffer{}
+			e := &DeviceExecutor{
+				IP: "192.168.58.200",
+				Client: &sshutil.SSHClient{
+					IP:     "192.168.58.200",
+					Stdin:  writer,
+					Stdout: reader,
+					Stderr: strings.NewReader(""),
+				},
+				deviceProfile: profile,
+			}
+
+			report, err := e.ExecutePlan(context.Background(), plan)
+			if err != nil {
+				t.Fatalf("ExecutePlan 不应失败: %v", err)
+			}
+			if report == nil {
+				t.Fatalf("ExecutePlan 返回 report 为空")
+			}
+			if len(report.Results) != len(plan.Commands) {
+				t.Fatalf("业务结果数量错误: want=%d got=%d", len(plan.Commands), len(report.Results))
+			}
+
+			for i, result := range report.Results {
+				if result == nil {
+					t.Fatalf("第 %d 条结果为空", i)
+				}
+				if result.CommandKey != plan.Commands[i].Key {
+					t.Fatalf("结果命令键错误: idx=%d want=%s got=%s", i, plan.Commands[i].Key, result.CommandKey)
+				}
+				if result.Command != plan.Commands[i].Command {
+					t.Fatalf("结果命令文本错误: idx=%d want=%s got=%s", i, plan.Commands[i].Command, result.Command)
+				}
+			}
+
+			sent := writer.String()
+			for _, initCmd := range profile.Init.DisablePagerCommands {
+				if !strings.Contains(sent, initCmd+"\n") {
+					t.Fatalf("应发送初始化命令 [%s]，实际发送: %q", initCmd, sent)
+				}
+			}
+			for _, cmd := range plan.Commands {
+				if !strings.Contains(sent, cmd.Command+"\n") {
+					t.Fatalf("应发送业务命令 [%s]，实际发送: %q", cmd.Command, sent)
+				}
+			}
+		})
+	}
 }
 
 // TestIsFatalError 测试致命错误判断

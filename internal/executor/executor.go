@@ -175,8 +175,8 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 }
 
 // ExecutePlan 执行统一执行计划
-// 这是 discovery、engine 等批量路径唯一应使用的统一入口
-// 只创建一次 StreamEngine，只执行一次 RunInit，在同一个会话中执行所有命令
+// 这是 discovery、engine 等批量路径唯一应使用的统一入口。
+// 方案三实现：初始化命令与业务命令并入同一条 StreamEngine 状态机路径执行。
 //
 // 注意：此方法委托给 executeInternal 统一实现
 func (e *DeviceExecutor) ExecutePlan(ctx context.Context, plan ExecutionPlan) (*ExecutionReport, error) {
@@ -190,8 +190,8 @@ func (e *DeviceExecutor) ExecutePlan(ctx context.Context, plan ExecutionPlan) (*
 }
 
 // executeInternal 统一的内部执行实现
-// ExecutePlaybook 和 ExecutePlan 都委托给此方法
-// 关键修复：使用 RunPlaybook 一次性执行所有命令，避免结果错位
+// ExecutePlaybook 和 ExecutePlan 都委托给此方法。
+// 方案三实现：初始化命令前置并与业务命令同路执行，消除 RunInit 旁路。
 func (e *DeviceExecutor) executeInternal(
 	ctx context.Context,
 	plan ExecutionPlan,
@@ -214,10 +214,13 @@ func (e *DeviceExecutor) executeInternal(
 		}
 	}()
 
-	// 提取命令字符串列表和标识
-	commandStrings := make([]string, len(plan.Commands))
-	commandKeys := make([]string, len(plan.Commands))
-	for i, cmd := range plan.Commands {
+	// 方案三：将初始化命令前置到统一命令队列，由同一状态机驱动。
+	unifiedCommands, initCmdCount := e.buildUnifiedPlanCommands(plan.Commands)
+
+	// 提取命令字符串列表和标识（统一队列）
+	commandStrings := make([]string, len(unifiedCommands))
+	commandKeys := make([]string, len(unifiedCommands))
+	for i, cmd := range unifiedCommands {
 		commandStrings[i] = cmd.Command
 		commandKeys[i] = cmd.Key
 	}
@@ -238,54 +241,23 @@ func (e *DeviceExecutor) executeInternal(
 		engine.SetErrorMatcher(e.Matcher)
 	}
 
-	// 设置设备画像
-	if e.deviceProfile != nil {
-		engine.SetProfile(e.deviceProfile)
+	if initCmdCount > 0 {
+		logger.Debug("Executor", e.IP, "统一执行模式：前置初始化命令 %d 条，业务命令 %d 条",
+			initCmdCount, len(plan.Commands))
+	} else {
+		logger.Debug("Executor", e.IP, "统一执行模式：无前置初始化命令，业务命令 %d 条", len(plan.Commands))
 	}
-
-	// 发送初始化开始事件
-	if eventCallback != nil {
-		eventCallback(ExecutionEvent{
-			Type:      EventInitStart,
-			Timestamp: time.Now(),
-		})
-	}
-
-	// 执行初始化
-	initTimeout := e.getInitTimeout(plan.Commands)
-	initStart := time.Now()
-	if err := engine.RunInit(ctx, initTimeout); err != nil {
-		report.FatalError = fmt.Errorf("初始化失败: %w", err)
-		report.SessionHealthy = false
-		if eventCallback != nil {
-			eventCallback(ExecutionEvent{
-				Type:      EventError,
-				Error:     err,
-				Timestamp: time.Now(),
-			})
-		}
-		return report, report.FatalError
-	}
-	report.InitDuration = time.Since(initStart)
-
-	// 发送初始化完成事件
-	if eventCallback != nil {
-		eventCallback(ExecutionEvent{
-			Type:      EventInitComplete,
-			Duration:  report.InitDuration,
-			Timestamp: time.Now(),
-		})
-	}
-
-	logger.Debug("Executor", e.IP, "初始化完成，开始执行 %d 条命令", len(plan.Commands))
 
 	// 关键修复：使用 RunPlaybook 一次性执行所有命令，而非循环调用 RunSingle
 	// 这避免了结果错位和状态机推进冲突
-	defaultTimeout := e.getDefaultTimeout(plan.Commands)
+	defaultTimeout := e.getDefaultTimeout(unifiedCommands)
 	results, err := engine.RunPlaybook(ctx, defaultTimeout)
 
-	// 回填 CommandKey 并处理结果
-	report.Results = e.processResultsWithKeys(results, commandKeys, plan.Commands)
+	// 方案三：剥离前置初始化结果，只对业务命令做回填与汇报。
+	report.InitDuration = e.computeInitDuration(results, initCmdCount)
+	bizResults := e.dropInitResults(results, initCmdCount)
+	bizCommandKeys := e.dropInitKeys(commandKeys, initCmdCount)
+	report.Results = e.processResultsWithKeys(bizResults, bizCommandKeys, plan.Commands)
 
 	// 更新统计
 	for _, result := range report.Results {
@@ -327,6 +299,100 @@ func (e *DeviceExecutor) executeInternal(
 		report.SuccessCount(), report.FailureCount(), report.SessionHealthy, time.Since(report.StartedAt))
 
 	return report, nil
+}
+
+func (e *DeviceExecutor) buildUnifiedPlanCommands(commands []PlannedCommand) ([]PlannedCommand, int) {
+	initCommands := e.buildInitCommands(commands)
+	if len(initCommands) == 0 {
+		merged := make([]PlannedCommand, len(commands))
+		copy(merged, commands)
+		return merged, 0
+	}
+
+	merged := make([]PlannedCommand, 0, len(initCommands)+len(commands))
+	merged = append(merged, initCommands...)
+	merged = append(merged, commands...)
+	return merged, len(initCommands)
+}
+
+func (e *DeviceExecutor) buildInitCommands(commands []PlannedCommand) []PlannedCommand {
+	if e.deviceProfile == nil {
+		return nil
+	}
+
+	initTimeout := e.getInitTimeout(commands)
+	if initTimeout <= 0 {
+		initTimeout = 30 * time.Second
+	}
+
+	result := make([]PlannedCommand, 0)
+	for i, cmd := range e.deviceProfile.Init.DisablePagerCommands {
+		cmd = strings.TrimSpace(cmd)
+		if cmd == "" {
+			continue
+		}
+		result = append(result, PlannedCommand{
+			Key:             fmt.Sprintf("__init_disable_pager_%d", i),
+			Command:         cmd,
+			Timeout:         initTimeout,
+			ContinueOnError: false,
+		})
+	}
+	for i, cmd := range e.deviceProfile.Init.ExtraCommands {
+		cmd = strings.TrimSpace(cmd)
+		if cmd == "" {
+			continue
+		}
+		result = append(result, PlannedCommand{
+			Key:             fmt.Sprintf("__init_extra_%d", i),
+			Command:         cmd,
+			Timeout:         initTimeout,
+			ContinueOnError: false,
+		})
+	}
+
+	return result
+}
+
+func (e *DeviceExecutor) computeInitDuration(results []*CommandResult, initCmdCount int) time.Duration {
+	if initCmdCount <= 0 || len(results) == 0 {
+		return 0
+	}
+	limit := initCmdCount
+	if limit > len(results) {
+		limit = len(results)
+	}
+	var total time.Duration
+	for i := 0; i < limit; i++ {
+		if results[i] != nil {
+			total += results[i].Duration
+		}
+	}
+	return total
+}
+
+func (e *DeviceExecutor) dropInitResults(results []*CommandResult, initCmdCount int) []*CommandResult {
+	if initCmdCount <= 0 {
+		return results
+	}
+	if len(results) <= initCmdCount {
+		return []*CommandResult{}
+	}
+	trimmed := make([]*CommandResult, len(results)-initCmdCount)
+	copy(trimmed, results[initCmdCount:])
+	return trimmed
+}
+
+func (e *DeviceExecutor) dropInitKeys(keys []string, initCmdCount int) []string {
+	if initCmdCount <= 0 {
+		return keys
+	}
+	if len(keys) <= initCmdCount {
+		return []string{}
+	}
+	trimmed := make([]string, len(keys)-initCmdCount)
+	copy(trimmed, keys[initCmdCount:])
+	return trimmed
 }
 
 // processResultsWithKeys 处理结果并回填 CommandKey

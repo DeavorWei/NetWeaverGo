@@ -46,9 +46,6 @@ type StreamEngine struct {
 
 	// suspendHandler 错误/超时挂起处理器
 	suspendHandler SuspendHandler
-
-	// profile 设备画像（用于初始化）
-	profile *config.DeviceProfile
 }
 
 // NewStreamEngine 创建新的流处理引擎
@@ -78,41 +75,6 @@ func (e *StreamEngine) SetErrorMatcher(m *matcher.StreamMatcher) {
 	e.adapter.matcher = m
 }
 
-// SetProfile 设置设备画像
-func (e *StreamEngine) SetProfile(profile *config.DeviceProfile) {
-	e.profile = profile
-}
-
-// RunInit 执行初始化流程
-// 在执行命令前调用，发送禁分页命令等
-func (e *StreamEngine) RunInit(ctx context.Context, timeout time.Duration) error {
-	if e.profile == nil {
-		// 关键修复：无设备画像时也执行简化初始化，清理登录残留
-		logger.Debug("StreamEngine", "-", "无设备画像，执行简化初始化...")
-		if err := e.waitAndClearInitResidual(ctx, timeout); err != nil {
-			logger.Warn("StreamEngine", "-", "简化初始化失败: %v（继续执行）", err)
-			// 不阻断执行，继续尝试
-		}
-		return nil
-	}
-
-	// 创建初始化器
-	initializer := NewInitializerWithMatcher(e.profile, e.matcher)
-
-	// 执行初始化
-	logger.Info("StreamEngine", "-", "开始执行初始化流程...")
-	result := initializer.RunWithResult(ctx, e.client, e.adapter)
-	if !result.Success {
-		return fmt.Errorf("初始化失败: %s", result.ErrorMessage)
-	}
-
-	// 清空初始化残留
-	e.adapter.ClearInitResiduals()
-
-	logger.Info("StreamEngine", "-", "初始化流程完成 (禁分页: %v, 耗时: %v)", result.PagerDisabled, result.Duration)
-	return nil
-}
-
 // Run 运行流处理引擎
 // mode=playbook 时消费整队列
 // mode=single 时只消费一条命令并返回单结果
@@ -122,8 +84,18 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 		_ = e.client.SetReadDeadline(time.Time{})
 	}
 
-	manager := config.GetRuntimeManager()
-	buf := make([]byte, manager.GetBufferSize())
+	bufferSize := config.DefaultBufferSize
+	paginationInterval := config.PaginationCheckInterval
+	if manager := config.GetRuntimeManagerIfInitialized(); manager != nil {
+		if size := manager.GetBufferSize(); size > 0 {
+			bufferSize = size
+		}
+		if interval := manager.GetPaginationCheckInterval(); interval > 0 {
+			paginationInterval = interval
+		}
+	}
+
+	buf := make([]byte, bufferSize)
 	outReader := e.client.Stdout
 	errReader := e.client.Stderr
 
@@ -309,7 +281,7 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 			}
 		}
 
-		time.Sleep(manager.GetPaginationCheckInterval())
+		time.Sleep(paginationInterval)
 	}
 }
 
@@ -596,110 +568,4 @@ func NormalizeOutput(chunk string, width int) string {
 	}
 
 	return result
-}
-
-// waitAndClearInitResidual 等待并清理初始化残留（无设备画像时使用）
-// 关键修复：即使没有设备画像，也需要等待稳定提示符并清理登录欢迎信息
-func (e *StreamEngine) waitAndClearInitResidual(ctx context.Context, timeout time.Duration) error {
-	if e.client != nil {
-		defer func() {
-			_ = e.client.SetReadDeadline(time.Time{})
-		}()
-	}
-
-	deadline := time.Now().Add(timeout)
-	buf := make([]byte, 4096)
-
-	for time.Now().Before(deadline) {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		// 设置读取超时
-		if err := e.client.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
-			continue
-		}
-
-		n, err := e.client.Read(buf)
-		if err != nil {
-			if netErr, ok := err.(interface{ Timeout() bool }); ok && netErr.Timeout() {
-				// 允许初始化在 Ready 或已成功发送首条命令后完成
-				if e.initResidualCleared() {
-					// 关键修复：清空残留数据后再返回
-					logger.Debug("StreamEngine", "-", "简化初始化完成，状态机已就绪")
-					return nil
-				}
-				continue
-			}
-			continue
-		}
-
-		if n > 0 {
-			chunk := string(buf[:n])
-			// 喂给状态机
-			actions := e.adapter.FeedSessionActions(chunk)
-
-			// 处理状态机返回的动作
-			done, execErr := e.executeInitActions(actions, buf)
-			if execErr != nil {
-				return execErr
-			}
-			if done {
-				return nil
-			}
-
-			// 检查状态机是否已经进入 Ready 状态
-			if e.initResidualCleared() {
-				// 关键修复：清空残留数据后再返回
-				logger.Debug("StreamEngine", "-", "简化初始化完成，状态机已就绪")
-				return nil
-			}
-		}
-	}
-
-	// 超时也清理残留，不阻断执行
-	logger.Warn("StreamEngine", "-", "简化初始化超时，当前状态: %s", e.adapter.NewState())
-	e.adapter.ClearInitResiduals()
-	return fmt.Errorf("等待初始化提示符超时")
-}
-
-func (e *StreamEngine) initResidualCleared() bool {
-	return e.adapter.NewState() == NewStateReady
-}
-
-func (e *StreamEngine) executeInitActions(actions []SessionAction, buf []byte) (bool, error) {
-	for _, action := range actions {
-		switch act := action.(type) {
-		case ActSendWarmup:
-			logger.Debug("StreamEngine", "-", "简化初始化发送预热空行...")
-			if err := e.client.SendCommand(""); err != nil {
-				logger.Warn("StreamEngine", "-", "发送预热空行失败: %v", err)
-				continue
-			}
-
-			if err := e.client.SetReadDeadline(time.Now().Add(500 * time.Millisecond)); err == nil {
-				if n2, err2 := e.client.Read(buf); err2 == nil && n2 > 0 {
-					followups := e.adapter.FeedSessionActions(string(buf[:n2]))
-					done, execErr := e.executeInitActions(followups, buf)
-					if execErr != nil {
-						return false, execErr
-					}
-					if done {
-						return true, nil
-					}
-				}
-			}
-
-		case ActSendCommand:
-			logger.Debug("StreamEngine", "-", "简化初始化接管首条命令发送: %s", act.Command)
-			if err := e.client.SendCommand(act.Command); err != nil {
-				return false, fmt.Errorf("简化初始化发送首条命令失败: %w", err)
-			}
-			return true, nil
-		}
-	}
-
-	return false, nil
 }

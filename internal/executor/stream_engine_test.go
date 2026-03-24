@@ -31,11 +31,12 @@ type writeBuffer struct {
 
 func (w *writeBuffer) Close() error { return nil }
 
-func TestStreamEngineWaitAndClearInitResidual_SendsFirstCommand(t *testing.T) {
+func TestStreamEngineRunPlaybook_UnifiedPathSendsWarmupAndCommand(t *testing.T) {
 	reader := &scriptReader{
 		chunks: []string{
 			"Info: login ok\r\n<S1>",
 			"\r\n<S1>",
+			"disp int b\r\nline-1\r\n<S1>",
 		},
 	}
 	writer := &writeBuffer{}
@@ -44,13 +45,17 @@ func TestStreamEngineWaitAndClearInitResidual_SendsFirstCommand(t *testing.T) {
 		IP:     "192.168.58.200",
 		Stdin:  writer,
 		Stdout: reader,
+		Stderr: strings.NewReader(""),
 	}
 
 	engine := NewStreamEngine(nil, client, []string{"disp int b"}, 80)
 
-	err := engine.waitAndClearInitResidual(context.Background(), 2*time.Second)
+	results, err := engine.RunPlaybook(context.Background(), 2*time.Second)
 	if err != nil {
-		t.Fatalf("简化初始化不应失败: %v", err)
+		t.Fatalf("统一执行路径不应失败: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("应返回 1 条命令结果，实际 %d", len(results))
 	}
 
 	got := writer.String()
@@ -61,12 +66,11 @@ func TestStreamEngineWaitAndClearInitResidual_SendsFirstCommand(t *testing.T) {
 		t.Fatalf("应在初始化完成后立即发送首条命令，实际输出为 %q", got)
 	}
 
-	if engine.adapter.NewState() != NewStateRunning {
-		t.Fatalf("首条命令发送后状态应为 Running，实际是 %s", engine.adapter.NewState())
+	if engine.adapter.NewState() != NewStateCompleted {
+		t.Fatalf("命令完成后状态应为 Completed，实际是 %s", engine.adapter.NewState())
 	}
 
-	current := engine.adapter.CurrentCommand()
-	if current == nil || current.Command != "disp int b" {
-		t.Fatalf("当前命令上下文异常: %+v", current)
+	if results[0].Command != "disp int b" {
+		t.Fatalf("命令结果异常: %+v", results[0])
 	}
 }

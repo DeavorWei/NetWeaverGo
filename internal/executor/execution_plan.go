@@ -170,10 +170,6 @@ func (r *ExecutionReport) String() string {
 type ExecutionEventType string
 
 const (
-	// EventInitStart 初始化开始
-	EventInitStart ExecutionEventType = "init_start"
-	// EventInitComplete 初始化完成
-	EventInitComplete ExecutionEventType = "init_complete"
 	// EventCmdStart 命令开始
 	EventCmdStart ExecutionEventType = "cmd_start"
 	// EventCmdComplete 命令完成
