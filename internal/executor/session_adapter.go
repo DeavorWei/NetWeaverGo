@@ -218,6 +218,16 @@ func (a *SessionAdapter) GetCurrentTimeout() time.Duration {
 	return 0
 }
 
+// SetCommandKeys 设置命令标识列表
+func (a *SessionAdapter) SetCommandKeys(keys []string) {
+	a.newContext.SetCommandKeys(keys)
+}
+
+// GetCommandKey 获取指定索引的命令标识
+func (a *SessionAdapter) GetCommandKey(index int) string {
+	return a.newContext.GetCommandKey(index)
+}
+
 func (a *SessionAdapter) detectSessionEvents(newLines []string, activeLineUpdated bool) []SessionEvent {
 	activeLine := ""
 	if activeLineUpdated {

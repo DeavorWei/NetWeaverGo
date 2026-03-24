@@ -355,10 +355,14 @@ export const PlanCompareAPI = {
 } as const
 
 // 导出发现任务相关类型
+// 阶段C修复：CommandSpec 已迁移到 config 包
 export type {
   CommandSpec,
-  VendorCommandProfile,
-} from '../bindings/github.com/NetWeaverGo/core/internal/discovery/models.js'
+  DeviceProfile,
+} from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
+
+// 兼容类型：VendorCommandProfile 已被 DeviceProfile 替代
+export type { DeviceProfile as VendorCommandProfile } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
 
 // ==================== 类型导出 ====================
 export type { 

@@ -136,6 +136,9 @@ type CommandResult struct {
 	// Index 命令索引
 	Index int
 
+	// CommandKey 命令标识 (如: version, lldp_neighbor)
+	CommandKey string
+
 	// Command 执行的命令
 	Command string
 

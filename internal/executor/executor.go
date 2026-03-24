@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -133,43 +134,421 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 
 // ExecutePlaybook 核心引擎方法：对该设备步进发送命令队列，并支持局部阻塞等待（配合 SuspendHandler）
 // 使用 StreamEngine 作为统一执行内核（Phase 2 设计要求）
+//
+// 注意：此方法现在委托给 executeInternal 统一实现
 func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string, cmdTimeout time.Duration) error {
 	logger.Debug("Executor", e.IP, "开始执行 Playbook (%d 条)", len(commands))
 	if e.Client == nil {
 		return fmt.Errorf("执行器未安全建连")
 	}
+
+	// 将命令列表转换为 PlannedCommand
+	plannedCmds := make([]PlannedCommand, len(commands))
+	for i, cmd := range commands {
+		plannedCmds[i] = PlannedCommand{
+			Key:             fmt.Sprintf("cmd_%d", i),
+			Command:         cmd,
+			Timeout:         cmdTimeout,
+			ContinueOnError: true,
+		}
+	}
+
+	plan := ExecutionPlan{
+		Name:               "playbook",
+		Commands:           plannedCmds,
+		ContinueOnCmdError: true,
+		Mode:               PlanModePlaybook,
+	}
+
+	report, err := e.executeInternal(ctx, plan, nil)
+	if err != nil {
+		return err
+	}
+
+	// 为了保持向后兼容，根据报告返回 error
+	if !report.IsSuccess() {
+		return fmt.Errorf("playbook 执行失败: %d/%d 个命令失败",
+			report.FailureCount(), len(commands))
+	}
+
+	return nil
+}
+
+// ExecutePlan 执行统一执行计划
+// 这是 discovery、engine 等批量路径唯一应使用的统一入口
+// 只创建一次 StreamEngine，只执行一次 RunInit，在同一个会话中执行所有命令
+//
+// 注意：此方法委托给 executeInternal 统一实现
+func (e *DeviceExecutor) ExecutePlan(ctx context.Context, plan ExecutionPlan) (*ExecutionReport, error) {
+	logger.Debug("Executor", e.IP, "开始执行 Plan: %s (%d 条命令)", plan.Name, len(plan.Commands))
+
+	if e.Client == nil {
+		return nil, fmt.Errorf("执行器未安全建连")
+	}
+
+	return e.executeInternal(ctx, plan, nil)
+}
+
+// executeInternal 统一的内部执行实现
+// ExecutePlaybook 和 ExecutePlan 都委托给此方法
+// 关键修复：使用 RunPlaybook 一次性执行所有命令，避免结果错位
+func (e *DeviceExecutor) executeInternal(
+	ctx context.Context,
+	plan ExecutionPlan,
+	eventCallback func(event ExecutionEvent),
+) (*ExecutionReport, error) {
+	logger.Debug("Executor", e.IP, "开始执行内部计划: %s (%d 条命令)", plan.Name, len(plan.Commands))
+
+	report := &ExecutionReport{
+		PlanName:       plan.Name,
+		Results:        make([]*CommandResult, 0, len(plan.Commands)),
+		SessionHealthy: true,
+		StartedAt:      time.Now(),
+	}
+
 	defer func() {
+		report.FinishedAt = time.Now()
+		report.ComputeStats()
 		if err := e.flushDetailLog(); err != nil {
 			logger.Warn("Executor", e.IP, "刷新详细日志失败: %v", err)
 		}
 	}()
 
+	// 提取命令字符串列表和标识
+	commandStrings := make([]string, len(plan.Commands))
+	commandKeys := make([]string, len(plan.Commands))
+	for i, cmd := range plan.Commands {
+		commandStrings[i] = cmd.Command
+		commandKeys[i] = cmd.Key
+	}
+
 	// 创建 StreamEngine
-	engine := NewStreamEngine(e, e.Client, commands, 80)
+	engine := NewStreamEngine(e, e.Client, commandStrings, 80)
+
+	// 设置命令标识
+	engine.adapter.SetCommandKeys(commandKeys)
 
 	// 设置挂起处理器
 	if e.OnSuspend != nil {
 		engine.SetSuspendHandler(e.OnSuspend)
 	}
 
-	// 使用执行器的匹配器（已配置设备画像）
+	// 使用执行器的匹配器
 	if e.Matcher != nil {
 		engine.SetErrorMatcher(e.Matcher)
 	}
 
-	// 无论是否有设备画像，都必须执行初始化流程。
-	// 无设备画像时，RunInit() 会执行简化初始化，清理登录残留。
+	// 设置设备画像
 	if e.deviceProfile != nil {
 		engine.SetProfile(e.deviceProfile)
 	}
-	// 始终调用 RunInit，由内部决定是否执行简化初始化
-	if err := engine.RunInit(ctx, cmdTimeout); err != nil {
-		return fmt.Errorf("初始化失败: %w", err)
+
+	// 发送初始化开始事件
+	if eventCallback != nil {
+		eventCallback(ExecutionEvent{
+			Type:      EventInitStart,
+			Timestamp: time.Now(),
+		})
 	}
 
-	// 执行 Playbook
-	_, err := engine.RunPlaybook(ctx, cmdTimeout)
-	return err
+	// 执行初始化
+	initTimeout := e.getInitTimeout(plan.Commands)
+	initStart := time.Now()
+	if err := engine.RunInit(ctx, initTimeout); err != nil {
+		report.FatalError = fmt.Errorf("初始化失败: %w", err)
+		report.SessionHealthy = false
+		if eventCallback != nil {
+			eventCallback(ExecutionEvent{
+				Type:      EventError,
+				Error:     err,
+				Timestamp: time.Now(),
+			})
+		}
+		return report, report.FatalError
+	}
+	report.InitDuration = time.Since(initStart)
+
+	// 发送初始化完成事件
+	if eventCallback != nil {
+		eventCallback(ExecutionEvent{
+			Type:      EventInitComplete,
+			Duration:  report.InitDuration,
+			Timestamp: time.Now(),
+		})
+	}
+
+	logger.Debug("Executor", e.IP, "初始化完成，开始执行 %d 条命令", len(plan.Commands))
+
+	// 关键修复：使用 RunPlaybook 一次性执行所有命令，而非循环调用 RunSingle
+	// 这避免了结果错位和状态机推进冲突
+	defaultTimeout := e.getDefaultTimeout(plan.Commands)
+	results, err := engine.RunPlaybook(ctx, defaultTimeout)
+
+	// 回填 CommandKey 并处理结果
+	report.Results = e.processResultsWithKeys(results, commandKeys, plan.Commands)
+
+	// 更新统计
+	for _, result := range report.Results {
+		if result != nil {
+			report.TotalBytesRead += result.RawSize
+			report.TotalLinesParsed += len(result.NormalizedLines)
+		}
+	}
+
+	// 处理执行错误
+	if err != nil {
+		errorClass := classifyRunError(err)
+		isFatal := e.isFatalError(err, plan)
+
+		logger.Warn("Executor", e.IP, "执行过程中发生错误: class=%s, fatal=%v, err=%v",
+			errorClass, isFatal, err)
+
+		// 判断是否为致命错误
+		if isFatal {
+			report.FatalError = err
+			report.SessionHealthy = false
+			logger.Debug("Executor", e.IP, "错误被判定为致命错误: class=%s, abortOnTransport=%v, abortOnTimeout=%v, continueOnCmdError=%v",
+				errorClass, plan.AbortOnTransportErr, plan.AbortOnCommandTimeout, plan.ContinueOnCmdError)
+		} else {
+			logger.Debug("Executor", e.IP, "错误被判定为非致命，继续执行: class=%s", errorClass)
+		}
+	}
+
+	// 发送执行完成事件
+	if eventCallback != nil {
+		eventCallback(ExecutionEvent{
+			Type:      EventComplete,
+			Duration:  time.Since(report.StartedAt),
+			Timestamp: time.Now(),
+		})
+	}
+
+	logger.Debug("Executor", e.IP, "计划执行完成: success=%d, failed=%d, sessionHealthy=%v, 总耗时=%v",
+		report.SuccessCount(), report.FailureCount(), report.SessionHealthy, time.Since(report.StartedAt))
+
+	return report, nil
+}
+
+// processResultsWithKeys 处理结果并回填 CommandKey
+// 确保结果与计划命令一一对应
+// P2修复：当 results==0 时按计划命令数补齐失败结果
+func (e *DeviceExecutor) processResultsWithKeys(
+	results []*CommandResult,
+	commandKeys []string,
+	plannedCmds []PlannedCommand,
+) []*CommandResult {
+	// P2修复：空结果时按计划命令数补齐失败结果
+	if len(results) == 0 && len(plannedCmds) > 0 {
+		logger.Warn("Executor", e.IP, "执行结果为空，按计划命令数(%d)补齐失败结果", len(plannedCmds))
+		processed := make([]*CommandResult, 0, len(plannedCmds))
+		for i, cmd := range plannedCmds {
+			key := ""
+			if i < len(commandKeys) {
+				key = commandKeys[i]
+			}
+			processed = append(processed, &CommandResult{
+				Index:        i,
+				CommandKey:   key,
+				Command:      cmd.Command,
+				Success:      false,
+				ErrorMessage: "missing result",
+			})
+		}
+		return processed
+	}
+
+	if len(results) == 0 {
+		logger.Warn("Executor", e.IP, "执行结果为空且无计划命令")
+		return make([]*CommandResult, 0)
+	}
+
+	// P2修复：处理结果数量大于命令数量的情况（截断）
+	if len(results) > len(plannedCmds) {
+		logger.Warn("Executor", e.IP, "结果数量超过命令数量，截断多余结果: results=%d, commands=%d",
+			len(results), len(plannedCmds))
+		results = results[:len(plannedCmds)]
+	}
+
+	// 如果结果数量与命令数量不一致，记录警告
+	if len(results) != len(plannedCmds) {
+		logger.Warn("Executor", e.IP, "结果数量与命令数量不一致: results=%d, commands=%d",
+			len(results), len(plannedCmds))
+	}
+
+	// 回填 CommandKey
+	processed := make([]*CommandResult, 0, len(plannedCmds))
+	for i, result := range results {
+		if result == nil {
+			// 补齐空结果
+			result = &CommandResult{
+				Index:        i,
+				Success:      false,
+				ErrorMessage: "missing result",
+			}
+		}
+		// 回填 CommandKey（按索引对应）
+		if i < len(commandKeys) && commandKeys[i] != "" {
+			result.CommandKey = commandKeys[i]
+		}
+		// 回填 Command 文本（如果为空）
+		if result.Command == "" && i < len(plannedCmds) {
+			result.Command = plannedCmds[i].Command
+		}
+		processed = append(processed, result)
+	}
+
+	// 如果结果数量少于命令数量，补齐失败结果
+	for i := len(results); i < len(plannedCmds); i++ {
+		key := ""
+		if i < len(commandKeys) {
+			key = commandKeys[i]
+		}
+		logger.Warn("Executor", e.IP, "命令 %d (%s) 缺少结果，补齐失败记录", i, plannedCmds[i].Key)
+		processed = append(processed, &CommandResult{
+			Index:        i,
+			CommandKey:   key,
+			Command:      plannedCmds[i].Command,
+			Success:      false,
+			ErrorMessage: "missing result",
+		})
+	}
+
+	return processed
+}
+
+// getDefaultTimeout 获取默认超时
+func (e *DeviceExecutor) getDefaultTimeout(commands []PlannedCommand) time.Duration {
+	if len(commands) > 0 && commands[0].Timeout > 0 {
+		return commands[0].Timeout
+	}
+	return 30 * time.Second
+}
+
+// getInitTimeout 获取初始化超时
+func (e *DeviceExecutor) getInitTimeout(commands []PlannedCommand) time.Duration {
+	if len(commands) > 0 && commands[0].Timeout > 0 {
+		return commands[0].Timeout
+	}
+	return 30 * time.Second
+}
+
+// ErrorClass 错误分类
+type ErrorClass string
+
+const (
+	ErrorClassTransport     ErrorClass = "transport"      // 传输层错误（连接断开等）
+	ErrorClassTimeout       ErrorClass = "timeout"        // 超时错误
+	ErrorClassCommand       ErrorClass = "command"        // 命令执行错误（设备返回错误）
+	ErrorClassContextCancel ErrorClass = "context_cancel" // 上下文取消
+	ErrorClassUnknown       ErrorClass = "unknown"        // 未知错误
+)
+
+// classifyRunError 对执行错误进行分类
+// P1修复：新增错误分类函数，支持策略语义
+func classifyRunError(err error) ErrorClass {
+	if err == nil {
+		return ""
+	}
+
+	// 检查上下文取消
+	if errors.Is(err, context.Canceled) {
+		return ErrorClassContextCancel
+	}
+
+	// 检查超时错误
+	if isTimeoutError(err) {
+		return ErrorClassTimeout
+	}
+
+	// 检查传输层错误
+	// P1修复：使用大小写不敏感匹配
+	errStrLower := strings.ToLower(err.Error())
+	transportKeywords := []string{
+		"connection reset", "connection refused", "broken pipe",
+		"network is unreachable", "no such host", "dial tcp",
+		"eof", "ssh: handshake failed", "会话被远端断开",
+	}
+	for _, kw := range transportKeywords {
+		if strings.Contains(errStrLower, kw) {
+			return ErrorClassTransport
+		}
+	}
+
+	// 检查命令错误（设备返回的错误提示）
+	commandKeywords := []string{
+		"invalid", "unknown command", "syntax error",
+		"unrecognized", "not found", "失败", "错误",
+	}
+	for _, kw := range commandKeywords {
+		if strings.Contains(errStrLower, kw) {
+			return ErrorClassCommand
+		}
+	}
+
+	return ErrorClassUnknown
+}
+
+// isFatalError 基于策略矩阵判断是否为致命错误
+// P1修复：从"默认全fatal"改为"基于分类+策略矩阵"
+func (e *DeviceExecutor) isFatalError(err error, plan ExecutionPlan) bool {
+	if err == nil {
+		return false
+	}
+
+	errorClass := classifyRunError(err)
+
+	switch errorClass {
+	case ErrorClassTransport:
+		// 传输错误仅在 AbortOnTransportErr=true 时标记为 fatal
+		return plan.AbortOnTransportErr
+
+	case ErrorClassTimeout:
+		// 超时错误仅在 AbortOnCommandTimeout=true 时标记为 fatal
+		return plan.AbortOnCommandTimeout
+
+	case ErrorClassContextCancel:
+		// 上下文取消总是 fatal
+		return true
+
+	case ErrorClassCommand:
+		// 命令错误遵循 ContinueOnCmdError
+		// 如果 ContinueOnCmdError=true 则不 fatal，否则 fatal
+		return !plan.ContinueOnCmdError
+
+	default:
+		// P1修复：unknown 错误回退到传输错误策略
+		// 假设可能是未识别的传输错误，遵循 AbortOnTransportErr 策略
+		logger.Warn("Executor", e.IP, "未识别错误类型，回退到传输错误策略(AbortOnTransportErr=%v): %v",
+			plan.AbortOnTransportErr, err)
+		return plan.AbortOnTransportErr
+	}
+}
+
+// isTimeoutError 检查是否为超时错误
+// 阶段C修复：优先使用标准错误检查，字符串匹配作为兜底
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// 优先检查标准错误类型
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	// 检查网络超时错误
+	if netErr, ok := err.(interface{ Timeout() bool }); ok && netErr.Timeout() {
+		return true
+	}
+
+	// 兜底：字符串匹配（保留但降低优先级）
+	errStrLower := strings.ToLower(err.Error())
+	if strings.Contains(errStrLower, "timeout") || strings.Contains(err.Error(), "超时") {
+		logger.Verbose("Executor", "-", "通过字符串匹配检测到超时错误（建议使用标准错误类型）")
+		return true
+	}
+
+	return false
 }
 
 // Close 断开所有的流和连接
@@ -180,32 +559,22 @@ func (e *DeviceExecutor) Close() {
 }
 
 // ExecuteCommandSync 同步执行单条命令并返回原始输出文本
-// 这是 ExecuteCommandSyncWithResult 的兼容性包装器，内部使用 StreamEngine 实现
-// 保持返回 string 类型以向后兼容现有调用方
+// 内部使用 ExecutePlan 实现，保持与其他执行方法的一致性
 func (e *DeviceExecutor) ExecuteCommandSync(ctx context.Context, cmd string, defaultTimeout time.Duration) (string, error) {
-	result, err := e.ExecuteCommandSyncWithResult(ctx, cmd, defaultTimeout)
+	plan := ExecutionPlan{
+		Name: "single-cmd",
+		Commands: []PlannedCommand{
+			{Key: "cmd", Command: cmd, Timeout: defaultTimeout},
+		},
+	}
+	report, err := e.ExecutePlan(ctx, plan)
 	if err != nil {
 		return "", err
 	}
-	// 返回原始文本以保持向后兼容
-	return result.RawText, nil
-}
-
-// ExecuteCommandSyncWithResult 执行单条命令并返回完整的 CommandResult
-// 这是 ExecuteCommandSync 的增强版本，返回规范化后的输出
-func (e *DeviceExecutor) ExecuteCommandSyncWithResult(ctx context.Context, cmd string, timeout time.Duration) (*CommandResult, error) {
-	if e.Client == nil {
-		return nil, fmt.Errorf("执行器未安全建连")
+	if len(report.Results) > 0 && report.Results[0] != nil {
+		return report.Results[0].RawText, nil
 	}
-
-	// 使用 StreamEngine 执行
-	engine := NewStreamEngine(e, e.Client, []string{cmd}, 80)
-	result, err := engine.RunSingle(ctx, cmd, timeout)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return "", fmt.Errorf("no result")
 }
 
 func (e *DeviceExecutor) rawSink() report.RawTranscriptSink {

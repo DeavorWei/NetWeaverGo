@@ -636,7 +636,7 @@ const canStart = computed(() => {
 const vendorProfile = computed(() => {
   if (!selectedVendor.value) return null;
   return (
-    vendorProfiles.value.find((p) => p.vendor === selectedVendor.value) || null
+    vendorProfiles.value.find((p: VendorCommandProfile) => p.vendor === selectedVendor.value) || null
   );
 });
 

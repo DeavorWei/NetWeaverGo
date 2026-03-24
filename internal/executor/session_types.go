@@ -266,6 +266,9 @@ type SessionContext struct {
 	// 命令队列
 	Queue []string
 
+	// 命令标识队列（与 Queue 一一对应）
+	CommandKeys []string
+
 	// 下一条命令索引
 	NextIndex int
 
@@ -298,11 +301,21 @@ type SessionContext struct {
 func NewSessionContext(commands []string) *SessionContext {
 	return &SessionContext{
 		Queue:              commands,
+		CommandKeys:        make([]string, len(commands)),
 		NextIndex:          0,
 		PendingLines:       make([]string, 0),
 		Results:            make([]*CommandResult, 0),
 		MaxPaginationCount: DefaultMaxPaginationCount,
 	}
+}
+
+// NewSessionContextWithKeys 创建带命令标识的会话上下文
+func NewSessionContextWithKeys(commands []string, keys []string) *SessionContext {
+	ctx := NewSessionContext(commands)
+	if len(keys) == len(commands) {
+		ctx.CommandKeys = keys
+	}
+	return ctx
 }
 
 // HasMoreCommands 是否还有更多命令
@@ -326,9 +339,32 @@ func (c *SessionContext) AdvanceCommand() *CommandContext {
 
 	rawCmd := c.Queue[c.NextIndex]
 	ctx := NewCommandContext(c.NextIndex, rawCmd)
+
+	// 解析命令文本（去除内联注释等）
+	cmdToSend, _ := parseInlineCommand(rawCmd)
+	ctx.SetCommand(cmdToSend)
+
+	// 注意：CommandKey 不在此处设置，由 executor 在结果映射阶段回填
+	// 保持 ctx.Command 为实际命令文本，确保日志和输出正确
+
 	c.NextIndex++
 	c.Current = ctx
 	return ctx
+}
+
+// SetCommandKeys 设置命令标识列表
+func (c *SessionContext) SetCommandKeys(keys []string) {
+	if len(keys) == len(c.Queue) {
+		c.CommandKeys = keys
+	}
+}
+
+// GetCommandKey 获取指定索引的命令标识
+func (c *SessionContext) GetCommandKey(index int) string {
+	if index >= 0 && index < len(c.CommandKeys) {
+		return c.CommandKeys[index]
+	}
+	return ""
 }
 
 // AddPendingLine 添加待处理行

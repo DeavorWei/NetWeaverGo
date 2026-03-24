@@ -12,6 +12,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/executor"
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -90,21 +91,27 @@ func (r *Runner) SetMaxWorkers(workers int) {
 }
 
 // setPhase 更新任务阶段
+// 阶段C修复：添加错误处理
 func (r *Runner) setPhase(taskID string, phase models.DiscoveryTaskPhase) {
 	now := time.Now()
-	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+	if err := r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"phase":            phase,
 		"phase_started_at": now,
 		"phase_progress":   0,
-	})
+	}).Error; err != nil {
+		logger.Warn("Discovery", taskID, "更新任务阶段失败: %v", err)
+	}
 }
 
 // setPhaseProgress 更新阶段进度
+// 阶段C修复：添加错误处理
 func (r *Runner) setPhaseProgress(taskID string, progress int) {
 	if progress > 100 {
 		progress = 100
 	}
-	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Update("phase_progress", progress)
+	if err := r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Update("phase_progress", progress).Error; err != nil {
+		logger.Warn("Discovery", taskID, "更新阶段进度失败: %v", err)
+	}
 }
 
 // Start 启动发现任务
@@ -175,7 +182,7 @@ func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (s
 	var rawOutputs []models.RawCommandOutput
 	for _, dev := range devices {
 		effectiveVendor := resolveDiscoveryVendor(req.Vendor, dev.Vendor)
-		profile := GetVendorProfile(effectiveVendor)
+		profile := config.GetDeviceProfile(effectiveVendor)
 		for _, cmd := range profile.Commands {
 			rawOutputs = append(rawOutputs, models.RawCommandOutput{
 				TaskID:      taskID,
@@ -197,12 +204,15 @@ func (r *Runner) Start(ctx context.Context, req models.StartDiscoveryRequest) (s
 	r.runningTask = taskID
 
 	// 更新任务状态为运行中
+	// 阶段C修复：添加错误处理
 	now := time.Now()
-	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+	if err := r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status":     "running",
 		"started_at": now,
 		"phase":      models.PhaseCollecting,
-	})
+	}).Error; err != nil {
+		logger.Warn("Discovery", taskID, "更新任务状态为running失败: %v", err)
+	}
 
 	// 启动后台任务执行
 	go r.runDiscovery(r.ctx, taskID, devices, req.Vendor, task.TimeoutSec, task.MaxWorkers)
@@ -224,12 +234,15 @@ func (r *Runner) Cancel(taskID string) error {
 	}
 
 	// 更新任务状态
+	// 阶段C修复：添加错误处理
 	now := time.Now()
-	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+	if err := r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status":      "cancelled",
 		"phase":       models.PhaseCancelled,
 		"finished_at": now,
-	})
+	}).Error; err != nil {
+		logger.Warn("Discovery", taskID, "更新任务状态为cancelled失败: %v", err)
+	}
 
 	r.runningTask = ""
 	return nil
@@ -272,17 +285,23 @@ func (r *Runner) RetryFailed(ctx context.Context, taskID string) error {
 	}
 
 	// 更新设备状态为 pending
-	r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND status = ?", taskID, "failed").Update("status", "pending")
+	// 阶段C修复：添加错误处理
+	if err := r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND status = ?", taskID, "failed").Update("status", "pending").Error; err != nil {
+		logger.Warn("Discovery", taskID, "重置设备状态失败: %v", err)
+	}
 
 	// 初始化 context
 	r.ctx, r.cancel = context.WithCancel(ctx)
 	r.runningTask = taskID
 
 	// 更新任务状态为运行中
-	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+	// 阶段C修复：添加错误处理
+	if err := r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status": "running",
 		"phase":  models.PhaseCollecting,
-	})
+	}).Error; err != nil {
+		logger.Warn("Discovery", taskID, "更新任务状态失败: %v", err)
+	}
 
 	// 启动后台任务执行
 	go r.runDiscovery(r.ctx, taskID, devices, task.Vendor, task.TimeoutSec, task.MaxWorkers)
@@ -301,11 +320,14 @@ func (r *Runner) runDiscovery(ctx context.Context, taskID string, devices []mode
 				Timestamp: time.Now().UnixMilli(),
 			})
 			// 更新任务状态为失败
-			r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+			// 阶段C修复：添加错误处理
+			if err := r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 				"status":      "failed",
 				"phase":       models.PhaseFailed,
 				"finished_at": time.Now(),
-			})
+			}).Error; err != nil {
+				logger.Error("Discovery", taskID, "更新任务失败状态失败: %v", err)
+			}
 		}
 		r.mu.Lock()
 		r.runningTask = ""
@@ -386,7 +408,6 @@ dispatchLoop:
 			time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 
 			effectiveVendor := resolveDiscoveryVendor(requestedVendor, device.Vendor)
-			profile := GetVendorProfile(effectiveVendor)
 
 			deviceCtx := ctx
 			cancel := func() {}
@@ -396,7 +417,7 @@ dispatchLoop:
 			defer cancel()
 
 			// 执行设备发现
-			err := r.discoverDevice(deviceCtx, taskID, device, effectiveVendor, profile, algorithms, connectTimeout, taskCommandTimeout)
+			err := r.discoverDevice(deviceCtx, taskID, device, effectiveVendor, algorithms, connectTimeout, taskCommandTimeout)
 
 			countMu.Lock()
 			if err != nil {
@@ -442,13 +463,16 @@ dispatchLoop:
 		}
 	}
 
-	r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+	// 阶段C修复：添加错误处理
+	if err := r.db.Model(&models.DiscoveryTask{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status":        status,
 		"phase":         phase,
 		"finished_at":   now,
 		"success_count": successCount,
 		"failed_count":  failedCount,
-	})
+	}).Error; err != nil {
+		logger.Error("Discovery", taskID, "更新任务最终状态失败: %v", err)
+	}
 
 	// 发送完成事件
 	r.emitEvent(DiscoveryEvent{
@@ -459,15 +483,21 @@ dispatchLoop:
 	})
 }
 
-// discoverDevice 执行单设备发现
-func (r *Runner) discoverDevice(ctx context.Context, taskID string, device models.DeviceInfo, vendor string, profile *VendorCommandProfile, algorithms *config.SSHAlgorithmSettings, connectTimeout time.Duration, taskCommandTimeout time.Duration) error {
-	// 更新设备状态
+// discoverDevice 执行单设备发现 - 重构后版本
+// 使用 ExecutePlan 统一执行计划，修复会话状态丢失问题
+func (r *Runner) discoverDevice(ctx context.Context, taskID string, device models.DeviceInfo, vendor string, algorithms *config.SSHAlgorithmSettings, connectTimeout time.Duration, taskCommandTimeout time.Duration) error {
+	logger.Debug("Discovery", device.IP, "开始发现设备, vendor=%s", vendor)
+
+	// 1. 更新设备状态
+	// 阶段C修复：添加错误处理
 	now := time.Now()
-	r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, device.IP).Updates(map[string]interface{}{
+	if err := r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, device.IP).Updates(map[string]interface{}{
 		"status":     "running",
 		"started_at": now,
 		"vendor":     vendor,
-	})
+	}).Error; err != nil {
+		logger.Warn("Discovery", device.IP, "更新设备running状态失败: %v", err)
+	}
 
 	// 发送开始事件
 	r.emitEvent(DiscoveryEvent{
@@ -478,83 +508,143 @@ func (r *Runner) discoverDevice(ctx context.Context, taskID string, device model
 		Timestamp: time.Now().UnixMilli(),
 	})
 
-	// 创建执行器
+	// 2. 获取设备画像并构建执行计划
+	// 优先使用统一的 config 配置源
+	deviceProfile := config.GetDeviceProfile(vendor)
+	plan := BuildDiscoveryPlan(deviceProfile, taskCommandTimeout)
+
+	logger.Debug("Discovery", device.IP, "构建执行计划: %s, 命令数=%d", plan.Name, len(plan.Commands))
+
+	// 3. 创建执行器
 	exec := executor.NewDeviceExecutor(device.IP, device.Port, device.Username, device.Password, executor.ExecutorOptions{
 		Algorithms: algorithms,
 		Vendor:     vendor,
 	})
 
-	// 连接设备
+	// 4. 连接设备
 	if err := exec.Connect(ctx, connectTimeout); err != nil {
+		logger.Error("Discovery", device.IP, "SSH连接失败: %v", err)
 		r.updateDeviceError(taskID, device.IP, fmt.Sprintf("SSH连接失败: %v", err))
 		return err
 	}
 	defer exec.Close()
 
-	// 执行命令并保存输出
-	var lastErr error
+	// 5. 执行统一计划（✅ 修复：只创建一次 StreamEngine，只初始化一次）
+	report, err := exec.ExecutePlan(ctx, plan)
+
+	// 6. 处理结果
+	return r.handleDiscoveryReport(taskID, device, vendor, report, err)
+}
+
+// handleDiscoveryReport 处理发现执行报告
+// 阶段B修复：增加空指针防御和失败统计准确性
+func (r *Runner) handleDiscoveryReport(taskID string, device models.DeviceInfo, vendor string, report *executor.ExecutionReport, execErr error) error {
+	// 防御：report 为 nil 的情况
+	if report == nil {
+		logger.Error("Discovery", device.IP, "执行报告为空")
+		errMsg := "执行报告为空"
+		if execErr != nil {
+			errMsg = fmt.Sprintf("执行失败: %v", execErr)
+		}
+		r.updateDeviceError(taskID, device.IP, errMsg)
+		return fmt.Errorf("执行报告为空: %w", execErr)
+	}
+
 	cmdSuccess := 0
 	cmdFailed := 0
-	for _, cmd := range profile.Commands {
-		select {
-		case <-ctx.Done():
-			r.updateDeviceError(taskID, device.IP, "任务已取消")
-			return fmt.Errorf("任务已取消")
-		default:
+
+	// 保存每条命令的结果
+	// 即使 Results 为空，也要根据 FatalError 和 execErr 判断状态
+	for _, result := range report.Results {
+		status := "success"
+		errMsg := ""
+		if result.ErrorMessage != "" {
+			status = "failed"
+			errMsg = result.ErrorMessage
+			cmdFailed++
+		} else {
+			cmdSuccess++
 		}
 
-		// 发送命令事件
+		// 查找对应的命令文本
+		cmdText := result.Command
+		if cmdText == "" {
+			// 如果 Command 为空，尝试从 profile 查找
+			if spec := GetCommandByKey(vendor, result.CommandKey); spec != nil {
+				cmdText = spec.Command
+			}
+		}
+
+		// 保存命令输出
+		r.saveCommandOutput(taskID, device.IP, result.CommandKey, cmdText, result, status, errMsg)
+
+		// 如果是 version 命令，解析设备信息
+		if result.CommandKey == "version" && status == "success" {
+			r.parseAndUpdateDeviceInfo(taskID, device.IP, vendor, result.NormalizedText)
+		}
+
+		// 发送命令完成事件
 		r.emitEvent(DiscoveryEvent{
 			TaskID:    taskID,
 			DeviceIP:  device.IP,
 			Type:      "cmd",
-			Message:   fmt.Sprintf("执行命令: %s", cmd.Command),
+			Message:   fmt.Sprintf("命令完成: %s (%s)", result.CommandKey, status),
 			Timestamp: time.Now().UnixMilli(),
 		})
-
-		// 执行命令并收集输出 (使用 ExecuteCommandSyncWithResult)
-		commandTimeout := resolveCommandTimeout(cmd.TimeoutSec, taskCommandTimeout)
-		result, err := exec.ExecuteCommandSyncWithResult(ctx, cmd.Command, commandTimeout)
-		if err != nil {
-			lastErr = err
-			cmdFailed++
-			// 保存错误信息
-			r.saveCommandOutput(taskID, device.IP, cmd.CommandKey, cmd.Command, nil, "failed", err.Error())
-			continue
-		}
-		cmdSuccess++
-
-		// 保存命令输出（规范化输出 + 原始审计输出）
-		r.saveCommandOutput(taskID, device.IP, cmd.CommandKey, cmd.Command, result, "success", "")
-
-		// 如果是 version 命令，尝试解析设备信息
-		if cmd.CommandKey == "version" {
-			r.parseAndUpdateDeviceInfo(taskID, device.IP, vendor, result.NormalizedText)
-		}
 	}
 
-	// 更新设备状态
-	finishedAt := time.Now()
+	// 确定设备状态（阶段B修复：统一状态判定规则）
+	// 规则：
+	// - fatal error => failed
+	// - failure>0 && success>0 => partial
+	// - failure>0 && success==0 => failed
+	// - 全成功 => success
 	deviceStatus := "success"
 	deviceErr := ""
-	if cmdFailed > 0 && cmdSuccess > 0 {
-		deviceStatus = "partial"
-		if lastErr != nil {
-			deviceErr = lastErr.Error()
-		}
-	} else if cmdFailed > 0 && cmdSuccess == 0 {
+
+	// 优先检查会话级致命错误
+	if report.FatalError != nil {
 		deviceStatus = "failed"
-		if lastErr != nil {
-			deviceErr = lastErr.Error()
+		deviceErr = report.FatalError.Error()
+		logger.Debug("Discovery", device.IP, "会话级致命错误: %s", deviceErr)
+	} else if execErr != nil {
+		// 执行错误（非致命）
+		deviceStatus = "failed"
+		deviceErr = execErr.Error()
+		logger.Debug("Discovery", device.IP, "执行错误: %s", deviceErr)
+	} else if cmdFailed > 0 {
+		if cmdSuccess > 0 {
+			deviceStatus = "partial"
+			logger.Debug("Discovery", device.IP, "部分成功: %d 成功, %d 失败", cmdSuccess, cmdFailed)
+		} else {
+			deviceStatus = "failed"
+			deviceErr = "所有命令执行失败"
+			logger.Debug("Discovery", device.IP, "所有命令执行失败")
 		}
 	}
-	r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, device.IP).Updates(map[string]interface{}{
+
+	// 如果 Results 为空但有 FatalError，记录错误
+	if len(report.Results) == 0 && report.FatalError != nil {
+		deviceStatus = "failed"
+		deviceErr = report.FatalError.Error()
+		logger.Warn("Discovery", device.IP, "无命令结果且存在致命错误")
+	}
+
+	logger.Debug("Discovery", device.IP, "设备发现完成: status=%s, success=%d, failed=%d",
+		deviceStatus, cmdSuccess, cmdFailed)
+
+	// 更新数据库
+	// 阶段C修复：添加错误处理
+	finishedAt := time.Now()
+	if err := r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, device.IP).Updates(map[string]interface{}{
 		"status":        deviceStatus,
 		"error_message": deviceErr,
 		"finished_at":   finishedAt,
-	})
+	}).Error; err != nil {
+		logger.Error("Discovery", device.IP, "更新设备状态失败: %v", err)
+	}
 
-	// 发送成功事件
+	// 发送完成事件
 	r.emitEvent(DiscoveryEvent{
 		TaskID:    taskID,
 		DeviceIP:  device.IP,
@@ -566,20 +656,23 @@ func (r *Runner) discoverDevice(ctx context.Context, taskID string, device model
 	if deviceStatus == "success" {
 		return nil
 	}
-	if lastErr != nil {
-		return lastErr
+	if execErr != nil {
+		return execErr
 	}
 	return fmt.Errorf("设备发现失败: %s", deviceStatus)
 }
 
 // updateDeviceError 更新设备错误状态
+// 阶段C修复：添加错误处理
 func (r *Runner) updateDeviceError(taskID, deviceIP, errMsg string) {
 	now := time.Now()
-	r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, deviceIP).Updates(map[string]interface{}{
+	if err := r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, deviceIP).Updates(map[string]interface{}{
 		"status":        "failed",
 		"error_message": errMsg,
 		"finished_at":   now,
-	})
+	}).Error; err != nil {
+		logger.Error("Discovery", deviceIP, "更新设备错误状态失败: %v", err)
+	}
 
 	r.emitEvent(DiscoveryEvent{
 		TaskID:    taskID,
@@ -647,13 +740,17 @@ func (r *Runner) saveCommandOutput(taskID, deviceIP, commandKey, command string,
 		updates["prompt_matched"] = false
 	}
 
-	r.db.Model(&models.RawCommandOutput{}).Where(
+	// 阶段C修复：添加错误处理
+	if err := r.db.Model(&models.RawCommandOutput{}).Where(
 		"task_id = ? AND device_ip = ? AND command_key = ?",
 		taskID, deviceIP, commandKey,
-	).Updates(updates)
+	).Updates(updates).Error; err != nil {
+		logger.Error("Discovery", deviceIP, "更新命令输出记录失败 [%s]: %v", commandKey, err)
+	}
 }
 
 // parseAndUpdateDeviceInfo 解析并更新设备信息（简单版本，后续由 parser 模块处理）
+// 阶段C修复：添加错误处理
 func (r *Runner) parseAndUpdateDeviceInfo(taskID, deviceIP, vendor, output string) {
 	// 这里只是轻量预判，详细解析由 parser 模块完成。
 	effectiveVendor := resolveDiscoveryVendor(vendor, "")
@@ -661,7 +758,9 @@ func (r *Runner) parseAndUpdateDeviceInfo(taskID, deviceIP, vendor, output strin
 	if detectedVendor != "" {
 		effectiveVendor = detectedVendor
 	}
-	r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, deviceIP).Update("vendor", effectiveVendor)
+	if err := r.db.Model(&models.DiscoveryDevice{}).Where("task_id = ? AND device_ip = ?", taskID, deviceIP).Update("vendor", effectiveVendor).Error; err != nil {
+		logger.Warn("Discovery", deviceIP, "更新设备厂商失败: %v", err)
+	}
 }
 
 // getDevicesForDiscovery 获取用于发现的设备列表

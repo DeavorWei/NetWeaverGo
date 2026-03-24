@@ -118,8 +118,8 @@ func (s *DiscoveryService) GetCurrentDiscoveryTask() string {
 }
 
 // GetVendorProfiles 获取所有厂商命令配置
-func (s *DiscoveryService) GetVendorProfiles() []*discovery.VendorCommandProfile {
-	return discovery.GetAllVendorProfiles()
+func (s *DiscoveryService) GetVendorProfiles() []*config.DeviceProfile {
+	return config.GetAllDeviceProfiles()
 }
 
 // GetSupportedVendors 获取支持的厂商列表
