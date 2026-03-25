@@ -689,7 +689,7 @@ func (e *ParseExecutor) executeParse(ctx RuntimeContext, stageID string, unit *U
 	logger.Debug("TaskExec", ctx.RunID(), "Parsing device: %s", deviceIP)
 
 	vendor := ""
-	if unit.Steps != nil && len(unit.Steps) > 0 {
+	if len(unit.Steps) > 0 {
 		vendor = unit.Steps[0].Params["vendor"]
 	}
 	if err := e.parseAndSaveRunDevice(ctx.RunID(), deviceIP, vendor); err != nil {
@@ -852,17 +852,17 @@ func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, res
 		lineCount = len(result.NormalizedLines)
 	}
 	_ = e.db.Create(&TaskRawOutput{
-		TaskRunID:       taskID,
-		DeviceIP:        deviceIP,
-		CommandKey:      result.CommandKey,
-		Command:         result.Command,
-		ParseFilePath:   normalizedPath,
-		RawFilePath:     rawPath,
-		Status:          "success",
-		ParseStatus:     "pending",
-		RawSize:         rawSize,
-		NormalizedSize:  normalizedSize,
-		LineCount:       lineCount,
+		TaskRunID:      taskID,
+		DeviceIP:       deviceIP,
+		CommandKey:     result.CommandKey,
+		Command:        result.Command,
+		ParseFilePath:  normalizedPath,
+		RawFilePath:    rawPath,
+		Status:         "success",
+		ParseStatus:    "pending",
+		RawSize:        rawSize,
+		NormalizedSize: normalizedSize,
+		LineCount:      lineCount,
 	}).Error
 }
 
