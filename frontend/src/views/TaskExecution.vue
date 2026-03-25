@@ -686,8 +686,8 @@ const selectedBackupDevices = ref<DeviceAsset[]>([])
 const showBackupHelp = ref(false)
 
 // ================== 计算属性 - 从 Store 获取 ==================
-const executionSnapshot = computed(() => engineStore.executionSnapshot)
-const isRunning = computed(() => engineStore.isRunning)
+const executionSnapshot = computed(() => taskexecStore.currentSnapshot)
+const isRunning = computed(() => taskexecStore.isRunning)
 const progressPercent = computed(() => executionSnapshot.value?.progress ?? 0)
 // 从 units 转换为 devices 视图（兼容旧 UI）
 const execDevices = computed<DeviceViewState[]>(() => {
@@ -704,7 +704,7 @@ const execDevices = computed<DeviceViewState[]>(() => {
     truncated: false
   }))
 })
-const suspendSessions = computed(() => engineStore.suspendSessions)
+const suspendSessions = computed<Record<string, any>>(() => ({}))
 
 // ================== 统一运行时 Stage/Unit 数据 (新增) ==================
 const executionStages = computed<StageSnapshot[]>(() => {
@@ -727,9 +727,9 @@ function mapUnitStatusToDeviceStatus(unitStatus: string): DeviceViewState['statu
   }
 }
 
-// 备份相关计算属性
-const isBackupRunning = computed(() => engineStore.isBackupRunning)
-const backupProgressPercent = computed(() => engineStore.backupProgress)
+// 备份相关计算属性（使用本地状态）
+const isBackupRunning = computed(() => backupView.value.loading)
+const backupProgressPercent = computed(() => 0)
 const backupExecDevices = computed<DeviceViewState[]>(() => {
   // 备份功能暂不支持，返回空数组
   return []

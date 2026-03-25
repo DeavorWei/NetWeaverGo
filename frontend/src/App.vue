@@ -104,11 +104,11 @@ import TitleBar from "@/components/common/TitleBar.vue";
 import GlobalToast from "@/components/common/GlobalToast.vue";
 import RouteLoading from "@/components/common/RouteLoading.vue";
 import { useTheme } from "@/composables/useTheme";
-import { useEngineStore } from "@/stores/engineStore";
+import { useTaskexecStore } from "@/stores/taskexecStore";
 
 const router = useRouter();
 const route = useRoute();
-const engineStore = useEngineStore();
+const taskexecStore = useTaskexecStore();
 
 // 初始化主题
 useTheme();
@@ -235,8 +235,7 @@ function handleNav(key: string) {
 }
 
 onMounted(() => {
-  engineStore.initListeners();
-  void engineStore.syncExecutionState();
+  taskexecStore.initListeners();
 
   // 预加载高频页面，提升用户体验
   setTimeout(() => {
@@ -247,6 +246,6 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  engineStore.cleanupListeners();
+  taskexecStore.cleanupListeners();
 });
 </script>
