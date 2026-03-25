@@ -3,6 +3,7 @@ package taskexec
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -103,14 +104,30 @@ func (c *defaultRuntimeContext) IsCancelled() bool {
 
 // refreshSnapshot 刷新快照
 func (c *defaultRuntimeContext) refreshSnapshot() {
-	run, _ := c.repo.GetRun(c.ctx, c.runID)
+	run, err := c.repo.GetRun(c.ctx, c.runID)
+	if err != nil {
+		log.Printf("[Runtime] refreshSnapshot: GetRun failed, runID=%s, err=%v", c.runID, err)
+		return
+	}
 	if run == nil {
+		log.Printf("[Runtime] refreshSnapshot: run not found, runID=%s", c.runID)
 		return
 	}
 
-	stages, _ := c.repo.GetStagesByRun(c.ctx, c.runID)
-	units, _ := c.repo.GetUnitsByRun(c.ctx, c.runID)
-	events, _ := c.repo.GetEventsByRun(c.ctx, c.runID, 50)
+	stages, err := c.repo.GetStagesByRun(c.ctx, c.runID)
+	if err != nil {
+		log.Printf("[Runtime] refreshSnapshot: GetStagesByRun failed, runID=%s, err=%v", c.runID, err)
+	}
+
+	units, err := c.repo.GetUnitsByRun(c.ctx, c.runID)
+	if err != nil {
+		log.Printf("[Runtime] refreshSnapshot: GetUnitsByRun failed, runID=%s, err=%v", c.runID, err)
+	}
+
+	events, err := c.repo.GetEventsByRun(c.ctx, c.runID, 50)
+	if err != nil {
+		log.Printf("[Runtime] refreshSnapshot: GetEventsByRun failed, runID=%s, err=%v", c.runID, err)
+	}
 
 	builder := NewSnapshotBuilder()
 	snapshot := builder.Build(run, stages, units, events)

@@ -2,11 +2,18 @@ package taskexec
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// SubscriptionID 订阅标识
+type SubscriptionID int64
+
+// DefaultEmitSyncTimeout EmitSync 默认超时时间
+const DefaultEmitSyncTimeout = 5 * time.Second
 
 // TaskEvent 统一任务事件
 type TaskEvent struct {
@@ -65,7 +72,8 @@ type EventHandler func(event *TaskEvent)
 
 // EventBus 事件总线
 type EventBus struct {
-	handlers []EventHandler
+	handlers map[SubscriptionID]EventHandler
+	nextID   SubscriptionID
 	mu       sync.RWMutex
 	buffer   chan *TaskEvent
 	ctx      context.Context
@@ -76,25 +84,35 @@ type EventBus struct {
 func NewEventBus(bufferSize int) *EventBus {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &EventBus{
-		handlers: make([]EventHandler, 0),
+		handlers: make(map[SubscriptionID]EventHandler),
+		nextID:   0,
 		buffer:   make(chan *TaskEvent, bufferSize),
 		ctx:      ctx,
 		cancel:   cancel,
 	}
 }
 
-// Subscribe 订阅事件
-func (b *EventBus) Subscribe(handler EventHandler) {
+// Subscribe 订阅事件，返回取消订阅函数
+func (b *EventBus) Subscribe(handler EventHandler) func() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.handlers = append(b.handlers, handler)
+
+	id := b.nextID
+	b.nextID++
+	b.handlers[id] = handler
+
+	return func() {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		delete(b.handlers, id)
+	}
 }
 
-// Unsubscribe 取消订阅（简单实现：清空所有）
-func (b *EventBus) Unsubscribe() {
+// UnsubscribeAll 取消所有订阅
+func (b *EventBus) UnsubscribeAll() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.handlers = make([]EventHandler, 0)
+	b.handlers = make(map[SubscriptionID]EventHandler)
 }
 
 // Emit 发送事件
@@ -111,15 +129,39 @@ func (b *EventBus) Emit(event *TaskEvent) {
 	}
 }
 
-// EmitSync 同步发送事件（直接调用处理器）
+// EmitSync 同步发送事件（直接调用处理器，带超时保护）
 func (b *EventBus) EmitSync(event *TaskEvent) {
 	b.mu.RLock()
-	handlers := make([]EventHandler, len(b.handlers))
-	copy(handlers, b.handlers)
+	handlers := make([]EventHandler, 0, len(b.handlers))
+	for _, h := range b.handlers {
+		handlers = append(handlers, h)
+	}
 	b.mu.RUnlock()
 
-	for _, handler := range handlers {
-		handler(event)
+	// 使用 goroutine + channel 实现超时保护
+	done := make(chan struct{}, 1)
+	go func() {
+		defer close(done)
+		for _, handler := range handlers {
+			// 单个 handler 添加 panic 恢复
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("[EventBus] handler panic recovered: %v", r)
+					}
+				}()
+				handler(event)
+			}()
+		}
+	}()
+
+	select {
+	case <-done:
+		// 正常完成
+	case <-time.After(DefaultEmitSyncTimeout):
+		log.Printf("[EventBus] EmitSync timeout after %v, runID=%s", DefaultEmitSyncTimeout, event.RunID)
+	case <-b.ctx.Done():
+		// EventBus 已关闭
 	}
 }
 
@@ -141,12 +183,22 @@ func (b *EventBus) dispatchLoop() {
 			return
 		case event := <-b.buffer:
 			b.mu.RLock()
-			handlers := make([]EventHandler, len(b.handlers))
-			copy(handlers, b.handlers)
+			handlers := make([]EventHandler, 0, len(b.handlers))
+			for _, h := range b.handlers {
+				handlers = append(handlers, h)
+			}
 			b.mu.RUnlock()
 
 			for _, handler := range handlers {
-				go handler(event) // 异步处理避免阻塞
+				h := handler // 捕获循环变量
+				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("[EventBus] handler panic: %v", r)
+						}
+					}()
+					h(event)
+				}()
 			}
 		}
 	}
@@ -154,9 +206,10 @@ func (b *EventBus) dispatchLoop() {
 
 // SnapshotHub 快照中心 - 维护最新快照供前端查询
 type SnapshotHub struct {
-	snapshots map[string]*ExecutionSnapshot
-	mu        sync.RWMutex
-	eventBus  *EventBus
+	snapshots      map[string]*ExecutionSnapshot
+	mu             sync.RWMutex
+	eventBus       *EventBus
+	unsubscribeEvt func()
 }
 
 // NewSnapshotHub 创建快照中心
@@ -166,8 +219,8 @@ func NewSnapshotHub(eventBus *EventBus) *SnapshotHub {
 		eventBus:  eventBus,
 	}
 
-	// 订阅事件更新快照
-	eventBus.Subscribe(func(event *TaskEvent) {
+	// 订阅事件更新快照，保存取消函数
+	hub.unsubscribeEvt = eventBus.Subscribe(func(event *TaskEvent) {
 		hub.invalidate(event.RunID)
 	})
 
@@ -189,10 +242,18 @@ func (h *SnapshotHub) Get(runID string) (*ExecutionSnapshot, bool) {
 	return snapshot, ok
 }
 
-// invalidate 标记快照失效（触发重新查询）
+// invalidate 标记快照失效（删除缓存，下次查询从数据库重建）
 func (h *SnapshotHub) invalidate(runID string) {
-	// 实际实现可以选择删除缓存，让下次查询从数据库重建
-	// 或者这里可以触发异步重建
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.snapshots, runID)
+}
+
+// Close 关闭快照中心，取消事件订阅
+func (h *SnapshotHub) Close() {
+	if h.unsubscribeEvt != nil {
+		h.unsubscribeEvt()
+	}
 }
 
 // ListRunning 获取所有运行中的快照

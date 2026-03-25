@@ -12,10 +12,11 @@ import (
 // TaskExecutionEventBridge 统一任务执行事件桥接器
 // 负责将 taskexec 内部事件转换为 Wails 事件发送到前端
 type TaskExecutionEventBridge struct {
-	eventBus *taskexec.EventBus
-	wailsApp *application.App
-	mu       sync.RWMutex
-	runIDs   map[string]struct{}
+	eventBus       *taskexec.EventBus
+	wailsApp       *application.App
+	mu             sync.RWMutex
+	runIDs         map[string]struct{}
+	unsubscribeEvt func()
 }
 
 // NewTaskExecutionEventBridge 创建事件桥接器
@@ -38,13 +39,16 @@ func (b *TaskExecutionEventBridge) Start() {
 		return
 	}
 
-	// 订阅所有任务事件
-	b.eventBus.Subscribe(b.handleEvent)
+	// 订阅所有任务事件，保存取消函数
+	b.unsubscribeEvt = b.eventBus.Subscribe(b.handleEvent)
 	logger.Info("TaskExecEventBridge", "-", "事件桥接已启动")
 }
 
 // Stop 停止事件桥接
 func (b *TaskExecutionEventBridge) Stop() {
+	if b.unsubscribeEvt != nil {
+		b.unsubscribeEvt()
+	}
 	logger.Info("TaskExecEventBridge", "-", "事件桥接已停止")
 }
 
