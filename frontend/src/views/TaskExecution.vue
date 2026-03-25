@@ -1,98 +1,40 @@
 <template>
   <div class="animate-slide-in space-y-5 h-full flex flex-col">
-    <!-- 标题栏 + Tab 切换 -->
+    <!-- 标题栏 -->
     <div class="flex items-center justify-between flex-shrink-0">
       <div class="flex items-center gap-4">
-        <!-- Tab 切换按钮 -->
-        <div class="flex bg-bg-panel border border-border rounded-lg p-1">
-          <button 
-            @click="switchTab('tasks')"
-            :class="activeTab === 'tasks' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary'"
-            class="px-3 py-1.5 rounded-md text-sm font-medium transition-all"
-          >
-            📋 任务执行
-          </button>
-          <button 
-            @click="switchTab('backup')"
-            :class="activeTab === 'backup' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-primary'"
-            class="px-3 py-1.5 rounded-md text-sm font-medium transition-all"
-          >
-            💾 配置备份
-          </button>
-        </div>
-        
-        <p class="text-sm text-text-muted">
-          {{ activeTab === 'tasks' ? '管理和执行已创建的任务绑定组合' : '批量备份设备配置文件' }}
-        </p>
+        <p class="text-sm text-text-muted">管理和执行已创建的任务绑定组合</p>
       </div>
       
       <!-- 操作按钮区域 -->
       <div class="flex gap-3">
-        <!-- 任务执行 Tab 按钮 -->
-        <template v-if="activeTab === 'tasks'">
-          <button
-            v-if="executionView.active && isRunning"
-            @click="stopExecution"
-            class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-error/10 border border-error/30 text-error hover:bg-error hover:text-white"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
-            停止任务
-          </button>
-          <button
-            @click="goToTaskCreate"
-            class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            创建新任务
-          </button>
-          <button
-            @click="loadTasks"
-            class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            刷新
-          </button>
-        </template>
-        
-        <!-- 配置备份 Tab 按钮 -->
-        <template v-else-if="activeTab === 'backup'">
-          <button
-            v-if="backupView.active && isBackupRunning"
-            @click="stopBackup"
-            class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-error/10 border border-error/30 text-error hover:bg-error hover:text-white"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
-            停止备份
-          </button>
-          <button
-            v-if="backupView.active && !isBackupRunning"
-            @click="closeBackupView"
-            class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-accent text-white hover:bg-accent-glow"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            开始备份
-          </button>
-          <button
-            v-if="!backupView.active"
-            @click="refreshBackupDevices"
-            class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            刷新设备
-          </button>
-          <button
-            @click="showBackupHelp = true"
-            class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            帮助
-          </button>
-        </template>
+        <button
+          v-if="executionView.active && isRunning"
+          @click="stopExecution"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-error/10 border border-error/30 text-error hover:bg-error hover:text-white"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+          停止任务
+        </button>
+        <button
+          @click="goToTaskCreate"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          创建新任务
+        </button>
+        <button
+          @click="loadTasks"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          刷新
+        </button>
       </div>
     </div>
 
-    <!-- ==================== 任务执行 Tab 内容 ==================== -->
-    <template v-if="activeTab === 'tasks'">
+    <!-- ==================== 任务执行内容 ==================== -->
+    <template>
       <!-- 搜索和筛选 -->
       <div class="flex items-center gap-4 flex-shrink-0">
         <div class="relative flex-1 max-w-md">
@@ -378,103 +320,6 @@
       </template>
     </template>
 
-    <!-- ==================== 配置备份 Tab 内容 ==================== -->
-    <template v-else-if="activeTab === 'backup'">
-      <!-- 备份执行视图（正在备份时显示） -->
-      <template v-if="backupView.active">
-        <!-- 进度条 -->
-        <div class="flex-shrink-0 space-y-1.5">
-          <div class="flex items-center justify-between text-xs text-text-muted">
-            <span>配置备份 - 总体进度</span>
-            <span class="font-mono">{{ backupProgressPercent }}%</span>
-          </div>
-          <div class="h-2 bg-bg-card rounded-full overflow-hidden border border-border">
-            <div
-              class="h-full rounded-full transition-all duration-500 ease-out"
-              :class="backupProgressPercent === 100 ? 'bg-success' : 'bg-accent'"
-              :style="{ width: backupProgressPercent + '%' }"
-            ></div>
-          </div>
-        </div>
-
-        <!-- 设备状态网格 -->
-        <div class="flex-1 overflow-auto scrollbar-custom min-h-0">
-          <div v-if="backupExecDevices.length === 0 && isBackupRunning" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
-            <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-            <p class="text-sm">正在初始化备份任务...</p>
-          </div>
-          <div v-else class="grid grid-cols-3 gap-4">
-            <div
-              v-for="dev in backupExecDevices"
-              :key="dev.ip"
-              class="bg-bg-card border rounded-xl overflow-hidden shadow-card transition-all duration-300"
-              :class="statusBorder(dev.status)"
-            >
-              <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-panel">
-                <span class="font-mono text-sm font-semibold text-text-primary">{{ dev.ip }}</span>
-                <span class="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border" :class="statusBadge(dev.status)">
-                  <span class="w-1.5 h-1.5 rounded-full" :class="statusDot(dev.status)"></span>
-                  {{ statusLabel(dev.status) }}
-                </span>
-              </div>
-              <VirtualLogTerminal
-                :logs="dev.logs || []"
-                :total-count="dev.logCount || 0"
-                :truncated="dev.truncated || false"
-                :device-ip="dev.ip"
-              />
-            </div>
-          </div>
-        </div>
-
-        <!-- 返回按钮 -->
-        <div v-if="!isBackupRunning" class="flex-shrink-0 text-center py-2">
-          <button @click="closeBackupView" class="text-sm text-accent hover:text-accent-glow transition-colors">
-            ← 返回设备选择
-          </button>
-        </div>
-      </template>
-
-      <!-- 备份配置视图（未备份时显示） -->
-      <template v-else>
-        <!-- 全屏设备选择 -->
-        <div class="flex-1 bg-bg-card border border-border rounded-xl overflow-hidden flex flex-col">
-          <div class="px-4 py-3 border-b border-border bg-bg-panel flex items-center justify-between">
-            <div>
-              <h3 class="text-sm font-semibold text-text-primary">选择备份设备</h3>
-              <p class="text-xs text-text-muted mt-0.5">已选 {{ selectedBackupDevices.length }} 台</p>
-            </div>
-            <button 
-              @click="startBackup" 
-              :disabled="selectedBackupDevices.length === 0 || isBackupRunning"
-              class="px-5 py-2 text-sm font-semibold text-white bg-accent rounded-lg hover:bg-accent-glow disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              开始备份
-            </button>
-          </div>
-          <div class="flex-1 overflow-auto p-4">
-            <div v-if="backupLoading" class="flex items-center justify-center h-32">
-              <div class="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-            </div>
-            <div v-else-if="allBackupDevices.length === 0" class="flex flex-col items-center justify-center h-32 text-text-muted">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 opacity-30 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-              <p class="text-xs">暂无设备</p>
-            </div>
-            <DeviceSelector 
-              v-else
-              :devices="allBackupDevices" 
-              @selectionChange="onBackupDeviceSelect" 
-            />
-          </div>
-        </div>
-      </template>
-    </template>
-
     <!-- 删除确认弹窗 -->
     <Transition name="modal">
       <div v-if="deleteModal.show" class="fixed inset-0 z-50 flex items-center justify-center">
@@ -499,50 +344,6 @@
           :class="toastType === 'success' ? 'bg-success/10 border-success/30 text-success' : 'bg-error/10 border-error/30 text-error'"
         >
           <span class="text-sm font-medium">{{ toastMessage }}</span>
-        </div>
-      </div>
-    </Transition>
-
-    <!-- 备份帮助弹窗 -->
-    <Transition name="modal">
-      <div v-if="showBackupHelp" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showBackupHelp = false"></div>
-        <div class="relative bg-bg-card border border-border rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden animate-slide-in">
-          <div class="px-5 py-4 border-b border-border bg-bg-panel flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-text-primary">💾 配置备份说明</h3>
-            <button @click="showBackupHelp = false" class="text-text-muted hover:text-text-primary transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>
-          <div class="px-5 py-4 space-y-4 max-h-[60vh] overflow-auto">
-            <div class="p-4 rounded-lg bg-info/10 border border-info/30">
-              <h4 class="text-sm font-medium text-info mb-2">💡 备份流程</h4>
-              <ol class="text-xs text-text-secondary space-y-1.5 list-decimal list-inside">
-                <li>工具作为 SFTP 客户端，主动登录设备</li>
-                <li>执行 <code class="px-1 py-0.5 bg-bg-panel rounded">display startup</code> 获取配置文件路径</li>
-                <li>通过 SFTP 下载配置文件到本地</li>
-                <li>保存路径：<code class="px-1 py-0.5 bg-bg-panel rounded">./netWeaverGoData/backup/config/日期/</code></li>
-              </ol>
-            </div>
-
-            <div class="p-4 rounded-lg bg-warning/10 border border-warning/30">
-              <h4 class="text-sm font-medium text-warning mb-2">⚠️ 前置条件</h4>
-              <ul class="text-xs text-text-secondary space-y-1">
-                <li>• 设备需开启 SFTP 服务 (<code class="px-1 py-0.5 bg-bg-panel rounded">sftp server enable</code>)</li>
-                <li>• 设备需配置下次启动文件</li>
-              </ul>
-            </div>
-
-            <div class="p-4 rounded-lg bg-accent/10 border border-accent/30">
-              <h4 class="text-sm font-medium text-accent mb-2">✅ 支持的设备</h4>
-              <p class="text-xs text-text-secondary">
-                华为、华三（H3C）、H3C 等支持 SFTP 子系统的网络设备
-              </p>
-            </div>
-          </div>
-          <div class="flex justify-end px-5 py-3 border-t border-border">
-            <button @click="showBackupHelp = false" class="px-4 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent-glow transition-all">我知道了</button>
-          </div>
         </div>
       </div>
     </Transition>
@@ -588,22 +389,16 @@ import type {
   TaskGroup,
   TaskGroupDetailViewModel
 } from '../services/api'
-import { useEngineStore } from '../stores/engineStore'
 import { useTaskexecStore } from '../stores/taskexecStore'
 import VirtualLogTerminal from '../components/task/VirtualLogTerminal.vue'
 import ExecutionHistoryDrawer from '../components/task/ExecutionHistoryDrawer.vue'
 import TaskDetailModal from '../components/task/TaskDetailModal.vue'
 import TaskEditModal from '../components/task/TaskEditModal.vue'
-import DeviceSelector from '../components/task/DeviceSelector.vue'
 import StageProgress from '../components/task/StageProgress.vue'
 import type { StageSnapshot, UnitSnapshot } from '../types/taskexec'
 
 const router = useRouter()
-const engineStore = useEngineStore()
 const taskexecStore = useTaskexecStore()
-
-// ================== Tab 状态 ==================
-const activeTab = ref<'tasks' | 'backup'>('tasks')
 
 // ================== 任务执行状态 ==================
 const loading = ref(false)
@@ -675,16 +470,6 @@ function triggerToast(msg: string, type: 'success' | 'error' = 'success') {
   toastTimer = setTimeout(() => { showToast.value = false }, 3000)
 }
 
-// ================== 备份相关状态 ==================
-const backupView = ref({
-  active: false,
-  loading: false
-})
-const backupLoading = ref(false)
-const allBackupDevices = ref<DeviceAsset[]>([])
-const selectedBackupDevices = ref<DeviceAsset[]>([])
-const showBackupHelp = ref(false)
-
 // ================== 计算属性 - 从 Store 获取 ==================
 const executionSnapshot = computed(() => taskexecStore.currentSnapshot)
 const isRunning = computed(() => taskexecStore.isRunning)
@@ -727,14 +512,6 @@ function mapUnitStatusToDeviceStatus(unitStatus: string): DeviceViewState['statu
   }
 }
 
-// 备份相关计算属性（使用本地状态）
-const isBackupRunning = computed(() => backupView.value.loading)
-const backupProgressPercent = computed(() => 0)
-const backupExecDevices = computed<DeviceViewState[]>(() => {
-  // 备份功能暂不支持，返回空数组
-  return []
-})
-
 // ================== 虚拟滚动优化计算属性 ==================
 const visibleDeviceCount = computed(() => 
   showAllDevices.value ? execDevices.value.length : VISIBLE_DEVICE_LIMIT
@@ -761,6 +538,7 @@ const visibleDevices = computed(() => {
 // ================== 生命周期 ==================
 onMounted(() => {
   void syncExecutionView()
+  void taskexecStore.loadRunHistory(50)
   void loadTasks()
 })
 
@@ -776,81 +554,10 @@ onUnmounted(() => {
 watch(isRunning, (running, wasRunning) => {
   if (!running && wasRunning && executionView.value.active) {
     stopSnapshotPolling()
+    void taskexecStore.loadRunHistory(50)
     void loadTasks()
   }
 })
-
-// 监听备份运行状态
-watch(isBackupRunning, (running, wasRunning) => {
-  if (!running && wasRunning && backupView.value.active) {
-    // 备份完成
-    triggerToast('备份任务已完成', 'success')
-  }
-})
-
-// ================== Tab 切换 ==================
-function switchTab(tab: 'tasks' | 'backup') {
-  activeTab.value = tab
-  
-  if (tab === 'backup') {
-    void refreshBackupDevices()
-  }
-}
-
-// ================== 备份相关方法 ==================
-async function refreshBackupDevices() {
-  backupLoading.value = true
-  try {
-    const devices = await DeviceAPI.listDevices()
-    allBackupDevices.value = devices || []
-  } catch (err) {
-    console.error('加载备份设备列表失败:', err)
-    allBackupDevices.value = []
-  } finally {
-    backupLoading.value = false
-  }
-}
-
-function onBackupDeviceSelect(devices: DeviceAsset[]) {
-  selectedBackupDevices.value = devices
-}
-
-async function startBackup() {
-  if (selectedBackupDevices.value.length === 0) {
-    triggerToast('请先选择要备份的设备', 'error')
-    return
-  }
-
-  backupView.value.active = true
-  
-  try {
-    await engineStore.startBackup(selectedBackupDevices.value)
-    triggerToast('备份任务已启动', 'success')
-  } catch (err: any) {
-    console.error('启动备份失败:', err)
-    triggerToast(`启动备份失败: ${err?.message || err}`, 'error')
-    backupView.value.active = false
-  }
-}
-
-async function stopBackup() {
-  if (!confirm('确定要停止当前备份任务吗？')) {
-    return
-  }
-
-  try {
-    await engineStore.stopEngine()
-    triggerToast('已发送停止信号')
-  } catch (err: any) {
-    triggerToast(`停止失败: ${err?.message || err}`, 'error')
-  }
-}
-
-function closeBackupView() {
-  backupView.value.active = false
-  engineStore.resetBackup()
-  engineStore.reset()
-}
 
 // ================== 过滤逻辑（任务列表） ==================
 const filteredTasks = computed(() => {
@@ -888,12 +595,18 @@ async function loadTasks() {
 }
 
 async function syncExecutionView() {
-  const active = await engineStore.syncExecutionState()
-  const snapshot = engineStore.executionSnapshot
-  if (active || snapshot) {
-    executionView.value.active = true
-    executionView.value.taskName = snapshot?.taskName || '任务执行'
+  const { TaskExecutionAPI } = await import('../services/api')
+  const running = await TaskExecutionAPI.listRunningTasks()
+  const snapshot = running[0] ?? null
+  if (!snapshot) {
+    return
   }
+  taskexecStore.updateSnapshot(snapshot.runId, snapshot)
+  taskexecStore.setCurrentRunId(snapshot.runId)
+  executionView.value.active = true
+  executionView.value.runId = snapshot.runId
+  executionView.value.taskName = snapshot.taskName || '任务执行'
+  executionView.value.taskType = snapshot.runKind === 'topology' ? 'topology' : 'normal'
 }
 
 function startSnapshotPolling() {
@@ -921,12 +634,13 @@ function stopSnapshotPolling() {
 async function handleSnapshotTimeout() {
   if (!awaitingSnapshot.value) return
 
-  const active = await engineStore.syncExecutionState()
-  const snapshot = engineStore.executionSnapshot
-  if (active || snapshot) {
+  const runId = executionView.value.runId || taskexecStore.currentRunId || ''
+  const snapshot = runId ? await taskexecStore.refreshSnapshot(runId) : null
+  if (snapshot) {
     awaitingSnapshot.value = false
     clearSnapshotTimeout()
     executionView.value.active = true
+    executionView.value.runId = snapshot.runId
     executionView.value.taskName = snapshot?.taskName || executionView.value.taskName || '任务执行'
     startSnapshotPolling()
     return
@@ -974,39 +688,33 @@ async function executeTask(task: TaskGroup) {
     topologyExecuting.value = true
   }
 
-  // 重置并初始化统一运行时状态
-  engineStore.reset()
-  taskexecStore.setCurrentRunId('')  // 清空当前runId
+  taskexecStore.clearEventLogs()
+  taskexecStore.setCurrentRunId(null)
   awaitingSnapshot.value = true
   
   startSnapshotTimeout()
   startSnapshotPolling()
 
   try {
-    // 调用任务组API启动任务
-    await TaskGroupAPI.startTaskGroup(task.id)
+    const runId = await TaskGroupAPI.startTaskGroup(task.id)
+    executionView.value.runId = runId
+    taskexecStore.setCurrentRunId(runId)
+    await taskexecStore.refreshSnapshot(runId)
+    await taskexecStore.loadRunHistory(50)
     
-    // 注意：startTaskGroup返回void，runId需要通过其他方式获取
-    // 实际项目中应该修改API返回runId，或者从快照中识别
-    
-    // 如果是拓扑任务，等待完成后跳转到拓扑页
     if (isTopology) {
-      // 监听任务完成
       const checkTopologyComplete = setInterval(async () => {
-        // 检查taskexecStore中是否有完成的拓扑任务
-        const completedRuns = taskexecStore.runHistory.filter(
-          r => r.runKind === 'topology' && ['completed', 'failed', 'cancelled'].includes(r.status)
-        )
-        if (completedRuns.length > 0) {
+        const snapshot = await taskexecStore.refreshSnapshot(runId)
+        if (snapshot && ['completed', 'failed', 'cancelled', 'partial'].includes(snapshot.status)) {
           clearInterval(checkTopologyComplete)
           topologyExecuting.value = false
           triggerToast('拓扑采集任务已完成', 'success')
+          await taskexecStore.loadRunHistory(50)
           await loadTasks()
           router.push('/topology')
         }
       }, 2000)
       
-      // 超时清理
       setTimeout(() => {
         clearInterval(checkTopologyComplete)
         topologyExecuting.value = false
@@ -1028,6 +736,8 @@ watch(executionSnapshot, (snapshot) => {
     awaitingSnapshot.value = false
     clearSnapshotTimeout()
     executionView.value.active = true
+    executionView.value.runId = snapshot.runId
+    executionView.value.taskType = snapshot.runKind === 'topology' ? 'topology' : 'normal'
     if (snapshot.taskName) {
       executionView.value.taskName = snapshot.taskName
     }
@@ -1053,19 +763,17 @@ async function doDelete() {
 // 关闭执行视图 (阶段3: 清理统一运行时状态)
 function closeExecutionView() {
   if (topologyExecuting.value) return
+  const currentRunId = executionView.value.runId
   executionView.value.active = false
   awaitingSnapshot.value = false
   clearSnapshotTimeout()
   stopSnapshotPolling()
-  engineStore.reset()
   
-  // 清理统一运行时状态
-  if (executionView.value.runId) {
-    taskexecStore.removeSnapshot(executionView.value.runId)
-    taskexecStore.setCurrentRunId('')
-    executionView.value.runId = ''
+  if (currentRunId) {
+    taskexecStore.removeSnapshot(currentRunId)
   }
-  
+  taskexecStore.setCurrentRunId(null)
+  executionView.value.runId = ''
   loadTasks()
 }
 
@@ -1075,29 +783,21 @@ async function stopExecution() {
     return
   }
 
-  // 优先使用统一运行时的取消接口
   if (executionView.value.runId) {
     try {
       await taskexecStore.cancelTask(executionView.value.runId)
       triggerToast('已发送停止信号')
       return
     } catch (err: any) {
-      console.warn('统一运行时取消失败，回退到旧接口:', err)
+      triggerToast(`停止失败: ${err?.message || err}`, 'error')
     }
-  }
-
-  // 回退到旧接口（备份任务等）
-  try {
-    await engineStore.stopEngine()
-    triggerToast('已发送停止信号')
-  } catch (err: any) {
-    triggerToast(`停止失败: ${err?.message || err}`, 'error')
   }
 }
 
 // Suspend 处理
 function resolveSuspend(ip: string, action: 'C' | 'A') {
-  engineStore.resolveSuspend(ip, action)
+  void ip
+  void action
 }
 
 // 导航

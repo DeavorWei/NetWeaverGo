@@ -103,14 +103,13 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ExecutionHistoryAPI } from '../../services/api'
-import type { ExecutionRecord, ListExecutionRecordsRequest } from '../../services/api'
+import type { ExecutionHistoryRecord } from '../../types/executionHistory'
 import ExecutionRecordDetail from './ExecutionRecordDetail.vue'
 
 const props = defineProps<{
   modelValue: boolean
   taskGroupId?: string
   taskGroupName?: string
-  useUnifiedRuntime?: boolean // 阶段5：是否使用统一运行时历史
 }>()
 
 const emit = defineEmits<{
@@ -119,7 +118,7 @@ const emit = defineEmits<{
 
 // 状态
 const loading = ref(false)
-const records = ref<ExecutionRecord[]>([])
+const records = ref<ExecutionHistoryRecord[]>([])
 const filterStatus = ref('')
 const currentPage = ref(1)
 const pageSize = 10
@@ -128,7 +127,7 @@ const totalPages = ref(0)
 
 // 详情弹窗
 const showDetailModal = ref(false)
-const selectedRecord = ref<ExecutionRecord | null>(null)
+const selectedRecord = ref<ExecutionHistoryRecord | null>(null)
 
 // 计算总页数
 const calculateTotalPages = () => {
@@ -141,48 +140,35 @@ const loadRecords = async () => {
 
   loading.value = true
   try {
-    // 阶段5：如果使用统一运行时，调用新接口
-    if (props.useUnifiedRuntime) {
-      const result = await ExecutionHistoryAPI.listTaskRunRecords({
-        runKind: '', // 获取所有类型
-        status: filterStatus.value,
-        limit: pageSize * currentPage.value,
-      })
-      // 转换统一运行时记录为 ExecutionRecord 格式
-      records.value = (result?.data || []).map((item: any) => ({
-        id: item.id,
-        runnerSource: item.runnerSource,
-        taskGroupId: item.taskGroupId,
-        taskGroupName: item.taskGroupName,
-        taskName: item.taskName,
-        mode: item.mode,
-        status: item.status,
-        totalDevices: item.totalDevices,
-        finishedCount: item.finishedCount,
-        successCount: item.successCount,
-        errorCount: item.errorCount,
-        startedAt: item.startedAt,
-        finishedAt: item.finishedAt,
-        durationMs: item.durationMs,
-        runKind: item.runKind,
-      }))
-      total.value = result?.total || 0
-    } else {
-      // 旧接口（兼容）
-      const req: ListExecutionRecordsRequest = {
-        taskGroupId: props.taskGroupId || '',
-        runnerSource: '',
-        status: filterStatus.value,
-        page: currentPage.value,
-        pageSize: pageSize,
-        sortBy: 'started_at',
-        sortOrder: 'desc',
-      }
-
-      const result = await ExecutionHistoryAPI.listExecutionRecords(req)
-      records.value = result?.data || []
-      total.value = result?.total || 0
-    }
+    const result = await ExecutionHistoryAPI.listTaskRunRecords({
+      runKind: '',
+      status: filterStatus.value,
+      limit: pageSize * currentPage.value,
+    })
+    records.value = (result?.data || []).map((item: any): ExecutionHistoryRecord => ({
+      id: item.id,
+      runnerSource: item.runnerSource,
+      runnerId: item.id,
+      taskGroupId: item.taskGroupId,
+      taskGroupName: item.taskGroupName,
+      taskName: item.taskName,
+      mode: item.mode,
+      status: item.status,
+      totalDevices: item.totalDevices,
+      finishedCount: item.finishedCount,
+      successCount: item.successCount,
+      errorCount: item.errorCount,
+      startedAt: item.startedAt,
+      finishedAt: item.finishedAt,
+      durationMs: item.durationMs,
+      runKind: item.runKind,
+      devices: [],
+      reportPath: '',
+      abortedCount: 0,
+      warningCount: 0,
+      createdAt: item.startedAt,
+    }))
+    total.value = result?.total || 0
     calculateTotalPages()
   } catch (error) {
     console.error('加载历史记录失败:', error)
@@ -203,7 +189,7 @@ const closeDrawer = () => {
 }
 
 // 显示详情
-const showDetail = (record: ExecutionRecord) => {
+const showDetail = (record: ExecutionHistoryRecord) => {
   selectedRecord.value = record
   showDetailModal.value = true
 }

@@ -2,10 +2,10 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"runtime"
 
-	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/taskexec"
@@ -88,28 +88,7 @@ type ListExecutionRecordsResponse struct {
 
 // ListExecutionRecords 查询历史执行记录列表（兼容旧接口）
 func (s *ExecutionHistoryService) ListExecutionRecords(req ListExecutionRecordsRequest) (*ListExecutionRecordsResponse, error) {
-	opts := config.ExecutionQueryOptions{
-		TaskGroupID:  req.TaskGroupID,
-		RunnerSource: req.RunnerSource,
-		Status:       req.Status,
-		Page:         req.Page,
-		PageSize:     req.PageSize,
-		SortBy:       req.SortBy,
-		SortOrder:    req.SortOrder,
-	}
-
-	result, err := config.ListExecutionRecords(opts)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ListExecutionRecordsResponse{
-		Data:       result.Data,
-		Total:      result.Total,
-		Page:       result.Page,
-		PageSize:   result.PageSize,
-		TotalPages: result.TotalPages,
-	}, nil
+	return nil, fmt.Errorf("legacy execution_records API 已移除，请使用 ListTaskRunRecords")
 }
 
 // ListTaskRunRecords 从统一运行时查询历史记录（阶段5：统一执行历史）
@@ -167,17 +146,17 @@ func (s *ExecutionHistoryService) ListTaskRunRecords(req ListTaskRunRecordsReque
 
 // GetExecutionRecord 根据 ID 获取历史执行记录详情
 func (s *ExecutionHistoryService) GetExecutionRecord(id string) (*models.ExecutionRecord, error) {
-	return config.GetExecutionRecord(id)
+	return nil, fmt.Errorf("legacy execution_records API 已移除，请使用统一运行时 run 详情")
 }
 
 // DeleteExecutionRecord 删除历史执行记录
 func (s *ExecutionHistoryService) DeleteExecutionRecord(id string) error {
-	return config.DeleteExecutionRecord(id)
+	return fmt.Errorf("legacy execution_records API 已移除")
 }
 
 // GetExecutionRecordStats 获取执行记录统计信息
 func (s *ExecutionHistoryService) GetExecutionRecordStats(taskGroupID string) (map[string]interface{}, error) {
-	return config.GetExecutionRecordStats(taskGroupID)
+	return nil, fmt.Errorf("legacy execution_records API 已移除")
 }
 
 // ExecutionRecordStatus 历史记录状态常量

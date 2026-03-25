@@ -83,19 +83,6 @@ func autoMigrateAll(db *gorm.DB) error {
 		&models.CommandGroup{},
 		&models.TaskGroup{},
 		&models.RuntimeSetting{},
-		&models.ExecutionRecord{},
-		// 发现任务相关表
-		&models.DiscoveryTask{},
-		&models.DiscoveryDevice{},
-		&models.RawCommandOutput{},
-		// 拓扑相关表
-		&models.TopologyEdge{},
-		&models.TopologyInterface{},
-		&models.TopologyLLDPNeighbor{},
-		&models.TopologyFDBEntry{},
-		&models.TopologyARPEntry{},
-		&models.TopologyAggregateGroup{},
-		&models.TopologyAggregateMember{},
 		// 规划比对相关表
 		&models.PlanFile{},
 		&models.PlannedLink{},
@@ -114,23 +101,6 @@ func createIndexes(db *gorm.DB) {
 		"CREATE INDEX IF NOT EXISTS idx_task_groups_name ON task_groups(name)",
 		"CREATE INDEX IF NOT EXISTS idx_runtime_category ON runtime_settings(category)",
 		"CREATE INDEX IF NOT EXISTS idx_runtime_key ON runtime_settings(key)",
-		// 历史执行记录索引
-		"CREATE INDEX IF NOT EXISTS idx_execution_records_task_group_id ON execution_records(task_group_id)",
-		"CREATE INDEX IF NOT EXISTS idx_execution_records_runner_source ON execution_records(runner_source)",
-		"CREATE INDEX IF NOT EXISTS idx_execution_records_status ON execution_records(status)",
-		"CREATE INDEX IF NOT EXISTS idx_execution_records_started_at ON execution_records(started_at)",
-		"CREATE INDEX IF NOT EXISTS idx_execution_records_created_at ON execution_records(created_at)",
-		// 拓扑发现相关索引
-		"CREATE INDEX IF NOT EXISTS idx_discovery_tasks_status ON discovery_tasks(status)",
-		"CREATE INDEX IF NOT EXISTS idx_discovery_tasks_task_group_id ON discovery_tasks(task_group_id)",
-		"CREATE INDEX IF NOT EXISTS idx_discovery_devices_task_status ON discovery_devices(task_id, status)",
-		"CREATE INDEX IF NOT EXISTS idx_discovery_devices_mgmt_ip ON discovery_devices(mgmt_ip)",
-		"CREATE INDEX IF NOT EXISTS idx_discovery_devices_normalized_name ON discovery_devices(normalized_name)",
-		"CREATE INDEX IF NOT EXISTS idx_raw_outputs_task_device_cmd ON raw_command_outputs(task_id, device_ip, command_key)",
-		"CREATE INDEX IF NOT EXISTS idx_raw_outputs_parse_status ON raw_command_outputs(parse_status)",
-		"CREATE INDEX IF NOT EXISTS idx_topology_edges_task_status ON topology_edges(task_id, status)",
-		"CREATE INDEX IF NOT EXISTS idx_topology_neighbors_task_device ON topology_lldp_neighbors(task_id, device_ip)",
-		"CREATE INDEX IF NOT EXISTS idx_topology_fdb_task_device_if ON topology_fdb_entries(task_id, device_ip, interface)",
 		// 规划比对相关索引
 		"CREATE INDEX IF NOT EXISTS idx_plan_files_imported_at ON plan_files(imported_at)",
 		"CREATE INDEX IF NOT EXISTS idx_planned_links_plan_edge_key ON planned_links(plan_file_id, edge_key)",

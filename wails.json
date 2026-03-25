@@ -19,14 +19,12 @@
           "DeviceService",
           "CommandGroupService",
           "SettingsService",
-          "EngineService",
           "TaskGroupService",
           "ForgeService",
           "QueryService",
           "ExecutionHistoryService",
-          "DiscoveryService",
-          "TopologyService",
-          "PlanCompareService"
+          "PlanCompareService",
+          "TaskExecutionUIService"
         ]
       }
     ]

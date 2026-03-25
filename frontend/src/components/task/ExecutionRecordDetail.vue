@@ -98,12 +98,12 @@
                   <span class="stat-value">{{ record.errorCount }}</span>
                   <span class="stat-label">失败</span>
                 </div>
-                <div class="stat-item warning" v-if="record.abortedCount > 0">
-                  <span class="stat-value">{{ record.abortedCount }}</span>
+                <div class="stat-item warning" v-if="(record.abortedCount || 0) > 0">
+                  <span class="stat-value">{{ record.abortedCount || 0 }}</span>
                   <span class="stat-label">中止</span>
                 </div>
-                <div class="stat-item" v-if="record.warningCount > 0">
-                  <span class="stat-value">{{ record.warningCount }}</span>
+                <div class="stat-item" v-if="(record.warningCount || 0) > 0">
+                  <span class="stat-value">{{ record.warningCount || 0 }}</span>
                   <span class="stat-label">告警</span>
                 </div>
               </div>
@@ -166,7 +166,7 @@
                     <span
                       >命令: {{ device.execCmd }}/{{ device.totalCmd }}</span
                     >
-                    <span v-if="device.logCount > 0"
+                    <span v-if="(device.logCount || 0) > 0"
                       >日志: {{ device.logCount }}条</span
                     >
                   </div>
@@ -203,15 +203,12 @@
 
 <script setup lang="ts">
 import { ExecutionHistoryAPI } from "../../services/api";
-import type {
-  ExecutionRecord,
-  ExecutionDeviceRecord,
-} from "../../services/api";
+import type { ExecutionHistoryDeviceRecord, ExecutionHistoryRecord } from "../../types/executionHistory";
 import { useToast } from "../../utils/useToast";
 
 const props = defineProps<{
   modelValue: boolean;
-  record: ExecutionRecord | null;
+  record: ExecutionHistoryRecord | null;
 }>();
 
 const emit = defineEmits<{
@@ -237,12 +234,12 @@ const openReportFile = async () => {
   }
 };
 
-const resolveDetailLogPath = (device: ExecutionDeviceRecord) => {
+const resolveDetailLogPath = (device: ExecutionHistoryDeviceRecord) => {
   return device.detailLogPath || device.logFilePath;
 };
 
 // 打开设备详细日志文件
-const openDeviceDetailLog = async (device: ExecutionDeviceRecord) => {
+const openDeviceDetailLog = async (device: ExecutionHistoryDeviceRecord) => {
   const detailLogPath = resolveDetailLogPath(device);
   if (!detailLogPath) return;
 
@@ -254,7 +251,7 @@ const openDeviceDetailLog = async (device: ExecutionDeviceRecord) => {
 };
 
 // 打开设备原始日志文件
-const openRawLog = async (device: ExecutionDeviceRecord) => {
+const openRawLog = async (device: ExecutionHistoryDeviceRecord) => {
   if (!device.rawLogPath) return;
 
   try {

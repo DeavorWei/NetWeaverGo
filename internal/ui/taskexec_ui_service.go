@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/NetWeaverGo/core/internal/taskexec"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -188,6 +189,26 @@ func (s *TaskExecutionUIService) UnsubscribeRunEvents(runID string) error {
 		s.bridge.UnsubscribeRun(runID)
 	}
 	return nil
+}
+
+// GetTopologyGraph 获取指定 run 的拓扑图
+func (s *TaskExecutionUIService) GetTopologyGraph(runID string) (*models.TopologyGraphView, error) {
+	return s.service.GetTopologyGraph(runID)
+}
+
+// GetTopologyEdgeDetail 获取指定 run 的链路详情
+func (s *TaskExecutionUIService) GetTopologyEdgeDetail(runID string, edgeID string) (*models.TopologyEdgeDetailView, error) {
+	return s.service.GetTopologyEdgeDetail(runID, edgeID)
+}
+
+// GetTopologyDeviceDetail 获取指定 run 的设备拓扑详情
+func (s *TaskExecutionUIService) GetTopologyDeviceDetail(runID string, deviceIP string) (*parser.ParsedResult, error) {
+	return s.service.GetTopologyDeviceDetail(runID, deviceIP)
+}
+
+// GetSupportedTopologyVendors 返回拓扑采集支持的厂商列表
+func (s *TaskExecutionUIService) GetSupportedTopologyVendors() []string {
+	return s.service.GetSupportedTopologyVendors()
 }
 
 // loadDeviceIPs 加载设备IP列表

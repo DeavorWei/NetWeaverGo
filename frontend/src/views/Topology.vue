@@ -19,7 +19,7 @@
         </select>
         <button
           @click="refreshGraph"
-          :disabled="!selectedTaskID || building"
+          :disabled="!selectedRunId || building"
           class="px-4 py-2 rounded-lg text-sm font-medium border border-border text-text-secondary hover:text-text-primary"
         >
           刷新图谱
@@ -348,8 +348,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import {
-  DiscoveryAPI,
-  type DiscoveryTaskView,
+  TaskExecutionAPI,
   type ParsedResult,
   type TopologyBuildResult,
   type TopologyEdgeDetailView,
@@ -361,9 +360,7 @@ import TopologyGraph from "../components/topology/TopologyGraph.vue";
 
 // 阶段4: 统一执行框架 - 使用runId替代taskId
 const taskexecStore = useTaskexecStore();
-const selectedRunId = ref("");  // 替代 selectedTaskID
-const tasks = ref<DiscoveryTaskView[]>([]);  // 保留兼容旧接口
-const selectedTaskID = ref("");  // 保留兼容旧接口
+const selectedRunId = ref("");
 
 // 计算属性：筛选拓扑类型的运行
 const topologyRuns = computed(() => {
@@ -528,7 +525,7 @@ function displayNodeLabel(nodeID: string) {
 function applySummaryFromGraph() {
   const edges = graph.value.edges || [];
   summary.value = {
-    taskId: selectedTaskID.value,
+    taskId: selectedRunId.value,
     totalEdges: edges.length,
     confirmedEdges: edges.filter((e) => e.status === "confirmed").length,
     semiConfirmedEdges: edges.filter((e) => e.status === "semi_confirmed")
@@ -543,64 +540,24 @@ function applySummaryFromGraph() {
 // 阶段4: 加载拓扑运行列表（从统一运行时）
 async function loadRuns() {
   await taskexecStore.loadRunHistory(50)
-  
-  // 同时加载旧发现任务（兼容）
-  try {
-    const list = (await DiscoveryAPI.listDiscoveryTasks(50)) || [];
-    tasks.value = [...list].sort((a, b) => {
-      const aLinked = a.taskGroupId ? 1 : 0;
-      const bLinked = b.taskGroupId ? 1 : 0;
-      if (aLinked !== bLinked) {
-        return bLinked - aLinked;
-      }
-      return 0;
-    });
-  } catch (err) {
-    console.warn('加载旧发现任务失败:', err)
-  }
 }
 
-// 保留旧方法名用于兼容
 async function loadTasks() {
   await loadRuns()
 }
 
 async function refreshGraph() {
-  // 优先使用runId（阶段4）
-  if (selectedRunId.value) {
-    edgeDetail.value = null;
-    deviceDetail.value = null;
-    
-    // 同步selectedTaskID用于兼容旧接口
-    selectedTaskID.value = selectedRunId.value;
-    
-    try {
-      // TODO: 后端需要提供按runId查询拓扑的接口
-      // 临时使用旧接口
-      const g = await DiscoveryAPI.getTopologyGraph(selectedRunId.value);
-      graph.value = g || { taskId: selectedRunId.value, nodes: [], edges: [] };
-      applySummaryFromGraph();
-    } catch (err: any) {
-      console.error('加载拓扑图失败:', err);
-    }
-    return;
-  }
-  
-  // 回退到旧逻辑
-  if (!selectedTaskID.value) return;
+  if (!selectedRunId.value) return;
   edgeDetail.value = null;
   deviceDetail.value = null;
-  const g = await DiscoveryAPI.getTopologyGraph(selectedTaskID.value);
-  graph.value = g || { taskId: selectedTaskID.value, nodes: [], edges: [] };
+  const g = await TaskExecutionAPI.getTopologyGraph(selectedRunId.value);
+  graph.value = g || { taskId: selectedRunId.value, nodes: [], edges: [] };
   applySummaryFromGraph();
 }
 
 async function loadEdgeDetail(edgeID: string) {
-  if (!selectedTaskID.value) return;
-  edgeDetail.value = await DiscoveryAPI.getEdgeDetail(
-    selectedTaskID.value,
-    edgeID,
-  );
+  if (!selectedRunId.value) return;
+  edgeDetail.value = await TaskExecutionAPI.getTopologyEdgeDetail(selectedRunId.value, edgeID);
 }
 
 async function openDeviceDetail(deviceID: string) {
@@ -608,12 +565,12 @@ async function openDeviceDetail(deviceID: string) {
   loadingDeviceDetail.value = true;
   try {
     if (
-      !selectedTaskID.value ||
+      !selectedRunId.value ||
       deviceID.startsWith("server:") ||
       deviceID.startsWith("unknown:")
     ) {
       deviceDetail.value = {
-        taskId: selectedTaskID.value,
+        taskId: selectedRunId.value,
         deviceIp: deviceID,
         parsedAt: new Date() as any,
         identity: {
@@ -628,16 +585,13 @@ async function openDeviceDetail(deviceID: string) {
       } as ParsedResult;
       return;
     }
-    deviceDetail.value = await DiscoveryAPI.getDeviceTopologyDetail(
-      selectedTaskID.value,
-      deviceID,
-    );
+    deviceDetail.value = await TaskExecutionAPI.getTopologyDeviceDetail(selectedRunId.value, deviceID);
   } finally {
     loadingDeviceDetail.value = false;
   }
 }
 
-watch(selectedTaskID, (value) => {
+watch(selectedRunId, (value) => {
   edgeDetail.value = null;
   deviceDetail.value = null;
   if (value) {

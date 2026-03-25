@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -14,14 +14,15 @@ import (
 type TaskExecutionEventBridge struct {
 	eventBus *taskexec.EventBus
 	wailsApp *application.App
-	runIDs   map[string]bool // 追踪已订阅的run
+	mu       sync.RWMutex
+	runIDs   map[string]struct{}
 }
 
 // NewTaskExecutionEventBridge 创建事件桥接器
 func NewTaskExecutionEventBridge(eventBus *taskexec.EventBus) *TaskExecutionEventBridge {
 	return &TaskExecutionEventBridge{
 		eventBus: eventBus,
-		runIDs:   make(map[string]bool),
+		runIDs:   make(map[string]struct{}),
 	}
 }
 
@@ -44,10 +45,6 @@ func (b *TaskExecutionEventBridge) Start() {
 
 // Stop 停止事件桥接
 func (b *TaskExecutionEventBridge) Stop() {
-	// 取消订阅（当前实现是清空所有处理器）
-	if b.eventBus != nil {
-		b.eventBus.Unsubscribe()
-	}
 	logger.Info("TaskExecEventBridge", "-", "事件桥接已停止")
 }
 
@@ -60,7 +57,10 @@ func (b *TaskExecutionEventBridge) handleEvent(event *taskexec.TaskEvent) {
 	// 转换为前端事件格式
 	frontendEvent := b.convertToFrontendEvent(event)
 
-	// 发送全局任务事件
+	if !b.shouldEmit(event.RunID) {
+		return
+	}
+
 	b.emitToFrontend("task:event", frontendEvent)
 
 	// 根据事件类型发送特定事件
@@ -69,8 +69,7 @@ func (b *TaskExecutionEventBridge) handleEvent(event *taskexec.TaskEvent) {
 		b.emitToFrontend("task:started", frontendEvent)
 	case taskexec.EventTypeRunFinished:
 		b.emitToFrontend("task:finished", frontendEvent)
-		// 清理追踪
-		delete(b.runIDs, event.RunID)
+		b.UnsubscribeRun(event.RunID)
 	case taskexec.EventTypeStageStarted, taskexec.EventTypeStageFinished, taskexec.EventTypeStageProgress:
 		b.emitToFrontend("task:stage_updated", frontendEvent)
 	case taskexec.EventTypeUnitStarted, taskexec.EventTypeUnitFinished, taskexec.EventTypeUnitProgress:
@@ -106,25 +105,37 @@ func (b *TaskExecutionEventBridge) emitToFrontend(eventName string, data interfa
 		return
 	}
 
-	// 序列化数据
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		logger.Error("TaskExecEventBridge", "-", "序列化事件数据失败: %v", err)
-		return
-	}
-
-	// 使用 Wails 事件系统发送到前端
-	b.wailsApp.Event.Emit(eventName, string(jsonData))
+	b.wailsApp.Event.Emit(eventName, data)
 }
 
 // SubscribeRun 订阅特定run的事件（用于前端页面打开时）
 func (b *TaskExecutionEventBridge) SubscribeRun(runID string) {
-	b.runIDs[runID] = true
+	if runID == "" {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.runIDs[runID] = struct{}{}
 }
 
 // UnsubscribeRun 取消订阅特定run的事件
 func (b *TaskExecutionEventBridge) UnsubscribeRun(runID string) {
+	if runID == "" {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	delete(b.runIDs, runID)
+}
+
+func (b *TaskExecutionEventBridge) shouldEmit(runID string) bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if len(b.runIDs) == 0 {
+		return true
+	}
+	_, ok := b.runIDs[runID]
+	return ok
 }
 
 // FrontendEvent 前端事件结构

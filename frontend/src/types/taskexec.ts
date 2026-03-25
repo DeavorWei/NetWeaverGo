@@ -7,8 +7,8 @@
 export interface ExecutionSnapshot {
   runId: string
   taskName: string
-  runKind: 'normal' | 'topology'
-  status: 'pending' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled'
+  runKind: string
+  status: string
   progress: number
   currentStage: string
   stages: StageSnapshot[]
@@ -21,7 +21,7 @@ export interface ExecutionSnapshot {
 /** Stage 快照 */
 export interface StageSnapshot {
   id: string
-  kind: 'device_command' | 'device_collect' | 'parse' | 'topology_build'
+  kind: string
   name: string
   order: number
   status: string
@@ -38,8 +38,8 @@ export interface StageSnapshot {
 export interface UnitSnapshot {
   id: string
   stageId: string
-  kind: 'device' | 'run' | 'dataset'
-  targetType: 'device_ip' | 'task_run' | 'dataset_key'
+  kind: string
+  targetType: string
   targetKey: string
   status: string
   progress: number
@@ -54,7 +54,7 @@ export interface UnitSnapshot {
 export interface EventSnapshot {
   id: string
   type: string
-  level: 'info' | 'warn' | 'error'
+  level: string
   stageId?: string
   unitId?: string
   message: string

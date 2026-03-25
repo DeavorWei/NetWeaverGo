@@ -17,6 +17,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/normalize"
+	"github.com/NetWeaverGo/core/internal/taskexec"
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
@@ -153,13 +154,13 @@ func (s *Service) CompareByRunID(runID string, planID string) (*models.CompareRe
 		return nil, fmt.Errorf("规划文件 %s 不存在或无链路", planID)
 	}
 
-	var edges []models.TopologyEdge
-	if err := s.db.Where("task_id = ?", runID).Find(&edges).Error; err != nil {
+	var edges []taskexec.TaskTopologyEdge
+	if err := s.db.Where("task_run_id = ?", runID).Find(&edges).Error; err != nil {
 		return nil, fmt.Errorf("加载实际拓扑失败: %w", err)
 	}
 
-	var devices []models.DiscoveryDevice
-	if err := s.db.Where("task_id = ?", runID).Find(&devices).Error; err != nil {
+	var devices []taskexec.TaskRunDevice
+	if err := s.db.Where("task_run_id = ?", runID).Find(&devices).Error; err != nil {
 		return nil, fmt.Errorf("加载发现设备失败: %w", err)
 	}
 	resolver := newDeviceResolver(devices)
@@ -768,14 +769,14 @@ func isRowEmpty(values ...string) bool {
 }
 
 type deviceResolver struct {
-	byMgmtIP map[string]models.DiscoveryDevice
-	byName   map[string][]models.DiscoveryDevice
+	byMgmtIP map[string]taskexec.TaskRunDevice
+	byName   map[string][]taskexec.TaskRunDevice
 }
 
-func newDeviceResolver(devices []models.DiscoveryDevice) *deviceResolver {
+func newDeviceResolver(devices []taskexec.TaskRunDevice) *deviceResolver {
 	r := &deviceResolver{
-		byMgmtIP: make(map[string]models.DiscoveryDevice),
-		byName:   make(map[string][]models.DiscoveryDevice),
+		byMgmtIP: make(map[string]taskexec.TaskRunDevice),
+		byName:   make(map[string][]taskexec.TaskRunDevice),
 	}
 	for _, d := range devices {
 		if ip := strings.TrimSpace(chooseNonEmpty(d.MgmtIP, d.DeviceIP)); ip != "" {
@@ -849,7 +850,7 @@ type edgeRef struct {
 	Status    string
 }
 
-func buildEdgeRef(edge models.TopologyEdge) (edgeRef, bool) {
+func buildEdgeRef(edge taskexec.TaskTopologyEdge) (edgeRef, bool) {
 	if strings.TrimSpace(edge.BDeviceID) == "" {
 		return edgeRef{}, false
 	}

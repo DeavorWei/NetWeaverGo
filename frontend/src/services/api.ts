@@ -27,9 +27,8 @@ import * as TaskGroupServiceBinding from '../bindings/github.com/NetWeaverGo/cor
 import * as ForgeServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice'
 import * as QueryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/queryservice'
 import * as ExecutionHistoryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/executionhistoryservice'
-import * as DiscoveryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/discoveryservice'
-import * as TopologyServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/topologyservice'
 import * as PlanCompareServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/plancompareservice'
+import * as TaskExecutionUIServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/taskexecutionuiservice'
 
 // ==================== 设备管理 API ====================
 /**
@@ -139,7 +138,7 @@ export const TaskGroupAPI = {
   /** 删除任务组 */
   deleteTaskGroup: TaskGroupServiceBinding.DeleteTaskGroup,
   /** 启动任务组执行 */
-  startTaskGroup: TaskGroupServiceBinding.StartTaskGroup,
+  startTaskGroup: (id: number): Promise<string> => TaskGroupServiceBinding.StartTaskGroup(id) as unknown as Promise<string>,
 } as const
 
 // ==================== 统一任务执行 API (阶段2/3) ====================
@@ -150,25 +149,27 @@ export const TaskGroupAPI = {
  */
 export const TaskExecutionAPI = {
   /** 获取任务快照 */
-  getTaskSnapshot: async (_runId: string): Promise<any> => {
-    // TODO: 绑定生成后替换为实际调用
-    console.warn('TaskExecutionAPI.getTaskSnapshot not yet bound')
-    return null
-  },
+  getTaskSnapshot: TaskExecutionUIServiceBinding.GetTaskSnapshot,
   /** 列出正在运行的任务 */
-  listRunningTasks: async (): Promise<any[]> => {
-    console.warn('TaskExecutionAPI.listRunningTasks not yet bound')
-    return []
-  },
+  listRunningTasks: async (): Promise<any[]> =>
+    (await TaskExecutionUIServiceBinding.ListRunningTasks()).filter(Boolean),
   /** 获取历史运行记录 */
-  listTaskRuns: async (_limit: number = 50): Promise<any[]> => {
-    console.warn('TaskExecutionAPI.listTaskRuns not yet bound')
-    return []
-  },
+  listTaskRuns: async (limit: number = 50): Promise<any[]> =>
+    (await TaskExecutionUIServiceBinding.ListTaskRuns(limit)).filter(Boolean),
   /** 取消任务 */
-  cancelTask: async (_runId: string): Promise<void> => {
-    console.warn('TaskExecutionAPI.cancelTask not yet bound')
-  },
+  cancelTask: TaskExecutionUIServiceBinding.CancelTask,
+  /** 订阅任务事件 */
+  subscribeRunEvents: TaskExecutionUIServiceBinding.SubscribeRunEvents,
+  /** 取消订阅任务事件 */
+  unsubscribeRunEvents: TaskExecutionUIServiceBinding.UnsubscribeRunEvents,
+  /** 获取拓扑图 */
+  getTopologyGraph: TaskExecutionUIServiceBinding.GetTopologyGraph,
+  /** 获取链路详情 */
+  getTopologyEdgeDetail: TaskExecutionUIServiceBinding.GetTopologyEdgeDetail,
+  /** 获取设备拓扑详情 */
+  getTopologyDeviceDetail: TaskExecutionUIServiceBinding.GetTopologyDeviceDetail,
+  /** 获取支持的厂商列表 */
+  getSupportedTopologyVendors: TaskExecutionUIServiceBinding.GetSupportedTopologyVendors,
 } as const
 
 // ==================== ConfigForge 服务 API ====================
@@ -238,6 +239,17 @@ export interface DeviceViewState {
   truncated?: boolean
 }
 
+export interface TopologyBuildResult {
+  taskId: string
+  totalEdges: number
+  confirmedEdges: number
+  semiConfirmedEdges: number
+  inferredEdges: number
+  conflictEdges: number
+  buildTime: number
+  errors?: string[]
+}
+
 export type {
   DeviceAssetResponse,
 } from '../bindings/github.com/NetWeaverGo/core/internal/models/models'
@@ -248,35 +260,14 @@ export type {
  * @description 提供历史执行记录的查询和管理
  */
 export const ExecutionHistoryAPI = {
-  /** 查询历史执行记录列表 */
-  listExecutionRecords: ExecutionHistoryServiceBinding.ListExecutionRecords,
   /** 从统一运行时查询历史记录（阶段5） */
   listTaskRunRecords: ExecutionHistoryServiceBinding.ListTaskRunRecords,
-  /** 获取单条历史执行记录详情 */
-  getExecutionRecord: ExecutionHistoryServiceBinding.GetExecutionRecord,
-  /** 删除历史执行记录 */
-  deleteExecutionRecord: ExecutionHistoryServiceBinding.DeleteExecutionRecord,
-  /** 获取执行记录统计信息 */
-  getExecutionRecordStats: ExecutionHistoryServiceBinding.GetExecutionRecordStats,
-  /** 获取状态列表 */
-  getStatusList: ExecutionHistoryServiceBinding.GetStatusList,
-  /** 获取模式列表 */
-  getModeList: ExecutionHistoryServiceBinding.GetModeList,
-  /** 获取执行来源列表 */
-  getRunnerSourceList: ExecutionHistoryServiceBinding.GetRunnerSourceList,
   /** 使用系统默认应用打开文件 */
   openFileWithDefaultApp: ExecutionHistoryServiceBinding.OpenFileWithDefaultApp,
 } as const
 
 // 导出历史执行记录相关类型
 export type {
-  ExecutionRecord,
-  ExecutionDeviceRecord,
-} from '../bindings/github.com/NetWeaverGo/core/internal/models/models.js'
-
-export type {
-  ListExecutionRecordsRequest,
-  ListExecutionRecordsResponse,
   ListTaskRunRecordsRequest,
   ListTaskRunRecordsResponse,
   TaskRunRecordView,
@@ -317,44 +308,6 @@ export type {
   QueryResult,
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
-// ==================== 发现任务 API ====================
-/**
- * 发现任务 API
- * @description 提供网络拓扑发现任务的管理
- */
-export const DiscoveryAPI = {
-  /** 启动发现任务 */
-  startDiscovery: DiscoveryServiceBinding.StartDiscovery,
-  /** 取消发现任务 */
-  cancelDiscovery: DiscoveryServiceBinding.CancelDiscovery,
-  /** 重试失败的设备 */
-  retryFailedDevices: DiscoveryServiceBinding.RetryFailedDevices,
-  /** 获取任务状态 */
-  getTaskStatus: DiscoveryServiceBinding.GetTaskStatus,
-  /** 列出所有发现任务 */
-  listDiscoveryTasks: DiscoveryServiceBinding.ListDiscoveryTasks,
-  /** 获取任务下的设备列表 */
-  getTaskDevices: DiscoveryServiceBinding.GetTaskDevices,
-  /** 获取原始命令输出 */
-  getRawOutput: DiscoveryServiceBinding.GetRawOutput,
-  /** 检查是否有发现任务在运行 */
-  isDiscoveryRunning: DiscoveryServiceBinding.IsDiscoveryRunning,
-  /** 获取当前运行的任务ID */
-  getCurrentDiscoveryTask: DiscoveryServiceBinding.GetCurrentDiscoveryTask,
-  /** 获取所有厂商命令配置 */
-  getVendorProfiles: DiscoveryServiceBinding.GetVendorProfiles,
-  /** 获取支持的厂商列表 */
-  getSupportedVendors: DiscoveryServiceBinding.GetSupportedVendors,
-  /** 构建拓扑图 */
-  buildTopology: TopologyServiceBinding.BuildTopology,
-  /** 获取拓扑图视图 */
-  getTopologyGraph: TopologyServiceBinding.GetTopologyGraph,
-  /** 获取链路详情 */
-  getEdgeDetail: TopologyServiceBinding.GetEdgeDetail,
-  /** 获取设备拓扑详情 */
-  getDeviceTopologyDetail: TopologyServiceBinding.GetDeviceTopologyDetail,
-} as const
-
 // ==================== 规划比对 API ====================
 /**
  * 规划比对 API
@@ -375,16 +328,6 @@ export const PlanCompareAPI = {
   exportDiffReport: PlanCompareServiceBinding.ExportDiffReport,
 } as const
 
-// 导出发现任务相关类型
-// 阶段C修复：CommandSpec 已迁移到 config 包
-export type {
-  CommandSpec,
-  DeviceProfile,
-} from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
-
-// 兼容类型：VendorCommandProfile 已被 DeviceProfile 替代
-export type { DeviceProfile as VendorCommandProfile } from '../bindings/github.com/NetWeaverGo/core/internal/config/models.js'
-
 // ==================== 类型导出 ====================
 export type { 
   DeviceAsset, 
@@ -393,12 +336,7 @@ export type {
   TaskGroup,
   TaskItem,
   SSHAlgorithmSettings,
-  StartDiscoveryRequest,
-  TaskStartResponse,
-  DiscoveryTaskView,
-  DiscoveryDeviceView,
   TopologyGraphView,
-  TopologyBuildResult,
   TopologyEdgeDetailView,
   PlanImportResult,
   PlanUploadView,

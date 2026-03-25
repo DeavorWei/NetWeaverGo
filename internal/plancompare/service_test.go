@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/taskexec"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
@@ -38,8 +39,8 @@ func TestCompareMatchedLink(t *testing.T) {
 		t.Fatalf("open db failed: %v", err)
 	}
 	if err := db.AutoMigrate(
-		&models.DiscoveryDevice{},
-		&models.TopologyEdge{},
+		&taskexec.TaskRunDevice{},
+		&taskexec.TaskTopologyEdge{},
 		&models.PlanFile{},
 		&models.PlannedLink{},
 		&models.DiffReport{},
@@ -68,8 +69,8 @@ func TestCompareMatchedLink(t *testing.T) {
 		t.Fatalf("create planned link failed: %v", err)
 	}
 
-	if err := db.Create(&models.DiscoveryDevice{
-		TaskID:         "task1",
+	if err := db.Create(&taskexec.TaskRunDevice{
+		TaskRunID:      "task1",
 		DeviceIP:       "10.0.0.1",
 		MgmtIP:         "10.0.0.1",
 		Hostname:       "Core1",
@@ -78,8 +79,8 @@ func TestCompareMatchedLink(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("create device1 failed: %v", err)
 	}
-	if err := db.Create(&models.DiscoveryDevice{
-		TaskID:         "task1",
+	if err := db.Create(&taskexec.TaskRunDevice{
+		TaskRunID:      "task1",
 		DeviceIP:       "10.0.0.2",
 		MgmtIP:         "10.0.0.2",
 		Hostname:       "Agg1",
@@ -88,9 +89,9 @@ func TestCompareMatchedLink(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("create device2 failed: %v", err)
 	}
-	if err := db.Create(&models.TopologyEdge{
+	if err := db.Create(&taskexec.TaskTopologyEdge{
 		ID:        "edge1",
-		TaskID:    "task1",
+		TaskRunID: "task1",
 		ADeviceID: "10.0.0.1",
 		AIf:       "GE1/0/1",
 		BDeviceID: "10.0.0.2",
@@ -184,8 +185,8 @@ func TestCompare_MultipleLinks_SameDevicePair(t *testing.T) {
 		t.Fatalf("open db failed: %v", err)
 	}
 	if err := db.AutoMigrate(
-		&models.DiscoveryDevice{},
-		&models.TopologyEdge{},
+		&taskexec.TaskRunDevice{},
+		&taskexec.TaskTopologyEdge{},
 		&models.PlanFile{},
 		&models.PlannedLink{},
 		&models.DiffReport{},
@@ -218,8 +219,8 @@ func TestCompare_MultipleLinks_SameDevicePair(t *testing.T) {
 	}
 
 	// 创建设备
-	if err := db.Create(&models.DiscoveryDevice{
-		TaskID:         "task1",
+	if err := db.Create(&taskexec.TaskRunDevice{
+		TaskRunID:      "task1",
 		DeviceIP:       "10.0.0.1",
 		MgmtIP:         "10.0.0.1",
 		Hostname:       "Core1",
@@ -228,8 +229,8 @@ func TestCompare_MultipleLinks_SameDevicePair(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("create device1 failed: %v", err)
 	}
-	if err := db.Create(&models.DiscoveryDevice{
-		TaskID:         "task1",
+	if err := db.Create(&taskexec.TaskRunDevice{
+		TaskRunID:      "task1",
 		DeviceIP:       "10.0.0.2",
 		MgmtIP:         "10.0.0.2",
 		Hostname:       "Agg1",
@@ -241,9 +242,9 @@ func TestCompare_MultipleLinks_SameDevicePair(t *testing.T) {
 
 	// 实际拓扑：同设备对存在2条链路
 	// 第一条：匹配规划的链路
-	if err := db.Create(&models.TopologyEdge{
+	if err := db.Create(&taskexec.TaskTopologyEdge{
 		ID:        "edge1",
-		TaskID:    "task1",
+		TaskRunID: "task1",
 		ADeviceID: "10.0.0.1",
 		AIf:       "GE1/0/1",
 		BDeviceID: "10.0.0.2",
@@ -254,9 +255,9 @@ func TestCompare_MultipleLinks_SameDevicePair(t *testing.T) {
 		t.Fatalf("create edge1 failed: %v", err)
 	}
 	// 第二条：同设备对的额外链路（GE1/0/2 <-> Trunk20）
-	if err := db.Create(&models.TopologyEdge{
+	if err := db.Create(&taskexec.TaskTopologyEdge{
 		ID:        "edge2",
-		TaskID:    "task1",
+		TaskRunID: "task1",
 		ADeviceID: "10.0.0.1",
 		AIf:       "GE1/0/2",
 		BDeviceID: "10.0.0.2",

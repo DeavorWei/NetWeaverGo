@@ -30,9 +30,9 @@ func (s *PlanCompareService) ListPlanFiles(ctx context.Context, limit int) ([]mo
 	return s.service.ListPlanFiles(limit)
 }
 
-// Compare 执行规划比对。
-func (s *PlanCompareService) Compare(ctx context.Context, taskID string, planID string) (*models.CompareResult, error) {
-	return s.service.Compare(taskID, planID)
+// Compare 执行规划比对（统一使用 runID）。
+func (s *PlanCompareService) Compare(ctx context.Context, runID string, planID string) (*models.CompareResult, error) {
+	return s.service.CompareByRunID(runID, planID)
 }
 
 // GetDiffReport 获取差异报告摘要。

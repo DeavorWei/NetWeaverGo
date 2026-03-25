@@ -468,7 +468,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
-import { DeviceAPI, DiscoveryAPI, TaskGroupAPI } from "../services/api";
+import { DeviceAPI, TaskExecutionAPI, TaskGroupAPI } from "../services/api";
 import type { DeviceAsset, CommandGroup } from "../services/api";
 import DeviceSelector from "../components/task/DeviceSelector.vue";
 import CommandGroupSelector from "../components/task/CommandGroupSelector.vue";
@@ -647,7 +647,7 @@ async function confirmCreate() {
 
 async function loadTopologyVendors() {
   try {
-    supportedVendors.value = (await DiscoveryAPI.getSupportedVendors()) || [];
+    supportedVendors.value = (await TaskExecutionAPI.getSupportedTopologyVendors()) || [];
   } catch (err) {
     console.error("加载拓扑厂商列表失败:", err);
     supportedVendors.value = [];

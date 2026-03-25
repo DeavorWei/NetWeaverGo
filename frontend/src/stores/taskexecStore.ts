@@ -2,7 +2,7 @@
  * 统一任务执行运行时 Store (Pinia)
  * 
  * 用于管理统一执行框架 (taskexec) 的状态
- * 替代 engineStore 在任务组执行场景中的职责
+ * 这是前端唯一的执行态真相源
  */
 
 import { defineStore } from 'pinia'
@@ -93,10 +93,15 @@ export const useTaskexecStore = defineStore('taskexec', () => {
   
   function unwrapEventData<T = any>(ev: any): T | null {
     if (!ev) return null
-    if (Array.isArray(ev.data)) {
-      return (ev.data[0] ?? null) as T | null
+    const raw = Array.isArray(ev.data) ? (ev.data[0] ?? null) : (ev.data ?? null)
+    if (typeof raw === 'string') {
+      try {
+        return JSON.parse(raw) as T
+      } catch {
+        return null
+      }
     }
-    return (ev.data ?? null) as T | null
+    return raw as T | null
   }
   
   // ================== 状态更新 ==================

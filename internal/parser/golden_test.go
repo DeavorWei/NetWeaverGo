@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
 )
 
@@ -59,9 +60,17 @@ func TestHuaweiGoldenParsedFacts(t *testing.T) {
 	if err := loadJSON(aggExpectedPath, &wantAgg); err != nil {
 		t.Fatalf("load expected aggregate failed: %v", err)
 	}
+	sortAggregateFacts(gotAgg)
+	sortAggregateFacts(wantAgg)
 	if !reflect.DeepEqual(gotAgg, wantAgg) {
 		t.Fatalf("aggregate golden mismatch\nwant=%+v\ngot=%+v", wantAgg, gotAgg)
 	}
+}
+
+func sortAggregateFacts(items []AggregateFact) {
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].AggregateName < items[j].AggregateName
+	})
 }
 
 func loadJSON(path string, target interface{}) error {

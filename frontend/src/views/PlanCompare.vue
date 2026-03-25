@@ -55,10 +55,10 @@
       <div class="flex gap-2">
         <button
           @click="compareNow"
-          :disabled="(!selectedTaskID && !selectedRunId) || !selectedPlanID || comparing"
+          :disabled="!selectedRunId || !selectedPlanID || comparing"
           class="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
           :class="
-            (!selectedTaskID && !selectedRunId) || !selectedPlanID || comparing
+            !selectedRunId || !selectedPlanID || comparing
               ? 'bg-bg-panel border border-border text-text-muted cursor-not-allowed'
               : 'bg-accent text-white border border-accent/40 hover:bg-accent-glow'
           "
@@ -161,11 +161,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import {
-  DiscoveryAPI,
   PlanCompareAPI,
   type CompareResult,
   type DiffItem,
-  type DiscoveryTaskView,
   type PlanUploadView,
 } from "../services/api";
 import { useTaskexecStore } from "../stores/taskexecStore";
@@ -177,10 +175,8 @@ const importing = ref(false);
 const comparing = ref(false);
 const lastExportPath = ref("");
 
-const selectedTaskID = ref("");
 const selectedPlanID = ref("");
 const selectedRunId = ref("");
-const tasks = ref<DiscoveryTaskView[]>([]);
 const plans = ref<PlanUploadView[]>([]);
 
 // 从统一运行时获取拓扑运行记录
@@ -221,19 +217,10 @@ function diffClass(diffType: string) {
 }
 
 async function loadBaseData() {
-  const [taskList, planList] = await Promise.all([
-    DiscoveryAPI.listDiscoveryTasks(50),
+  const [planList] = await Promise.all([
     PlanCompareAPI.listPlanFiles(50),
     taskexecStore.loadRunHistory(50), // 加载统一运行时历史
   ]);
-  tasks.value = [...(taskList || [])].sort((a, b) => {
-    const aLinked = a.taskGroupId ? 1 : 0;
-    const bLinked = b.taskGroupId ? 1 : 0;
-    if (aLinked !== bLinked) {
-      return bLinked - aLinked;
-    }
-    return 0;
-  });
   plans.value = planList || [];
 }
 
@@ -252,13 +239,10 @@ async function importPlan() {
 }
 
 async function compareNow() {
-  // 优先使用 runId，否则回退到 taskId
-  const taskOrRunId = selectedRunId.value || selectedTaskID.value;
-  if (!taskOrRunId || !selectedPlanID.value || comparing.value) return;
+  if (!selectedRunId.value || !selectedPlanID.value || comparing.value) return;
   comparing.value = true;
   try {
-    // TODO: 后端需要支持通过 runId 查询拓扑数据
-    const result = await PlanCompareAPI.compare(selectedTaskID.value || selectedRunId.value, selectedPlanID.value);
+    const result = await PlanCompareAPI.compare(selectedRunId.value, selectedPlanID.value);
     if (result) {
       compareResult.value = result;
     }

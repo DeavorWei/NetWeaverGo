@@ -275,6 +275,15 @@ func AutoMigrate(db *gorm.DB) error {
 		&TaskRunUnit{},
 		&TaskRunEvent{},
 		&TaskArtifact{},
+		&TaskRunDevice{},
+		&TaskRawOutput{},
+		&TaskParsedInterface{},
+		&TaskParsedLLDPNeighbor{},
+		&TaskParsedFDBEntry{},
+		&TaskParsedARPEntry{},
+		&TaskParsedAggregateGroup{},
+		&TaskParsedAggregateMember{},
+		&TaskTopologyEdge{},
 	)
 }
 

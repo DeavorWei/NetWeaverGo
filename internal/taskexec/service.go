@@ -16,6 +16,7 @@ type TaskExecutionService struct {
 	compiler   *CompilerRegistry
 	snapshot   *SnapshotHub
 	repo       Repository
+	db         *gorm.DB
 	deviceRepo repository.DeviceRepository
 }
 
@@ -42,6 +43,7 @@ func NewTaskExecutionService(db *gorm.DB) *TaskExecutionService {
 		compiler:   compilerReg,
 		snapshot:   snapshotHub,
 		repo:       repo,
+		db:         db,
 		deviceRepo: repository.NewDeviceRepository(),
 	}
 
