@@ -3,174 +3,22 @@ package models
 
 import "time"
 
-// ============================================================================
-// 拓扑发现相关模型
-// ============================================================================
-
-// TopologyEdge 拓扑边（链路）
-type TopologyEdge struct {
-	ID               string         `json:"id" gorm:"primaryKey"`
-	TaskID           string         `json:"taskId" gorm:"index;not null"`
-	ADeviceID        string         `json:"aDeviceId" gorm:"index"`
-	AIf              string         `json:"aIf"`
-	BDeviceID        string         `json:"bDeviceId" gorm:"index"`
-	BIf              string         `json:"bIf"`
-	LogicalAIf       string         `json:"logicalAIf"`
-	LogicalBIf       string         `json:"logicalBIf"`
-	EdgeType         string         `json:"edgeType"` // physical / logical_aggregate
-	Status           string         `json:"status"`   // confirmed / semi_confirmed / inferred / conflict
-	Confidence       float64        `json:"confidence"`
-	DiscoveryMethods []string       `json:"discoveryMethods" gorm:"serializer:json"`
-	Evidence         []EdgeEvidence `json:"evidence" gorm:"serializer:json"`
-	CreatedAt        time.Time      `json:"createdAt"`
-	UpdatedAt        time.Time      `json:"updatedAt"`
-}
-
-// TableName 指定表名
-func (TopologyEdge) TableName() string {
-	return "topology_edges"
-}
-
-// EdgeEvidence 边证据
+// EdgeEvidence 链路证据
+// 仅作为统一运行时拓扑详情视图的嵌套 DTO。
 type EdgeEvidence struct {
-	Type       string `json:"type"`                // 证据类型: lldp / fdb / arp / aggregate / identity
-	DeviceID   string `json:"deviceId"`            // 证据来源设备
-	Command    string `json:"command"`             // 来源命令 key
-	RawRefID   string `json:"rawRefId"`            // 原始输出引用ID
-	Summary    string `json:"summary"`             // 证据摘要
-	Source     string `json:"source"`              // 兼容字段: 来源
-	LocalIf    string `json:"localIf"`             // 本地接口
-	RemoteName string `json:"remoteName"`          // 远端名称
-	RemoteIf   string `json:"remoteIf"`            // 远端接口
-	RemoteMAC  string `json:"remoteMac"`           // 远端MAC
-	RemoteIP   string `json:"remoteIp"`            // 远端IP
-	Timestamp  string `json:"timestamp,omitempty"` // 时间戳
+	Type       string `json:"type"`
+	DeviceID   string `json:"deviceId"`
+	Command    string `json:"command"`
+	RawRefID   string `json:"rawRefId"`
+	Summary    string `json:"summary"`
+	Source     string `json:"source"`
+	LocalIf    string `json:"localIf"`
+	RemoteName string `json:"remoteName"`
+	RemoteIf   string `json:"remoteIf"`
+	RemoteMAC  string `json:"remoteMac"`
+	RemoteIP   string `json:"remoteIp"`
+	Timestamp  string `json:"timestamp,omitempty"`
 }
-
-// TopologyInterface 拓扑接口信息
-type TopologyInterface struct {
-	ID            uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	TaskID        string    `json:"taskId" gorm:"index;not null"`
-	DeviceIP      string    `json:"deviceIp" gorm:"index;not null"`
-	InterfaceName string    `json:"interfaceName" gorm:"index"`
-	Status        string    `json:"status"` // up / down
-	Speed         string    `json:"speed"`
-	Duplex        string    `json:"duplex"`
-	Description   string    `json:"description"`
-	MACAddress    string    `json:"macAddress"`
-	IPAddress     string    `json:"ipAddress"`
-	IsAggregate   bool      `json:"isAggregate"`
-	AggregateID   string    `json:"aggregateId"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-}
-
-// TableName 指定表名
-func (TopologyInterface) TableName() string {
-	return "topology_interfaces"
-}
-
-// TopologyLLDPNeighbor LLDP邻居信息
-type TopologyLLDPNeighbor struct {
-	ID              uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	TaskID          string    `json:"taskId" gorm:"index;not null"`
-	DeviceIP        string    `json:"deviceIp" gorm:"index;not null"`
-	LocalInterface  string    `json:"localInterface" gorm:"index"`
-	NeighborName    string    `json:"neighborName" gorm:"index"`
-	NeighborChassis string    `json:"neighborChassis"`
-	NeighborPort    string    `json:"neighborPort"`
-	NeighborIP      string    `json:"neighborIp"`
-	NeighborDesc    string    `json:"neighborDesc"`
-	CommandKey      string    `json:"commandKey"`
-	RawRefID        string    `json:"rawRefId"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
-}
-
-// TableName 指定表名
-func (TopologyLLDPNeighbor) TableName() string {
-	return "topology_lldp_neighbors"
-}
-
-// TopologyFDBEntry MAC地址表项
-type TopologyFDBEntry struct {
-	ID         uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	TaskID     string    `json:"taskId" gorm:"index;not null"`
-	DeviceIP   string    `json:"deviceIp" gorm:"index;not null"`
-	MACAddress string    `json:"macAddress" gorm:"index"`
-	VLAN       int       `json:"vlan"`
-	Interface  string    `json:"interface" gorm:"index"`
-	Type       string    `json:"type"` // dynamic / static
-	CommandKey string    `json:"commandKey"`
-	RawRefID   string    `json:"rawRefId"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
-}
-
-// TableName 指定表名
-func (TopologyFDBEntry) TableName() string {
-	return "topology_fdb_entries"
-}
-
-// TopologyARPEntry ARP表项
-type TopologyARPEntry struct {
-	ID         uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	TaskID     string    `json:"taskId" gorm:"index;not null"`
-	DeviceIP   string    `json:"deviceIp" gorm:"index;not null"`
-	IPAddress  string    `json:"ipAddress" gorm:"index"`
-	MACAddress string    `json:"macAddress" gorm:"index"`
-	Interface  string    `json:"interface" gorm:"index"`
-	Type       string    `json:"type"`
-	CommandKey string    `json:"commandKey"`
-	RawRefID   string    `json:"rawRefId"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
-}
-
-// TableName 指定表名
-func (TopologyARPEntry) TableName() string {
-	return "topology_arp_entries"
-}
-
-// TopologyAggregateGroup 聚合组
-type TopologyAggregateGroup struct {
-	ID            uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	TaskID        string    `json:"taskId" gorm:"index;not null"`
-	DeviceIP      string    `json:"deviceIp" gorm:"index;not null"`
-	AggregateName string    `json:"aggregateName" gorm:"index"`
-	Mode          string    `json:"mode"` // lacp / static
-	CommandKey    string    `json:"commandKey"`
-	RawRefID      string    `json:"rawRefId"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-}
-
-// TableName 指定表名
-func (TopologyAggregateGroup) TableName() string {
-	return "topology_aggregate_groups"
-}
-
-// TopologyAggregateMember 聚合成员
-type TopologyAggregateMember struct {
-	ID            uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	TaskID        string    `json:"taskId" gorm:"index;not null"`
-	DeviceIP      string    `json:"deviceIp" gorm:"index;not null"`
-	AggregateName string    `json:"aggregateName" gorm:"index"`
-	MemberPort    string    `json:"memberPort" gorm:"index"`
-	CommandKey    string    `json:"commandKey"`
-	RawRefID      string    `json:"rawRefId"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-}
-
-// TableName 指定表名
-func (TopologyAggregateMember) TableName() string {
-	return "topology_aggregate_members"
-}
-
-// ============================================================================
-// 拓扑视图模型
-// ============================================================================
 
 // TopologyBuildResult 拓扑构建结果
 type TopologyBuildResult struct {

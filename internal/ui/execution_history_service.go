@@ -2,12 +2,10 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"os/exec"
 	"runtime"
 
 	"github.com/NetWeaverGo/core/internal/logger"
-	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/taskexec"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -66,31 +64,6 @@ type ListTaskRunRecordsResponse struct {
 	Total int                 `json:"total"`
 }
 
-// ListExecutionRecordsRequest 列表查询请求
-type ListExecutionRecordsRequest struct {
-	TaskGroupID  string `json:"taskGroupId"`
-	RunnerSource string `json:"runnerSource"`
-	Status       string `json:"status"`
-	Page         int    `json:"page"`
-	PageSize     int    `json:"pageSize"`
-	SortBy       string `json:"sortBy"`
-	SortOrder    string `json:"sortOrder"`
-}
-
-// ListExecutionRecordsResponse 列表查询响应
-type ListExecutionRecordsResponse struct {
-	Data       []models.ExecutionRecord `json:"data"`
-	Total      int64                    `json:"total"`
-	Page       int                      `json:"page"`
-	PageSize   int                      `json:"pageSize"`
-	TotalPages int                      `json:"totalPages"`
-}
-
-// ListExecutionRecords 查询历史执行记录列表（兼容旧接口）
-func (s *ExecutionHistoryService) ListExecutionRecords(req ListExecutionRecordsRequest) (*ListExecutionRecordsResponse, error) {
-	return nil, fmt.Errorf("legacy execution_records API 已移除，请使用 ListTaskRunRecords")
-}
-
 // ListTaskRunRecords 从统一运行时查询历史记录（阶段5：统一执行历史）
 func (s *ExecutionHistoryService) ListTaskRunRecords(req ListTaskRunRecordsRequest) (*ListTaskRunRecordsResponse, error) {
 	if s.taskExecutionService == nil {
@@ -142,56 +115,6 @@ func (s *ExecutionHistoryService) ListTaskRunRecords(req ListTaskRunRecordsReque
 		Data:  views,
 		Total: len(views),
 	}, nil
-}
-
-// GetExecutionRecord 根据 ID 获取历史执行记录详情
-func (s *ExecutionHistoryService) GetExecutionRecord(id string) (*models.ExecutionRecord, error) {
-	return nil, fmt.Errorf("legacy execution_records API 已移除，请使用统一运行时 run 详情")
-}
-
-// DeleteExecutionRecord 删除历史执行记录
-func (s *ExecutionHistoryService) DeleteExecutionRecord(id string) error {
-	return fmt.Errorf("legacy execution_records API 已移除")
-}
-
-// GetExecutionRecordStats 获取执行记录统计信息
-func (s *ExecutionHistoryService) GetExecutionRecordStats(taskGroupID string) (map[string]interface{}, error) {
-	return nil, fmt.Errorf("legacy execution_records API 已移除")
-}
-
-// ExecutionRecordStatus 历史记录状态常量
-type ExecutionRecordStatus struct{}
-
-// GetStatusList 获取所有可用的状态列表
-func (s *ExecutionHistoryService) GetStatusList() []string {
-	return []string{
-		"completed", // 成功
-		"partial",   // 部分成功
-		"failed",    // 失败
-		"cancelled", // 已取消
-	}
-}
-
-// GetModeList 获取所有可用的执行模式列表
-func (s *ExecutionHistoryService) GetModeList() []string {
-	return []string{
-		"group",     // 任务组模式A
-		"binding",   // 任务组模式B
-		"topology",  // 任务组拓扑采集
-		"discovery", // 发现任务
-		"manual",    // 普通执行
-		"backup",    // 备份执行
-	}
-}
-
-// GetRunnerSourceList 获取所有可用的执行来源列表
-func (s *ExecutionHistoryService) GetRunnerSourceList() []string {
-	return []string{
-		"task_group",        // 任务组服务
-		"discovery_service", // 发现服务
-		"engine_service",    // 引擎服务
-		"backup_service",    // 备份服务
-	}
 }
 
 // OpenFileWithDefaultApp 使用系统默认应用打开文件

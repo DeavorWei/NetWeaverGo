@@ -205,54 +205,6 @@ func (RuntimeSetting) TableName() string {
 }
 
 // ============================================================================
-// 执行记录相关模型
-// ============================================================================
-
-// ExecutionDeviceRecord 设备执行记录（嵌套在 ExecutionRecord 中）
-type ExecutionDeviceRecord struct {
-	IP             string   `json:"ip"`
-	Status         string   `json:"status"`
-	TotalCmd       int      `json:"totalCmd"`
-	ExecCmd        int      `json:"execCmd"`
-	ErrorMsg       string   `json:"errorMsg"`
-	LogCount       int      `json:"logCount"`
-	LogTail        []string `json:"logTail" gorm:"serializer:json"`
-	LogFilePath    string   `json:"logFilePath"`
-	SummaryLogPath string   `json:"summaryLogPath"`
-	DetailLogPath  string   `json:"detailLogPath"`
-	RawLogPath     string   `json:"rawLogPath"`
-}
-
-// ExecutionRecord 历史执行记录表
-type ExecutionRecord struct {
-	ID            string                  `json:"id" gorm:"primaryKey"`
-	RunnerSource  string                  `json:"runnerSource" gorm:"index"` // task_group / engine_service / backup_service / discovery_service
-	RunnerID      string                  `json:"runnerId" gorm:"index"`     // 运行实例ID，可为空
-	TaskGroupID   string                  `json:"taskGroupId" gorm:"index"`  // 任务组ID，非任务组执行时为空
-	TaskGroupName string                  `json:"taskGroupName"`             // 任务组名称快照
-	TaskName      string                  `json:"taskName"`                  // 执行任务名称快照
-	Mode          string                  `json:"mode"`                      // group / binding / manual / backup / discovery
-	Status        string                  `json:"status" gorm:"index"`       // completed / partial / failed / cancelled
-	TotalDevices  int                     `json:"totalDevices"`
-	FinishedCount int                     `json:"finishedCount"`
-	SuccessCount  int                     `json:"successCount"`
-	ErrorCount    int                     `json:"errorCount"`
-	AbortedCount  int                     `json:"abortedCount"`
-	WarningCount  int                     `json:"warningCount"`
-	StartedAt     string                  `json:"startedAt" gorm:"index"`
-	FinishedAt    string                  `json:"finishedAt"`
-	DurationMs    int64                   `json:"durationMs"`
-	ReportPath    string                  `json:"reportPath"`
-	Devices       []ExecutionDeviceRecord `json:"devices" gorm:"serializer:json"`
-	CreatedAt     string                  `json:"createdAt" gorm:"index"`
-}
-
-// TableName 指定表名
-func (ExecutionRecord) TableName() string {
-	return "execution_records"
-}
-
-// ============================================================================
 // 任务组相关辅助类型
 // ============================================================================
 
