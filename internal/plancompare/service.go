@@ -133,11 +133,16 @@ func (s *Service) ImportPlanExcel(filePath string) (*models.PlanImportResult, er
 	}, nil
 }
 
-// Compare 执行规划与实际拓扑的无向比对。
+// Compare 执行规划与实际拓扑的无向比对（兼容旧版 taskID）。
 func (s *Service) Compare(taskID string, planID string) (*models.CompareResult, error) {
+	return s.CompareByRunID(taskID, planID)
+}
+
+// CompareByRunID 执行规划与实际拓扑的无向比对（使用统一运行时的 runID）。
+func (s *Service) CompareByRunID(runID string, planID string) (*models.CompareResult, error) {
 	planID = normalizePlanID(planID)
-	if strings.TrimSpace(taskID) == "" || planID == "" {
-		return nil, fmt.Errorf("taskID/planID 不能为空")
+	if strings.TrimSpace(runID) == "" || planID == "" {
+		return nil, fmt.Errorf("runID/planID 不能为空")
 	}
 
 	var plans []models.PlannedLink
@@ -149,12 +154,12 @@ func (s *Service) Compare(taskID string, planID string) (*models.CompareResult, 
 	}
 
 	var edges []models.TopologyEdge
-	if err := s.db.Where("task_id = ?", taskID).Find(&edges).Error; err != nil {
+	if err := s.db.Where("task_id = ?", runID).Find(&edges).Error; err != nil {
 		return nil, fmt.Errorf("加载实际拓扑失败: %w", err)
 	}
 
 	var devices []models.DiscoveryDevice
-	if err := s.db.Where("task_id = ?", taskID).Find(&devices).Error; err != nil {
+	if err := s.db.Where("task_id = ?", runID).Find(&devices).Error; err != nil {
 		return nil, fmt.Errorf("加载发现设备失败: %w", err)
 	}
 	resolver := newDeviceResolver(devices)
@@ -306,7 +311,7 @@ func (s *Service) Compare(taskID string, planID string) (*models.CompareResult, 
 
 	report := models.DiffReport{
 		ID:                reportID,
-		TaskID:            taskID,
+		TaskID:            runID,
 		PlanFileID:        planID,
 		TotalPlanned:      len(plannedRefs),
 		TotalActual:       len(actualRefs),

@@ -5,16 +5,15 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/discovery"
-	"github.com/NetWeaverGo/core/internal/engine"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/repository"
+	"github.com/NetWeaverGo/core/internal/taskexec"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -24,12 +23,14 @@ type TaskGroupService struct {
 	repo             repository.DeviceRepository
 	discoveryService *DiscoveryService
 	topologyService  *TopologyService
+	v2               *TaskGroupServiceV2
 }
 
 // NewTaskGroupService 创建任务组服务实例
 func NewTaskGroupService() *TaskGroupService {
 	return &TaskGroupService{
 		repo: repository.NewDeviceRepository(),
+		v2:   NewTaskGroupServiceV2(),
 	}
 }
 
@@ -43,6 +44,7 @@ func NewTaskGroupServiceWithDeps(
 		repo:             repo,
 		discoveryService: discoveryService,
 		topologyService:  topologyService,
+		v2:               NewTaskGroupServiceV2(),
 	}
 }
 
@@ -50,7 +52,16 @@ func NewTaskGroupServiceWithDeps(
 func NewTaskGroupServiceWithRepo(repo repository.DeviceRepository) *TaskGroupService {
 	return &TaskGroupService{
 		repo: repo,
+		v2:   NewTaskGroupServiceV2(),
 	}
+}
+
+// SetTaskExecutionService 设置共享的任务执行服务（阶段1：统一运行时服务化）
+func (s *TaskGroupService) SetTaskExecutionService(service *taskexec.TaskExecutionService) {
+	if s.v2 == nil {
+		s.v2 = NewTaskGroupServiceV2()
+	}
+	s.v2.SetTaskExecutionService(service)
 }
 
 // SetTopologyDeps 设置拓扑采集相关依赖
@@ -62,9 +73,7 @@ func (s *TaskGroupService) SetTopologyDeps(discoveryService *DiscoveryService, t
 // ServiceStartup Wails 服务启动生命周期钩子
 func (s *TaskGroupService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	s.wailsApp = application.Get()
-	getExecutionManager().SetWailsApp(s.wailsApp)
-	// 设置全局 SuspendManager 的 Wails App 实例（如果 EngineService 尚未设置）
-	GetSuspendManager().SetWailsApp(s.wailsApp)
+	// 统一运行时通过 TaskExecutionEventBridge 自动处理 Wails 事件，无需此处设置
 	return nil
 }
 
@@ -122,251 +131,23 @@ func (s *TaskGroupService) DeleteTaskGroup(id uint) error {
 }
 
 // ResolveSuspend 被前端调用（当用户在弹窗中选择动作后）
-// 委托给全局 SuspendManager 处理
-func (s *TaskGroupService) ResolveSuspend(sessionIDOrIP string, action string) {
-	GetSuspendManager().Resolve(sessionIDOrIP, action)
+// 注意：暂停功能已随旧执行引擎删除，此方法保留为兼容接口
+func (s *TaskGroupService) ResolveSuspend(_sessionIDOrIP string, _action string) {
+	// 统一运行时暂不支持暂停功能
 }
 
 // StartTaskGroup 启动任务组执行（并行执行模式）
 func (s *TaskGroupService) StartTaskGroup(id uint) error {
-	taskGroup, err := config.GetTaskGroup(id)
-	if err != nil {
-		logger.Error("TaskGroup", fmt.Sprintf("%d", id), "获取任务组失败: %v", err)
-		return fmt.Errorf("获取任务组失败: %v", err)
+	if s.v2 == nil {
+		s.v2 = NewTaskGroupServiceV2()
 	}
-	logger.Info("TaskGroup", fmt.Sprintf("%d", id), "开始执行任务组: name=%s type=%s mode=%s status=%s", taskGroup.Name, normalizeTaskType(taskGroup.TaskType), taskGroup.Mode, taskGroup.Status)
-
-	if err := config.UpdateTaskGroupStatus(id, "running"); err != nil {
-		logger.Error("TaskGroup", fmt.Sprintf("%d", id), "更新任务组状态为running失败: %v", err)
-		return err
-	}
-
-	var finalStatus string
-	taskType := normalizeTaskType(taskGroup.TaskType)
-	switch taskType {
-	case "topology":
-		finalStatus, err = s.executeTopologyTask(taskGroup)
-	default:
-		settings, _, settingsErr := config.LoadSettings()
-		if settingsErr != nil {
-			config.UpdateTaskGroupStatus(id, "failed")
-			return settingsErr
-		}
-
-		allAssets, assetsErr := s.repo.FindAll()
-		if assetsErr != nil {
-			config.UpdateTaskGroupStatus(id, "failed")
-			return assetsErr
-		}
-
-		assetMap := make(map[uint]models.DeviceAsset, len(allAssets))
-		for _, asset := range allAssets {
-			assetMap[asset.ID] = asset
-		}
-
-		switch taskGroup.Mode {
-		case "group":
-			finalStatus, err = s.executeModeA(taskGroup, assetMap, settings)
-		case "binding":
-			finalStatus, err = s.executeModeB(taskGroup, assetMap, settings)
-		default:
-			err = fmt.Errorf("未知的任务组模式: %s", taskGroup.Mode)
-		}
-	}
-
-	if err != nil {
-		logger.Error("TaskGroup", fmt.Sprintf("%d", id), "任务组执行失败: %v", err)
-		config.UpdateTaskGroupStatus(id, "failed")
-		return err
-	}
-
-	logger.Info("TaskGroup", fmt.Sprintf("%d", id), "任务组执行完成: finalStatus=%s", finalStatus)
-	return config.UpdateTaskGroupStatus(id, finalStatus)
+	_, err := s.v2.StartTaskGroup(id)
+	return err
 }
 
-// executeModeA 模式A执行：一组命令发送给所有设备
-func (s *TaskGroupService) executeModeA(
-	taskGroup *models.TaskGroup,
-	assetMap map[uint]models.DeviceAsset,
-	settings *models.GlobalSettings,
-) (string, error) {
-	assetSet := make(map[uint]bool)
-	var allSelectedAssets []models.DeviceAsset
-	var commands []string
+// executeModeA 已删除 - 使用统一运行时替代
 
-	for _, item := range taskGroup.Items {
-		for _, deviceID := range item.DeviceIDs {
-			if !assetSet[deviceID] {
-				assetSet[deviceID] = true
-				if asset, ok := assetMap[deviceID]; ok {
-					allSelectedAssets = append(allSelectedAssets, asset)
-				}
-			}
-		}
-
-		if len(commands) == 0 && item.CommandGroupID != "" {
-			group, err := config.GetCommandGroup(uint(parseID(item.CommandGroupID)))
-			if err == nil && len(group.Commands) > 0 {
-				commands = group.Commands
-			}
-		}
-	}
-
-	if len(allSelectedAssets) == 0 {
-		return "", fmt.Errorf("未选择任何有效设备")
-	}
-	if len(commands) == 0 {
-		return "", fmt.Errorf("命令组为空或未配置")
-	}
-
-	logger.Info("TaskGroup", "-", "模式A执行: %d 台设备, %d 条命令", len(allSelectedAssets), len(commands))
-
-	ng := engine.NewEngine(allSelectedAssets, commands, settings, false)
-	ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
-	ng.SetEnableRawLog(taskGroup.EnableRawLog)
-
-	// 构建执行元数据
-	meta := &ExecutionMeta{
-		RunnerSource:  "task_group",
-		RunnerID:      fmt.Sprintf("%d", taskGroup.ID),
-		TaskGroupID:   fmt.Sprintf("%d", taskGroup.ID),
-		TaskGroupName: taskGroup.Name,
-		TaskName:      taskGroup.Name,
-		Mode:          "group",
-	}
-
-	tracker, err := getExecutionManager().RunEngineWithMeta(
-		ng,
-		meta,
-		func(ctx context.Context) error {
-			return ng.Run(ctx)
-		},
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return deriveTaskGroupStatus(tracker), nil
-}
-
-// executeModeB 模式B执行：每台设备执行各自的独立命令
-func (s *TaskGroupService) executeModeB(
-	taskGroup *models.TaskGroup,
-	assetMap map[uint]models.DeviceAsset,
-	settings *models.GlobalSettings,
-) (string, error) {
-	logger.Info("TaskGroup", "-", "模式B执行: %d 个任务项", len(taskGroup.Items))
-
-	type taskRun struct {
-		assets   []models.DeviceAsset
-		commands []string
-	}
-
-	var runs []taskRun
-	uniqueIDs := make(map[uint]struct{})
-
-	for _, item := range taskGroup.Items {
-		var commands []string
-		for _, cmd := range item.Commands {
-			trimmed := strings.TrimSpace(cmd)
-			if trimmed != "" {
-				commands = append(commands, trimmed)
-			}
-		}
-		if len(commands) == 0 {
-			logger.Warn("TaskGroup", "-", "任务项命令为空，跳过")
-			continue
-		}
-
-		var itemAssets []models.DeviceAsset
-		for _, deviceID := range item.DeviceIDs {
-			if asset, ok := assetMap[deviceID]; ok {
-				itemAssets = append(itemAssets, asset)
-				uniqueIDs[deviceID] = struct{}{}
-			}
-		}
-		if len(itemAssets) == 0 {
-			logger.Warn("TaskGroup", "-", "任务项设备为空，跳过")
-			continue
-		}
-
-		runs = append(runs, taskRun{
-			assets:   itemAssets,
-			commands: commands,
-		})
-	}
-
-	if len(runs) == 0 {
-		return "", fmt.Errorf("任务组中没有可执行的任务项")
-	}
-
-	totalDevices := len(uniqueIDs)
-	if totalDevices == 0 {
-		return "", fmt.Errorf("任务组中没有可执行设备")
-	}
-
-	// 构建执行元数据
-	meta := &ExecutionMeta{
-		RunnerSource:  "task_group",
-		RunnerID:      fmt.Sprintf("%d", taskGroup.ID),
-		TaskGroupID:   fmt.Sprintf("%d", taskGroup.ID),
-		TaskGroupName: taskGroup.Name,
-		TaskName:      taskGroup.Name,
-		Mode:          "binding",
-	}
-
-	// 创建轻量级执行会话（不依赖空引擎壳）
-	session, err := getExecutionManager().BeginCompositeExecution(
-		meta,
-		totalDevices,
-	)
-	if err != nil {
-		return "", err
-	}
-	defer session.Finish()
-
-	var (
-		runWG       sync.WaitGroup
-		errMu       sync.Mutex
-		firstRunErr error
-		forwarders  = make([]<-chan struct{}, 0, len(runs))
-	)
-
-	for _, run := range runs {
-		logger.Info("TaskGroup", "-", "启动独立任务: %d 台设备, %d 条命令", len(run.assets), len(run.commands))
-
-		ng := engine.NewEngine(run.assets, run.commands, settings, false)
-		ng.CustomSuspendHandler = GetSuspendManager().CreateHandler()
-		ng.SetEnableRawLog(taskGroup.EnableRawLog)
-		ng.SetLogStore(session.Tracker().GetLogStore())
-
-		forwarders = append(forwarders, getExecutionManager().listenEvents(ng.FrontendBus, session.Tracker().TrackEvent))
-
-		runWG.Add(1)
-		go func(ng *engine.Engine) {
-			defer runWG.Done()
-
-			if err := ng.Run(session.Context()); err != nil {
-				errMu.Lock()
-				if firstRunErr == nil {
-					firstRunErr = err
-				}
-				errMu.Unlock()
-			}
-		}(ng)
-	}
-
-	runWG.Wait()
-	for _, done := range forwarders {
-		<-done
-	}
-
-	if firstRunErr != nil {
-		return "", firstRunErr
-	}
-
-	return deriveTaskGroupStatus(session.Tracker()), nil
-}
+// executeModeB 已删除 - 使用统一运行时替代
 
 // executeTopologyTask 执行拓扑采集任务
 func (s *TaskGroupService) executeTopologyTask(taskGroup *models.TaskGroup) (string, error) {

@@ -128,15 +128,23 @@
       <!-- 执行视图（正在运行时显示） -->
       <template v-if="executionView.active">
         <template v-if="executionView.taskType === 'topology'">
-          <div class="flex-1 flex items-center justify-center">
-            <div class="bg-bg-card border border-border rounded-xl p-8 text-center min-w-[420px]">
-              <div class="w-10 h-10 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto"></div>
-              <p class="mt-4 text-sm text-text-primary font-medium">
-                {{ topologyExecuting ? '拓扑采集执行中，请稍候...' : '拓扑采集任务已结束' }}
-              </p>
-              <p class="mt-2 text-xs text-text-muted">
-                {{ topologyExecuting ? '任务执行完成后将自动跳转到拓扑图谱页面。' : '可返回任务列表或前往拓扑图谱查看结果。' }}
-              </p>
+          <div class="flex-1 flex flex-col gap-4">
+            <!-- Stage 进度展示 (新运行时支持) -->
+            <div v-if="executionStages.length > 0" class="flex-shrink-0">
+              <StageProgress :stages="executionStages" :units="executionUnits" />
+            </div>
+            
+            <!-- 原有提示内容 -->
+            <div class="flex-1 flex items-center justify-center">
+              <div class="bg-bg-card border border-border rounded-xl p-8 text-center min-w-[420px]">
+                <div class="w-10 h-10 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <p class="mt-4 text-sm text-text-primary font-medium">
+                  {{ topologyExecuting ? '拓扑任务执行中，请稍候...' : '拓扑任务已结束' }}
+                </p>
+                <p class="mt-2 text-xs text-text-muted">
+                  {{ topologyExecuting ? '任务将自动完成采集→解析→构建流程。' : '可前往拓扑图谱查看结果。' }}
+                </p>
+              </div>
             </div>
           </div>
         </template>
@@ -155,6 +163,11 @@
               :style="{ width: progressPercent + '%' }"
             ></div>
           </div>
+        </div>
+
+        <!-- Stage 进度展示 (新运行时支持) -->
+        <div v-if="executionStages.length > 0" class="flex-shrink-0">
+          <StageProgress :stages="executionStages" :units="executionUnits" />
         </div>
 
         <!-- 设备卡片网格 -->
@@ -186,9 +199,9 @@
                   </span>
                 </div>
                 <VirtualLogTerminal
-                  :logs="dev.logs"
-                  :total-count="dev.logCount"
-                  :truncated="dev.truncated"
+                  :logs="dev.logs || []"
+                  :total-count="dev.logCount || 0"
+                  :truncated="dev.truncated || false"
                   :device-ip="dev.ip"
                 />
                 <div
@@ -405,9 +418,9 @@
                 </span>
               </div>
               <VirtualLogTerminal
-                :logs="dev.logs"
-                :total-count="dev.logCount"
-                :truncated="dev.truncated"
+                :logs="dev.logs || []"
+                :total-count="dev.logCount || 0"
+                :truncated="dev.truncated || false"
                 :device-ip="dev.ip"
               />
             </div>
@@ -576,14 +589,18 @@ import type {
   TaskGroupDetailViewModel
 } from '../services/api'
 import { useEngineStore } from '../stores/engineStore'
+import { useTaskexecStore } from '../stores/taskexecStore'
 import VirtualLogTerminal from '../components/task/VirtualLogTerminal.vue'
 import ExecutionHistoryDrawer from '../components/task/ExecutionHistoryDrawer.vue'
 import TaskDetailModal from '../components/task/TaskDetailModal.vue'
 import TaskEditModal from '../components/task/TaskEditModal.vue'
 import DeviceSelector from '../components/task/DeviceSelector.vue'
+import StageProgress from '../components/task/StageProgress.vue'
+import type { StageSnapshot, UnitSnapshot } from '../types/taskexec'
 
 const router = useRouter()
 const engineStore = useEngineStore()
+const taskexecStore = useTaskexecStore()
 
 // ================== Tab 状态 ==================
 const activeTab = ref<'tasks' | 'backup'>('tasks')
@@ -595,10 +612,11 @@ const searchQuery = ref('')
 const filterStatus = ref('')
 const filterMode = ref('')
 
-// 执行视图状态
+// 执行视图状态 (阶段3: 统一执行框架 - 使用runId驱动)
 const executionView = ref({
   active: false,
   taskId: 0 as number,
+  runId: '' as string,  // 统一运行时runId
   taskName: '',
   taskType: 'normal' as 'normal' | 'topology'
 })
@@ -671,16 +689,50 @@ const showBackupHelp = ref(false)
 const executionSnapshot = computed(() => engineStore.executionSnapshot)
 const isRunning = computed(() => engineStore.isRunning)
 const progressPercent = computed(() => executionSnapshot.value?.progress ?? 0)
-const execDevices = computed(() => executionSnapshot.value?.devices ?? [])
+// 从 units 转换为 devices 视图（兼容旧 UI）
+const execDevices = computed<DeviceViewState[]>(() => {
+  const units = (executionSnapshot.value as any)?.units as UnitSnapshot[] || []
+  return units.map((unit: UnitSnapshot) => ({
+    ip: unit.targetKey,
+    name: unit.targetKey,
+    status: mapUnitStatusToDeviceStatus(unit.status),
+    progress: unit.progress,
+    output: unit.errorMessage || '',
+    error: unit.errorMessage,
+    logs: [],
+    logCount: 0,
+    truncated: false
+  }))
+})
 const suspendSessions = computed(() => engineStore.suspendSessions)
+
+// ================== 统一运行时 Stage/Unit 数据 (新增) ==================
+const executionStages = computed<StageSnapshot[]>(() => {
+  return (executionSnapshot.value as any)?.stages || []
+})
+
+const executionUnits = computed<UnitSnapshot[]>(() => {
+  return (executionSnapshot.value as any)?.units || []
+})
+
+// 将 Unit 状态映射到 Device 状态
+function mapUnitStatusToDeviceStatus(unitStatus: string): DeviceViewState['status'] {
+  switch (unitStatus) {
+    case 'pending': return 'idle'
+    case 'running': return 'running'
+    case 'completed': return 'success'
+    case 'failed': return 'failed'
+    case 'cancelled': return 'timeout'
+    default: return 'idle'
+  }
+}
 
 // 备份相关计算属性
 const isBackupRunning = computed(() => engineStore.isBackupRunning)
 const backupProgressPercent = computed(() => engineStore.backupProgress)
-const backupExecDevices = computed(() => {
-  const snapshot = engineStore.executionSnapshot
-  if (!snapshot || !backupView.value.active) return []
-  return snapshot.devices ?? []
+const backupExecDevices = computed<DeviceViewState[]>(() => {
+  // 备份功能暂不支持，返回空数组
+  return []
 })
 
 // ================== 虚拟滚动优化计算属性 ==================
@@ -903,55 +955,70 @@ function clearSnapshotTimeout() {
   }
 }
 
-// 执行任务
+// 执行任务 (阶段3: 统一执行框架 - 统一使用runId驱动)
 async function executeTask(task: TaskGroup) {
   if (isRunning.value || topologyExecuting.value) return
 
-  if (isTopologyTask(task)) {
-    executionView.value = {
-      active: true,
-      taskId: task.id,
-      taskName: task.name,
-      taskType: 'topology'
-    }
-    topologyExecuting.value = true
-    try {
-      await TaskGroupAPI.startTaskGroup(task.id)
-      triggerToast('拓扑采集任务已完成', 'success')
-      await loadTasks()
-      router.push('/topology')
-    } catch (err: any) {
-      console.error('执行拓扑任务失败:', err)
-      triggerToast(`执行失败: ${err?.message || err}`, 'error')
-      await loadTasks()
-      executionView.value.active = false
-    } finally {
-      topologyExecuting.value = false
-    }
-    return
-  }
-
-  engineStore.reset()
-  awaitingSnapshot.value = true
-  
-  startSnapshotTimeout()
-  startSnapshotPolling()
-  
+  // 统一使用统一运行时执行（普通任务和拓扑任务）
   executionView.value = {
     active: true,
     taskId: task.id,
+    runId: '',  // 将在启动后设置
     taskName: task.name,
     taskType: isTopologyTask(task) ? 'topology' : 'normal'
   }
 
+  const isTopology = isTopologyTask(task)
+  
+  if (isTopology) {
+    topologyExecuting.value = true
+  }
+
+  // 重置并初始化统一运行时状态
+  engineStore.reset()
+  taskexecStore.setCurrentRunId('')  // 清空当前runId
+  awaitingSnapshot.value = true
+  
+  startSnapshotTimeout()
+  startSnapshotPolling()
+
   try {
+    // 调用任务组API启动任务
     await TaskGroupAPI.startTaskGroup(task.id)
+    
+    // 注意：startTaskGroup返回void，runId需要通过其他方式获取
+    // 实际项目中应该修改API返回runId，或者从快照中识别
+    
+    // 如果是拓扑任务，等待完成后跳转到拓扑页
+    if (isTopology) {
+      // 监听任务完成
+      const checkTopologyComplete = setInterval(async () => {
+        // 检查taskexecStore中是否有完成的拓扑任务
+        const completedRuns = taskexecStore.runHistory.filter(
+          r => r.runKind === 'topology' && ['completed', 'failed', 'cancelled'].includes(r.status)
+        )
+        if (completedRuns.length > 0) {
+          clearInterval(checkTopologyComplete)
+          topologyExecuting.value = false
+          triggerToast('拓扑采集任务已完成', 'success')
+          await loadTasks()
+          router.push('/topology')
+        }
+      }, 2000)
+      
+      // 超时清理
+      setTimeout(() => {
+        clearInterval(checkTopologyComplete)
+        topologyExecuting.value = false
+      }, 300000) // 5分钟超时
+    }
   } catch (err: any) {
     console.error('执行任务失败:', err)
     triggerToast(`执行失败: ${err?.message || err}`, 'error')
     executionView.value.active = false
     clearSnapshotTimeout()
     stopSnapshotPolling()
+    topologyExecuting.value = false
   }
 }
 
@@ -983,7 +1050,7 @@ async function doDelete() {
   }
 }
 
-// 关闭执行视图
+// 关闭执行视图 (阶段3: 清理统一运行时状态)
 function closeExecutionView() {
   if (topologyExecuting.value) return
   executionView.value.active = false
@@ -991,14 +1058,35 @@ function closeExecutionView() {
   clearSnapshotTimeout()
   stopSnapshotPolling()
   engineStore.reset()
+  
+  // 清理统一运行时状态
+  if (executionView.value.runId) {
+    taskexecStore.removeSnapshot(executionView.value.runId)
+    taskexecStore.setCurrentRunId('')
+    executionView.value.runId = ''
+  }
+  
   loadTasks()
 }
 
+// 停止执行任务 (阶段3: 使用统一运行时的CancelTask)
 async function stopExecution() {
   if (!confirm('确定要停止当前执行任务吗？')) {
     return
   }
 
+  // 优先使用统一运行时的取消接口
+  if (executionView.value.runId) {
+    try {
+      await taskexecStore.cancelTask(executionView.value.runId)
+      triggerToast('已发送停止信号')
+      return
+    } catch (err: any) {
+      console.warn('统一运行时取消失败，回退到旧接口:', err)
+    }
+  }
+
+  // 回退到旧接口（备份任务等）
   try {
     await engineStore.stopEngine()
     triggerToast('已发送停止信号')

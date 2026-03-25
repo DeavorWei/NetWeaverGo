@@ -110,6 +110,7 @@ const props = defineProps<{
   modelValue: boolean
   taskGroupId?: string
   taskGroupName?: string
+  useUnifiedRuntime?: boolean // 阶段5：是否使用统一运行时历史
 }>()
 
 const emit = defineEmits<{
@@ -140,19 +141,48 @@ const loadRecords = async () => {
 
   loading.value = true
   try {
-    const req: ListExecutionRecordsRequest = {
-      taskGroupId: props.taskGroupId || '',
-      runnerSource: '',
-      status: filterStatus.value,
-      page: currentPage.value,
-      pageSize: pageSize,
-      sortBy: 'started_at',
-      sortOrder: 'desc',
-    }
+    // 阶段5：如果使用统一运行时，调用新接口
+    if (props.useUnifiedRuntime) {
+      const result = await ExecutionHistoryAPI.listTaskRunRecords({
+        runKind: '', // 获取所有类型
+        status: filterStatus.value,
+        limit: pageSize * currentPage.value,
+      })
+      // 转换统一运行时记录为 ExecutionRecord 格式
+      records.value = (result?.data || []).map((item: any) => ({
+        id: item.id,
+        runnerSource: item.runnerSource,
+        taskGroupId: item.taskGroupId,
+        taskGroupName: item.taskGroupName,
+        taskName: item.taskName,
+        mode: item.mode,
+        status: item.status,
+        totalDevices: item.totalDevices,
+        finishedCount: item.finishedCount,
+        successCount: item.successCount,
+        errorCount: item.errorCount,
+        startedAt: item.startedAt,
+        finishedAt: item.finishedAt,
+        durationMs: item.durationMs,
+        runKind: item.runKind,
+      }))
+      total.value = result?.total || 0
+    } else {
+      // 旧接口（兼容）
+      const req: ListExecutionRecordsRequest = {
+        taskGroupId: props.taskGroupId || '',
+        runnerSource: '',
+        status: filterStatus.value,
+        page: currentPage.value,
+        pageSize: pageSize,
+        sortBy: 'started_at',
+        sortOrder: 'desc',
+      }
 
-    const result = await ExecutionHistoryAPI.listExecutionRecords(req)
-    records.value = result?.data || []
-    total.value = result?.total || 0
+      const result = await ExecutionHistoryAPI.listExecutionRecords(req)
+      records.value = result?.data || []
+      total.value = result?.total || 0
+    }
     calculateTotalPages()
   } catch (error) {
     console.error('加载历史记录失败:', error)

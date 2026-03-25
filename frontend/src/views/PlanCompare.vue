@@ -34,12 +34,12 @@
       <div class="text-sm font-medium text-text-primary">2. 选择任务与规划文件</div>
       <div class="grid grid-cols-2 gap-3">
         <select
-          v-model="selectedTaskID"
+          v-model="selectedRunId"
           class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
         >
-          <option value="">选择发现任务</option>
-          <option v-for="task in tasks" :key="task.id" :value="task.id">
-            {{ task.name || task.id }} / TG:{{ task.taskGroupId || "-" }} ({{ task.status }})
+          <option value="">选择拓扑运行</option>
+          <option v-for="run in topologyRuns" :key="run.runId" :value="run.runId">
+            {{ run.taskName || run.runId.slice(0, 8) }} - {{ run.status }} ({{ run.successUnits }}/{{ run.totalUnits }})
           </option>
         </select>
         <select
@@ -55,10 +55,10 @@
       <div class="flex gap-2">
         <button
           @click="compareNow"
-          :disabled="!selectedTaskID || !selectedPlanID || comparing"
+          :disabled="(!selectedTaskID && !selectedRunId) || !selectedPlanID || comparing"
           class="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
           :class="
-            !selectedTaskID || !selectedPlanID || comparing
+            (!selectedTaskID && !selectedRunId) || !selectedPlanID || comparing
               ? 'bg-bg-panel border border-border text-text-muted cursor-not-allowed'
               : 'bg-accent text-white border border-accent/40 hover:bg-accent-glow'
           "
@@ -168,6 +168,9 @@ import {
   type DiscoveryTaskView,
   type PlanUploadView,
 } from "../services/api";
+import { useTaskexecStore } from "../stores/taskexecStore";
+
+const taskexecStore = useTaskexecStore();
 
 const importPath = ref("");
 const importing = ref(false);
@@ -176,8 +179,16 @@ const lastExportPath = ref("");
 
 const selectedTaskID = ref("");
 const selectedPlanID = ref("");
+const selectedRunId = ref("");
 const tasks = ref<DiscoveryTaskView[]>([]);
 const plans = ref<PlanUploadView[]>([]);
+
+// 从统一运行时获取拓扑运行记录
+const topologyRuns = computed(() => {
+  return taskexecStore.runHistory.filter(
+    (run) => run.runKind === "topology" && run.status !== "running"
+  );
+});
 
 const compareResult = ref<CompareResult>({
   reportId: "",
@@ -213,6 +224,7 @@ async function loadBaseData() {
   const [taskList, planList] = await Promise.all([
     DiscoveryAPI.listDiscoveryTasks(50),
     PlanCompareAPI.listPlanFiles(50),
+    taskexecStore.loadRunHistory(50), // 加载统一运行时历史
   ]);
   tasks.value = [...(taskList || [])].sort((a, b) => {
     const aLinked = a.taskGroupId ? 1 : 0;
@@ -240,10 +252,13 @@ async function importPlan() {
 }
 
 async function compareNow() {
-  if (!selectedTaskID.value || !selectedPlanID.value || comparing.value) return;
+  // 优先使用 runId，否则回退到 taskId
+  const taskOrRunId = selectedRunId.value || selectedTaskID.value;
+  if (!taskOrRunId || !selectedPlanID.value || comparing.value) return;
   comparing.value = true;
   try {
-    const result = await PlanCompareAPI.compare(selectedTaskID.value, selectedPlanID.value);
+    // TODO: 后端需要支持通过 runId 查询拓扑数据
+    const result = await PlanCompareAPI.compare(selectedTaskID.value || selectedRunId.value, selectedPlanID.value);
     if (result) {
       compareResult.value = result;
     }

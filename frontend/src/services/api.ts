@@ -23,7 +23,6 @@
 import * as DeviceServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/deviceservice'
 import * as CommandGroupServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/commandgroupservice'
 import * as SettingsServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/settingsservice'
-import * as EngineServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/engineservice'
 import * as TaskGroupServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/taskgroupservice'
 import * as ForgeServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice'
 import * as QueryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/queryservice'
@@ -121,30 +120,6 @@ export const SettingsAPI = {
 // 导出运行时配置类型（RuntimeConfigData 是类，需要作为值导出）
 export { RuntimeConfigData } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
-// ==================== 引擎控制 API ====================
-/**
- * 引擎控制 API
- * @description 负责任务执行、状态管理和挂起处理
- */
-export const EngineAPI = {
-  /** 启动引擎（使用默认配置文件） */
-  startEngine: EngineServiceBinding.StartEngine,
-  /** 使用选定的设备和命令组启动引擎 */
-  startEngineWithSelection: EngineServiceBinding.StartEngineWithSelection,
-  /** 启动备份模式 */
-  startBackup: EngineServiceBinding.StartBackup,
-  /** 解除挂起状态（用户选择操作后调用） */
-  resolveSuspend: EngineServiceBinding.ResolveSuspend,
-  /** 检查引擎是否正在运行 */
-  isRunning: EngineServiceBinding.IsRunning,
-  /** 停止当前执行 */
-  stopEngine: EngineServiceBinding.StopEngine,
-  /** 获取引擎状态 */
-  getEngineState: EngineServiceBinding.GetEngineState,
-  /** 获取执行快照 */
-  getExecutionSnapshot: EngineServiceBinding.GetExecutionSnapshot,
-} as const
-
 // ==================== 任务组管理 API ====================
 /**
  * 任务组管理 API
@@ -165,6 +140,35 @@ export const TaskGroupAPI = {
   deleteTaskGroup: TaskGroupServiceBinding.DeleteTaskGroup,
   /** 启动任务组执行 */
   startTaskGroup: TaskGroupServiceBinding.StartTaskGroup,
+} as const
+
+// ==================== 统一任务执行 API (阶段2/3) ====================
+/**
+ * 统一任务执行 API
+ * @description 提供统一运行时的任务执行、状态查询和控制功能
+ * @note 此API绑定由Wails自动生成，需要在构建后更新
+ */
+export const TaskExecutionAPI = {
+  /** 获取任务快照 */
+  getTaskSnapshot: async (_runId: string): Promise<any> => {
+    // TODO: 绑定生成后替换为实际调用
+    console.warn('TaskExecutionAPI.getTaskSnapshot not yet bound')
+    return null
+  },
+  /** 列出正在运行的任务 */
+  listRunningTasks: async (): Promise<any[]> => {
+    console.warn('TaskExecutionAPI.listRunningTasks not yet bound')
+    return []
+  },
+  /** 获取历史运行记录 */
+  listTaskRuns: async (_limit: number = 50): Promise<any[]> => {
+    console.warn('TaskExecutionAPI.listTaskRuns not yet bound')
+    return []
+  },
+  /** 取消任务 */
+  cancelTask: async (_runId: string): Promise<void> => {
+    console.warn('TaskExecutionAPI.cancelTask not yet bound')
+  },
 } as const
 
 // ==================== ConfigForge 服务 API ====================
@@ -215,12 +219,24 @@ export type {
   TaskGroupItemDetailViewModel,
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
-// ExecutionSnapshot 是类，需要作为值导出（有 createFrom 方法）
-export { ExecutionSnapshot } from '../bindings/github.com/NetWeaverGo/core/internal/report/models.js'
+// ExecutionSnapshot 从统一运行时导出
+export type { ExecutionSnapshot, StageSnapshot, UnitSnapshot, EventSnapshot } from '../types/taskexec'
 
-export type {
-  DeviceViewState,
-} from '../bindings/github.com/NetWeaverGo/core/internal/report/models.js'
+// DeviceViewState 类型（兼容旧 UI，从 units 数据转换）
+export interface DeviceViewState {
+  ip: string
+  name?: string
+  status: 'idle' | 'running' | 'success' | 'failed' | 'timeout' | 'suspended'
+  progress: number
+  output?: string
+  error?: string
+  suspended?: boolean
+  command?: string
+  // 日志相关属性
+  logs?: string[]
+  logCount?: number
+  truncated?: boolean
+}
 
 export type {
   DeviceAssetResponse,
@@ -234,6 +250,8 @@ export type {
 export const ExecutionHistoryAPI = {
   /** 查询历史执行记录列表 */
   listExecutionRecords: ExecutionHistoryServiceBinding.ListExecutionRecords,
+  /** 从统一运行时查询历史记录（阶段5） */
+  listTaskRunRecords: ExecutionHistoryServiceBinding.ListTaskRunRecords,
   /** 获取单条历史执行记录详情 */
   getExecutionRecord: ExecutionHistoryServiceBinding.GetExecutionRecord,
   /** 删除历史执行记录 */
@@ -259,6 +277,9 @@ export type {
 export type {
   ListExecutionRecordsRequest,
   ListExecutionRecordsResponse,
+  ListTaskRunRecordsRequest,
+  ListTaskRunRecordsResponse,
+  TaskRunRecordView,
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
 // ==================== 查询服务 API ====================

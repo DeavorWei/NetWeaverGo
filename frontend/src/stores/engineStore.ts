@@ -1,8 +1,8 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { Events } from "@wailsio/runtime";
-import { EngineAPI, DeviceAPI, ExecutionSnapshot } from "../services/api";
-import type { DeviceAsset } from "../services/api";
+import { DeviceAPI } from "../services/api";
+import type { DeviceAsset, ExecutionSnapshot } from "../services/api";
 
 export interface SuspendRequiredEvent {
   sessionId?: string;
@@ -19,11 +19,19 @@ export interface SuspendSessionState {
   content: string;
 }
 
+/**
+ * Engine Store - 执行引擎状态管理
+ * 
+ * @deprecated 此 store 基于旧执行引擎，现已迁移到 taskexecStore。
+ * 保留此文件仅为兼容过渡期，请使用 useTaskexecStore() 替代。
+ */
 export const useEngineStore = defineStore("engine", () => {
+  // ================== 执行状态（已废弃，使用 taskexecStore）==================
   const executionSnapshot = ref<ExecutionSnapshot | null>(null);
   const suspendSessions = ref<Record<string, SuspendSessionState>>({});
 
-  const isRunning = computed(() => Boolean(executionSnapshot.value?.isRunning));
+  // 使用 status 字段判断运行状态
+  const isRunning = computed(() => executionSnapshot.value?.status === 'running');
 
   // ================== 备份相关状态 ==================
   const backupState = ref<{
@@ -44,22 +52,19 @@ export const useEngineStore = defineStore("engine", () => {
   let cleanupFns: (() => void)[] = [];
 
   function applySnapshot(snapshot: ExecutionSnapshot | null) {
-    executionSnapshot.value = snapshot
-      ? ExecutionSnapshot.createFrom(snapshot)
-      : null;
+    // 简单赋值，不再使用 ExecutionSnapshot.createFrom
+    executionSnapshot.value = snapshot;
   }
 
   function markExecutionFinished() {
     if (!executionSnapshot.value) {
       return;
     }
-
-    applySnapshot(
-      ExecutionSnapshot.createFrom({
-        ...executionSnapshot.value,
-        isRunning: false,
-      })
-    );
+    // 直接修改状态
+    executionSnapshot.value = {
+      ...executionSnapshot.value,
+      status: 'completed'
+    };
   }
 
   function unwrapEventData<T = any>(ev: any): T | null {
@@ -75,50 +80,35 @@ export const useEngineStore = defineStore("engine", () => {
   function initListeners() {
     cleanupListeners();
 
-    const unlistenSnapshot = Events.On("execution:snapshot", (ev: any) => {
+    // 监听统一运行时事件（新事件格式）
+    const unlistenSnapshot = Events.On("task:snapshot", (ev: any) => {
       const data = unwrapEventData<ExecutionSnapshot>(ev);
       if (data) {
-        applySnapshot(ExecutionSnapshot.createFrom(data));
+        applySnapshot(data);
       }
     });
     if (typeof unlistenSnapshot === "function") {
       cleanupFns.push(unlistenSnapshot);
     }
 
-    const unlistenFinished = Events.On("engine:finished", () => {
+    const unlistenFinished = Events.On("task:finished", () => {
       markExecutionFinished();
-      // 同时重置备份状态
       backupState.value.isRunning = false;
     });
     if (typeof unlistenFinished === "function") {
       cleanupFns.push(unlistenFinished);
     }
 
-    const unlistenSuspend = Events.On("engine:suspend_required", (ev: any) => {
-      const data = unwrapEventData<SuspendRequiredEvent>(ev);
-      if (data) {
-        suspendSessions.value[data.ip] = {
-          sessionId: data.sessionId || "",
-          ip: data.ip,
-          command: data.command,
-          error: data.error,
-          content: `设备: ${data.ip}\n命令: ${data.command}\n\n错误详情:\n${data.error}`,
-        };
-      }
+    // 旧事件监听（兼容期）
+    const unlistenOldFinished = Events.On("engine:finished", () => {
+      markExecutionFinished();
+      backupState.value.isRunning = false;
     });
-    if (typeof unlistenSuspend === "function") {
-      cleanupFns.push(unlistenSuspend);
+    if (typeof unlistenOldFinished === "function") {
+      cleanupFns.push(unlistenOldFinished);
     }
 
-    const unlistenTimeout = Events.On("engine:suspend_timeout", (ev: any) => {
-      const data = unwrapEventData<{ ip: string; sessionId: string }>(ev);
-      if (data) {
-        delete suspendSessions.value[data.ip];
-      }
-    });
-    if (typeof unlistenTimeout === "function") {
-      cleanupFns.push(unlistenTimeout);
-    }
+    // 暂停功能已随旧引擎删除
   }
 
   function cleanupListeners() {
@@ -132,41 +122,20 @@ export const useEngineStore = defineStore("engine", () => {
     cleanupFns = [];
   }
 
-  async function syncExecutionState() {
-    try {
-      // 统一从 ExecutionSnapshot 获取运行态
-      const snapshot = await EngineAPI.getExecutionSnapshot().catch(() => null);
-
-      if (snapshot) {
-        applySnapshot(snapshot);
-        return snapshot.isRunning;
-      }
-
-      applySnapshot(null);
-      return false;
-    } catch (err) {
-      console.error("Failed to sync execution state:", err);
-      return false;
-    }
+  async function syncExecutionState(): Promise<boolean> {
+    // 统一运行时通过事件驱动，不再主动轮询
+    console.warn('syncExecutionState 已废弃，统一运行时通过事件驱动状态更新');
+    return isRunning.value;
   }
 
   async function stopEngine() {
-    try {
-      await EngineAPI.stopEngine();
-    } catch (err) {
-      console.error("停止引擎失败:", err);
-      throw err;
-    }
+    console.warn('stopEngine 已废弃，请使用 taskexecStore.cancelTask(runId)');
+    // 不再调用旧 API
   }
 
-  function resolveSuspend(ip: string, action: "C" | "A") {
-    const session = suspendSessions.value[ip];
-    if (!session) {
-      return;
-    }
-    const identifier = session.sessionId || session.ip;
-    void EngineAPI.resolveSuspend(identifier, action);
-    delete suspendSessions.value[ip];
+  function resolveSuspend(_ip: string, _action: "C" | "A") {
+    console.warn('暂停功能已随旧执行引擎删除');
+    // 暂停功能已删除
   }
 
   function reset() {
@@ -200,8 +169,9 @@ export const useEngineStore = defineStore("engine", () => {
     };
 
     try {
-      // 调用后端 StartBackup API
-      await EngineAPI.startBackup();
+      // 调用后端 StartBackup API（统一运行时暂不支持，保留接口）
+      console.warn('备份功能在统一运行时中暂不支持');
+      throw new Error('备份功能暂不可用');
     } catch (err) {
       console.error("启动备份失败:", err);
       backupState.value.isRunning = false;
@@ -212,8 +182,8 @@ export const useEngineStore = defineStore("engine", () => {
   function updateBackupSnapshot(snapshot: ExecutionSnapshot) {
     backupState.value.progress = snapshot.progress;
 
-    // 检查是否完成
-    if (!snapshot.isRunning) {
+    // 检查是否完成（统一运行时使用 status 字段）
+    if (snapshot.status !== 'running') {
       backupState.value.isRunning = false;
     }
   }

@@ -8,6 +8,7 @@ import (
 	"github.com/NetWeaverGo/core"
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/taskexec"
 	"github.com/NetWeaverGo/core/internal/ui"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -29,6 +30,10 @@ func main() {
 		logger.Error("System", "-", "数据库初始化失败: %v", err)
 		os.Exit(1)
 	}
+	if err := taskexec.AutoMigrate(config.DB); err != nil {
+		logger.Error("System", "-", "统一运行时数据库迁移失败: %v", err)
+		os.Exit(1)
+	}
 
 	// 初始化运行时配置管理器
 	if err := config.InitRuntimeManager(config.DB); err != nil {
@@ -42,19 +47,27 @@ func main() {
 func runGUI() {
 	logger.Info("System", "-", "正在初始化 Wails GUI 环境...")
 
+	// 创建应用级共享的统一任务执行服务（阶段1：统一运行时服务化）
+	taskExecutionService := taskexec.NewTaskExecutionService(config.DB)
+	taskExecutionService.Start()
+	logger.Info("System", "-", "统一任务执行服务已启动")
+
 	// 创建各独立服务实例
 	deviceService := ui.NewDeviceService()
 	commandGroupService := ui.NewCommandGroupService()
 	settingsService := ui.NewSettingsService()
-	engineService := ui.NewEngineService()
 	queryService := ui.NewQueryService()
 	forgeService := ui.NewForgeService()
 	executionHistoryService := ui.NewExecutionHistoryService()
+	executionHistoryService.SetTaskExecutionService(taskExecutionService) // 设置统一运行时服务（阶段5）
 	discoveryService := ui.NewDiscoveryService()
 	topologyService := ui.NewTopologyService(config.DB)
 	taskGroupService := ui.NewTaskGroupService()
 	taskGroupService.SetTopologyDeps(discoveryService, topologyService)
+	taskGroupService.SetTaskExecutionService(taskExecutionService) // 设置共享运行时（阶段1）
 	planCompareService := ui.NewPlanCompareService()
+	// 创建统一任务执行UI服务（Wails暴露层）
+	taskExecutionUIService := ui.NewTaskExecutionUIService(taskExecutionService)
 
 	// 修正：修正嵌入文件系统的路径级联问题
 	// core.FrontendAssets 包含了 "frontend/dist" 这一层，我们需要提取其子 FS
@@ -83,7 +96,6 @@ func runGUI() {
 			application.NewService(deviceService),
 			application.NewService(commandGroupService),
 			application.NewService(settingsService),
-			application.NewService(engineService),
 			application.NewService(taskGroupService),
 			application.NewService(queryService),
 			application.NewService(forgeService),
@@ -91,6 +103,7 @@ func runGUI() {
 			application.NewService(discoveryService),
 			application.NewService(topologyService),
 			application.NewService(planCompareService),
+			application.NewService(taskExecutionUIService), // 统一任务执行UI服务（阶段1）
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assetsFS),

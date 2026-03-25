@@ -9,12 +9,12 @@
       </div>
       <div class="flex items-center gap-2">
         <select
-          v-model="selectedTaskID"
+          v-model="selectedRunId"
           class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary min-w-[260px]"
         >
-          <option value="">选择发现任务</option>
-          <option v-for="task in tasks" :key="task.id" :value="task.id">
-            {{ task.name || task.id }} / TG:{{ task.taskGroupId || "-" }} ({{ task.status }})
+          <option value="">选择拓扑运行</option>
+          <option v-for="run in topologyRuns" :key="run.runId" :value="run.runId">
+            {{ run.taskName || run.runId }} ({{ StatusNames[run.status] || run.status }})
           </option>
         </select>
         <button
@@ -24,18 +24,7 @@
         >
           刷新图谱
         </button>
-        <button
-          @click="buildTopology"
-          :disabled="!selectedTaskID || building"
-          class="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
-          :class="
-            !selectedTaskID || building
-              ? 'bg-bg-panel border border-border text-text-muted cursor-not-allowed'
-              : 'bg-accent text-white border border-accent/40 hover:bg-accent-glow'
-          "
-        >
-          {{ building ? "构建中..." : "构建拓扑" }}
-        </button>
+        <!-- 构建按钮已移除：新架构下拓扑自动构建 -->
       </div>
     </div>
 
@@ -366,10 +355,20 @@ import {
   type TopologyEdgeDetailView,
   type TopologyGraphView,
 } from "../services/api";
+import { useTaskexecStore } from "../stores/taskexecStore";
+import { StatusNames } from "../types/taskexec";
 import TopologyGraph from "../components/topology/TopologyGraph.vue";
 
-const tasks = ref<DiscoveryTaskView[]>([]);
-const selectedTaskID = ref("");
+// 阶段4: 统一执行框架 - 使用runId替代taskId
+const taskexecStore = useTaskexecStore();
+const selectedRunId = ref("");  // 替代 selectedTaskID
+const tasks = ref<DiscoveryTaskView[]>([]);  // 保留兼容旧接口
+const selectedTaskID = ref("");  // 保留兼容旧接口
+
+// 计算属性：筛选拓扑类型的运行
+const topologyRuns = computed(() => {
+  return taskexecStore.runHistory.filter(r => r.runKind === 'topology')
+});
 const building = ref(false);
 
 const keyword = ref("");
@@ -541,41 +540,59 @@ function applySummaryFromGraph() {
   };
 }
 
+// 阶段4: 加载拓扑运行列表（从统一运行时）
+async function loadRuns() {
+  await taskexecStore.loadRunHistory(50)
+  
+  // 同时加载旧发现任务（兼容）
+  try {
+    const list = (await DiscoveryAPI.listDiscoveryTasks(50)) || [];
+    tasks.value = [...list].sort((a, b) => {
+      const aLinked = a.taskGroupId ? 1 : 0;
+      const bLinked = b.taskGroupId ? 1 : 0;
+      if (aLinked !== bLinked) {
+        return bLinked - aLinked;
+      }
+      return 0;
+    });
+  } catch (err) {
+    console.warn('加载旧发现任务失败:', err)
+  }
+}
+
+// 保留旧方法名用于兼容
 async function loadTasks() {
-  const list = (await DiscoveryAPI.listDiscoveryTasks(50)) || [];
-  tasks.value = [...list].sort((a, b) => {
-    const aLinked = a.taskGroupId ? 1 : 0;
-    const bLinked = b.taskGroupId ? 1 : 0;
-    if (aLinked !== bLinked) {
-      return bLinked - aLinked;
-    }
-    return 0;
-  });
+  await loadRuns()
 }
 
 async function refreshGraph() {
+  // 优先使用runId（阶段4）
+  if (selectedRunId.value) {
+    edgeDetail.value = null;
+    deviceDetail.value = null;
+    
+    // 同步selectedTaskID用于兼容旧接口
+    selectedTaskID.value = selectedRunId.value;
+    
+    try {
+      // TODO: 后端需要提供按runId查询拓扑的接口
+      // 临时使用旧接口
+      const g = await DiscoveryAPI.getTopologyGraph(selectedRunId.value);
+      graph.value = g || { taskId: selectedRunId.value, nodes: [], edges: [] };
+      applySummaryFromGraph();
+    } catch (err: any) {
+      console.error('加载拓扑图失败:', err);
+    }
+    return;
+  }
+  
+  // 回退到旧逻辑
   if (!selectedTaskID.value) return;
   edgeDetail.value = null;
   deviceDetail.value = null;
   const g = await DiscoveryAPI.getTopologyGraph(selectedTaskID.value);
   graph.value = g || { taskId: selectedTaskID.value, nodes: [], edges: [] };
   applySummaryFromGraph();
-}
-
-async function buildTopology() {
-  if (!selectedTaskID.value || building.value) return;
-  building.value = true;
-  edgeDetail.value = null;
-  deviceDetail.value = null;
-  try {
-    const result = await DiscoveryAPI.buildTopology(selectedTaskID.value);
-    if (result) {
-      summary.value = result;
-    }
-    await refreshGraph();
-  } finally {
-    building.value = false;
-  }
 }
 
 async function loadEdgeDetail(edgeID: string) {
