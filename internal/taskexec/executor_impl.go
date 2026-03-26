@@ -17,7 +17,6 @@ import (
 	"github.com/NetWeaverGo/core/internal/normalize"
 	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/NetWeaverGo/core/internal/repository"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -1580,7 +1579,7 @@ func (e *ParseExecutor) updateStageProgress(handler *ErrorHandler, ctx RuntimeCo
 func (e *DeviceCollectExecutor) createArtifact(taskRunID, stageID, unitID, artifactType, artifactKey, filePath string) {
 	handler := NewErrorHandler(taskRunID)
 	handler.ArtifactBestEffort(NewGormRepository(e.db), context.Background(), &TaskArtifact{
-		ID:           uuid.New().String()[:8],
+		ID:           newArtifactID(),
 		TaskRunID:    taskRunID,
 		StageID:      stageID,
 		UnitID:       unitID,
@@ -1594,7 +1593,7 @@ func (e *DeviceCollectExecutor) createArtifact(taskRunID, stageID, unitID, artif
 func (e *ParseExecutor) createArtifact(taskRunID, stageID, unitID, artifactType, artifactKey, filePath string) {
 	handler := NewErrorHandler(taskRunID)
 	handler.ArtifactBestEffort(NewGormRepository(e.db), context.Background(), &TaskArtifact{
-		ID:           uuid.New().String()[:8],
+		ID:           newArtifactID(),
 		TaskRunID:    taskRunID,
 		StageID:      stageID,
 		UnitID:       unitID,
@@ -1608,7 +1607,7 @@ func (e *ParseExecutor) createArtifact(taskRunID, stageID, unitID, artifactType,
 func (e *TopologyBuildExecutor) createArtifact(taskRunID, stageID, unitID, artifactType, artifactKey, filePath string) {
 	handler := NewErrorHandler(taskRunID)
 	handler.ArtifactBestEffort(NewGormRepository(e.db), context.Background(), &TaskArtifact{
-		ID:           uuid.New().String()[:8],
+		ID:           newArtifactID(),
 		TaskRunID:    taskRunID,
 		StageID:      stageID,
 		UnitID:       unitID,

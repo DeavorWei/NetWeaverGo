@@ -77,19 +77,21 @@ type ArtifactSnapshot struct {
 
 // RunSummary Run摘要 - 用于历史记录
 type RunSummary struct {
-	RunID           string    `json:"runId"`
-	TaskName        string    `json:"taskName"`
-	RunKind         string    `json:"runKind"`
-	Status          string    `json:"status"`
-	Progress        int       `json:"progress"`
-	TotalStages     int       `json:"totalStages"`
-	CompletedStages int       `json:"completedStages"`
-	TotalUnits      int       `json:"totalUnits"`
-	SuccessUnits    int       `json:"successUnits"`
-	FailedUnits     int       `json:"failedUnits"`
-	StartedAt       time.Time `json:"startedAt"`
-	FinishedAt      time.Time `json:"finishedAt"`
-	DurationMs      int64     `json:"durationMs"`
+	RunID            string    `json:"runId"`
+	TaskGroupID      uint      `json:"taskGroupId"`
+	TaskName         string    `json:"taskName"`
+	TaskNameSnapshot string    `json:"taskNameSnapshot"`
+	RunKind          string    `json:"runKind"`
+	Status           string    `json:"status"`
+	Progress         int       `json:"progress"`
+	TotalStages      int       `json:"totalStages"`
+	CompletedStages  int       `json:"completedStages"`
+	TotalUnits       int       `json:"totalUnits"`
+	SuccessUnits     int       `json:"successUnits"`
+	FailedUnits      int       `json:"failedUnits"`
+	StartedAt        time.Time `json:"startedAt"`
+	FinishedAt       time.Time `json:"finishedAt"`
+	DurationMs       int64     `json:"durationMs"`
 }
 
 // SnapshotBuilder 快照构建器
@@ -187,16 +189,27 @@ func (b *SnapshotBuilder) BuildSummary(run *TaskRun, stages []TaskRunStage) *Run
 		durationMs = run.FinishedAt.Sub(*run.StartedAt).Milliseconds()
 	}
 
+	startedAt := time.Time{}
+	if run.StartedAt != nil {
+		startedAt = *run.StartedAt
+	}
+	finishedAt := time.Time{}
+	if run.FinishedAt != nil {
+		finishedAt = *run.FinishedAt
+	}
+
 	return &RunSummary{
-		RunID:           run.ID,
-		TaskName:        run.Name,
-		RunKind:         run.RunKind,
-		Status:          run.Status,
-		Progress:        run.Progress,
-		TotalStages:     len(stages),
-		CompletedStages: completedStages,
-		StartedAt:       *run.StartedAt,
-		FinishedAt:      *run.FinishedAt,
-		DurationMs:      durationMs,
+		RunID:            run.ID,
+		TaskGroupID:      run.TaskGroupID,
+		TaskName:         run.Name,
+		TaskNameSnapshot: run.TaskNameSnapshot,
+		RunKind:          run.RunKind,
+		Status:           run.Status,
+		Progress:         run.Progress,
+		TotalStages:      len(stages),
+		CompletedStages:  completedStages,
+		StartedAt:        startedAt,
+		FinishedAt:       finishedAt,
+		DurationMs:       durationMs,
 	}
 }

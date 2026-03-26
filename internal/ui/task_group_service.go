@@ -5,27 +5,28 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/models"
-	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/NetWeaverGo/core/internal/taskexec"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// TaskGroupService 任务组管理服务 - 负责任务组的增删改查和执行
+// TaskGroupService 任务模板服务
+// 仅负责任务模板的 CRUD、详情聚合与按 taskGroupID 发起执行。
 type TaskGroupService struct {
-	wailsApp *application.App
-	repo     repository.DeviceRepository
-	v2       *TaskGroupServiceV2
+	wailsApp      *application.App
+	repo          repository.DeviceRepository
+	taskexec      *taskexec.TaskExecutionService
+	launchService *taskexec.TaskLaunchService
 }
 
 // NewTaskGroupService 创建任务组服务实例
 func NewTaskGroupService() *TaskGroupService {
 	return &TaskGroupService{
 		repo: repository.NewDeviceRepository(),
-		v2:   NewTaskGroupServiceV2(),
 	}
 }
 
@@ -33,7 +34,6 @@ func NewTaskGroupService() *TaskGroupService {
 func NewTaskGroupServiceWithDeps(repo repository.DeviceRepository) *TaskGroupService {
 	return &TaskGroupService{
 		repo: repo,
-		v2:   NewTaskGroupServiceV2(),
 	}
 }
 
@@ -41,33 +41,85 @@ func NewTaskGroupServiceWithDeps(repo repository.DeviceRepository) *TaskGroupSer
 func NewTaskGroupServiceWithRepo(repo repository.DeviceRepository) *TaskGroupService {
 	return &TaskGroupService{
 		repo: repo,
-		v2:   NewTaskGroupServiceV2(),
 	}
 }
 
-// SetTaskExecutionService 设置共享的任务执行服务（阶段1：统一运行时服务化）
+// SetTaskExecutionService 设置共享的任务执行服务
 func (s *TaskGroupService) SetTaskExecutionService(service *taskexec.TaskExecutionService) {
-	if s.v2 == nil {
-		s.v2 = NewTaskGroupServiceV2()
+	s.taskexec = service
+	if service != nil {
+		s.launchService = taskexec.NewTaskLaunchService(service)
 	}
-	s.v2.SetTaskExecutionService(service)
 }
 
 // ServiceStartup Wails 服务启动生命周期钩子
 func (s *TaskGroupService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	s.wailsApp = application.Get()
-	// 统一运行时通过 TaskExecutionEventBridge 自动处理 Wails 事件，无需此处设置
 	return nil
 }
 
-// ListTaskGroups 获取所有任务组列表
-func (s *TaskGroupService) ListTaskGroups() ([]models.TaskGroup, error) {
-	return config.ListTaskGroups()
+// ListTaskGroups 获取所有任务模板列表
+func (s *TaskGroupService) ListTaskGroups() ([]TaskGroupListView, error) {
+	groups, err := config.ListTaskGroups()
+	if err != nil {
+		return nil, err
+	}
+
+	runsByTaskGroup := s.latestRunsByTaskGroup()
+	activeRunCount := s.activeRunCounts()
+	result := make([]TaskGroupListView, 0, len(groups))
+	for _, group := range groups {
+		latestRun, hasRun := runsByTaskGroup[group.ID]
+		status := "pending"
+		latestRunID := ""
+		latestRunStatus := ""
+		latestRunStartedAt := ""
+		latestRunFinishedAt := ""
+		if hasRun {
+			status = latestRun.Status
+			latestRunID = latestRun.RunID
+			latestRunStatus = latestRun.Status
+			latestRunStartedAt = formatRunTime(latestRun.StartedAt)
+			latestRunFinishedAt = formatRunTime(latestRun.FinishedAt)
+		}
+		activeCount := activeRunCount[group.ID]
+		result = append(result, TaskGroupListView{
+			ID:                  group.ID,
+			Name:                group.Name,
+			Description:         group.Description,
+			DeviceGroup:         group.DeviceGroup,
+			CommandGroup:        group.CommandGroup,
+			MaxWorkers:          group.MaxWorkers,
+			Timeout:             group.Timeout,
+			TaskType:            group.TaskType,
+			TopologyVendor:      group.TopologyVendor,
+			AutoBuildTopology:   group.AutoBuildTopology,
+			Mode:                group.Mode,
+			Items:               append([]models.TaskItem(nil), group.Items...),
+			Status:              status,
+			LatestRunID:         latestRunID,
+			LatestRunStatus:     latestRunStatus,
+			LatestRunStartedAt:  latestRunStartedAt,
+			LatestRunFinishedAt: latestRunFinishedAt,
+			ActiveRunCount:      activeCount,
+			CanEdit:             activeCount == 0,
+			Tags:                append([]string(nil), group.Tags...),
+			EnableRawLog:        group.EnableRawLog,
+			CreatedAt:           group.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:           group.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+	return result, nil
 }
 
-// GetTaskGroup 根据 ID 获取单个任务组
+// GetTaskGroup 根据 ID 获取单个任务模板
 func (s *TaskGroupService) GetTaskGroup(id uint) (*models.TaskGroup, error) {
-	return config.GetTaskGroup(id)
+	group, err := config.GetTaskGroup(id)
+	if err != nil {
+		return nil, err
+	}
+	group.Status = ""
+	return group, nil
 }
 
 // GetTaskGroupDetail 根据 ID 获取任务详情聚合信息
@@ -82,6 +134,7 @@ func (s *TaskGroupService) GetTaskGroupDetail(id uint) (*TaskGroupDetailViewMode
 
 // CreateTaskGroup 创建新任务组
 func (s *TaskGroupService) CreateTaskGroup(group models.TaskGroup) (*models.TaskGroup, error) {
+	group.Status = ""
 	return config.CreateTaskGroup(group)
 }
 
@@ -92,14 +145,13 @@ func (s *TaskGroupService) UpdateTaskGroup(id uint, group models.TaskGroup) (*mo
 		return nil, err
 	}
 
-	if !canEditTaskGroup(existing.Status) {
-		return nil, fmt.Errorf("任务执行中不可编辑，当前状态为 %s", existing.Status)
+	if !s.canEditTaskGroup(existing.ID) {
+		return nil, fmt.Errorf("任务存在活跃运行，当前不可编辑")
 	}
 
-	// 任务编辑只允许修改基础信息和当前模式下的任务项。
 	group.ID = existing.ID
 	group.CreatedAt = existing.CreatedAt
-	group.Status = existing.Status
+	group.Status = ""
 	group.Mode = existing.Mode
 	group.TaskType = existing.TaskType
 	group.TopologyVendor = existing.TopologyVendor
@@ -110,77 +162,85 @@ func (s *TaskGroupService) UpdateTaskGroup(id uint, group models.TaskGroup) (*mo
 
 // DeleteTaskGroup 删除任务组
 func (s *TaskGroupService) DeleteTaskGroup(id uint) error {
+	if !s.canEditTaskGroup(id) {
+		return fmt.Errorf("任务存在活跃运行，当前不可删除")
+	}
 	return config.DeleteTaskGroup(id)
 }
 
-// ResolveSuspend 被前端调用（当用户在弹窗中选择动作后）
-// 注意：暂停功能已随旧执行引擎删除，此方法保留为兼容接口
-func (s *TaskGroupService) ResolveSuspend(_sessionIDOrIP string, _action string) {
-	// 统一运行时暂不支持暂停功能
-}
-
-// StartTaskGroup 启动任务组执行并返回统一运行时 runID
+// StartTaskGroup 按 taskGroupID 启动任务，返回 runID
 func (s *TaskGroupService) StartTaskGroup(id uint) (string, error) {
-	if s.v2 == nil {
-		s.v2 = NewTaskGroupServiceV2()
+	if s.launchService == nil {
+		return "", fmt.Errorf("task launch service not initialized")
 	}
-	return s.v2.StartTaskGroup(id)
+	return s.launchService.StartTaskGroup(context.Background(), id)
 }
 
-func collectUniqueDeviceIDs(items []models.TaskItem) []uint {
-	if len(items) == 0 {
-		return nil
+func (s *TaskGroupService) canEditTaskGroup(taskGroupID uint) bool {
+	if s.taskexec == nil || taskGroupID == 0 {
+		return true
 	}
 
-	set := make(map[uint]struct{})
-	for _, item := range items {
-		for _, deviceID := range item.DeviceIDs {
-			if deviceID == 0 {
-				continue
-			}
-			set[deviceID] = struct{}{}
+	runs, err := s.taskexec.ListRuns(200)
+	if err != nil {
+		return true
+	}
+	for _, run := range runs {
+		status := strings.TrimSpace(run.Status)
+		if run.TaskGroupID == taskGroupID && (status == string(taskexec.RunStatusPending) || status == string(taskexec.RunStatusRunning)) {
+			return false
 		}
 	}
-
-	ids := make([]uint, 0, len(set))
-	for id := range set {
-		ids = append(ids, id)
-	}
-	sort.Slice(ids, func(i, j int) bool {
-		return ids[i] < ids[j]
-	})
-	return ids
+	return true
 }
 
-func normalizeTaskType(taskType string) string {
-	value := strings.ToLower(strings.TrimSpace(taskType))
-	if value == "" {
-		return "normal"
+func (s *TaskGroupService) latestRunsByTaskGroup() map[uint]*taskexec.RunSummary {
+	result := make(map[uint]*taskexec.RunSummary)
+	if s.taskexec == nil {
+		return result
 	}
-	return value
+
+	runs, err := s.taskexec.ListRuns(500)
+	if err != nil {
+		return result
+	}
+
+	for _, run := range runs {
+		if run == nil || run.TaskGroupID == 0 {
+			continue
+		}
+		if _, exists := result[run.TaskGroupID]; !exists {
+			result[run.TaskGroupID] = run
+		}
+	}
+	return result
 }
 
-func deriveTaskGroupStatus(tracker *report.ProgressTracker) string {
-	total, finished, successCount, errorCount := tracker.GetStats()
-
-	if total == 0 {
-		return "failed"
-	}
-	if errorCount > 0 {
-		return "failed"
-	}
-	if finished < total {
-		return "failed"
-	}
-	if successCount < total {
-		return "failed"
+func (s *TaskGroupService) activeRunCounts() map[uint]int {
+	result := make(map[uint]int)
+	if s.taskexec == nil {
+		return result
 	}
 
-	return "completed"
+	running := s.taskexec.ListRunning()
+	for _, snapshot := range running {
+		if snapshot == nil {
+			continue
+		}
+		for _, run := range s.latestRunsByTaskGroup() {
+			if run != nil && run.RunID == snapshot.RunID && run.TaskGroupID != 0 {
+				result[run.TaskGroupID]++
+			}
+		}
+	}
+	return result
 }
 
-func canEditTaskGroup(status string) bool {
-	return status != "running"
+func formatRunTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Format(time.RFC3339)
 }
 
 func (s *TaskGroupService) buildTaskGroupDetail(taskGroup *models.TaskGroup) (*TaskGroupDetailViewModel, error) {
@@ -227,6 +287,7 @@ func (s *TaskGroupService) buildTaskGroupDetail(taskGroup *models.TaskGroup) (*T
 					ID:    asset.ID,
 					IP:    asset.IP,
 					Group: asset.Group,
+					Tags:  append([]string(nil), asset.Tags...),
 				})
 				continue
 			}
@@ -234,7 +295,6 @@ func (s *TaskGroupService) buildTaskGroupDetail(taskGroup *models.TaskGroup) (*T
 			missingDeviceSet[deviceID] = struct{}{}
 			devices = append(devices, TaskDeviceOverview{
 				ID:      deviceID,
-				IP:      "",
 				Missing: true,
 			})
 		}
@@ -254,7 +314,7 @@ func (s *TaskGroupService) buildTaskGroupDetail(taskGroup *models.TaskGroup) (*T
 					ID:          commandGroup.ID,
 					Name:        commandGroup.Name,
 					Description: commandGroup.Description,
-					Commands:    commandGroup.Commands,
+					Commands:    append([]string(nil), commandGroup.Commands...),
 				}
 			} else {
 				itemDetail.CommandInfo = &TaskCommandOverview{
@@ -270,20 +330,67 @@ func (s *TaskGroupService) buildTaskGroupDetail(taskGroup *models.TaskGroup) (*T
 
 	missingDevices := sortedUintKeys(missingDeviceSet)
 	missingCommandIDs := sortedUintKeys(missingCommandSet)
+	canEdit := s.canEditTaskGroup(taskGroup.ID)
 	editDisabledReason := ""
-	if !canEditTaskGroup(taskGroup.Status) {
-		editDisabledReason = fmt.Sprintf("任务执行中不可编辑，当前状态为 %s", taskGroup.Status)
+	if !canEdit {
+		editDisabledReason = "任务存在活跃运行，当前不可编辑"
+	}
+
+	latestRuns := s.latestRunsByTaskGroup()
+	latestRun := latestRuns[taskGroup.ID]
+	activeRunCount := s.activeRunCounts()[taskGroup.ID]
+	latestRunID := ""
+	latestRunStatus := "pending"
+	if latestRun != nil {
+		latestRunID = latestRun.RunID
+		latestRunStatus = latestRun.Status
 	}
 
 	return &TaskGroupDetailViewModel{
 		Task:               *taskGroup,
 		ItemCount:          len(taskGroup.Items),
-		CanEdit:            canEditTaskGroup(taskGroup.Status),
+		CanEdit:            canEdit,
 		EditDisabledReason: editDisabledReason,
+		LatestRunID:        latestRunID,
+		LatestRunStatus:    latestRunStatus,
+		ActiveRunCount:     activeRunCount,
 		Items:              items,
 		MissingDevices:     missingDevices,
 		MissingCommandIDs:  missingCommandIDs,
 	}, nil
+}
+
+func collectUniqueDeviceIDs(items []models.TaskItem) []uint {
+	if len(items) == 0 {
+		return nil
+	}
+
+	set := make(map[uint]struct{})
+	for _, item := range items {
+		for _, deviceID := range item.DeviceIDs {
+			if deviceID == 0 {
+				continue
+			}
+			set[deviceID] = struct{}{}
+		}
+	}
+
+	ids := make([]uint, 0, len(set))
+	for id := range set {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		return ids[i] < ids[j]
+	})
+	return ids
+}
+
+func normalizeTaskType(taskType string) string {
+	value := strings.ToLower(strings.TrimSpace(taskType))
+	if value == "" {
+		return "normal"
+	}
+	return value
 }
 
 func parseID(s string) uint {

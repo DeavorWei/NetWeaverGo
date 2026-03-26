@@ -7,14 +7,6 @@ import (
 	"github.com/NetWeaverGo/core/internal/models"
 )
 
-// 有效状态值常量
-var validStatuses = map[string]bool{
-	"pending":   true,
-	"running":   true,
-	"completed": true,
-	"failed":    true,
-}
-
 // ========== 任务组管理 API ==========
 
 // ListTaskGroups 获取所有任务组列表
@@ -100,25 +92,6 @@ func DeleteTaskGroup(id uint) error {
 	}
 	logger.Info("Config", "-", "删除任务组: %s (%d)", existing.Name, id)
 	return nil
-}
-
-// UpdateTaskGroupStatus 更新任务组状态
-func UpdateTaskGroupStatus(id uint, status string) error {
-	if !validStatuses[status] {
-		return fmt.Errorf("无效的状态值: %s (应为 pending/running/completed/failed)", status)
-	}
-
-	if DB == nil {
-		return fmt.Errorf("数据库未初始化")
-	}
-
-	var group models.TaskGroup
-	if err := DB.First(&group, id).Error; err != nil {
-		return fmt.Errorf("任务组不存在: %d", id)
-	}
-
-	group.Status = status
-	return DB.Save(&group).Error
 }
 
 // validateTaskGroup 校验任务组

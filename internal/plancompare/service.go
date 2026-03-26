@@ -186,7 +186,7 @@ func (s *Service) CompareByRunID(runID string, planID string) (*models.CompareRe
 		actualByPair[ref.PairKey] = append(actualByPair[ref.PairKey], ref)
 	}
 
-	reportID := "diff_" + uuid.NewString()[:8]
+	reportID := "diff_" + uuid.NewString()
 	matched := 0
 	usedActualKeys := make(map[string]struct{})
 	var missing []models.DiffItem

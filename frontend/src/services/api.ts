@@ -218,6 +218,7 @@ export type {
   TaskDeviceOverview,
   TaskGroupDetailViewModel,
   TaskGroupItemDetailViewModel,
+  TaskGroupListView,
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
 // ExecutionSnapshot 从统一运行时导出

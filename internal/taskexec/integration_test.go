@@ -50,7 +50,7 @@ func TestNormalTaskCompileAndExecute(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	run, err := runtime.Execute(ctx, plan)
+	run, err := runtime.Execute(ctx, plan, def, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, run.ID)
 

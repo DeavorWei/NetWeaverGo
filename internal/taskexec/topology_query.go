@@ -1,7 +1,6 @@
 package taskexec
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -9,7 +8,6 @@ import (
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/NetWeaverGo/core/internal/repository"
-	"github.com/google/uuid"
 )
 
 func (s *TaskExecutionService) GetSupportedTopologyVendors() []string {
@@ -275,5 +273,5 @@ func convertToModelEvidence(items []EdgeEvidence) []models.EdgeEvidence {
 }
 
 func makeTaskEdgeID() string {
-	return fmt.Sprintf("edge_%s", uuid.New().String()[:8])
+	return newEdgeID()
 }

@@ -100,7 +100,7 @@ const executeSend = async () => {
       items,
       tags: tags.value,
       enableRawLog: false,
-      status: "pending" as const,
+      status: "",
       createdAt: "",
       updatedAt: "",
     };

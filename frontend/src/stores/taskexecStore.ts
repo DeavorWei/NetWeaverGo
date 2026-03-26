@@ -26,7 +26,9 @@ export interface TaskEvent {
 // 运行摘要
 export interface RunSummary {
   runId: string
+  taskGroupId: number
   taskName: string
+  taskNameSnapshot: string
   runKind: 'normal' | 'topology'
   status: string
   progress: number
@@ -171,14 +173,7 @@ export const useTaskexecStore = defineStore('taskexec', () => {
       const data = unwrapEventData<TaskEvent>(ev)
       if (data) {
         addEventLog(data)
-        // 刷新最终状态
         refreshSnapshot(data.runId)
-        // 延迟清理（保留一段时间供查看）
-        setTimeout(() => {
-          if (data.runId !== currentRunId.value) {
-            removeSnapshot(data.runId)
-          }
-        }, 60000) // 1分钟后清理
       }
     })
     if (typeof unlistenFinished === 'function') {

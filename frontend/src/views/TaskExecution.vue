@@ -146,22 +146,6 @@
                   :truncated="dev.truncated || false"
                   :device-ip="dev.ip"
                 />
-                <div
-                  v-if="suspendSessions[dev.ip]"
-                  class="border-t border-warning/40 bg-warning/5 px-3 py-2"
-                >
-                  <div class="flex items-center justify-between mb-2">
-                    <div class="text-xs text-warning font-medium">异常干预（当前设备已挂起）</div>
-                    <span
-                      class="w-5 h-5 rounded-full border border-warning/40 text-warning text-[11px] flex items-center justify-center cursor-help"
-                      title="继续执行：放行当前异常并继续命令流程；终止执行：停止该设备所有后续命令。"
-                    >?</span>
-                  </div>
-                  <div class="grid grid-cols-2 gap-2">
-                    <button @click="resolveSuspend(dev.ip, 'C')" class="py-1.5 text-xs font-medium rounded border border-success/40 text-success bg-success/10 hover:bg-success hover:text-white transition-all duration-200">继续执行</button>
-                    <button @click="resolveSuspend(dev.ip, 'A')" class="py-1.5 text-xs font-medium rounded border border-error/40 text-error bg-error/10 hover:bg-error hover:text-white transition-all duration-200">终止执行</button>
-                  </div>
-                </div>
               </div>
             </div>
             
@@ -218,10 +202,10 @@
                     >{{ task.mode === 'group' ? '模式A' : '模式B' }}</span>
                     <span
                       class="flex-shrink-0 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium"
-                      :class="taskStatusBadge(task.status)"
+                      :class="taskStatusBadge(task.latestRunStatus || task.status)"
                     >
-                      <span class="w-1.5 h-1.5 rounded-full" :class="taskStatusDot(task.status)"></span>
-                      {{ taskStatusLabel(task.status) }}
+                      <span class="w-1.5 h-1.5 rounded-full" :class="taskStatusDot(task.latestRunStatus || task.status)"></span>
+                      {{ taskStatusLabel(task.latestRunStatus || task.status) }}
                     </span>
                   </div>
                   <p class="text-xs text-text-muted line-clamp-1 mt-1">{{ task.description || '暂无描述' }}</p>
@@ -237,10 +221,10 @@
                   </button>
                   <button
                     @click="openTaskEdit(task)"
-                    :disabled="task.status === 'running' || isTopologyTask(task)"
+                    :disabled="!task.canEdit || isTopologyTask(task)"
                     class="p-1.5 rounded-md text-text-muted transition-colors"
-                    :class="task.status !== 'running' && !isTopologyTask(task) ? 'hover:text-warning hover:bg-warning/10' : 'opacity-40 cursor-not-allowed'"
-                    :title="task.status === 'running' ? '任务执行中不可编辑' : (isTopologyTask(task) ? '拓扑任务暂不支持编辑' : '编辑任务')"
+                    :class="task.canEdit && !isTopologyTask(task) ? 'hover:text-warning hover:bg-warning/10' : 'opacity-40 cursor-not-allowed'"
+                    :title="!task.canEdit ? '任务存在活跃运行，不可编辑' : (isTopologyTask(task) ? '拓扑任务暂不支持编辑' : '编辑任务')"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
@@ -387,7 +371,8 @@ import type {
   DeviceAsset,
   DeviceViewState,
   TaskGroup,
-  TaskGroupDetailViewModel
+  TaskGroupDetailViewModel,
+  TaskGroupListView
 } from '../services/api'
 import { useTaskexecStore } from '../stores/taskexecStore'
 import VirtualLogTerminal from '../components/task/VirtualLogTerminal.vue'
@@ -402,7 +387,7 @@ const taskexecStore = useTaskexecStore()
 
 // ================== 任务执行状态 ==================
 const loading = ref(false)
-const tasks = ref<TaskGroup[]>([])
+const tasks = ref<TaskGroupListView[]>([])
 const searchQuery = ref('')
 const filterStatus = ref('')
 const filterMode = ref('')
@@ -489,7 +474,6 @@ const execDevices = computed<DeviceViewState[]>(() => {
     truncated: false
   }))
 })
-const suspendSessions = computed<Record<string, any>>(() => ({}))
 
 // ================== 统一运行时 Stage/Unit 数据 (新增) ==================
 const executionStages = computed<StageSnapshot[]>(() => {
@@ -597,11 +581,19 @@ async function loadTasks() {
 async function syncExecutionView() {
   const { TaskExecutionAPI } = await import('../services/api')
   const running = await TaskExecutionAPI.listRunningTasks()
-  const snapshot = running[0] ?? null
-  if (!snapshot) {
+  if (!running.length) {
     return
   }
-  taskexecStore.updateSnapshot(snapshot.runId, snapshot)
+
+  for (const snapshot of running) {
+    taskexecStore.updateSnapshot(snapshot.runId, snapshot)
+  }
+
+  const currentRunId = taskexecStore.currentRunId && running.some((item) => item.runId === taskexecStore.currentRunId)
+    ? taskexecStore.currentRunId
+    : running[0].runId
+  const snapshot = running.find((item) => item.runId === currentRunId) ?? running[0]
+
   taskexecStore.setCurrentRunId(snapshot.runId)
   executionView.value.active = true
   executionView.value.runId = snapshot.runId
@@ -745,8 +737,8 @@ watch(executionSnapshot, (snapshot) => {
 })
 
 // 删除任务
-function confirmDelete(task: TaskGroup) {
-  deleteModal.value = { show: true, taskId: task.id, taskName: task.name }
+function confirmDelete(task: TaskGroupListView) {
+	deleteModal.value = { show: true, taskId: task.id, taskName: task.name }
 }
 
 async function doDelete() {
@@ -760,18 +752,13 @@ async function doDelete() {
   }
 }
 
-// 关闭执行视图 (阶段3: 清理统一运行时状态)
+// 关闭执行视图：仅解绑当前 run，不删除快照缓存
 function closeExecutionView() {
   if (topologyExecuting.value) return
-  const currentRunId = executionView.value.runId
   executionView.value.active = false
   awaitingSnapshot.value = false
   clearSnapshotTimeout()
   stopSnapshotPolling()
-  
-  if (currentRunId) {
-    taskexecStore.removeSnapshot(currentRunId)
-  }
   taskexecStore.setCurrentRunId(null)
   executionView.value.runId = ''
   loadTasks()
@@ -794,27 +781,22 @@ async function stopExecution() {
   }
 }
 
-// Suspend 处理
-function resolveSuspend(ip: string, action: 'C' | 'A') {
-  void ip
-  void action
-}
 
 // 导航
 function goToTaskCreate() {
   router.push('/tasks')
 }
 
-function isTopologyTask(task: TaskGroup) {
+function isTopologyTask(task: TaskGroupListView | TaskGroup) {
   return ((task as any).taskType || 'normal') === 'topology'
 }
 
-function topologyVendorLabel(task: TaskGroup) {
+function topologyVendorLabel(task: TaskGroupListView | TaskGroup) {
   const vendor = ((task as any).topologyVendor || '').trim()
   return vendor === '' ? '自动识别' : vendor
 }
 
-function topologyDeviceCount(task: TaskGroup) {
+function topologyDeviceCount(task: TaskGroupListView | TaskGroup) {
   const set = new Set<number>()
   for (const item of task.items || []) {
     for (const id of item.deviceIDs || []) {
@@ -825,7 +807,7 @@ function topologyDeviceCount(task: TaskGroup) {
 }
 
 // 查看执行历史
-function showExecutionHistory(task: TaskGroup) {
+function showExecutionHistory(task: TaskGroupListView) {
   historyDrawer.value = {
     show: true,
     taskGroupId: String(task.id),
@@ -849,7 +831,7 @@ async function ensureEditReferences() {
   }
 }
 
-async function openTaskDetail(task: TaskGroup) {
+async function openTaskDetail(task: TaskGroupListView) {
   detailModal.value.show = true
   detailModal.value.loading = true
   detailModal.value.detail = null
@@ -864,9 +846,9 @@ async function openTaskDetail(task: TaskGroup) {
   }
 }
 
-async function openTaskEdit(task: TaskGroup) {
-  if (task.status === 'running') {
-    triggerToast('任务执行中不可编辑', 'error')
+async function openTaskEdit(task: TaskGroupListView) {
+  if (!task.canEdit) {
+    triggerToast('任务存在活跃运行，不可编辑', 'error')
     return
   }
   if (isTopologyTask(task)) {
@@ -883,7 +865,10 @@ async function openTaskEdit(task: TaskGroup) {
       TaskGroupAPI.getTaskGroup(task.id),
       ensureEditReferences()
     ])
-    editModal.value.task = freshTask
+    editModal.value.task = {
+      ...(freshTask as any),
+      status: task.latestRunStatus || task.status || 'pending'
+    }
   } catch (err: any) {
     editModal.value.show = false
     triggerToast(`加载编辑数据失败: ${err?.message || err}`, 'error')
@@ -896,7 +881,16 @@ async function editFromDetail() {
   const currentTask = detailModal.value.detail?.task
   if (!currentTask) return
   detailModal.value.show = false
-  await openTaskEdit(currentTask)
+  await openTaskEdit({
+    ...currentTask,
+    status: detailModal.value.detail?.latestRunStatus || 'pending',
+    latestRunId: detailModal.value.detail?.latestRunId || '',
+    latestRunStatus: detailModal.value.detail?.latestRunStatus || 'pending',
+    latestRunStartedAt: '',
+    latestRunFinishedAt: '',
+    activeRunCount: detailModal.value.detail?.activeRunCount || 0,
+    canEdit: detailModal.value.detail?.canEdit ?? true,
+  })
 }
 
 async function saveTaskEdit(payload: TaskGroup) {
@@ -973,7 +967,9 @@ function taskStatusBadge(s: string) {
     case 'running':   return 'bg-accent/10 border-accent/30 text-accent'
     case 'completed': return 'bg-success/10 border-success/30 text-success'
     case 'partial':   return 'bg-warning/10 border-warning/30 text-warning'
-    case 'failed':    return 'bg-error/10 border-error/30 text-error'
+    case 'failed':
+    case 'aborted':   return 'bg-error/10 border-error/30 text-error'
+    case 'cancelled': return 'bg-bg-panel border-border text-text-muted'
     default:          return 'bg-bg-panel border-border text-text-muted'
   }
 }
@@ -983,12 +979,14 @@ function taskStatusDot(s: string) {
     case 'running':   return 'bg-accent animate-pulse'
     case 'completed': return 'bg-success'
     case 'partial':   return 'bg-warning'
-    case 'failed':    return 'bg-error'
+    case 'failed':
+    case 'aborted':   return 'bg-error'
+    case 'cancelled': return 'bg-text-muted'
     default:          return 'bg-text-muted'
   }
 }
 function taskStatusLabel(s: string) {
-  const map: Record<string, string> = { pending: '待执行', running: '执行中', completed: '已完成', partial: '部分成功', failed: '失败' }
+  const map: Record<string, string> = { pending: '待执行', running: '执行中', completed: '已完成', partial: '部分成功', failed: '失败', cancelled: '已取消', aborted: '已中止' }
   return map[s] ?? s
 }
 

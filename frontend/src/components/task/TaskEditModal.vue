@@ -102,8 +102,8 @@
                   <span class="text-sm font-semibold text-text-primary">{{ modeLabel(task.mode) }}</span>
                 </div>
                 <div class="flex items-center justify-between">
-                  <span class="text-sm text-text-muted">状态</span>
-                  <span class="text-sm font-semibold text-text-primary">{{ statusLabel(task.status) }}</span>
+                  <span class="text-sm text-text-muted">对象类型</span>
+                  <span class="text-sm font-semibold text-text-primary">任务模板</span>
                 </div>
                 <div class="flex items-center justify-between">
                   <span class="text-sm text-text-muted">设备库存</span>
@@ -491,7 +491,7 @@ function submit() {
     items,
     tags,
     enableRawLog: form.enableRawLog,
-    status: props.task.status,
+    status: '',
     createdAt: props.task.createdAt,
     updatedAt: props.task.updatedAt
   })
@@ -501,15 +501,6 @@ function modeLabel(mode: string) {
   return mode === 'group' ? '模式A' : mode === 'binding' ? '模式B' : mode
 }
 
-function statusLabel(status: string) {
-  const mapping: Record<string, string> = {
-    pending: '待执行',
-    running: '执行中',
-    completed: '已完成',
-    failed: '失败'
-  }
-  return mapping[status] ?? status
-}
 </script>
 
 <style scoped>

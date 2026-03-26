@@ -161,6 +161,36 @@ func NewDeviceViewState(ip string, totalCmd int) *DeviceViewState {
 	}
 }
 
+// ================== 任务列表/详情视图模型 ==================
+
+// TaskGroupListView 任务模板列表视图
+// 模板本身不再承载执行真相，状态字段为最近一次运行派生结果。
+type TaskGroupListView struct {
+	ID                  uint              `json:"id"`
+	Name                string            `json:"name"`
+	Description         string            `json:"description"`
+	DeviceGroup         string            `json:"deviceGroup"`
+	CommandGroup        string            `json:"commandGroup"`
+	MaxWorkers          int               `json:"maxWorkers"`
+	Timeout             int               `json:"timeout"`
+	TaskType            string            `json:"taskType"`
+	TopologyVendor      string            `json:"topologyVendor"`
+	AutoBuildTopology   bool              `json:"autoBuildTopology"`
+	Mode                string            `json:"mode"`
+	Items               []models.TaskItem `json:"items"`
+	Status              string            `json:"status"`
+	LatestRunID         string            `json:"latestRunId"`
+	LatestRunStatus     string            `json:"latestRunStatus"`
+	LatestRunStartedAt  string            `json:"latestRunStartedAt"`
+	LatestRunFinishedAt string            `json:"latestRunFinishedAt"`
+	ActiveRunCount      int               `json:"activeRunCount"`
+	CanEdit             bool              `json:"canEdit"`
+	Tags                []string          `json:"tags"`
+	EnableRawLog        bool              `json:"enableRawLog"`
+	CreatedAt           string            `json:"createdAt"`
+	UpdatedAt           string            `json:"updatedAt"`
+}
+
 // ================== 任务详情视图模型 ==================
 
 // TaskGroupDetailViewModel 任务详情聚合模型
@@ -170,6 +200,9 @@ type TaskGroupDetailViewModel struct {
 	ItemCount          int                            `json:"itemCount"`
 	CanEdit            bool                           `json:"canEdit"`
 	EditDisabledReason string                         `json:"editDisabledReason"`
+	LatestRunID        string                         `json:"latestRunId"`
+	LatestRunStatus    string                         `json:"latestRunStatus"`
+	ActiveRunCount     int                            `json:"activeRunCount"`
 	Items              []TaskGroupItemDetailViewModel `json:"items"`
 	MissingDevices     []uint                         `json:"missingDevices"`
 	MissingCommandIDs  []uint                         `json:"missingCommandIds"`

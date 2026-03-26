@@ -76,9 +76,12 @@ func (TaskDefinition) TableName() string {
 type TaskRun struct {
 	ID               string         `gorm:"primaryKey" json:"id"`
 	TaskDefinitionID string         `json:"taskDefinitionId"`
+	TaskGroupID      uint           `gorm:"index" json:"taskGroupId"`
+	TaskNameSnapshot string         `json:"taskNameSnapshot"`
+	LaunchSpecJSON   string         `gorm:"type:text" json:"launchSpecJson"`
 	Name             string         `json:"name"`
 	RunKind          string         `json:"runKind"` // normal / topology
-	Status           string         `json:"status"`  // pending / running / completed / partial / failed / cancelled
+	Status           string         `json:"status"`  // pending / running / completed / partial / failed / cancelled / aborted
 	CurrentStage     string         `json:"currentStage"`
 	Progress         int            `json:"progress"` // 0-100
 	StartedAt        *time.Time     `json:"startedAt"`

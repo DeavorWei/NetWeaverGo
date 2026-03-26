@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
-	"github.com/google/uuid"
 )
 
 // RuntimeContext 运行时上下文 - 供StageExecutor使用
@@ -232,9 +231,20 @@ func (m *RuntimeManager) GetSnapshot(runID string) (*ExecutionSnapshot, error) {
 		return nil, fmt.Errorf("snapshot hub not initialized")
 	}
 	snapshot, ok := m.snapshotHub.Get(runID)
-	if !ok || snapshot == nil {
+	if ok && snapshot != nil {
+		return snapshot, nil
+	}
+
+	run, err := m.repo.GetRun(context.Background(), runID)
+	if err != nil || run == nil {
 		return nil, fmt.Errorf("snapshot not found: %s", runID)
 	}
+	stages, _ := m.repo.GetStagesByRun(context.Background(), runID)
+	units, _ := m.repo.GetUnitsByRun(context.Background(), runID)
+	events, _ := m.repo.GetEventsByRun(context.Background(), runID, 50)
+	builder := NewSnapshotBuilder()
+	snapshot = builder.Build(run, stages, units, events)
+	m.snapshotHub.Update(runID, snapshot)
 	return snapshot, nil
 }
 
@@ -256,10 +266,24 @@ func (m *RuntimeManager) ListRunningSnapshots() []*ExecutionSnapshot {
 }
 
 // CreateRun 创建新的运行实例
-func (m *RuntimeManager) CreateRun(definitionID, name, runKind string) (*TaskRun, error) {
+func (m *RuntimeManager) CreateRun(definitionID, name, runKind string, metadata *RunMetadata) (*TaskRun, error) {
+	launchSpecJSON := ""
+	taskGroupID := uint(0)
+	taskNameSnapshot := name
+	if metadata != nil {
+		launchSpecJSON = string(metadata.LaunchSpecJSON)
+		taskGroupID = metadata.TaskGroupID
+		if metadata.TaskNameSnapshot != "" {
+			taskNameSnapshot = metadata.TaskNameSnapshot
+		}
+	}
+
 	run := &TaskRun{
-		ID:               uuid.New().String()[:8],
+		ID:               newRunID(),
 		TaskDefinitionID: definitionID,
+		TaskGroupID:      taskGroupID,
+		TaskNameSnapshot: taskNameSnapshot,
+		LaunchSpecJSON:   launchSpecJSON,
 		Name:             name,
 		RunKind:          runKind,
 		Status:           string(RunStatusPending),
@@ -276,9 +300,13 @@ func (m *RuntimeManager) CreateRun(definitionID, name, runKind string) (*TaskRun
 }
 
 // Execute 执行计划
-func (m *RuntimeManager) Execute(ctx context.Context, plan *ExecutionPlan) (*TaskRun, error) {
-	// 创建Run
-	run, err := m.CreateRun("", plan.Name, plan.RunKind)
+func (m *RuntimeManager) Execute(ctx context.Context, plan *ExecutionPlan, def *TaskDefinition, metadata *RunMetadata) (*TaskRun, error) {
+	definitionID := ""
+	if def != nil {
+		definitionID = def.ID
+	}
+
+	run, err := m.CreateRun(definitionID, plan.Name, plan.RunKind, metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -420,7 +448,7 @@ func (m *RuntimeManager) checkStageDependencies(plan *ExecutionPlan, stage Stage
 func (m *RuntimeManager) skipStage(runtimeCtx *defaultRuntimeContext, runID string, stagePlan *StagePlan, reason string) {
 	// 创建跳过的 Stage 记录
 	stage := &TaskRunStage{
-		ID:         uuid.New().String()[:8],
+		ID:         newStageID(),
 		TaskRunID:  runID,
 		StageKind:  stagePlan.Kind,
 		StageName:  stagePlan.Name,
@@ -454,7 +482,7 @@ func (m *RuntimeManager) executeStage(runtimeCtx *defaultRuntimeContext, runID s
 	startedAt := time.Now()
 	// 创建Stage记录
 	stage := &TaskRunStage{
-		ID:         uuid.New().String()[:8],
+		ID:         newStageID(),
 		TaskRunID:  runID,
 		StageKind:  stagePlan.Kind,
 		StageName:  stagePlan.Name,
@@ -534,7 +562,7 @@ func (m *RuntimeManager) materializeStageUnits(runtimeCtx *defaultRuntimeContext
 	now := time.Now()
 	for _, unitPlan := range stagePlan.Units {
 		runtimeUnit := &TaskRunUnit{
-			ID:             uuid.New().String()[:8],
+			ID:             newUnitID(),
 			TaskRunID:      runID,
 			TaskRunStageID: runtimeStageID,
 			UnitKind:       unitPlan.Kind,
@@ -762,20 +790,43 @@ func (m *RuntimeManager) CancelRun(runID string) error {
 	runtimeCtx, ok := m.runningRuns[runID]
 	m.mu.RUnlock()
 
-	if !ok {
-		// 检查是否已在数据库中
-		run, err := m.repo.GetRun(context.Background(), runID)
-		if err != nil {
-			return fmt.Errorf("运行实例不存在: %s", runID)
-		}
-		if RunStatus(run.Status).IsTerminal() {
-			return fmt.Errorf("运行实例已结束: %s", runID)
-		}
+	if ok {
+		runtimeCtx.cancel()
+		logger.Info("TaskExec", runID, "取消运行实例")
 		return nil
 	}
 
-	runtimeCtx.cancel()
-	logger.Info("TaskExec", runID, "取消运行实例")
+	run, err := m.repo.GetRun(context.Background(), runID)
+	if err != nil {
+		return fmt.Errorf("运行实例不存在: %s", runID)
+	}
+	if RunStatus(run.Status).IsTerminal() {
+		return nil
+	}
+
+	cancelledStatus := string(RunStatusCancelled)
+	now := time.Now()
+	if updateErr := m.repo.UpdateRun(context.Background(), runID, &RunPatch{Status: &cancelledStatus, FinishedAt: &now}); updateErr != nil {
+		return fmt.Errorf("补偿取消运行失败: %w", updateErr)
+	}
+
+	stages, _ := m.repo.GetStagesByRun(context.Background(), runID)
+	for _, stage := range stages {
+		stageStatus := string(StageStatusCancelled)
+		finishedAt := now
+		_ = m.repo.UpdateStage(context.Background(), stage.ID, &StagePatch{Status: &stageStatus, FinishedAt: &finishedAt})
+		units, _ := m.repo.GetUnitsByStage(context.Background(), stage.ID)
+		for _, unit := range units {
+			if UnitStatus(unit.Status).IsTerminal() {
+				continue
+			}
+			unitStatus := string(UnitStatusCancelled)
+			reason := "run cancelled by compensation"
+			_ = m.repo.UpdateUnit(context.Background(), unit.ID, &UnitPatch{Status: &unitStatus, ErrorMessage: &reason, FinishedAt: &finishedAt})
+		}
+	}
+
+	m.emitError(runID, "", "", "运行实例不在内存中，已执行补偿取消")
 	return nil
 }
 

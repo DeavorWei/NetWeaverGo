@@ -5,8 +5,6 @@ import (
 	"log"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // SubscriptionID 订阅标识
@@ -31,7 +29,7 @@ type TaskEvent struct {
 // NewTaskEvent 创建任务事件
 func NewTaskEvent(runID string, eventType EventType, message string) *TaskEvent {
 	return &TaskEvent{
-		ID:        uuid.New().String(),
+		ID:        newEventID(),
 		RunID:     runID,
 		Type:      eventType,
 		Level:     EventLevelInfo,

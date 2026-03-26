@@ -23,7 +23,7 @@ const (
 // IsTerminal 是否终态
 func (s RunStatus) IsTerminal() bool {
 	switch s {
-	case RunStatusCompleted, RunStatusPartial, RunStatusFailed, RunStatusCancelled:
+	case RunStatusCompleted, RunStatusPartial, RunStatusFailed, RunStatusCancelled, RunStatusAborted:
 		return true
 	default:
 		return false

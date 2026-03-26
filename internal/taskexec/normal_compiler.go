@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
-	"github.com/google/uuid"
 )
 
 // NormalTaskCompiler 普通任务编译器
@@ -88,7 +87,7 @@ func (c *NormalTaskCompiler) compileModeA(def *TaskDefinition, config *NormalTas
 	}
 
 	stage := StagePlan{
-		ID:          uuid.New().String()[:8],
+		ID:          newStageID(),
 		Kind:        string(StageKindDeviceCommand),
 		Name:        "命令执行",
 		Order:       1,
@@ -151,7 +150,7 @@ func (c *NormalTaskCompiler) compileModeB(def *TaskDefinition, config *NormalTas
 	}
 
 	stage := StagePlan{
-		ID:          uuid.New().String()[:8],
+		ID:          newStageID(),
 		Kind:        string(StageKindDeviceCommand),
 		Name:        "命令执行",
 		Order:       1,

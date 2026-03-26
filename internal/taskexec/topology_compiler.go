@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // TopologyTaskCompiler 拓扑任务编译器
@@ -84,7 +82,7 @@ func (c *TopologyTaskCompiler) buildCollectStage(config *TopologyTaskConfig) Sta
 	}
 
 	return StagePlan{
-		ID:          uuid.New().String()[:8],
+		ID:          newStageID(),
 		Kind:        string(StageKindDeviceCollect),
 		Name:        "设备信息采集",
 		Order:       1,
@@ -114,7 +112,7 @@ func (c *TopologyTaskCompiler) buildParseStage(config *TopologyTaskConfig) Stage
 	}
 
 	return StagePlan{
-		ID:          uuid.New().String()[:8],
+		ID:          newStageID(),
 		Kind:        string(StageKindParse),
 		Name:        "信息解析",
 		Order:       2,
@@ -127,7 +125,7 @@ func (c *TopologyTaskCompiler) buildParseStage(config *TopologyTaskConfig) Stage
 func (c *TopologyTaskCompiler) buildTopologyBuildStage(config *TopologyTaskConfig) StagePlan {
 	// 整个任务只有一个Unit
 	return StagePlan{
-		ID:          uuid.New().String()[:8],
+		ID:          newStageID(),
 		Kind:        string(StageKindTopologyBuild),
 		Name:        "拓扑构建",
 		Order:       3,

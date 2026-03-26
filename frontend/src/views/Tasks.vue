@@ -631,7 +631,7 @@ async function confirmCreate() {
       items: taskItems,
       tags: createModal.value.tags,
       enableRawLog: createModal.value.enableRawLog,
-      status: "pending" as const,
+      status: "",
       createdAt: new Date(),
       updatedAt: new Date(),
     };

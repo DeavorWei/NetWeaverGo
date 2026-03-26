@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/NetWeaverGo/core/internal/repository"
 	"gorm.io/gorm"
@@ -60,6 +59,12 @@ func (s *TaskExecutionService) Stop() {
 	s.runtime.Stop()
 }
 
+type RunMetadata struct {
+	TaskGroupID      uint
+	TaskNameSnapshot string
+	LaunchSpecJSON   []byte
+}
+
 // CreateNormalTask 创建普通任务定义
 func (s *TaskExecutionService) CreateNormalTask(name string, config *NormalTaskConfig) (*TaskDefinition, error) {
 	configJSON, err := json.Marshal(config)
@@ -68,7 +73,7 @@ func (s *TaskExecutionService) CreateNormalTask(name string, config *NormalTaskC
 	}
 
 	def := &TaskDefinition{
-		ID:     generateID(),
+		ID:     newDefinitionID(),
 		Name:   name,
 		Kind:   string(RunKindNormal),
 		Config: configJSON,
@@ -85,7 +90,7 @@ func (s *TaskExecutionService) CreateTopologyTask(name string, config *TopologyT
 	}
 
 	def := &TaskDefinition{
-		ID:     generateID(),
+		ID:     newDefinitionID(),
 		Name:   name,
 		Kind:   string(RunKindTopology),
 		Config: configJSON,
@@ -96,14 +101,17 @@ func (s *TaskExecutionService) CreateTopologyTask(name string, config *TopologyT
 
 // StartTask 启动任务
 func (s *TaskExecutionService) StartTask(ctx context.Context, def *TaskDefinition) (string, error) {
-	// compile execution plan
+	return s.StartTaskWithMetadata(ctx, def, nil)
+}
+
+// StartTaskWithMetadata 启动任务并附带运行元数据
+func (s *TaskExecutionService) StartTaskWithMetadata(ctx context.Context, def *TaskDefinition, metadata *RunMetadata) (string, error) {
 	plan, err := s.compiler.Compile(ctx, def)
 	if err != nil {
 		return "", fmt.Errorf("fail to compile plan: %w", err)
 	}
 
-	// submit to runtime
-	run, err := s.runtime.Execute(ctx, plan)
+	run, err := s.runtime.Execute(ctx, plan, def, metadata)
 	if err != nil {
 		return "", fmt.Errorf("fail to start task: %w", err)
 	}
@@ -153,9 +161,4 @@ func (s *TaskExecutionService) GetRunStatus(runID string) (*TaskRun, error) {
 // GetEventBus 获取事件总线（用于事件桥接）
 func (s *TaskExecutionService) GetEventBus() *EventBus {
 	return s.runtime.GetEventBus()
-}
-
-// generateID 生成ID
-func generateID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
 }

@@ -47,8 +47,8 @@
                     <span class="px-2 py-0.5 rounded-full text-xs border" :class="modeBadge(detail.task.mode)">
                       {{ modeLabel(detail.task.mode) }}
                     </span>
-                    <span class="px-2 py-0.5 rounded-full text-xs border" :class="statusBadge(detail.task.status)">
-                      {{ statusLabel(detail.task.status) }}
+                    <span class="px-2 py-0.5 rounded-full text-xs border" :class="statusBadge(detail.latestRunStatus || 'pending')">
+                      {{ statusLabel(detail.latestRunStatus || 'pending') }}
                     </span>
                   </div>
                   <p class="text-sm text-text-secondary">{{ detail.task.description || '暂无描述' }}</p>
@@ -90,7 +90,7 @@
                     </span>
                   </div>
                   <div class="pt-1 border-t border-border/60">
-                    <p class="text-xs text-text-muted">编辑规则：除执行中（`running`）外均可编辑。</p>
+                    <p class="text-xs text-text-muted">编辑规则：存在活跃运行时不可编辑，状态展示来源于最近一次运行。</p>
                   </div>
                 </div>
               </div>
@@ -273,7 +273,10 @@ function statusLabel(status: string) {
     pending: '待执行',
     running: '执行中',
     completed: '已完成',
-    failed: '失败'
+    partial: '部分成功',
+    failed: '失败',
+    cancelled: '已取消',
+    aborted: '已中止'
   }
   return mapping[status] ?? status
 }
@@ -286,8 +289,13 @@ function statusBadge(status: string) {
       return 'bg-accent/10 border-accent/30 text-accent'
     case 'completed':
       return 'bg-success/10 border-success/30 text-success'
+    case 'partial':
+      return 'bg-warning/10 border-warning/30 text-warning'
     case 'failed':
+    case 'aborted':
       return 'bg-error/10 border-error/30 text-error'
+    case 'cancelled':
+      return 'bg-bg-panel border-border text-text-muted'
     default:
       return 'bg-bg-card border-border text-text-muted'
   }
