@@ -79,6 +79,8 @@ type EventBus struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup // 等待 goroutine 退出
+	started  bool
+	closed   bool
 }
 
 // NewEventBus 创建事件总线
@@ -118,41 +120,50 @@ func (b *EventBus) UnsubscribeAll() {
 
 // Emit 发送事件
 func (b *EventBus) Emit(event *TaskEvent) {
+	if event == nil || b.isClosed() {
+		return
+	}
+
 	select {
+	case <-b.ctx.Done():
+		return
 	case b.buffer <- event:
 	default:
 		// 缓冲区满，丢弃最旧的事件
 		select {
 		case <-b.buffer:
-			b.buffer <- event
+			select {
+			case <-b.ctx.Done():
+				return
+			case b.buffer <- event:
+			default:
+			}
 		default:
 		}
 	}
 }
 
-// EmitSync 同步发送事件（直接调用处理器，带超时保护）
+// EmitSync 同步发送事件（串行调用处理器，带超时保护）
 func (b *EventBus) EmitSync(event *TaskEvent) {
-	b.mu.RLock()
-	handlers := make([]EventHandler, 0, len(b.handlers))
-	for _, h := range b.handlers {
-		handlers = append(handlers, h)
+	if event == nil || b.isClosed() {
+		return
 	}
-	b.mu.RUnlock()
 
-	// 使用 goroutine + channel 实现超时保护
-	done := make(chan struct{}, 1)
+	handlers := b.snapshotHandlers()
+	if len(handlers) == 0 {
+		return
+	}
+
+	done := make(chan struct{})
+	b.wg.Add(1)
 	go func() {
+		defer b.wg.Done()
 		defer close(done)
 		for _, handler := range handlers {
-			// 单个 handler 添加 panic 恢复
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("[EventBus] handler panic recovered: %v", r)
-					}
-				}()
-				handler(event)
-			}()
+			if b.isClosed() {
+				return
+			}
+			b.safeInvokeHandler(handler, event)
 		}
 	}()
 
@@ -168,15 +179,29 @@ func (b *EventBus) EmitSync(event *TaskEvent) {
 
 // Start 启动事件分发
 func (b *EventBus) Start() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.started || b.closed {
+		return
+	}
+	b.started = true
 	b.wg.Add(1)
 	go b.dispatchLoop()
 }
 
 // Stop 停止事件总线
 func (b *EventBus) Stop() {
+	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		return
+	}
+	b.closed = true
+	b.mu.Unlock()
+
 	b.cancel()
 
-	// 等待 dispatchLoop 退出（带超时保护）
+	// 等待所有 dispatch / handler / EmitSync 受控 goroutine 退出（带超时保护）
 	done := make(chan struct{})
 	go func() {
 		b.wg.Wait()
@@ -187,7 +212,6 @@ func (b *EventBus) Stop() {
 	case <-done:
 		// 正常退出
 	case <-time.After(5 * time.Second):
-		// 超时，强制继续
 		log.Printf("[EventBus] Stop timeout, some handlers may still be running")
 	}
 }
@@ -200,26 +224,48 @@ func (b *EventBus) dispatchLoop() {
 		case <-b.ctx.Done():
 			return
 		case event := <-b.buffer:
-			b.mu.RLock()
-			handlers := make([]EventHandler, 0, len(b.handlers))
-			for _, h := range b.handlers {
-				handlers = append(handlers, h)
+			if event == nil || b.isClosed() {
+				continue
 			}
-			b.mu.RUnlock()
-
+			handlers := b.snapshotHandlers()
 			for _, handler := range handlers {
-				h := handler // 捕获循环变量
+				b.wg.Add(1)
+				h := handler
 				go func() {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Printf("[EventBus] handler panic: %v", r)
-						}
-					}()
-					h(event)
+					defer b.wg.Done()
+					if b.isClosed() {
+						return
+					}
+					b.safeInvokeHandler(h, event)
 				}()
 			}
 		}
 	}
+}
+
+func (b *EventBus) snapshotHandlers() []EventHandler {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	handlers := make([]EventHandler, 0, len(b.handlers))
+	for _, h := range b.handlers {
+		handlers = append(handlers, h)
+	}
+	return handlers
+}
+
+func (b *EventBus) safeInvokeHandler(handler EventHandler, event *TaskEvent) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[EventBus] handler panic recovered: %v", r)
+		}
+	}()
+	handler(event)
+}
+
+func (b *EventBus) isClosed() bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.closed
 }
 
 // SnapshotHub 快照中心 - 维护最新快照供前端查询
