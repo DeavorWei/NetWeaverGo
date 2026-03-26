@@ -46,6 +46,10 @@ type StreamEngine struct {
 
 	// suspendHandler 错误/超时挂起处理器
 	suspendHandler SuspendHandler
+
+	// eventCallback 执行事件回调（命令开始/完成）
+	eventCallback  func(event ExecutionEvent)
+	emittedResults int
 }
 
 // NewStreamEngine 创建新的流处理引擎
@@ -67,6 +71,12 @@ func NewStreamEngine(executor *DeviceExecutor, client *sshutil.SSHClient, comman
 // SetSuspendHandler 设置挂起处理器
 func (e *StreamEngine) SetSuspendHandler(handler SuspendHandler) {
 	e.suspendHandler = handler
+}
+
+// SetExecutionEventCallback 设置执行事件回调。
+func (e *StreamEngine) SetExecutionEventCallback(callback func(event ExecutionEvent)) {
+	e.eventCallback = callback
+	e.emittedResults = 0
 }
 
 // SetErrorMatcher 设置错误匹配器（使用执行器的匹配器）
@@ -253,9 +263,11 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 				for _, action := range actions {
 					if err := e.executeSessionAction(action, &currentTimeout, defaultTimeout, timer); err != nil {
 						e.adapter.MarkFailed(err.Error())
+						e.emitNewCommandCompleteEvents()
 						return e.adapter.Results(), err
 					}
 				}
+				e.emitNewCommandCompleteEvents()
 
 				// 检查是否完成
 				if e.adapter.NewState() == NewStateCompleted {
@@ -308,6 +320,14 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 	case ActSendCommand:
 		// 发送命令
 		logger.Info("StreamEngine", "-", ">>> [发送命令]: %s", act.Command)
+		if e.eventCallback != nil {
+			e.eventCallback(ExecutionEvent{
+				Type:      EventCmdStart,
+				Command:   act.Command,
+				Index:     act.Index,
+				Timestamp: time.Now(),
+			})
+		}
 
 		// 写入命令日志
 		if e.executor != nil {
@@ -526,6 +546,37 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 	}
 
 	return nil
+}
+
+func (e *StreamEngine) emitNewCommandCompleteEvents() {
+	if e.eventCallback == nil || e.adapter == nil {
+		return
+	}
+
+	results := e.adapter.Results()
+	for e.emittedResults < len(results) {
+		result := results[e.emittedResults]
+		if result == nil {
+			e.emittedResults++
+			continue
+		}
+
+		var eventErr error
+		if !result.Success && strings.TrimSpace(result.ErrorMessage) != "" {
+			eventErr = fmt.Errorf("%s", result.ErrorMessage)
+		}
+
+		e.eventCallback(ExecutionEvent{
+			Type:      EventCmdComplete,
+			Command:   result.Command,
+			Key:       result.CommandKey,
+			Index:     result.Index,
+			Duration:  result.Duration,
+			Error:     eventErr,
+			Timestamp: time.Now(),
+		})
+		e.emittedResults++
+	}
 }
 
 // RunSingle 执行单条命令并返回结果

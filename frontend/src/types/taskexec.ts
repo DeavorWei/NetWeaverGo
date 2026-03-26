@@ -46,6 +46,12 @@ export interface UnitSnapshot {
   totalSteps: number
   doneSteps: number
   errorMessage: string
+  logs?: string[]
+  logCount?: number
+  truncated?: boolean
+  summaryLogPath?: string
+  detailLogPath?: string
+  rawLogPath?: string
   startedAt: string
   finishedAt: string
 }

@@ -475,7 +475,19 @@ const isRunning = computed(() => taskexecStore.isRunning)
 const shouldShowExecutionView = computed(() => {
   return executionView.value.active && (awaitingSnapshot.value || isRunning.value || !!executionSnapshot.value)
 })
-const progressPercent = computed(() => executionSnapshot.value?.progress ?? 0)
+const progressPercent = computed(() => {
+  const snapshot = executionSnapshot.value
+  if (!snapshot) {
+    return 0
+  }
+
+  if (Array.isArray(snapshot.stages) && snapshot.stages.length > 0) {
+    const total = snapshot.stages.reduce((sum, stage) => sum + (stage.progress || 0), 0)
+    return Math.round(total / snapshot.stages.length)
+  }
+
+  return snapshot.progress ?? 0
+})
 // 从 units 转换为 devices 视图（兼容旧 UI）
 const execDevices = computed<DeviceViewState[]>(() => {
   const units = (executionSnapshot.value as any)?.units as UnitSnapshot[] || []
@@ -486,9 +498,9 @@ const execDevices = computed<DeviceViewState[]>(() => {
     progress: unit.progress,
     output: unit.errorMessage || '',
     error: unit.errorMessage,
-    logs: [],
-    logCount: 0,
-    truncated: false
+    logs: Array.isArray(unit.logs) ? unit.logs : (unit.errorMessage ? [unit.errorMessage] : []),
+    logCount: typeof unit.logCount === 'number' ? unit.logCount : (Array.isArray(unit.logs) ? unit.logs.length : 0),
+    truncated: Boolean(unit.truncated)
   }))
 })
 
@@ -507,9 +519,10 @@ function mapUnitStatusToDeviceStatus(unitStatus: string): DeviceViewState['statu
     case 'pending': return 'idle'
     case 'running': return 'running'
     case 'completed': return 'success'
-    case 'failed': return 'failed'
-    case 'cancelled': return 'timeout'
-    default: return 'idle'
+    case 'partial': return 'error'
+    case 'failed': return 'error'
+    case 'cancelled': return 'aborted'
+    default: return 'waiting'
   }
 }
 

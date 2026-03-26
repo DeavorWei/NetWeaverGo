@@ -70,6 +70,13 @@ func (h *ErrorHandler) UpdateStageBestEffort(ctx RuntimeContext, stageID string,
 	}
 }
 
+// UpdateUnitBestEffort 更新 Unit，失败仅记录日志
+func (h *ErrorHandler) UpdateUnitBestEffort(ctx RuntimeContext, unitID string, patch *UnitPatch, operation string) {
+	if err := ctx.UpdateUnit(unitID, patch); err != nil {
+		h.LogUpdateError(operation, err)
+	}
+}
+
 // UpdateRunBestEffort 更新 Run，失败仅记录日志
 func (h *ErrorHandler) UpdateRunBestEffort(ctx RuntimeContext, patch *RunPatch, operation string) {
 	if err := ctx.UpdateRun(patch); err != nil {

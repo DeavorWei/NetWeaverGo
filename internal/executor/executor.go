@@ -137,6 +137,16 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 //
 // 注意：此方法现在委托给 executeInternal 统一实现
 func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string, cmdTimeout time.Duration) error {
+	return e.ExecutePlaybookWithEvents(ctx, commands, cmdTimeout, nil)
+}
+
+// ExecutePlaybookWithEvents 在执行 Playbook 时回调命令级事件。
+func (e *DeviceExecutor) ExecutePlaybookWithEvents(
+	ctx context.Context,
+	commands []string,
+	cmdTimeout time.Duration,
+	eventCallback func(event ExecutionEvent),
+) error {
 	logger.Debug("Executor", e.IP, "开始执行 Playbook (%d 条)", len(commands))
 	if e.Client == nil {
 		return fmt.Errorf("执行器未安全建连")
@@ -160,7 +170,7 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 		Mode:               PlanModePlaybook,
 	}
 
-	report, err := e.executeInternal(ctx, plan, nil)
+	report, err := e.executeInternal(ctx, plan, eventCallback)
 	if err != nil {
 		return err
 	}
@@ -180,13 +190,22 @@ func (e *DeviceExecutor) ExecutePlaybook(ctx context.Context, commands []string,
 //
 // 注意：此方法委托给 executeInternal 统一实现
 func (e *DeviceExecutor) ExecutePlan(ctx context.Context, plan ExecutionPlan) (*ExecutionReport, error) {
+	return e.ExecutePlanWithEvents(ctx, plan, nil)
+}
+
+// ExecutePlanWithEvents 执行统一执行计划，并回调命令级事件。
+func (e *DeviceExecutor) ExecutePlanWithEvents(
+	ctx context.Context,
+	plan ExecutionPlan,
+	eventCallback func(event ExecutionEvent),
+) (*ExecutionReport, error) {
 	logger.Debug("Executor", e.IP, "开始执行 Plan: %s (%d 条命令)", plan.Name, len(plan.Commands))
 
 	if e.Client == nil {
 		return nil, fmt.Errorf("执行器未安全建连")
 	}
 
-	return e.executeInternal(ctx, plan, nil)
+	return e.executeInternal(ctx, plan, eventCallback)
 }
 
 // executeInternal 统一的内部执行实现
@@ -227,6 +246,7 @@ func (e *DeviceExecutor) executeInternal(
 
 	// 创建 StreamEngine
 	engine := NewStreamEngine(e, e.Client, commandStrings, 80)
+	engine.SetExecutionEventCallback(eventCallback)
 
 	// 设置命令标识
 	engine.adapter.SetCommandKeys(commandKeys)

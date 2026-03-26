@@ -38,18 +38,24 @@ type StageSnapshot struct {
 
 // UnitSnapshot Unit快照
 type UnitSnapshot struct {
-	ID           string     `json:"id"`
-	StageID      string     `json:"stageId"`
-	Kind         string     `json:"kind"`
-	TargetType   string     `json:"targetType"`
-	TargetKey    string     `json:"targetKey"`
-	Status       string     `json:"status"`
-	Progress     int        `json:"progress"` // 基于 steps 计算
-	TotalSteps   int        `json:"totalSteps"`
-	DoneSteps    int        `json:"doneSteps"`
-	ErrorMessage string     `json:"errorMessage"`
-	StartedAt    *time.Time `json:"startedAt"`
-	FinishedAt   *time.Time `json:"finishedAt"`
+	ID             string     `json:"id"`
+	StageID        string     `json:"stageId"`
+	Kind           string     `json:"kind"`
+	TargetType     string     `json:"targetType"`
+	TargetKey      string     `json:"targetKey"`
+	Status         string     `json:"status"`
+	Progress       int        `json:"progress"` // 基于 steps 计算
+	TotalSteps     int        `json:"totalSteps"`
+	DoneSteps      int        `json:"doneSteps"`
+	ErrorMessage   string     `json:"errorMessage"`
+	Logs           []string   `json:"logs,omitempty"`
+	LogCount       int        `json:"logCount"`
+	Truncated      bool       `json:"truncated"`
+	SummaryLogPath string     `json:"summaryLogPath,omitempty"`
+	DetailLogPath  string     `json:"detailLogPath,omitempty"`
+	RawLogPath     string     `json:"rawLogPath,omitempty"`
+	StartedAt      *time.Time `json:"startedAt"`
+	FinishedAt     *time.Time `json:"finishedAt"`
 }
 
 // EventSnapshot 事件快照

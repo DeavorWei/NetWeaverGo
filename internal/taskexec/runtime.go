@@ -2,12 +2,16 @@ package taskexec
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/report"
 )
 
 // RuntimeContext 运行时上下文 - 供StageExecutor使用
@@ -39,6 +43,7 @@ type defaultRuntimeContext struct {
 	repo        Repository
 	eventBus    *EventBus
 	logger      RuntimeLogger
+	logStore    *report.ExecutionLogStore
 	snapshotHub *SnapshotHub
 }
 
@@ -131,6 +136,7 @@ func (c *defaultRuntimeContext) refreshSnapshot() {
 
 	builder := NewSnapshotBuilder()
 	snapshot := builder.Build(run, stages, units, events)
+	enrichSnapshotWithStore(c.logStore, snapshot)
 	c.snapshotHub.Update(run.ID, snapshot)
 }
 
@@ -179,6 +185,7 @@ type RuntimeManager struct {
 	loggerFactory LoggerFactory
 
 	runningRuns map[string]*defaultRuntimeContext
+	logStores   map[string]*report.ExecutionLogStore
 	mu          sync.RWMutex
 }
 
@@ -190,6 +197,7 @@ func NewRuntimeManager(repo Repository, eventBus *EventBus, snapshotHub *Snapsho
 		snapshotHub: snapshotHub,
 		executorReg: NewExecutorRegistry(),
 		runningRuns: make(map[string]*defaultRuntimeContext),
+		logStores:   make(map[string]*report.ExecutionLogStore),
 	}
 }
 
@@ -223,6 +231,13 @@ func (m *RuntimeManager) Stop() {
 	for _, ctx := range m.runningRuns {
 		ctx.cancel()
 	}
+	for runID, store := range m.logStores {
+		if store == nil {
+			continue
+		}
+		logger.Debug("TaskExec", runID, "关闭运行日志存储")
+		store.Close()
+	}
 }
 
 // GetSnapshot 获取指定运行的快照
@@ -244,6 +259,7 @@ func (m *RuntimeManager) GetSnapshot(runID string) (*ExecutionSnapshot, error) {
 	events, _ := m.repo.GetEventsByRun(context.Background(), runID, 50)
 	builder := NewSnapshotBuilder()
 	snapshot = builder.Build(run, stages, units, events)
+	m.enrichSnapshotWithLogs(runID, snapshot)
 	m.snapshotHub.Update(runID, snapshot)
 	return snapshot, nil
 }
@@ -257,8 +273,8 @@ func (m *RuntimeManager) ListRunningSnapshots() []*ExecutionSnapshot {
 	defer m.mu.RUnlock()
 	result := make([]*ExecutionSnapshot, 0, len(m.runningRuns))
 	for runID := range m.runningRuns {
-		snapshot, ok := m.snapshotHub.Get(runID)
-		if ok && snapshot != nil {
+		snapshot, err := m.GetSnapshot(runID)
+		if err == nil && snapshot != nil {
 			result = append(result, snapshot)
 		}
 	}
@@ -319,7 +335,23 @@ func (m *RuntimeManager) Execute(ctx context.Context, plan *ExecutionPlan, def *
 		cancel:      cancel,
 		repo:        m.repo,
 		eventBus:    m.eventBus,
+		logger:      newNoopRuntimeLogger(),
 		snapshotHub: m.snapshotHub,
+	}
+
+	enableRawLog := extractEnableRawLog(def)
+	if store, err := report.NewExecutionLogStore(run.Name, time.Now()); err != nil {
+		logger.Error("TaskExec", run.ID, "创建执行日志存储失败: %v", err)
+	} else {
+		runtimeCtx.logStore = store
+		factory := NewDefaultLoggerFactory(config.GetPathManager().GetStorageRoot(), store, enableRawLog)
+		runtimeCtx.logger = NewDefaultRuntimeLogger(factory)
+		logger.Debug("TaskExec", run.ID, "执行日志存储已创建: raw=%t", enableRawLog)
+		m.mu.Lock()
+		m.logStores[run.ID] = store
+		m.runningRuns[run.ID] = runtimeCtx
+		m.mu.Unlock()
+		goto schedule
 	}
 
 	if m.loggerFactory != nil {
@@ -331,6 +363,7 @@ func (m *RuntimeManager) Execute(ctx context.Context, plan *ExecutionPlan, def *
 	m.runningRuns[run.ID] = runtimeCtx
 	m.mu.Unlock()
 
+schedule:
 	// 异步执行
 	go m.executePlan(runtimeCtx, run, plan)
 
@@ -418,6 +451,101 @@ func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *Tas
 
 	// 发射完成事件
 	m.eventBus.EmitSync(NewTaskEvent(run.ID, EventTypeRunFinished, fmt.Sprintf("任务完成，状态: %s", finalStatus)))
+}
+
+func (m *RuntimeManager) enrichSnapshotWithLogs(runID string, snapshot *ExecutionSnapshot) {
+	if snapshot == nil {
+		return
+	}
+
+	m.mu.RLock()
+	store := m.logStores[runID]
+	m.mu.RUnlock()
+	enrichSnapshotWithStore(store, snapshot)
+}
+
+func enrichSnapshotWithStore(store *report.ExecutionLogStore, snapshot *ExecutionSnapshot) {
+	if store == nil {
+		return
+	}
+
+	maxLogs := 30
+	if manager := config.GetRuntimeManagerIfInitialized(); manager != nil {
+		if configured := manager.GetMaxLogsPerDevice(); configured > 0 {
+			maxLogs = configured
+		}
+	}
+
+	for idx := range snapshot.Units {
+		unit := &snapshot.Units[idx]
+		if unit.TargetType != "device_ip" || unit.TargetKey == "" {
+			continue
+		}
+
+		logs, logCount := storeLogsForUnit(store, unit.TargetKey, maxLogs)
+		paths := store.GetDeviceLogPaths(unit.TargetKey)
+
+		unit.Logs = logs
+		unit.LogCount = logCount
+		unit.Truncated = logCount > len(logs)
+		unit.SummaryLogPath = paths.SummaryPath
+		unit.DetailLogPath = paths.DetailPath
+		unit.RawLogPath = paths.RawPath
+
+		if logCount > 0 {
+			logger.Verbose("TaskExecLog", unit.TargetKey, "快照附加日志: run=%s, lines=%d, tail=%d, summary=%t, detail=%t, raw=%t",
+				snapshot.RunID, logCount, len(logs), unit.SummaryLogPath != "", unit.DetailLogPath != "", unit.RawLogPath != "")
+		}
+	}
+}
+
+func storeLogsForUnit(store *report.ExecutionLogStore, unitKey string, maxLogs int) ([]string, int) {
+	if store == nil || unitKey == "" || maxLogs <= 0 {
+		return nil, 0
+	}
+
+	summaryCount := store.GetSummaryLogCount(unitKey)
+	if summaryCount > 0 {
+		logs, err := store.GetSummaryLastLogs(unitKey, maxLogs)
+		if err != nil {
+			logger.Warn("TaskExecLog", unitKey, "读取摘要日志尾部失败: %v", err)
+			return nil, summaryCount
+		}
+		logger.Verbose("TaskExecLog", unitKey, "任务执行大屏使用 summary.log 尾部: lines=%d, tail=%d", summaryCount, len(logs))
+		return logs, summaryCount
+	}
+
+	return nil, 0
+}
+
+func extractEnableRawLog(def *TaskDefinition) bool {
+	if def == nil || len(def.Config) == 0 {
+		return false
+	}
+
+	switch stringsTrim(def.Kind) {
+	case string(RunKindTopology):
+		var cfg TopologyTaskConfig
+		if err := json.Unmarshal(def.Config, &cfg); err != nil {
+			logger.Warn("TaskExec", "-", "解析拓扑任务 raw 日志配置失败: %v", err)
+			return false
+		}
+		return cfg.EnableRawLog
+	default:
+		var cfg NormalTaskConfig
+		if err := json.Unmarshal(def.Config, &cfg); err != nil {
+			logger.Warn("TaskExec", "-", "解析普通任务 raw 日志配置失败: %v", err)
+			return false
+		}
+		return cfg.EnableRawLog
+	}
+}
+
+func stringsTrim(value string) string {
+	if value == "" {
+		return ""
+	}
+	return strings.TrimSpace(value)
 }
 
 // checkStageDependencies 检查阶段依赖

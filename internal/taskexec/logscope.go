@@ -3,8 +3,10 @@ package taskexec
 import (
 	"fmt"
 	"path/filepath"
+	"sync"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/report"
 )
 
@@ -93,35 +95,45 @@ type LoggerFactory interface {
 
 // DefaultLoggerFactory 默认日志工厂
 type DefaultLoggerFactory struct {
-	basePath string
-	store    *report.ExecutionLogStore
+	basePath  string
+	store     *report.ExecutionLogStore
+	enableRaw bool
 }
 
 // NewDefaultLoggerFactory 创建默认日志工厂
-func NewDefaultLoggerFactory(basePath string, store *report.ExecutionLogStore) *DefaultLoggerFactory {
+func NewDefaultLoggerFactory(basePath string, store *report.ExecutionLogStore, enableRaw bool) *DefaultLoggerFactory {
 	return &DefaultLoggerFactory{
-		basePath: basePath,
-		store:    store,
+		basePath:  basePath,
+		store:     store,
+		enableRaw: enableRaw,
 	}
 }
 
 // CreateLogger 创建日志记录器
 func (f *DefaultLoggerFactory) CreateLogger(scope LogScope) *report.DeviceLogSession {
+	if f == nil || f.store == nil {
+		return nil
+	}
+
 	// 使用ExecutionLogStore确保设备日志会话
 	if scope.UnitKey == "" {
 		scope.UnitKey = "default"
 	}
 
-	session, err := f.store.EnsureDevice(scope.UnitKey, true)
+	session, err := f.store.EnsureDevice(scope.UnitKey, f.enableRaw)
 	if err != nil {
+		logger.Error("TaskExecLog", scope.UnitKey, "创建设备日志会话失败: %v", err)
 		return nil
 	}
 
+	logger.Verbose("TaskExecLog", scope.UnitKey, "日志会话已就绪: run=%s, stage=%s, unit=%s, raw=%t", scope.RunID, scope.StageID, scope.UnitID, f.enableRaw)
 	return session
 }
 
 // RuntimeLogger Runtime日志接口 - 供StageExecutor使用
 type RuntimeLogger interface {
+	// 获取或创建日志会话
+	Session(scope LogScope) *report.DeviceLogSession
 	// 写summary日志
 	WriteSummary(scope LogScope, message string)
 	// 写detail日志
@@ -134,6 +146,7 @@ type RuntimeLogger interface {
 
 // DefaultRuntimeLogger 默认Runtime日志实现
 type DefaultRuntimeLogger struct {
+	mu       sync.Mutex
 	factory  LoggerFactory
 	sessions map[string]*report.DeviceLogSession
 }
@@ -159,6 +172,9 @@ func (l *DefaultRuntimeLogger) getSessionKey(scope LogScope) string {
 
 // getOrCreateSession 获取或创建session
 func (l *DefaultRuntimeLogger) getOrCreateSession(scope LogScope) *report.DeviceLogSession {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	key := l.getSessionKey(scope)
 	if session, ok := l.sessions[key]; ok {
 		return session
@@ -167,6 +183,11 @@ func (l *DefaultRuntimeLogger) getOrCreateSession(scope LogScope) *report.Device
 	session := l.factory.CreateLogger(scope)
 	l.sessions[key] = session
 	return session
+}
+
+// Session 获取或创建日志会话
+func (l *DefaultRuntimeLogger) Session(scope LogScope) *report.DeviceLogSession {
+	return l.getOrCreateSession(scope)
 }
 
 // WriteSummary 写summary日志
@@ -195,6 +216,9 @@ func (l *DefaultRuntimeLogger) WriteRaw(scope LogScope, data []byte) {
 
 // Close 关闭日志
 func (l *DefaultRuntimeLogger) Close(scope LogScope) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	key := l.getSessionKey(scope)
 	delete(l.sessions, key)
 	return nil
@@ -202,5 +226,26 @@ func (l *DefaultRuntimeLogger) Close(scope LogScope) error {
 
 // CloseAll 关闭所有日志
 func (l *DefaultRuntimeLogger) CloseAll() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.sessions = make(map[string]*report.DeviceLogSession)
+}
+
+// noopRuntimeLogger 在日志链路不可用时提供空实现，避免执行器判空分支四散。
+type noopRuntimeLogger struct{}
+
+func (l *noopRuntimeLogger) Session(scope LogScope) *report.DeviceLogSession {
+	return nil
+}
+
+func (l *noopRuntimeLogger) WriteSummary(scope LogScope, message string) {}
+
+func (l *noopRuntimeLogger) WriteDetail(scope LogScope, message string) {}
+
+func (l *noopRuntimeLogger) WriteRaw(scope LogScope, data []byte) {}
+
+func (l *noopRuntimeLogger) Close(scope LogScope) error { return nil }
+
+func newNoopRuntimeLogger() RuntimeLogger {
+	return &noopRuntimeLogger{}
 }

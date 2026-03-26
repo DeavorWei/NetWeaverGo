@@ -228,7 +228,7 @@ export type { ExecutionSnapshot, StageSnapshot, UnitSnapshot, EventSnapshot } fr
 export interface DeviceViewState {
   ip: string
   name?: string
-  status: 'idle' | 'running' | 'success' | 'failed' | 'timeout' | 'suspended'
+  status: 'idle' | 'running' | 'success' | 'error' | 'aborted' | 'waiting'
   progress: number
   output?: string
   error?: string
