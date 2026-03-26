@@ -50,6 +50,7 @@ type StreamEngine struct {
 	// eventCallback 执行事件回调（命令开始/完成）
 	eventCallback  func(event ExecutionEvent)
 	emittedResults int
+	sessionSeq     uint64
 }
 
 // NewStreamEngine 创建新的流处理引擎
@@ -77,6 +78,7 @@ func (e *StreamEngine) SetSuspendHandler(handler SuspendHandler) {
 func (e *StreamEngine) SetExecutionEventCallback(callback func(event ExecutionEvent)) {
 	e.eventCallback = callback
 	e.emittedResults = 0
+	e.sessionSeq = 0
 }
 
 // SetErrorMatcher 设置错误匹配器（使用执行器的匹配器）
@@ -166,6 +168,7 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 		select {
 		case <-ctx.Done():
 			e.adapter.MarkFailed("上下文取消")
+			e.emitNewCommandCompleteEvents()
 			return e.adapter.Results(), ctx.Err()
 
 		case <-timer.C:
@@ -208,6 +211,7 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 						}
 					}
 					e.adapter.MarkFailed("读取超时，用户中止")
+					e.emitNewCommandCompleteEvents()
 					return e.adapter.Results(), fmt.Errorf("设备 %s 的执行因超时被用户中止", e.executor.IP)
 
 				case ActionContinue:
@@ -228,17 +232,20 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 			}
 
 			e.adapter.MarkFailed("读取超时")
+			e.emitNewCommandCompleteEvents()
 			return e.adapter.Results(), fmt.Errorf("读取超时")
 
 		case res, ok := <-readCh:
 			if !ok {
 				// 读取通道关闭
 				if e.adapter.NewState() == NewStateCompleted {
+					e.emitNewCommandCompleteEvents()
 					logger.Info("StreamEngine", "-", "读取流已结束，命令执行已完成")
 					return e.adapter.Results(), nil
 				}
 				logger.Warn("StreamEngine", "-", "读取流已结束，但命令尚未完成")
 				e.adapter.MarkFailed("读取流意外关闭")
+				e.emitNewCommandCompleteEvents()
 				return e.adapter.Results(), fmt.Errorf("读取流意外关闭")
 			}
 
@@ -259,13 +266,11 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 				chunk := string(data)
 				actions := e.processChunk(chunk)
 
-				// 执行动作
-				for _, action := range actions {
-					if err := e.executeSessionAction(action, &currentTimeout, defaultTimeout, timer); err != nil {
-						e.adapter.MarkFailed(err.Error())
-						e.emitNewCommandCompleteEvents()
-						return e.adapter.Results(), err
-					}
+				// 先发出本轮 chunk 已确定完成的命令结果，再执行后续动作。
+				if err := e.executeActions(actions, &currentTimeout, defaultTimeout, timer); err != nil {
+					e.adapter.MarkFailed(err.Error())
+					e.emitNewCommandCompleteEvents()
+					return e.adapter.Results(), err
 				}
 				e.emitNewCommandCompleteEvents()
 
@@ -282,19 +287,34 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 
 			if err != nil {
 				if err == io.EOF {
+					e.emitNewCommandCompleteEvents()
 					if e.adapter.NewState() == NewStateCompleted {
 						return e.adapter.Results(), nil
 					}
 					e.adapter.MarkFailed("SSH 会话被远端断开")
+					e.emitNewCommandCompleteEvents()
 					return e.adapter.Results(), fmt.Errorf("SSH 会话被远端断开")
 				}
 				e.adapter.MarkFailed(err.Error())
+				e.emitNewCommandCompleteEvents()
 				return e.adapter.Results(), fmt.Errorf("读取错误: %w", err)
 			}
 		}
 
 		time.Sleep(paginationInterval)
 	}
+}
+
+func (e *StreamEngine) executeActions(actions []SessionAction, currentTimeout *time.Duration, defaultTimeout time.Duration, timer *time.Timer) error {
+	e.emitNewCommandCompleteEvents()
+	for _, action := range actions {
+		e.emitNewCommandCompleteEvents()
+		if err := e.executeSessionAction(action, currentTimeout, defaultTimeout, timer); err != nil {
+			return err
+		}
+		e.emitNewCommandCompleteEvents()
+	}
+	return nil
 }
 
 // processChunk 处理 chunk，返回需要执行的新动作
@@ -320,13 +340,10 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 	case ActSendCommand:
 		// 发送命令
 		logger.Info("StreamEngine", "-", ">>> [发送命令]: %s", act.Command)
-		if e.eventCallback != nil {
-			e.eventCallback(ExecutionEvent{
-				Type:      EventCmdStart,
-				Command:   act.Command,
-				Index:     act.Index,
-				Timestamp: time.Now(),
-			})
+
+		// 发送命令
+		if err := e.client.SendCommand(act.Command); err != nil {
+			return fmt.Errorf("发送命令失败: %w", err)
 		}
 
 		// 写入命令日志
@@ -336,10 +353,13 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 			}
 		}
 
-		// 发送命令
-		if err := e.client.SendCommand(act.Command); err != nil {
-			return fmt.Errorf("发送命令失败: %w", err)
-		}
+		e.emitExecutionEvent(ExecutionEvent{
+			Type:      EventCmdStart,
+			Kind:      RecordCommandDispatched,
+			Command:   act.Command,
+			Index:     act.Index,
+			Timestamp: time.Now(),
+		})
 
 		// 设置超时
 		if cmd := e.adapter.CurrentCommand(); cmd != nil && cmd.CustomTimeout > 0 {
@@ -427,10 +447,8 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 					}
 				}
 				followups := e.adapter.ResolveErrorActions(false)
-				for _, next := range followups {
-					if err := e.executeSessionAction(next, currentTimeout, defaultTimeout, timer); err != nil {
-						return err
-					}
+				if err := e.executeActions(followups, currentTimeout, defaultTimeout, timer); err != nil {
+					return err
 				}
 				return fmt.Errorf("设备 %s 的执行被用户手动中止", e.executor.IP)
 
@@ -447,10 +465,8 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 					CommandIndex: act.ErrorContext.CmdIndex,
 					Reason:       "5分钟超时",
 				})
-				for _, next := range followups {
-					if err := e.executeSessionAction(next, currentTimeout, defaultTimeout, timer); err != nil {
-						return err
-					}
+				if err := e.executeActions(followups, currentTimeout, defaultTimeout, timer); err != nil {
+					return err
 				}
 				return fmt.Errorf("设备 %s 的执行因挂起超时被自动中止", e.executor.IP)
 
@@ -465,20 +481,16 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 					}
 				}
 				followups := e.adapter.ResolveErrorActions(true)
-				for _, next := range followups {
-					if err := e.executeSessionAction(next, currentTimeout, defaultTimeout, timer); err != nil {
-						return err
-					}
+				if err := e.executeActions(followups, currentTimeout, defaultTimeout, timer); err != nil {
+					return err
 				}
 				logger.Debug("StreamEngine", "-", "用户选择放行错误，继续执行")
 			}
 		} else {
 			// 没有挂起处理器，默认中止
 			followups := e.adapter.ResolveErrorActions(false)
-			for _, next := range followups {
-				if err := e.executeSessionAction(next, currentTimeout, defaultTimeout, timer); err != nil {
-					return err
-				}
+			if err := e.executeActions(followups, currentTimeout, defaultTimeout, timer); err != nil {
+				return err
 			}
 			return fmt.Errorf("设备 %s 执行错误: %s", e.executor.IP, act.ErrorContext.Line)
 		}
@@ -566,17 +578,46 @@ func (e *StreamEngine) emitNewCommandCompleteEvents() {
 			eventErr = fmt.Errorf("%s", result.ErrorMessage)
 		}
 
-		e.eventCallback(ExecutionEvent{
-			Type:      EventCmdComplete,
-			Command:   result.Command,
-			Key:       result.CommandKey,
-			Index:     result.Index,
-			Duration:  result.Duration,
-			Error:     eventErr,
-			Timestamp: time.Now(),
+		kind := RecordCommandCompleted
+		if eventErr != nil {
+			kind = RecordCommandFailed
+		}
+
+		e.emitExecutionEvent(ExecutionEvent{
+			Type:         EventCmdComplete,
+			Kind:         kind,
+			Command:      result.Command,
+			Key:          result.CommandKey,
+			Index:        result.Index,
+			Duration:     result.Duration,
+			Error:        eventErr,
+			ErrorMessage: result.ErrorMessage,
+			Timestamp:    time.Now(),
 		})
 		e.emittedResults++
 	}
+}
+
+func (e *StreamEngine) emitExecutionEvent(event ExecutionEvent) {
+	if e.eventCallback == nil {
+		return
+	}
+
+	e.sessionSeq++
+	event.SessionSeq = e.sessionSeq
+	if event.TotalCommands == 0 && e.adapter != nil {
+		event.TotalCommands = e.adapter.TotalCommands()
+	}
+	if event.Error != nil && strings.TrimSpace(event.ErrorMessage) == "" {
+		event.ErrorMessage = event.Error.Error()
+	}
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now()
+	}
+
+	logger.Verbose("StreamEngine", "-", "发出执行记录: seq=%d, kind=%s, type=%s, cmdIndex=%d, total=%d, command=%s, err=%s",
+		event.SessionSeq, event.Kind, event.Type, event.Index+1, event.TotalCommands, event.Command, event.ErrorMessage)
+	e.eventCallback(event)
 }
 
 // RunSingle 执行单条命令并返回结果

@@ -14,16 +14,21 @@ import (
 type TaskExecutionEventBridge struct {
 	eventBus       *taskexec.EventBus
 	wailsApp       *application.App
+	snapshotGetter func(runID string) (*taskexec.ExecutionSnapshot, error)
 	mu             sync.RWMutex
 	runIDs         map[string]struct{}
 	unsubscribeEvt func()
 }
 
 // NewTaskExecutionEventBridge 创建事件桥接器
-func NewTaskExecutionEventBridge(eventBus *taskexec.EventBus) *TaskExecutionEventBridge {
+func NewTaskExecutionEventBridge(
+	eventBus *taskexec.EventBus,
+	snapshotGetter func(runID string) (*taskexec.ExecutionSnapshot, error),
+) *TaskExecutionEventBridge {
 	return &TaskExecutionEventBridge{
-		eventBus: eventBus,
-		runIDs:   make(map[string]struct{}),
+		eventBus:       eventBus,
+		snapshotGetter: snapshotGetter,
+		runIDs:         make(map[string]struct{}),
 	}
 }
 
@@ -80,11 +85,21 @@ func (b *TaskExecutionEventBridge) handleEvent(event *taskexec.TaskEvent) {
 		b.emitToFrontend("task:unit_updated", frontendEvent)
 	}
 
-	// 发送run特定的快照更新事件
+	if b.snapshotGetter != nil {
+		snapshot, err := b.snapshotGetter(event.RunID)
+		if err != nil {
+			logger.Warn("TaskExecEventBridge", event.RunID, "获取快照失败: %v", err)
+		} else if snapshot != nil {
+			b.emitToFrontend("task:snapshot_data", snapshot)
+		}
+	}
+
+	// 兼容旧前端事件
 	b.emitToFrontend("task:snapshot", map[string]interface{}{
-		"runId":     event.RunID,
-		"timestamp": time.Now().UnixMilli(),
-		"eventType": string(event.Type),
+		"runId":      event.RunID,
+		"timestamp":  time.Now().UnixMilli(),
+		"eventType":  string(event.Type),
+		"hasPayload": b.snapshotGetter != nil,
 	})
 }
 

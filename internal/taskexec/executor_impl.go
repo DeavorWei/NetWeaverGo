@@ -81,7 +81,7 @@ func (e *DeviceCommandExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 				stageProgress := aggregateUnitProgress(unitProgress, len(stage.Units))
 				mu.Unlock()
 
-				e.updateStageProgressDetailed(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled, stageProgress)
+				applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled, stageProgress, "更新命令阶段细粒度进度")
 			}
 
 			if ctx.IsCancelled() {
@@ -91,7 +91,7 @@ func (e *DeviceCommandExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 				unitProgress[u.ID] = 0
 				stageProgress := aggregateUnitProgress(unitProgress, len(stage.Units))
 				mu.Unlock()
-				e.updateStageProgressDetailed(handler, ctx, stage.ID, len(stage.Units), completedCount, failedCount, cancelledCount, stageProgress)
+				applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), completedCount, failedCount, cancelledCount, stageProgress, "更新命令阶段细粒度进度")
 				return
 			}
 
@@ -115,7 +115,7 @@ func (e *DeviceCommandExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 			stageProgress := aggregateUnitProgress(unitProgress, len(stage.Units))
 			mu.Unlock()
 
-			e.updateStageProgressDetailed(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled, stageProgress)
+			applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled, stageProgress, "更新命令阶段细粒度进度")
 		}(unit)
 	}
 
@@ -177,15 +177,8 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 			ErrorMessage: &errMsg,
 			FinishedAt:   &finishedAt,
 		}, "写入设备不存在失败状态")
-		ctx.Emit(&TaskEvent{
-			RunID:   ctx.RunID(),
-			StageID: stageID,
-			UnitID:  unit.ID,
-			Type:    EventTypeUnitFinished,
-			Level:   EventLevelError,
-			Message: fmt.Sprintf("Device not found: %s", deviceIP),
-		})
-		runtimeLogger.WriteSummary(scope, fmt.Sprintf("设备不存在: %s", deviceIP))
+		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Device not found: %s", deviceIP))
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordDeviceMissing, fmt.Sprintf("设备不存在: %s", deviceIP), 0, 0)
 		return fmt.Errorf("%s", errMsg)
 	}
 
@@ -209,7 +202,7 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		}, "写入空命令 Unit 完成状态"); err != nil {
 			return err
 		}
-		runtimeLogger.WriteSummary(scope, "未配置可执行命令，直接完成")
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordNoCommands, "未配置可执行命令，直接完成", 0, 0)
 		return nil
 	}
 
@@ -258,15 +251,8 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 	}
 
 	// Connect to device
-	ctx.Emit(&TaskEvent{
-		RunID:   ctx.RunID(),
-		StageID: stageID,
-		UnitID:  unit.ID,
-		Type:    EventTypeUnitStarted,
-		Level:   EventLevelInfo,
-		Message: fmt.Sprintf("Connecting to %s...", deviceIP),
-	})
-	runtimeLogger.WriteSummary(scope, fmt.Sprintf("开始连接设备，共 %d 条命令", len(commands)))
+	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitStarted, EventLevelInfo, fmt.Sprintf("Connecting to %s...", deviceIP))
+	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnecting, fmt.Sprintf("开始连接设备，共 %d 条命令", len(commands)), len(commands), 0)
 
 	if err := exec.Connect(execCtx, connTimeout); err != nil {
 		if IsContextCancelled(ctx, err) {
@@ -281,71 +267,32 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 			ErrorMessage: &errMsg,
 			FinishedAt:   &finishedAt,
 		}, "写入连接失败状态")
-		ctx.Emit(&TaskEvent{
-			RunID:   ctx.RunID(),
-			StageID: stageID,
-			UnitID:  unit.ID,
-			Type:    EventTypeUnitFinished,
-			Level:   EventLevelError,
-			Message: fmt.Sprintf("Connection failed: %v", err),
-		})
-		runtimeLogger.WriteSummary(scope, fmt.Sprintf("连接失败: %v", err))
+		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Connection failed: %v", err))
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnectFailed, fmt.Sprintf("连接失败: %v", err), len(commands), 0)
 		return err
 	}
-	runtimeLogger.WriteSummary(scope, "SSH 连接成功")
+	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnected, "SSH 连接成功", len(commands), 0)
 
 	if ctx.IsCancelled() {
 		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before execute commands", intPtrLocal(0))
-		runtimeLogger.WriteSummary(scope, "执行前收到取消信号")
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionCancelled, "执行前收到取消信号", len(commands), 0)
 		return ctx.Context().Err()
 	}
 
 	// Execute commands
-	ctx.Emit(&TaskEvent{
-		RunID:   ctx.RunID(),
-		StageID: stageID,
-		UnitID:  unit.ID,
-		Type:    EventTypeStepStarted,
-		Level:   EventLevelInfo,
-		Message: fmt.Sprintf("Executing %d commands...", len(commands)),
-	})
-	runtimeLogger.WriteSummary(scope, fmt.Sprintf("开始执行命令，命令总数: %d", len(commands)))
+	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeStepStarted, EventLevelInfo, fmt.Sprintf("Executing %d commands...", len(commands)))
+	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionStarting, fmt.Sprintf("开始执行命令，命令总数: %d", len(commands)), len(commands), 0)
 
 	commandEventHandler := func(event executor.ExecutionEvent) {
-		switch event.Type {
-		case executor.EventCmdStart:
-			runtimeLogger.WriteSummary(scope, fmt.Sprintf("命令[%d/%d]开始: %s", event.Index+1, len(commands), event.Command))
-		case executor.EventCmdComplete:
-			doneSteps := event.Index + 1
-			logger.Verbose("TaskExec", ctx.RunID(), "设备 %s 命令进度更新: %d/%d, command=%s, err=%v", deviceIP, doneSteps, len(commands), event.Command, event.Error)
-			handler.UpdateUnitBestEffort(ctx, unit.ID, &UnitPatch{
-				DoneSteps: &doneSteps,
-			}, "更新命令执行 Unit 进度")
-			if reportProgress != nil {
-				reportProgress(doneSteps, len(commands))
-			}
-
-			message := fmt.Sprintf("命令[%d/%d]完成: %s", doneSteps, len(commands), event.Command)
-			level := EventLevelInfo
-			if event.Error != nil {
-				message = fmt.Sprintf("命令[%d/%d]失败: %s (%v)", doneSteps, len(commands), event.Command, event.Error)
-				level = EventLevelWarn
-			}
-			runtimeLogger.WriteSummary(scope, message)
-			ctx.Emit(NewTaskEvent(ctx.RunID(), EventTypeUnitProgress, message).
-				WithStage(stageID).
-				WithUnit(unit.ID).
-				WithLevel(level).
-				WithPayload("doneSteps", doneSteps).
-				WithPayload("totalSteps", len(commands)).
-				WithPayload("command", event.Command))
-		}
+		projectExecutorRecord(ctx, handler, runtimeLogger, scope, stageID, unit.ID, len(commands), event, reportProgress, executorRecordProjectionOptions{
+			CommandNoun: "命令",
+		})
 	}
 
 	if err := exec.ExecutePlaybookWithEvents(execCtx, commands, cmdTimeout, commandEventHandler); err != nil {
 		if IsContextCancelled(ctx, err) {
 			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during command execution", intPtrLocal(len(commands)))
-			runtimeLogger.WriteSummary(scope, "命令执行过程中收到取消信号")
+			projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionCancelled, "命令执行过程中收到取消信号", len(commands), 0)
 			return err
 		}
 		logger.Error("TaskExec", ctx.RunID(), "Failed to execute commands on %s: %v", deviceIP, err)
@@ -358,15 +305,8 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 			ErrorMessage: &errMsg,
 			FinishedAt:   &finishedAt,
 		}, "写入命令执行失败状态")
-		ctx.Emit(&TaskEvent{
-			RunID:   ctx.RunID(),
-			StageID: stageID,
-			UnitID:  unit.ID,
-			Type:    EventTypeUnitFinished,
-			Level:   EventLevelError,
-			Message: fmt.Sprintf("Command execution failed: %v", err),
-		})
-		runtimeLogger.WriteSummary(scope, fmt.Sprintf("命令执行失败: %v", err))
+		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Command execution failed: %v", err))
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, fmt.Sprintf("命令执行失败: %v", err), len(commands), 0)
 		return err
 	}
 
@@ -385,15 +325,8 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 	}
 
 	// Success
-	ctx.Emit(&TaskEvent{
-		RunID:   ctx.RunID(),
-		StageID: stageID,
-		UnitID:  unit.ID,
-		Type:    EventTypeUnitFinished,
-		Level:   EventLevelInfo,
-		Message: fmt.Sprintf("Successfully executed %d commands on %s", len(commands), deviceIP),
-	})
-	runtimeLogger.WriteSummary(scope, fmt.Sprintf("设备执行完成，成功命令数: %d", len(commands)))
+	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelInfo, fmt.Sprintf("Successfully executed %d commands on %s", len(commands), deviceIP))
+	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionSucceeded, fmt.Sprintf("设备执行完成，成功命令数: %d", len(commands)), len(commands), len(commands))
 
 	logger.Debug("TaskExec", ctx.RunID(), "Unit completed for device: %s", deviceIP)
 	return nil
@@ -457,7 +390,7 @@ func (e *DeviceCollectExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 				mu.Lock()
 				cancelledCount++
 				mu.Unlock()
-				e.updateStageProgress(handler, ctx, stage.ID, len(stage.Units), completedCount, failedCount, cancelledCount)
+				applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), completedCount, failedCount, cancelledCount, stageProgressFromCounts(len(stage.Units), completedCount, failedCount, cancelledCount), "更新采集阶段进度")
 				return
 			}
 
@@ -481,35 +414,14 @@ func (e *DeviceCollectExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 			mu.Unlock()
 
 			if IsContextCancelled(ctx, err) {
-				ctx.Emit(&TaskEvent{
-					RunID:   ctx.RunID(),
-					StageID: stage.ID,
-					UnitID:  u.ID,
-					Type:    EventTypeUnitFinished,
-					Level:   EventLevelWarn,
-					Message: fmt.Sprintf("Collection cancelled for %s", u.Target.Key),
-				})
+				emitProjectedUnitEvent(ctx, stage.ID, u.ID, EventTypeUnitFinished, EventLevelWarn, fmt.Sprintf("Collection cancelled for %s", u.Target.Key))
 			} else if err != nil {
-				ctx.Emit(&TaskEvent{
-					RunID:   ctx.RunID(),
-					StageID: stage.ID,
-					UnitID:  u.ID,
-					Type:    EventTypeUnitFinished,
-					Level:   EventLevelError,
-					Message: fmt.Sprintf("Collection failed for %s: %v", u.Target.Key, err),
-				})
+				emitProjectedUnitEvent(ctx, stage.ID, u.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Collection failed for %s: %v", u.Target.Key, err))
 			} else {
-				ctx.Emit(&TaskEvent{
-					RunID:   ctx.RunID(),
-					StageID: stage.ID,
-					UnitID:  u.ID,
-					Type:    EventTypeUnitFinished,
-					Level:   EventLevelInfo,
-					Message: fmt.Sprintf("Collection completed for %s", u.Target.Key),
-				})
+				emitProjectedUnitEvent(ctx, stage.ID, u.ID, EventTypeUnitFinished, EventLevelInfo, fmt.Sprintf("Collection completed for %s", u.Target.Key))
 			}
 
-			e.updateStageProgress(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled)
+			applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled, stageProgressFromCounts(len(stage.Units), localCompleted, localFailed, localCancelled), "更新采集阶段进度")
 		}(unit)
 	}
 
@@ -574,7 +486,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 			ErrorMessage: &errMsg,
 			FinishedAt:   &finishedAt,
 		}, "写入采集设备不存在状态")
-		runtimeLogger.WriteSummary(scope, fmt.Sprintf("采集设备不存在: %v", err))
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordDeviceMissing, fmt.Sprintf("采集设备不存在: %v", err), 0, 0)
 		return fmt.Errorf("device not found: %w", err)
 	}
 	if err := e.ensureRunDevice(ctx.RunID(), device); err != nil {
@@ -585,7 +497,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 			ErrorMessage: &errMsg,
 			FinishedAt:   &finishedAt,
 		}, "创建运行设备记录失败")
-		runtimeLogger.WriteSummary(scope, errMsg)
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, errMsg, 0, 0)
 		return err
 	}
 
@@ -637,12 +549,12 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 	if ctx.IsCancelled() {
 		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before connect", intPtrLocal(0))
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled before connect")
-		runtimeLogger.WriteSummary(scope, "采集前收到取消信号")
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionCancelled, "采集前收到取消信号", 0, 0)
 		return ctx.Context().Err()
 	}
 
 	// Connect to device
-	runtimeLogger.WriteSummary(scope, "开始建立采集连接")
+	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnecting, "开始建立采集连接", 0, 0)
 	if err := exec.Connect(execCtx, connTimeout); err != nil {
 		if IsContextCancelled(ctx, err) {
 			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during connect", intPtrLocal(0))
@@ -657,10 +569,10 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 			FinishedAt:   &finishedAt,
 		}, "写入采集连接失败状态")
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
-		runtimeLogger.WriteSummary(scope, fmt.Sprintf("采集连接失败: %v", err))
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnectFailed, fmt.Sprintf("采集连接失败: %v", err), 0, 0)
 		return fmt.Errorf("connection failed: %w", err)
 	}
-	runtimeLogger.WriteSummary(scope, "采集连接成功")
+	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnected, "采集连接成功", 0, 0)
 
 	// Get commands from device profile
 	profile := config.GetDeviceProfile(vendor)
@@ -673,7 +585,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 			FinishedAt:   &finishedAt,
 		}, "写入采集 Profile 缺失状态")
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
-		runtimeLogger.WriteSummary(scope, errMsg)
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, errMsg, 0, 0)
 		return fmt.Errorf("no profile found for vendor: %s", vendor)
 	}
 
@@ -701,14 +613,14 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 			FinishedAt:   &finishedAt,
 		}, "写入采集命令为空状态")
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
-		runtimeLogger.WriteSummary(scope, errMsg)
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordNoCommands, errMsg, 0, 0)
 		return fmt.Errorf("no commands defined for vendor: %s", vendor)
 	}
 
 	if ctx.IsCancelled() {
 		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before execute plan", intPtrLocal(0))
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled before execute plan")
-		runtimeLogger.WriteSummary(scope, "采集执行前收到取消信号")
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionCancelled, "采集执行前收到取消信号", len(commands), 0)
 		return ctx.Context().Err()
 	}
 
@@ -720,33 +632,11 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 		Mode:               executor.PlanModeDiscovery,
 	}
 
-	runtimeLogger.WriteSummary(scope, fmt.Sprintf("开始采集命令，总数: %d", len(commands)))
+	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionStarting, fmt.Sprintf("开始采集命令，总数: %d", len(commands)), len(commands), 0)
 	commandEventHandler := func(event executor.ExecutionEvent) {
-		switch event.Type {
-		case executor.EventCmdStart:
-			runtimeLogger.WriteSummary(scope, fmt.Sprintf("采集命令[%d/%d]开始: %s", event.Index+1, len(commands), event.Command))
-		case executor.EventCmdComplete:
-			doneSteps := event.Index + 1
-			logger.Verbose("TaskExec", ctx.RunID(), "采集设备 %s 命令进度更新: %d/%d, command=%s, err=%v", deviceIP, doneSteps, len(commands), event.Command, event.Error)
-			handler.UpdateUnitBestEffort(ctx, unit.ID, &UnitPatch{
-				DoneSteps: &doneSteps,
-			}, "更新采集 Unit 进度")
-
-			message := fmt.Sprintf("采集命令[%d/%d]完成: %s", doneSteps, len(commands), event.Command)
-			level := EventLevelInfo
-			if event.Error != nil {
-				message = fmt.Sprintf("采集命令[%d/%d]失败: %s (%v)", doneSteps, len(commands), event.Command, event.Error)
-				level = EventLevelWarn
-			}
-			runtimeLogger.WriteSummary(scope, message)
-			ctx.Emit(NewTaskEvent(ctx.RunID(), EventTypeUnitProgress, message).
-				WithStage(stageID).
-				WithUnit(unit.ID).
-				WithLevel(level).
-				WithPayload("doneSteps", doneSteps).
-				WithPayload("totalSteps", len(commands)).
-				WithPayload("command", event.Command))
-		}
+		projectExecutorRecord(ctx, handler, runtimeLogger, scope, stageID, unit.ID, len(commands), event, nil, executorRecordProjectionOptions{
+			CommandNoun: "采集命令",
+		})
 	}
 
 	report, err := exec.ExecutePlanWithEvents(execCtx, plan, commandEventHandler)
@@ -754,6 +644,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 		if IsContextCancelled(ctx, err) {
 			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during execute plan", intPtrLocal(0))
 			e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled during execute plan")
+			projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionCancelled, "采集执行过程中收到取消信号", len(commands), 0)
 			return err
 		}
 		errMsg := fmt.Sprintf("execution failed: %v", err)
@@ -764,7 +655,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 			FinishedAt:   &finishedAt,
 		}, "写入采集执行失败状态")
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
-		runtimeLogger.WriteSummary(scope, fmt.Sprintf("采集执行失败: %v", err))
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, fmt.Sprintf("采集执行失败: %v", err), len(commands), 0)
 		return fmt.Errorf("execution failed: %w", err)
 	}
 
@@ -848,7 +739,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 		return err
 	}
 	e.updateRunDeviceStatus(ctx.RunID(), deviceIP, deviceStatus, "")
-	runtimeLogger.WriteSummary(scope, fmt.Sprintf("采集完成: status=%s, success=%d/%d", status, successCount, len(report.Results)))
+	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionSucceeded, fmt.Sprintf("采集完成: status=%s, success=%d/%d", status, successCount, len(report.Results)), len(report.Results), successCount)
 
 	logger.Debug("TaskExec", ctx.RunID(), "Collection completed for device: %s", deviceIP)
 	return nil
@@ -894,7 +785,7 @@ func (e *ParseExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 				mu.Lock()
 				cancelledCount++
 				mu.Unlock()
-				e.updateStageProgress(handler, ctx, stage.ID, len(stage.Units), completedCount, failedCount, cancelledCount)
+				applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), completedCount, failedCount, cancelledCount, stageProgressFromCounts(len(stage.Units), completedCount, failedCount, cancelledCount), "更新解析阶段进度")
 				return
 			}
 
@@ -918,35 +809,14 @@ func (e *ParseExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 			mu.Unlock()
 
 			if IsContextCancelled(ctx, err) {
-				ctx.Emit(&TaskEvent{
-					RunID:   ctx.RunID(),
-					StageID: stage.ID,
-					UnitID:  u.ID,
-					Type:    EventTypeUnitFinished,
-					Level:   EventLevelWarn,
-					Message: fmt.Sprintf("Parse cancelled for %s", u.Target.Key),
-				})
+				emitProjectedUnitEvent(ctx, stage.ID, u.ID, EventTypeUnitFinished, EventLevelWarn, fmt.Sprintf("Parse cancelled for %s", u.Target.Key))
 			} else if err != nil {
-				ctx.Emit(&TaskEvent{
-					RunID:   ctx.RunID(),
-					StageID: stage.ID,
-					UnitID:  u.ID,
-					Type:    EventTypeUnitFinished,
-					Level:   EventLevelError,
-					Message: fmt.Sprintf("Parse failed for %s: %v", u.Target.Key, err),
-				})
+				emitProjectedUnitEvent(ctx, stage.ID, u.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Parse failed for %s: %v", u.Target.Key, err))
 			} else {
-				ctx.Emit(&TaskEvent{
-					RunID:   ctx.RunID(),
-					StageID: stage.ID,
-					UnitID:  u.ID,
-					Type:    EventTypeUnitFinished,
-					Level:   EventLevelInfo,
-					Message: fmt.Sprintf("Parse completed for %s", u.Target.Key),
-				})
+				emitProjectedUnitEvent(ctx, stage.ID, u.ID, EventTypeUnitFinished, EventLevelInfo, fmt.Sprintf("Parse completed for %s", u.Target.Key))
 			}
 
-			e.updateStageProgress(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled)
+			applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled, stageProgressFromCounts(len(stage.Units), localCompleted, localFailed, localCancelled), "更新解析阶段进度")
 		}(unit)
 	}
 
@@ -1059,13 +929,7 @@ func (e *TopologyBuildExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 	}
 
 	// Emit build started event
-	ctx.Emit(&TaskEvent{
-		RunID:   ctx.RunID(),
-		StageID: stage.ID,
-		Type:    EventTypeStageStarted,
-		Level:   EventLevelInfo,
-		Message: "Starting topology build...",
-	})
+	emitProjectedStageEvent(ctx, stage.ID, EventTypeStageStarted, EventLevelInfo, "Starting topology build...")
 
 	result, err := e.buildRunTopology(ctx.RunID())
 	if err != nil {
@@ -1074,13 +938,7 @@ func (e *TopologyBuildExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 		}
 		logger.Error("TaskExec", ctx.RunID(), "Topology build failed: %v", err)
 
-		ctx.Emit(&TaskEvent{
-			RunID:   ctx.RunID(),
-			StageID: stage.ID,
-			Type:    EventTypeStageFinished,
-			Level:   EventLevelError,
-			Message: fmt.Sprintf("Topology build failed: %v", err),
-		})
+		emitProjectedStageEvent(ctx, stage.ID, EventTypeStageFinished, EventLevelError, fmt.Sprintf("Topology build failed: %v", err))
 
 		return fmt.Errorf("topology build failed: %w", err)
 	}
@@ -1092,13 +950,7 @@ func (e *TopologyBuildExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 	}
 
 	// Emit completion event
-	ctx.Emit(&TaskEvent{
-		RunID:   ctx.RunID(),
-		StageID: stage.ID,
-		Type:    EventTypeStageFinished,
-		Level:   EventLevelInfo,
-		Message: fmt.Sprintf("Topology build completed with %d edges", edgeCount),
-	})
+	emitProjectedStageEvent(ctx, stage.ID, EventTypeStageFinished, EventLevelInfo, fmt.Sprintf("Topology build completed with %d edges", edgeCount))
 
 	// Update stage status
 	completedStatus := string(StageStatusCompleted)
@@ -1645,60 +1497,13 @@ func appendUniqueStrings(base []string, values ...string) []string {
 	return base
 }
 
-func (e *DeviceCommandExecutor) updateStageProgress(handler *ErrorHandler, ctx RuntimeContext, stageID string, totalUnits, completedCount, failedCount, cancelledCount int) {
+func stageProgressFromCounts(totalUnits, completedCount, failedCount, cancelledCount int) int {
 	finished := completedCount + failedCount + cancelledCount
 	progress := 100
 	if totalUnits > 0 {
 		progress = finished * 100 / totalUnits
 	}
-	handler.UpdateStageBestEffort(ctx, stageID, &StagePatch{
-		CompletedUnits: &finished,
-		SuccessUnits:   &completedCount,
-		FailedUnits:    &failedCount,
-		CancelledUnits: &cancelledCount,
-		Progress:       &progress,
-	}, "更新命令阶段进度")
-}
-
-func (e *DeviceCommandExecutor) updateStageProgressDetailed(handler *ErrorHandler, ctx RuntimeContext, stageID string, totalUnits, completedCount, failedCount, cancelledCount, progress int) {
-	finished := completedCount + failedCount + cancelledCount
-	handler.UpdateStageBestEffort(ctx, stageID, &StagePatch{
-		CompletedUnits: &finished,
-		SuccessUnits:   &completedCount,
-		FailedUnits:    &failedCount,
-		CancelledUnits: &cancelledCount,
-		Progress:       &progress,
-	}, "更新命令阶段细粒度进度")
-}
-
-func (e *DeviceCollectExecutor) updateStageProgress(handler *ErrorHandler, ctx RuntimeContext, stageID string, totalUnits, completedCount, failedCount, cancelledCount int) {
-	finished := completedCount + failedCount + cancelledCount
-	progress := 100
-	if totalUnits > 0 {
-		progress = finished * 100 / totalUnits
-	}
-	handler.UpdateStageBestEffort(ctx, stageID, &StagePatch{
-		CompletedUnits: &finished,
-		SuccessUnits:   &completedCount,
-		FailedUnits:    &failedCount,
-		CancelledUnits: &cancelledCount,
-		Progress:       &progress,
-	}, "更新采集阶段进度")
-}
-
-func (e *ParseExecutor) updateStageProgress(handler *ErrorHandler, ctx RuntimeContext, stageID string, totalUnits, completedCount, failedCount, cancelledCount int) {
-	finished := completedCount + failedCount + cancelledCount
-	progress := 100
-	if totalUnits > 0 {
-		progress = finished * 100 / totalUnits
-	}
-	handler.UpdateStageBestEffort(ctx, stageID, &StagePatch{
-		CompletedUnits: &finished,
-		SuccessUnits:   &completedCount,
-		FailedUnits:    &failedCount,
-		CancelledUnits: &cancelledCount,
-		Progress:       &progress,
-	}, "更新解析阶段进度")
+	return progress
 }
 
 func aggregateUnitProgress(unitProgress map[string]int, totalUnits int) int {

@@ -10,6 +10,8 @@ export interface ExecutionSnapshot {
   runKind: string
   status: string
   progress: number
+  revision: number
+  updatedAt: string
   currentStage: string
   stages: StageSnapshot[]
   units: UnitSnapshot[]
@@ -52,6 +54,7 @@ export interface UnitSnapshot {
   summaryLogPath?: string
   detailLogPath?: string
   rawLogPath?: string
+  journalLogPath?: string
   startedAt: string
   finishedAt: string
 }

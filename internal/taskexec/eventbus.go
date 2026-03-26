@@ -3,6 +3,7 @@ package taskexec
 import (
 	"context"
 	"log"
+	"sort"
 	"sync"
 	"time"
 )
@@ -268,32 +269,39 @@ func (b *EventBus) isClosed() bool {
 
 // SnapshotHub 快照中心 - 维护最新快照供前端查询
 type SnapshotHub struct {
-	snapshots      map[string]*ExecutionSnapshot
-	mu             sync.RWMutex
-	eventBus       *EventBus
-	unsubscribeEvt func()
+	snapshots   map[string]*ExecutionSnapshot
+	revisions   map[string]uint64
+	unsubscribe func()
+	mu          sync.RWMutex
 }
 
 // NewSnapshotHub 创建快照中心
 func NewSnapshotHub(eventBus *EventBus) *SnapshotHub {
 	hub := &SnapshotHub{
 		snapshots: make(map[string]*ExecutionSnapshot),
-		eventBus:  eventBus,
+		revisions: make(map[string]uint64),
 	}
-
-	// 订阅事件更新快照，保存取消函数
-	hub.unsubscribeEvt = eventBus.Subscribe(func(event *TaskEvent) {
-		hub.invalidate(event.RunID)
-	})
-
+	if eventBus != nil {
+		hub.unsubscribe = eventBus.Subscribe(func(event *TaskEvent) {
+			hub.AppendEvent(event)
+		})
+	}
 	return hub
 }
 
 // Update 更新快照
 func (h *SnapshotHub) Update(runID string, snapshot *ExecutionSnapshot) {
+	if snapshot == nil {
+		return
+	}
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.snapshots[runID] = snapshot
+	cloned := snapshot.Clone()
+	h.touchSnapshotLocked(runID, cloned)
+	snapshot.Revision = cloned.Revision
+	snapshot.UpdatedAt = cloned.UpdatedAt
+	h.snapshots[runID] = cloned
 }
 
 // Get 获取快照
@@ -301,20 +309,19 @@ func (h *SnapshotHub) Get(runID string) (*ExecutionSnapshot, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	snapshot, ok := h.snapshots[runID]
-	return snapshot, ok
+	if !ok || snapshot == nil {
+		return nil, false
+	}
+	return snapshot.Clone(), true
 }
 
-// invalidate 标记快照失效（删除缓存，下次查询从数据库重建）
-func (h *SnapshotHub) invalidate(runID string) {
+// Close 关闭快照中心。
+func (h *SnapshotHub) Close() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	delete(h.snapshots, runID)
-}
-
-// Close 关闭快照中心，取消事件订阅
-func (h *SnapshotHub) Close() {
-	if h.unsubscribeEvt != nil {
-		h.unsubscribeEvt()
+	if h.unsubscribe != nil {
+		h.unsubscribe()
+		h.unsubscribe = nil
 	}
 }
 
@@ -326,7 +333,7 @@ func (h *SnapshotHub) ListRunning() []*ExecutionSnapshot {
 	result := make([]*ExecutionSnapshot, 0)
 	for _, snapshot := range h.snapshots {
 		if snapshot.Status == string(RunStatusRunning) {
-			result = append(result, snapshot)
+			result = append(result, snapshot.Clone())
 		}
 	}
 	return result
@@ -340,6 +347,421 @@ func (h *SnapshotHub) Cleanup() {
 	for id, snapshot := range h.snapshots {
 		if RunStatus(snapshot.Status).IsTerminal() {
 			delete(h.snapshots, id)
+			delete(h.revisions, id)
 		}
+	}
+}
+
+func (h *SnapshotHub) EnsureRun(run *TaskRun) bool {
+	if run == nil {
+		return false
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	snapshot, ok := h.snapshots[run.ID]
+	if !ok || snapshot == nil {
+		snapshot = NewExecutionSnapshotFromRun(run)
+		h.touchSnapshotLocked(run.ID, snapshot)
+		h.snapshots[run.ID] = snapshot
+		return true
+	}
+
+	changed := applyRunModelToSnapshot(snapshot, run)
+	if changed {
+		h.touchSnapshotLocked(run.ID, snapshot)
+	}
+	return changed
+}
+
+func (h *SnapshotHub) UpsertStage(runID string, stage *TaskRunStage) bool {
+	if runID == "" || stage == nil {
+		return false
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	snapshot := h.ensureSnapshotLocked(runID)
+	stageSnapshot := NewStageSnapshotFromModel(stage)
+	changed := false
+	for idx := range snapshot.Stages {
+		if snapshot.Stages[idx].ID != stage.ID {
+			continue
+		}
+		if !stageSnapshotsEqual(snapshot.Stages[idx], stageSnapshot) {
+			snapshot.Stages[idx] = stageSnapshot
+			changed = true
+		}
+		if changed {
+			sortStageSnapshots(snapshot.Stages)
+			h.touchSnapshotLocked(runID, snapshot)
+		}
+		return changed
+	}
+
+	snapshot.Stages = append(snapshot.Stages, stageSnapshot)
+	sortStageSnapshots(snapshot.Stages)
+	h.touchSnapshotLocked(runID, snapshot)
+	return true
+}
+
+func (h *SnapshotHub) UpsertUnit(runID string, unit *TaskRunUnit) bool {
+	if runID == "" || unit == nil {
+		return false
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	snapshot := h.ensureSnapshotLocked(runID)
+	unitSnapshot := NewUnitSnapshotFromModel(unit)
+	for idx := range snapshot.Units {
+		if snapshot.Units[idx].ID != unit.ID {
+			continue
+		}
+		preserveProjectedUnitFields(&unitSnapshot, snapshot.Units[idx])
+		if unitSnapshotsEqual(snapshot.Units[idx], unitSnapshot) {
+			return false
+		}
+		snapshot.Units[idx] = unitSnapshot
+		h.touchSnapshotLocked(runID, snapshot)
+		return true
+	}
+
+	snapshot.Units = append(snapshot.Units, unitSnapshot)
+	h.touchSnapshotLocked(runID, snapshot)
+	return true
+}
+
+func (h *SnapshotHub) ApplyRunPatch(runID string, patch *RunPatch) bool {
+	if runID == "" || patch == nil {
+		return false
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	snapshot, ok := h.snapshots[runID]
+	if !ok || snapshot == nil {
+		return false
+	}
+
+	changed := false
+	if patch.Status != nil && snapshot.Status != *patch.Status {
+		snapshot.Status = *patch.Status
+		changed = true
+	}
+	if patch.CurrentStage != nil && snapshot.CurrentStage != *patch.CurrentStage {
+		snapshot.CurrentStage = *patch.CurrentStage
+		changed = true
+	}
+	if patch.Progress != nil && snapshot.Progress != *patch.Progress {
+		snapshot.Progress = *patch.Progress
+		changed = true
+	}
+	if patch.StartedAt != nil && !timesEqual(snapshot.StartedAt, patch.StartedAt) {
+		snapshot.StartedAt = cloneTimePtr(patch.StartedAt)
+		changed = true
+	}
+	if patch.FinishedAt != nil && !timesEqual(snapshot.FinishedAt, patch.FinishedAt) {
+		snapshot.FinishedAt = cloneTimePtr(patch.FinishedAt)
+		changed = true
+	}
+	if changed {
+		h.touchSnapshotLocked(runID, snapshot)
+	}
+	return changed
+}
+
+func (h *SnapshotHub) ApplyStagePatch(runID, stageID string, patch *StagePatch) bool {
+	if runID == "" || stageID == "" || patch == nil {
+		return false
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	snapshot, ok := h.snapshots[runID]
+	if !ok || snapshot == nil {
+		return false
+	}
+
+	for idx := range snapshot.Stages {
+		stage := &snapshot.Stages[idx]
+		if stage.ID != stageID {
+			continue
+		}
+
+		changed := false
+		if patch.Status != nil && stage.Status != *patch.Status {
+			stage.Status = *patch.Status
+			changed = true
+		}
+		if patch.Progress != nil && stage.Progress != *patch.Progress {
+			stage.Progress = *patch.Progress
+			changed = true
+		}
+		if patch.CompletedUnits != nil && stage.CompletedUnits != *patch.CompletedUnits {
+			stage.CompletedUnits = *patch.CompletedUnits
+			changed = true
+		}
+		if patch.SuccessUnits != nil && stage.SuccessUnits != *patch.SuccessUnits {
+			stage.SuccessUnits = *patch.SuccessUnits
+			changed = true
+		}
+		if patch.FailedUnits != nil && stage.FailedUnits != *patch.FailedUnits {
+			stage.FailedUnits = *patch.FailedUnits
+			changed = true
+		}
+		if patch.CancelledUnits != nil && stage.CancelledUnits != *patch.CancelledUnits {
+			stage.CancelledUnits = *patch.CancelledUnits
+			changed = true
+		}
+		if patch.StartedAt != nil && !timesEqual(stage.StartedAt, patch.StartedAt) {
+			stage.StartedAt = cloneTimePtr(patch.StartedAt)
+			changed = true
+		}
+		if patch.FinishedAt != nil && !timesEqual(stage.FinishedAt, patch.FinishedAt) {
+			stage.FinishedAt = cloneTimePtr(patch.FinishedAt)
+			changed = true
+		}
+		if changed {
+			h.touchSnapshotLocked(runID, snapshot)
+		}
+		return changed
+	}
+
+	return false
+}
+
+func (h *SnapshotHub) ApplyUnitPatch(runID, unitID string, patch *UnitPatch) bool {
+	if runID == "" || unitID == "" || patch == nil {
+		return false
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	snapshot, ok := h.snapshots[runID]
+	if !ok || snapshot == nil {
+		return false
+	}
+
+	for idx := range snapshot.Units {
+		unit := &snapshot.Units[idx]
+		if unit.ID != unitID {
+			continue
+		}
+
+		changed := false
+		if patch.Status != nil && unit.Status != *patch.Status {
+			unit.Status = *patch.Status
+			changed = true
+		}
+		if patch.DoneSteps != nil && unit.DoneSteps != *patch.DoneSteps {
+			unit.DoneSteps = *patch.DoneSteps
+			progress := 0
+			if unit.TotalSteps > 0 {
+				progress = unit.DoneSteps * 100 / unit.TotalSteps
+			}
+			unit.Progress = progress
+			changed = true
+		}
+		if patch.ErrorMessage != nil && unit.ErrorMessage != *patch.ErrorMessage {
+			unit.ErrorMessage = *patch.ErrorMessage
+			changed = true
+		}
+		if patch.StartedAt != nil && !timesEqual(unit.StartedAt, patch.StartedAt) {
+			unit.StartedAt = cloneTimePtr(patch.StartedAt)
+			changed = true
+		}
+		if patch.FinishedAt != nil && !timesEqual(unit.FinishedAt, patch.FinishedAt) {
+			unit.FinishedAt = cloneTimePtr(patch.FinishedAt)
+			changed = true
+		}
+		if changed {
+			h.touchSnapshotLocked(runID, snapshot)
+		}
+		return changed
+	}
+
+	return false
+}
+
+func (h *SnapshotHub) AppendEvent(event *TaskEvent) bool {
+	if event == nil || event.RunID == "" {
+		return false
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	snapshot := h.ensureSnapshotLocked(event.RunID)
+	if containsEventSnapshot(snapshot.Events, event.ID) {
+		return false
+	}
+
+	eventSnapshot := NewEventSnapshotFromTaskEvent(event)
+	snapshot.Events = append([]EventSnapshot{eventSnapshot}, snapshot.Events...)
+	if len(snapshot.Events) > 50 {
+		snapshot.Events = snapshot.Events[:50]
+	}
+	h.touchSnapshotLocked(event.RunID, snapshot)
+	return true
+}
+
+func (h *SnapshotHub) ensureSnapshotLocked(runID string) *ExecutionSnapshot {
+	if snapshot, ok := h.snapshots[runID]; ok && snapshot != nil {
+		return snapshot
+	}
+	snapshot := &ExecutionSnapshot{
+		RunID:  runID,
+		Stages: []StageSnapshot{},
+		Units:  []UnitSnapshot{},
+		Events: []EventSnapshot{},
+	}
+	h.snapshots[runID] = snapshot
+	return snapshot
+}
+
+func (h *SnapshotHub) touchSnapshotLocked(runID string, snapshot *ExecutionSnapshot) {
+	h.revisions[runID]++
+	snapshot.Revision = h.revisions[runID]
+	snapshot.UpdatedAt = time.Now()
+}
+
+func applyRunModelToSnapshot(snapshot *ExecutionSnapshot, run *TaskRun) bool {
+	if snapshot == nil || run == nil {
+		return false
+	}
+
+	changed := false
+	if snapshot.RunID != run.ID {
+		snapshot.RunID = run.ID
+		changed = true
+	}
+	if snapshot.TaskName != run.Name {
+		snapshot.TaskName = run.Name
+		changed = true
+	}
+	if snapshot.RunKind != run.RunKind {
+		snapshot.RunKind = run.RunKind
+		changed = true
+	}
+	if snapshot.Status != run.Status {
+		snapshot.Status = run.Status
+		changed = true
+	}
+	if snapshot.Progress != run.Progress {
+		snapshot.Progress = run.Progress
+		changed = true
+	}
+	if snapshot.CurrentStage != run.CurrentStage {
+		snapshot.CurrentStage = run.CurrentStage
+		changed = true
+	}
+	if !timesEqual(snapshot.StartedAt, run.StartedAt) {
+		snapshot.StartedAt = cloneTimePtr(run.StartedAt)
+		changed = true
+	}
+	if !timesEqual(snapshot.FinishedAt, run.FinishedAt) {
+		snapshot.FinishedAt = cloneTimePtr(run.FinishedAt)
+		changed = true
+	}
+	return changed
+}
+
+func stageSnapshotsEqual(left, right StageSnapshot) bool {
+	return left.ID == right.ID &&
+		left.Kind == right.Kind &&
+		left.Name == right.Name &&
+		left.Order == right.Order &&
+		left.Status == right.Status &&
+		left.Progress == right.Progress &&
+		left.TotalUnits == right.TotalUnits &&
+		left.CompletedUnits == right.CompletedUnits &&
+		left.SuccessUnits == right.SuccessUnits &&
+		left.FailedUnits == right.FailedUnits &&
+		left.CancelledUnits == right.CancelledUnits &&
+		timesEqual(left.StartedAt, right.StartedAt) &&
+		timesEqual(left.FinishedAt, right.FinishedAt)
+}
+
+func unitSnapshotsEqual(left, right UnitSnapshot) bool {
+	if left.ID != right.ID ||
+		left.StageID != right.StageID ||
+		left.Kind != right.Kind ||
+		left.TargetType != right.TargetType ||
+		left.TargetKey != right.TargetKey ||
+		left.Status != right.Status ||
+		left.Progress != right.Progress ||
+		left.TotalSteps != right.TotalSteps ||
+		left.DoneSteps != right.DoneSteps ||
+		left.ErrorMessage != right.ErrorMessage ||
+		left.LogCount != right.LogCount ||
+		left.Truncated != right.Truncated ||
+		left.SummaryLogPath != right.SummaryLogPath ||
+		left.DetailLogPath != right.DetailLogPath ||
+		left.RawLogPath != right.RawLogPath ||
+		left.JournalLogPath != right.JournalLogPath ||
+		!timesEqual(left.StartedAt, right.StartedAt) ||
+		!timesEqual(left.FinishedAt, right.FinishedAt) {
+		return false
+	}
+	if len(left.Logs) != len(right.Logs) {
+		return false
+	}
+	for i := range left.Logs {
+		if left.Logs[i] != right.Logs[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func preserveProjectedUnitFields(target *UnitSnapshot, existing UnitSnapshot) {
+	if target == nil {
+		return
+	}
+	target.Logs = cloneStringSlice(existing.Logs)
+	target.LogCount = existing.LogCount
+	target.Truncated = existing.Truncated
+	target.SummaryLogPath = existing.SummaryLogPath
+	target.DetailLogPath = existing.DetailLogPath
+	target.RawLogPath = existing.RawLogPath
+	target.JournalLogPath = existing.JournalLogPath
+}
+
+func containsEventSnapshot(events []EventSnapshot, eventID string) bool {
+	if eventID == "" {
+		return false
+	}
+	for _, event := range events {
+		if event.ID == eventID {
+			return true
+		}
+	}
+	return false
+}
+
+func sortStageSnapshots(stages []StageSnapshot) {
+	sort.SliceStable(stages, func(i, j int) bool {
+		if stages[i].Order == stages[j].Order {
+			return stages[i].ID < stages[j].ID
+		}
+		return stages[i].Order < stages[j].Order
+	})
+}
+
+func timesEqual(left, right *time.Time) bool {
+	switch {
+	case left == nil && right == nil:
+		return true
+	case left == nil || right == nil:
+		return false
+	default:
+		return left.Equal(*right)
 	}
 }

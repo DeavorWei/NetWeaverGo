@@ -11,6 +11,8 @@ type ExecutionSnapshot struct {
 	RunKind      string          `json:"runKind"`  // normal / topology
 	Status       string          `json:"status"`   // pending / running / completed / partial / failed / cancelled
 	Progress     int             `json:"progress"` // 0-100
+	Revision     uint64          `json:"revision"`
+	UpdatedAt    time.Time       `json:"updatedAt"`
 	CurrentStage string          `json:"currentStage"`
 	Stages       []StageSnapshot `json:"stages"`
 	Units        []UnitSnapshot  `json:"units"`
@@ -54,6 +56,7 @@ type UnitSnapshot struct {
 	SummaryLogPath string     `json:"summaryLogPath,omitempty"`
 	DetailLogPath  string     `json:"detailLogPath,omitempty"`
 	RawLogPath     string     `json:"rawLogPath,omitempty"`
+	JournalLogPath string     `json:"journalLogPath,omitempty"`
 	StartedAt      *time.Time `json:"startedAt"`
 	FinishedAt     *time.Time `json:"finishedAt"`
 }
@@ -108,6 +111,169 @@ func NewSnapshotBuilder() *SnapshotBuilder {
 	return &SnapshotBuilder{}
 }
 
+func NewExecutionSnapshotFromRun(run *TaskRun) *ExecutionSnapshot {
+	if run == nil {
+		return nil
+	}
+	return &ExecutionSnapshot{
+		RunID:        run.ID,
+		TaskName:     run.Name,
+		RunKind:      run.RunKind,
+		Status:       run.Status,
+		Progress:     run.Progress,
+		UpdatedAt:    time.Now(),
+		CurrentStage: run.CurrentStage,
+		StartedAt:    run.StartedAt,
+		FinishedAt:   run.FinishedAt,
+		Stages:       []StageSnapshot{},
+		Units:        []UnitSnapshot{},
+		Events:       []EventSnapshot{},
+	}
+}
+
+func NewStageSnapshotFromModel(stage *TaskRunStage) StageSnapshot {
+	if stage == nil {
+		return StageSnapshot{}
+	}
+	return StageSnapshot{
+		ID:             stage.ID,
+		Kind:           stage.StageKind,
+		Name:           stage.StageName,
+		Order:          stage.StageOrder,
+		Status:         stage.Status,
+		Progress:       stage.Progress,
+		TotalUnits:     stage.TotalUnits,
+		CompletedUnits: stage.CompletedUnits,
+		SuccessUnits:   stage.SuccessUnits,
+		FailedUnits:    stage.FailedUnits,
+		CancelledUnits: stage.CancelledUnits,
+		StartedAt:      stage.StartedAt,
+		FinishedAt:     stage.FinishedAt,
+	}
+}
+
+func NewUnitSnapshotFromModel(unit *TaskRunUnit) UnitSnapshot {
+	if unit == nil {
+		return UnitSnapshot{}
+	}
+	progress := 0
+	if unit.TotalSteps > 0 {
+		progress = unit.DoneSteps * 100 / unit.TotalSteps
+	}
+	return UnitSnapshot{
+		ID:           unit.ID,
+		StageID:      unit.TaskRunStageID,
+		Kind:         unit.UnitKind,
+		TargetType:   unit.TargetType,
+		TargetKey:    unit.TargetKey,
+		Status:       unit.Status,
+		Progress:     progress,
+		TotalSteps:   unit.TotalSteps,
+		DoneSteps:    unit.DoneSteps,
+		ErrorMessage: unit.ErrorMessage,
+		StartedAt:    unit.StartedAt,
+		FinishedAt:   unit.FinishedAt,
+	}
+}
+
+func NewEventSnapshotFromTaskEvent(event *TaskEvent) EventSnapshot {
+	if event == nil {
+		return EventSnapshot{}
+	}
+	return EventSnapshot{
+		ID:        event.ID,
+		Type:      string(event.Type),
+		Level:     string(event.Level),
+		StageID:   event.StageID,
+		UnitID:    event.UnitID,
+		Message:   event.Message,
+		Timestamp: event.Timestamp,
+	}
+}
+
+func cloneTimePtr(src *time.Time) *time.Time {
+	if src == nil {
+		return nil
+	}
+	value := *src
+	return &value
+}
+
+func cloneStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make([]string, len(values))
+	copy(cloned, values)
+	return cloned
+}
+
+func cloneStageSnapshots(stages []StageSnapshot) []StageSnapshot {
+	if len(stages) == 0 {
+		return nil
+	}
+	cloned := make([]StageSnapshot, len(stages))
+	for i := range stages {
+		cloned[i] = stages[i]
+		cloned[i].StartedAt = cloneTimePtr(stages[i].StartedAt)
+		cloned[i].FinishedAt = cloneTimePtr(stages[i].FinishedAt)
+	}
+	return cloned
+}
+
+func cloneUnitSnapshots(units []UnitSnapshot) []UnitSnapshot {
+	if len(units) == 0 {
+		return nil
+	}
+	cloned := make([]UnitSnapshot, len(units))
+	for i := range units {
+		cloned[i] = units[i]
+		cloned[i].Logs = cloneStringSlice(units[i].Logs)
+		cloned[i].StartedAt = cloneTimePtr(units[i].StartedAt)
+		cloned[i].FinishedAt = cloneTimePtr(units[i].FinishedAt)
+	}
+	return cloned
+}
+
+func cloneEventSnapshots(events []EventSnapshot) []EventSnapshot {
+	if len(events) == 0 {
+		return nil
+	}
+	cloned := make([]EventSnapshot, len(events))
+	copy(cloned, events)
+	return cloned
+}
+
+func (s StageSnapshot) Clone() StageSnapshot {
+	s.StartedAt = cloneTimePtr(s.StartedAt)
+	s.FinishedAt = cloneTimePtr(s.FinishedAt)
+	return s
+}
+
+func (u UnitSnapshot) Clone() UnitSnapshot {
+	u.Logs = cloneStringSlice(u.Logs)
+	u.StartedAt = cloneTimePtr(u.StartedAt)
+	u.FinishedAt = cloneTimePtr(u.FinishedAt)
+	return u
+}
+
+func (e EventSnapshot) Clone() EventSnapshot {
+	return e
+}
+
+func (s *ExecutionSnapshot) Clone() *ExecutionSnapshot {
+	if s == nil {
+		return nil
+	}
+	cloned := *s
+	cloned.StartedAt = cloneTimePtr(s.StartedAt)
+	cloned.FinishedAt = cloneTimePtr(s.FinishedAt)
+	cloned.Stages = cloneStageSnapshots(s.Stages)
+	cloned.Units = cloneUnitSnapshots(s.Units)
+	cloned.Events = cloneEventSnapshots(s.Events)
+	return &cloned
+}
+
 // Build 从运行状态构建快照
 func (b *SnapshotBuilder) Build(run *TaskRun, stages []TaskRunStage, units []TaskRunUnit, events []TaskRunEvent) *ExecutionSnapshot {
 	snapshot := &ExecutionSnapshot{
@@ -116,6 +282,7 @@ func (b *SnapshotBuilder) Build(run *TaskRun, stages []TaskRunStage, units []Tas
 		RunKind:      run.RunKind,
 		Status:       run.Status,
 		Progress:     run.Progress,
+		UpdatedAt:    time.Now(),
 		CurrentStage: run.CurrentStage,
 		StartedAt:    run.StartedAt,
 		FinishedAt:   run.FinishedAt,
@@ -126,43 +293,14 @@ func (b *SnapshotBuilder) Build(run *TaskRun, stages []TaskRunStage, units []Tas
 
 	// 构建 Stage 快照
 	for _, stage := range stages {
-		snapshot.Stages = append(snapshot.Stages, StageSnapshot{
-			ID:             stage.ID,
-			Kind:           stage.StageKind,
-			Name:           stage.StageName,
-			Order:          stage.StageOrder,
-			Status:         stage.Status,
-			Progress:       stage.Progress,
-			TotalUnits:     stage.TotalUnits,
-			CompletedUnits: stage.CompletedUnits,
-			SuccessUnits:   stage.SuccessUnits,
-			FailedUnits:    stage.FailedUnits,
-			CancelledUnits: stage.CancelledUnits,
-			StartedAt:      stage.StartedAt,
-			FinishedAt:     stage.FinishedAt,
-		})
+		stageCopy := stage
+		snapshot.Stages = append(snapshot.Stages, NewStageSnapshotFromModel(&stageCopy))
 	}
 
 	// 构建 Unit 快照
 	for _, unit := range units {
-		progress := 0
-		if unit.TotalSteps > 0 {
-			progress = unit.DoneSteps * 100 / unit.TotalSteps
-		}
-		snapshot.Units = append(snapshot.Units, UnitSnapshot{
-			ID:           unit.ID,
-			StageID:      unit.TaskRunStageID,
-			Kind:         unit.UnitKind,
-			TargetType:   unit.TargetType,
-			TargetKey:    unit.TargetKey,
-			Status:       unit.Status,
-			Progress:     progress,
-			TotalSteps:   unit.TotalSteps,
-			DoneSteps:    unit.DoneSteps,
-			ErrorMessage: unit.ErrorMessage,
-			StartedAt:    unit.StartedAt,
-			FinishedAt:   unit.FinishedAt,
-		})
+		unitCopy := unit
+		snapshot.Units = append(snapshot.Units, NewUnitSnapshotFromModel(&unitCopy))
 	}
 
 	// 构建 Event 快照

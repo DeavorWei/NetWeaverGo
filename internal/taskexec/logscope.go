@@ -134,6 +134,8 @@ func (f *DefaultLoggerFactory) CreateLogger(scope LogScope) *report.DeviceLogSes
 type RuntimeLogger interface {
 	// 获取或创建日志会话
 	Session(scope LogScope) *report.DeviceLogSession
+	// 写结构化事件日志
+	WriteJournal(scope LogScope, record interface{})
 	// 写summary日志
 	WriteSummary(scope LogScope, message string)
 	// 写detail日志
@@ -190,6 +192,14 @@ func (l *DefaultRuntimeLogger) Session(scope LogScope) *report.DeviceLogSession 
 	return l.getOrCreateSession(scope)
 }
 
+// WriteJournal 写结构化事件日志
+func (l *DefaultRuntimeLogger) WriteJournal(scope LogScope, record interface{}) {
+	session := l.getOrCreateSession(scope)
+	if session != nil {
+		_ = session.WriteJournalRecord(record)
+	}
+}
+
 // WriteSummary 写summary日志
 func (l *DefaultRuntimeLogger) WriteSummary(scope LogScope, message string) {
 	session := l.getOrCreateSession(scope)
@@ -237,6 +247,8 @@ type noopRuntimeLogger struct{}
 func (l *noopRuntimeLogger) Session(scope LogScope) *report.DeviceLogSession {
 	return nil
 }
+
+func (l *noopRuntimeLogger) WriteJournal(scope LogScope, record interface{}) {}
 
 func (l *noopRuntimeLogger) WriteSummary(scope LogScope, message string) {}
 

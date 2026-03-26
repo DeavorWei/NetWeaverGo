@@ -142,16 +142,15 @@ export const useTaskexecStore = defineStore('taskexec', () => {
   function initListeners() {
     cleanupListeners()
     
-    // 监听任务快照更新
-    const unlistenSnapshot = Events.On('task:snapshot', (ev: any) => {
-      const data = unwrapEventData<{ runId: string; timestamp: number; eventType: string }>(ev)
+    // 监听后端直接推送的快照数据
+    const unlistenSnapshotData = Events.On('task:snapshot_data', (ev: any) => {
+      const data = unwrapEventData<ExecutionSnapshot>(ev)
       if (data?.runId) {
-        // 触发快照刷新
-        refreshSnapshot(data.runId)
+        updateSnapshot(data.runId, data)
       }
     })
-    if (typeof unlistenSnapshot === 'function') {
-      cleanupFns.push(unlistenSnapshot)
+    if (typeof unlistenSnapshotData === 'function') {
+      cleanupFns.push(unlistenSnapshotData)
     }
     
     // 监听任务开始
@@ -159,10 +158,6 @@ export const useTaskexecStore = defineStore('taskexec', () => {
       const data = unwrapEventData<TaskEvent>(ev)
       if (data) {
         addEventLog(data)
-        // 如果是当前关注的run，刷新快照
-        if (data.runId === currentRunId.value) {
-          refreshSnapshot(data.runId)
-        }
       }
     })
     if (typeof unlistenStarted === 'function') {
@@ -174,7 +169,6 @@ export const useTaskexecStore = defineStore('taskexec', () => {
       const data = unwrapEventData<TaskEvent>(ev)
       if (data) {
         addEventLog(data)
-        refreshSnapshot(data.runId)
       }
     })
     if (typeof unlistenFinished === 'function') {
@@ -193,26 +187,10 @@ export const useTaskexecStore = defineStore('taskexec', () => {
       cleanupFns.push(unlistenTaskEvent)
     }
     
-    // 监听Stage更新
-    const unlistenStage = Events.On('task:stage_updated', (ev: any) => {
-      const data = unwrapEventData<TaskEvent>(ev)
-      if (data?.runId) {
-        refreshSnapshot(data.runId)
-      }
-    })
-    if (typeof unlistenStage === 'function') {
-      cleanupFns.push(unlistenStage)
-    }
-    
-    // 监听Unit更新
-    const unlistenUnit = Events.On('task:unit_updated', (ev: any) => {
-      const data = unwrapEventData<TaskEvent>(ev)
-      if (data?.runId) {
-        refreshSnapshot(data.runId)
-      }
-    })
-    if (typeof unlistenUnit === 'function') {
-      cleanupFns.push(unlistenUnit)
+    // 兼容旧桥接事件，保留监听但不再触发全量刷新。
+    const unlistenSnapshotCompat = Events.On('task:snapshot', () => {})
+    if (typeof unlistenSnapshotCompat === 'function') {
+      cleanupFns.push(unlistenSnapshotCompat)
     }
   }
   

@@ -178,6 +178,29 @@ func TestEventBus(t *testing.T) {
 	}
 }
 
+func TestTaskEventRepositoryProjector(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewGormRepository(db)
+	projector := NewTaskEventRepositoryProjector(repo)
+
+	event := NewTaskEvent("run-1", EventTypeRunProgress, "任务推进").
+		WithStage("stage-1").
+		WithUnit("unit-1").
+		WithPayload("progress", 50)
+
+	projector(event)
+
+	events, err := repo.GetEventsByRun(context.Background(), "run-1", 10)
+	require.NoError(t, err)
+	if len(events) != 1 {
+		t.Fatalf("事件持久化数量错误: got=%d want=1", len(events))
+	}
+	assert.Equal(t, string(EventTypeRunProgress), events[0].EventType)
+	assert.Equal(t, "stage-1", events[0].StageID)
+	assert.Equal(t, "unit-1", events[0].UnitID)
+	assert.Contains(t, events[0].PayloadJSON, "\"progress\":50")
+}
+
 // TestSnapshotBuilder 测试快照构建
 func TestSnapshotBuilder(t *testing.T) {
 	builder := NewSnapshotBuilder()

@@ -18,7 +18,7 @@ type TaskExecutionUIService struct {
 }
 
 func NewTaskExecutionUIService(service *taskexec.TaskExecutionService) *TaskExecutionUIService {
-	bridge := NewTaskExecutionEventBridge(service.GetEventBus())
+	bridge := NewTaskExecutionEventBridge(service.GetEventBus(), service.GetSnapshot)
 	return &TaskExecutionUIService{
 		service: service,
 		bridge:  bridge,

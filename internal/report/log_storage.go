@@ -24,6 +24,7 @@ type DeviceLogPaths struct {
 	SummaryPath string
 	DetailPath  string
 	RawPath     string
+	JournalPath string
 }
 
 // DeviceLogSession 表示单台设备的一次执行日志会话。
@@ -32,6 +33,7 @@ type DeviceLogSession struct {
 	Summary *SummaryLogger
 	Detail  *DetailLogger
 	Raw     *RawLogger
+	Journal *JournalLogger
 }
 
 // WriteSummary 追加简略日志。
@@ -74,6 +76,14 @@ func (s *DeviceLogSession) RawSink() RawTranscriptSink {
 	return s.Raw
 }
 
+// WriteJournalRecord 追加结构化事件。
+func (s *DeviceLogSession) WriteJournalRecord(record interface{}) error {
+	if s == nil || s.Journal == nil {
+		return nil
+	}
+	return s.Journal.WriteRecord(record)
+}
+
 // ExecutionLogStore 统一管理单次执行中的所有设备日志。
 type ExecutionLogStore struct {
 	mu         sync.RWMutex
@@ -114,6 +124,13 @@ func (ls *ExecutionLogStore) EnsureDevice(ip string, enableRaw bool) (*DeviceLog
 	defer ls.mu.Unlock()
 
 	if session, exists := ls.sessions[ip]; exists {
+		if session.Journal == nil {
+			journalLogger, err := NewJournalLogger(ls.buildFilePath(ip, "journal"))
+			if err != nil {
+				return nil, err
+			}
+			session.Journal = journalLogger
+		}
 		if enableRaw && session.Raw == nil {
 			rawLogger, err := NewRawLogger(ls.buildFilePath(ip, "raw"))
 			if err != nil {
@@ -141,9 +158,18 @@ func (ls *ExecutionLogStore) EnsureDevice(ip string, enableRaw bool) (*DeviceLog
 		Detail:  detailLogger,
 	}
 
+	journalLogger, err := NewJournalLogger(ls.buildFilePath(ip, "journal"))
+	if err != nil {
+		_ = detailLogger.Close()
+		_ = summaryLogger.Close()
+		return nil, err
+	}
+	session.Journal = journalLogger
+
 	if enableRaw {
 		rawLogger, rawErr := NewRawLogger(ls.buildFilePath(ip, "raw"))
 		if rawErr != nil {
+			_ = journalLogger.Close()
 			_ = detailLogger.Close()
 			_ = summaryLogger.Close()
 			return nil, rawErr
@@ -225,6 +251,9 @@ func (ls *ExecutionLogStore) GetDeviceLogPaths(ip string) DeviceLogPaths {
 	if session.Raw != nil {
 		paths.RawPath = session.Raw.Path()
 	}
+	if session.Journal != nil {
+		paths.JournalPath = session.Journal.Path()
+	}
 	return paths
 }
 
@@ -247,6 +276,11 @@ func (ls *ExecutionLogStore) Close() {
 		if session.Raw != nil {
 			if err := session.Raw.Close(); err != nil {
 				logger.Error("LogStore", ip, "关闭原始日志失败: %v", err)
+			}
+		}
+		if session.Journal != nil {
+			if err := session.Journal.Close(); err != nil {
+				logger.Error("LogStore", ip, "关闭结构化事件日志失败: %v", err)
 			}
 		}
 	}

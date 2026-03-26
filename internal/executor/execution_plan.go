@@ -166,7 +166,7 @@ func (r *ExecutionReport) String() string {
 // 执行事件 (用于实时监控)
 // ============================================================================
 
-// ExecutionEventType 事件类型
+// ExecutionEventType 兼容旧链路的事件类型。
 type ExecutionEventType string
 
 const (
@@ -180,13 +180,31 @@ const (
 	EventComplete ExecutionEventType = "complete"
 )
 
-// ExecutionEvent 执行过程中的事件
+// ExecutionRecordKind 结构化执行记录类型。
+type ExecutionRecordKind string
+
+const (
+	// RecordCommandDispatched 命令已发送到设备。
+	RecordCommandDispatched ExecutionRecordKind = "command_dispatched"
+	// RecordCommandCompleted 命令成功完成。
+	RecordCommandCompleted ExecutionRecordKind = "command_completed"
+	// RecordCommandFailed 命令执行失败，但结果已经封存。
+	RecordCommandFailed ExecutionRecordKind = "command_failed"
+	// RecordExecutionCompleted 本次执行计划已结束。
+	RecordExecutionCompleted ExecutionRecordKind = "execution_completed"
+)
+
+// ExecutionEvent 执行过程中的结构化事件。
 type ExecutionEvent struct {
-	Type      ExecutionEventType // 事件类型
-	Command   string             // 命令文本
-	Key       string             // 命令标识
-	Index     int                // 命令索引
-	Duration  time.Duration      // 耗时
-	Error     error              // 错误（如果有）
-	Timestamp time.Time          // 事件发生时间
+	Type          ExecutionEventType  `json:"type"`
+	Kind          ExecutionRecordKind `json:"kind"`
+	SessionSeq    uint64              `json:"sessionSeq"`
+	Command       string              `json:"command,omitempty"`
+	Key           string              `json:"key,omitempty"`
+	Index         int                 `json:"index"`
+	TotalCommands int                 `json:"totalCommands,omitempty"`
+	Duration      time.Duration       `json:"duration,omitempty"`
+	Error         error               `json:"-"`
+	ErrorMessage  string              `json:"errorMessage,omitempty"`
+	Timestamp     time.Time           `json:"timestamp"`
 }

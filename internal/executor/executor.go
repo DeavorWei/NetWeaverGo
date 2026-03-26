@@ -312,9 +312,11 @@ func (e *DeviceExecutor) executeInternal(
 	// 发送执行完成事件
 	if eventCallback != nil {
 		eventCallback(ExecutionEvent{
-			Type:      EventComplete,
-			Duration:  time.Since(report.StartedAt),
-			Timestamp: time.Now(),
+			Type:          EventComplete,
+			Kind:          RecordExecutionCompleted,
+			TotalCommands: len(plan.Commands),
+			Duration:      time.Since(report.StartedAt),
+			Timestamp:     time.Now(),
 		})
 	}
 
