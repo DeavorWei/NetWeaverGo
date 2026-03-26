@@ -636,9 +636,14 @@ async function confirmCreate() {
       updatedAt: new Date(),
     };
 
-    await TaskGroupAPI.createTaskGroup(taskGroup);
+    const createdTask = await TaskGroupAPI.createTaskGroup(taskGroup);
+    console.debug("[Tasks] 任务创建成功", createdTask);
     createModal.value.show = false;
-    triggerToast("任务创建成功！可前往任务执行页查看", "success");
+    triggerToast("任务创建成功，正在跳转任务执行页", "success");
+    router.push({
+      path: "/task-execution",
+      query: { refresh: String(Date.now()) },
+    });
   } catch (err: any) {
     console.error("创建任务失败:", err);
     triggerToast(`创建失败: ${err?.message || err}`, "error");

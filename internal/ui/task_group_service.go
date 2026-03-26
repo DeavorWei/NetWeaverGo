@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/NetWeaverGo/core/internal/taskexec"
@@ -60,13 +61,15 @@ func (s *TaskGroupService) ServiceStartup(ctx context.Context, options applicati
 
 // ListTaskGroups 获取所有任务模板列表
 func (s *TaskGroupService) ListTaskGroups() ([]TaskGroupListView, error) {
+	logger.Debug("TaskGroupService", "-", "开始组装任务模板列表")
 	groups, err := config.ListTaskGroups()
 	if err != nil {
+		logger.Error("TaskGroupService", "-", "加载任务模板列表失败: %v", err)
 		return nil, err
 	}
 
 	runsByTaskGroup := s.latestRunsByTaskGroup()
-	activeRunCount := s.activeRunCounts()
+	activeRunCount := s.activeRunCounts(runsByTaskGroup)
 	result := make([]TaskGroupListView, 0, len(groups))
 	for _, group := range groups {
 		latestRun, hasRun := runsByTaskGroup[group.ID]
@@ -76,25 +79,25 @@ func (s *TaskGroupService) ListTaskGroups() ([]TaskGroupListView, error) {
 		latestRunStartedAt := ""
 		latestRunFinishedAt := ""
 		if hasRun {
-			status = latestRun.Status
-			latestRunID = latestRun.RunID
-			latestRunStatus = latestRun.Status
+			status = strings.TrimSpace(latestRun.Status)
+			latestRunID = strings.TrimSpace(latestRun.RunID)
+			latestRunStatus = strings.TrimSpace(latestRun.Status)
 			latestRunStartedAt = formatRunTime(latestRun.StartedAt)
 			latestRunFinishedAt = formatRunTime(latestRun.FinishedAt)
 		}
 		activeCount := activeRunCount[group.ID]
-		result = append(result, TaskGroupListView{
+		view := normalizeTaskGroupListView(TaskGroupListView{
 			ID:                  group.ID,
-			Name:                group.Name,
-			Description:         group.Description,
-			DeviceGroup:         group.DeviceGroup,
-			CommandGroup:        group.CommandGroup,
+			Name:                strings.TrimSpace(group.Name),
+			Description:         strings.TrimSpace(group.Description),
+			DeviceGroup:         strings.TrimSpace(group.DeviceGroup),
+			CommandGroup:        strings.TrimSpace(group.CommandGroup),
 			MaxWorkers:          group.MaxWorkers,
 			Timeout:             group.Timeout,
-			TaskType:            group.TaskType,
-			TopologyVendor:      group.TopologyVendor,
+			TaskType:            strings.TrimSpace(group.TaskType),
+			TopologyVendor:      strings.TrimSpace(group.TopologyVendor),
 			AutoBuildTopology:   group.AutoBuildTopology,
-			Mode:                group.Mode,
+			Mode:                strings.TrimSpace(group.Mode),
 			Items:               append([]models.TaskItem(nil), group.Items...),
 			Status:              status,
 			LatestRunID:         latestRunID,
@@ -108,7 +111,14 @@ func (s *TaskGroupService) ListTaskGroups() ([]TaskGroupListView, error) {
 			CreatedAt:           group.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:           group.UpdatedAt.Format(time.RFC3339),
 		})
+		result = append(result, view)
+		logger.Verbose("TaskGroupService", "-", "任务模板列表项: id=%d, name=%s, mode=%s, taskType=%s, status=%s, latestRun=%s, items=%d, tags=%d, canEdit=%t", view.ID, view.Name, view.Mode, view.TaskType, view.Status, view.LatestRunID, len(view.Items), len(view.Tags), view.CanEdit)
 	}
+
+	sort.SliceStable(result, func(i, j int) bool {
+		return result[i].CreatedAt > result[j].CreatedAt
+	})
+	logger.Debug("TaskGroupService", "-", "任务模板列表组装完成: groups=%d, runs=%d, active=%d", len(result), len(runsByTaskGroup), len(activeRunCount))
 	return result, nil
 }
 
@@ -134,8 +144,17 @@ func (s *TaskGroupService) GetTaskGroupDetail(id uint) (*TaskGroupDetailViewMode
 
 // CreateTaskGroup 创建新任务组
 func (s *TaskGroupService) CreateTaskGroup(group models.TaskGroup) (*models.TaskGroup, error) {
+	logger.Debug("TaskGroupService", "-", "收到创建任务模板请求: name=%s, mode=%s, taskType=%s, items=%d", strings.TrimSpace(group.Name), strings.TrimSpace(group.Mode), strings.TrimSpace(group.TaskType), len(group.Items))
 	group.Status = ""
-	return config.CreateTaskGroup(group)
+	created, err := config.CreateTaskGroup(group)
+	if err != nil {
+		logger.Error("TaskGroupService", "-", "创建任务模板失败: name=%s, err=%v", strings.TrimSpace(group.Name), err)
+		return nil, err
+	}
+	if created != nil {
+		logger.Verbose("TaskGroupService", "-", "创建任务模板成功: id=%d, name=%s, mode=%s, taskType=%s, tags=%d", created.ID, created.Name, created.Mode, created.TaskType, len(created.Tags))
+	}
+	return created, nil
 }
 
 // UpdateTaskGroup 更新任务组
@@ -216,10 +235,18 @@ func (s *TaskGroupService) latestRunsByTaskGroup() map[uint]*taskexec.RunSummary
 	return result
 }
 
-func (s *TaskGroupService) activeRunCounts() map[uint]int {
+func (s *TaskGroupService) activeRunCounts(runsByTaskGroup map[uint]*taskexec.RunSummary) map[uint]int {
 	result := make(map[uint]int)
 	if s.taskexec == nil {
 		return result
+	}
+
+	runToTaskGroup := make(map[string]uint, len(runsByTaskGroup))
+	for taskGroupID, run := range runsByTaskGroup {
+		if run == nil || run.RunID == "" || taskGroupID == 0 {
+			continue
+		}
+		runToTaskGroup[run.RunID] = taskGroupID
 	}
 
 	running := s.taskexec.ListRunning()
@@ -227,10 +254,8 @@ func (s *TaskGroupService) activeRunCounts() map[uint]int {
 		if snapshot == nil {
 			continue
 		}
-		for _, run := range s.latestRunsByTaskGroup() {
-			if run != nil && run.RunID == snapshot.RunID && run.TaskGroupID != 0 {
-				result[run.TaskGroupID]++
-			}
+		if taskGroupID, ok := runToTaskGroup[snapshot.RunID]; ok && taskGroupID != 0 {
+			result[taskGroupID]++
 		}
 	}
 	return result
@@ -241,6 +266,39 @@ func formatRunTime(value time.Time) string {
 		return ""
 	}
 	return value.Format(time.RFC3339)
+}
+
+func normalizeTaskGroupListView(view TaskGroupListView) TaskGroupListView {
+	view.Name = strings.TrimSpace(view.Name)
+	view.Description = strings.TrimSpace(view.Description)
+	view.DeviceGroup = strings.TrimSpace(view.DeviceGroup)
+	view.CommandGroup = strings.TrimSpace(view.CommandGroup)
+	view.TaskType = strings.TrimSpace(view.TaskType)
+	view.TopologyVendor = strings.TrimSpace(view.TopologyVendor)
+	view.Mode = strings.TrimSpace(view.Mode)
+	view.Status = strings.TrimSpace(view.Status)
+	view.LatestRunID = strings.TrimSpace(view.LatestRunID)
+	view.LatestRunStatus = strings.TrimSpace(view.LatestRunStatus)
+
+	if view.Description == "" {
+		view.Description = "暂无描述"
+	}
+	if view.TaskType == "" {
+		view.TaskType = "normal"
+	}
+	if view.Mode == "" {
+		view.Mode = "group"
+	}
+	if view.Status == "" {
+		view.Status = "pending"
+	}
+	if view.Items == nil {
+		view.Items = make([]models.TaskItem, 0)
+	}
+	if view.Tags == nil {
+		view.Tags = make([]string, 0)
+	}
+	return view
 }
 
 func (s *TaskGroupService) buildTaskGroupDetail(taskGroup *models.TaskGroup) (*TaskGroupDetailViewModel, error) {
@@ -338,7 +396,7 @@ func (s *TaskGroupService) buildTaskGroupDetail(taskGroup *models.TaskGroup) (*T
 
 	latestRuns := s.latestRunsByTaskGroup()
 	latestRun := latestRuns[taskGroup.ID]
-	activeRunCount := s.activeRunCounts()[taskGroup.ID]
+	activeRunCount := s.activeRunCounts(latestRuns)[taskGroup.ID]
 	latestRunID := ""
 	latestRunStatus := "pending"
 	if latestRun != nil {

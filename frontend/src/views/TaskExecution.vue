@@ -24,7 +24,7 @@
           创建新任务
         </button>
         <button
-          @click="loadTasks"
+          @click="refreshTaskList"
           class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -171,6 +171,12 @@
           <div v-if="loading" class="flex items-center justify-center h-48">
             <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
           </div>
+          <div v-else-if="loadError" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16" r="0.5" fill="currentColor"/></svg>
+            <p class="text-sm text-error">任务列表加载失败</p>
+            <p class="text-xs max-w-md text-center break-all">{{ loadError }}</p>
+            <button @click="loadTasks('retry')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-bg-card border border-border text-text-primary hover:border-accent/50 transition-all">重试加载</button>
+          </div>
           <div v-else-if="filteredTasks.length === 0" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
             <p class="text-sm">暂无任务，请前往「任务创建」页面创建</p>
@@ -267,23 +273,23 @@
                   </div>
                 </template>
                 <template v-else-if="task.mode === 'group'">
-                  <div v-for="(item, idx) in task.items" :key="idx" class="flex items-center gap-2 text-xs">
+                  <div v-for="(item, idx) in (task.items || [])" :key="idx" class="flex items-center gap-2 text-xs">
                     <span class="px-2 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent font-mono truncate max-w-[200px]">
-                      命令组: {{ item.commandGroupId.substring(0, 8) }}...
+                      命令组: {{ String(item.commandGroupId || '-').substring(0, 8) }}...
                     </span>
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-text-muted flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                    <span class="text-text-secondary">{{ item.deviceIDs.length }} 台设备</span>
+                    <span class="text-text-secondary">{{ Array.isArray(item.deviceIDs) ? item.deviceIDs.length : 0 }} 台设备</span>
                   </div>
                 </template>
                 <template v-else>
                   <div class="space-y-1">
-                    <div v-for="(item, idx) in task.items.slice(0, 3)" :key="idx" class="flex items-center gap-2 text-xs">
-                      <span class="font-mono text-text-secondary">{{ item.deviceIDs[0] }}</span>
+                    <div v-for="(item, idx) in (task.items || []).slice(0, 3)" :key="idx" class="flex items-center gap-2 text-xs">
+                      <span class="font-mono text-text-secondary">{{ Array.isArray(item.deviceIDs) && item.deviceIDs.length > 0 ? item.deviceIDs[0] : '-' }}</span>
                       <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 text-text-muted flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                      <span class="text-text-muted truncate">{{ item.commands.length }} 条命令</span>
+                      <span class="text-text-muted truncate">{{ Array.isArray(item.commands) ? item.commands.length : 0 }} 条命令</span>
                     </div>
-                    <div v-if="task.items.length > 3" class="text-xs text-text-muted">
-                      +{{ task.items.length - 3 }} 台设备...
+                    <div v-if="(task.items || []).length > 3" class="text-xs text-text-muted">
+                      +{{ (task.items || []).length - 3 }} 台设备...
                     </div>
                   </div>
                 </template>
@@ -292,7 +298,7 @@
               <!-- 标签和时间 -->
               <div class="px-4 py-2 border-t border-border bg-bg-secondary/30 text-xs text-text-muted flex items-center justify-between">
                 <div class="flex items-center gap-1.5 overflow-hidden">
-                  <span v-for="tag in task.tags.slice(0, 3)" :key="tag"
+                  <span v-for="tag in (task.tags || []).slice(0, 3)" :key="tag"
                     class="px-1.5 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent truncate"
                   >{{ tag }}</span>
                 </div>
@@ -360,7 +366,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import {
   CommandGroupAPI,
   DeviceAPI,
@@ -384,10 +390,12 @@ import StageProgress from '../components/task/StageProgress.vue'
 import type { StageSnapshot, UnitSnapshot } from '../types/taskexec'
 
 const router = useRouter()
+const route = useRoute()
 const taskexecStore = useTaskexecStore()
 
 // ================== 任务执行状态 ==================
 const loading = ref(false)
+const loadError = ref('')
 const tasks = ref<TaskGroupListView[]>([])
 const searchQuery = ref('')
 const filterStatus = ref('')
@@ -524,7 +532,7 @@ const visibleDevices = computed(() => {
 onMounted(() => {
   void syncExecutionView()
   void taskexecStore.loadRunHistory(50)
-  void loadTasks()
+  void loadTasks('mounted')
 })
 
 onUnmounted(() => {
@@ -540,39 +548,123 @@ watch(isRunning, (running, wasRunning) => {
   if (!running && wasRunning && executionView.value.active) {
     stopSnapshotPolling()
     void taskexecStore.loadRunHistory(50)
-    void loadTasks()
+    void loadTasks('run-finished')
   }
 })
 
+watch(() => route.query.refresh, (refreshToken, previousToken) => {
+  if (!refreshToken || refreshToken === previousToken) {
+    return
+  }
+  console.debug('[TaskExecution] 检测到路由刷新信号，重新加载任务列表', refreshToken)
+  void loadTasks('route-refresh')
+})
+
+function normalizeString(value: unknown, fallback: string = ''): string {
+  return typeof value === 'string' ? value.trim() : fallback
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+function normalizeNumberArray(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .map(item => Number(item))
+    .filter(item => Number.isFinite(item) && item > 0)
+}
+
+function normalizeTaskItem(item: any) {
+  return {
+    commandGroupId: normalizeString(item?.commandGroupId),
+    commands: normalizeStringArray(item?.commands),
+    deviceIDs: normalizeNumberArray(item?.deviceIDs)
+  }
+}
+
+function normalizeTaskListEntry(task: any): TaskGroupListView {
+  const normalized = {
+    ...(task || {}),
+    id: Number(task?.id || 0),
+    name: normalizeString(task?.name, '未命名任务'),
+    description: normalizeString(task?.description, '暂无描述'),
+    deviceGroup: normalizeString(task?.deviceGroup),
+    commandGroup: normalizeString(task?.commandGroup),
+    taskType: normalizeString(task?.taskType, 'normal'),
+    topologyVendor: normalizeString(task?.topologyVendor),
+    mode: normalizeString(task?.mode, 'group'),
+    status: normalizeString(task?.status, 'pending'),
+    latestRunId: normalizeString(task?.latestRunId),
+    latestRunStatus: normalizeString(task?.latestRunStatus),
+    latestRunStartedAt: normalizeString(task?.latestRunStartedAt),
+    latestRunFinishedAt: normalizeString(task?.latestRunFinishedAt),
+    activeRunCount: Number(task?.activeRunCount || 0),
+    canEdit: task?.canEdit !== false,
+    tags: normalizeStringArray(task?.tags),
+    items: Array.isArray(task?.items) ? task.items.map((item: any) => normalizeTaskItem(item)) : [],
+    createdAt: normalizeString(task?.createdAt),
+    updatedAt: normalizeString(task?.updatedAt || task?.createdAt),
+    enableRawLog: Boolean(task?.enableRawLog)
+  }
+  return normalized as TaskGroupListView
+}
+
+function matchesTaskQuery(task: TaskGroupListView, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) {
+    return true
+  }
+  const name = normalizeString(task.name).toLowerCase()
+  const description = normalizeString(task.description).toLowerCase()
+  const tags = normalizeStringArray(task.tags)
+  return name.includes(q) || description.includes(q) || tags.some(tag => tag.toLowerCase().includes(q))
+}
+
 // ================== 过滤逻辑（任务列表） ==================
 const filteredTasks = computed(() => {
-  let result = tasks.value
+  let result = tasks.value.filter(task => task && task.id > 0)
   if (searchQuery.value) {
-    const q = searchQuery.value.toLowerCase()
-    result = result.filter(t =>
-      t.name.toLowerCase().includes(q) ||
-      t.description.toLowerCase().includes(q) ||
-      t.tags.some(tag => tag.toLowerCase().includes(q))
-    )
+    result = result.filter(task => matchesTaskQuery(task, searchQuery.value))
   }
   if (filterStatus.value) {
-    result = result.filter(t => t.status === filterStatus.value)
+    result = result.filter(task => normalizeString(task.status, 'pending') === filterStatus.value)
   }
   if (filterMode.value) {
-    result = result.filter(t => t.mode === filterMode.value)
+    result = result.filter(task => normalizeString(task.mode, 'group') === filterMode.value)
   }
   return result
 })
 
 
+function refreshTaskList() {
+  void loadTasks('manual-refresh')
+}
+
 // 加载任务列表
-async function loadTasks() {
+async function loadTasks(reason: string = 'manual') {
   loading.value = true
+  loadError.value = ''
   try {
+    console.debug(`[TaskExecution] 开始加载任务列表，reason=${reason}`)
     const result = await TaskGroupAPI.listTaskGroups()
-    tasks.value = result || []
-  } catch (err) {
-    console.error('加载任务列表失败:', err)
+    if (!Array.isArray(result)) {
+      throw new Error('任务列表接口返回非数组数据')
+    }
+    tasks.value = result.filter(Boolean).map(item => normalizeTaskListEntry(item))
+    console.debug(`[TaskExecution] 任务列表加载完成，count=${tasks.value.length}, reason=${reason}`)
+  } catch (err: any) {
+    const message = err?.message || String(err)
+    console.error('[TaskExecution] 加载任务列表失败:', err)
+    loadError.value = message
     tasks.value = []
   } finally {
     loading.value = false
