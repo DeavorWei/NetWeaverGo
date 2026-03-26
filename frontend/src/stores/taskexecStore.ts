@@ -8,6 +8,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, markRaw } from 'vue'
 import { Events } from '@wailsio/runtime'
+import { TaskExecutionAPI } from '../services/api'
 import type { ExecutionSnapshot } from '../types/taskexec'
 
 // 前端事件格式
@@ -230,8 +231,6 @@ export const useTaskexecStore = defineStore('taskexec', () => {
   
   async function refreshSnapshot(runId: string): Promise<ExecutionSnapshot | null> {
     try {
-      // 动态导入避免循环依赖
-      const { TaskExecutionAPI } = await import('../services/api')
       const snapshot = await TaskExecutionAPI.getTaskSnapshot(runId)
       if (snapshot) {
         updateSnapshot(runId, snapshot)
@@ -245,7 +244,6 @@ export const useTaskexecStore = defineStore('taskexec', () => {
   
   async function loadRunHistory(limit: number = 50): Promise<RunSummary[]> {
     try {
-      const { TaskExecutionAPI } = await import('../services/api')
       const runs = await TaskExecutionAPI.listTaskRuns(limit)
       setRunHistory(runs)
       return runs
@@ -257,7 +255,6 @@ export const useTaskexecStore = defineStore('taskexec', () => {
   
   async function cancelTask(runId: string): Promise<boolean> {
     try {
-      const { TaskExecutionAPI } = await import('../services/api')
       await TaskExecutionAPI.cancelTask(runId)
       return true
     } catch (err) {

@@ -364,6 +364,7 @@ import { useRouter } from 'vue-router'
 import {
   CommandGroupAPI,
   DeviceAPI,
+  TaskExecutionAPI,
   TaskGroupAPI
 } from '../services/api'
 import type {
@@ -579,7 +580,6 @@ async function loadTasks() {
 }
 
 async function syncExecutionView() {
-  const { TaskExecutionAPI } = await import('../services/api')
   const running = await TaskExecutionAPI.listRunningTasks()
   if (!running.length) {
     return
