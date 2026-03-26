@@ -1013,7 +1013,7 @@ func (e *DeviceCollectExecutor) ensureRunDevice(taskID string, device *models.De
 	if err == nil {
 		return nil
 	}
-	if err != nil && !IsNotFoundError(err) {
+	if !IsNotFoundError(err) {
 		return err
 	}
 	return e.db.Create(&TaskRunDevice{
