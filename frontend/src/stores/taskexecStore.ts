@@ -9,7 +9,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, markRaw } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { TaskExecutionAPI } from '../services/api'
-import type { ExecutionSnapshot } from '../types/taskexec'
+import type { ExecutionSnapshot, SnapshotDelta } from '../types/taskexec'
 
 // 前端事件格式
 export interface TaskEvent {
@@ -114,7 +114,25 @@ export const useTaskexecStore = defineStore('taskexec', () => {
   }
   
   function updateSnapshot(runId: string, snapshot: ExecutionSnapshot) {
+    const current = snapshots.value[runId]
+    const currentSeq = current?.lastRunSeq ?? current?.revision ?? 0
+    const nextSeq = snapshot.lastRunSeq ?? snapshot.revision ?? 0
+    if (current && nextSeq < currentSeq) {
+      return
+    }
     snapshots.value[runId] = markRaw({ ...snapshot })
+  }
+
+  function applySnapshotDelta(delta: SnapshotDelta) {
+    if (!delta?.runId) return
+    const current = snapshots.value[delta.runId]
+    const currentSeq = current?.lastRunSeq ?? current?.revision ?? 0
+    if (delta.seq <= currentSeq) {
+      return
+    }
+    if (delta.snapshot) {
+      updateSnapshot(delta.runId, delta.snapshot)
+    }
   }
   
   function removeSnapshot(runId: string) {
@@ -142,7 +160,18 @@ export const useTaskexecStore = defineStore('taskexec', () => {
   function initListeners() {
     cleanupListeners()
     
-    // 监听后端直接推送的快照数据
+    // 监听后端直接推送的快照增量
+    const unlistenSnapshotDelta = Events.On('task:snapshot_delta', (ev: any) => {
+      const data = unwrapEventData<SnapshotDelta>(ev)
+      if (data?.runId) {
+        applySnapshotDelta(data)
+      }
+    })
+    if (typeof unlistenSnapshotDelta === 'function') {
+      cleanupFns.push(unlistenSnapshotDelta)
+    }
+
+    // 兼容后端仍会推送的全量快照数据
     const unlistenSnapshotData = Events.On('task:snapshot_data', (ev: any) => {
       const data = unwrapEventData<ExecutionSnapshot>(ev)
       if (data?.runId) {
@@ -263,6 +292,7 @@ export const useTaskexecStore = defineStore('taskexec', () => {
     addEventLog,
     clearEventLogs,
     setRunHistory,
+    applySnapshotDelta,
     initListeners,
     cleanupListeners,
     refreshSnapshot,

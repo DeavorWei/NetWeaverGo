@@ -212,3 +212,36 @@ func TestAdapter_RuntimeEventsFromNormalizedOutput(t *testing.T) {
 		t.Fatalf("最后一条命令完成后不应再有后续动作，实际有 %d 个", len(actions))
 	}
 }
+
+func TestAdapter_FeedTransitionBatchMatchesLegacyActions(t *testing.T) {
+	m := matcher.NewStreamMatcher()
+	adapter := NewSessionAdapter(80, []string{"display version"}, m)
+
+	batch := adapter.FeedTransitionBatch("hostname# ")
+	if batch == nil {
+		t.Fatal("FeedTransitionBatch 不应返回 nil")
+	}
+	if batch.IsEmpty() {
+		t.Fatal("首次提示符应产生预热 batch")
+	}
+	legacy := batch.ToActions()
+	if len(legacy) != 1 {
+		t.Fatalf("batch 转换动作数错误: got=%d want=1", len(legacy))
+	}
+	if _, ok := legacy[0].(ActSendWarmup); !ok {
+		t.Fatalf("首次 batch 动作应为 ActSendWarmup，实际是 %T", legacy[0])
+	}
+
+	batch = adapter.FeedTransitionBatch("\r\nhostname# ")
+	legacy = batch.ToActions()
+	foundCommand := false
+	for _, action := range legacy {
+		if act, ok := action.(ActSendCommand); ok && act.Index == 0 && act.Command == "display version" {
+			foundCommand = true
+			break
+		}
+	}
+	if !foundCommand {
+		t.Fatal("预热完成后 batch 应发送第一条命令")
+	}
+}

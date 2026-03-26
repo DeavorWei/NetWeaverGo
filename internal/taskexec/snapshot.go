@@ -6,19 +6,21 @@ import (
 
 // ExecutionSnapshot 执行快照 - 前端消费的唯一视图
 type ExecutionSnapshot struct {
-	RunID        string          `json:"runId"`
-	TaskName     string          `json:"taskName"`
-	RunKind      string          `json:"runKind"`  // normal / topology
-	Status       string          `json:"status"`   // pending / running / completed / partial / failed / cancelled
-	Progress     int             `json:"progress"` // 0-100
-	Revision     uint64          `json:"revision"`
-	UpdatedAt    time.Time       `json:"updatedAt"`
-	CurrentStage string          `json:"currentStage"`
-	Stages       []StageSnapshot `json:"stages"`
-	Units        []UnitSnapshot  `json:"units"`
-	StartedAt    *time.Time      `json:"startedAt"`
-	FinishedAt   *time.Time      `json:"finishedAt"`
-	Events       []EventSnapshot `json:"events"` // 最近事件
+	RunID                string            `json:"runId"`
+	TaskName             string            `json:"taskName"`
+	RunKind              string            `json:"runKind"`  // normal / topology
+	Status               string            `json:"status"`   // pending / running / completed / partial / failed / cancelled
+	Progress             int               `json:"progress"` // 0-100
+	Revision             uint64            `json:"revision"`
+	LastRunSeq           uint64            `json:"lastRunSeq"`
+	UpdatedAt            time.Time         `json:"updatedAt"`
+	CurrentStage         string            `json:"currentStage"`
+	Stages               []StageSnapshot   `json:"stages"`
+	Units                []UnitSnapshot    `json:"units"`
+	StartedAt            *time.Time        `json:"startedAt"`
+	FinishedAt           *time.Time        `json:"finishedAt"`
+	Events               []EventSnapshot   `json:"events"` // 最近事件
+	LastSessionSeqByUnit map[string]uint64 `json:"lastSessionSeqByUnit,omitempty"`
 }
 
 // StageSnapshot Stage快照
@@ -64,12 +66,23 @@ type UnitSnapshot struct {
 // EventSnapshot 事件快照
 type EventSnapshot struct {
 	ID        string    `json:"id"`
+	Seq       uint64    `json:"seq"`
 	Type      string    `json:"type"`
 	Level     string    `json:"level"`
 	StageID   string    `json:"stageId,omitempty"`
 	UnitID    string    `json:"unitId,omitempty"`
 	Message   string    `json:"message"`
 	Timestamp time.Time `json:"timestamp"`
+}
+
+// SnapshotDelta 快照增量事件
+// 当前阶段以“全量快照 + 单调序号”封装，后续可继续细化为真正的 patch 集合。
+type SnapshotDelta struct {
+	RunID     string             `json:"runId"`
+	Seq       uint64             `json:"seq"`
+	Revision  uint64             `json:"revision"`
+	UpdatedAt time.Time          `json:"updatedAt"`
+	Snapshot  *ExecutionSnapshot `json:"snapshot,omitempty"`
 }
 
 // ArtifactSnapshot 产物快照
@@ -116,18 +129,19 @@ func NewExecutionSnapshotFromRun(run *TaskRun) *ExecutionSnapshot {
 		return nil
 	}
 	return &ExecutionSnapshot{
-		RunID:        run.ID,
-		TaskName:     run.Name,
-		RunKind:      run.RunKind,
-		Status:       run.Status,
-		Progress:     run.Progress,
-		UpdatedAt:    time.Now(),
-		CurrentStage: run.CurrentStage,
-		StartedAt:    run.StartedAt,
-		FinishedAt:   run.FinishedAt,
-		Stages:       []StageSnapshot{},
-		Units:        []UnitSnapshot{},
-		Events:       []EventSnapshot{},
+		RunID:                run.ID,
+		TaskName:             run.Name,
+		RunKind:              run.RunKind,
+		Status:               run.Status,
+		Progress:             run.Progress,
+		UpdatedAt:            time.Now(),
+		CurrentStage:         run.CurrentStage,
+		StartedAt:            run.StartedAt,
+		FinishedAt:           run.FinishedAt,
+		Stages:               []StageSnapshot{},
+		Units:                []UnitSnapshot{},
+		Events:               []EventSnapshot{},
+		LastSessionSeqByUnit: map[string]uint64{},
 	}
 }
 
@@ -208,6 +222,17 @@ func cloneStringSlice(values []string) []string {
 	return cloned
 }
 
+func cloneUint64Map(values map[string]uint64) map[string]uint64 {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]uint64, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
 func cloneStageSnapshots(stages []StageSnapshot) []StageSnapshot {
 	if len(stages) == 0 {
 		return nil
@@ -271,24 +296,26 @@ func (s *ExecutionSnapshot) Clone() *ExecutionSnapshot {
 	cloned.Stages = cloneStageSnapshots(s.Stages)
 	cloned.Units = cloneUnitSnapshots(s.Units)
 	cloned.Events = cloneEventSnapshots(s.Events)
+	cloned.LastSessionSeqByUnit = cloneUint64Map(s.LastSessionSeqByUnit)
 	return &cloned
 }
 
 // Build 从运行状态构建快照
 func (b *SnapshotBuilder) Build(run *TaskRun, stages []TaskRunStage, units []TaskRunUnit, events []TaskRunEvent) *ExecutionSnapshot {
 	snapshot := &ExecutionSnapshot{
-		RunID:        run.ID,
-		TaskName:     run.Name,
-		RunKind:      run.RunKind,
-		Status:       run.Status,
-		Progress:     run.Progress,
-		UpdatedAt:    time.Now(),
-		CurrentStage: run.CurrentStage,
-		StartedAt:    run.StartedAt,
-		FinishedAt:   run.FinishedAt,
-		Stages:       make([]StageSnapshot, 0, len(stages)),
-		Units:        make([]UnitSnapshot, 0, len(units)),
-		Events:       make([]EventSnapshot, 0, len(events)),
+		RunID:                run.ID,
+		TaskName:             run.Name,
+		RunKind:              run.RunKind,
+		Status:               run.Status,
+		Progress:             run.Progress,
+		UpdatedAt:            time.Now(),
+		CurrentStage:         run.CurrentStage,
+		StartedAt:            run.StartedAt,
+		FinishedAt:           run.FinishedAt,
+		Stages:               make([]StageSnapshot, 0, len(stages)),
+		Units:                make([]UnitSnapshot, 0, len(units)),
+		Events:               make([]EventSnapshot, 0, len(events)),
+		LastSessionSeqByUnit: map[string]uint64{},
 	}
 
 	// 构建 Stage 快照

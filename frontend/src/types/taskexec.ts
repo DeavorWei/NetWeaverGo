@@ -11,6 +11,7 @@ export interface ExecutionSnapshot {
   status: string
   progress: number
   revision: number
+  lastRunSeq: number
   updatedAt: string
   currentStage: string
   stages: StageSnapshot[]
@@ -18,6 +19,7 @@ export interface ExecutionSnapshot {
   startedAt: string
   finishedAt: string
   events: EventSnapshot[]
+  lastSessionSeqByUnit?: Record<string, number>
 }
 
 /** Stage 快照 */
@@ -62,12 +64,21 @@ export interface UnitSnapshot {
 /** 事件快照 */
 export interface EventSnapshot {
   id: string
+  seq: number
   type: string
   level: string
   stageId?: string
   unitId?: string
   message: string
   timestamp: string
+}
+
+export interface SnapshotDelta {
+  runId: string
+  seq: number
+  revision: number
+  updatedAt: string
+  snapshot?: ExecutionSnapshot
 }
 
 /** Stage 类型显示名称 */

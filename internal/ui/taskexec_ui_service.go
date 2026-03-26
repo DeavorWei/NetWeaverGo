@@ -18,7 +18,7 @@ type TaskExecutionUIService struct {
 }
 
 func NewTaskExecutionUIService(service *taskexec.TaskExecutionService) *TaskExecutionUIService {
-	bridge := NewTaskExecutionEventBridge(service.GetEventBus(), service.GetSnapshot)
+	bridge := NewTaskExecutionEventBridge(service.GetEventBus(), service.GetSnapshot, service.GetSnapshotDelta)
 	return &TaskExecutionUIService{
 		service: service,
 		bridge:  bridge,
@@ -43,6 +43,10 @@ func (s *TaskExecutionUIService) ServiceShutdown() error {
 
 func (s *TaskExecutionUIService) GetTaskSnapshot(runID string) (*taskexec.ExecutionSnapshot, error) {
 	return s.service.GetSnapshot(runID)
+}
+
+func (s *TaskExecutionUIService) GetTaskSnapshotDelta(runID string) (*taskexec.SnapshotDelta, error) {
+	return s.service.GetSnapshotDelta(runID)
 }
 
 func (s *TaskExecutionUIService) ListRunningTasks() []*taskexec.ExecutionSnapshot {

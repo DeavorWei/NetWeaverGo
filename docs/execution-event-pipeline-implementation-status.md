@@ -30,14 +30,14 @@
 
 当前对应状态如下：
 
-| 问题 | 当前状态 | 说明 |
-| --- | --- | --- |
-| 大屏没有日志 | 已解决 | 大屏现在消费后端快照中的日志 |
-| 大屏显示过多 detail 日志 | 已解决 | 大屏只显示 `summary.log` |
-| `live-logs` 未接通 | 已解决 | `summary/detail/raw/journal` 已接入运行链路 |
-| 命令顺序看起来交错 | 已解决根因 | 引擎内已保证 `complete(n) < dispatch(n+1)` |
-| 快照强依赖回库重建 | 部分解决 | 已支持增量投影，回库重建仍作为兜底 |
-| Journal 成为唯一事实源 | 未完成 | 当前是“Journal + 投影 + 旧仓库模型并存” |
+| 问题                     | 当前状态   | 说明                                        |
+| ------------------------ | ---------- | ------------------------------------------- |
+| 大屏没有日志             | 已解决     | 大屏现在消费后端快照中的日志                |
+| 大屏显示过多 detail 日志 | 已解决     | 大屏只显示 `summary.log`                    |
+| `live-logs` 未接通       | 已解决     | `summary/detail/raw/journal` 已接入运行链路 |
+| 命令顺序看起来交错       | 已解决根因 | 引擎内已保证 `complete(n) < dispatch(n+1)`  |
+| 快照强依赖回库重建       | 部分解决   | 已支持增量投影，回库重建仍作为兜底          |
+| Journal 成为唯一事实源   | 未完成     | 当前是“Journal + 投影 + 旧仓库模型并存”     |
 
 ## 4. 已完成事项
 
@@ -128,7 +128,15 @@ CommandCompleted(2)
   - `ApplyStagePatch(...)`
   - `ApplyUnitPatch(...)`
   - `AppendEvent(...)`
+  - `BuildDelta(...)`
 
+- 快照中已加入：
+  - `revision`
+  - `lastRunSeq`
+  - `lastSessionSeqByUnit`
+  - 事件级 `seq`
+- UI Bridge 已开始推送 `task:snapshot_delta`
+- 前端 Store 已支持按 `seq` 丢弃旧快照、消费 delta
 - `Get()` 返回快照副本，避免外部篡改缓存
 - `UpdateRun/Stage/Unit` 现在优先走增量投影，未命中才回退到仓库重建
 
@@ -143,6 +151,7 @@ CommandCompleted(2)
 
 - 快照主路径已经不再是“每次更新都全量回库重建”
 - 回库重建现在更多只是缓存 miss 或补偿路径的兜底
+- 前后端之间已经具备“单调序号 + delta 载荷”的第一版协议骨架
 
 ## 4.5 TaskEvent 持久化统一入口
 
@@ -168,6 +177,8 @@ CommandCompleted(2)
 - 阶段依赖跳过策略抽离
 - 关键阶段失败中止策略抽离
 - 离线运行补偿取消策略抽离
+- Run / Stage 终态写法开始统一收口为 helper
+- 取消投影已拆出 Stage / Unit 级辅助收口函数
 
 涉及文件：
 
@@ -178,6 +189,7 @@ CommandCompleted(2)
 结果：
 
 - `runtime.go` 进一步从“直接写策略判断”收缩成“编排入口”
+- 运行终态、Stage 终态、取消补偿的重复补丁写法已开始集中收口
 
 ## 5. 当前中间态架构
 
@@ -237,11 +249,14 @@ flowchart TD
 当前实际情况：
 
 - 已经把顺序问题在引擎侧修正
+- `SessionReducer` 已新增兼容式 `TransitionBatch`
+- `SessionAdapter` / `StreamEngine` 已能走 `ReduceBatch -> batch -> 旧动作执行链`
 - 但 아직没有完整落成文档中的 `Session Actor + TransitionBatch + EffectExecutor` 结构
 
 结论：
 
 - 顺序问题已修
+- reducer 输出对象已经开始成型
 - 但执行引擎的架构终态还没完全重塑
 
 ## 6.3 runtime 仍不是纯 orchestration shell
@@ -253,7 +268,8 @@ flowchart TD
 当前实际情况：
 
 - 已经比最初干净很多
-- 但 `skipStage`、`abortPlan`、`handleCancellation` 等流程还没有全部继续拆成更统一的 projector/policy 组合
+- `abortPlan`、Run 终态写入、Stage 终态写入、取消投影循环已经开始抽成统一 helper
+- 但 `skipStage`、`handleCancellation` 等流程还没有全部继续拆成更统一的 projector/policy 组合
 
 结论：
 
@@ -270,12 +286,14 @@ flowchart TD
 当前实际情况：
 
 - 前端已改为直接吃 `task:snapshot_data`
+- Bridge 已增加 `task:snapshot_delta`
+- Store 已支持基于 `lastRunSeq` 的增量接入与旧包丢弃
 - 已不再在每个事件上频繁回源刷新
-- 但还没有进一步演进成“按 seq 的精细增量更新协议”
+- 当前 delta 仍是“带全量 snapshot 的增量封装”，还不是细粒度 patch 协议
 
 结论：
 
-- 已经从“事件触发全量刷新”进化了一步
+- 已经从“事件触发全量刷新”进化到“按 seq 增量接入”
 - 但不是文档设计中的最终消费模式
 
 ## 7. 当前代码最明显的遗留问题
@@ -306,6 +324,10 @@ flowchart TD
 - 一些 unit 级状态切换
 - 一些取消路径处理
 - 一些阶段进度推进
+
+最新进展：
+
+- 命令执行、采集、解析分支的 unit 生命周期写法已开始统一复用 helper
 
 建议继续把 unit 生命周期表达再往 projector 靠。
 
@@ -373,8 +395,9 @@ flowchart TD
 
 截至本文档编写时，已通过的验证包括：
 
-- `go test ./internal/taskexec ./internal/executor ./internal/report ./internal/ui`
-- `npm run build`
+- `go test ./internal/taskexec`
+- `go test ./internal/executor ./internal/taskexec`
+- 根目录 `build.bat`
 
 说明：
 

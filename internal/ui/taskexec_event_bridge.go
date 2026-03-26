@@ -12,23 +12,26 @@ import (
 // TaskExecutionEventBridge 统一任务执行事件桥接器
 // 负责将 taskexec 内部事件转换为 Wails 事件发送到前端
 type TaskExecutionEventBridge struct {
-	eventBus       *taskexec.EventBus
-	wailsApp       *application.App
-	snapshotGetter func(runID string) (*taskexec.ExecutionSnapshot, error)
-	mu             sync.RWMutex
-	runIDs         map[string]struct{}
-	unsubscribeEvt func()
+	eventBus            *taskexec.EventBus
+	wailsApp            *application.App
+	snapshotGetter      func(runID string) (*taskexec.ExecutionSnapshot, error)
+	snapshotDeltaGetter func(runID string) (*taskexec.SnapshotDelta, error)
+	mu                  sync.RWMutex
+	runIDs              map[string]struct{}
+	unsubscribeEvt      func()
 }
 
 // NewTaskExecutionEventBridge 创建事件桥接器
 func NewTaskExecutionEventBridge(
 	eventBus *taskexec.EventBus,
 	snapshotGetter func(runID string) (*taskexec.ExecutionSnapshot, error),
+	snapshotDeltaGetter func(runID string) (*taskexec.SnapshotDelta, error),
 ) *TaskExecutionEventBridge {
 	return &TaskExecutionEventBridge{
-		eventBus:       eventBus,
-		snapshotGetter: snapshotGetter,
-		runIDs:         make(map[string]struct{}),
+		eventBus:            eventBus,
+		snapshotGetter:      snapshotGetter,
+		snapshotDeltaGetter: snapshotDeltaGetter,
+		runIDs:              make(map[string]struct{}),
 	}
 }
 
@@ -85,7 +88,17 @@ func (b *TaskExecutionEventBridge) handleEvent(event *taskexec.TaskEvent) {
 		b.emitToFrontend("task:unit_updated", frontendEvent)
 	}
 
-	if b.snapshotGetter != nil {
+	if b.snapshotDeltaGetter != nil {
+		delta, err := b.snapshotDeltaGetter(event.RunID)
+		if err != nil {
+			logger.Warn("TaskExecEventBridge", event.RunID, "获取快照增量失败: %v", err)
+		} else if delta != nil {
+			b.emitToFrontend("task:snapshot_delta", delta)
+			if delta.Snapshot != nil {
+				b.emitToFrontend("task:snapshot_data", delta.Snapshot)
+			}
+		}
+	} else if b.snapshotGetter != nil {
 		snapshot, err := b.snapshotGetter(event.RunID)
 		if err != nil {
 			logger.Warn("TaskExecEventBridge", event.RunID, "获取快照失败: %v", err)
@@ -99,7 +112,7 @@ func (b *TaskExecutionEventBridge) handleEvent(event *taskexec.TaskEvent) {
 		"runId":      event.RunID,
 		"timestamp":  time.Now().UnixMilli(),
 		"eventType":  string(event.Type),
-		"hasPayload": b.snapshotGetter != nil,
+		"hasPayload": b.snapshotGetter != nil || b.snapshotDeltaGetter != nil,
 	})
 }
 

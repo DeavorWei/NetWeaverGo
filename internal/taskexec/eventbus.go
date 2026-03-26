@@ -315,6 +315,25 @@ func (h *SnapshotHub) Get(runID string) (*ExecutionSnapshot, bool) {
 	return snapshot.Clone(), true
 }
 
+// BuildDelta 基于当前快照构建增量消息。
+// 当前阶段采用“单调序号 + 全量快照载荷”的方式，后续可继续演进为真正 patch。
+func (h *SnapshotHub) BuildDelta(runID string) (*SnapshotDelta, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	snapshot, ok := h.snapshots[runID]
+	if !ok || snapshot == nil {
+		return nil, false
+	}
+	cloned := snapshot.Clone()
+	return &SnapshotDelta{
+		RunID:     runID,
+		Seq:       cloned.LastRunSeq,
+		Revision:  cloned.Revision,
+		UpdatedAt: cloned.UpdatedAt,
+		Snapshot:  cloned,
+	}, true
+}
+
 // Close 关闭快照中心。
 func (h *SnapshotHub) Close() {
 	h.mu.Lock()
@@ -603,11 +622,14 @@ func (h *SnapshotHub) AppendEvent(event *TaskEvent) bool {
 		return false
 	}
 
+	nextSeq := h.revisions[event.RunID] + 1
 	eventSnapshot := NewEventSnapshotFromTaskEvent(event)
+	eventSnapshot.Seq = nextSeq
 	snapshot.Events = append([]EventSnapshot{eventSnapshot}, snapshot.Events...)
 	if len(snapshot.Events) > 50 {
 		snapshot.Events = snapshot.Events[:50]
 	}
+	updateSnapshotSessionSeq(snapshot, event)
 	h.touchSnapshotLocked(event.RunID, snapshot)
 	return true
 }
@@ -617,10 +639,11 @@ func (h *SnapshotHub) ensureSnapshotLocked(runID string) *ExecutionSnapshot {
 		return snapshot
 	}
 	snapshot := &ExecutionSnapshot{
-		RunID:  runID,
-		Stages: []StageSnapshot{},
-		Units:  []UnitSnapshot{},
-		Events: []EventSnapshot{},
+		RunID:                runID,
+		Stages:               []StageSnapshot{},
+		Units:                []UnitSnapshot{},
+		Events:               []EventSnapshot{},
+		LastSessionSeqByUnit: map[string]uint64{},
 	}
 	h.snapshots[runID] = snapshot
 	return snapshot
@@ -629,7 +652,65 @@ func (h *SnapshotHub) ensureSnapshotLocked(runID string) *ExecutionSnapshot {
 func (h *SnapshotHub) touchSnapshotLocked(runID string, snapshot *ExecutionSnapshot) {
 	h.revisions[runID]++
 	snapshot.Revision = h.revisions[runID]
+	snapshot.LastRunSeq = h.revisions[runID]
 	snapshot.UpdatedAt = time.Now()
+	if snapshot.LastSessionSeqByUnit == nil {
+		snapshot.LastSessionSeqByUnit = map[string]uint64{}
+	}
+}
+
+func updateSnapshotSessionSeq(snapshot *ExecutionSnapshot, event *TaskEvent) {
+	if snapshot == nil || event == nil || event.UnitID == "" {
+		return
+	}
+	if snapshot.LastSessionSeqByUnit == nil {
+		snapshot.LastSessionSeqByUnit = map[string]uint64{}
+	}
+	seq, ok := payloadUint64(event.Payload, "sessionSeq")
+	if !ok {
+		seq, ok = payloadUint64(event.Payload, "seq")
+	}
+	if !ok {
+		return
+	}
+	if current := snapshot.LastSessionSeqByUnit[event.UnitID]; seq > current {
+		snapshot.LastSessionSeqByUnit[event.UnitID] = seq
+	}
+}
+
+func payloadUint64(payload map[string]interface{}, key string) (uint64, bool) {
+	if len(payload) == 0 {
+		return 0, false
+	}
+	value, ok := payload[key]
+	if !ok {
+		return 0, false
+	}
+	switch v := value.(type) {
+	case uint64:
+		return v, true
+	case uint32:
+		return uint64(v), true
+	case uint:
+		return uint64(v), true
+	case int:
+		if v < 0 {
+			return 0, false
+		}
+		return uint64(v), true
+	case int64:
+		if v < 0 {
+			return 0, false
+		}
+		return uint64(v), true
+	case float64:
+		if v < 0 {
+			return 0, false
+		}
+		return uint64(v), true
+	default:
+		return 0, false
+	}
 }
 
 func applyRunModelToSnapshot(snapshot *ExecutionSnapshot, run *TaskRun) bool {

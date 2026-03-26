@@ -39,6 +39,11 @@ func NewSessionAdapter(width int, commands []string, m *matcher.StreamMatcher) *
 
 // FeedSessionActions 消费原始 chunk，返回统一的新动作模型
 func (a *SessionAdapter) FeedSessionActions(chunk string) []SessionAction {
+	return a.FeedTransitionBatch(chunk).ToActions()
+}
+
+// FeedTransitionBatch 消费原始 chunk，返回 reducer 批次结果。
+func (a *SessionAdapter) FeedTransitionBatch(chunk string) *TransitionBatch {
 	// 1. 使用 Replayer 处理 chunk
 	events := a.replayer.Process(chunk)
 	newLines := make([]string, 0)
@@ -59,17 +64,20 @@ func (a *SessionAdapter) FeedSessionActions(chunk string) []SessionAction {
 	protocolEvents := a.detectSessionEvents(newLines, activeLineUpdated)
 
 	// 3. 使用 Reducer 进行状态归约
-	var sessionActions []SessionAction
+	batch := NewTransitionBatch()
 	for _, event := range protocolEvents {
-		actions := a.reducer.Reduce(event)
-		sessionActions = append(sessionActions, actions...)
+		reduced := a.reducer.ReduceBatch(event)
+		if reduced == nil || reduced.IsEmpty() {
+			continue
+		}
+		batch.Effects = append(batch.Effects, reduced.Effects...)
 	}
 
 	// 同步状态和上下文快照
 	a.newState = a.reducer.State()
 	a.newContext = a.reducer.Context()
 
-	return sessionActions
+	return batch
 }
 
 // NewState 返回当前状态（新架构）
@@ -133,24 +141,40 @@ func (a *SessionAdapter) GetPendingError() *ErrorContext {
 
 // ResolveErrorActions 解决错误（外部决策后调用），返回后续动作
 func (a *SessionAdapter) ResolveErrorActions(continueExec bool) []SessionAction {
-	var actions []SessionAction
+	return a.ResolveErrorBatch(continueExec).ToActions()
+}
+
+// ResolveErrorBatch 解决错误（外部决策后调用），返回后续批次。
+func (a *SessionAdapter) ResolveErrorBatch(continueExec bool) *TransitionBatch {
+	var batch *TransitionBatch
 	if continueExec {
-		actions = a.reducer.Reduce(EvUserContinue{})
+		batch = a.reducer.ReduceBatch(EvUserContinue{})
 	} else {
-		actions = a.reducer.Reduce(EvUserAbort{})
+		batch = a.reducer.ReduceBatch(EvUserAbort{})
 	}
 	a.newState = a.reducer.State()
 	a.newContext = a.reducer.Context()
 	logger.Debug("SessionAdapter", "-", "解决错误: continue=%v", continueExec)
-	return actions
+	if batch == nil {
+		return NewTransitionBatch()
+	}
+	return batch
 }
 
 // ReduceEvent 注入一个外部事件并同步状态快照。
 func (a *SessionAdapter) ReduceEvent(event SessionEvent) []SessionAction {
-	actions := a.reducer.Reduce(event)
+	return a.ReduceEventBatch(event).ToActions()
+}
+
+// ReduceEventBatch 注入一个外部事件并同步状态快照，返回批次。
+func (a *SessionAdapter) ReduceEventBatch(event SessionEvent) *TransitionBatch {
+	batch := a.reducer.ReduceBatch(event)
 	a.newState = a.reducer.State()
 	a.newContext = a.reducer.Context()
-	return actions
+	if batch == nil {
+		return NewTransitionBatch()
+	}
+	return batch
 }
 
 // ResolveError 兼容旧调用

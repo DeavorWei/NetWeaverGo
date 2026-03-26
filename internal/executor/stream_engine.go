@@ -264,10 +264,10 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 
 				// 处理 chunk - 使用数据副本
 				chunk := string(data)
-				actions := e.processChunk(chunk)
+				batch := e.processChunkBatch(chunk)
 
 				// 先发出本轮 chunk 已确定完成的命令结果，再执行后续动作。
-				if err := e.executeActions(actions, &currentTimeout, defaultTimeout, timer); err != nil {
+				if err := e.executeBatch(batch, &currentTimeout, defaultTimeout, timer); err != nil {
 					e.adapter.MarkFailed(err.Error())
 					e.emitNewCommandCompleteEvents()
 					return e.adapter.Results(), err
@@ -306,10 +306,17 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 }
 
 func (e *StreamEngine) executeActions(actions []SessionAction, currentTimeout *time.Duration, defaultTimeout time.Duration, timer *time.Timer) error {
+	return e.executeBatch(NewTransitionBatch(actions...), currentTimeout, defaultTimeout, timer)
+}
+
+func (e *StreamEngine) executeBatch(batch *TransitionBatch, currentTimeout *time.Duration, defaultTimeout time.Duration, timer *time.Timer) error {
 	e.emitNewCommandCompleteEvents()
-	for _, action := range actions {
+	if batch == nil || batch.IsEmpty() {
+		return nil
+	}
+	for _, effect := range batch.Effects {
 		e.emitNewCommandCompleteEvents()
-		if err := e.executeSessionAction(action, currentTimeout, defaultTimeout, timer); err != nil {
+		if err := e.executeSessionEffect(effect, currentTimeout, defaultTimeout, timer); err != nil {
 			return err
 		}
 		e.emitNewCommandCompleteEvents()
@@ -319,7 +326,11 @@ func (e *StreamEngine) executeActions(actions []SessionAction, currentTimeout *t
 
 // processChunk 处理 chunk，返回需要执行的新动作
 func (e *StreamEngine) processChunk(chunk string) []SessionAction {
-	actions := e.adapter.FeedSessionActions(chunk)
+	return e.processChunkBatch(chunk).ToActions()
+}
+
+func (e *StreamEngine) processChunkBatch(chunk string) *TransitionBatch {
+	batch := e.adapter.FeedTransitionBatch(chunk)
 
 	// 将规范化后的行同步写入 Detail 日志
 	if e.executor != nil && e.executor.logSession != nil {
@@ -331,7 +342,24 @@ func (e *StreamEngine) processChunk(chunk string) []SessionAction {
 		}
 	}
 
-	return actions
+	if batch == nil {
+		return NewTransitionBatch()
+	}
+	return batch
+}
+
+// executeSessionEffect 执行批次中的副作用。
+// 当前阶段通过 ActionEffect 适配旧动作执行链，后续可继续演进为真正的 EffectExecutor。
+func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout *time.Duration, defaultTimeout time.Duration, timer *time.Timer) error {
+	if effect == nil {
+		return nil
+	}
+	logger.Verbose("StreamEngine", "-", "执行副作用: type=%s", effect.EffectType())
+	action := effect.AsAction()
+	if action == nil {
+		return nil
+	}
+	return e.executeSessionAction(action, currentTimeout, defaultTimeout, timer)
 }
 
 // executeSessionAction 执行统一的新动作模型
@@ -446,8 +474,8 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 						TotalCmd: e.adapter.TotalCommands(),
 					}
 				}
-				followups := e.adapter.ResolveErrorActions(false)
-				if err := e.executeActions(followups, currentTimeout, defaultTimeout, timer); err != nil {
+				followups := e.adapter.ResolveErrorBatch(false)
+				if err := e.executeBatch(followups, currentTimeout, defaultTimeout, timer); err != nil {
 					return err
 				}
 				return fmt.Errorf("设备 %s 的执行被用户手动中止", e.executor.IP)
@@ -461,11 +489,11 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 						TotalCmd: e.adapter.TotalCommands(),
 					}
 				}
-				followups := e.adapter.ReduceEvent(EvSuspendTimeout{
+				followups := e.adapter.ReduceEventBatch(EvSuspendTimeout{
 					CommandIndex: act.ErrorContext.CmdIndex,
 					Reason:       "5分钟超时",
 				})
-				if err := e.executeActions(followups, currentTimeout, defaultTimeout, timer); err != nil {
+				if err := e.executeBatch(followups, currentTimeout, defaultTimeout, timer); err != nil {
 					return err
 				}
 				return fmt.Errorf("设备 %s 的执行因挂起超时被自动中止", e.executor.IP)
@@ -480,16 +508,16 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 						TotalCmd: e.adapter.TotalCommands(),
 					}
 				}
-				followups := e.adapter.ResolveErrorActions(true)
-				if err := e.executeActions(followups, currentTimeout, defaultTimeout, timer); err != nil {
+				followups := e.adapter.ResolveErrorBatch(true)
+				if err := e.executeBatch(followups, currentTimeout, defaultTimeout, timer); err != nil {
 					return err
 				}
 				logger.Debug("StreamEngine", "-", "用户选择放行错误，继续执行")
 			}
 		} else {
 			// 没有挂起处理器，默认中止
-			followups := e.adapter.ResolveErrorActions(false)
-			if err := e.executeActions(followups, currentTimeout, defaultTimeout, timer); err != nil {
+			followups := e.adapter.ResolveErrorBatch(false)
+			if err := e.executeBatch(followups, currentTimeout, defaultTimeout, timer); err != nil {
 				return err
 			}
 			return fmt.Errorf("设备 %s 执行错误: %s", e.executor.IP, act.ErrorContext.Line)

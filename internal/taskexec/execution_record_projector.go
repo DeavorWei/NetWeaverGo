@@ -55,13 +55,8 @@ func emitProjectedRunEvent(
 	message string,
 ) {
 	logger.Verbose("TaskExec", ctx.RunID(), "发出 Run 事件: type=%s, level=%s, message=%s", eventType, level, message)
-	ctx.Emit(&TaskEvent{
-		RunID:     ctx.RunID(),
-		Type:      eventType,
-		Level:     level,
-		Message:   message,
-		Timestamp: time.Now(),
-	})
+	ctx.Emit(NewTaskEvent(ctx.RunID(), eventType, message).
+		WithLevel(level))
 }
 
 func emitProjectedUnitEvent(
@@ -74,15 +69,10 @@ func emitProjectedUnitEvent(
 ) {
 	logger.Verbose("TaskExec", ctx.RunID(), "发出 Unit 事件: stage=%s, unit=%s, type=%s, level=%s, message=%s",
 		stageID, unitID, eventType, level, message)
-	ctx.Emit(&TaskEvent{
-		RunID:     ctx.RunID(),
-		StageID:   stageID,
-		UnitID:    unitID,
-		Type:      eventType,
-		Level:     level,
-		Message:   message,
-		Timestamp: time.Now(),
-	})
+	ctx.Emit(NewTaskEvent(ctx.RunID(), eventType, message).
+		WithStage(stageID).
+		WithUnit(unitID).
+		WithLevel(level))
 }
 
 func emitProjectedStageEvent(
@@ -94,14 +84,9 @@ func emitProjectedStageEvent(
 ) {
 	logger.Verbose("TaskExec", ctx.RunID(), "发出 Stage 事件: stage=%s, type=%s, level=%s, message=%s",
 		stageID, eventType, level, message)
-	ctx.Emit(&TaskEvent{
-		RunID:     ctx.RunID(),
-		StageID:   stageID,
-		Type:      eventType,
-		Level:     level,
-		Message:   message,
-		Timestamp: time.Now(),
-	})
+	ctx.Emit(NewTaskEvent(ctx.RunID(), eventType, message).
+		WithStage(stageID).
+		WithLevel(level))
 }
 
 func emitProjectedStageProgressEvent(

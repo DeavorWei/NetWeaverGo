@@ -150,3 +150,86 @@ func TestSnapshotHubGetReturnsClone(t *testing.T) {
 		t.Fatalf("本地修改不应污染缓存事件: %+v", second.Events)
 	}
 }
+
+func TestSnapshotHubBuildDeltaTracksRunSeq(t *testing.T) {
+	hub := NewSnapshotHub(nil)
+	now := time.Now()
+	run := &TaskRun{
+		ID:        "run-delta",
+		Name:      "delta",
+		RunKind:   string(RunKindNormal),
+		Status:    string(RunStatusRunning),
+		Progress:  0,
+		StartedAt: &now,
+	}
+
+	if !hub.EnsureRun(run) {
+		t.Fatal("首次 EnsureRun 应写入快照")
+	}
+
+	delta, ok := hub.BuildDelta(run.ID)
+	if !ok || delta == nil {
+		t.Fatal("应能构建初始 delta")
+	}
+	if delta.Seq != 1 {
+		t.Fatalf("初始 delta seq 错误: got=%d want=1", delta.Seq)
+	}
+	if delta.Snapshot == nil || delta.Snapshot.LastRunSeq != 1 {
+		t.Fatalf("初始快照 run seq 错误: %+v", delta.Snapshot)
+	}
+
+	progress := 50
+	if !hub.ApplyRunPatch(run.ID, &RunPatch{Progress: &progress}) {
+		t.Fatal("ApplyRunPatch 应命中已有快照")
+	}
+
+	delta, ok = hub.BuildDelta(run.ID)
+	if !ok || delta == nil {
+		t.Fatal("应能构建更新后的 delta")
+	}
+	if delta.Seq != 2 {
+		t.Fatalf("更新后 delta seq 错误: got=%d want=2", delta.Seq)
+	}
+	if delta.Snapshot == nil || delta.Snapshot.Progress != 50 || delta.Snapshot.LastRunSeq != 2 {
+		t.Fatalf("更新后快照错误: %+v", delta.Snapshot)
+	}
+}
+
+func TestSnapshotHubAppendEventProjectsEventSeqAndSessionSeq(t *testing.T) {
+	hub := NewSnapshotHub(nil)
+	run := &TaskRun{
+		ID:       "run-event-seq",
+		Name:     "event-seq",
+		RunKind:  string(RunKindNormal),
+		Status:   string(RunStatusRunning),
+		Progress: 0,
+	}
+	if !hub.EnsureRun(run) {
+		t.Fatal("首次 EnsureRun 应写入快照")
+	}
+
+	event := NewTaskEvent(run.ID, EventTypeUnitProgress, "命令完成").
+		WithStage("stage-1").
+		WithUnit("unit-1").
+		WithPayload("sessionSeq", 7)
+	if !hub.AppendEvent(event) {
+		t.Fatal("AppendEvent 应写入事件投影")
+	}
+
+	snapshot, ok := hub.Get(run.ID)
+	if !ok || snapshot == nil {
+		t.Fatal("应能读取事件投影后的快照")
+	}
+	if snapshot.LastRunSeq != 2 {
+		t.Fatalf("事件追加后 run seq 错误: got=%d want=2", snapshot.LastRunSeq)
+	}
+	if len(snapshot.Events) != 1 {
+		t.Fatalf("事件数量错误: %+v", snapshot.Events)
+	}
+	if snapshot.Events[0].Seq != 2 {
+		t.Fatalf("事件 seq 错误: got=%d want=2", snapshot.Events[0].Seq)
+	}
+	if snapshot.LastSessionSeqByUnit["unit-1"] != 7 {
+		t.Fatalf("unit session seq 错误: got=%d want=7", snapshot.LastSessionSeqByUnit["unit-1"])
+	}
+}

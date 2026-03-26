@@ -345,6 +345,191 @@ func TestExecutorRegistry(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestRuntimeManagerGetSnapshotDelta(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewGormRepository(db)
+	eventBus := NewEventBus(100)
+	snapshotHub := NewSnapshotHub(eventBus)
+	runtime := NewRuntimeManager(repo, eventBus, snapshotHub)
+
+	run := &TaskRun{
+		ID:        "delta-run-1",
+		Name:      "delta-test",
+		RunKind:   string(RunKindNormal),
+		Status:    string(RunStatusRunning),
+		Progress:  0,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, repo.CreateRun(context.Background(), run))
+	snapshotHub.EnsureRun(run)
+
+	delta, err := runtime.GetSnapshotDelta(run.ID)
+	require.NoError(t, err)
+	require.NotNil(t, delta)
+	require.NotNil(t, delta.Snapshot)
+	assert.Equal(t, run.ID, delta.RunID)
+	assert.Equal(t, delta.Seq, delta.Snapshot.LastRunSeq)
+
+	progress := 35
+	require.True(t, snapshotHub.ApplyRunPatch(run.ID, &RunPatch{Progress: &progress}))
+
+	delta, err = runtime.GetSnapshotDelta(run.ID)
+	require.NoError(t, err)
+	require.NotNil(t, delta)
+	assert.Equal(t, uint64(2), delta.Seq)
+	require.NotNil(t, delta.Snapshot)
+	assert.Equal(t, 35, delta.Snapshot.Progress)
+}
+
+func TestTaskExecutionServiceGetSnapshotDelta(t *testing.T) {
+	db := setupTestDB(t)
+	service := NewTaskExecutionService(db)
+	run := &TaskRun{
+		ID:        "delta-run-2",
+		Name:      "service-delta-test",
+		RunKind:   string(RunKindNormal),
+		Status:    string(RunStatusRunning),
+		Progress:  0,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, service.repo.CreateRun(context.Background(), run))
+	require.True(t, service.snapshot.EnsureRun(run))
+
+	delta, err := service.GetSnapshotDelta(run.ID)
+	require.NoError(t, err)
+	require.NotNil(t, delta)
+	require.NotNil(t, delta.Snapshot)
+	assert.Equal(t, run.ID, delta.RunID)
+	assert.Equal(t, delta.Seq, delta.Snapshot.LastRunSeq)
+}
+
+func TestRuntimeManagerProjectCancellationToStages(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewGormRepository(db)
+	eventBus := NewEventBus(100)
+	snapshotHub := NewSnapshotHub(eventBus)
+	runtime := NewRuntimeManager(repo, eventBus, snapshotHub)
+
+	run := &TaskRun{
+		ID:        "cancel-run-1",
+		Name:      "cancel-test",
+		RunKind:   string(RunKindNormal),
+		Status:    string(RunStatusRunning),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, repo.CreateRun(context.Background(), run))
+
+	stage := &TaskRunStage{
+		ID:         "cancel-stage-1",
+		TaskRunID:  run.ID,
+		StageKind:  string(StageKindDeviceCommand),
+		StageName:  "命令执行",
+		StageOrder: 1,
+		Status:     string(StageStatusRunning),
+		TotalUnits: 1,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+	require.NoError(t, repo.CreateStage(context.Background(), stage))
+
+	unit := &TaskRunUnit{
+		ID:             "cancel-unit-1",
+		TaskRunID:      run.ID,
+		TaskRunStageID: stage.ID,
+		UnitKind:       string(UnitKindDevice),
+		TargetType:     "device_ip",
+		TargetKey:      "10.0.0.1",
+		Status:         string(UnitStatusRunning),
+		DoneSteps:      2,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+	require.NoError(t, repo.CreateUnit(context.Background(), unit))
+
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runtimeCtx := &defaultRuntimeContext{
+		runID:       run.ID,
+		ctx:         runCtx,
+		cancel:      cancel,
+		repo:        repo,
+		eventBus:    eventBus,
+		logger:      newNoopRuntimeLogger(),
+		snapshotHub: snapshotHub,
+	}
+	handler := NewErrorHandler(run.ID)
+
+	runtime.projectCancellationToStages(runtimeCtx, handler, []TaskRunStage{*stage})
+
+	gotUnit, err := repo.GetUnit(context.Background(), unit.ID)
+	require.NoError(t, err)
+	assert.Equal(t, string(UnitStatusCancelled), gotUnit.Status)
+	assert.Equal(t, "run cancelled", gotUnit.ErrorMessage)
+
+	gotStage, err := repo.GetStage(context.Background(), stage.ID)
+	require.NoError(t, err)
+	assert.Equal(t, string(StageStatusCancelled), gotStage.Status)
+}
+
+func TestFinishRunAndStageWithStatus(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewGormRepository(db)
+	eventBus := NewEventBus(10)
+	snapshotHub := NewSnapshotHub(eventBus)
+
+	run := &TaskRun{
+		ID:        "finish-run-1",
+		Name:      "finish-test",
+		RunKind:   string(RunKindNormal),
+		Status:    string(RunStatusRunning),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, repo.CreateRun(context.Background(), run))
+
+	stage := &TaskRunStage{
+		ID:         "finish-stage-1",
+		TaskRunID:  run.ID,
+		StageKind:  string(StageKindDeviceCommand),
+		StageName:  "命令执行",
+		StageOrder: 1,
+		Status:     string(StageStatusRunning),
+		TotalUnits: 0,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+	require.NoError(t, repo.CreateStage(context.Background(), stage))
+
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runtimeCtx := &defaultRuntimeContext{
+		runID:       run.ID,
+		ctx:         runCtx,
+		cancel:      cancel,
+		repo:        repo,
+		eventBus:    eventBus,
+		logger:      newNoopRuntimeLogger(),
+		snapshotHub: snapshotHub,
+	}
+	handler := NewErrorHandler(run.ID)
+
+	finishRunWithStatus(handler, runtimeCtx, string(RunStatusCompleted), "测试 run 终态收口")
+	finishStageWithStatus(handler, runtimeCtx, stage.ID, string(StageStatusFailed), "测试 stage 终态收口")
+
+	gotRun, err := repo.GetRun(context.Background(), run.ID)
+	require.NoError(t, err)
+	assert.Equal(t, string(RunStatusCompleted), gotRun.Status)
+	assert.NotNil(t, gotRun.FinishedAt)
+
+	gotStage, err := repo.GetStage(context.Background(), stage.ID)
+	require.NoError(t, err)
+	assert.Equal(t, string(StageStatusFailed), gotStage.Status)
+	assert.NotNil(t, gotStage.FinishedAt)
+}
+
 // mockPlanCompiler 模拟计划编译器
 type mockPlanCompiler struct {
 	kind string

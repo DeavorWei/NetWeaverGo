@@ -130,33 +130,21 @@ func (e *DeviceCommandExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, unit *UnitPlan, reportProgress func(doneSteps, totalSteps int)) error {
 	handler := NewErrorHandler(ctx.RunID())
 	if ctx.IsCancelled() {
-		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before unit start", intPtrLocal(0))
-		return ctx.Context().Err()
+		return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled before unit start", intPtrLocal(0))
 	}
 
-	startedAt := time.Now()
-	unitRunning := string(UnitStatusRunning)
-	if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-		Status:    &unitRunning,
-		StartedAt: &startedAt,
-	}, "设置命令执行 Unit 为 running"); err != nil {
+	if err := markUnitRunning(handler, ctx, unit.ID, "设置命令执行 Unit 为 running"); err != nil {
 		return err
 	}
 
 	if ctx.IsCancelled() {
-		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled after unit start", intPtrLocal(0))
-		return ctx.Context().Err()
+		return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled after unit start", intPtrLocal(0))
 	}
 
 	// Get device info from unit target
 	if unit.Target.Type != "device_ip" {
 		errMsg := fmt.Sprintf("unsupported target type: %s", unit.Target.Type)
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "写入命令执行 Unit 失败状态")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入命令执行 Unit 失败状态", nil)
 		return fmt.Errorf("%s", errMsg)
 	}
 
@@ -171,12 +159,7 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 	if err != nil {
 		logger.Error("TaskExec", ctx.RunID(), "Failed to find device %s: %v", deviceIP, err)
 		errMsg := fmt.Sprintf("Device not found: %s", deviceIP)
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "写入设备不存在失败状态")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入设备不存在失败状态", nil)
 		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Device not found: %s", deviceIP))
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordDeviceMissing, fmt.Sprintf("设备不存在: %s", deviceIP), 0, 0)
 		return fmt.Errorf("%s", errMsg)
@@ -193,13 +176,7 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 	if len(commands) == 0 {
 		logger.Warn("TaskExec", ctx.RunID(), "No commands to execute for device: %s", deviceIP)
 		doneSteps := 0
-		unitCompleted := string(UnitStatusCompleted)
-		finishedAt := time.Now()
-		if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:     &unitCompleted,
-			DoneSteps:  &doneSteps,
-			FinishedAt: &finishedAt,
-		}, "写入空命令 Unit 完成状态"); err != nil {
+		if err := completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), doneSteps, "写入空命令 Unit 完成状态"); err != nil {
 			return err
 		}
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordNoCommands, "未配置可执行命令，直接完成", 0, 0)
@@ -246,8 +223,7 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 	}
 
 	if ctx.IsCancelled() {
-		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before connect", intPtrLocal(0))
-		return ctx.Context().Err()
+		return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled before connect", intPtrLocal(0))
 	}
 
 	// Connect to device
@@ -256,17 +232,11 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 
 	if err := exec.Connect(execCtx, connTimeout); err != nil {
 		if IsContextCancelled(ctx, err) {
-			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during connect", intPtrLocal(0))
-			return err
+			return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled during connect", intPtrLocal(0))
 		}
 		logger.Error("TaskExec", ctx.RunID(), "Failed to connect to %s: %v", deviceIP, err)
 		errMsg := fmt.Sprintf("connection failed: %v", err)
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "写入连接失败状态")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入连接失败状态", nil)
 		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Connection failed: %v", err))
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnectFailed, fmt.Sprintf("连接失败: %v", err), len(commands), 0)
 		return err
@@ -274,9 +244,8 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnected, "SSH 连接成功", len(commands), 0)
 
 	if ctx.IsCancelled() {
-		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before execute commands", intPtrLocal(0))
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionCancelled, "执行前收到取消信号", len(commands), 0)
-		return ctx.Context().Err()
+		return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled before execute commands", intPtrLocal(0))
 	}
 
 	// Execute commands
@@ -291,33 +260,20 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 
 	if err := exec.ExecutePlaybookWithEvents(execCtx, commands, cmdTimeout, commandEventHandler); err != nil {
 		if IsContextCancelled(ctx, err) {
-			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during command execution", intPtrLocal(len(commands)))
 			projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionCancelled, "命令执行过程中收到取消信号", len(commands), 0)
-			return err
+			return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled during command execution", intPtrLocal(len(commands)))
 		}
 		logger.Error("TaskExec", ctx.RunID(), "Failed to execute commands on %s: %v", deviceIP, err)
 		errMsg := fmt.Sprintf("command execution failed: %v", err)
 		doneSteps := len(commands)
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			DoneSteps:    &doneSteps,
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "写入命令执行失败状态")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入命令执行失败状态", &doneSteps)
 		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Command execution failed: %v", err))
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, fmt.Sprintf("命令执行失败: %v", err), len(commands), 0)
 		return err
 	}
 
 	doneSteps := len(commands)
-	unitCompleted := string(UnitStatusCompleted)
-	finishedAt := time.Now()
-	if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-		Status:     &unitCompleted,
-		DoneSteps:  &doneSteps,
-		FinishedAt: &finishedAt,
-	}, "写入命令执行完成状态"); err != nil {
+	if err := completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), doneSteps, "写入命令执行完成状态"); err != nil {
 		return err
 	}
 	if reportProgress != nil {
@@ -436,31 +392,20 @@ func (e *DeviceCollectExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID string, unit *UnitPlan, outputDir string) error {
 	handler := NewErrorHandler(ctx.RunID())
 	if ctx.IsCancelled() {
-		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before collect unit start", intPtrLocal(0))
 		if unit.Target.Key != "" {
 			e.updateRunDeviceStatus(ctx.RunID(), unit.Target.Key, "cancelled", "run cancelled before collect unit start")
 		}
-		return ctx.Context().Err()
+		return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled before collect unit start", intPtrLocal(0))
 	}
 
-	startedAt := time.Now()
-	unitRunning := string(UnitStatusRunning)
-	if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-		Status:    &unitRunning,
-		StartedAt: &startedAt,
-	}, "设置采集 Unit 为 running"); err != nil {
+	if err := markUnitRunning(handler, ctx, unit.ID, "设置采集 Unit 为 running"); err != nil {
 		return err
 	}
 
 	// Get device info from unit target
 	if unit.Target.Type != "device_ip" {
 		errMsg := fmt.Sprintf("unsupported target type: %s", unit.Target.Type)
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "写入采集 Unit 失败状态")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集 Unit 失败状态", nil)
 		return fmt.Errorf("%s", errMsg)
 	}
 
@@ -471,32 +416,21 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 	logger.Debug("TaskExec", ctx.RunID(), "Collecting from device: %s", deviceIP)
 
 	if ctx.IsCancelled() {
-		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before loading device", intPtrLocal(0))
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled before loading device")
-		return ctx.Context().Err()
+		return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled before loading device", intPtrLocal(0))
 	}
 
 	// Get device from repository
 	device, err := e.repo.FindByIP(deviceIP)
 	if err != nil {
 		errMsg := fmt.Sprintf("device not found: %v", err)
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "写入采集设备不存在状态")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集设备不存在状态", nil)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordDeviceMissing, fmt.Sprintf("采集设备不存在: %v", err), 0, 0)
 		return fmt.Errorf("device not found: %w", err)
 	}
 	if err := e.ensureRunDevice(ctx.RunID(), device); err != nil {
 		errMsg := fmt.Sprintf("ensure run device failed: %v", err)
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "创建运行设备记录失败")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "创建运行设备记录失败", nil)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, errMsg, 0, 0)
 		return err
 	}
@@ -547,27 +481,20 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 	}
 
 	if ctx.IsCancelled() {
-		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before connect", intPtrLocal(0))
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled before connect")
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionCancelled, "采集前收到取消信号", 0, 0)
-		return ctx.Context().Err()
+		return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled before connect", intPtrLocal(0))
 	}
 
 	// Connect to device
 	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnecting, "开始建立采集连接", 0, 0)
 	if err := exec.Connect(execCtx, connTimeout); err != nil {
 		if IsContextCancelled(ctx, err) {
-			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during connect", intPtrLocal(0))
 			e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled during connect")
-			return err
+			return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled during connect", intPtrLocal(0))
 		}
 		errMsg := fmt.Sprintf("connection failed: %v", err)
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "写入采集连接失败状态")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集连接失败状态", nil)
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnectFailed, fmt.Sprintf("采集连接失败: %v", err), 0, 0)
 		return fmt.Errorf("connection failed: %w", err)
@@ -578,12 +505,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 	profile := config.GetDeviceProfile(vendor)
 	if profile == nil {
 		errMsg := fmt.Sprintf("no profile found for vendor: %s", vendor)
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "写入采集 Profile 缺失状态")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集 Profile 缺失状态", nil)
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, errMsg, 0, 0)
 		return fmt.Errorf("no profile found for vendor: %s", vendor)
@@ -606,22 +528,16 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 
 	if len(commands) == 0 {
 		errMsg := fmt.Sprintf("no commands defined for vendor: %s", vendor)
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "写入采集命令为空状态")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集命令为空状态", nil)
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordNoCommands, errMsg, 0, 0)
 		return fmt.Errorf("no commands defined for vendor: %s", vendor)
 	}
 
 	if ctx.IsCancelled() {
-		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before execute plan", intPtrLocal(0))
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled before execute plan")
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionCancelled, "采集执行前收到取消信号", len(commands), 0)
-		return ctx.Context().Err()
+		return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled before execute plan", intPtrLocal(0))
 	}
 
 	// Execute plan
@@ -642,27 +558,20 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 	report, err := exec.ExecutePlanWithEvents(execCtx, plan, commandEventHandler)
 	if err != nil {
 		if IsContextCancelled(ctx, err) {
-			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during execute plan", intPtrLocal(0))
 			e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled during execute plan")
 			projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionCancelled, "采集执行过程中收到取消信号", len(commands), 0)
-			return err
+			return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled during execute plan", intPtrLocal(0))
 		}
 		errMsg := fmt.Sprintf("execution failed: %v", err)
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "写入采集执行失败状态")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集执行失败状态", nil)
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, fmt.Sprintf("采集执行失败: %v", err), len(commands), 0)
 		return fmt.Errorf("execution failed: %w", err)
 	}
 
 	if ctx.IsCancelled() {
-		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before persisting outputs", intPtrLocal(0))
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled before persisting outputs")
-		return ctx.Context().Err()
+		return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled before persisting outputs", intPtrLocal(0))
 	}
 
 	// Save outputs
@@ -670,9 +579,8 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 	successCount := 0
 	for _, result := range report.Results {
 		if ctx.IsCancelled() {
-			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during output persistence", &successCount)
 			e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled during output persistence")
-			return ctx.Context().Err()
+			return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled during output persistence", &successCount)
 		}
 		if result != nil && result.Success {
 			successCount++
@@ -703,13 +611,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 
 			if err := e.createTaskRawOutput(ctx.RunID(), deviceIP, result, rawPath, normalizedPath); err != nil {
 				errMsg := fmt.Sprintf("create task raw output failed: %v", err)
-				finishedAt := time.Now()
-				_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-					Status:       strPtr(string(UnitStatusFailed)),
-					DoneSteps:    &successCount,
-					ErrorMessage: &errMsg,
-					FinishedAt:   &finishedAt,
-				}, "写入采集原始输出失败状态")
+				failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集原始输出失败状态", &successCount)
 				e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
 				return err
 			}
@@ -730,12 +632,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 		deviceStatus = "partial"
 	}
 	doneSteps := successCount
-	finishedAt := time.Now()
-	if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-		Status:     &status,
-		DoneSteps:  &doneSteps,
-		FinishedAt: &finishedAt,
-	}, "写入采集完成状态"); err != nil {
+	if err := completeUnitExecution(handler, ctx, unit.ID, status, doneSteps, "写入采集完成状态"); err != nil {
 		return err
 	}
 	e.updateRunDeviceStatus(ctx.RunID(), deviceIP, deviceStatus, "")
@@ -831,28 +728,17 @@ func (e *ParseExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 func (e *ParseExecutor) executeParse(ctx RuntimeContext, stageID string, unit *UnitPlan) error {
 	handler := NewErrorHandler(ctx.RunID())
 	if ctx.IsCancelled() {
-		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before parse unit start", intPtrLocal(0))
-		return ctx.Context().Err()
+		return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled before parse unit start", intPtrLocal(0))
 	}
 
-	startedAt := time.Now()
-	unitRunning := string(UnitStatusRunning)
-	if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-		Status:    &unitRunning,
-		StartedAt: &startedAt,
-	}, "设置解析 Unit 为 running"); err != nil {
+	if err := markUnitRunning(handler, ctx, unit.ID, "设置解析 Unit 为 running"); err != nil {
 		return err
 	}
 
 	// For parse stage, target is device_ip
 	if unit.Target.Type != "device_ip" {
 		errMsg := fmt.Sprintf("unsupported target type: %s", unit.Target.Type)
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "写入解析 Unit 失败状态")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入解析 Unit 失败状态", nil)
 		return fmt.Errorf("%s", errMsg)
 	}
 
@@ -860,8 +746,7 @@ func (e *ParseExecutor) executeParse(ctx RuntimeContext, stageID string, unit *U
 	logger.Debug("TaskExec", ctx.RunID(), "Parsing device: %s", deviceIP)
 
 	if ctx.IsCancelled() {
-		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before parse execution", intPtrLocal(0))
-		return ctx.Context().Err()
+		return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled before parse execution", intPtrLocal(0))
 	}
 
 	vendor := ""
@@ -870,29 +755,16 @@ func (e *ParseExecutor) executeParse(ctx RuntimeContext, stageID string, unit *U
 	}
 	if err := e.parseAndSaveRunDevice(ctx, deviceIP, vendor); err != nil {
 		if IsContextCancelled(ctx, err) {
-			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during parse execution", intPtrLocal(0))
-			return err
+			return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled during parse execution", intPtrLocal(0))
 		}
 		errMsg := fmt.Sprintf("parse failed: %v", err)
 		doneSteps := 0
-		finishedAt := time.Now()
-		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-			Status:       strPtr(string(UnitStatusFailed)),
-			DoneSteps:    &doneSteps,
-			ErrorMessage: &errMsg,
-			FinishedAt:   &finishedAt,
-		}, "写入解析失败状态")
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入解析失败状态", &doneSteps)
 		return fmt.Errorf("parse failed: %w", err)
 	}
 
 	doneSteps := 1
-	unitCompleted := string(UnitStatusCompleted)
-	finishedAt := time.Now()
-	if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
-		Status:     &unitCompleted,
-		DoneSteps:  &doneSteps,
-		FinishedAt: &finishedAt,
-	}, "写入解析完成状态"); err != nil {
+	if err := completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), doneSteps, "写入解析完成状态"); err != nil {
 		return err
 	}
 	e.createArtifact(ctx.RunID(), stageID, unit.ID, string(ArtifactTypeParseResult), fmt.Sprintf("%s:parse_result", deviceIP), "")
@@ -1574,6 +1446,42 @@ func (e *TopologyBuildExecutor) createArtifact(taskRunID, stageID, unitID, artif
 		FilePath:     filePath,
 		CreatedAt:    time.Now(),
 	})
+}
+
+func cancelUnitExecution(ctx RuntimeContext, handler *ErrorHandler, unitID, reason string, doneSteps *int) error {
+	handler.MarkUnitCancelled(ctx, unitID, reason, doneSteps)
+	return ctx.Context().Err()
+}
+
+func markUnitRunning(handler *ErrorHandler, ctx RuntimeContext, unitID, operation string) error {
+	startedAt := time.Now()
+	unitRunning := string(UnitStatusRunning)
+	return handler.UpdateUnitRequired(ctx, unitID, &UnitPatch{
+		Status:    &unitRunning,
+		StartedAt: &startedAt,
+	}, operation)
+}
+
+func failUnitExecution(handler *ErrorHandler, ctx RuntimeContext, unitID, errMsg, operation string, doneSteps *int) {
+	finishedAt := time.Now()
+	patch := &UnitPatch{
+		Status:       strPtr(string(UnitStatusFailed)),
+		ErrorMessage: &errMsg,
+		FinishedAt:   &finishedAt,
+	}
+	if doneSteps != nil {
+		patch.DoneSteps = doneSteps
+	}
+	_ = handler.UpdateUnitRequired(ctx, unitID, patch, operation)
+}
+
+func completeUnitExecution(handler *ErrorHandler, ctx RuntimeContext, unitID, status string, doneSteps int, operation string) error {
+	finishedAt := time.Now()
+	return handler.UpdateUnitRequired(ctx, unitID, &UnitPatch{
+		Status:     &status,
+		DoneSteps:  &doneSteps,
+		FinishedAt: &finishedAt,
+	}, operation)
 }
 
 func intPtrLocal(v int) *int {

@@ -49,54 +49,66 @@ func (r *SessionReducer) Context() *SessionContext {
 
 // Reduce 状态迁移核心函数
 // 输入：事件
-// 输出：动作列表
+// 输出：动作列表（兼容旧接口）
 func (r *SessionReducer) Reduce(event SessionEvent) []SessionAction {
+	return r.ReduceBatch(event).ToActions()
+}
+
+// ReduceBatch 状态迁移核心函数
+// 输入：事件
+// 输出：批次（新接口）
+func (r *SessionReducer) ReduceBatch(event SessionEvent) *TransitionBatch {
+	batch := NewTransitionBatch()
+
 	// 终态不处理任何事件
 	if r.state.IsTerminal() {
-		return nil
+		return batch
 	}
 
+	var actions []SessionAction
 	switch e := event.(type) {
 	case EvInitPromptStable:
-		return r.handleInitPromptStable(e)
+		actions = r.handleInitPromptStable(e)
 
 	case EvWarmupPromptSeen:
-		return r.handleWarmupPromptSeen(e)
+		actions = r.handleWarmupPromptSeen(e)
 
 	case EvCommittedLine:
-		return r.handleCommittedLine(e)
+		actions = r.handleCommittedLine(e)
 
 	case EvPagerSeen:
-		return r.handlePagerSeen(e)
+		actions = r.handlePagerSeen(e)
 
 	case EvActivePromptSeen:
-		return r.handleActivePromptSeen(e)
+		actions = r.handleActivePromptSeen(e)
 
 	case EvErrorMatched:
-		return r.handleErrorMatched(e)
+		actions = r.handleErrorMatched(e)
 
 	case EvTimeout:
-		return r.handleTimeout(e)
+		actions = r.handleTimeout(e)
 
 	case EvUserContinue:
-		return r.handleUserContinue(e)
+		actions = r.handleUserContinue(e)
 
 	case EvUserAbort:
-		return r.handleUserAbort(e)
+		actions = r.handleUserAbort(e)
 
 	case EvSuspendTimeout:
-		return r.handleSuspendTimeout(e)
+		actions = r.handleSuspendTimeout(e)
 
 	case EvStreamClosed:
-		return r.handleStreamClosed(e)
+		actions = r.handleStreamClosed(e)
 
 	case EvCommandPromptSeen:
-		return r.handleCommandPromptSeen(e)
+		actions = r.handleCommandPromptSeen(e)
 
 	default:
 		logger.Debug("SessionReducer", "-", "未知事件类型: %s", event.EventType())
-		return nil
 	}
+
+	batch.AppendActions(actions...)
+	return batch
 }
 
 // ============================================================================

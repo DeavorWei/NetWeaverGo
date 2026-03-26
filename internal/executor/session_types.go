@@ -181,6 +181,78 @@ type SessionAction interface {
 	ActionType() string
 }
 
+// SessionEffect 副作用接口。
+// 当前阶段作为兼容层存在，先把旧的 SessionAction 封装为 Effect，
+// 便于后续逐步把 reducer 从“直接返回动作”演进为“返回 batch + effects”。
+type SessionEffect interface {
+	EffectType() string
+	AsAction() SessionAction
+}
+
+// TransitionBatch reducer 输出批次。
+// 现阶段保留 Effects 作为主通道，并通过 ToActions 兼容旧执行链路。
+type TransitionBatch struct {
+	Effects []SessionEffect
+}
+
+// ActionEffect 使用旧 SessionAction 适配新的 SessionEffect。
+type ActionEffect struct {
+	Action SessionAction
+}
+
+func (e ActionEffect) EffectType() string {
+	if e.Action == nil {
+		return ""
+	}
+	return e.Action.ActionType()
+}
+
+func (e ActionEffect) AsAction() SessionAction {
+	return e.Action
+}
+
+// NewTransitionBatch 创建批次。
+func NewTransitionBatch(actions ...SessionAction) *TransitionBatch {
+	batch := &TransitionBatch{Effects: make([]SessionEffect, 0, len(actions))}
+	batch.AppendActions(actions...)
+	return batch
+}
+
+// AppendActions 追加旧动作到批次。
+func (b *TransitionBatch) AppendActions(actions ...SessionAction) {
+	if b == nil {
+		return
+	}
+	for _, action := range actions {
+		if action == nil {
+			continue
+		}
+		b.Effects = append(b.Effects, ActionEffect{Action: action})
+	}
+}
+
+// ToActions 将批次回退为旧动作列表，供旧执行链路继续消费。
+func (b *TransitionBatch) ToActions() []SessionAction {
+	if b == nil || len(b.Effects) == 0 {
+		return nil
+	}
+	actions := make([]SessionAction, 0, len(b.Effects))
+	for _, effect := range b.Effects {
+		if effect == nil {
+			continue
+		}
+		if action := effect.AsAction(); action != nil {
+			actions = append(actions, action)
+		}
+	}
+	return actions
+}
+
+// IsEmpty 判断批次是否为空。
+func (b *TransitionBatch) IsEmpty() bool {
+	return b == nil || len(b.Effects) == 0
+}
+
 // ActSendWarmup 发送预热空行动作
 type ActSendWarmup struct{}
 

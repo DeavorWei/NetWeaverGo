@@ -834,3 +834,29 @@ func TestNewSessionStateIsTerminal(t *testing.T) {
 		}
 	}
 }
+
+func TestReducerReduceBatchWrapsLegacyActions(t *testing.T) {
+	m := NewMockMatcher()
+	reducer := NewSessionReducer([]string{"display version"}, m)
+
+	batch := reducer.ReduceBatch(EvInitPromptStable{Prompt: "<SW1>"})
+	if batch == nil {
+		t.Fatal("ReduceBatch 不应返回 nil")
+	}
+	if batch.IsEmpty() {
+		t.Fatal("ReduceBatch 应包含 effect")
+	}
+	if len(batch.Effects) != 1 {
+		t.Fatalf("effect 数量错误: got=%d want=1", len(batch.Effects))
+	}
+	if batch.Effects[0].EffectType() != "SendWarmup" {
+		t.Fatalf("effect 类型错误: got=%s want=SendWarmup", batch.Effects[0].EffectType())
+	}
+	actions := batch.ToActions()
+	if len(actions) != 1 {
+		t.Fatalf("ToActions 数量错误: got=%d want=1", len(actions))
+	}
+	if _, ok := actions[0].(ActSendWarmup); !ok {
+		t.Fatalf("ToActions[0] 应为 ActSendWarmup，实际是 %T", actions[0])
+	}
+}

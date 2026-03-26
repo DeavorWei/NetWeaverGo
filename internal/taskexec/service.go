@@ -129,6 +129,11 @@ func (s *TaskExecutionService) GetSnapshot(runID string) (*ExecutionSnapshot, er
 	return s.runtime.GetSnapshot(runID)
 }
 
+// GetSnapshotDelta 获取执行快照增量。
+func (s *TaskExecutionService) GetSnapshotDelta(runID string) (*SnapshotDelta, error) {
+	return s.runtime.GetSnapshotDelta(runID)
+}
+
 // ListRunning 获取运行中的任务
 func (s *TaskExecutionService) ListRunning() []*ExecutionSnapshot {
 	return s.runtime.ListRunningSnapshots()
