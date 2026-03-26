@@ -34,7 +34,7 @@
     </div>
 
     <!-- ==================== 任务执行内容 ==================== -->
-    <template>
+    <div class="flex-1 min-h-0 flex flex-col gap-4">
       <!-- 搜索和筛选 -->
       <div class="flex items-center gap-4 flex-shrink-0">
         <div class="relative flex-1 max-w-md">
@@ -67,8 +67,13 @@
         </select>
       </div>
 
+      <div class="flex items-center justify-between gap-3 flex-shrink-0 px-3 py-2 rounded-lg border border-border bg-bg-card/70 text-xs text-text-muted">
+        <span>状态：tasks={{ tasks.length }} / filtered={{ filteredTasks.length }} / active={{ shouldShowExecutionView ? 'true' : 'false' }} / running={{ isRunning ? 'true' : 'false' }} / awaiting={{ awaitingSnapshot ? 'true' : 'false' }}</span>
+        <span class="font-mono">run={{ executionView.runId || taskexecStore.currentRunId || '-' }}</span>
+      </div>
+
       <!-- 执行视图（正在运行时显示） -->
-      <template v-if="executionView.active">
+      <template v-if="shouldShowExecutionView">
         <template v-if="executionView.taskType === 'topology'">
           <div class="flex-1 flex flex-col gap-4">
             <!-- Stage 进度展示 (新运行时支持) -->
@@ -167,7 +172,7 @@
 
       <!-- 任务列表视图 -->
       <template v-else>
-        <div class="flex-1 overflow-auto scrollbar-custom min-h-0">
+        <div class="flex-1 overflow-auto scrollbar-custom min-h-0 space-y-4">
           <div v-if="loading" class="flex items-center justify-center h-48">
             <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
           </div>
@@ -308,7 +313,7 @@
           </div>
         </div>
       </template>
-    </template>
+    </div>
 
     <!-- 删除确认弹窗 -->
     <Transition name="modal">
@@ -467,6 +472,9 @@ function triggerToast(msg: string, type: 'success' | 'error' = 'success') {
 // ================== 计算属性 - 从 Store 获取 ==================
 const executionSnapshot = computed(() => taskexecStore.currentSnapshot)
 const isRunning = computed(() => taskexecStore.isRunning)
+const shouldShowExecutionView = computed(() => {
+  return executionView.value.active && (awaitingSnapshot.value || isRunning.value || !!executionSnapshot.value)
+})
 const progressPercent = computed(() => executionSnapshot.value?.progress ?? 0)
 // 从 units 转换为 devices 视图（兼容旧 UI）
 const execDevices = computed<DeviceViewState[]>(() => {
@@ -649,6 +657,24 @@ function refreshTaskList() {
   void loadTasks('manual-refresh')
 }
 
+function resetExecutionViewState(reason: string) {
+  console.debug(`[TaskExecution] 重置执行视图状态，reason=${reason}`, {
+    active: executionView.value.active,
+    runId: executionView.value.runId,
+    currentRunId: taskexecStore.currentRunId,
+    awaitingSnapshot: awaitingSnapshot.value,
+  })
+  executionView.value.active = false
+  executionView.value.runId = ''
+  executionView.value.taskName = ''
+  executionView.value.taskType = 'normal'
+  awaitingSnapshot.value = false
+  topologyExecuting.value = false
+  clearSnapshotTimeout()
+  stopSnapshotPolling()
+  taskexecStore.setCurrentRunId(null)
+}
+
 // 加载任务列表
 async function loadTasks(reason: string = 'manual') {
   loading.value = true
@@ -672,25 +698,37 @@ async function loadTasks(reason: string = 'manual') {
 }
 
 async function syncExecutionView() {
-  const running = await TaskExecutionAPI.listRunningTasks()
-  if (!running.length) {
-    return
+  try {
+    const running = await TaskExecutionAPI.listRunningTasks()
+    console.debug(`[TaskExecution] 同步执行视图: running=${running.length}`)
+    if (!running.length) {
+      resetExecutionViewState('no-running-snapshots')
+      return
+    }
+
+    for (const snapshot of running) {
+      taskexecStore.updateSnapshot(snapshot.runId, snapshot)
+    }
+
+    const currentRunId = taskexecStore.currentRunId && running.some((item) => item.runId === taskexecStore.currentRunId)
+      ? taskexecStore.currentRunId
+      : running[0].runId
+    const snapshot = running.find((item) => item.runId === currentRunId) ?? running[0]
+
+    taskexecStore.setCurrentRunId(snapshot.runId)
+    executionView.value.active = true
+    executionView.value.runId = snapshot.runId
+    executionView.value.taskName = snapshot.taskName || '任务执行'
+    executionView.value.taskType = snapshot.runKind === 'topology' ? 'topology' : 'normal'
+    console.debug('[TaskExecution] 已切换到执行视图', {
+      runId: snapshot.runId,
+      taskName: snapshot.taskName,
+      runKind: snapshot.runKind,
+    })
+  } catch (err) {
+    console.error('[TaskExecution] 同步执行视图失败:', err)
+    resetExecutionViewState('sync-error')
   }
-
-  for (const snapshot of running) {
-    taskexecStore.updateSnapshot(snapshot.runId, snapshot)
-  }
-
-  const currentRunId = taskexecStore.currentRunId && running.some((item) => item.runId === taskexecStore.currentRunId)
-    ? taskexecStore.currentRunId
-    : running[0].runId
-  const snapshot = running.find((item) => item.runId === currentRunId) ?? running[0]
-
-  taskexecStore.setCurrentRunId(snapshot.runId)
-  executionView.value.active = true
-  executionView.value.runId = snapshot.runId
-  executionView.value.taskName = snapshot.taskName || '任务执行'
-  executionView.value.taskType = snapshot.runKind === 'topology' ? 'topology' : 'normal'
 }
 
 function startSnapshotPolling() {
@@ -847,13 +885,9 @@ async function doDelete() {
 // 关闭执行视图：仅解绑当前 run，不删除快照缓存
 function closeExecutionView() {
   if (topologyExecuting.value) return
-  executionView.value.active = false
-  awaitingSnapshot.value = false
-  clearSnapshotTimeout()
-  stopSnapshotPolling()
-  taskexecStore.setCurrentRunId(null)
-  executionView.value.runId = ''
-  loadTasks()
+  console.debug('[TaskExecution] 用户关闭执行视图')
+  resetExecutionViewState('close-execution-view')
+  void loadTasks('close-execution-view')
 }
 
 // 停止执行任务 (阶段3: 使用统一运行时的CancelTask)
