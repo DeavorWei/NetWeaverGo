@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/google/uuid"
 )
 
@@ -300,11 +301,22 @@ func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *Tas
 	// 发射开始事件
 	m.eventBus.EmitSync(NewTaskEvent(run.ID, EventTypeRunStarted, "任务开始执行"))
 
+	// 记录每个阶段的执行结果
+	stageResults := make(map[string]error)
+
 	// 按顺序执行Stage
 	for i, stagePlan := range plan.Stages {
 		if runtimeCtx.IsCancelled() {
 			m.handleCancellation(runtimeCtx, run.ID)
 			return
+		}
+
+		// 检查阶段依赖
+		if shouldSkip, reason := m.checkStageDependencies(plan, stagePlan, stageResults); shouldSkip {
+			logger.Warn("TaskExec", run.ID, "跳过 Stage %s: %s", stagePlan.Name, reason)
+			m.skipStage(runtimeCtx, run.ID, &stagePlan, reason)
+			stageResults[stagePlan.Kind] = fmt.Errorf("skipped: %s", reason)
+			continue
 		}
 
 		// 更新当前Stage
@@ -314,8 +326,20 @@ func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *Tas
 
 		// 执行Stage
 		if err := m.executeStage(runtimeCtx, run.ID, &stagePlan, i, len(plan.Stages)); err != nil {
+			stageResults[stagePlan.Kind] = err
 			m.handleStageError(runtimeCtx, run.ID, stagePlan.ID, err)
-			// 继续执行下一个Stage，除非需要停止
+
+			// 对于拓扑任务，关键阶段失败则中止
+			if plan.RunKind == string(RunKindTopology) {
+				switch StageKind(stagePlan.Kind) {
+				case StageKindDeviceCollect, StageKindParse:
+					logger.Error("TaskExec", run.ID, "拓扑任务关键阶段 %s 失败，中止执行", stagePlan.Name)
+					m.abortPlan(runtimeCtx, run.ID, fmt.Sprintf("关键阶段 %s 失败", stagePlan.Name))
+					return
+				}
+			}
+		} else {
+			stageResults[stagePlan.Kind] = nil
 		}
 
 		m.refreshRunProgress(runtimeCtx, run.ID)
@@ -331,6 +355,61 @@ func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *Tas
 
 	// 发射完成事件
 	m.eventBus.EmitSync(NewTaskEvent(run.ID, EventTypeRunFinished, fmt.Sprintf("任务完成，状态: %s", finalStatus)))
+}
+
+// checkStageDependencies 检查阶段依赖
+func (m *RuntimeManager) checkStageDependencies(plan *ExecutionPlan, stage StagePlan, results map[string]error) (bool, string) {
+	// 拓扑任务的阶段依赖定义
+	if plan.RunKind != string(RunKindTopology) {
+		return false, ""
+	}
+
+	// 解析阶段依赖采集阶段
+	if StageKind(stage.Kind) == StageKindParse {
+		if err, ok := results[string(StageKindDeviceCollect)]; ok && err != nil {
+			return true, fmt.Sprintf("依赖阶段 %s 执行失败", StageKindDeviceCollect)
+		}
+	}
+
+	// 拓扑构建阶段依赖解析阶段
+	if StageKind(stage.Kind) == StageKindTopologyBuild {
+		if err, ok := results[string(StageKindParse)]; ok && err != nil {
+			return true, fmt.Sprintf("依赖阶段 %s 执行失败", StageKindParse)
+		}
+	}
+
+	return false, ""
+}
+
+// skipStage 跳过阶段
+func (m *RuntimeManager) skipStage(runtimeCtx *defaultRuntimeContext, runID string, stagePlan *StagePlan, reason string) {
+	// 创建跳过的 Stage 记录
+	stage := &TaskRunStage{
+		ID:         uuid.New().String()[:8],
+		TaskRunID:  runID,
+		StageKind:  stagePlan.Kind,
+		StageName:  stagePlan.Name,
+		StageOrder: stagePlan.Order,
+		Status:     string(StageStatusSkipped),
+		TotalUnits: 0,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+	m.repo.CreateStage(runtimeCtx.ctx, stage)
+
+	m.eventBus.EmitSync(NewTaskEvent(runID, EventTypeStageSkipped,
+		fmt.Sprintf("Stage %s 被跳过: %s", stagePlan.Name, reason)).WithStage(stage.ID))
+}
+
+// abortPlan 中止计划执行
+func (m *RuntimeManager) abortPlan(runtimeCtx *defaultRuntimeContext, runID, reason string) {
+	abortedStatus := string(RunStatusAborted)
+	now := time.Now()
+	runtimeCtx.UpdateRun(&RunPatch{
+		Status:     &abortedStatus,
+		FinishedAt: &now,
+	})
+	m.eventBus.EmitSync(NewTaskEvent(runID, EventTypeRunAborted, fmt.Sprintf("任务中止: %s", reason)))
 }
 
 // executeStage 执行Stage

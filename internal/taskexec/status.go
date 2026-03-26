@@ -16,6 +16,8 @@ const (
 	RunStatusFailed RunStatus = "failed"
 	// RunStatusCancelled 已取消
 	RunStatusCancelled RunStatus = "cancelled"
+	// RunStatusAborted 已中止（拓扑任务关键阶段失败）
+	RunStatusAborted RunStatus = "aborted"
 )
 
 // IsTerminal 是否终态
@@ -44,6 +46,8 @@ const (
 	StageStatusFailed StageStatus = "failed"
 	// StageStatusCancelled 已取消
 	StageStatusCancelled StageStatus = "cancelled"
+	// StageStatusSkipped 已跳过（依赖阶段失败）
+	StageStatusSkipped StageStatus = "skipped"
 )
 
 // IsTerminal 是否终态
@@ -152,6 +156,10 @@ const (
 	EventTypeWarning EventType = "warning"
 	// EventTypeError 错误
 	EventTypeError EventType = "error"
+	// EventTypeRunAborted Run中止
+	EventTypeRunAborted EventType = "run_aborted"
+	// EventTypeStageSkipped Stage跳过
+	EventTypeStageSkipped EventType = "stage_skipped"
 )
 
 // EventLevel 事件级别

@@ -176,6 +176,13 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		device.Password,
 		opts,
 	)
+	// 确保连接关闭
+	defer func() {
+		if exec != nil {
+			exec.Close()
+			logger.Debug("TaskExec", ctx.RunID(), "关闭设备 %s 的连接", deviceIP)
+		}
+	}()
 
 	// Get connection timeout from settings
 	connTimeout := 30 * time.Second
@@ -434,6 +441,13 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 		device.Password,
 		opts,
 	)
+	// 确保连接关闭
+	defer func() {
+		if exec != nil {
+			exec.Close()
+			logger.Debug("TaskExec", ctx.RunID(), "关闭设备 %s 的连接", deviceIP)
+		}
+	}()
 
 	// Get timeout settings
 	connTimeout := 30 * time.Second

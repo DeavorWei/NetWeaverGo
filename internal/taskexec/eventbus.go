@@ -78,6 +78,7 @@ type EventBus struct {
 	buffer   chan *TaskEvent
 	ctx      context.Context
 	cancel   context.CancelFunc
+	wg       sync.WaitGroup // 等待 goroutine 退出
 }
 
 // NewEventBus 创建事件总线
@@ -167,16 +168,33 @@ func (b *EventBus) EmitSync(event *TaskEvent) {
 
 // Start 启动事件分发
 func (b *EventBus) Start() {
+	b.wg.Add(1)
 	go b.dispatchLoop()
 }
 
 // Stop 停止事件总线
 func (b *EventBus) Stop() {
 	b.cancel()
+
+	// 等待 dispatchLoop 退出（带超时保护）
+	done := make(chan struct{})
+	go func() {
+		b.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// 正常退出
+	case <-time.After(5 * time.Second):
+		// 超时，强制继续
+		log.Printf("[EventBus] Stop timeout, some handlers may still be running")
+	}
 }
 
 // dispatchLoop 事件分发循环
 func (b *EventBus) dispatchLoop() {
+	defer b.wg.Done()
 	for {
 		select {
 		case <-b.ctx.Done():
