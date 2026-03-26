@@ -9,7 +9,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, markRaw } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { TaskExecutionAPI } from '../services/api'
-import type { ExecutionSnapshot, SnapshotDelta } from '../types/taskexec'
+import type { ExecutionSnapshot, SnapshotDelta, SnapshotDeltaOp } from '../types/taskexec'
 
 // 前端事件格式
 export interface TaskEvent {
@@ -108,11 +108,26 @@ export const useTaskexecStore = defineStore('taskexec', () => {
   }
   
   // ================== 状态更新 ==================
-  
+
+  function cloneSnapshot(snapshot: ExecutionSnapshot): ExecutionSnapshot {
+    return {
+      ...snapshot,
+      stages: (snapshot.stages ?? []).map(stage => ({ ...stage })),
+      units: (snapshot.units ?? []).map(unit => ({
+        ...unit,
+        logs: unit.logs ? [...unit.logs] : undefined,
+      })),
+      events: (snapshot.events ?? []).map(event => ({ ...event })),
+      lastSessionSeqByUnit: snapshot.lastSessionSeqByUnit
+        ? { ...snapshot.lastSessionSeqByUnit }
+        : undefined,
+    }
+  }
+
   function setCurrentRunId(runId: string | null) {
     currentRunId.value = runId
   }
-  
+
   function updateSnapshot(runId: string, snapshot: ExecutionSnapshot) {
     const current = snapshots.value[runId]
     const currentSeq = current?.lastRunSeq ?? current?.revision ?? 0
@@ -120,19 +135,104 @@ export const useTaskexecStore = defineStore('taskexec', () => {
     if (current && nextSeq < currentSeq) {
       return
     }
-    snapshots.value[runId] = markRaw({ ...snapshot })
+    snapshots.value[runId] = markRaw(cloneSnapshot(snapshot))
   }
 
-  function applySnapshotDelta(delta: SnapshotDelta) {
-    if (!delta?.runId) return
+  function sortStages(stages: ExecutionSnapshot['stages']) {
+    stages.sort((a, b) => {
+      if (a.order === b.order) {
+        return a.id.localeCompare(b.id)
+      }
+      return a.order - b.order
+    })
+  }
+
+  function upsertStage(snapshot: ExecutionSnapshot, stage: NonNullable<SnapshotDeltaOp['stage']>) {
+    const idx = snapshot.stages.findIndex(item => item.id === stage.id)
+    if (idx >= 0) {
+      snapshot.stages[idx] = { ...stage }
+    } else {
+      snapshot.stages.push({ ...stage })
+    }
+    sortStages(snapshot.stages)
+  }
+
+  function upsertUnit(snapshot: ExecutionSnapshot, unit: NonNullable<SnapshotDeltaOp['unit']>) {
+    const idx = snapshot.units.findIndex(item => item.id === unit.id)
+    if (idx >= 0) {
+      snapshot.units[idx] = {
+        ...unit,
+        logs: unit.logs ? [...unit.logs] : undefined,
+      }
+      return
+    }
+    snapshot.units.push({
+      ...unit,
+      logs: unit.logs ? [...unit.logs] : undefined,
+    })
+  }
+
+  function appendEvent(snapshot: ExecutionSnapshot, event: NonNullable<SnapshotDeltaOp['event']>) {
+    snapshot.events = snapshot.events.filter(item => item.id !== event.id)
+    snapshot.events.unshift({ ...event })
+    if (snapshot.events.length > 50) {
+      snapshot.events = snapshot.events.slice(0, 50)
+    }
+  }
+
+  function applyDeltaOps(snapshot: ExecutionSnapshot, ops: SnapshotDeltaOp[]) {
+    for (const op of ops) {
+      switch (op.type) {
+        case 'run_patch':
+          if (op.status !== undefined) snapshot.status = op.status
+          if (op.currentStage !== undefined) snapshot.currentStage = op.currentStage
+          if (op.progress !== undefined) snapshot.progress = op.progress
+          if ('startedAt' in op) snapshot.startedAt = op.startedAt ?? null
+          if ('finishedAt' in op) snapshot.finishedAt = op.finishedAt ?? null
+          break
+        case 'stage_upsert':
+          if (op.stage) upsertStage(snapshot, op.stage)
+          break
+        case 'unit_upsert':
+          if (op.unit) upsertUnit(snapshot, op.unit)
+          break
+        case 'event_append':
+          if (op.event) appendEvent(snapshot, op.event)
+          break
+        default:
+          break
+      }
+    }
+  }
+
+  function applySnapshotDelta(delta: SnapshotDelta): boolean {
+    if (!delta?.runId) return false
     const current = snapshots.value[delta.runId]
     const currentSeq = current?.lastRunSeq ?? current?.revision ?? 0
     if (delta.seq <= currentSeq) {
-      return
+      return false
     }
+
     if (delta.snapshot) {
       updateSnapshot(delta.runId, delta.snapshot)
+      return true
     }
+
+    if (!current) {
+      return false
+    }
+
+    if ((delta.baseSeq ?? 0) !== currentSeq) {
+      return false
+    }
+
+    const nextSnapshot = cloneSnapshot(current)
+    applyDeltaOps(nextSnapshot, delta.ops ?? [])
+    nextSnapshot.lastRunSeq = delta.seq
+    nextSnapshot.revision = delta.revision
+    nextSnapshot.updatedAt = delta.updatedAt
+    snapshots.value[delta.runId] = markRaw(nextSnapshot)
+    return true
   }
   
   function removeSnapshot(runId: string) {
@@ -164,24 +264,18 @@ export const useTaskexecStore = defineStore('taskexec', () => {
     const unlistenSnapshotDelta = Events.On('task:snapshot_delta', (ev: any) => {
       const data = unwrapEventData<SnapshotDelta>(ev)
       if (data?.runId) {
-        applySnapshotDelta(data)
+        const applied = applySnapshotDelta(data)
+        if (!applied) {
+          refreshSnapshot(data.runId).catch(err => {
+            console.error('Failed to refresh snapshot after delta gap:', err)
+          })
+        }
       }
     })
     if (typeof unlistenSnapshotDelta === 'function') {
       cleanupFns.push(unlistenSnapshotDelta)
     }
 
-    // 兼容后端仍会推送的全量快照数据
-    const unlistenSnapshotData = Events.On('task:snapshot_data', (ev: any) => {
-      const data = unwrapEventData<ExecutionSnapshot>(ev)
-      if (data?.runId) {
-        updateSnapshot(data.runId, data)
-      }
-    })
-    if (typeof unlistenSnapshotData === 'function') {
-      cleanupFns.push(unlistenSnapshotData)
-    }
-    
     // 监听任务开始
     const unlistenStarted = Events.On('task:started', (ev: any) => {
       const data = unwrapEventData<TaskEvent>(ev)
@@ -216,11 +310,6 @@ export const useTaskexecStore = defineStore('taskexec', () => {
       cleanupFns.push(unlistenTaskEvent)
     }
     
-    // 兼容旧桥接事件，保留监听但不再触发全量刷新。
-    const unlistenSnapshotCompat = Events.On('task:snapshot', () => {})
-    if (typeof unlistenSnapshotCompat === 'function') {
-      cleanupFns.push(unlistenSnapshotCompat)
-    }
   }
   
   function cleanupListeners() {

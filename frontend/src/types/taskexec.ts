@@ -16,8 +16,8 @@ export interface ExecutionSnapshot {
   currentStage: string
   stages: StageSnapshot[]
   units: UnitSnapshot[]
-  startedAt: string
-  finishedAt: string
+  startedAt?: string | null
+  finishedAt?: string | null
   events: EventSnapshot[]
   lastSessionSeqByUnit?: Record<string, number>
 }
@@ -34,8 +34,9 @@ export interface StageSnapshot {
   completedUnits: number
   successUnits: number
   failedUnits: number
-  startedAt: string
-  finishedAt: string
+  cancelledUnits: number
+  startedAt?: string | null
+  finishedAt?: string | null
 }
 
 /** Unit 快照 */
@@ -57,8 +58,8 @@ export interface UnitSnapshot {
   detailLogPath?: string
   rawLogPath?: string
   journalLogPath?: string
-  startedAt: string
-  finishedAt: string
+  startedAt?: string | null
+  finishedAt?: string | null
 }
 
 /** 事件快照 */
@@ -73,11 +74,27 @@ export interface EventSnapshot {
   timestamp: string
 }
 
+export type SnapshotDeltaOpType = 'run_patch' | 'stage_upsert' | 'unit_upsert' | 'event_append'
+
+export interface SnapshotDeltaOp {
+  type: SnapshotDeltaOpType
+  status?: string
+  currentStage?: string
+  progress?: number
+  startedAt?: string | null
+  finishedAt?: string | null
+  stage?: StageSnapshot
+  unit?: UnitSnapshot
+  event?: EventSnapshot
+}
+
 export interface SnapshotDelta {
   runId: string
+  baseSeq: number
   seq: number
   revision: number
   updatedAt: string
+  ops?: SnapshotDeltaOp[]
   snapshot?: ExecutionSnapshot
 }
 

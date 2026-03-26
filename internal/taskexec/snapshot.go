@@ -75,13 +75,42 @@ type EventSnapshot struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// SnapshotDelta 快照增量事件
-// 当前阶段以“全量快照 + 单调序号”封装，后续可继续细化为真正的 patch 集合。
+// SnapshotDeltaOpType 增量操作类型。
+type SnapshotDeltaOpType string
+
+const (
+	SnapshotDeltaOpRunPatch    SnapshotDeltaOpType = "run_patch"
+	SnapshotDeltaOpStageUpsert SnapshotDeltaOpType = "stage_upsert"
+	SnapshotDeltaOpUnitUpsert  SnapshotDeltaOpType = "unit_upsert"
+	SnapshotDeltaOpEventAppend SnapshotDeltaOpType = "event_append"
+)
+
+// SnapshotDeltaOp 快照增量操作。
+type SnapshotDeltaOp struct {
+	Type SnapshotDeltaOpType `json:"type"`
+
+	// run_patch
+	Status       *string    `json:"status,omitempty"`
+	CurrentStage *string    `json:"currentStage,omitempty"`
+	Progress     *int       `json:"progress,omitempty"`
+	StartedAt    *time.Time `json:"startedAt,omitempty"`
+	FinishedAt   *time.Time `json:"finishedAt,omitempty"`
+
+	// stage/unit/event
+	Stage *StageSnapshot `json:"stage,omitempty"`
+	Unit  *UnitSnapshot  `json:"unit,omitempty"`
+	Event *EventSnapshot `json:"event,omitempty"`
+}
+
+// SnapshotDelta 快照增量事件。
+// BaseSeq/Seq 描述该批增量作用区间，客户端可据此做 gap 检测。
 type SnapshotDelta struct {
 	RunID     string             `json:"runId"`
+	BaseSeq   uint64             `json:"baseSeq"`
 	Seq       uint64             `json:"seq"`
 	Revision  uint64             `json:"revision"`
 	UpdatedAt time.Time          `json:"updatedAt"`
+	Ops       []SnapshotDeltaOp  `json:"ops,omitempty"`
 	Snapshot  *ExecutionSnapshot `json:"snapshot,omitempty"`
 }
 

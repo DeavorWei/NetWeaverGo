@@ -269,17 +269,21 @@ func (b *EventBus) isClosed() bool {
 
 // SnapshotHub 快照中心 - 维护最新快照供前端查询
 type SnapshotHub struct {
-	snapshots   map[string]*ExecutionSnapshot
-	revisions   map[string]uint64
-	unsubscribe func()
-	mu          sync.RWMutex
+	snapshots      map[string]*ExecutionSnapshot
+	revisions      map[string]uint64
+	pendingOps     map[string][]SnapshotDeltaOp
+	pendingBaseSeq map[string]uint64
+	unsubscribe    func()
+	mu             sync.RWMutex
 }
 
 // NewSnapshotHub 创建快照中心
 func NewSnapshotHub(eventBus *EventBus) *SnapshotHub {
 	hub := &SnapshotHub{
-		snapshots: make(map[string]*ExecutionSnapshot),
-		revisions: make(map[string]uint64),
+		snapshots:      make(map[string]*ExecutionSnapshot),
+		revisions:      make(map[string]uint64),
+		pendingOps:     make(map[string][]SnapshotDeltaOp),
+		pendingBaseSeq: make(map[string]uint64),
 	}
 	if eventBus != nil {
 		hub.unsubscribe = eventBus.Subscribe(func(event *TaskEvent) {
@@ -299,8 +303,10 @@ func (h *SnapshotHub) Update(runID string, snapshot *ExecutionSnapshot) {
 	defer h.mu.Unlock()
 	cloned := snapshot.Clone()
 	h.touchSnapshotLocked(runID, cloned)
+	h.resetDeltaQueueLocked(runID)
 	snapshot.Revision = cloned.Revision
 	snapshot.UpdatedAt = cloned.UpdatedAt
+	snapshot.LastRunSeq = cloned.LastRunSeq
 	h.snapshots[runID] = cloned
 }
 
@@ -316,21 +322,41 @@ func (h *SnapshotHub) Get(runID string) (*ExecutionSnapshot, bool) {
 }
 
 // BuildDelta 基于当前快照构建增量消息。
-// 当前阶段采用“单调序号 + 全量快照载荷”的方式，后续可继续演进为真正 patch。
+// 当存在 pending ops 时只返回 patch；否则返回全量快照用于初始化。
 func (h *SnapshotHub) BuildDelta(runID string) (*SnapshotDelta, bool) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	snapshot, ok := h.snapshots[runID]
 	if !ok || snapshot == nil {
 		return nil, false
 	}
 	cloned := snapshot.Clone()
+
+	ops := h.pendingOps[runID]
+	if len(ops) == 0 {
+		return &SnapshotDelta{
+			RunID:     runID,
+			BaseSeq:   0,
+			Seq:       cloned.LastRunSeq,
+			Revision:  cloned.Revision,
+			UpdatedAt: cloned.UpdatedAt,
+			Snapshot:  cloned,
+		}, true
+	}
+
+	baseSeq := h.pendingBaseSeq[runID]
+	opsCopy := make([]SnapshotDeltaOp, len(ops))
+	copy(opsCopy, ops)
+	h.pendingOps[runID] = nil
+	delete(h.pendingBaseSeq, runID)
+
 	return &SnapshotDelta{
 		RunID:     runID,
+		BaseSeq:   baseSeq,
 		Seq:       cloned.LastRunSeq,
 		Revision:  cloned.Revision,
 		UpdatedAt: cloned.UpdatedAt,
-		Snapshot:  cloned,
+		Ops:       opsCopy,
 	}, true
 }
 
@@ -367,6 +393,8 @@ func (h *SnapshotHub) Cleanup() {
 		if RunStatus(snapshot.Status).IsTerminal() {
 			delete(h.snapshots, id)
 			delete(h.revisions, id)
+			delete(h.pendingOps, id)
+			delete(h.pendingBaseSeq, id)
 		}
 	}
 }
@@ -387,9 +415,33 @@ func (h *SnapshotHub) EnsureRun(run *TaskRun) bool {
 		return true
 	}
 
+	prevStatus := snapshot.Status
+	prevCurrentStage := snapshot.CurrentStage
+	prevProgress := snapshot.Progress
+	prevStartedAt := cloneTimePtr(snapshot.StartedAt)
+	prevFinishedAt := cloneTimePtr(snapshot.FinishedAt)
+
 	changed := applyRunModelToSnapshot(snapshot, run)
 	if changed {
+		baseSeq := snapshot.LastRunSeq
 		h.touchSnapshotLocked(run.ID, snapshot)
+		op := SnapshotDeltaOp{Type: SnapshotDeltaOpRunPatch}
+		if prevStatus != snapshot.Status {
+			op.Status = cloneStringPtr(snapshot.Status)
+		}
+		if prevCurrentStage != snapshot.CurrentStage {
+			op.CurrentStage = cloneStringPtr(snapshot.CurrentStage)
+		}
+		if prevProgress != snapshot.Progress {
+			op.Progress = cloneIntPtr(snapshot.Progress)
+		}
+		if !timesEqual(prevStartedAt, snapshot.StartedAt) {
+			op.StartedAt = cloneTimePtr(snapshot.StartedAt)
+		}
+		if !timesEqual(prevFinishedAt, snapshot.FinishedAt) {
+			op.FinishedAt = cloneTimePtr(snapshot.FinishedAt)
+		}
+		h.enqueueDeltaOpLocked(run.ID, baseSeq, op)
 	}
 	return changed
 }
@@ -410,19 +462,23 @@ func (h *SnapshotHub) UpsertStage(runID string, stage *TaskRunStage) bool {
 			continue
 		}
 		if !stageSnapshotsEqual(snapshot.Stages[idx], stageSnapshot) {
+			baseSeq := snapshot.LastRunSeq
 			snapshot.Stages[idx] = stageSnapshot
-			changed = true
-		}
-		if changed {
 			sortStageSnapshots(snapshot.Stages)
 			h.touchSnapshotLocked(runID, snapshot)
+			opStage := stageSnapshot.Clone()
+			h.enqueueDeltaOpLocked(runID, baseSeq, SnapshotDeltaOp{Type: SnapshotDeltaOpStageUpsert, Stage: &opStage})
+			changed = true
 		}
 		return changed
 	}
 
+	baseSeq := snapshot.LastRunSeq
 	snapshot.Stages = append(snapshot.Stages, stageSnapshot)
 	sortStageSnapshots(snapshot.Stages)
 	h.touchSnapshotLocked(runID, snapshot)
+	opStage := stageSnapshot.Clone()
+	h.enqueueDeltaOpLocked(runID, baseSeq, SnapshotDeltaOp{Type: SnapshotDeltaOpStageUpsert, Stage: &opStage})
 	return true
 }
 
@@ -444,13 +500,19 @@ func (h *SnapshotHub) UpsertUnit(runID string, unit *TaskRunUnit) bool {
 		if unitSnapshotsEqual(snapshot.Units[idx], unitSnapshot) {
 			return false
 		}
+		baseSeq := snapshot.LastRunSeq
 		snapshot.Units[idx] = unitSnapshot
 		h.touchSnapshotLocked(runID, snapshot)
+		opUnit := unitSnapshot.Clone()
+		h.enqueueDeltaOpLocked(runID, baseSeq, SnapshotDeltaOp{Type: SnapshotDeltaOpUnitUpsert, Unit: &opUnit})
 		return true
 	}
 
+	baseSeq := snapshot.LastRunSeq
 	snapshot.Units = append(snapshot.Units, unitSnapshot)
 	h.touchSnapshotLocked(runID, snapshot)
+	opUnit := unitSnapshot.Clone()
+	h.enqueueDeltaOpLocked(runID, baseSeq, SnapshotDeltaOp{Type: SnapshotDeltaOpUnitUpsert, Unit: &opUnit})
 	return true
 }
 
@@ -468,28 +530,36 @@ func (h *SnapshotHub) ApplyRunPatch(runID string, patch *RunPatch) bool {
 	}
 
 	changed := false
+	op := SnapshotDeltaOp{Type: SnapshotDeltaOpRunPatch}
 	if patch.Status != nil && snapshot.Status != *patch.Status {
 		snapshot.Status = *patch.Status
+		op.Status = cloneStringPtr(snapshot.Status)
 		changed = true
 	}
 	if patch.CurrentStage != nil && snapshot.CurrentStage != *patch.CurrentStage {
 		snapshot.CurrentStage = *patch.CurrentStage
+		op.CurrentStage = cloneStringPtr(snapshot.CurrentStage)
 		changed = true
 	}
 	if patch.Progress != nil && snapshot.Progress != *patch.Progress {
 		snapshot.Progress = *patch.Progress
+		op.Progress = cloneIntPtr(snapshot.Progress)
 		changed = true
 	}
 	if patch.StartedAt != nil && !timesEqual(snapshot.StartedAt, patch.StartedAt) {
 		snapshot.StartedAt = cloneTimePtr(patch.StartedAt)
+		op.StartedAt = cloneTimePtr(snapshot.StartedAt)
 		changed = true
 	}
 	if patch.FinishedAt != nil && !timesEqual(snapshot.FinishedAt, patch.FinishedAt) {
 		snapshot.FinishedAt = cloneTimePtr(patch.FinishedAt)
+		op.FinishedAt = cloneTimePtr(snapshot.FinishedAt)
 		changed = true
 	}
 	if changed {
+		baseSeq := snapshot.LastRunSeq
 		h.touchSnapshotLocked(runID, snapshot)
+		h.enqueueDeltaOpLocked(runID, baseSeq, op)
 	}
 	return changed
 }
@@ -547,7 +617,10 @@ func (h *SnapshotHub) ApplyStagePatch(runID, stageID string, patch *StagePatch) 
 			changed = true
 		}
 		if changed {
+			baseSeq := snapshot.LastRunSeq
 			h.touchSnapshotLocked(runID, snapshot)
+			opStage := stage.Clone()
+			h.enqueueDeltaOpLocked(runID, baseSeq, SnapshotDeltaOp{Type: SnapshotDeltaOpStageUpsert, Stage: &opStage})
 		}
 		return changed
 	}
@@ -601,7 +674,10 @@ func (h *SnapshotHub) ApplyUnitPatch(runID, unitID string, patch *UnitPatch) boo
 			changed = true
 		}
 		if changed {
+			baseSeq := snapshot.LastRunSeq
 			h.touchSnapshotLocked(runID, snapshot)
+			opUnit := unit.Clone()
+			h.enqueueDeltaOpLocked(runID, baseSeq, SnapshotDeltaOp{Type: SnapshotDeltaOpUnitUpsert, Unit: &opUnit})
 		}
 		return changed
 	}
@@ -622,15 +698,19 @@ func (h *SnapshotHub) AppendEvent(event *TaskEvent) bool {
 		return false
 	}
 
-	nextSeq := h.revisions[event.RunID] + 1
+	baseSeq := snapshot.LastRunSeq
 	eventSnapshot := NewEventSnapshotFromTaskEvent(event)
-	eventSnapshot.Seq = nextSeq
 	snapshot.Events = append([]EventSnapshot{eventSnapshot}, snapshot.Events...)
 	if len(snapshot.Events) > 50 {
 		snapshot.Events = snapshot.Events[:50]
 	}
 	updateSnapshotSessionSeq(snapshot, event)
 	h.touchSnapshotLocked(event.RunID, snapshot)
+	if len(snapshot.Events) > 0 {
+		snapshot.Events[0].Seq = snapshot.LastRunSeq
+		opEvent := snapshot.Events[0].Clone()
+		h.enqueueDeltaOpLocked(event.RunID, baseSeq, SnapshotDeltaOp{Type: SnapshotDeltaOpEventAppend, Event: &opEvent})
+	}
 	return true
 }
 
@@ -657,6 +737,50 @@ func (h *SnapshotHub) touchSnapshotLocked(runID string, snapshot *ExecutionSnaps
 	if snapshot.LastSessionSeqByUnit == nil {
 		snapshot.LastSessionSeqByUnit = map[string]uint64{}
 	}
+}
+
+func (h *SnapshotHub) resetDeltaQueueLocked(runID string) {
+	h.pendingOps[runID] = nil
+	delete(h.pendingBaseSeq, runID)
+}
+
+func (h *SnapshotHub) enqueueDeltaOpLocked(runID string, baseSeq uint64, op SnapshotDeltaOp) {
+	if runID == "" {
+		return
+	}
+	if len(h.pendingOps[runID]) == 0 {
+		h.pendingBaseSeq[runID] = baseSeq
+	}
+	h.pendingOps[runID] = append(h.pendingOps[runID], cloneSnapshotDeltaOp(op))
+}
+
+func cloneSnapshotDeltaOp(op SnapshotDeltaOp) SnapshotDeltaOp {
+	cloned := op
+	cloned.StartedAt = cloneTimePtr(op.StartedAt)
+	cloned.FinishedAt = cloneTimePtr(op.FinishedAt)
+	if op.Stage != nil {
+		stage := op.Stage.Clone()
+		cloned.Stage = &stage
+	}
+	if op.Unit != nil {
+		unit := op.Unit.Clone()
+		cloned.Unit = &unit
+	}
+	if op.Event != nil {
+		event := op.Event.Clone()
+		cloned.Event = &event
+	}
+	return cloned
+}
+
+func cloneStringPtr(value string) *string {
+	v := value
+	return &v
+}
+
+func cloneIntPtr(value int) *int {
+	v := value
+	return &v
 }
 
 func updateSnapshotSessionSeq(snapshot *ExecutionSnapshot, event *TaskEvent) {

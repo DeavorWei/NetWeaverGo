@@ -13,7 +13,7 @@ func TestInvariant_PendingLinesBlocksCommand(t *testing.T) {
 	ctx.PendingLines = []string{"some unconsumed output"}
 	reducer.state = NewStateReady
 
-	actions := reducer.Reduce(EvActivePromptSeen{Prompt: "<SW1>"})
+	actions := reduceEffects(reducer, EvActivePromptSeen{Prompt: "<SW1>"})
 	for _, action := range actions {
 		if _, ok := action.(ActSendCommand); ok {
 			t.Fatal("pendingLines 非空时不应发送命令")
@@ -32,7 +32,7 @@ func TestInvariant_TerminalStateNoRegression(t *testing.T) {
 		t.Run(terminalState.String(), func(t *testing.T) {
 			reducer := NewSessionReducer([]string{"cmd"}, m)
 			reducer.state = terminalState
-			actions := reducer.Reduce(EvActivePromptSeen{Prompt: "<SW1>"})
+			actions := reduceEffects(reducer, EvActivePromptSeen{Prompt: "<SW1>"})
 			if len(actions) != 0 {
 				t.Fatalf("终态不应产生动作，得到 %d 个", len(actions))
 			}
@@ -47,7 +47,7 @@ func TestInvariant_InitRequiredBeforeCommand(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
-	actions := adapter.FeedSessionActions("some random output\n")
+	actions := feedEffects(adapter, "some random output\n")
 	for _, action := range actions {
 		if _, ok := action.(ActSendCommand); ok {
 			t.Fatal("初始化未完成时不应发送命令")
@@ -67,7 +67,7 @@ func TestInvariant_PaginationBeforePrompt(t *testing.T) {
 	reducer.ctx.Current = NewCommandContext(0, "display version")
 	reducer.ctx.Current.SetCommand("display version")
 
-	actions := reducer.Reduce(EvPagerSeen{Line: "--More--"})
+	actions := reduceEffects(reducer, EvPagerSeen{Line: "--More--"})
 
 	found := false
 	for _, action := range actions {

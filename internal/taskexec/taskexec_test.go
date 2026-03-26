@@ -378,8 +378,12 @@ func TestRuntimeManagerGetSnapshotDelta(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, delta)
 	assert.Equal(t, uint64(2), delta.Seq)
-	require.NotNil(t, delta.Snapshot)
-	assert.Equal(t, 35, delta.Snapshot.Progress)
+	assert.Equal(t, uint64(1), delta.BaseSeq)
+	require.Nil(t, delta.Snapshot)
+	require.Len(t, delta.Ops, 1)
+	require.Equal(t, SnapshotDeltaOpRunPatch, delta.Ops[0].Type)
+	require.NotNil(t, delta.Ops[0].Progress)
+	assert.Equal(t, 35, *delta.Ops[0].Progress)
 }
 
 func TestTaskExecutionServiceGetSnapshotDelta(t *testing.T) {

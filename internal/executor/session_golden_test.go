@@ -42,7 +42,7 @@ func TestGoldenPromptMisalignment(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display cpu-usage", "display memory"}, m)
 
-	_ = adapter.FeedSessionActions(`<SW1>display cpu-usage
+	_ = feedEffects(adapter, `<SW1>display cpu-usage
 CPU Usage: 15%
 <SW1>display memory
 Memory Usage: 60%
@@ -60,8 +60,8 @@ func TestGoldenMultiplePagination(t *testing.T) {
 	m.SetPaginationPrompts([]string{"--More--"})
 
 	adapter := NewSessionAdapter(80, []string{"display interface"}, m)
-	_ = adapter.FeedSessionActions("hostname# ")
-	actions := adapter.FeedSessionActions(`hostname# display interface
+	_ = feedEffects(adapter, "hostname# ")
+	actions := feedEffects(adapter, `hostname# display interface
 Interface                   PHY   Protocol
 GE1/0/1                     down  down
 --More--

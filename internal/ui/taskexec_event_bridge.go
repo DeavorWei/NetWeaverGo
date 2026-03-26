@@ -2,7 +2,6 @@ package ui
 
 import (
 	"sync"
-	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/taskexec"
@@ -14,7 +13,6 @@ import (
 type TaskExecutionEventBridge struct {
 	eventBus            *taskexec.EventBus
 	wailsApp            *application.App
-	snapshotGetter      func(runID string) (*taskexec.ExecutionSnapshot, error)
 	snapshotDeltaGetter func(runID string) (*taskexec.SnapshotDelta, error)
 	mu                  sync.RWMutex
 	runIDs              map[string]struct{}
@@ -24,12 +22,10 @@ type TaskExecutionEventBridge struct {
 // NewTaskExecutionEventBridge 创建事件桥接器
 func NewTaskExecutionEventBridge(
 	eventBus *taskexec.EventBus,
-	snapshotGetter func(runID string) (*taskexec.ExecutionSnapshot, error),
 	snapshotDeltaGetter func(runID string) (*taskexec.SnapshotDelta, error),
 ) *TaskExecutionEventBridge {
 	return &TaskExecutionEventBridge{
 		eventBus:            eventBus,
-		snapshotGetter:      snapshotGetter,
 		snapshotDeltaGetter: snapshotDeltaGetter,
 		runIDs:              make(map[string]struct{}),
 	}
@@ -88,32 +84,19 @@ func (b *TaskExecutionEventBridge) handleEvent(event *taskexec.TaskEvent) {
 		b.emitToFrontend("task:unit_updated", frontendEvent)
 	}
 
-	if b.snapshotDeltaGetter != nil {
-		delta, err := b.snapshotDeltaGetter(event.RunID)
-		if err != nil {
-			logger.Warn("TaskExecEventBridge", event.RunID, "获取快照增量失败: %v", err)
-		} else if delta != nil {
-			b.emitToFrontend("task:snapshot_delta", delta)
-			if delta.Snapshot != nil {
-				b.emitToFrontend("task:snapshot_data", delta.Snapshot)
-			}
-		}
-	} else if b.snapshotGetter != nil {
-		snapshot, err := b.snapshotGetter(event.RunID)
-		if err != nil {
-			logger.Warn("TaskExecEventBridge", event.RunID, "获取快照失败: %v", err)
-		} else if snapshot != nil {
-			b.emitToFrontend("task:snapshot_data", snapshot)
-		}
+	if b.snapshotDeltaGetter == nil {
+		logger.Warn("TaskExecEventBridge", event.RunID, "快照增量获取器未配置")
+		return
 	}
 
-	// 兼容旧前端事件
-	b.emitToFrontend("task:snapshot", map[string]interface{}{
-		"runId":      event.RunID,
-		"timestamp":  time.Now().UnixMilli(),
-		"eventType":  string(event.Type),
-		"hasPayload": b.snapshotGetter != nil || b.snapshotDeltaGetter != nil,
-	})
+	delta, err := b.snapshotDeltaGetter(event.RunID)
+	if err != nil {
+		logger.Warn("TaskExecEventBridge", event.RunID, "获取快照增量失败: %v", err)
+		return
+	}
+	if delta != nil {
+		b.emitToFrontend("task:snapshot_delta", delta)
+	}
 }
 
 // convertToFrontendEvent 转换为前端事件格式

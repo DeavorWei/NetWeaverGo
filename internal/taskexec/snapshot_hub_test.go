@@ -174,6 +174,9 @@ func TestSnapshotHubBuildDeltaTracksRunSeq(t *testing.T) {
 	if delta.Seq != 1 {
 		t.Fatalf("初始 delta seq 错误: got=%d want=1", delta.Seq)
 	}
+	if delta.BaseSeq != 0 {
+		t.Fatalf("初始 delta baseSeq 错误: got=%d want=0", delta.BaseSeq)
+	}
 	if delta.Snapshot == nil || delta.Snapshot.LastRunSeq != 1 {
 		t.Fatalf("初始快照 run seq 错误: %+v", delta.Snapshot)
 	}
@@ -190,8 +193,21 @@ func TestSnapshotHubBuildDeltaTracksRunSeq(t *testing.T) {
 	if delta.Seq != 2 {
 		t.Fatalf("更新后 delta seq 错误: got=%d want=2", delta.Seq)
 	}
-	if delta.Snapshot == nil || delta.Snapshot.Progress != 50 || delta.Snapshot.LastRunSeq != 2 {
-		t.Fatalf("更新后快照错误: %+v", delta.Snapshot)
+	if delta.BaseSeq != 1 {
+		t.Fatalf("更新后 delta baseSeq 错误: got=%d want=1", delta.BaseSeq)
+	}
+	if delta.Snapshot != nil {
+		t.Fatalf("patch delta 不应携带 snapshot: %+v", delta.Snapshot)
+	}
+	if len(delta.Ops) != 1 {
+		t.Fatalf("patch delta ops 数量错误: got=%d want=1", len(delta.Ops))
+	}
+	op := delta.Ops[0]
+	if op.Type != SnapshotDeltaOpRunPatch {
+		t.Fatalf("patch op 类型错误: got=%s want=%s", op.Type, SnapshotDeltaOpRunPatch)
+	}
+	if op.Progress == nil || *op.Progress != 50 {
+		t.Fatalf("patch op progress 错误: %+v", op.Progress)
 	}
 }
 

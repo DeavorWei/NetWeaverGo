@@ -101,7 +101,7 @@ func TestReducerTerminalState(t *testing.T) {
 	reducer.state = NewStateCompleted
 
 	// 尝试处理事件
-	actions := reducer.Reduce(EvInitPromptStable{Prompt: "<SW1>"})
+	actions := reduceEffects(reducer, EvInitPromptStable{Prompt: "<SW1>"})
 
 	if len(actions) != 0 {
 		t.Errorf("终态不应该产生动作，但产生了 %d 个动作", len(actions))
@@ -122,7 +122,7 @@ func TestReducerInitPromptToWarmup(t *testing.T) {
 	reducer := NewSessionReducer([]string{"display version"}, m)
 
 	// 发送初始提示符稳定事件
-	actions := reducer.Reduce(EvInitPromptStable{Prompt: "<SW1>"})
+	actions := reduceEffects(reducer, EvInitPromptStable{Prompt: "<SW1>"})
 
 	// 验证状态转换
 	if reducer.State() != NewStateInitAwaitWarmupPrompt {
@@ -145,10 +145,10 @@ func TestReducerWarmupToReady(t *testing.T) {
 	reducer := NewSessionReducer([]string{"display version"}, m)
 
 	// 先进入预热等待状态
-	reducer.Reduce(EvInitPromptStable{Prompt: "<SW1>"})
+	reduceEffects(reducer, EvInitPromptStable{Prompt: "<SW1>"})
 
 	// 发送预热后提示符事件
-	actions := reducer.Reduce(EvWarmupPromptSeen{Prompt: "<SW1>"})
+	actions := reduceEffects(reducer, EvWarmupPromptSeen{Prompt: "<SW1>"})
 
 	// 验证状态转换
 	if reducer.State() != NewStateRunning {
@@ -256,7 +256,7 @@ func TestReducerPagerSeen(t *testing.T) {
 	reducer.ctx.Current = NewCommandContext(0, "display version")
 
 	// 发送分页符事件
-	actions := reducer.Reduce(EvPagerSeen{Line: "--More--"})
+	actions := reduceEffects(reducer, EvPagerSeen{Line: "--More--"})
 
 	// 验证状态转换
 	if reducer.State() != NewStateAwaitPagerContinueAck {
@@ -288,7 +288,7 @@ func TestReducerPagerSeen_AbortWhenPaginationLimitExceeded(t *testing.T) {
 	reducer.ctx.MaxPaginationCount = 1
 	reducer.ctx.NextIndex = 1
 
-	actions := reducer.Reduce(EvPagerSeen{Line: "--More--"})
+	actions := reduceEffects(reducer, EvPagerSeen{Line: "--More--"})
 	if reducer.State() != NewStateAwaitPagerContinueAck {
 		t.Fatalf("第一次分页后状态应为 AwaitPagerContinueAck，实际是 %s", reducer.State())
 	}
@@ -299,16 +299,19 @@ func TestReducerPagerSeen_AbortWhenPaginationLimitExceeded(t *testing.T) {
 		t.Fatalf("第一次分页动作应为 ActSendPagerContinue，实际是 %T", actions[0])
 	}
 
-	actions = reducer.Reduce(EvPagerSeen{Line: "--More--"})
+	actions = reduceEffects(reducer, EvPagerSeen{Line: "--More--"})
 	if reducer.State() != NewStateFailed {
 		t.Fatalf("超出分页上限后状态应为 Failed，实际是 %s", reducer.State())
 	}
-	if len(actions) != 1 {
-		t.Fatalf("超出分页上限后应产生 1 个动作，实际是 %d", len(actions))
+	if len(actions) != 2 {
+		t.Fatalf("超出分页上限后应产生 2 个动作(完成事件+中止会话)，实际是 %d", len(actions))
 	}
-	act, ok := actions[0].(ActAbortSession)
+	if _, ok := actions[0].(ActEmitCommandDone); !ok {
+		t.Fatalf("第一个动作应为 ActEmitCommandDone，实际是 %T", actions[0])
+	}
+	act, ok := actions[1].(ActAbortSession)
 	if !ok {
-		t.Fatalf("超出分页上限动作应为 ActAbortSession，实际是 %T", actions[0])
+		t.Fatalf("第二个动作应为 ActAbortSession，实际是 %T", actions[1])
 	}
 	if act.Reason != "pagination_limit_exceeded" {
 		t.Fatalf("中止原因应为 pagination_limit_exceeded，实际是 %s", act.Reason)
@@ -328,7 +331,7 @@ func TestReducerPagerPromptCompletesCommand(t *testing.T) {
 	reducer.ctx.Current.IncrementPagination()
 	reducer.ctx.NextIndex = 1
 
-	actions := reducer.Reduce(EvActivePromptSeen{Prompt: "<S1>"})
+	actions := reduceEffects(reducer, EvActivePromptSeen{Prompt: "<S1>"})
 	if reducer.State() != NewStateRunning {
 		t.Fatalf("分页结束后应直接完成当前命令并发送下一条，实际状态是 %s", reducer.State())
 	}
@@ -358,14 +361,14 @@ func TestReducerCommittedLinesAfterPagerDoNotBlockNextCommand(t *testing.T) {
 	reducer.ctx.Current.IncrementPagination()
 	reducer.ctx.NextIndex = 1
 
-	if actions := reducer.Reduce(EvCommittedLine{Line: "GE1/0/7 up up"}); len(actions) != 0 {
+	if actions := reduceEffects(reducer, EvCommittedLine{Line: "GE1/0/7 up up"}); len(actions) != 0 {
 		t.Fatalf("分页中间输出不应直接产生动作，实际是 %d 个", len(actions))
 	}
 	if reducer.ctx.HasPendingLines() {
 		t.Fatalf("分页中间输出应立即被消费，不应残留 pendingLines: %d", len(reducer.ctx.PendingLines))
 	}
 
-	actions := reducer.Reduce(EvActivePromptSeen{Prompt: "<S1>"})
+	actions := reduceEffects(reducer, EvActivePromptSeen{Prompt: "<S1>"})
 	if reducer.State() != NewStateRunning {
 		t.Fatalf("分页结束后应推进到下一条命令，实际状态是 %s", reducer.State())
 	}
@@ -395,7 +398,7 @@ func TestReducerProcessPendingLines_AbortWhenPaginationLimitExceeded(t *testing.
 	reducer.ctx.MaxPaginationCount = 1
 	reducer.ctx.NextIndex = 1
 
-	actions := reducer.Reduce(EvCommittedLine{Line: "--More--"})
+	actions := reduceEffects(reducer, EvCommittedLine{Line: "--More--"})
 	if reducer.State() != NewStateAwaitPagerContinueAck {
 		t.Fatalf("第一次分页后状态应为 AwaitPagerContinueAck，实际是 %s", reducer.State())
 	}
@@ -404,15 +407,18 @@ func TestReducerProcessPendingLines_AbortWhenPaginationLimitExceeded(t *testing.
 	}
 
 	reducer.state = NewStateRunning
-	actions = reducer.Reduce(EvCommittedLine{Line: "--More--"})
+	actions = reduceEffects(reducer, EvCommittedLine{Line: "--More--"})
 	if reducer.State() != NewStateFailed {
 		t.Fatalf("超出分页上限后状态应为 Failed，实际是 %s", reducer.State())
 	}
-	if len(actions) != 1 {
-		t.Fatalf("超出分页上限后应产生 1 个动作，实际是 %d", len(actions))
+	if len(actions) != 2 {
+		t.Fatalf("超出分页上限后应产生 2 个动作(完成事件+中止会话)，实际是 %d", len(actions))
 	}
-	if _, ok := actions[0].(ActAbortSession); !ok {
-		t.Fatalf("超出分页上限动作应为 ActAbortSession，实际是 %T", actions[0])
+	if _, ok := actions[0].(ActEmitCommandDone); !ok {
+		t.Fatalf("第一个动作应为 ActEmitCommandDone，实际是 %T", actions[0])
+	}
+	if _, ok := actions[1].(ActAbortSession); !ok {
+		t.Fatalf("第二个动作应为 ActAbortSession，实际是 %T", actions[1])
 	}
 }
 
@@ -436,7 +442,7 @@ func TestReducerErrorMatched(t *testing.T) {
 	reducer.ctx.Current = NewCommandContext(0, "bad command")
 
 	// 发送错误匹配事件
-	actions := reducer.Reduce(EvErrorMatched{
+	actions := reduceEffects(reducer, EvErrorMatched{
 		Line: "Error: command failed",
 		Rule: &matcher.ErrorRule{
 			Name:     "命令失败",
@@ -470,7 +476,7 @@ func TestReducerWarningPass(t *testing.T) {
 	reducer.ctx.Current = NewCommandContext(0, "cmd")
 
 	// 发送警告级别错误事件
-	actions := reducer.Reduce(EvErrorMatched{
+	actions := reduceEffects(reducer, EvErrorMatched{
 		Line: "Warning: minor issue",
 		Rule: &matcher.ErrorRule{
 			Name:     "警告",
@@ -501,7 +507,7 @@ func TestReducerContinueOnCmdErrorWaitsForPromptAndIgnoresDuplicateErrorLines(t 
 	reducer.ctx.Current.SetCommand("display arp all")
 	reducer.ctx.NextIndex = 1
 
-	firstActions := reducer.Reduce(EvErrorMatched{
+	firstActions := reduceEffects(reducer, EvErrorMatched{
 		Line: "^",
 		Rule: &matcher.ErrorRule{
 			Name:     "输入错误",
@@ -519,7 +525,7 @@ func TestReducerContinueOnCmdErrorWaitsForPromptAndIgnoresDuplicateErrorLines(t 
 		t.Fatal("当前命令应已标记为失败")
 	}
 
-	secondActions := reducer.Reduce(EvErrorMatched{
+	secondActions := reduceEffects(reducer, EvErrorMatched{
 		Line: "Error: Too many parameters found at '^' position.",
 		Rule: &matcher.ErrorRule{
 			Name:     "输入错误",
@@ -534,7 +540,7 @@ func TestReducerContinueOnCmdErrorWaitsForPromptAndIgnoresDuplicateErrorLines(t 
 		t.Fatalf("提示符到达前不应提前写入结果，实际结果数 %d", len(reducer.ctx.Results))
 	}
 
-	promptActions := reducer.Reduce(EvCommittedLine{Line: "<SW>"})
+	promptActions := reduceEffects(reducer, EvCommittedLine{Line: "<SW>"})
 	if reducer.State() != NewStateRunning {
 		t.Fatalf("错误命令收尾后应自动发送下一条命令并保持 Running，实际是 %s", reducer.State())
 	}
@@ -556,12 +562,15 @@ func TestReducerContinueOnCmdErrorWaitsForPromptAndIgnoresDuplicateErrorLines(t 
 		t.Fatalf("错误命令规范化输出不符合预期: %#v", reducer.ctx.Results[0].NormalizedLines)
 	}
 
-	if len(promptActions) != 1 {
-		t.Fatalf("提示符到达后应只产生 1 个动作，实际是 %d", len(promptActions))
+	if len(promptActions) != 2 {
+		t.Fatalf("提示符到达后应产生 2 个动作(完成事件+下一条命令)，实际是 %d", len(promptActions))
 	}
-	act, ok := promptActions[0].(ActSendCommand)
+	if _, ok := promptActions[0].(ActEmitCommandDone); !ok {
+		t.Fatalf("提示符到达后第一个动作应为 ActEmitCommandDone，实际是 %T", promptActions[0])
+	}
+	act, ok := promptActions[1].(ActSendCommand)
 	if !ok {
-		t.Fatalf("提示符到达后应发送下一条命令，实际动作是 %T", promptActions[0])
+		t.Fatalf("提示符到达后第二个动作应发送下一条命令，实际动作是 %T", promptActions[1])
 	}
 	if act.Index != 1 || act.Command != "display device" {
 		t.Fatalf("下一条命令错误: index=%d command=%q", act.Index, act.Command)
@@ -578,7 +587,7 @@ func TestReducerUserContinue(t *testing.T) {
 	reducer.ctx.Current = NewCommandContext(0, "cmd")
 
 	// 发送用户继续事件
-	actions := reducer.Reduce(EvUserContinue{CommandIndex: 0})
+	actions := reduceEffects(reducer, EvUserContinue{CommandIndex: 0})
 
 	// 验证状态转换
 	if reducer.State() != NewStateRunning {
@@ -605,20 +614,22 @@ func TestReducerUserAbort(t *testing.T) {
 	reducer.ctx.Current = NewCommandContext(0, "cmd")
 
 	// 发送用户中止事件
-	actions := reducer.Reduce(EvUserAbort{CommandIndex: 0})
+	actions := reduceEffects(reducer, EvUserAbort{CommandIndex: 0})
 
 	// 验证状态转换
 	if reducer.State() != NewStateFailed {
 		t.Errorf("状态应该是 NewStateFailed，实际是 %s", reducer.State())
 	}
 
-	// 验证产生中止会话动作
-	if len(actions) != 1 {
-		t.Fatalf("应该产生 1 个动作，实际产生了 %d 个", len(actions))
+	// 验证产生失败完成事件和中止会话动作
+	if len(actions) != 2 {
+		t.Fatalf("应该产生 2 个动作，实际产生了 %d 个", len(actions))
 	}
-
-	if _, ok := actions[0].(ActAbortSession); !ok {
-		t.Errorf("动作应该是 ActAbortSession，实际是 %T", actions[0])
+	if _, ok := actions[0].(ActEmitCommandDone); !ok {
+		t.Errorf("第一个动作应该是 ActEmitCommandDone，实际是 %T", actions[0])
+	}
+	if _, ok := actions[1].(ActAbortSession); !ok {
+		t.Errorf("第二个动作应该是 ActAbortSession，实际是 %T", actions[1])
 	}
 }
 
@@ -630,7 +641,7 @@ func TestReducerSuspendTimeout(t *testing.T) {
 	reducer.ctx.Current = NewCommandContext(0, "cmd")
 	reducer.ctx.Current.SetCommand("cmd")
 
-	actions := reducer.Reduce(EvSuspendTimeout{
+	actions := reduceEffects(reducer, EvSuspendTimeout{
 		CommandIndex: 0,
 		Reason:       "5分钟超时",
 	})
@@ -638,12 +649,15 @@ func TestReducerSuspendTimeout(t *testing.T) {
 	if reducer.State() != NewStateFailed {
 		t.Fatalf("状态应该是 NewStateFailed，实际是 %s", reducer.State())
 	}
-	if len(actions) != 1 {
-		t.Fatalf("应该产生 1 个动作，实际产生了 %d 个", len(actions))
+	if len(actions) != 2 {
+		t.Fatalf("应该产生 2 个动作，实际产生了 %d 个", len(actions))
 	}
-	act, ok := actions[0].(ActAbortSession)
+	if _, ok := actions[0].(ActEmitCommandDone); !ok {
+		t.Fatalf("第一个动作应该是 ActEmitCommandDone，实际是 %T", actions[0])
+	}
+	act, ok := actions[1].(ActAbortSession)
 	if !ok {
-		t.Fatalf("动作应该是 ActAbortSession，实际是 %T", actions[0])
+		t.Fatalf("第二个动作应该是 ActAbortSession，实际是 %T", actions[1])
 	}
 	if act.Reason != "suspend_timeout" {
 		t.Fatalf("中止原因应该是 suspend_timeout，实际是 %s", act.Reason)
@@ -664,21 +678,24 @@ func TestReducerTimeout(t *testing.T) {
 	reducer.ctx.Current = NewCommandContext(0, "cmd")
 
 	// 发送超时事件
-	actions := reducer.Reduce(EvTimeout{CommandIndex: 0})
+	actions := reduceEffects(reducer, EvTimeout{CommandIndex: 0})
 
 	// 验证状态转换
 	if reducer.State() != NewStateFailed {
 		t.Errorf("状态应该是 NewStateFailed，实际是 %s", reducer.State())
 	}
 
-	// 验证产生中止会话动作
-	if len(actions) != 1 {
-		t.Fatalf("应该产生 1 个动作，实际产生了 %d 个", len(actions))
+	// 验证产生失败完成事件和中止会话动作
+	if len(actions) != 2 {
+		t.Fatalf("应该产生 2 个动作，实际产生了 %d 个", len(actions))
+	}
+	if _, ok := actions[0].(ActEmitCommandDone); !ok {
+		t.Errorf("第一个动作应该是 ActEmitCommandDone，实际是 %T", actions[0])
 	}
 
-	act, ok := actions[0].(ActAbortSession)
+	act, ok := actions[1].(ActAbortSession)
 	if !ok {
-		t.Errorf("动作应该是 ActAbortSession，实际是 %T", actions[0])
+		t.Errorf("第二个动作应该是 ActAbortSession，实际是 %T", actions[1])
 	}
 
 	if act.Reason != "timeout" {
@@ -696,21 +713,24 @@ func TestReducerStreamClosed(t *testing.T) {
 	reducer.ctx.Current = NewCommandContext(0, "cmd")
 
 	// 发送流关闭事件
-	actions := reducer.Reduce(EvStreamClosed{})
+	actions := reduceEffects(reducer, EvStreamClosed{})
 
 	// 验证状态转换
 	if reducer.State() != NewStateFailed {
 		t.Errorf("状态应该是 NewStateFailed，实际是 %s", reducer.State())
 	}
 
-	// 验证产生中止会话动作
-	if len(actions) != 1 {
-		t.Fatalf("应该产生 1 个动作，实际产生了 %d 个", len(actions))
+	// 验证产生失败完成事件和中止会话动作
+	if len(actions) != 2 {
+		t.Fatalf("应该产生 2 个动作，实际产生了 %d 个", len(actions))
+	}
+	if _, ok := actions[0].(ActEmitCommandDone); !ok {
+		t.Errorf("第一个动作应该是 ActEmitCommandDone，实际是 %T", actions[0])
 	}
 
-	act, ok := actions[0].(ActAbortSession)
+	act, ok := actions[1].(ActAbortSession)
 	if !ok {
-		t.Errorf("动作应该是 ActAbortSession，实际是 %T", actions[0])
+		t.Errorf("第二个动作应该是 ActAbortSession，实际是 %T", actions[1])
 	}
 
 	if act.Reason != "stream_closed" {
@@ -734,7 +754,7 @@ func TestReducerCommandComplete(t *testing.T) {
 	reducer.ctx.NextIndex = 1 // 第一条命令已发送
 
 	// 发送提示符事件
-	actions := reducer.Reduce(EvActivePromptSeen{Prompt: "<SW1>"})
+	actions := reduceEffects(reducer, EvActivePromptSeen{Prompt: "<SW1>"})
 
 	// 验证状态转换（应该自动发送下一条命令）
 	if reducer.State() != NewStateRunning {
@@ -773,16 +793,21 @@ func TestReducerAllCommandsComplete(t *testing.T) {
 	reducer.ctx.NextIndex = 1 // 已经发送了第一条命令
 
 	// 发送提示符事件
-	actions := reducer.Reduce(EvActivePromptSeen{Prompt: "<SW1>"})
+	actions := reduceEffects(reducer, EvActivePromptSeen{Prompt: "<SW1>"})
 
 	// 验证状态转换
 	if reducer.State() != NewStateCompleted {
 		t.Errorf("状态应该是 NewStateCompleted，实际是 %s", reducer.State())
 	}
 
-	// 验证没有产生动作
-	if len(actions) != 0 {
-		t.Errorf("所有命令完成后不应该产生动作，但产生了 %d 个", len(actions))
+	// 验证仅产生命令完成事件动作
+	if len(actions) != 1 {
+		t.Errorf("所有命令完成后应产生 1 个完成事件动作，但产生了 %d 个", len(actions))
+	}
+	if len(actions) > 0 {
+		if _, ok := actions[0].(ActEmitCommandDone); !ok {
+			t.Errorf("所有命令完成后动作应为 ActEmitCommandDone，实际是 %T", actions[0])
+		}
 	}
 }
 
@@ -852,7 +877,7 @@ func TestReducerReduceBatchWrapsLegacyActions(t *testing.T) {
 	if batch.Effects[0].EffectType() != "SendWarmup" {
 		t.Fatalf("effect 类型错误: got=%s want=SendWarmup", batch.Effects[0].EffectType())
 	}
-	actions := batch.ToActions()
+	actions := batch.Effects
 	if len(actions) != 1 {
 		t.Fatalf("ToActions 数量错误: got=%d want=1", len(actions))
 	}

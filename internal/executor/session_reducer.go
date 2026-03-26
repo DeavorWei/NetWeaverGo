@@ -47,13 +47,6 @@ func (r *SessionReducer) Context() *SessionContext {
 	return r.ctx
 }
 
-// Reduce 状态迁移核心函数
-// 输入：事件
-// 输出：动作列表（兼容旧接口）
-func (r *SessionReducer) Reduce(event SessionEvent) []SessionAction {
-	return r.ReduceBatch(event).ToActions()
-}
-
 // ReduceBatch 状态迁移核心函数
 // 输入：事件
 // 输出：批次（新接口）
@@ -65,49 +58,49 @@ func (r *SessionReducer) ReduceBatch(event SessionEvent) *TransitionBatch {
 		return batch
 	}
 
-	var actions []SessionAction
+	var effects []SessionEffect
 	switch e := event.(type) {
 	case EvInitPromptStable:
-		actions = r.handleInitPromptStable(e)
+		effects = r.handleInitPromptStable(e)
 
 	case EvWarmupPromptSeen:
-		actions = r.handleWarmupPromptSeen(e)
+		effects = r.handleWarmupPromptSeen(e)
 
 	case EvCommittedLine:
-		actions = r.handleCommittedLine(e)
+		effects = r.handleCommittedLine(e)
 
 	case EvPagerSeen:
-		actions = r.handlePagerSeen(e)
+		effects = r.handlePagerSeen(e)
 
 	case EvActivePromptSeen:
-		actions = r.handleActivePromptSeen(e)
+		effects = r.handleActivePromptSeen(e)
 
 	case EvErrorMatched:
-		actions = r.handleErrorMatched(e)
+		effects = r.handleErrorMatched(e)
 
 	case EvTimeout:
-		actions = r.handleTimeout(e)
+		effects = r.handleTimeout(e)
 
 	case EvUserContinue:
-		actions = r.handleUserContinue(e)
+		effects = r.handleUserContinue(e)
 
 	case EvUserAbort:
-		actions = r.handleUserAbort(e)
+		effects = r.handleUserAbort(e)
 
 	case EvSuspendTimeout:
-		actions = r.handleSuspendTimeout(e)
+		effects = r.handleSuspendTimeout(e)
 
 	case EvStreamClosed:
-		actions = r.handleStreamClosed(e)
+		effects = r.handleStreamClosed(e)
 
 	case EvCommandPromptSeen:
-		actions = r.handleCommandPromptSeen(e)
+		effects = r.handleCommandPromptSeen(e)
 
 	default:
 		logger.Debug("SessionReducer", "-", "未知事件类型: %s", event.EventType())
 	}
 
-	batch.AppendActions(actions...)
+	batch.AppendEffects(effects...)
 	return batch
 }
 
@@ -116,7 +109,7 @@ func (r *SessionReducer) ReduceBatch(event SessionEvent) *TransitionBatch {
 // ============================================================================
 
 // handleInitPromptStable 处理初始提示符稳定事件
-func (r *SessionReducer) handleInitPromptStable(e EvInitPromptStable) []SessionAction {
+func (r *SessionReducer) handleInitPromptStable(e EvInitPromptStable) []SessionEffect {
 	if r.state != NewStateInitAwaitPrompt {
 		return nil
 	}
@@ -125,11 +118,11 @@ func (r *SessionReducer) handleInitPromptStable(e EvInitPromptStable) []SessionA
 	r.state = NewStateInitAwaitWarmupPrompt
 
 	logger.Debug("SessionReducer", "-", "初始提示符稳定，进入预热等待: %s", e.Prompt)
-	return []SessionAction{ActSendWarmup{}}
+	return []SessionEffect{ActSendWarmup{}}
 }
 
 // handleWarmupPromptSeen 处理预热后提示符检测事件
-func (r *SessionReducer) handleWarmupPromptSeen(e EvWarmupPromptSeen) []SessionAction {
+func (r *SessionReducer) handleWarmupPromptSeen(e EvWarmupPromptSeen) []SessionEffect {
 	if r.state != NewStateInitAwaitWarmupPrompt {
 		return nil
 	}
@@ -145,7 +138,7 @@ func (r *SessionReducer) handleWarmupPromptSeen(e EvWarmupPromptSeen) []SessionA
 }
 
 // handleCommittedLine 处理行提交事件
-func (r *SessionReducer) handleCommittedLine(e EvCommittedLine) []SessionAction {
+func (r *SessionReducer) handleCommittedLine(e EvCommittedLine) []SessionEffect {
 	// 添加到待处理行
 	r.ctx.AddPendingLine(e.Line)
 
@@ -159,7 +152,7 @@ func (r *SessionReducer) handleCommittedLine(e EvCommittedLine) []SessionAction 
 }
 
 // handlePagerSeen 处理分页符检测事件
-func (r *SessionReducer) handlePagerSeen(e EvPagerSeen) []SessionAction {
+func (r *SessionReducer) handlePagerSeen(e EvPagerSeen) []SessionEffect {
 	switch r.state {
 	case NewStateRunning, NewStateReady:
 		if r.ctx.Current != nil {
@@ -170,7 +163,7 @@ func (r *SessionReducer) handlePagerSeen(e EvPagerSeen) []SessionAction {
 		}
 		r.state = NewStateAwaitPagerContinueAck
 		logger.Debug("SessionReducer", "-", "检测到分页符，进入等待续页确认")
-		return []SessionAction{ActSendPagerContinue{}}
+		return []SessionEffect{ActSendPagerContinue{}}
 
 	case NewStateAwaitPagerContinueAck:
 		// 已经在等待续页确认，记录新的分页符
@@ -180,14 +173,14 @@ func (r *SessionReducer) handlePagerSeen(e EvPagerSeen) []SessionAction {
 				return actions
 			}
 		}
-		return []SessionAction{ActSendPagerContinue{}}
+		return []SessionEffect{ActSendPagerContinue{}}
 	}
 
 	return nil
 }
 
 // handleActivePromptSeen 处理活动行提示符检测事件
-func (r *SessionReducer) handleActivePromptSeen(e EvActivePromptSeen) []SessionAction {
+func (r *SessionReducer) handleActivePromptSeen(e EvActivePromptSeen) []SessionEffect {
 	switch r.state {
 	case NewStateRunning:
 		// 命令完成
@@ -203,7 +196,7 @@ func (r *SessionReducer) handleActivePromptSeen(e EvActivePromptSeen) []SessionA
 }
 
 // handleErrorMatched 处理错误匹配事件
-func (r *SessionReducer) handleErrorMatched(e EvErrorMatched) []SessionAction {
+func (r *SessionReducer) handleErrorMatched(e EvErrorMatched) []SessionEffect {
 	if r.state.IsTerminal() {
 		return nil
 	}
@@ -241,24 +234,25 @@ func (r *SessionReducer) handleErrorMatched(e EvErrorMatched) []SessionAction {
 	r.state = NewStateSuspended
 
 	logger.Debug("SessionReducer", "-", "检测到严重错误，进入挂起状态: %s", e.Line)
-	return []SessionAction{ActRequestSuspendDecision{ErrorContext: r.ctx.PendingError}}
+	return []SessionEffect{ActRequestSuspendDecision{ErrorContext: r.ctx.PendingError}}
 }
 
 // handleTimeout 处理超时事件
-func (r *SessionReducer) handleTimeout(e EvTimeout) []SessionAction {
+func (r *SessionReducer) handleTimeout(e EvTimeout) []SessionEffect {
 	if r.state.IsTerminal() {
 		return nil
 	}
 
-	r.ctx.FailCurrentCommand("命令执行超时")
+	effects := r.failCurrentCommand("命令执行超时")
 	r.state = NewStateFailed
 
 	logger.Debug("SessionReducer", "-", "命令超时，进入失败状态")
-	return []SessionAction{ActAbortSession{Reason: "timeout"}}
+	effects = append(effects, ActAbortSession{Reason: "timeout"})
+	return effects
 }
 
 // handleUserContinue 处理用户继续事件
-func (r *SessionReducer) handleUserContinue(e EvUserContinue) []SessionAction {
+func (r *SessionReducer) handleUserContinue(e EvUserContinue) []SessionEffect {
 	if r.state != NewStateSuspended {
 		return nil
 	}
@@ -267,24 +261,25 @@ func (r *SessionReducer) handleUserContinue(e EvUserContinue) []SessionAction {
 	r.state = NewStateRunning
 
 	logger.Debug("SessionReducer", "-", "用户选择继续，恢复执行")
-	return []SessionAction{ActResetReadTimeout{}}
+	return []SessionEffect{ActResetReadTimeout{}}
 }
 
 // handleUserAbort 处理用户中止事件
-func (r *SessionReducer) handleUserAbort(e EvUserAbort) []SessionAction {
+func (r *SessionReducer) handleUserAbort(e EvUserAbort) []SessionEffect {
 	if r.state != NewStateSuspended {
 		return nil
 	}
 
-	r.ctx.FailCurrentCommand("用户中止")
+	effects := r.failCurrentCommand("用户中止")
 	r.state = NewStateFailed
 
 	logger.Debug("SessionReducer", "-", "用户选择中止，进入失败状态")
-	return []SessionAction{ActAbortSession{Reason: "user_abort"}}
+	effects = append(effects, ActAbortSession{Reason: "user_abort"})
+	return effects
 }
 
 // handleSuspendTimeout 处理挂起超时事件
-func (r *SessionReducer) handleSuspendTimeout(e EvSuspendTimeout) []SessionAction {
+func (r *SessionReducer) handleSuspendTimeout(e EvSuspendTimeout) []SessionEffect {
 	if r.state != NewStateSuspended {
 		return nil
 	}
@@ -294,15 +289,16 @@ func (r *SessionReducer) handleSuspendTimeout(e EvSuspendTimeout) []SessionActio
 		reason = "suspend_timeout"
 	}
 
-	r.ctx.FailCurrentCommand("挂起超时: " + reason)
+	effects := r.failCurrentCommand("挂起超时: " + reason)
 	r.state = NewStateFailed
 
 	logger.Warn("SessionReducer", "-", "挂起超时，进入失败状态: %s", reason)
-	return []SessionAction{ActAbortSession{Reason: "suspend_timeout"}}
+	effects = append(effects, ActAbortSession{Reason: "suspend_timeout"})
+	return effects
 }
 
 // handleStreamClosed 处理流关闭事件
-func (r *SessionReducer) handleStreamClosed(e EvStreamClosed) []SessionAction {
+func (r *SessionReducer) handleStreamClosed(e EvStreamClosed) []SessionEffect {
 	if r.state.IsTerminal() {
 		return nil
 	}
@@ -311,15 +307,16 @@ func (r *SessionReducer) handleStreamClosed(e EvStreamClosed) []SessionAction {
 		return nil
 	}
 
-	r.ctx.FailCurrentCommand("流意外关闭")
+	effects := r.failCurrentCommand("流意外关闭")
 	r.state = NewStateFailed
 
 	logger.Debug("SessionReducer", "-", "流关闭，进入失败状态")
-	return []SessionAction{ActAbortSession{Reason: "stream_closed"}}
+	effects = append(effects, ActAbortSession{Reason: "stream_closed"})
+	return effects
 }
 
 // handleCommandPromptSeen 处理命令完成后提示符检测事件
-func (r *SessionReducer) handleCommandPromptSeen(e EvCommandPromptSeen) []SessionAction {
+func (r *SessionReducer) handleCommandPromptSeen(e EvCommandPromptSeen) []SessionEffect {
 	if r.state == NewStateRunning {
 		return r.completeCurrentCommand()
 	}
@@ -331,7 +328,7 @@ func (r *SessionReducer) handleCommandPromptSeen(e EvCommandPromptSeen) []Sessio
 // ============================================================================
 
 // trySendCommand 尝试发送下一条命令
-func (r *SessionReducer) trySendCommand() []SessionAction {
+func (r *SessionReducer) trySendCommand() []SessionEffect {
 	// 不变量检查：pendingLines 非空时不发送命令
 	if r.ctx.HasPendingLines() {
 		logger.Debug("SessionReducer", "-", "防串台门禁：存在 %d 行未消费输出，禁止发送新命令", len(r.ctx.PendingLines))
@@ -359,25 +356,62 @@ func (r *SessionReducer) trySendCommand() []SessionAction {
 	r.state = NewStateRunning
 	logger.Debug("SessionReducer", "-", "准备发送命令 [%d]: %s", ctx.Index, ctx.Command)
 
-	return []SessionAction{
+	return []SessionEffect{
 		ActSendCommand{Index: ctx.Index, Command: ctx.Command},
 	}
 }
 
 // completeCurrentCommand 完成当前命令
-func (r *SessionReducer) completeCurrentCommand() []SessionAction {
+func (r *SessionReducer) completeCurrentCommand() []SessionEffect {
+	var effects []SessionEffect
+
+	if doneEffect, ok := r.buildCommandDoneEffectFromCurrent(); ok {
+		effects = append(effects, doneEffect)
+	}
 	r.ctx.CompleteCurrentCommand()
 	r.state = NewStateReady
 
 	logger.Debug("SessionReducer", "-", "命令完成，回到就绪状态")
 
-	// 尝试发送下一条命令
-	return r.trySendCommand()
+	// 先发命令完成事件，再尝试发送下一条命令，确保顺序为 completed -> next dispatched。
+	effects = append(effects, r.trySendCommand()...)
+	return effects
+}
+
+func (r *SessionReducer) failCurrentCommand(reason string) []SessionEffect {
+	doneEffect, ok := r.buildCommandDoneEffectFromCurrent()
+	r.ctx.FailCurrentCommand(reason)
+	if !ok || r.ctx == nil || r.ctx.Current == nil {
+		return nil
+	}
+	doneEffect.Success = false
+	doneEffect.Duration = r.ctx.Current.Duration()
+	doneEffect.ErrorMessage = r.ctx.Current.ErrorMessage
+	return []SessionEffect{doneEffect}
+}
+
+func (r *SessionReducer) buildCommandDoneEffectFromCurrent() (ActEmitCommandDone, bool) {
+	if r.ctx == nil || r.ctx.Current == nil {
+		return ActEmitCommandDone{}, false
+	}
+	current := r.ctx.Current
+	command := current.Command
+	if command == "" {
+		parsed, _ := parseInlineCommand(current.RawCommand)
+		command = parsed
+	}
+	return ActEmitCommandDone{
+		Index:        current.Index,
+		Command:      command,
+		Success:      !current.HasError(),
+		Duration:     current.Duration(),
+		ErrorMessage: current.ErrorMessage,
+	}, true
 }
 
 // processPendingLines 处理待处理行
-func (r *SessionReducer) processPendingLines() []SessionAction {
-	var actions []SessionAction
+func (r *SessionReducer) processPendingLines() []SessionEffect {
+	var actions []SessionEffect
 
 	for r.ctx.HasPendingLines() {
 		line := r.ctx.PendingLines[0]
@@ -428,7 +462,7 @@ func (r *SessionReducer) processPendingLines() []SessionAction {
 	return actions
 }
 
-func (r *SessionReducer) checkPaginationLimit() []SessionAction {
+func (r *SessionReducer) checkPaginationLimit() []SessionEffect {
 	if r.ctx == nil || r.ctx.Current == nil {
 		return nil
 	}
@@ -443,9 +477,10 @@ func (r *SessionReducer) checkPaginationLimit() []SessionAction {
 	}
 
 	reason := "pagination_limit_exceeded"
-	r.ctx.FailCurrentCommand("分页次数超限")
+	effects := r.failCurrentCommand("分页次数超限")
 	r.state = NewStateFailed
 
 	logger.Warn("SessionReducer", "-", "分页次数超限: current=%d limit=%d", r.ctx.Current.PaginationCount, limit)
-	return []SessionAction{ActAbortSession{Reason: reason}}
+	effects = append(effects, ActAbortSession{Reason: reason})
+	return effects
 }

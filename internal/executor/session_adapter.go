@@ -37,11 +37,6 @@ func NewSessionAdapter(width int, commands []string, m *matcher.StreamMatcher) *
 	return adapter
 }
 
-// FeedSessionActions 消费原始 chunk，返回统一的新动作模型
-func (a *SessionAdapter) FeedSessionActions(chunk string) []SessionAction {
-	return a.FeedTransitionBatch(chunk).ToActions()
-}
-
 // FeedTransitionBatch 消费原始 chunk，返回 reducer 批次结果。
 func (a *SessionAdapter) FeedTransitionBatch(chunk string) *TransitionBatch {
 	// 1. 使用 Replayer 处理 chunk
@@ -139,11 +134,6 @@ func (a *SessionAdapter) GetPendingError() *ErrorContext {
 	return a.newContext.PendingError
 }
 
-// ResolveErrorActions 解决错误（外部决策后调用），返回后续动作
-func (a *SessionAdapter) ResolveErrorActions(continueExec bool) []SessionAction {
-	return a.ResolveErrorBatch(continueExec).ToActions()
-}
-
 // ResolveErrorBatch 解决错误（外部决策后调用），返回后续批次。
 func (a *SessionAdapter) ResolveErrorBatch(continueExec bool) *TransitionBatch {
 	var batch *TransitionBatch
@@ -161,11 +151,6 @@ func (a *SessionAdapter) ResolveErrorBatch(continueExec bool) *TransitionBatch {
 	return batch
 }
 
-// ReduceEvent 注入一个外部事件并同步状态快照。
-func (a *SessionAdapter) ReduceEvent(event SessionEvent) []SessionAction {
-	return a.ReduceEventBatch(event).ToActions()
-}
-
 // ReduceEventBatch 注入一个外部事件并同步状态快照，返回批次。
 func (a *SessionAdapter) ReduceEventBatch(event SessionEvent) *TransitionBatch {
 	batch := a.reducer.ReduceBatch(event)
@@ -175,11 +160,6 @@ func (a *SessionAdapter) ReduceEventBatch(event SessionEvent) *TransitionBatch {
 		return NewTransitionBatch()
 	}
 	return batch
-}
-
-// ResolveError 兼容旧调用
-func (a *SessionAdapter) ResolveError(continueExec bool) {
-	_ = a.ResolveErrorActions(continueExec)
 }
 
 // ClearError 清除错误状态

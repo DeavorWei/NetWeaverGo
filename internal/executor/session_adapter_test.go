@@ -14,7 +14,7 @@ func TestAdapter_UsesSingleArchitecture(t *testing.T) {
 		t.Fatalf("架构模式 = %q, 期望 single (Replayer+Detector+Reducer)", got)
 	}
 
-	_ = adapter.FeedSessionActions("hostname# ")
+	_ = feedEffects(adapter, "hostname# ")
 	if state := adapter.NewState(); state != NewStateInitAwaitPrompt && state != NewStateInitAwaitWarmupPrompt && state != NewStateReady {
 		t.Fatalf("初始化后状态异常: %s", state)
 	}
@@ -24,7 +24,7 @@ func TestAdapter_StateProjection(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display version", "display interface"}, m)
 
-	_ = adapter.FeedSessionActions("hostname# ")
+	_ = feedEffects(adapter, "hostname# ")
 
 	newState := adapter.NewState()
 	if newState != NewStateInitAwaitPrompt && newState != NewStateInitAwaitWarmupPrompt && newState != NewStateReady {
@@ -41,8 +41,8 @@ func TestAdapter_OutputCollection(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
-	_ = adapter.FeedSessionActions("hostname# ")
-	_ = adapter.FeedSessionActions(input)
+	_ = feedEffects(adapter, "hostname# ")
+	_ = feedEffects(adapter, input)
 
 	if len(adapter.Lines()) == 0 && adapter.ActiveLine() == "" {
 		t.Fatal("期望至少有已提交行或活动行")
@@ -57,13 +57,13 @@ func TestAdapter_PaginationHandling(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display interface"}, m)
 
-	actions := adapter.FeedSessionActions("hostname# ")
-	actions = adapter.FeedSessionActions("\r\nhostname# ")
+	actions := feedEffects(adapter, "hostname# ")
+	actions = feedEffects(adapter, "\r\nhostname# ")
 	if adapter.NewState() != NewStateRunning {
 		t.Fatalf("预热后应进入 Running，实际是 %s", adapter.NewState())
 	}
 
-	actions = adapter.FeedSessionActions(input)
+	actions = feedEffects(adapter, input)
 
 	hasPagerContinue := false
 	for _, action := range actions {
@@ -81,13 +81,13 @@ func TestAdapter_ErrorHandling(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
-	_ = adapter.FeedSessionActions("hostname# ")
-	actions := adapter.FeedSessionActions("\r\nhostname# ")
+	_ = feedEffects(adapter, "hostname# ")
+	actions := feedEffects(adapter, "\r\nhostname# ")
 	if adapter.NewState() != NewStateRunning {
 		t.Fatalf("预热后应进入 Running，实际是 %s", adapter.NewState())
 	}
 
-	actions = adapter.FeedSessionActions("  Error: Unrecognized command\r\nhostname# ")
+	actions = feedEffects(adapter, "  Error: Unrecognized command\r\nhostname# ")
 
 	state := adapter.NewState()
 	if state != NewStateSuspended {
@@ -110,11 +110,11 @@ func TestAdapter_MultipleCommands(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display version", "display interface", "display arp"}, m)
 
-	_ = adapter.FeedSessionActions("hostname# ")
-	_ = adapter.FeedSessionActions("\r\nhostname# ")
+	_ = feedEffects(adapter, "hostname# ")
+	_ = feedEffects(adapter, "\r\nhostname# ")
 	initialCount := len(adapter.Results())
 
-	actions := adapter.FeedSessionActions("display version\r\noutput\r\nhostname# ")
+	actions := feedEffects(adapter, "display version\r\noutput\r\nhostname# ")
 	foundNextCommand := false
 	for _, action := range actions {
 		if act, ok := action.(ActSendCommand); ok && act.Index == 1 {
@@ -154,8 +154,8 @@ func TestAdapter_ClearInitResiduals(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
-	_ = adapter.FeedSessionActions("hostname# ")
-	_ = adapter.FeedSessionActions("some output\r\n")
+	_ = feedEffects(adapter, "hostname# ")
+	_ = feedEffects(adapter, "some output\r\n")
 	adapter.ClearInitResiduals()
 }
 
@@ -163,7 +163,7 @@ func TestAdapter_MarkFailed(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
-	_ = adapter.FeedSessionActions("hostname# ")
+	_ = feedEffects(adapter, "hostname# ")
 	adapter.MarkFailed("test failure")
 
 	if state := adapter.NewState(); state != NewStateFailed {
@@ -175,7 +175,7 @@ func TestAdapter_RuntimeEventsFromNormalizedOutput(t *testing.T) {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(80, []string{"display version"}, m)
 
-	actions := adapter.FeedSessionActions("hostname# ")
+	actions := feedEffects(adapter, "hostname# ")
 	if len(actions) != 1 {
 		t.Fatalf("首次提示符应只产生预热动作，得到 %d 个动作", len(actions))
 	}
@@ -183,7 +183,7 @@ func TestAdapter_RuntimeEventsFromNormalizedOutput(t *testing.T) {
 		t.Fatalf("首次动作应为 ActSendWarmup，实际是 %T", actions[0])
 	}
 
-	actions = adapter.FeedSessionActions("\r\nhostname# ")
+	actions = feedEffects(adapter, "\r\nhostname# ")
 	if adapter.NewState() != NewStateRunning {
 		t.Fatalf("预热后应进入 Running，实际是 %s", adapter.NewState())
 	}
@@ -199,7 +199,7 @@ func TestAdapter_RuntimeEventsFromNormalizedOutput(t *testing.T) {
 		t.Fatal("预热后应发送第一条命令")
 	}
 
-	actions = adapter.FeedSessionActions("Huawei Versatile Routing Platform Software\r\nhostname# ")
+	actions = feedEffects(adapter, "Huawei Versatile Routing Platform Software\r\nhostname# ")
 	if adapter.NewState() != NewStateCompleted {
 		t.Fatalf("命令完成后应进入 Completed，实际是 %s", adapter.NewState())
 	}
@@ -208,8 +208,11 @@ func TestAdapter_RuntimeEventsFromNormalizedOutput(t *testing.T) {
 		t.Fatalf("应产生 1 条命令结果，实际是 %d", len(adapter.Results()))
 	}
 
-	if len(actions) != 0 {
-		t.Fatalf("最后一条命令完成后不应再有后续动作，实际有 %d 个", len(actions))
+	if len(actions) != 1 {
+		t.Fatalf("最后一条命令完成后应产生 1 个完成事件动作，实际有 %d 个", len(actions))
+	}
+	if _, ok := actions[0].(ActEmitCommandDone); !ok {
+		t.Fatalf("最后一条命令完成后的动作应为 ActEmitCommandDone，实际是 %T", actions[0])
 	}
 }
 
@@ -224,16 +227,16 @@ func TestAdapter_FeedTransitionBatchMatchesLegacyActions(t *testing.T) {
 	if batch.IsEmpty() {
 		t.Fatal("首次提示符应产生预热 batch")
 	}
-	legacy := batch.ToActions()
+	legacy := batch.Effects
 	if len(legacy) != 1 {
-		t.Fatalf("batch 转换动作数错误: got=%d want=1", len(legacy))
+		t.Fatalf("batch effect 数错误: got=%d want=1", len(legacy))
 	}
 	if _, ok := legacy[0].(ActSendWarmup); !ok {
-		t.Fatalf("首次 batch 动作应为 ActSendWarmup，实际是 %T", legacy[0])
+		t.Fatalf("首次 batch effect 应为 ActSendWarmup，实际是 %T", legacy[0])
 	}
 
 	batch = adapter.FeedTransitionBatch("\r\nhostname# ")
-	legacy = batch.ToActions()
+	legacy = batch.Effects
 	foundCommand := false
 	for _, action := range legacy {
 		if act, ok := action.(ActSendCommand); ok && act.Index == 0 && act.Command == "display version" {

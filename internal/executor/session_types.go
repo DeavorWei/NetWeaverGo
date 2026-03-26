@@ -176,76 +176,35 @@ func (e EvCommandPromptSeen) EventType() string { return "CommandPromptSeen" }
 // 动作类型 (Action Types)
 // ============================================================================
 
-// SessionAction 动作接口
-type SessionAction interface {
-	ActionType() string
-}
-
 // SessionEffect 副作用接口。
-// 当前阶段作为兼容层存在，先把旧的 SessionAction 封装为 Effect，
-// 便于后续逐步把 reducer 从“直接返回动作”演进为“返回 batch + effects”。
+// 执行基座硬切后，reducer 只能产出 effect，不再回退到旧动作数组。
 type SessionEffect interface {
 	EffectType() string
-	AsAction() SessionAction
 }
 
 // TransitionBatch reducer 输出批次。
-// 现阶段保留 Effects 作为主通道，并通过 ToActions 兼容旧执行链路。
 type TransitionBatch struct {
 	Effects []SessionEffect
 }
 
-// ActionEffect 使用旧 SessionAction 适配新的 SessionEffect。
-type ActionEffect struct {
-	Action SessionAction
-}
-
-func (e ActionEffect) EffectType() string {
-	if e.Action == nil {
-		return ""
-	}
-	return e.Action.ActionType()
-}
-
-func (e ActionEffect) AsAction() SessionAction {
-	return e.Action
-}
-
 // NewTransitionBatch 创建批次。
-func NewTransitionBatch(actions ...SessionAction) *TransitionBatch {
-	batch := &TransitionBatch{Effects: make([]SessionEffect, 0, len(actions))}
-	batch.AppendActions(actions...)
+func NewTransitionBatch(effects ...SessionEffect) *TransitionBatch {
+	batch := &TransitionBatch{Effects: make([]SessionEffect, 0, len(effects))}
+	batch.AppendEffects(effects...)
 	return batch
 }
 
-// AppendActions 追加旧动作到批次。
-func (b *TransitionBatch) AppendActions(actions ...SessionAction) {
+// AppendEffects 追加副作用到批次。
+func (b *TransitionBatch) AppendEffects(effects ...SessionEffect) {
 	if b == nil {
 		return
 	}
-	for _, action := range actions {
-		if action == nil {
-			continue
-		}
-		b.Effects = append(b.Effects, ActionEffect{Action: action})
-	}
-}
-
-// ToActions 将批次回退为旧动作列表，供旧执行链路继续消费。
-func (b *TransitionBatch) ToActions() []SessionAction {
-	if b == nil || len(b.Effects) == 0 {
-		return nil
-	}
-	actions := make([]SessionAction, 0, len(b.Effects))
-	for _, effect := range b.Effects {
+	for _, effect := range effects {
 		if effect == nil {
 			continue
 		}
-		if action := effect.AsAction(); action != nil {
-			actions = append(actions, action)
-		}
+		b.Effects = append(b.Effects, effect)
 	}
-	return actions
 }
 
 // IsEmpty 判断批次是否为空。
@@ -253,81 +212,83 @@ func (b *TransitionBatch) IsEmpty() bool {
 	return b == nil || len(b.Effects) == 0
 }
 
-// ActSendWarmup 发送预热空行动作
+// ActSendWarmup 发送预热空行动作。
 type ActSendWarmup struct{}
 
-func (a ActSendWarmup) ActionType() string { return "SendWarmup" }
+func (a ActSendWarmup) EffectType() string { return "SendWarmup" }
 
-// ActSendCommand 发送命令动作
+// ActSendCommand 发送命令动作。
 type ActSendCommand struct {
 	Index   int
 	Command string
 }
 
-func (a ActSendCommand) ActionType() string { return "SendCommand" }
+func (a ActSendCommand) EffectType() string { return "SendCommand" }
 
-// ActSendPagerContinue 发送分页续页动作
+// ActSendPagerContinue 发送分页续页动作。
 type ActSendPagerContinue struct{}
 
-func (a ActSendPagerContinue) ActionType() string { return "SendPagerContinue" }
+func (a ActSendPagerContinue) EffectType() string { return "SendPagerContinue" }
 
-// ActEmitCommandStart 发送命令开始事件动作
+// ActEmitCommandStart 发送命令开始事件动作。
 type ActEmitCommandStart struct {
 	Index   int
 	Command string
 }
 
-func (a ActEmitCommandStart) ActionType() string { return "EmitCommandStart" }
+func (a ActEmitCommandStart) EffectType() string { return "EmitCommandStart" }
 
-// ActEmitCommandDone 发送命令完成事件动作
+// ActEmitCommandDone 发送命令完成事件动作。
 type ActEmitCommandDone struct {
-	Index    int
-	Success  bool
-	Duration time.Duration
+	Index        int
+	Command      string
+	Success      bool
+	Duration     time.Duration
+	ErrorMessage string
 }
 
-func (a ActEmitCommandDone) ActionType() string { return "EmitCommandDone" }
+func (a ActEmitCommandDone) EffectType() string { return "EmitCommandDone" }
 
-// ActEmitDeviceError 发送设备错误事件动作
+// ActEmitDeviceError 发送设备错误事件动作。
 type ActEmitDeviceError struct {
 	Index   int
 	Message string
 }
 
-func (a ActEmitDeviceError) ActionType() string { return "EmitDeviceError" }
+func (a ActEmitDeviceError) EffectType() string { return "EmitDeviceError" }
 
-// ActRequestSuspendDecision 请求挂起决策动作
+// ActRequestSuspendDecision 请求挂起决策动作。
 type ActRequestSuspendDecision struct {
 	ErrorContext *ErrorContext
 }
 
-func (a ActRequestSuspendDecision) ActionType() string { return "RequestSuspendDecision" }
+func (a ActRequestSuspendDecision) EffectType() string { return "RequestSuspendDecision" }
 
-// ActAbortSession 中止会话动作
+// ActAbortSession 中止会话动作。
 type ActAbortSession struct {
 	Reason string
 }
 
-func (a ActAbortSession) ActionType() string { return "AbortSession" }
+func (a ActAbortSession) EffectType() string { return "AbortSession" }
 
-// ActResetReadTimeout 重置读取超时动作
+// ActResetReadTimeout 重置读取超时动作。
 type ActResetReadTimeout struct {
 	Timeout time.Duration
 }
 
-func (a ActResetReadTimeout) ActionType() string { return "ResetReadTimeout" }
+func (a ActResetReadTimeout) EffectType() string { return "ResetReadTimeout" }
 
-// ActFlushDetailLog 刷新详细日志动作
+// ActFlushDetailLog 刷新详细日志动作。
 type ActFlushDetailLog struct {
 	Lines []string
 }
 
-func (a ActFlushDetailLog) ActionType() string { return "FlushDetailLog" }
+func (a ActFlushDetailLog) EffectType() string { return "FlushDetailLog" }
 
-// ActClearInitResiduals 清理初始化残留动作
+// ActClearInitResiduals 清理初始化残留动作。
 type ActClearInitResiduals struct{}
 
-func (a ActClearInitResiduals) ActionType() string { return "ClearInitResiduals" }
+func (a ActClearInitResiduals) EffectType() string { return "ClearInitResiduals" }
 
 // ============================================================================
 // 会话上下文 (Session Context)

@@ -48,9 +48,8 @@ type StreamEngine struct {
 	suspendHandler SuspendHandler
 
 	// eventCallback 执行事件回调（命令开始/完成）
-	eventCallback  func(event ExecutionEvent)
-	emittedResults int
-	sessionSeq     uint64
+	eventCallback func(event ExecutionEvent)
+	sessionSeq    uint64
 }
 
 // NewStreamEngine 创建新的流处理引擎
@@ -77,7 +76,6 @@ func (e *StreamEngine) SetSuspendHandler(handler SuspendHandler) {
 // SetExecutionEventCallback 设置执行事件回调。
 func (e *StreamEngine) SetExecutionEventCallback(callback func(event ExecutionEvent)) {
 	e.eventCallback = callback
-	e.emittedResults = 0
 	e.sessionSeq = 0
 }
 
@@ -168,7 +166,6 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 		select {
 		case <-ctx.Done():
 			e.adapter.MarkFailed("上下文取消")
-			e.emitNewCommandCompleteEvents()
 			return e.adapter.Results(), ctx.Err()
 
 		case <-timer.C:
@@ -211,7 +208,6 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 						}
 					}
 					e.adapter.MarkFailed("读取超时，用户中止")
-					e.emitNewCommandCompleteEvents()
 					return e.adapter.Results(), fmt.Errorf("设备 %s 的执行因超时被用户中止", e.executor.IP)
 
 				case ActionContinue:
@@ -232,20 +228,17 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 			}
 
 			e.adapter.MarkFailed("读取超时")
-			e.emitNewCommandCompleteEvents()
 			return e.adapter.Results(), fmt.Errorf("读取超时")
 
 		case res, ok := <-readCh:
 			if !ok {
 				// 读取通道关闭
 				if e.adapter.NewState() == NewStateCompleted {
-					e.emitNewCommandCompleteEvents()
 					logger.Info("StreamEngine", "-", "读取流已结束，命令执行已完成")
 					return e.adapter.Results(), nil
 				}
 				logger.Warn("StreamEngine", "-", "读取流已结束，但命令尚未完成")
 				e.adapter.MarkFailed("读取流意外关闭")
-				e.emitNewCommandCompleteEvents()
 				return e.adapter.Results(), fmt.Errorf("读取流意外关闭")
 			}
 
@@ -266,13 +259,10 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 				chunk := string(data)
 				batch := e.processChunkBatch(chunk)
 
-				// 先发出本轮 chunk 已确定完成的命令结果，再执行后续动作。
 				if err := e.executeBatch(batch, &currentTimeout, defaultTimeout, timer); err != nil {
 					e.adapter.MarkFailed(err.Error())
-					e.emitNewCommandCompleteEvents()
 					return e.adapter.Results(), err
 				}
-				e.emitNewCommandCompleteEvents()
 
 				// 检查是否完成
 				if e.adapter.NewState() == NewStateCompleted {
@@ -287,16 +277,13 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 
 			if err != nil {
 				if err == io.EOF {
-					e.emitNewCommandCompleteEvents()
 					if e.adapter.NewState() == NewStateCompleted {
 						return e.adapter.Results(), nil
 					}
 					e.adapter.MarkFailed("SSH 会话被远端断开")
-					e.emitNewCommandCompleteEvents()
 					return e.adapter.Results(), fmt.Errorf("SSH 会话被远端断开")
 				}
 				e.adapter.MarkFailed(err.Error())
-				e.emitNewCommandCompleteEvents()
 				return e.adapter.Results(), fmt.Errorf("读取错误: %w", err)
 			}
 		}
@@ -305,28 +292,16 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 	}
 }
 
-func (e *StreamEngine) executeActions(actions []SessionAction, currentTimeout *time.Duration, defaultTimeout time.Duration, timer *time.Timer) error {
-	return e.executeBatch(NewTransitionBatch(actions...), currentTimeout, defaultTimeout, timer)
-}
-
 func (e *StreamEngine) executeBatch(batch *TransitionBatch, currentTimeout *time.Duration, defaultTimeout time.Duration, timer *time.Timer) error {
-	e.emitNewCommandCompleteEvents()
 	if batch == nil || batch.IsEmpty() {
 		return nil
 	}
 	for _, effect := range batch.Effects {
-		e.emitNewCommandCompleteEvents()
 		if err := e.executeSessionEffect(effect, currentTimeout, defaultTimeout, timer); err != nil {
 			return err
 		}
-		e.emitNewCommandCompleteEvents()
 	}
 	return nil
-}
-
-// processChunk 处理 chunk，返回需要执行的新动作
-func (e *StreamEngine) processChunk(chunk string) []SessionAction {
-	return e.processChunkBatch(chunk).ToActions()
 }
 
 func (e *StreamEngine) processChunkBatch(chunk string) *TransitionBatch {
@@ -349,22 +324,12 @@ func (e *StreamEngine) processChunkBatch(chunk string) *TransitionBatch {
 }
 
 // executeSessionEffect 执行批次中的副作用。
-// 当前阶段通过 ActionEffect 适配旧动作执行链，后续可继续演进为真正的 EffectExecutor。
 func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout *time.Duration, defaultTimeout time.Duration, timer *time.Timer) error {
 	if effect == nil {
 		return nil
 	}
 	logger.Verbose("StreamEngine", "-", "执行副作用: type=%s", effect.EffectType())
-	action := effect.AsAction()
-	if action == nil {
-		return nil
-	}
-	return e.executeSessionAction(action, currentTimeout, defaultTimeout, timer)
-}
-
-// executeSessionAction 执行统一的新动作模型
-func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout *time.Duration, defaultTimeout time.Duration, timer *time.Timer) error {
-	switch act := action.(type) {
+	switch act := effect.(type) {
 	case ActSendCommand:
 		// 发送命令
 		logger.Info("StreamEngine", "-", ">>> [发送命令]: %s", act.Command)
@@ -574,6 +539,22 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 			}
 		}
 
+		evtType := EventCmdComplete
+		evtKind := RecordCommandCompleted
+		if !act.Success {
+			evtType = EventError
+			evtKind = RecordCommandFailed
+		}
+		e.emitExecutionEvent(ExecutionEvent{
+			Type:         evtType,
+			Kind:         evtKind,
+			Command:      act.Command,
+			Index:        act.Index,
+			Duration:     act.Duration,
+			ErrorMessage: act.ErrorMessage,
+			Timestamp:    time.Now(),
+		})
+
 	case ActEmitDeviceError:
 		if e.executor != nil && e.executor.EventBus != nil {
 			e.executor.EventBus <- report.ExecutorEvent{
@@ -586,44 +567,6 @@ func (e *StreamEngine) executeSessionAction(action SessionAction, currentTimeout
 	}
 
 	return nil
-}
-
-func (e *StreamEngine) emitNewCommandCompleteEvents() {
-	if e.eventCallback == nil || e.adapter == nil {
-		return
-	}
-
-	results := e.adapter.Results()
-	for e.emittedResults < len(results) {
-		result := results[e.emittedResults]
-		if result == nil {
-			e.emittedResults++
-			continue
-		}
-
-		var eventErr error
-		if !result.Success && strings.TrimSpace(result.ErrorMessage) != "" {
-			eventErr = fmt.Errorf("%s", result.ErrorMessage)
-		}
-
-		kind := RecordCommandCompleted
-		if eventErr != nil {
-			kind = RecordCommandFailed
-		}
-
-		e.emitExecutionEvent(ExecutionEvent{
-			Type:         EventCmdComplete,
-			Kind:         kind,
-			Command:      result.Command,
-			Key:          result.CommandKey,
-			Index:        result.Index,
-			Duration:     result.Duration,
-			Error:        eventErr,
-			ErrorMessage: result.ErrorMessage,
-			Timestamp:    time.Now(),
-		})
-		e.emittedResults++
-	}
 }
 
 func (e *StreamEngine) emitExecutionEvent(event ExecutionEvent) {
