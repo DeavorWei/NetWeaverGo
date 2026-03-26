@@ -45,6 +45,24 @@ func (h *ErrorHandler) UpdateUnitRequired(ctx RuntimeContext, unitID string, pat
 	return nil
 }
 
+// UpdateStageRequired 更新 Stage，失败则返回错误
+func (h *ErrorHandler) UpdateStageRequired(ctx RuntimeContext, stageID string, patch *StagePatch, operation string) error {
+	if err := ctx.UpdateStage(stageID, patch); err != nil {
+		h.MustUpdate(operation, err)
+		return fmt.Errorf("%s: %w", operation, err)
+	}
+	return nil
+}
+
+// UpdateRunRequired 更新 Run，失败则返回错误
+func (h *ErrorHandler) UpdateRunRequired(ctx RuntimeContext, patch *RunPatch, operation string) error {
+	if err := ctx.UpdateRun(patch); err != nil {
+		h.MustUpdate(operation, err)
+		return fmt.Errorf("%s: %w", operation, err)
+	}
+	return nil
+}
+
 // UpdateStageBestEffort 更新 Stage，失败仅记录日志
 func (h *ErrorHandler) UpdateStageBestEffort(ctx RuntimeContext, stageID string, patch *StagePatch, operation string) {
 	if err := ctx.UpdateStage(stageID, patch); err != nil {
@@ -72,8 +90,20 @@ func (h *ErrorHandler) ArtifactBestEffort(repo Repository, ctx context.Context, 
 		return
 	}
 	if err := repo.CreateArtifact(ctx, artifact); err != nil {
-		h.LogUpdateError("创建产物索引", err)
+		h.LogUpdateError(fmt.Sprintf("创建产物索引[%s:%s]", artifact.ArtifactType, artifact.ArtifactKey), err)
 	}
+}
+
+// LogDBErrorWithContext 记录带上下文的数据库写入错误
+func (h *ErrorHandler) LogDBErrorWithContext(operation string, err error, fields map[string]interface{}) {
+	if err == nil {
+		return
+	}
+	if len(fields) == 0 {
+		h.LogUpdateError(operation, err)
+		return
+	}
+	logger.Error("TaskExec", h.runID, "%s 失败: %v, context=%v", operation, err, fields)
 }
 
 // IsContextCancelled 判断错误或上下文是否表示取消

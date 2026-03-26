@@ -1,6 +1,7 @@
 package taskexec
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,9 +47,11 @@ func (e *DeviceCommandExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 		concurrency = 10
 	}
 
+	handler := NewErrorHandler(ctx.RunID())
 	semaphore := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
-	var completedCount, failedCount int
+	var completedCount, failedCount, cancelledCount int
+	var firstErr error
 	var mu sync.Mutex
 
 	for _, unit := range stage.Units {
@@ -63,55 +66,76 @@ func (e *DeviceCommandExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 			defer wg.Done()
 			defer func() { <-semaphore }()
 
-			// Execute unit
-			if err := e.executeUnit(ctx, stage.ID, &u); err != nil {
+			if ctx.IsCancelled() {
+				handler.MarkUnitCancelled(ctx, u.ID, "run cancelled before unit start", intPtrLocal(0))
 				mu.Lock()
-				failedCount++
+				cancelledCount++
 				mu.Unlock()
-			} else {
-				mu.Lock()
-				completedCount++
-				mu.Unlock()
+				e.updateStageProgress(handler, ctx, stage.ID, len(stage.Units), completedCount, failedCount, cancelledCount)
+				return
 			}
+
+			err := e.executeUnit(ctx, stage.ID, &u)
 
 			mu.Lock()
-			completed := completedCount + failedCount
-			progress := 100
-			if len(stage.Units) > 0 {
-				progress = completed * 100 / len(stage.Units)
+			switch {
+			case IsContextCancelled(ctx, err):
+				cancelledCount++
+			case err != nil:
+				failedCount++
+				if firstErr == nil {
+					firstErr = err
+				}
+			default:
+				completedCount++
 			}
+			localCompleted := completedCount
+			localFailed := failedCount
+			localCancelled := cancelledCount
 			mu.Unlock()
 
-			ctx.UpdateStage(stage.ID, &StagePatch{
-				CompletedUnits: &completed,
-				SuccessUnits:   &completedCount,
-				FailedUnits:    &failedCount,
-				Progress:       &progress,
-			})
+			e.updateStageProgress(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled)
 		}(unit)
 	}
 
 	wg.Wait()
-	logger.Info("TaskExec", ctx.RunID(), "Stage completed: success=%d, failed=%d", completedCount, failedCount)
-	return nil
+	logger.Info("TaskExec", ctx.RunID(), "Stage completed: success=%d, failed=%d, cancelled=%d", completedCount, failedCount, cancelledCount)
+	if ctx.IsCancelled() {
+		return ctx.Context().Err()
+	}
+	return firstErr
 }
 
 func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, unit *UnitPlan) error {
+	handler := NewErrorHandler(ctx.RunID())
+	if ctx.IsCancelled() {
+		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before unit start", intPtrLocal(0))
+		return ctx.Context().Err()
+	}
+
 	startedAt := time.Now()
 	unitRunning := string(UnitStatusRunning)
-	_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
+	if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
 		Status:    &unitRunning,
 		StartedAt: &startedAt,
-	})
+	}, "设置命令执行 Unit 为 running"); err != nil {
+		return err
+	}
+
+	if ctx.IsCancelled() {
+		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled after unit start", intPtrLocal(0))
+		return ctx.Context().Err()
+	}
 
 	// Get device info from unit target
 	if unit.Target.Type != "device_ip" {
 		errMsg := fmt.Sprintf("unsupported target type: %s", unit.Target.Type)
-		unitFailed := string(UnitStatusFailed)
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
-			Status:       &unitFailed,
+		finishedAt := time.Now()
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
 			ErrorMessage: &errMsg,
-		})
+			FinishedAt:   &finishedAt,
+		}, "写入命令执行 Unit 失败状态")
 		return fmt.Errorf("%s", errMsg)
 	}
 
@@ -123,13 +147,12 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 	if err != nil {
 		logger.Error("TaskExec", ctx.RunID(), "Failed to find device %s: %v", deviceIP, err)
 		errMsg := fmt.Sprintf("Device not found: %s", deviceIP)
-		unitFailed := string(UnitStatusFailed)
 		finishedAt := time.Now()
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
-			Status:       &unitFailed,
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
 			ErrorMessage: &errMsg,
 			FinishedAt:   &finishedAt,
-		})
+		}, "写入设备不存在失败状态")
 		ctx.Emit(&TaskEvent{
 			RunID:   ctx.RunID(),
 			StageID: stageID,
@@ -154,11 +177,13 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		doneSteps := 0
 		unitCompleted := string(UnitStatusCompleted)
 		finishedAt := time.Now()
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
+		if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
 			Status:     &unitCompleted,
 			DoneSteps:  &doneSteps,
 			FinishedAt: &finishedAt,
-		})
+		}, "写入空命令 Unit 完成状态"); err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -200,6 +225,11 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		}
 	}
 
+	if ctx.IsCancelled() {
+		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before connect", intPtrLocal(0))
+		return ctx.Context().Err()
+	}
+
 	// Connect to device
 	ctx.Emit(&TaskEvent{
 		RunID:   ctx.RunID(),
@@ -211,15 +241,18 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 	})
 
 	if err := exec.Connect(execCtx, connTimeout); err != nil {
+		if IsContextCancelled(ctx, err) {
+			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during connect", intPtrLocal(0))
+			return err
+		}
 		logger.Error("TaskExec", ctx.RunID(), "Failed to connect to %s: %v", deviceIP, err)
 		errMsg := fmt.Sprintf("connection failed: %v", err)
-		unitFailed := string(UnitStatusFailed)
 		finishedAt := time.Now()
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
-			Status:       &unitFailed,
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
 			ErrorMessage: &errMsg,
 			FinishedAt:   &finishedAt,
-		})
+		}, "写入连接失败状态")
 		ctx.Emit(&TaskEvent{
 			RunID:   ctx.RunID(),
 			StageID: stageID,
@@ -229,6 +262,11 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 			Message: fmt.Sprintf("Connection failed: %v", err),
 		})
 		return err
+	}
+
+	if ctx.IsCancelled() {
+		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before execute commands", intPtrLocal(0))
+		return ctx.Context().Err()
 	}
 
 	// Execute commands
@@ -242,17 +280,20 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 	})
 
 	if err := exec.ExecutePlaybook(execCtx, commands, cmdTimeout); err != nil {
+		if IsContextCancelled(ctx, err) {
+			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during command execution", intPtrLocal(len(commands)))
+			return err
+		}
 		logger.Error("TaskExec", ctx.RunID(), "Failed to execute commands on %s: %v", deviceIP, err)
 		errMsg := fmt.Sprintf("command execution failed: %v", err)
-		unitFailed := string(UnitStatusFailed)
 		doneSteps := len(commands)
 		finishedAt := time.Now()
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
-			Status:       &unitFailed,
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
 			DoneSteps:    &doneSteps,
 			ErrorMessage: &errMsg,
 			FinishedAt:   &finishedAt,
-		})
+		}, "写入命令执行失败状态")
 		ctx.Emit(&TaskEvent{
 			RunID:   ctx.RunID(),
 			StageID: stageID,
@@ -267,11 +308,13 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 	doneSteps := len(commands)
 	unitCompleted := string(UnitStatusCompleted)
 	finishedAt := time.Now()
-	_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
+	if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
 		Status:     &unitCompleted,
 		DoneSteps:  &doneSteps,
 		FinishedAt: &finishedAt,
-	})
+	}, "写入命令执行完成状态"); err != nil {
+		return err
+	}
 
 	// Success
 	ctx.Emit(&TaskEvent{
@@ -314,9 +357,11 @@ func (e *DeviceCollectExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 		concurrency = 5
 	}
 
+	handler := NewErrorHandler(ctx.RunID())
 	semaphore := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
-	var completedCount, failedCount int
+	var completedCount, failedCount, cancelledCount int
+	var firstErr error
 	var mu sync.Mutex
 
 	// Get task context for output storage
@@ -335,12 +380,47 @@ func (e *DeviceCollectExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 			defer wg.Done()
 			defer func() { <-semaphore }()
 
-			// Execute collection
-			if err := e.executeCollect(ctx, stage.ID, &u, outputDir); err != nil {
+			if ctx.IsCancelled() {
+				handler.MarkUnitCancelled(ctx, u.ID, "run cancelled before collect unit start", intPtrLocal(0))
+				if u.Target.Key != "" {
+					e.updateRunDeviceStatus(ctx.RunID(), u.Target.Key, "cancelled", "run cancelled before collect unit start")
+				}
 				mu.Lock()
-				failedCount++
+				cancelledCount++
 				mu.Unlock()
+				e.updateStageProgress(handler, ctx, stage.ID, len(stage.Units), completedCount, failedCount, cancelledCount)
+				return
+			}
 
+			err := e.executeCollect(ctx, stage.ID, &u, outputDir)
+
+			mu.Lock()
+			switch {
+			case IsContextCancelled(ctx, err):
+				cancelledCount++
+			case err != nil:
+				failedCount++
+				if firstErr == nil {
+					firstErr = err
+				}
+			default:
+				completedCount++
+			}
+			localCompleted := completedCount
+			localFailed := failedCount
+			localCancelled := cancelledCount
+			mu.Unlock()
+
+			if IsContextCancelled(ctx, err) {
+				ctx.Emit(&TaskEvent{
+					RunID:   ctx.RunID(),
+					StageID: stage.ID,
+					UnitID:  u.ID,
+					Type:    EventTypeUnitFinished,
+					Level:   EventLevelWarn,
+					Message: fmt.Sprintf("Collection cancelled for %s", u.Target.Key),
+				})
+			} else if err != nil {
 				ctx.Emit(&TaskEvent{
 					RunID:   ctx.RunID(),
 					StageID: stage.ID,
@@ -350,10 +430,6 @@ func (e *DeviceCollectExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 					Message: fmt.Sprintf("Collection failed for %s: %v", u.Target.Key, err),
 				})
 			} else {
-				mu.Lock()
-				completedCount++
-				mu.Unlock()
-
 				ctx.Emit(&TaskEvent{
 					RunID:   ctx.RunID(),
 					StageID: stage.ID,
@@ -364,62 +440,80 @@ func (e *DeviceCollectExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 				})
 			}
 
-			mu.Lock()
-			completed := completedCount + failedCount
-			progress := 100
-			if len(stage.Units) > 0 {
-				progress = completed * 100 / len(stage.Units)
-			}
-			mu.Unlock()
-
-			ctx.UpdateStage(stage.ID, &StagePatch{
-				CompletedUnits: &completed,
-				Progress:       &progress,
-			})
+			e.updateStageProgress(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled)
 		}(unit)
 	}
 
 	wg.Wait()
-	logger.Info("TaskExec", ctx.RunID(), "Collection stage completed: success=%d, failed=%d", completedCount, failedCount)
-	return nil
+	logger.Info("TaskExec", ctx.RunID(), "Collection stage completed: success=%d, failed=%d, cancelled=%d", completedCount, failedCount, cancelledCount)
+	if ctx.IsCancelled() {
+		return ctx.Context().Err()
+	}
+	return firstErr
 }
 
 func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID string, unit *UnitPlan, outputDir string) error {
+	handler := NewErrorHandler(ctx.RunID())
+	if ctx.IsCancelled() {
+		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before collect unit start", intPtrLocal(0))
+		if unit.Target.Key != "" {
+			e.updateRunDeviceStatus(ctx.RunID(), unit.Target.Key, "cancelled", "run cancelled before collect unit start")
+		}
+		return ctx.Context().Err()
+	}
+
 	startedAt := time.Now()
 	unitRunning := string(UnitStatusRunning)
-	_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
+	if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
 		Status:    &unitRunning,
 		StartedAt: &startedAt,
-	})
+	}, "设置采集 Unit 为 running"); err != nil {
+		return err
+	}
 
 	// Get device info from unit target
 	if unit.Target.Type != "device_ip" {
 		errMsg := fmt.Sprintf("unsupported target type: %s", unit.Target.Type)
-		unitFailed := string(UnitStatusFailed)
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
-			Status:       &unitFailed,
+		finishedAt := time.Now()
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
 			ErrorMessage: &errMsg,
-		})
+			FinishedAt:   &finishedAt,
+		}, "写入采集 Unit 失败状态")
 		return fmt.Errorf("%s", errMsg)
 	}
 
 	deviceIP := unit.Target.Key
 	logger.Debug("TaskExec", ctx.RunID(), "Collecting from device: %s", deviceIP)
 
+	if ctx.IsCancelled() {
+		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before loading device", intPtrLocal(0))
+		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled before loading device")
+		return ctx.Context().Err()
+	}
+
 	// Get device from repository
 	device, err := e.repo.FindByIP(deviceIP)
 	if err != nil {
 		errMsg := fmt.Sprintf("device not found: %v", err)
-		unitFailed := string(UnitStatusFailed)
 		finishedAt := time.Now()
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
-			Status:       &unitFailed,
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
 			ErrorMessage: &errMsg,
 			FinishedAt:   &finishedAt,
-		})
+		}, "写入采集设备不存在状态")
 		return fmt.Errorf("device not found: %w", err)
 	}
-	e.ensureRunDevice(ctx.RunID(), device)
+	if err := e.ensureRunDevice(ctx.RunID(), device); err != nil {
+		errMsg := fmt.Sprintf("ensure run device failed: %v", err)
+		finishedAt := time.Now()
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
+			ErrorMessage: &errMsg,
+			FinishedAt:   &finishedAt,
+		}, "创建运行设备记录失败")
+		return err
+	}
 
 	// Get vendor profile
 	vendor := device.Vendor
@@ -465,16 +559,26 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 		}
 	}
 
+	if ctx.IsCancelled() {
+		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before connect", intPtrLocal(0))
+		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled before connect")
+		return ctx.Context().Err()
+	}
+
 	// Connect to device
 	if err := exec.Connect(execCtx, connTimeout); err != nil {
+		if IsContextCancelled(ctx, err) {
+			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during connect", intPtrLocal(0))
+			e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled during connect")
+			return err
+		}
 		errMsg := fmt.Sprintf("connection failed: %v", err)
-		unitFailed := string(UnitStatusFailed)
 		finishedAt := time.Now()
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
-			Status:       &unitFailed,
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
 			ErrorMessage: &errMsg,
 			FinishedAt:   &finishedAt,
-		})
+		}, "写入采集连接失败状态")
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
 		return fmt.Errorf("connection failed: %w", err)
 	}
@@ -483,11 +587,13 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 	profile := config.GetDeviceProfile(vendor)
 	if profile == nil {
 		errMsg := fmt.Sprintf("no profile found for vendor: %s", vendor)
-		unitFailed := string(UnitStatusFailed)
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
-			Status:       &unitFailed,
+		finishedAt := time.Now()
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
 			ErrorMessage: &errMsg,
-		})
+			FinishedAt:   &finishedAt,
+		}, "写入采集 Profile 缺失状态")
+		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
 		return fmt.Errorf("no profile found for vendor: %s", vendor)
 	}
 
@@ -508,12 +614,20 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 
 	if len(commands) == 0 {
 		errMsg := fmt.Sprintf("no commands defined for vendor: %s", vendor)
-		unitFailed := string(UnitStatusFailed)
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
-			Status:       &unitFailed,
+		finishedAt := time.Now()
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
 			ErrorMessage: &errMsg,
-		})
+			FinishedAt:   &finishedAt,
+		}, "写入采集命令为空状态")
+		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
 		return fmt.Errorf("no commands defined for vendor: %s", vendor)
+	}
+
+	if ctx.IsCancelled() {
+		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before execute plan", intPtrLocal(0))
+		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled before execute plan")
+		return ctx.Context().Err()
 	}
 
 	// Execute plan
@@ -526,22 +640,37 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 
 	report, err := exec.ExecutePlan(execCtx, plan)
 	if err != nil {
+		if IsContextCancelled(ctx, err) {
+			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during execute plan", intPtrLocal(0))
+			e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled during execute plan")
+			return err
+		}
 		errMsg := fmt.Sprintf("execution failed: %v", err)
-		unitFailed := string(UnitStatusFailed)
 		finishedAt := time.Now()
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
-			Status:       &unitFailed,
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
 			ErrorMessage: &errMsg,
 			FinishedAt:   &finishedAt,
-		})
+		}, "写入采集执行失败状态")
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
 		return fmt.Errorf("execution failed: %w", err)
+	}
+
+	if ctx.IsCancelled() {
+		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before persisting outputs", intPtrLocal(0))
+		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled before persisting outputs")
+		return ctx.Context().Err()
 	}
 
 	// Save outputs
 	taskID := ctx.RunID()
 	successCount := 0
 	for _, result := range report.Results {
+		if ctx.IsCancelled() {
+			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during output persistence", &successCount)
+			e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "cancelled", "run cancelled during output persistence")
+			return ctx.Context().Err()
+		}
 		if result != nil && result.Success {
 			successCount++
 			// Save raw output
@@ -569,7 +698,18 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 				}
 			}
 
-			e.createTaskRawOutput(ctx.RunID(), deviceIP, result, rawPath, normalizedPath)
+			if err := e.createTaskRawOutput(ctx.RunID(), deviceIP, result, rawPath, normalizedPath); err != nil {
+				errMsg := fmt.Sprintf("create task raw output failed: %v", err)
+				finishedAt := time.Now()
+				_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+					Status:       strPtr(string(UnitStatusFailed)),
+					DoneSteps:    &successCount,
+					ErrorMessage: &errMsg,
+					FinishedAt:   &finishedAt,
+				}, "写入采集原始输出失败状态")
+				e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
+				return err
+			}
 			e.createArtifact(ctx.RunID(), stageID, unit.ID, string(ArtifactTypeRawOutput), fmt.Sprintf("%s:%s:raw", deviceIP, result.CommandKey), rawPath)
 			if normalizedPath != "" {
 				e.createArtifact(ctx.RunID(), stageID, unit.ID, string(ArtifactTypeNormalizedOutput), fmt.Sprintf("%s:%s:normalized", deviceIP, result.CommandKey), normalizedPath)
@@ -588,11 +728,13 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 	}
 	doneSteps := successCount
 	finishedAt := time.Now()
-	_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
+	if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
 		Status:     &status,
 		DoneSteps:  &doneSteps,
 		FinishedAt: &finishedAt,
-	})
+	}, "写入采集完成状态"); err != nil {
+		return err
+	}
 	e.updateRunDeviceStatus(ctx.RunID(), deviceIP, deviceStatus, "")
 
 	logger.Debug("TaskExec", ctx.RunID(), "Collection completed for device: %s", deviceIP)
@@ -619,8 +761,10 @@ func (e *ParseExecutor) Kind() string {
 func (e *ParseExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 	logger.Info("TaskExec", ctx.RunID(), "Start parse stage: %s, units: %d", stage.Name, len(stage.Units))
 
+	handler := NewErrorHandler(ctx.RunID())
 	var wg sync.WaitGroup
-	var completedCount, failedCount int
+	var completedCount, failedCount, cancelledCount int
+	var firstErr error
 	var mu sync.Mutex
 
 	for _, unit := range stage.Units {
@@ -632,11 +776,44 @@ func (e *ParseExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 		go func(u UnitPlan) {
 			defer wg.Done()
 
-			if err := e.executeParse(ctx, stage.ID, &u); err != nil {
+			if ctx.IsCancelled() {
+				handler.MarkUnitCancelled(ctx, u.ID, "run cancelled before parse unit start", intPtrLocal(0))
 				mu.Lock()
-				failedCount++
+				cancelledCount++
 				mu.Unlock()
+				e.updateStageProgress(handler, ctx, stage.ID, len(stage.Units), completedCount, failedCount, cancelledCount)
+				return
+			}
 
+			err := e.executeParse(ctx, stage.ID, &u)
+
+			mu.Lock()
+			switch {
+			case IsContextCancelled(ctx, err):
+				cancelledCount++
+			case err != nil:
+				failedCount++
+				if firstErr == nil {
+					firstErr = err
+				}
+			default:
+				completedCount++
+			}
+			localCompleted := completedCount
+			localFailed := failedCount
+			localCancelled := cancelledCount
+			mu.Unlock()
+
+			if IsContextCancelled(ctx, err) {
+				ctx.Emit(&TaskEvent{
+					RunID:   ctx.RunID(),
+					StageID: stage.ID,
+					UnitID:  u.ID,
+					Type:    EventTypeUnitFinished,
+					Level:   EventLevelWarn,
+					Message: fmt.Sprintf("Parse cancelled for %s", u.Target.Key),
+				})
+			} else if err != nil {
 				ctx.Emit(&TaskEvent{
 					RunID:   ctx.RunID(),
 					StageID: stage.ID,
@@ -646,10 +823,6 @@ func (e *ParseExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 					Message: fmt.Sprintf("Parse failed for %s: %v", u.Target.Key, err),
 				})
 			} else {
-				mu.Lock()
-				completedCount++
-				mu.Unlock()
-
 				ctx.Emit(&TaskEvent{
 					RunID:   ctx.RunID(),
 					StageID: stage.ID,
@@ -660,74 +833,85 @@ func (e *ParseExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 				})
 			}
 
-			mu.Lock()
-			completed := completedCount + failedCount
-			progress := 100
-			if len(stage.Units) > 0 {
-				progress = completed * 100 / len(stage.Units)
-			}
-			mu.Unlock()
-
-			ctx.UpdateStage(stage.ID, &StagePatch{
-				CompletedUnits: &completed,
-				Progress:       &progress,
-			})
+			e.updateStageProgress(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled)
 		}(unit)
 	}
 
 	wg.Wait()
-	logger.Info("TaskExec", ctx.RunID(), "Parse stage completed: success=%d, failed=%d", completedCount, failedCount)
-	return nil
+	logger.Info("TaskExec", ctx.RunID(), "Parse stage completed: success=%d, failed=%d, cancelled=%d", completedCount, failedCount, cancelledCount)
+	if ctx.IsCancelled() {
+		return ctx.Context().Err()
+	}
+	return firstErr
 }
 
 func (e *ParseExecutor) executeParse(ctx RuntimeContext, stageID string, unit *UnitPlan) error {
+	handler := NewErrorHandler(ctx.RunID())
+	if ctx.IsCancelled() {
+		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before parse unit start", intPtrLocal(0))
+		return ctx.Context().Err()
+	}
+
 	startedAt := time.Now()
 	unitRunning := string(UnitStatusRunning)
-	_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
+	if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
 		Status:    &unitRunning,
 		StartedAt: &startedAt,
-	})
+	}, "设置解析 Unit 为 running"); err != nil {
+		return err
+	}
 
 	// For parse stage, target is device_ip
 	if unit.Target.Type != "device_ip" {
 		errMsg := fmt.Sprintf("unsupported target type: %s", unit.Target.Type)
-		unitFailed := string(UnitStatusFailed)
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
-			Status:       &unitFailed,
+		finishedAt := time.Now()
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
 			ErrorMessage: &errMsg,
-		})
+			FinishedAt:   &finishedAt,
+		}, "写入解析 Unit 失败状态")
 		return fmt.Errorf("%s", errMsg)
 	}
 
 	deviceIP := unit.Target.Key
 	logger.Debug("TaskExec", ctx.RunID(), "Parsing device: %s", deviceIP)
 
+	if ctx.IsCancelled() {
+		handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled before parse execution", intPtrLocal(0))
+		return ctx.Context().Err()
+	}
+
 	vendor := ""
 	if len(unit.Steps) > 0 {
 		vendor = unit.Steps[0].Params["vendor"]
 	}
-	if err := e.parseAndSaveRunDevice(ctx.RunID(), deviceIP, vendor); err != nil {
+	if err := e.parseAndSaveRunDevice(ctx, deviceIP, vendor); err != nil {
+		if IsContextCancelled(ctx, err) {
+			handler.MarkUnitCancelled(ctx, unit.ID, "run cancelled during parse execution", intPtrLocal(0))
+			return err
+		}
 		errMsg := fmt.Sprintf("parse failed: %v", err)
-		unitFailed := string(UnitStatusFailed)
 		doneSteps := 0
 		finishedAt := time.Now()
-		_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
-			Status:       &unitFailed,
+		_ = handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
+			Status:       strPtr(string(UnitStatusFailed)),
 			DoneSteps:    &doneSteps,
 			ErrorMessage: &errMsg,
 			FinishedAt:   &finishedAt,
-		})
+		}, "写入解析失败状态")
 		return fmt.Errorf("parse failed: %w", err)
 	}
 
 	doneSteps := 1
 	unitCompleted := string(UnitStatusCompleted)
 	finishedAt := time.Now()
-	_ = ctx.UpdateUnit(unit.ID, &UnitPatch{
+	if err := handler.UpdateUnitRequired(ctx, unit.ID, &UnitPatch{
 		Status:     &unitCompleted,
 		DoneSteps:  &doneSteps,
 		FinishedAt: &finishedAt,
-	})
+	}, "写入解析完成状态"); err != nil {
+		return err
+	}
 	e.createArtifact(ctx.RunID(), stageID, unit.ID, string(ArtifactTypeParseResult), fmt.Sprintf("%s:parse_result", deviceIP), "")
 
 	logger.Debug("TaskExec", ctx.RunID(), "Parse completed for device: %s", deviceIP)
@@ -752,9 +936,13 @@ func (e *TopologyBuildExecutor) Kind() string {
 // Run executes the stage
 func (e *TopologyBuildExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 	logger.Info("TaskExec", ctx.RunID(), "Start topology build stage")
+	handler := NewErrorHandler(ctx.RunID())
 
 	if len(stage.Units) == 0 {
 		return fmt.Errorf("no units in build stage")
+	}
+	if ctx.IsCancelled() {
+		return ctx.Context().Err()
 	}
 
 	// Emit build started event
@@ -768,6 +956,9 @@ func (e *TopologyBuildExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 
 	result, err := e.buildRunTopology(ctx.RunID())
 	if err != nil {
+		if IsContextCancelled(ctx, err) {
+			return err
+		}
 		logger.Error("TaskExec", ctx.RunID(), "Topology build failed: %v", err)
 
 		ctx.Emit(&TaskEvent{
@@ -802,27 +993,30 @@ func (e *TopologyBuildExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 	progress := 100
 	now := time.Now()
 
-	ctx.UpdateStage(stage.ID, &StagePatch{
+	handler.UpdateStageBestEffort(ctx, stage.ID, &StagePatch{
 		Status:         &completedStatus,
 		Progress:       &progress,
 		CompletedUnits: &doneSteps,
 		SuccessUnits:   &doneSteps,
 		FinishedAt:     &now,
-	})
+	}, "写入拓扑构建完成状态")
 	e.createArtifact(ctx.RunID(), stage.ID, stage.Units[0].ID, string(ArtifactTypeTopologyGraph), "topology_graph", "")
 
 	logger.Info("TaskExec", ctx.RunID(), "Topology build completed with %d edges", edgeCount)
 	return nil
 }
 
-func (e *DeviceCollectExecutor) ensureRunDevice(taskID string, device *models.DeviceAsset) {
+func (e *DeviceCollectExecutor) ensureRunDevice(taskID string, device *models.DeviceAsset) error {
 	now := time.Now()
 	var record TaskRunDevice
 	err := e.db.Where("task_run_id = ? AND device_ip = ?", taskID, device.IP).First(&record).Error
 	if err == nil {
-		return
+		return nil
 	}
-	_ = e.db.Create(&TaskRunDevice{
+	if err != nil && !IsNotFoundError(err) {
+		return err
+	}
+	return e.db.Create(&TaskRunDevice{
 		TaskRunID:   taskID,
 		DeviceIP:    device.IP,
 		DeviceID:    device.ID,
@@ -838,23 +1032,26 @@ func (e *DeviceCollectExecutor) ensureRunDevice(taskID string, device *models.De
 }
 
 func (e *DeviceCollectExecutor) updateRunDeviceStatus(taskID, deviceIP, status, errMsg string) {
+	handler := NewErrorHandler(taskID)
 	updates := map[string]interface{}{
 		"status":        status,
 		"error_message": errMsg,
 		"updated_at":    time.Now(),
 	}
-	if status == "success" || status == "partial" || status == "failed" {
+	if status == "success" || status == "partial" || status == "failed" || status == "cancelled" {
 		now := time.Now()
 		updates["finished_at"] = now
 	}
-	_ = e.db.Model(&TaskRunDevice{}).
-		Where("task_run_id = ? AND device_ip = ?", taskID, deviceIP).
-		Updates(updates).Error
+	handler.DBBestEffort(fmt.Sprintf("更新运行设备状态[%s][%s]", deviceIP, status), func() error {
+		return e.db.Model(&TaskRunDevice{}).
+			Where("task_run_id = ? AND device_ip = ?", taskID, deviceIP).
+			Updates(updates).Error
+	})
 }
 
-func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, result *executor.CommandResult, rawPath, normalizedPath string) {
+func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, result *executor.CommandResult, rawPath, normalizedPath string) error {
 	if result == nil {
-		return
+		return nil
 	}
 	rawSize := int64(len(result.RawText))
 	normalizedSize := int64(0)
@@ -865,7 +1062,7 @@ func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, res
 		}
 		lineCount = len(result.NormalizedLines)
 	}
-	_ = e.db.Create(&TaskRawOutput{
+	return e.db.Create(&TaskRawOutput{
 		TaskRunID:      taskID,
 		DeviceIP:       deviceIP,
 		CommandKey:     result.CommandKey,
@@ -880,7 +1077,9 @@ func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, res
 	}).Error
 }
 
-func (e *ParseExecutor) parseAndSaveRunDevice(runID, deviceIP, vendor string) error {
+func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vendor string) error {
+	handler := NewErrorHandler(ctx.RunID())
+	runID := ctx.RunID()
 	if vendor == "" {
 		var dev TaskRunDevice
 		if err := e.db.Where("task_run_id = ? AND device_ip = ?", runID, deviceIP).First(&dev).Error; err == nil {
@@ -909,22 +1108,31 @@ func (e *ParseExecutor) parseAndSaveRunDevice(runID, deviceIP, vendor string) er
 	var aggs []parser.AggregateFact
 
 	for _, output := range outputs {
+		if ctx.IsCancelled() {
+			return ctx.Context().Err()
+		}
 		parsePath := strings.TrimSpace(output.ParseFilePath)
 		if parsePath == "" {
-			_ = e.db.Model(&TaskRawOutput{}).Where("id = ?", output.ID).
-				Updates(map[string]interface{}{"parse_status": "skipped", "parse_error": "parse file path empty"}).Error
+			handler.LogDBErrorWithContext("更新 parse_status 为 skipped", e.db.Model(&TaskRawOutput{}).Where("id = ?", output.ID).
+				Updates(map[string]interface{}{"parse_status": "skipped", "parse_error": "parse file path empty"}).Error,
+				map[string]interface{}{"runID": runID, "deviceIP": deviceIP, "outputID": output.ID, "commandKey": output.CommandKey})
 			continue
 		}
 		rawText, err := os.ReadFile(parsePath)
 		if err != nil {
-			_ = e.db.Model(&TaskRawOutput{}).Where("id = ?", output.ID).
-				Updates(map[string]interface{}{"parse_status": "parse_failed", "parse_error": err.Error()}).Error
+			handler.LogDBErrorWithContext("更新 parse_status 为 parse_failed", e.db.Model(&TaskRawOutput{}).Where("id = ?", output.ID).
+				Updates(map[string]interface{}{"parse_status": "parse_failed", "parse_error": err.Error()}).Error,
+				map[string]interface{}{"runID": runID, "deviceIP": deviceIP, "outputID": output.ID, "commandKey": output.CommandKey})
 			continue
+		}
+		if ctx.IsCancelled() {
+			return ctx.Context().Err()
 		}
 		rows, err := e.parserEngine.Parse(output.CommandKey, string(rawText))
 		if err != nil {
-			_ = e.db.Model(&TaskRawOutput{}).Where("id = ?", output.ID).
-				Updates(map[string]interface{}{"parse_status": "parse_failed", "parse_error": err.Error()}).Error
+			handler.LogDBErrorWithContext("更新 parse_status 为 parse_failed", e.db.Model(&TaskRawOutput{}).Where("id = ?", output.ID).
+				Updates(map[string]interface{}{"parse_status": "parse_failed", "parse_error": err.Error()}).Error,
+				map[string]interface{}{"runID": runID, "deviceIP": deviceIP, "outputID": output.ID, "commandKey": output.CommandKey})
 			continue
 		}
 
@@ -1022,14 +1230,22 @@ func (e *ParseExecutor) parseAndSaveRunDevice(runID, deviceIP, vendor string) er
 			}
 			aggs = append(aggs, items...)
 		}
-		_ = e.db.Model(&TaskRawOutput{}).Where("id = ?", output.ID).
-			Updates(map[string]interface{}{"parse_status": parseStatus, "parse_error": parseError}).Error
+		handler.LogDBErrorWithContext("更新 parse_status", e.db.Model(&TaskRawOutput{}).Where("id = ?", output.ID).
+			Updates(map[string]interface{}{"parse_status": parseStatus, "parse_error": parseError}).Error,
+			map[string]interface{}{"runID": runID, "deviceIP": deviceIP, "outputID": output.ID, "commandKey": output.CommandKey, "parseStatus": parseStatus})
+	}
+
+	if ctx.IsCancelled() {
+		return ctx.Context().Err()
 	}
 
 	identity.Vendor = normalize.NormalizeVendor(identity.Vendor)
 	identity.Hostname = normalize.NormalizeDeviceName(identity.Hostname)
 
 	return e.db.Transaction(func(tx *gorm.DB) error {
+		if ctx.IsCancelled() {
+			return ctx.Context().Err()
+		}
 		if err := tx.Model(&TaskRunDevice{}).
 			Where("task_run_id = ? AND device_ip = ?", runID, deviceIP).
 			Updates(map[string]interface{}{
@@ -1065,6 +1281,9 @@ func (e *ParseExecutor) parseAndSaveRunDevice(runID, deviceIP, vendor string) er
 		}
 
 		for _, iface := range interfaces {
+			if ctx.IsCancelled() {
+				return ctx.Context().Err()
+			}
 			if err := tx.Create(&TaskParsedInterface{
 				TaskRunID:     runID,
 				DeviceIP:      deviceIP,
@@ -1082,6 +1301,9 @@ func (e *ParseExecutor) parseAndSaveRunDevice(runID, deviceIP, vendor string) er
 			}
 		}
 		for _, n := range lldps {
+			if ctx.IsCancelled() {
+				return ctx.Context().Err()
+			}
 			if err := tx.Create(&TaskParsedLLDPNeighbor{
 				TaskRunID:       runID,
 				DeviceIP:        deviceIP,
@@ -1098,6 +1320,9 @@ func (e *ParseExecutor) parseAndSaveRunDevice(runID, deviceIP, vendor string) er
 			}
 		}
 		for _, f := range fdbs {
+			if ctx.IsCancelled() {
+				return ctx.Context().Err()
+			}
 			if err := tx.Create(&TaskParsedFDBEntry{
 				TaskRunID:  runID,
 				DeviceIP:   deviceIP,
@@ -1112,6 +1337,9 @@ func (e *ParseExecutor) parseAndSaveRunDevice(runID, deviceIP, vendor string) er
 			}
 		}
 		for _, a := range arps {
+			if ctx.IsCancelled() {
+				return ctx.Context().Err()
+			}
 			if err := tx.Create(&TaskParsedARPEntry{
 				TaskRunID:  runID,
 				DeviceIP:   deviceIP,
@@ -1126,6 +1354,9 @@ func (e *ParseExecutor) parseAndSaveRunDevice(runID, deviceIP, vendor string) er
 			}
 		}
 		for _, g := range aggs {
+			if ctx.IsCancelled() {
+				return ctx.Context().Err()
+			}
 			if err := tx.Create(&TaskParsedAggregateGroup{
 				TaskRunID:     runID,
 				DeviceIP:      deviceIP,
@@ -1137,6 +1368,9 @@ func (e *ParseExecutor) parseAndSaveRunDevice(runID, deviceIP, vendor string) er
 				return err
 			}
 			for _, member := range g.MemberPorts {
+				if ctx.IsCancelled() {
+					return ctx.Context().Err()
+				}
 				if err := tx.Create(&TaskParsedAggregateMember{
 					TaskRunID:     runID,
 					DeviceIP:      deviceIP,
@@ -1298,8 +1532,54 @@ func appendUniqueStrings(base []string, values ...string) []string {
 	return base
 }
 
+func (e *DeviceCommandExecutor) updateStageProgress(handler *ErrorHandler, ctx RuntimeContext, stageID string, totalUnits, completedCount, failedCount, cancelledCount int) {
+	finished := completedCount + failedCount + cancelledCount
+	progress := 100
+	if totalUnits > 0 {
+		progress = finished * 100 / totalUnits
+	}
+	handler.UpdateStageBestEffort(ctx, stageID, &StagePatch{
+		CompletedUnits: &finished,
+		SuccessUnits:   &completedCount,
+		FailedUnits:    &failedCount,
+		CancelledUnits: &cancelledCount,
+		Progress:       &progress,
+	}, "更新命令阶段进度")
+}
+
+func (e *DeviceCollectExecutor) updateStageProgress(handler *ErrorHandler, ctx RuntimeContext, stageID string, totalUnits, completedCount, failedCount, cancelledCount int) {
+	finished := completedCount + failedCount + cancelledCount
+	progress := 100
+	if totalUnits > 0 {
+		progress = finished * 100 / totalUnits
+	}
+	handler.UpdateStageBestEffort(ctx, stageID, &StagePatch{
+		CompletedUnits: &finished,
+		SuccessUnits:   &completedCount,
+		FailedUnits:    &failedCount,
+		CancelledUnits: &cancelledCount,
+		Progress:       &progress,
+	}, "更新采集阶段进度")
+}
+
+func (e *ParseExecutor) updateStageProgress(handler *ErrorHandler, ctx RuntimeContext, stageID string, totalUnits, completedCount, failedCount, cancelledCount int) {
+	finished := completedCount + failedCount + cancelledCount
+	progress := 100
+	if totalUnits > 0 {
+		progress = finished * 100 / totalUnits
+	}
+	handler.UpdateStageBestEffort(ctx, stageID, &StagePatch{
+		CompletedUnits: &finished,
+		SuccessUnits:   &completedCount,
+		FailedUnits:    &failedCount,
+		CancelledUnits: &cancelledCount,
+		Progress:       &progress,
+	}, "更新解析阶段进度")
+}
+
 func (e *DeviceCollectExecutor) createArtifact(taskRunID, stageID, unitID, artifactType, artifactKey, filePath string) {
-	_ = e.db.Create(&TaskArtifact{
+	handler := NewErrorHandler(taskRunID)
+	handler.ArtifactBestEffort(NewGormRepository(e.db), context.Background(), &TaskArtifact{
 		ID:           uuid.New().String()[:8],
 		TaskRunID:    taskRunID,
 		StageID:      stageID,
@@ -1308,11 +1588,12 @@ func (e *DeviceCollectExecutor) createArtifact(taskRunID, stageID, unitID, artif
 		ArtifactKey:  artifactKey,
 		FilePath:     filePath,
 		CreatedAt:    time.Now(),
-	}).Error
+	})
 }
 
 func (e *ParseExecutor) createArtifact(taskRunID, stageID, unitID, artifactType, artifactKey, filePath string) {
-	_ = e.db.Create(&TaskArtifact{
+	handler := NewErrorHandler(taskRunID)
+	handler.ArtifactBestEffort(NewGormRepository(e.db), context.Background(), &TaskArtifact{
 		ID:           uuid.New().String()[:8],
 		TaskRunID:    taskRunID,
 		StageID:      stageID,
@@ -1321,11 +1602,12 @@ func (e *ParseExecutor) createArtifact(taskRunID, stageID, unitID, artifactType,
 		ArtifactKey:  artifactKey,
 		FilePath:     filePath,
 		CreatedAt:    time.Now(),
-	}).Error
+	})
 }
 
 func (e *TopologyBuildExecutor) createArtifact(taskRunID, stageID, unitID, artifactType, artifactKey, filePath string) {
-	_ = e.db.Create(&TaskArtifact{
+	handler := NewErrorHandler(taskRunID)
+	handler.ArtifactBestEffort(NewGormRepository(e.db), context.Background(), &TaskArtifact{
 		ID:           uuid.New().String()[:8],
 		TaskRunID:    taskRunID,
 		StageID:      stageID,
@@ -1334,5 +1616,9 @@ func (e *TopologyBuildExecutor) createArtifact(taskRunID, stageID, unitID, artif
 		ArtifactKey:  artifactKey,
 		FilePath:     filePath,
 		CreatedAt:    time.Now(),
-	}).Error
+	})
+}
+
+func intPtrLocal(v int) *int {
+	return &v
 }

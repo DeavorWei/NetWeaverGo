@@ -226,6 +226,35 @@ func (m *RuntimeManager) Stop() {
 	}
 }
 
+// GetSnapshot 获取指定运行的快照
+func (m *RuntimeManager) GetSnapshot(runID string) (*ExecutionSnapshot, error) {
+	if m.snapshotHub == nil {
+		return nil, fmt.Errorf("snapshot hub not initialized")
+	}
+	snapshot, ok := m.snapshotHub.Get(runID)
+	if !ok || snapshot == nil {
+		return nil, fmt.Errorf("snapshot not found: %s", runID)
+	}
+	return snapshot, nil
+}
+
+// ListRunningSnapshots 列出运行中的任务快照
+func (m *RuntimeManager) ListRunningSnapshots() []*ExecutionSnapshot {
+	if m.snapshotHub == nil {
+		return []*ExecutionSnapshot{}
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]*ExecutionSnapshot, 0, len(m.runningRuns))
+	for runID := range m.runningRuns {
+		snapshot, ok := m.snapshotHub.Get(runID)
+		if ok && snapshot != nil {
+			result = append(result, snapshot)
+		}
+	}
+	return result
+}
+
 // CreateRun 创建新的运行实例
 func (m *RuntimeManager) CreateRun(definitionID, name, runKind string) (*TaskRun, error) {
 	run := &TaskRun{
@@ -282,6 +311,7 @@ func (m *RuntimeManager) Execute(ctx context.Context, plan *ExecutionPlan) (*Tas
 
 // executePlan 执行计划
 func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *TaskRun, plan *ExecutionPlan) {
+	handler := NewErrorHandler(run.ID)
 	defer func() {
 		m.mu.Lock()
 		delete(m.runningRuns, run.ID)
@@ -290,10 +320,10 @@ func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *Tas
 
 	// 更新状态为运行中
 	now := time.Now()
-	if err := runtimeCtx.UpdateRun(&RunPatch{
+	if err := handler.UpdateRunRequired(runtimeCtx, &RunPatch{
 		Status:    strPtr(string(RunStatusRunning)),
 		StartedAt: &now,
-	}); err != nil {
+	}, "更新运行状态为 running"); err != nil {
 		m.emitError(run.ID, "", "", fmt.Sprintf("更新运行状态失败: %v", err))
 		return
 	}
@@ -320,9 +350,9 @@ func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *Tas
 		}
 
 		// 更新当前Stage
-		runtimeCtx.UpdateRun(&RunPatch{
+		handler.UpdateRunBestEffort(runtimeCtx, &RunPatch{
 			CurrentStage: &stagePlan.Kind,
-		})
+		}, "更新当前阶段")
 
 		// 执行Stage
 		if err := m.executeStage(runtimeCtx, run.ID, &stagePlan, i, len(plan.Stages)); err != nil {
@@ -345,13 +375,18 @@ func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *Tas
 		m.refreshRunProgress(runtimeCtx, run.ID)
 	}
 
+	if runtimeCtx.IsCancelled() {
+		m.handleCancellation(runtimeCtx, run.ID)
+		return
+	}
+
 	// 计算最终状态
 	finalStatus := m.calculateFinalStatus(runtimeCtx, run.ID)
 	finishedAt := time.Now()
-	runtimeCtx.UpdateRun(&RunPatch{
+	handler.UpdateRunBestEffort(runtimeCtx, &RunPatch{
 		Status:     &finalStatus,
 		FinishedAt: &finishedAt,
-	})
+	}, "写入运行终态")
 
 	// 发射完成事件
 	m.eventBus.EmitSync(NewTaskEvent(run.ID, EventTypeRunFinished, fmt.Sprintf("任务完成，状态: %s", finalStatus)))
@@ -403,17 +438,19 @@ func (m *RuntimeManager) skipStage(runtimeCtx *defaultRuntimeContext, runID stri
 
 // abortPlan 中止计划执行
 func (m *RuntimeManager) abortPlan(runtimeCtx *defaultRuntimeContext, runID, reason string) {
+	handler := NewErrorHandler(runID)
 	abortedStatus := string(RunStatusAborted)
 	now := time.Now()
-	runtimeCtx.UpdateRun(&RunPatch{
+	handler.UpdateRunBestEffort(runtimeCtx, &RunPatch{
 		Status:     &abortedStatus,
 		FinishedAt: &now,
-	})
+	}, "写入运行中止状态")
 	m.eventBus.EmitSync(NewTaskEvent(runID, EventTypeRunAborted, fmt.Sprintf("任务中止: %s", reason)))
 }
 
 // executeStage 执行Stage
 func (m *RuntimeManager) executeStage(runtimeCtx *defaultRuntimeContext, runID string, stagePlan *StagePlan, index, total int) error {
+	handler := NewErrorHandler(runID)
 	startedAt := time.Now()
 	// 创建Stage记录
 	stage := &TaskRunStage{
@@ -441,34 +478,42 @@ func (m *RuntimeManager) executeStage(runtimeCtx *defaultRuntimeContext, runID s
 	if err != nil {
 		failedStatus := string(StageStatusFailed)
 		now := time.Now()
-		m.repo.UpdateStage(runtimeCtx.ctx, stage.ID, &StagePatch{
+		handler.UpdateStageBestEffort(runtimeCtx, stage.ID, &StagePatch{
 			Status:     &failedStatus,
 			FinishedAt: &now,
-		})
+		}, "创建 Unit 记录失败后标记 Stage 失败")
 		return fmt.Errorf("创建Stage Unit记录失败: %w", err)
 	}
 
 	// 查找执行器
 	executor, ok := m.executorReg.Get(stagePlan.Kind)
 	if !ok {
-		// 没有找到执行器，标记为失败
 		failedStatus := string(StageStatusFailed)
 		now := time.Now()
-		m.repo.UpdateStage(runtimeCtx.ctx, stage.ID, &StagePatch{
+		handler.UpdateStageBestEffort(runtimeCtx, stage.ID, &StagePatch{
 			Status:     &failedStatus,
 			FinishedAt: &now,
-		})
+		}, "Stage 执行器不存在时标记失败")
 		return fmt.Errorf("未找到Stage执行器: %s", stagePlan.Kind)
 	}
 
 	// 执行Stage
 	if err := executor.Run(runtimeCtx, execStagePlan); err != nil {
+		if IsContextCancelled(runtimeCtx, err) {
+			cancelledStatus := string(StageStatusCancelled)
+			now := time.Now()
+			handler.UpdateStageBestEffort(runtimeCtx, stage.ID, &StagePatch{
+				Status:     &cancelledStatus,
+				FinishedAt: &now,
+			}, "Stage 取消后写入取消状态")
+			return err
+		}
 		failedStatus := string(StageStatusFailed)
 		now := time.Now()
-		m.repo.UpdateStage(runtimeCtx.ctx, stage.ID, &StagePatch{
+		handler.UpdateStageBestEffort(runtimeCtx, stage.ID, &StagePatch{
 			Status:     &failedStatus,
 			FinishedAt: &now,
-		})
+		}, "Stage 执行失败后标记失败")
 		return err
 	}
 
@@ -513,8 +558,10 @@ func (m *RuntimeManager) materializeStageUnits(runtimeCtx *defaultRuntimeContext
 }
 
 func (m *RuntimeManager) reconcileStageStatus(runtimeCtx *defaultRuntimeContext, stageID string) {
+	handler := NewErrorHandler(runtimeCtx.runID)
 	units, err := m.repo.GetUnitsByStage(runtimeCtx.ctx, stageID)
 	if err != nil {
+		handler.LogUpdateError("读取 Stage 单元用于状态汇总", err)
 		return
 	}
 
@@ -547,13 +594,26 @@ func (m *RuntimeManager) reconcileStageStatus(runtimeCtx *defaultRuntimeContext,
 	status := string(StageStatusCompleted)
 	if total == 0 {
 		status = string(StageStatusCompleted)
+	} else if cancelled == total {
+		status = string(StageStatusCancelled)
 	} else if failed > 0 && success == 0 && cancelled == 0 {
 		status = string(StageStatusFailed)
 	} else if failed > 0 || cancelled > 0 {
 		status = string(StageStatusPartial)
 	}
+	if runtimeCtx.IsCancelled() && completed < total {
+		if cancelled+failed == total && cancelled > 0 {
+			status = string(StageStatusCancelled)
+		} else {
+			status = string(StageStatusPartial)
+		}
+	}
+	if total == 0 && runtimeCtx.IsCancelled() {
+		status = string(StageStatusCancelled)
+	}
+
 	now := time.Now()
-	_ = runtimeCtx.UpdateStage(stageID, &StagePatch{
+	handler.UpdateStageBestEffort(runtimeCtx, stageID, &StagePatch{
 		Status:         &status,
 		Progress:       &progress,
 		CompletedUnits: &completed,
@@ -561,12 +621,16 @@ func (m *RuntimeManager) reconcileStageStatus(runtimeCtx *defaultRuntimeContext,
 		FailedUnits:    &failed,
 		CancelledUnits: &cancelled,
 		FinishedAt:     &now,
-	})
+	}, "汇总 Stage 状态")
 }
 
 func (m *RuntimeManager) refreshRunProgress(runtimeCtx *defaultRuntimeContext, runID string) {
+	handler := NewErrorHandler(runtimeCtx.runID)
 	stages, err := m.repo.GetStagesByRun(runtimeCtx.ctx, runID)
 	if err != nil || len(stages) == 0 {
+		if err != nil {
+			handler.LogUpdateError("刷新 Run 进度时读取 Stage 列表", err)
+		}
 		return
 	}
 
@@ -575,17 +639,84 @@ func (m *RuntimeManager) refreshRunProgress(runtimeCtx *defaultRuntimeContext, r
 		progress += stage.Progress
 	}
 	progress = progress / len(stages)
-	_ = runtimeCtx.UpdateRun(&RunPatch{Progress: &progress})
+	handler.UpdateRunBestEffort(runtimeCtx, &RunPatch{Progress: &progress}, "刷新运行进度")
 }
 
 // handleCancellation 处理取消
 func (m *RuntimeManager) handleCancellation(runtimeCtx *defaultRuntimeContext, runID string) {
+	handler := NewErrorHandler(runID)
 	cancelledStatus := string(RunStatusCancelled)
 	now := time.Now()
-	runtimeCtx.UpdateRun(&RunPatch{
+	handler.UpdateRunBestEffort(runtimeCtx, &RunPatch{
 		Status:     &cancelledStatus,
 		FinishedAt: &now,
-	})
+	}, "写入运行取消状态")
+
+	stages, err := m.repo.GetStagesByRun(runtimeCtx.ctx, runID)
+	if err != nil {
+		handler.LogUpdateError("取消时读取 Stage 列表", err)
+		m.eventBus.EmitSync(NewTaskEvent(runID, EventTypeRunFinished, "任务已取消"))
+		return
+	}
+
+	for _, stage := range stages {
+		status := StageStatus(stage.Status)
+		if status.IsTerminal() {
+			continue
+		}
+		units, unitErr := m.repo.GetUnitsByStage(runtimeCtx.ctx, stage.ID)
+		if unitErr != nil {
+			handler.LogUpdateError(fmt.Sprintf("取消时读取 Stage[%s] Unit 列表", stage.ID), unitErr)
+			continue
+		}
+
+		cancelled := 0
+		failed := 0
+		success := 0
+		completed := 0
+		for _, unit := range units {
+			unitStatus := UnitStatus(unit.Status)
+			if !unitStatus.IsTerminal() {
+				reason := "run cancelled"
+				handler.MarkUnitCancelled(runtimeCtx, unit.ID, reason, &unit.DoneSteps)
+				unitStatus = UnitStatusCancelled
+			}
+			switch unitStatus {
+			case UnitStatusCompleted:
+				completed++
+				success++
+			case UnitStatusPartial:
+				completed++
+			case UnitStatusFailed:
+				completed++
+				failed++
+			case UnitStatusCancelled:
+				completed++
+				cancelled++
+			}
+		}
+
+		progress := 0
+		if stage.TotalUnits > 0 {
+			progress = completed * 100 / stage.TotalUnits
+		}
+
+		stageStatus := string(StageStatusCancelled)
+		if failed > 0 || success > 0 {
+			stageStatus = string(StageStatusPartial)
+		}
+		finishedAt := time.Now()
+		handler.UpdateStageBestEffort(runtimeCtx, stage.ID, &StagePatch{
+			Status:         &stageStatus,
+			Progress:       &progress,
+			CompletedUnits: &completed,
+			SuccessUnits:   &success,
+			FailedUnits:    &failed,
+			CancelledUnits: &cancelled,
+			FinishedAt:     &finishedAt,
+		}, fmt.Sprintf("取消时汇总 Stage[%s]", stage.ID))
+	}
+
 	m.eventBus.EmitSync(NewTaskEvent(runID, EventTypeRunFinished, "任务已取消"))
 }
 
@@ -601,20 +732,25 @@ func (m *RuntimeManager) calculateFinalStatus(runtimeCtx *defaultRuntimeContext,
 		return string(RunStatusFailed)
 	}
 
-	var failedCount, partialCount int
+	var failedCount, partialCount, cancelledCount int
 	for _, stage := range stages {
 		switch stage.Status {
 		case string(StageStatusFailed):
 			failedCount++
 		case string(StageStatusPartial):
 			partialCount++
+		case string(StageStatusCancelled):
+			cancelledCount++
 		}
 	}
 
+	if cancelledCount == len(stages) && len(stages) > 0 {
+		return string(RunStatusCancelled)
+	}
 	if failedCount == len(stages) && len(stages) > 0 {
 		return string(RunStatusFailed)
 	}
-	if failedCount > 0 || partialCount > 0 {
+	if failedCount > 0 || partialCount > 0 || cancelledCount > 0 {
 		return string(RunStatusPartial)
 	}
 	return string(RunStatusCompleted)
@@ -639,39 +775,13 @@ func (m *RuntimeManager) CancelRun(runID string) error {
 	}
 
 	runtimeCtx.cancel()
+	logger.Info("TaskExec", runID, "取消运行实例")
 	return nil
-}
-
-// GetSnapshot 获取快照
-func (m *RuntimeManager) GetSnapshot(runID string) (*ExecutionSnapshot, error) {
-	// 先从Hub获取
-	if snapshot, ok := m.snapshotHub.Get(runID); ok {
-		return snapshot, nil
-	}
-
-	// 从数据库重建
-	ctx := context.Background()
-	run, err := m.repo.GetRun(ctx, runID)
-	if err != nil {
-		return nil, err
-	}
-
-	stages, _ := m.repo.GetStagesByRun(ctx, runID)
-	units, _ := m.repo.GetUnitsByRun(ctx, runID)
-	events, _ := m.repo.GetEventsByRun(ctx, runID, 50)
-
-	builder := NewSnapshotBuilder()
-	return builder.Build(run, stages, units, events), nil
-}
-
-// ListRunningSnapshots 列出运行中的快照
-func (m *RuntimeManager) ListRunningSnapshots() []*ExecutionSnapshot {
-	return m.snapshotHub.ListRunning()
 }
 
 // emitError 发射错误事件
 func (m *RuntimeManager) emitError(runID, stageID, unitID, message string) {
-	event := NewTaskEvent(runID, EventTypeError, message).WithLevel(EventLevelError)
+	event := NewTaskEvent(runID, EventTypeError, message)
 	if stageID != "" {
 		event.WithStage(stageID)
 	}
@@ -681,7 +791,6 @@ func (m *RuntimeManager) emitError(runID, stageID, unitID, message string) {
 	m.eventBus.EmitSync(event)
 }
 
-// strPtr 字符串指针辅助函数
-func strPtr(s string) *string {
-	return &s
+func strPtr(v string) *string {
+	return &v
 }
