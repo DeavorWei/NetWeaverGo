@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 // NormalTaskCompiler 普通任务编译器
@@ -28,8 +29,10 @@ func NewNormalTaskCompiler(options *CompileOptions) *NormalTaskCompiler {
 func (c *NormalTaskCompiler) Compile(ctx context.Context, def *TaskDefinition) (*ExecutionPlan, error) {
 	var config NormalTaskConfig
 	if err := json.Unmarshal(def.Config, &config); err != nil {
+		logger.Error("TaskCompiler", "-", "解析普通任务配置失败: task=%s, err=%v", def.Name, err)
 		return nil, fmt.Errorf("解析普通任务配置失败: %w", err)
 	}
+	logger.Debug("TaskCompiler", "-", "普通任务编译输入: task=%s, mode=%s, deviceIDs=%d, deviceIPs=%d, items=%d, commandGroupID=%s", def.Name, config.Mode, len(config.DeviceIDs), len(config.DeviceIPs), len(config.Items), config.CommandGroupID)
 
 	switch config.Mode {
 	case "group":
@@ -37,6 +40,7 @@ func (c *NormalTaskCompiler) Compile(ctx context.Context, def *TaskDefinition) (
 	case "binding":
 		return c.compileModeB(def, &config)
 	default:
+		logger.Error("TaskCompiler", "-", "未知的普通任务模式: task=%s, mode=%s", def.Name, config.Mode)
 		return nil, fmt.Errorf("未知的普通任务模式: %s", config.Mode)
 	}
 }
@@ -49,12 +53,15 @@ func (c *NormalTaskCompiler) Supports(kind string) bool {
 // compileModeA 编译模式A：一组命令发送给所有设备
 func (c *NormalTaskCompiler) compileModeA(def *TaskDefinition, config *NormalTaskConfig) (*ExecutionPlan, error) {
 	deviceIPs := normalizeDeviceIPs(config.DeviceIPs)
+	logger.Debug("TaskCompiler", "-", "编译 Mode A: task=%s, deviceIDs=%d, deviceIPs=%d, commandGroupID=%s, directCommands=%d", def.Name, len(config.DeviceIDs), len(deviceIPs), config.CommandGroupID, len(config.Commands))
 	if len(deviceIPs) == 0 {
+		logger.Error("TaskCompiler", "-", "Mode A编译失败: task=%s, deviceIDs=%v, deviceIPs=%v, commandGroupID=%s", def.Name, config.DeviceIDs, config.DeviceIPs, config.CommandGroupID)
 		return nil, fmt.Errorf("Mode A需要至少一台设备")
 	}
 
 	commands := c.resolveCommands(config)
 	if len(commands) == 0 {
+		logger.Error("TaskCompiler", "-", "Mode A编译失败: task=%s, commandGroupID=%s, directCommands=%v", def.Name, config.CommandGroupID, config.Commands)
 		return nil, fmt.Errorf("Mode A需要至少一条命令")
 	}
 
@@ -104,7 +111,9 @@ func (c *NormalTaskCompiler) compileModeA(def *TaskDefinition, config *NormalTas
 
 // compileModeB 编译模式B：每台设备执行各自的独立命令
 func (c *NormalTaskCompiler) compileModeB(def *TaskDefinition, config *NormalTaskConfig) (*ExecutionPlan, error) {
+	logger.Debug("TaskCompiler", "-", "编译 Mode B: task=%s, items=%d", def.Name, len(config.Items))
 	if len(config.Items) == 0 {
+		logger.Error("TaskCompiler", "-", "Mode B编译失败: task=%s, items=0", def.Name)
 		return nil, fmt.Errorf("Mode B需要至少一个任务项")
 	}
 

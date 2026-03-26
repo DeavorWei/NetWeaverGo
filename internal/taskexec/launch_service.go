@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/repository"
 )
@@ -44,23 +45,23 @@ type CanonicalLaunchSpec struct {
 
 type CanonicalNormal struct {
 	Mode           string                `json:"mode"`
-	GroupCommandID string                `json:"groupCommandId,omitempty"`
-	GroupCommands  []string              `json:"groupCommands,omitempty"`
-	DeviceIDs      []uint                `json:"deviceIds,omitempty"`
-	DeviceIPs      []string              `json:"deviceIps,omitempty"`
+	GroupCommandID string                `json:"commandGroupID,omitempty"`
+	GroupCommands  []string              `json:"commands,omitempty"`
+	DeviceIDs      []uint                `json:"deviceIDs,omitempty"`
+	DeviceIPs      []string              `json:"deviceIPs,omitempty"`
 	Items          []CanonicalNormalItem `json:"items,omitempty"`
 }
 
 type CanonicalNormalItem struct {
-	DeviceIDs      []uint   `json:"deviceIds"`
-	DeviceIPs      []string `json:"deviceIps"`
-	CommandGroupID string   `json:"commandGroupId,omitempty"`
+	DeviceIDs      []uint   `json:"deviceIDs"`
+	DeviceIPs      []string `json:"deviceIPs"`
+	CommandGroupID string   `json:"commandGroupID,omitempty"`
 	Commands       []string `json:"commands,omitempty"`
 }
 
 type CanonicalTopology struct {
-	DeviceIDs []uint   `json:"deviceIds"`
-	DeviceIPs []string `json:"deviceIps"`
+	DeviceIDs []uint   `json:"deviceIDs"`
+	DeviceIPs []string `json:"deviceIPs"`
 	Vendor    string   `json:"vendor,omitempty"`
 }
 
@@ -80,32 +81,53 @@ func NewTaskLaunchService(service *TaskExecutionService) *TaskLaunchService {
 
 func (s *TaskLaunchService) StartTaskGroup(ctx context.Context, taskGroupID uint) (string, error) {
 	if s == nil || s.taskexec == nil {
+		logger.Error("TaskLaunchService", "-", "启动任务组失败: service 未初始化, taskGroupID=%d", taskGroupID)
 		return "", fmt.Errorf("task launch service not initialized")
 	}
 
+	logger.Debug("TaskLaunchService", "-", "开始启动任务组: taskGroupID=%d", taskGroupID)
 	taskGroup, err := config.GetTaskGroup(taskGroupID)
 	if err != nil {
+		logger.Error("TaskLaunchService", "-", "加载任务组失败: taskGroupID=%d, err=%v", taskGroupID, err)
 		return "", err
 	}
+	logger.Verbose("TaskLaunchService", "-", "任务组加载完成: id=%d, name=%s, mode=%s, taskType=%s, items=%d", taskGroup.ID, taskGroup.Name, taskGroup.Mode, taskGroup.TaskType, len(taskGroup.Items))
 
 	spec, err := s.normalizer.NormalizeTaskGroup(taskGroup)
 	if err != nil {
+		logger.Error("TaskLaunchService", "-", "任务组归一化失败: taskGroupID=%d, err=%v", taskGroupID, err)
 		return "", err
 	}
+
+	launchSpecJSON, err := json.Marshal(spec)
+	if err != nil {
+		logger.Error("TaskLaunchService", "-", "序列化启动规格失败: taskGroupID=%d, err=%v", taskGroupID, err)
+		return "", fmt.Errorf("marshal launch spec failed: %w", err)
+	}
+	logger.Verbose("TaskLaunchService", "-", "启动规格: %s", string(launchSpecJSON))
+
 	if err := s.validator.ValidateLaunchSpec(ctx, spec); err != nil {
+		logger.Error("TaskLaunchService", "-", "启动规格校验失败: taskGroupID=%d, err=%v", taskGroupID, err)
 		return "", err
 	}
 
 	def, err := s.taskexec.CreateTaskDefinitionFromLaunchSpec(spec)
 	if err != nil {
+		logger.Error("TaskLaunchService", "-", "创建任务定义失败: taskGroupID=%d, err=%v", taskGroupID, err)
 		return "", err
 	}
 
-	return s.taskexec.StartTaskWithMetadata(ctx, def, &RunMetadata{
+	runID, err := s.taskexec.StartTaskWithMetadata(ctx, def, &RunMetadata{
 		TaskGroupID:      taskGroupID,
 		TaskNameSnapshot: spec.TaskNameSnapshot,
-		LaunchSpecJSON:   def.Config,
+		LaunchSpecJSON:   launchSpecJSON,
 	})
+	if err != nil {
+		logger.Error("TaskLaunchService", "-", "启动任务组失败: taskGroupID=%d, err=%v", taskGroupID, err)
+		return "", err
+	}
+	logger.Info("TaskLaunchService", "-", "任务组启动成功: taskGroupID=%d, runID=%s", taskGroupID, runID)
+	return runID, nil
 }
 
 func (n *LaunchNormalizer) NormalizeTaskGroup(taskGroup *models.TaskGroup) (*CanonicalLaunchSpec, error) {
@@ -151,6 +173,7 @@ func (n *LaunchNormalizer) normalizeNormal(taskGroup *models.TaskGroup) (*Canoni
 	}
 
 	normal := &CanonicalNormal{Mode: mode}
+	logger.Debug("TaskLaunchService", "-", "开始归一化普通任务: taskGroupID=%d, mode=%s, items=%d", taskGroup.ID, mode, len(taskGroup.Items))
 	switch mode {
 	case "group":
 		deviceIDs := make([]uint, 0)
@@ -182,6 +205,7 @@ func (n *LaunchNormalizer) normalizeNormal(taskGroup *models.TaskGroup) (*Canoni
 		normal.GroupCommands = uniqueSortedStrings(canonicalCommands)
 		normal.DeviceIDs = uniqueSortedUint(deviceIDs)
 		normal.DeviceIPs = uniqueSortedStrings(deviceIPs)
+		logger.Verbose("TaskLaunchService", "-", "普通任务归一化完成(group): taskGroupID=%d, commandGroupID=%s, deviceIDs=%d, deviceIPs=%d, commands=%d", taskGroup.ID, normal.GroupCommandID, len(normal.DeviceIDs), len(normal.DeviceIPs), len(normal.GroupCommands))
 	case "binding":
 		items := make([]CanonicalNormalItem, 0, len(taskGroup.Items))
 		for _, item := range taskGroup.Items {
@@ -197,6 +221,7 @@ func (n *LaunchNormalizer) normalizeNormal(taskGroup *models.TaskGroup) (*Canoni
 			})
 		}
 		normal.Items = items
+		logger.Verbose("TaskLaunchService", "-", "普通任务归一化完成(binding): taskGroupID=%d, items=%d", taskGroup.ID, len(normal.Items))
 	default:
 		return nil, fmt.Errorf("不支持的任务模式: %s", mode)
 	}
@@ -209,11 +234,13 @@ func (n *LaunchNormalizer) normalizeTopology(taskGroup *models.TaskGroup) (*Cano
 	for _, item := range taskGroup.Items {
 		deviceIDs = append(deviceIDs, item.DeviceIDs...)
 	}
-	return &CanonicalTopology{
+	topology := &CanonicalTopology{
 		DeviceIDs: uniqueSortedUint(deviceIDs),
 		DeviceIPs: uniqueSortedStrings(n.lookupDeviceIPs(deviceIDs)),
 		Vendor:    strings.TrimSpace(taskGroup.TopologyVendor),
-	}, nil
+	}
+	logger.Verbose("TaskLaunchService", "-", "拓扑任务归一化完成: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d, vendor=%s", taskGroup.ID, len(topology.DeviceIDs), len(topology.DeviceIPs), topology.Vendor)
+	return topology, nil
 }
 
 func (n *LaunchNormalizer) resolveTaskItemCommands(item models.TaskItem) ([]string, string, error) {
@@ -238,12 +265,15 @@ func (n *LaunchNormalizer) lookupDeviceIPs(deviceIDs []uint) []string {
 	for _, deviceID := range uniqueSortedUint(deviceIDs) {
 		device, err := n.deviceRepo.FindByID(deviceID)
 		if err != nil || device == nil {
+			logger.Warn("TaskLaunchService", "-", "设备解析失败: deviceID=%d, err=%v", deviceID, err)
 			continue
 		}
 		ip := strings.TrimSpace(device.IP)
 		if ip != "" {
 			result = append(result, ip)
+			continue
 		}
+		logger.Warn("TaskLaunchService", "-", "设备缺少管理IP: deviceID=%d", deviceID)
 	}
 	return result
 }
@@ -333,9 +363,67 @@ func (v *LaunchValidator) findConflictingActiveRunTargets(ctx context.Context, s
 }
 
 func (s *TaskExecutionService) CreateTaskDefinitionFromLaunchSpec(spec *CanonicalLaunchSpec) (*TaskDefinition, error) {
-	configJSON, err := json.Marshal(spec)
+	if spec == nil {
+		return nil, fmt.Errorf("launch spec is nil")
+	}
+
+	var (
+		configJSON []byte
+		err        error
+	)
+
+	switch spec.RunKind {
+	case string(RunKindTopology):
+		if spec.Topology == nil {
+			return nil, fmt.Errorf("topology launch spec is nil")
+		}
+		configJSON, err = json.Marshal(&TopologyTaskConfig{
+			DeviceIDs:         append([]uint(nil), spec.Topology.DeviceIDs...),
+			DeviceIPs:         append([]string(nil), spec.Topology.DeviceIPs...),
+			Vendor:            strings.TrimSpace(spec.Topology.Vendor),
+			MaxWorkers:        spec.Concurrency,
+			TimeoutSec:        spec.TimeoutSec,
+			AutoBuildTopology: spec.AutoBuildTopology,
+			EnableRawLog:      spec.EnableRawLog,
+		})
+		logger.Debug("TaskLaunchService", "-", "创建拓扑任务定义: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d, vendor=%s", spec.TaskGroupID, len(spec.Topology.DeviceIDs), len(spec.Topology.DeviceIPs), spec.Topology.Vendor)
+	default:
+		if spec.Normal == nil {
+			return nil, fmt.Errorf("normal launch spec is nil")
+		}
+		mode := strings.TrimSpace(spec.Normal.Mode)
+		if mode == "" {
+			mode = strings.TrimSpace(spec.Mode)
+		}
+		if mode == "" {
+			mode = "group"
+		}
+		config := &NormalTaskConfig{
+			Mode:           mode,
+			DeviceIDs:      append([]uint(nil), spec.Normal.DeviceIDs...),
+			DeviceIPs:      append([]string(nil), spec.Normal.DeviceIPs...),
+			CommandGroupID: strings.TrimSpace(spec.Normal.GroupCommandID),
+			Commands:       append([]string(nil), spec.Normal.GroupCommands...),
+			Concurrency:    spec.Concurrency,
+			TimeoutSec:     spec.TimeoutSec,
+			EnableRawLog:   spec.EnableRawLog,
+		}
+		if mode == "binding" {
+			config.Items = make([]NormalTaskItem, 0, len(spec.Normal.Items))
+			for _, item := range spec.Normal.Items {
+				config.Items = append(config.Items, NormalTaskItem{
+					DeviceIDs:      append([]uint(nil), item.DeviceIDs...),
+					DeviceIPs:      append([]string(nil), item.DeviceIPs...),
+					CommandGroupID: strings.TrimSpace(item.CommandGroupID),
+					Commands:       append([]string(nil), item.Commands...),
+				})
+			}
+		}
+		configJSON, err = json.Marshal(config)
+		logger.Debug("TaskLaunchService", "-", "创建普通任务定义: taskGroupID=%d, mode=%s, deviceIDs=%d, deviceIPs=%d, items=%d, commandGroupID=%s", spec.TaskGroupID, config.Mode, len(config.DeviceIDs), len(config.DeviceIPs), len(config.Items), config.CommandGroupID)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("marshal launch spec failed: %w", err)
+		return nil, fmt.Errorf("marshal compiler config failed: %w", err)
 	}
 
 	return &TaskDefinition{
