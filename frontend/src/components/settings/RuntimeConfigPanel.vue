@@ -18,7 +18,7 @@
       <h2 class="runtime-title">运行时配置（热更新）</h2>
     </div>
     <p class="runtime-subtitle">
-      修改这些配置将立即生效，无需重启应用。引擎工作协程数与事件缓冲会直接驱动执行链；上方全局最大并发数仅作为兼容回退值。
+      修改这些配置将立即生效，无需重启应用。引擎工作协程数与事件缓冲会直接驱动执行链。
     </p>
 
     <div class="runtime-settings-panels-flow">
@@ -245,20 +245,6 @@
               type="number"
               min="100"
               max="10000"
-              step="100"
-              class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-info focus:ring-1 focus:ring-info/30 transition-all"
-            />
-          </div>
-          <div class="space-y-2">
-            <label class="settings-label"
-              >后备事件容量
-              <HelpTip text="主缓冲耗尽时的兜底事件容量，默认 500。"
-            /></label>
-            <input
-              v-model.number="config.engine.fallbackEventCapacity"
-              type="number"
-              min="100"
-              max="2000"
               step="100"
               class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-info focus:ring-1 focus:ring-info/30 transition-all"
             />
@@ -605,7 +591,6 @@ const config = ref({
   engine: {
     workerCount: 10,
     eventBufferSize: 1000,
-    fallbackEventCapacity: 500,
   },
   discovery: {
     workerCount: 10,
@@ -667,7 +652,6 @@ async function loadConfig() {
       engine: {
         workerCount: data.engine?.workerCount || 10,
         eventBufferSize: data.engine?.eventBufferSize || 1000,
-        fallbackEventCapacity: data.engine?.fallbackEventCapacity || 500,
       },
       discovery: {
         workerCount: data.discovery?.workerCount || 10,
@@ -715,7 +699,6 @@ async function saveConfig() {
       engine: {
         workerCount: config.value.engine.workerCount,
         eventBufferSize: config.value.engine.eventBufferSize,
-        fallbackEventCapacity: config.value.engine.fallbackEventCapacity,
       },
       discovery: {
         workerCount: config.value.discovery.workerCount,

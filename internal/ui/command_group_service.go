@@ -63,13 +63,3 @@ func (s *CommandGroupService) ImportCommandGroup(filePath string) (*models.Comma
 func (s *CommandGroupService) ExportCommandGroup(id uint, filePath string) error {
 	return config.ExportCommandGroup(id, filePath)
 }
-
-// GetCommands 获取命令列表（兼容旧接口）
-func (s *CommandGroupService) GetCommands() ([]string, error) {
-	return config.LoadDefaultCommands()
-}
-
-// SaveCommands 保存命令列表（兼容旧接口）
-func (s *CommandGroupService) SaveCommands(commands []string) error {
-	return config.SaveCommands(commands)
-}

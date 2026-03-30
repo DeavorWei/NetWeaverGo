@@ -10,6 +10,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/matcher"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/sshutil"
 	"github.com/NetWeaverGo/core/internal/terminal"
@@ -33,7 +34,7 @@ type ExecutorOptions struct {
 	EventBus       chan report.ExecutorEvent
 	SuspendHandler SuspendHandler
 	LogSession     *report.DeviceLogSession
-	Algorithms     *config.SSHAlgorithmSettings
+	Algorithms     *models.SSHAlgorithmSettings
 	Vendor         string
 	DeviceProfile  *config.DeviceProfile
 }
@@ -52,7 +53,7 @@ type DeviceExecutor struct {
 	OnSuspend SuspendHandler
 
 	// 构造阶段注入的连接与日志配置。
-	algorithms    *config.SSHAlgorithmSettings
+	algorithms    *models.SSHAlgorithmSettings
 	logSession    *report.DeviceLogSession
 	deviceProfile *config.DeviceProfile
 

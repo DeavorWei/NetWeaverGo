@@ -1,14 +1,14 @@
 package sshutil
 
 import (
-	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"golang.org/x/crypto/ssh"
 )
 
 // SecurePreset 安全优先预设（仅使用现代安全算法）
 // 适用于新设备，追求最高安全性
-var SecurePreset = config.SSHAlgorithmSettings{
+var SecurePreset = models.SSHAlgorithmSettings{
 	Ciphers: []string{
 		// 官方推荐的最安全的现代算法（AEAD）
 		ssh.CipherAES128GCM,
@@ -66,7 +66,7 @@ var SecurePreset = config.SSHAlgorithmSettings{
 
 // CompatiblePreset 兼容性预设（包含老旧设备支持的算法）
 // 适用于需要连接各种老旧网络设备的场景
-var CompatiblePreset = config.SSHAlgorithmSettings{
+var CompatiblePreset = models.SSHAlgorithmSettings{
 	Ciphers: []string{
 		// 现代安全算法
 		ssh.CipherAES128GCM,
@@ -141,7 +141,7 @@ var CompatiblePreset = config.SSHAlgorithmSettings{
 
 // GetPreset 根据预设模式返回对应的算法配置
 // 如果模式为空或 "custom"，返回 nil 表示使用自定义配置
-func GetPreset(presetMode string) *config.SSHAlgorithmSettings {
+func GetPreset(presetMode string) *models.SSHAlgorithmSettings {
 	switch presetMode {
 	case "secure":
 		preset := SecurePreset
@@ -156,7 +156,7 @@ func GetPreset(presetMode string) *config.SSHAlgorithmSettings {
 
 // GetEffectiveAlgorithms 获取实际生效的算法配置
 // 优先级：自定义配置 > 预设配置 > 内置默认配置
-func GetEffectiveAlgorithms(settings config.SSHAlgorithmSettings) (ciphers, keyExchanges, macs, hostKeyAlgorithms []string) {
+func GetEffectiveAlgorithms(settings models.SSHAlgorithmSettings) (ciphers, keyExchanges, macs, hostKeyAlgorithms []string) {
 	logger.Debug("SSH", "-", "GetEffectiveAlgorithms 被调用: PresetMode=%s", settings.PresetMode)
 	logger.Debug("SSH", "-", "  - 输入 Ciphers(%d): %v", len(settings.Ciphers), settings.Ciphers)
 	logger.Debug("SSH", "-", "  - 输入 KeyExchanges(%d): %v", len(settings.KeyExchanges), settings.KeyExchanges)

@@ -27,18 +27,6 @@
           执行参数
         </h3>
         <div class="settings-auto-grid">
-          <!-- 最大并发数 -->
-          <div class="space-y-2">
-            <label class="settings-label">最大并发数 <HelpTip text="控制全局并发上限。若运行时配置设置了工作协程数，执行链会优先采用运行时配置。" /></label>
-          <input
-            type="number"
-            v-model.number="settings.maxWorkers"
-            min="1"
-            max="256"
-            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-          />
-          </div>
-
           <!-- 错误处理模式 -->
           <div class="space-y-2">
             <label class="settings-label">错误处理模式 <HelpTip text="命令执行出错时的处理策略：挂起询问、跳过继续或终止执行。" /></label>
@@ -424,7 +412,6 @@ interface AlgorithmSection {
 
 // 前端使用的设置接口（小写字段名，与后端绑定类保持一致）
 interface GlobalSettings {
-  maxWorkers: number
   connectTimeout: string
   commandTimeout: string
   storageRoot: string
@@ -488,7 +475,6 @@ const defaultSSHAlgorithms: SSHAlgorithmSettings = {
 }
 
 const settings = ref<GlobalSettings>({
-  maxWorkers: 32,
   connectTimeout: '10s',
   commandTimeout: '30s',
   storageRoot: './netWeaverGoData',
@@ -499,7 +485,6 @@ const settings = ref<GlobalSettings>({
 })
 
 const defaultSettings: GlobalSettings = {
-  maxWorkers: 32,
   connectTimeout: '10s',
   commandTimeout: '30s',
   storageRoot: './netWeaverGoData',
@@ -658,7 +643,6 @@ async function loadSettings() {
       // 保存初始值，用于判断是否是用户主动切换
       initialPresetMode.value = loadedPresetMode
       settings.value = {
-        maxWorkers: result.maxWorkers || 32,
         connectTimeout: result.connectTimeout || '10s',
         commandTimeout: result.commandTimeout || '30s',
         storageRoot: rawResult.storageRoot || './netWeaverGoData',
@@ -681,7 +665,6 @@ async function loadSettings() {
 function toBackendSettings(frontend: GlobalSettings): BackendSettings {
   return {
     id: 1,
-    maxWorkers: frontend.maxWorkers,
     connectTimeout: frontend.connectTimeout,
     commandTimeout: frontend.commandTimeout,
     storageRoot: frontend.storageRoot,

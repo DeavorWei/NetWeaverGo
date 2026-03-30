@@ -100,41 +100,6 @@ func TestDetailLogger_WriteCommand(t *testing.T) {
 	}
 }
 
-func TestDetailLogger_WriteChunk_BackwardCompatible(t *testing.T) {
-	tmpDir := t.TempDir()
-	logPath := filepath.Join(tmpDir, "detail.log")
-
-	logger, err := NewDetailLogger(logPath)
-	if err != nil {
-		t.Fatalf("NewDetailLogger failed: %v", err)
-	}
-	defer logger.Close()
-
-	// 测试废弃的 WriteChunk 方法仍然可用
-	chunk := "line1\r\nline2\rline3\x00line4"
-	if err := logger.WriteChunk(chunk); err != nil {
-		t.Fatalf("WriteChunk failed: %v", err)
-	}
-
-	if err := logger.FlushPending(); err != nil {
-		t.Fatalf("FlushPending failed: %v", err)
-	}
-
-	content, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("ReadFile failed: %v", err)
-	}
-
-	// 验证换行标准化和空字符删除
-	contentStr := string(content)
-	if strings.Contains(contentStr, "\r") {
-		t.Errorf("Content should not contain CR, got %q", contentStr)
-	}
-	if strings.Contains(contentStr, "\x00") {
-		t.Errorf("Content should not contain null bytes, got %q", contentStr)
-	}
-}
-
 func TestDetailLogger_NoTerminalRepair(t *testing.T) {
 	tmpDir := t.TempDir()
 	logPath := filepath.Join(tmpDir, "detail.log")

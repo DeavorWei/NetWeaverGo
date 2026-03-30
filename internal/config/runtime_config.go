@@ -40,9 +40,8 @@ type RuntimeConfig struct {
 
 	// 引擎配置
 	Engine struct {
-		WorkerCount           int `json:"workerCount"`           // 工作协程数
-		EventBufferSize       int `json:"eventBufferSize"`       // 事件缓冲区大小
-		FallbackEventCapacity int `json:"fallbackEventCapacity"` // 后备事件容量
+		WorkerCount     int `json:"workerCount"`     // 工作协程数
+		EventBufferSize int `json:"eventBufferSize"` // 事件缓冲区大小
 	} `json:"engine"`
 
 	// 拓扑发现配置
@@ -91,7 +90,6 @@ func DefaultRuntimeConfig() RuntimeConfig {
 	// 引擎配置
 	cfg.Engine.WorkerCount = DefaultWorkerCount
 	cfg.Engine.EventBufferSize = EventBufferSize
-	cfg.Engine.FallbackEventCapacity = FallbackEventCapacity
 
 	// 发现配置
 	cfg.Discovery.WorkerCount = DefaultWorkerCount
@@ -159,7 +157,6 @@ func ResetRuntimeSettingsToDefault(db *gorm.DB) error {
 		// 引擎配置
 		{Category: "engine", Key: "workerCount", Value: strconv.Itoa(defaults.Engine.WorkerCount)},
 		{Category: "engine", Key: "eventBufferSize", Value: strconv.Itoa(defaults.Engine.EventBufferSize)},
-		{Category: "engine", Key: "fallbackEventCapacity", Value: strconv.Itoa(defaults.Engine.FallbackEventCapacity)},
 
 		// 发现配置
 		{Category: "discovery", Key: "workerCount", Value: strconv.Itoa(defaults.Discovery.WorkerCount)},
@@ -256,12 +253,6 @@ func applyRuntimeSetting(cfg *RuntimeConfig, setting RuntimeSetting) error {
 				return fmt.Errorf("无效的配置值: %s", setting.Value)
 			}
 			cfg.Engine.EventBufferSize = val
-		case "fallbackEventCapacity":
-			val, err := strconv.Atoi(setting.Value)
-			if err != nil {
-				return fmt.Errorf("无效的配置值: %s", setting.Value)
-			}
-			cfg.Engine.FallbackEventCapacity = val
 		default:
 			return nil
 		}
@@ -335,7 +326,6 @@ func SaveRuntimeConfig(db *gorm.DB, config RuntimeConfig) error {
 		// 引擎配置
 		{Category: "engine", Key: "workerCount", Value: strconv.Itoa(config.Engine.WorkerCount)},
 		{Category: "engine", Key: "eventBufferSize", Value: strconv.Itoa(config.Engine.EventBufferSize)},
-		{Category: "engine", Key: "fallbackEventCapacity", Value: strconv.Itoa(config.Engine.FallbackEventCapacity)},
 
 		// 发现配置
 		{Category: "discovery", Key: "workerCount", Value: strconv.Itoa(config.Discovery.WorkerCount)},
@@ -432,68 +422,24 @@ func GetRuntimeManagerIfInitialized() *RuntimeConfigManager {
 	return runtimeManager
 }
 
-// resolveWorkerCount 通用的工作协程数解析函数
-func resolveWorkerCount(
-	settings *GlobalSettings,
-	getRuntimeValue func() int,
-	logPrefix string,
-) int {
-	legacyWorkers := 0
-	if settings != nil {
-		legacyWorkers = settings.MaxWorkers
-	}
-
+// ResolveEngineWorkerCount 解析执行链最终使用的工作协程数。
+func ResolveEngineWorkerCount() int {
 	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
-		runtimeWorkers := getRuntimeValue()
-		if runtimeWorkers > 0 {
-			if legacyWorkers > 0 && legacyWorkers != runtimeWorkers {
-				logger.Debug(
-					"Config",
-					"-",
-					"%s工作协程数采用 runtime config=%d，覆盖 settings.maxWorkers=%d",
-					logPrefix,
-					runtimeWorkers,
-					legacyWorkers,
-				)
-			}
+		if runtimeWorkers := manager.GetWorkerCount(); runtimeWorkers > 0 {
 			return runtimeWorkers
 		}
 	}
-
-	if legacyWorkers > 0 {
-		return legacyWorkers
-	}
-
 	return DefaultWorkerCount
 }
 
-// ResolveEngineWorkerCount 解析执行链最终使用的工作协程数。
-// 运行时配置优先生效，GlobalSettings.MaxWorkers 仅作为兼容兜底。
-func ResolveEngineWorkerCount(settings *GlobalSettings) int {
-	return resolveWorkerCount(
-		settings,
-		func() int {
-			if m := GetRuntimeManagerIfInitialized(); m != nil {
-				return m.GetWorkerCount()
-			}
-			return 0
-		},
-		"执行链",
-	)
-}
-
 // ResolveDiscoveryWorkerCount 解析发现任务工作协程数。
-func ResolveDiscoveryWorkerCount(settings *GlobalSettings) int {
-	return resolveWorkerCount(
-		settings,
-		func() int {
-			if m := GetRuntimeManagerIfInitialized(); m != nil {
-				return m.GetDiscoveryWorkerCount()
-			}
-			return 0
-		},
-		"发现任务",
-	)
+func ResolveDiscoveryWorkerCount() int {
+	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
+		if runtimeWorkers := manager.GetDiscoveryWorkerCount(); runtimeWorkers > 0 {
+			return runtimeWorkers
+		}
+	}
+	return DefaultWorkerCount
 }
 
 // ResolveDiscoveryPerDeviceTimeout 解析单设备发现超时时间。
@@ -534,16 +480,6 @@ func ResolveEventBufferSize() int {
 		}
 	}
 	return EventBufferSize
-}
-
-// ResolveFallbackEventCapacity 解析执行链后备事件容量。
-func ResolveFallbackEventCapacity() int {
-	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
-		if size := manager.GetFallbackEventCapacity(); size > 0 {
-			return size
-		}
-	}
-	return FallbackEventCapacity
 }
 
 // GetConfig 获取当前配置（只读副本）
@@ -640,13 +576,6 @@ func (m *RuntimeConfigManager) GetEventBufferSize() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.config.Engine.EventBufferSize
-}
-
-// GetFallbackEventCapacity 获取后备事件容量
-func (m *RuntimeConfigManager) GetFallbackEventCapacity() int {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.config.Engine.FallbackEventCapacity
 }
 
 // GetBufferSize 获取缓冲区大小

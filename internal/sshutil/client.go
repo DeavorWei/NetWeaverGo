@@ -16,6 +16,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -80,7 +81,7 @@ type Config struct {
 	Timeout  time.Duration
 
 	// SSH 算法配置（可选）
-	Algorithms *config.SSHAlgorithmSettings
+	Algorithms *models.SSHAlgorithmSettings
 	// 主机密钥校验策略: strict / accept_new / insecure
 	HostKeyPolicy string
 	// known_hosts 文件路径（可选）
@@ -259,7 +260,7 @@ func logSSHHandshakeError(ip string, err error, sshConfig *ssh.ClientConfig, cfg
 
 // applyAlgorithmConfig 应用 SSH 算法配置到 ssh.ClientConfig
 // 如果提供了自定义算法配置，使用自定义配置；否则使用内置的兼容性配置
-func applyAlgorithmConfig(sshConfig *ssh.ClientConfig, algoSettings *config.SSHAlgorithmSettings) {
+func applyAlgorithmConfig(sshConfig *ssh.ClientConfig, algoSettings *models.SSHAlgorithmSettings) {
 	// 获取有效的算法配置
 	var ciphers, keyExchanges, macs, hostKeyAlgorithms []string
 

@@ -9,16 +9,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// SSHAlgorithmSettings 是 models.SSHAlgorithmSettings 的别名，保持向后兼容
-type SSHAlgorithmSettings = models.SSHAlgorithmSettings
-
-// GlobalSettings 是 models.GlobalSettings 的别名，保持向后兼容
-type GlobalSettings = models.GlobalSettings
-
 // DefaultSettings 返回默认配置
 func DefaultSettings() models.GlobalSettings {
 	return models.GlobalSettings{
-		MaxWorkers:        32,
 		ConnectTimeout:    "10s",
 		CommandTimeout:    "30s",
 		StorageRoot:       GetPathManager().GetStorageRoot(),
@@ -110,8 +103,8 @@ func ApplyDebugSettings(debug, verbose bool) {
 // SaveSettings 保存全局设置到数据库
 func SaveSettings(settings models.GlobalSettings) error {
 	logger.Debug("Config", "-", "准备将更新后的全局参数覆盖保存至本地数据库...")
-	logger.Verbose("Config", "-", "保存内容: workers=%d, connect=%s, cmd=%s, error=%s, storageRoot=%s, debug=%v, verbose=%v",
-		settings.MaxWorkers, settings.ConnectTimeout, settings.CommandTimeout, settings.ErrorMode,
+	logger.Verbose("Config", "-", "保存内容: connect=%s, cmd=%s, error=%s, storageRoot=%s, debug=%v, verbose=%v",
+		settings.ConnectTimeout, settings.CommandTimeout, settings.ErrorMode,
 		settings.StorageRoot, settings.Debug, settings.Verbose)
 	logger.Verbose("Config", "-", "SSH主机密钥策略: policy=%s, known_hosts=%s", settings.SSHHostKeyPolicy, settings.SSHKnownHostsPath)
 	logger.Verbose("Config", "-", "SSH算法配置: presetMode=%s, ciphers=%d, keyExchanges=%d, macs=%d, hostKeys=%d",

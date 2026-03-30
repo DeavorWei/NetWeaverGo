@@ -156,6 +156,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { CommandGroupAPI } from '../../services/api'
+import type { CommandGroup } from '../../services/api'
 
 const isOpen = ref(false)
 const isEditing = ref(false)
@@ -168,8 +169,9 @@ const commandCount = computed(() => localCommands.value.length)
 
 async function loadCommands() {
   try {
-    const commands = await CommandGroupAPI.getCommands()
-    localCommands.value = commands || []
+    const groups = await CommandGroupAPI.listCommandGroups()
+    const defaultGroup = (groups || []).find((group: CommandGroup) => group.name === '默认命令组')
+    localCommands.value = defaultGroup?.commands || []
   } catch (err) {
     console.error('加载命令失败:', err)
     localCommands.value = []
@@ -212,12 +214,31 @@ async function saveCommands() {
       return
     }
 
-    await CommandGroupAPI.saveCommands(lines)
+    const groups = await CommandGroupAPI.listCommandGroups()
+    const defaultGroup = (groups || []).find((group: CommandGroup) => group.name === '默认命令组')
+
+    if (defaultGroup) {
+      await CommandGroupAPI.updateCommandGroup(defaultGroup.id, {
+        ...defaultGroup,
+        commands: lines,
+      })
+    } else {
+      await CommandGroupAPI.createCommandGroup({
+        id: 0,
+        name: '默认命令组',
+        description: '自动生成的默认命令组',
+        commands: lines,
+        tags: [],
+        createdAt: '',
+        updatedAt: '',
+      } as any)
+    }
+
     localCommands.value = lines
     isEditing.value = false
     editContent.value = ''
     lastSaved.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-    
+
     // 触发事件通知父组件
     emit('saved', lines)
   } catch (err: any) {

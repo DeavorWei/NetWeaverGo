@@ -46,9 +46,6 @@ const (
 	// EventBufferSize 事件缓冲区大小
 	EventBufferSize = 1000
 
-	// FallbackEventCapacity 后备事件存储容量
-	FallbackEventCapacity = 500
-
 	// MaxConcurrentDevices 最大并发设备数
 	MaxConcurrentDevices = 100
 )

@@ -108,37 +108,6 @@ func (l *DetailLogger) WriteNormalizedLines(lines []string) error {
 	return l.writer.Flush()
 }
 
-// WriteChunk 写入输出块。
-// 注意：此方法已废弃，仅保留向后兼容。
-// 新代码应使用 WriteNormalizedText 或 WriteNormalizedLines。
-//
-// Deprecated: 使用 WriteNormalizedText 代替
-func (l *DetailLogger) WriteChunk(chunk string) error {
-	// 不再做终端修复，只做基本的换行标准化
-	cleaned := strings.ReplaceAll(chunk, "\r\n", "\n")
-	cleaned = strings.ReplaceAll(cleaned, "\r", "\n")
-	cleaned = strings.ReplaceAll(cleaned, "\x00", "")
-
-	if cleaned == "" {
-		return nil
-	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	l.pending += cleaned
-	lines := strings.Split(l.pending, "\n")
-	l.pending = lines[len(lines)-1]
-
-	for _, line := range lines[:len(lines)-1] {
-		if err := l.writeLineLocked(line); err != nil {
-			return err
-		}
-	}
-
-	return l.writer.Flush()
-}
-
 // FlushPending 刷新未完成的尾部内容。
 func (l *DetailLogger) FlushPending() error {
 	l.mu.Lock()

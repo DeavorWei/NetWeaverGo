@@ -112,7 +112,6 @@ type SSHAlgorithmSettings struct {
 // GlobalSettings 全局运行参数
 type GlobalSettings struct {
 	ID             uint   `json:"id" gorm:"primaryKey"`
-	MaxWorkers     int    `json:"maxWorkers"`     // 并发数 (当前硬编码为 32)
 	ConnectTimeout string `json:"connectTimeout"` // SSH/SFTP 连接超时 (如 "10s")
 	CommandTimeout string `json:"commandTimeout"` // 单条命令默认超时 (如 "30s")
 	StorageRoot    string `json:"storageRoot"`    // 统一数据根目录

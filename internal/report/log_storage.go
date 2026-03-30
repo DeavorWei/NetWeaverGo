@@ -52,12 +52,12 @@ func (s *DeviceLogSession) WriteDetailCommand(command string) error {
 	return s.Detail.WriteCommand(command)
 }
 
-// WriteDetailChunk 记录并清洗 SSH 输出块。
+// WriteDetailChunk 记录规范化后的 SSH 输出文本。
 func (s *DeviceLogSession) WriteDetailChunk(chunk string) error {
 	if s == nil || s.Detail == nil {
 		return nil
 	}
-	return s.Detail.WriteChunk(chunk)
+	return s.Detail.WriteNormalizedText(chunk)
 }
 
 // FlushDetail 刷新详细日志尾部缓冲。

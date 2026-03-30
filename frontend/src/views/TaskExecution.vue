@@ -119,43 +119,43 @@
 
         <!-- 设备卡片网格 -->
         <div class="flex-1 overflow-auto scrollbar-custom min-h-0 relative" ref="devicesContainer">
-          <div v-if="execDevices.length === 0 && (isRunning || awaitingSnapshot)" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
+          <div v-if="executionUnits.length === 0 && (isRunning || awaitingSnapshot)" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
             <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
             <p class="text-sm">正在初始化任务...</p>
           </div>
           <div v-else>
-            <div v-if="execDevices.length > 50" class="text-xs text-text-muted mb-2 px-1">
-              共 {{ execDevices.length }} 台设备，显示前 {{ visibleDeviceCount }} 台活跃设备
-              <button v-if="execDevices.length > visibleDeviceCount" @click="showAllDevices = !showAllDevices" class="ml-2 text-accent hover:underline">
+            <div v-if="executionUnits.length > 50" class="text-xs text-text-muted mb-2 px-1">
+              共 {{ executionUnits.length }} 台设备，显示前 {{ visibleUnitCount }} 台活跃设备
+              <button v-if="executionUnits.length > visibleUnitCount" @click="showAllDevices = !showAllDevices" class="ml-2 text-accent hover:underline">
                 {{ showAllDevices ? '收起' : '显示全部' }}
               </button>
             </div>
             
             <div class="grid grid-cols-3 gap-4">
               <div
-                v-for="dev in visibleDevices"
-                :key="dev.ip"
+                v-for="unit in visibleUnits"
+                :key="unit.id"
                 class="bg-bg-card border rounded-xl overflow-hidden shadow-card transition-all duration-300"
-                :class="statusBorder(dev.status)"
+                :class="statusBorder(unit.status)"
               >
                 <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-panel">
-                  <span class="font-mono text-sm font-semibold text-text-primary">{{ dev.ip }}</span>
-                  <span class="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border" :class="statusBadge(dev.status)">
-                    <span class="w-1.5 h-1.5 rounded-full" :class="statusDot(dev.status)"></span>
-                    {{ statusLabel(dev.status) }}
+                  <span class="font-mono text-sm font-semibold text-text-primary">{{ unit.targetKey }}</span>
+                  <span class="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border" :class="statusBadge(unit.status)">
+                    <span class="w-1.5 h-1.5 rounded-full" :class="statusDot(unit.status)"></span>
+                    {{ statusLabel(unit.status) }}
                   </span>
                 </div>
                 <VirtualLogTerminal
-                  :logs="dev.logs || []"
-                  :total-count="dev.logCount || 0"
-                  :truncated="dev.truncated || false"
-                  :device-ip="dev.ip"
+                  :logs="unit.logs || []"
+                  :total-count="unit.logCount || 0"
+                  :truncated="unit.truncated || false"
+                  :device-ip="unit.targetKey"
                 />
               </div>
             </div>
             
-            <div v-if="!showAllDevices && execDevices.length > visibleDeviceCount" class="text-center py-4 text-text-muted text-sm">
-              还有 {{ execDevices.length - visibleDeviceCount }} 台设备已完成或等待中
+            <div v-if="!showAllDevices && executionUnits.length > visibleUnitCount" class="text-center py-4 text-text-muted text-sm">
+              还有 {{ executionUnits.length - visibleUnitCount }} 台设备已完成或等待中
               <button @click="showAllDevices = true" class="ml-2 text-accent hover:underline">显示全部</button>
             </div>
           </div>
@@ -381,7 +381,6 @@ import {
 import type {
   CommandGroup,
   DeviceAsset,
-  DeviceViewState,
   TaskGroup,
   TaskGroupDetailViewModel,
   TaskGroupListView
@@ -488,22 +487,6 @@ const progressPercent = computed(() => {
 
   return snapshot.progress ?? 0
 })
-// 从 units 转换为 devices 视图（兼容旧 UI）
-const execDevices = computed<DeviceViewState[]>(() => {
-  const units = (executionSnapshot.value as any)?.units as UnitSnapshot[] || []
-  return units.map((unit: UnitSnapshot) => ({
-    ip: unit.targetKey,
-    name: unit.targetKey,
-    status: mapUnitStatusToDeviceStatus(unit.status),
-    progress: unit.progress,
-    output: unit.errorMessage || '',
-    error: unit.errorMessage,
-    logs: Array.isArray(unit.logs) ? unit.logs : (unit.errorMessage ? [unit.errorMessage] : []),
-    logCount: typeof unit.logCount === 'number' ? unit.logCount : (Array.isArray(unit.logs) ? unit.logs.length : 0),
-    truncated: Boolean(unit.truncated)
-  }))
-})
-
 // ================== 统一运行时 Stage/Unit 数据 (新增) ==================
 const executionStages = computed<StageSnapshot[]>(() => {
   return (executionSnapshot.value as any)?.stages || []
@@ -513,34 +496,21 @@ const executionUnits = computed<UnitSnapshot[]>(() => {
   return (executionSnapshot.value as any)?.units || []
 })
 
-// 将 Unit 状态映射到 Device 状态
-function mapUnitStatusToDeviceStatus(unitStatus: string): DeviceViewState['status'] {
-  switch (unitStatus) {
-    case 'pending': return 'idle'
-    case 'running': return 'running'
-    case 'completed': return 'success'
-    case 'partial': return 'error'
-    case 'failed': return 'error'
-    case 'cancelled': return 'aborted'
-    default: return 'waiting'
-  }
-}
-
 // ================== 虚拟滚动优化计算属性 ==================
-const visibleDeviceCount = computed(() => 
-  showAllDevices.value ? execDevices.value.length : VISIBLE_DEVICE_LIMIT
+const visibleUnitCount = computed(() =>
+  showAllDevices.value ? executionUnits.value.length : VISIBLE_DEVICE_LIMIT
 )
 
-const visibleDevices = computed(() => {
-  const devices = execDevices.value as DeviceViewState[]
+const visibleUnits = computed(() => {
+  const units = executionUnits.value
   
   if (showAllDevices.value) {
-    return devices
+    return units
   }
   
-  const activeStatuses = ['running', 'error', 'waiting']
-  const active = devices.filter((d: DeviceViewState) => activeStatuses.includes(d.status))
-  const inactive = devices.filter((d: DeviceViewState) => !activeStatuses.includes(d.status))
+  const activeStatuses = ['running', 'failed', 'partial', 'pending']
+  const active = units.filter((unit: UnitSnapshot) => activeStatuses.includes(unit.status))
+  const inactive = units.filter((unit: UnitSnapshot) => !activeStatuses.includes(unit.status))
   
   if (active.length >= VISIBLE_DEVICE_LIMIT) {
     return active.slice(0, VISIBLE_DEVICE_LIMIT)
@@ -1068,35 +1038,45 @@ async function saveTaskEdit(payload: TaskGroup) {
 function statusBorder(s: string) {
   switch (s) {
     case 'running': return 'border-accent/50'
-    case 'success': return 'border-success/50'
-    case 'error':   return 'border-error/50'
-    case 'aborted': return 'border-error/50'
-    case 'waiting': return 'border-warning/40'
-    default:        return 'border-border'
+    case 'completed': return 'border-success/50'
+    case 'failed':
+    case 'partial':
+    case 'cancelled': return 'border-error/50'
+    case 'pending': return 'border-warning/40'
+    default: return 'border-border'
   }
 }
 function statusBadge(s: string) {
   switch (s) {
     case 'running': return 'bg-accent/10 border-accent/30 text-accent'
-    case 'success': return 'bg-success/10 border-success/30 text-success'
-    case 'error':   return 'bg-error/10 border-error/30 text-error'
-    case 'aborted': return 'bg-error/10 border-error/30 text-error'
-    case 'waiting': return 'bg-warning/10 border-warning/30 text-warning'
-    default:        return 'bg-bg-panel border-border text-text-muted'
+    case 'completed': return 'bg-success/10 border-success/30 text-success'
+    case 'failed':
+    case 'partial':
+    case 'cancelled': return 'bg-error/10 border-error/30 text-error'
+    case 'pending': return 'bg-warning/10 border-warning/30 text-warning'
+    default: return 'bg-bg-panel border-border text-text-muted'
   }
 }
 function statusDot(s: string) {
   switch (s) {
     case 'running': return 'bg-accent animate-pulse'
-    case 'success': return 'bg-success'
-    case 'error':   return 'bg-error'
-    case 'aborted': return 'bg-error'
-    case 'waiting': return 'bg-warning animate-pulse'
-    default:        return 'bg-text-muted'
+    case 'completed': return 'bg-success'
+    case 'failed':
+    case 'partial':
+    case 'cancelled': return 'bg-error'
+    case 'pending': return 'bg-warning animate-pulse'
+    default: return 'bg-text-muted'
   }
 }
 function statusLabel(s: string) {
-  const map: Record<string, string> = { running: '执行中', success: '成功', error: '失败', aborted: '已终止', waiting: '等待', idle: '空闲' }
+  const map: Record<string, string> = {
+    pending: '等待中',
+    running: '执行中',
+    completed: '成功',
+    partial: '部分完成',
+    failed: '失败',
+    cancelled: '已终止',
+  }
   return map[s] ?? s
 }
 // 任务状态样式

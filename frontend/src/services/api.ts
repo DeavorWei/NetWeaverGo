@@ -80,10 +80,6 @@ export const CommandGroupAPI = {
   importCommandGroup: CommandGroupServiceBinding.ImportCommandGroup,
   /** 导出命令组 */
   exportCommandGroup: CommandGroupServiceBinding.ExportCommandGroup,
-  /** 获取命令列表 */
-  getCommands: CommandGroupServiceBinding.GetCommands,
-  /** 保存命令列表 */
-  saveCommands: CommandGroupServiceBinding.SaveCommands,
 } as const
 
 // ==================== 设置管理 API ====================
@@ -223,22 +219,6 @@ export type {
 
 // ExecutionSnapshot 从统一运行时导出
 export type { ExecutionSnapshot, StageSnapshot, UnitSnapshot, EventSnapshot } from '../types/taskexec'
-
-// DeviceViewState 类型（兼容旧 UI，从 units 数据转换）
-export interface DeviceViewState {
-  ip: string
-  name?: string
-  status: 'idle' | 'running' | 'success' | 'error' | 'aborted' | 'waiting'
-  progress: number
-  output?: string
-  error?: string
-  suspended?: boolean
-  command?: string
-  // 日志相关属性
-  logs?: string[]
-  logCount?: number
-  truncated?: boolean
-}
 
 export interface TopologyBuildResult {
   taskId: string
