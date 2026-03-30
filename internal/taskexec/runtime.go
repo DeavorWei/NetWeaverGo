@@ -315,6 +315,8 @@ func (m *RuntimeManager) GetSnapshotDelta(runID string) (*SnapshotDelta, error) 
 	if delta, ok := m.snapshotHub.BuildDelta(runID); ok && delta != nil {
 		if delta.Snapshot != nil {
 			m.enrichSnapshotWithLogs(runID, delta.Snapshot)
+		} else {
+			m.enrichDeltaUnitOpsWithLogs(runID, delta)
 		}
 		return delta, nil
 	}
@@ -554,17 +556,47 @@ func (m *RuntimeManager) enrichSnapshotWithLogs(runID string, snapshot *Executio
 	enrichSnapshotWithStore(store, snapshot)
 }
 
+func (m *RuntimeManager) enrichDeltaUnitOpsWithLogs(runID string, delta *SnapshotDelta) {
+	if delta == nil || len(delta.Ops) == 0 {
+		return
+	}
+
+	m.mu.RLock()
+	store := m.logStores[runID]
+	m.mu.RUnlock()
+	if store == nil {
+		return
+	}
+
+	maxLogs := resolveMaxLogsPerDevice()
+	for idx := range delta.Ops {
+		op := &delta.Ops[idx]
+		if op == nil || op.Type != SnapshotDeltaOpUnitUpsert || op.Unit == nil {
+			continue
+		}
+		unit := op.Unit
+		if unit.TargetType != "device_ip" || unit.TargetKey == "" {
+			continue
+		}
+
+		logs, logCount := storeLogsForUnit(store, unit.TargetKey, maxLogs)
+		paths := store.GetDeviceLogPaths(unit.TargetKey)
+		unit.Logs = logs
+		unit.LogCount = logCount
+		unit.Truncated = logCount > len(logs)
+		unit.SummaryLogPath = paths.SummaryPath
+		unit.DetailLogPath = paths.DetailPath
+		unit.RawLogPath = paths.RawPath
+		unit.JournalLogPath = paths.JournalPath
+	}
+}
+
 func enrichSnapshotWithStore(store *report.ExecutionLogStore, snapshot *ExecutionSnapshot) {
 	if store == nil {
 		return
 	}
 
-	maxLogs := 30
-	if manager := config.GetRuntimeManagerIfInitialized(); manager != nil {
-		if configured := manager.GetMaxLogsPerDevice(); configured > 0 {
-			maxLogs = configured
-		}
-	}
+	maxLogs := resolveMaxLogsPerDevice()
 
 	for idx := range snapshot.Units {
 		unit := &snapshot.Units[idx]
@@ -588,6 +620,16 @@ func enrichSnapshotWithStore(store *report.ExecutionLogStore, snapshot *Executio
 				snapshot.RunID, logCount, len(logs), unit.SummaryLogPath != "", unit.DetailLogPath != "", unit.RawLogPath != "", unit.JournalLogPath != "")
 		}
 	}
+}
+
+func resolveMaxLogsPerDevice() int {
+	maxLogs := 30
+	if manager := config.GetRuntimeManagerIfInitialized(); manager != nil {
+		if configured := manager.GetMaxLogsPerDevice(); configured > 0 {
+			maxLogs = configured
+		}
+	}
+	return maxLogs
 }
 
 func storeLogsForUnit(store *report.ExecutionLogStore, unitKey string, maxLogs int) ([]string, int) {

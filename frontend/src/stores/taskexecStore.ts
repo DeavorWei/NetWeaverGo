@@ -159,17 +159,46 @@ export const useTaskexecStore = defineStore('taskexec', () => {
 
   function upsertUnit(snapshot: ExecutionSnapshot, unit: NonNullable<SnapshotDeltaOp['unit']>) {
     const idx = snapshot.units.findIndex(item => item.id === unit.id)
+    const existing = idx >= 0 ? snapshot.units[idx] : undefined
+
+    const mergedUnit = {
+      ...(existing ?? {}),
+      ...unit,
+    } as ExecutionSnapshot['units'][number]
+
+    if (unit.logs !== undefined) {
+      mergedUnit.logs = [...unit.logs]
+    } else if (existing?.logs) {
+      mergedUnit.logs = [...existing.logs]
+    } else {
+      mergedUnit.logs = undefined
+    }
+
+    if (unit.logCount === undefined && existing?.logCount !== undefined) {
+      mergedUnit.logCount = existing.logCount
+    }
+    if (unit.truncated === undefined && existing?.truncated !== undefined) {
+      mergedUnit.truncated = existing.truncated
+    }
+    if (unit.summaryLogPath === undefined && existing?.summaryLogPath !== undefined) {
+      mergedUnit.summaryLogPath = existing.summaryLogPath
+    }
+    if (unit.detailLogPath === undefined && existing?.detailLogPath !== undefined) {
+      mergedUnit.detailLogPath = existing.detailLogPath
+    }
+    if (unit.rawLogPath === undefined && existing?.rawLogPath !== undefined) {
+      mergedUnit.rawLogPath = existing.rawLogPath
+    }
+    if (unit.journalLogPath === undefined && existing?.journalLogPath !== undefined) {
+      mergedUnit.journalLogPath = existing.journalLogPath
+    }
+
     if (idx >= 0) {
-      snapshot.units[idx] = {
-        ...unit,
-        logs: unit.logs ? [...unit.logs] : undefined,
-      }
+      snapshot.units[idx] = mergedUnit
       return
     }
-    snapshot.units.push({
-      ...unit,
-      logs: unit.logs ? [...unit.logs] : undefined,
-    })
+
+    snapshot.units.push(mergedUnit)
   }
 
   function appendEvent(snapshot: ExecutionSnapshot, event: NonNullable<SnapshotDeltaOp['event']>) {

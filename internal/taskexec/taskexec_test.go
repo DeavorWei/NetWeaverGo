@@ -459,6 +459,78 @@ func TestRuntimeManagerGetSnapshotDelta(t *testing.T) {
 	assert.Equal(t, 35, *delta.Ops[0].Progress)
 }
 
+func TestRuntimeManagerGetSnapshotDeltaEnrichesUnitUpsertLogs(t *testing.T) {
+	useTempStorageRoot(t)
+
+	db := setupTestDB(t)
+	repo := NewGormRepository(db)
+	eventBus := NewEventBus(100)
+	snapshotHub := NewSnapshotHub(eventBus)
+	runtime := NewRuntimeManager(repo, eventBus, snapshotHub)
+
+	run := &TaskRun{
+		ID:        "delta-run-logs-1",
+		Name:      "delta-log-enrich-test",
+		RunKind:   string(RunKindNormal),
+		Status:    string(RunStatusRunning),
+		Progress:  0,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, repo.CreateRun(context.Background(), run))
+	require.True(t, snapshotHub.EnsureRun(run))
+
+	unit := &TaskRunUnit{
+		ID:             "delta-unit-logs-1",
+		TaskRunID:      run.ID,
+		TaskRunStageID: "stage-logs-1",
+		UnitKind:       string(UnitKindDevice),
+		TargetType:     "device_ip",
+		TargetKey:      "10.0.0.9",
+		Status:         string(UnitStatusRunning),
+		TotalSteps:     3,
+		DoneSteps:      1,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+	require.True(t, snapshotHub.UpsertUnit(run.ID, unit))
+
+	store, err := report.NewExecutionLogStore(run.Name, time.Now())
+	require.NoError(t, err)
+	defer store.Close()
+
+	session, err := store.EnsureDevice(unit.TargetKey, false)
+	require.NoError(t, err)
+	require.NoError(t, session.WriteSummary("增量日志补齐验证"))
+
+	runtime.mu.Lock()
+	runtime.logStores[run.ID] = store
+	runtime.mu.Unlock()
+
+	delta, err := runtime.GetSnapshotDelta(run.ID)
+	require.NoError(t, err)
+	require.NotNil(t, delta)
+	require.Nil(t, delta.Snapshot)
+	require.NotEmpty(t, delta.Ops)
+
+	foundUnitUpsert := false
+	for _, op := range delta.Ops {
+		if op.Type != SnapshotDeltaOpUnitUpsert || op.Unit == nil {
+			continue
+		}
+		if op.Unit.ID != unit.ID {
+			continue
+		}
+		foundUnitUpsert = true
+		assert.Equal(t, 1, op.Unit.LogCount)
+		require.Len(t, op.Unit.Logs, 1)
+		assert.Contains(t, op.Unit.Logs[0], "增量日志补齐验证")
+		assert.NotEmpty(t, op.Unit.SummaryLogPath)
+		break
+	}
+	assert.True(t, foundUnitUpsert)
+}
+
 func TestTaskExecutionServiceGetSnapshotDelta(t *testing.T) {
 	db := setupTestDB(t)
 	service := NewTaskExecutionService(db)
