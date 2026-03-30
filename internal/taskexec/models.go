@@ -111,6 +111,7 @@ type TaskRunStage struct {
 	SuccessUnits   int        `json:"successUnits"`
 	FailedUnits    int        `json:"failedUnits"`
 	CancelledUnits int        `json:"cancelledUnits"`
+	PartialUnits   int        `json:"partialUnits"`
 	StartedAt      *time.Time `json:"startedAt"`
 	FinishedAt     *time.Time `json:"finishedAt"`
 	CreatedAt      time.Time  `json:"createdAt"`
@@ -203,6 +204,7 @@ type StagePatch struct {
 	SuccessUnits   *int       `json:"successUnits,omitempty"`
 	FailedUnits    *int       `json:"failedUnits,omitempty"`
 	CancelledUnits *int       `json:"cancelledUnits,omitempty"`
+	PartialUnits   *int       `json:"partialUnits,omitempty"`
 	StartedAt      *time.Time `json:"startedAt,omitempty"`
 	FinishedAt     *time.Time `json:"finishedAt,omitempty"`
 }

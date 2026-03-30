@@ -35,6 +35,7 @@ export interface StageSnapshot {
   successUnits: number
   failedUnits: number
   cancelledUnits: number
+  partialUnits: number
   startedAt?: string | null
   finishedAt?: string | null
 }
@@ -113,7 +114,9 @@ export const StatusNames: Record<string, string> = {
   'completed': '已完成',
   'partial': '部分完成',
   'failed': '失败',
-  'cancelled': '已取消'
+  'cancelled': '已取消',
+  'aborted': '已中止',
+  'skipped': '已跳过'
 }
 
 /** 状态颜色类名 */
@@ -123,7 +126,9 @@ export const StatusColorClasses: Record<string, string> = {
   'completed': 'text-success',
   'partial': 'text-warning',
   'failed': 'text-error',
-  'cancelled': 'text-text-muted'
+  'cancelled': 'text-text-muted',
+  'aborted': 'text-error',
+  'skipped': 'text-text-muted'
 }
 
 /** 状态背景色类名 */
@@ -133,5 +138,7 @@ export const StatusBgClasses: Record<string, string> = {
   'completed': 'bg-success/20',
   'partial': 'bg-warning/20',
   'failed': 'bg-error/20',
-  'cancelled': 'bg-bg-panel'
+  'cancelled': 'bg-bg-panel',
+  'aborted': 'bg-error/20',
+  'skipped': 'bg-bg-panel'
 }

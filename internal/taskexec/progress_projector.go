@@ -12,6 +12,7 @@ type projectedStageCompletion struct {
 	SuccessUnits   int
 	FailedUnits    int
 	CancelledUnits int
+	PartialUnits   int
 }
 
 func applyProjectedStageProgress(
@@ -56,7 +57,7 @@ func projectRunProgressFromStages(stages []TaskRunStage) int {
 }
 
 func projectRunFinalStatus(stages []TaskRunStage) string {
-	var failedCount, partialCount, cancelledCount int
+	var failedCount, partialCount, cancelledCount, skippedCount int
 	for _, stage := range stages {
 		switch stage.Status {
 		case string(StageStatusFailed):
@@ -65,7 +66,19 @@ func projectRunFinalStatus(stages []TaskRunStage) string {
 			partialCount++
 		case string(StageStatusCancelled):
 			cancelledCount++
+		case string(StageStatusSkipped):
+			skippedCount++
 		}
+	}
+
+	// 关键阶段失败导致后续阶段跳过，整体为 aborted
+	if skippedCount > 0 && failedCount > 0 {
+		return string(RunStatusAborted)
+	}
+
+	// 所有阶段都被跳过
+	if skippedCount == len(stages) && len(stages) > 0 {
+		return string(RunStatusAborted)
 	}
 
 	if cancelledCount == len(stages) && len(stages) > 0 {
@@ -74,7 +87,7 @@ func projectRunFinalStatus(stages []TaskRunStage) string {
 	if failedCount == len(stages) && len(stages) > 0 {
 		return string(RunStatusFailed)
 	}
-	if failedCount > 0 || partialCount > 0 || cancelledCount > 0 {
+	if failedCount > 0 || partialCount > 0 || cancelledCount > 0 || skippedCount > 0 {
 		return string(RunStatusPartial)
 	}
 	return string(RunStatusCompleted)
@@ -97,6 +110,7 @@ func projectStageCompletion(units []TaskRunUnit, runtimeCancelled bool) projecte
 			result.CancelledUnits++
 		case UnitStatusPartial:
 			result.CompletedUnits++
+			result.PartialUnits++
 		}
 	}
 
@@ -109,9 +123,9 @@ func projectStageCompletion(units []TaskRunUnit, runtimeCancelled bool) projecte
 		result.Status = string(StageStatusCompleted)
 	} else if result.CancelledUnits == total {
 		result.Status = string(StageStatusCancelled)
-	} else if result.FailedUnits > 0 && result.SuccessUnits == 0 && result.CancelledUnits == 0 {
+	} else if result.FailedUnits > 0 && result.SuccessUnits == 0 && result.CancelledUnits == 0 && result.PartialUnits == 0 {
 		result.Status = string(StageStatusFailed)
-	} else if result.FailedUnits > 0 || result.CancelledUnits > 0 {
+	} else if result.FailedUnits > 0 || result.CancelledUnits > 0 || result.PartialUnits > 0 {
 		result.Status = string(StageStatusPartial)
 	}
 	if runtimeCancelled && result.CompletedUnits < total {
@@ -145,6 +159,7 @@ func applyProjectedStageCompletion(
 		SuccessUnits:   &projection.SuccessUnits,
 		FailedUnits:    &projection.FailedUnits,
 		CancelledUnits: &projection.CancelledUnits,
+		PartialUnits:   &projection.PartialUnits,
 		FinishedAt:     &finishedAt,
 	}, operation)
 	return projection

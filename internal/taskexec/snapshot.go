@@ -36,6 +36,7 @@ type StageSnapshot struct {
 	SuccessUnits   int        `json:"successUnits"`
 	FailedUnits    int        `json:"failedUnits"`
 	CancelledUnits int        `json:"cancelledUnits"`
+	PartialUnits   int        `json:"partialUnits"`
 	StartedAt      *time.Time `json:"startedAt"`
 	FinishedAt     *time.Time `json:"finishedAt"`
 }
@@ -192,6 +193,7 @@ func NewStageSnapshotFromModel(stage *TaskRunStage) StageSnapshot {
 		SuccessUnits:   stage.SuccessUnits,
 		FailedUnits:    stage.FailedUnits,
 		CancelledUnits: stage.CancelledUnits,
+		PartialUnits:   stage.PartialUnits,
 		StartedAt:      stage.StartedAt,
 		FinishedAt:     stage.FinishedAt,
 	}

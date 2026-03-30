@@ -185,6 +185,42 @@ func (e *DeviceExecutor) ExecutePlaybookWithEvents(
 	return nil
 }
 
+// ExecutePlaybookWithReport 执行 Playbook 并返回完整报告
+// 与 ExecutePlaybookWithEvents 不同，此方法不因命令失败而返回错误
+// 调用方可以根据 report.SuccessCount() 和 report.FailureCount() 判断执行状态
+func (e *DeviceExecutor) ExecutePlaybookWithReport(
+	ctx context.Context,
+	commands []string,
+	cmdTimeout time.Duration,
+	eventCallback func(event ExecutionEvent),
+) (*ExecutionReport, error) {
+	logger.Debug("Executor", e.IP, "开始执行 Playbook (%d 条)", len(commands))
+	if e.Client == nil {
+		return nil, fmt.Errorf("执行器未安全建连")
+	}
+
+	// 将命令列表转换为 PlannedCommand
+	plannedCmds := make([]PlannedCommand, len(commands))
+	for i, cmd := range commands {
+		plannedCmds[i] = PlannedCommand{
+			Key:             fmt.Sprintf("cmd_%d", i),
+			Command:         cmd,
+			Timeout:         cmdTimeout,
+			ContinueOnError: true,
+		}
+	}
+
+	plan := ExecutionPlan{
+		Name:               "playbook",
+		Commands:           plannedCmds,
+		ContinueOnCmdError: true,
+		Mode:               PlanModePlaybook,
+	}
+
+	// 直接返回 report，不因命令失败而返回错误
+	return e.executeInternal(ctx, plan, eventCallback)
+}
+
 // ExecutePlan 执行统一执行计划
 // 这是 discovery、engine 等批量路径唯一应使用的统一入口。
 // 方案三实现：初始化命令与业务命令并入同一条 StreamEngine 状态机路径执行。

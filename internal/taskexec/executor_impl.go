@@ -258,33 +258,68 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		})
 	}
 
-	if err := exec.ExecutePlaybookWithEvents(execCtx, commands, cmdTimeout, commandEventHandler); err != nil {
+	report, err := exec.ExecutePlaybookWithReport(execCtx, commands, cmdTimeout, commandEventHandler)
+
+	if err != nil {
 		if IsContextCancelled(ctx, err) {
 			projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionCancelled, "命令执行过程中收到取消信号", len(commands), 0)
 			return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled during command execution", intPtrLocal(len(commands)))
 		}
+		// 连接级错误，整个 Unit 失败
 		logger.Error("TaskExec", ctx.RunID(), "Failed to execute commands on %s: %v", deviceIP, err)
 		errMsg := fmt.Sprintf("command execution failed: %v", err)
-		doneSteps := len(commands)
-		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入命令执行失败状态", &doneSteps)
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入命令执行失败状态", intPtrLocal(len(commands)))
 		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Command execution failed: %v", err))
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, fmt.Sprintf("命令执行失败: %v", err), len(commands), 0)
 		return err
 	}
 
-	doneSteps := len(commands)
-	if err := completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), doneSteps, "写入命令执行完成状态"); err != nil {
+	// 根据 report 计算 Unit 状态
+	var unitStatus string
+	var doneSteps int
+	var successCount, failureCount int
+
+	if report != nil {
+		doneSteps = len(report.Results)
+		successCount = report.SuccessCount()
+		failureCount = report.FailureCount()
+
+		if failureCount == 0 {
+			unitStatus = string(UnitStatusCompleted)
+		} else if successCount == 0 {
+			unitStatus = string(UnitStatusFailed)
+		} else {
+			unitStatus = string(UnitStatusPartial)
+		}
+	} else {
+		unitStatus = string(UnitStatusFailed)
+		doneSteps = len(commands)
+	}
+
+	// 根据状态选择日志级别
+	eventLevel := EventLevelInfo
+	lifecycleRecord := recordExecutionSucceeded
+	if unitStatus == string(UnitStatusFailed) {
+		eventLevel = EventLevelError
+		lifecycleRecord = recordExecutionFailed
+	} else if unitStatus == string(UnitStatusPartial) {
+		eventLevel = EventLevelWarn
+	}
+
+	if err := completeUnitExecution(handler, ctx, unit.ID, unitStatus, doneSteps, "写入命令执行状态"); err != nil {
 		return err
 	}
+
 	if reportProgress != nil {
 		reportProgress(doneSteps, len(commands))
 	}
 
-	// Success
-	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelInfo, fmt.Sprintf("Successfully executed %d commands on %s", len(commands), deviceIP))
-	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionSucceeded, fmt.Sprintf("设备执行完成，成功命令数: %d", len(commands)), len(commands), len(commands))
+	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, eventLevel,
+		fmt.Sprintf("Executed %d commands on %s: %d success, %d failed", len(commands), deviceIP, successCount, failureCount))
+	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, lifecycleRecord,
+		fmt.Sprintf("设备执行完成: status=%s, success=%d, failed=%d", unitStatus, successCount, failureCount), len(commands), successCount)
 
-	logger.Debug("TaskExec", ctx.RunID(), "Unit completed for device: %s", deviceIP)
+	logger.Debug("TaskExec", ctx.RunID(), "Unit completed for device: %s, status=%s", deviceIP, unitStatus)
 	return nil
 }
 

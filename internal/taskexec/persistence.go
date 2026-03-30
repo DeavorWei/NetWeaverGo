@@ -146,6 +146,9 @@ func (r *GormRepository) UpdateStage(ctx context.Context, stageID string, patch 
 	if patch.CancelledUnits != nil {
 		updates["cancelled_units"] = *patch.CancelledUnits
 	}
+	if patch.PartialUnits != nil {
+		updates["partial_units"] = *patch.PartialUnits
+	}
 	if patch.StartedAt != nil {
 		updates["started_at"] = *patch.StartedAt
 	}

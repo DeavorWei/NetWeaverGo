@@ -620,6 +620,10 @@ func (h *SnapshotHub) ApplyStagePatch(runID, stageID string, patch *StagePatch) 
 			stage.CancelledUnits = *patch.CancelledUnits
 			changed = true
 		}
+		if patch.PartialUnits != nil && stage.PartialUnits != *patch.PartialUnits {
+			stage.PartialUnits = *patch.PartialUnits
+			changed = true
+		}
 		if patch.StartedAt != nil && !timesEqual(stage.StartedAt, patch.StartedAt) {
 			stage.StartedAt = cloneTimePtr(patch.StartedAt)
 			changed = true
@@ -917,6 +921,7 @@ func stageSnapshotsEqual(left, right StageSnapshot) bool {
 		left.SuccessUnits == right.SuccessUnits &&
 		left.FailedUnits == right.FailedUnits &&
 		left.CancelledUnits == right.CancelledUnits &&
+		left.PartialUnits == right.PartialUnits &&
 		timesEqual(left.StartedAt, right.StartedAt) &&
 		timesEqual(left.FinishedAt, right.FinishedAt)
 }
