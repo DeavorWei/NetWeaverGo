@@ -3,9 +3,12 @@ package taskexec
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,6 +25,24 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 
 	return db
+}
+
+func useTempStorageRoot(t *testing.T) {
+	t.Helper()
+	pm := config.GetPathManager()
+	originalRoot := pm.GetStorageRoot()
+	_, originalStatErr := os.Stat(originalRoot)
+	originalExists := originalStatErr == nil
+	tempRoot := t.TempDir()
+	require.NoError(t, pm.UpdateStorageRoot(tempRoot))
+	t.Cleanup(func() {
+		if err := pm.UpdateStorageRoot(originalRoot); err != nil {
+			t.Fatalf("恢复 storage root 失败: %v", err)
+		}
+		if !originalExists {
+			_ = os.RemoveAll(originalRoot)
+		}
+	})
 }
 
 // TestAutoMigrate 测试数据库迁移
@@ -551,6 +572,149 @@ func TestRuntimeManagerProjectCancellationToStages(t *testing.T) {
 	gotStage, err := repo.GetStage(context.Background(), stage.ID)
 	require.NoError(t, err)
 	assert.Equal(t, string(StageStatusCancelled), gotStage.Status)
+}
+
+func TestRuntimeManagerFinalizeRunResourcesPersistsLogsAndEvictsRuntimeState(t *testing.T) {
+	useTempStorageRoot(t)
+
+	db := setupTestDB(t)
+	repo := NewGormRepository(db)
+	eventBus := NewEventBus(10)
+	snapshotHub := NewSnapshotHub(eventBus)
+	runtime := NewRuntimeManager(repo, eventBus, snapshotHub)
+
+	run := &TaskRun{
+		ID:        "finalize-run-1",
+		Name:      "finalize-test",
+		RunKind:   string(RunKindNormal),
+		Status:    string(RunStatusRunning),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, repo.CreateRun(context.Background(), run))
+
+	snapshot := NewExecutionSnapshotFromRun(run)
+	snapshot.Units = []UnitSnapshot{
+		{
+			ID:         "unit-finalize-1",
+			StageID:    "stage-finalize-1",
+			TargetType: "device_ip",
+			TargetKey:  "10.0.0.1",
+			Status:     string(UnitStatusRunning),
+		},
+	}
+	snapshotHub.Update(run.ID, snapshot)
+
+	store, err := report.NewExecutionLogStore(run.Name, time.Now())
+	require.NoError(t, err)
+	session, err := store.EnsureDevice("10.0.0.1", false)
+	require.NoError(t, err)
+	require.NoError(t, session.WriteSummary("命令执行失败，进入收尾"))
+
+	runCtx, cancel := context.WithCancel(context.Background())
+	runtimeCtx := &defaultRuntimeContext{
+		runID:       run.ID,
+		ctx:         runCtx,
+		cancel:      cancel,
+		repo:        repo,
+		eventBus:    eventBus,
+		logger:      newNoopRuntimeLogger(),
+		logStore:    store,
+		snapshotHub: snapshotHub,
+	}
+	defer cancel()
+
+	runtime.mu.Lock()
+	runtime.runningRuns[run.ID] = runtimeCtx
+	runtime.logStores[run.ID] = store
+	runtime.mu.Unlock()
+
+	runtime.finalizeRunResources(run.ID, nil)
+
+	runtime.mu.RLock()
+	_, runExists := runtime.runningRuns[run.ID]
+	_, storeExists := runtime.logStores[run.ID]
+	runtime.mu.RUnlock()
+	assert.False(t, runExists)
+	assert.False(t, storeExists)
+
+	got, err := runtime.GetSnapshot(run.ID)
+	require.NoError(t, err)
+	require.Len(t, got.Units, 1)
+	assert.Equal(t, 1, got.Units[0].LogCount)
+	require.Len(t, got.Units[0].Logs, 1)
+	assert.Contains(t, got.Units[0].Logs[0], "命令执行失败，进入收尾")
+	assert.NotEmpty(t, got.Units[0].SummaryLogPath)
+}
+
+func TestRuntimeManagerStopFinalizesAllRunResources(t *testing.T) {
+	useTempStorageRoot(t)
+
+	db := setupTestDB(t)
+	repo := NewGormRepository(db)
+	eventBus := NewEventBus(10)
+	snapshotHub := NewSnapshotHub(eventBus)
+	runtime := NewRuntimeManager(repo, eventBus, snapshotHub)
+
+	run := &TaskRun{
+		ID:        "stop-finalize-run-1",
+		Name:      "stop-finalize-test",
+		RunKind:   string(RunKindNormal),
+		Status:    string(RunStatusRunning),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, repo.CreateRun(context.Background(), run))
+
+	snapshot := NewExecutionSnapshotFromRun(run)
+	snapshot.Units = []UnitSnapshot{
+		{
+			ID:         "unit-stop-1",
+			StageID:    "stage-stop-1",
+			TargetType: "device_ip",
+			TargetKey:  "10.0.0.2",
+			Status:     string(UnitStatusRunning),
+		},
+	}
+	snapshotHub.Update(run.ID, snapshot)
+
+	store, err := report.NewExecutionLogStore(run.Name, time.Now())
+	require.NoError(t, err)
+	session, err := store.EnsureDevice("10.0.0.2", false)
+	require.NoError(t, err)
+	require.NoError(t, session.WriteSummary("Stop 收尾写入摘要"))
+
+	runCtx, cancel := context.WithCancel(context.Background())
+	runtimeCtx := &defaultRuntimeContext{
+		runID:       run.ID,
+		ctx:         runCtx,
+		cancel:      cancel,
+		repo:        repo,
+		eventBus:    eventBus,
+		logger:      newNoopRuntimeLogger(),
+		logStore:    store,
+		snapshotHub: snapshotHub,
+	}
+	defer cancel()
+
+	runtime.mu.Lock()
+	runtime.runningRuns[run.ID] = runtimeCtx
+	runtime.logStores[run.ID] = store
+	runtime.mu.Unlock()
+
+	runtime.Stop()
+
+	runtime.mu.RLock()
+	assert.Empty(t, runtime.runningRuns)
+	assert.Empty(t, runtime.logStores)
+	runtime.mu.RUnlock()
+
+	got, err := runtime.GetSnapshot(run.ID)
+	require.NoError(t, err)
+	require.Len(t, got.Units, 1)
+	assert.Equal(t, 1, got.Units[0].LogCount)
+	require.Len(t, got.Units[0].Logs, 1)
+	assert.Contains(t, got.Units[0].Logs[0], "Stop 收尾写入摘要")
 }
 
 func TestFinishRunAndStageWithStatus(t *testing.T) {

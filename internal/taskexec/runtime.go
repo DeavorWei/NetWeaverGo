@@ -274,18 +274,23 @@ func (m *RuntimeManager) GetEventBus() *EventBus {
 func (m *RuntimeManager) Stop() {
 	m.eventBus.Stop()
 
-	// 取消所有运行中的任务
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, ctx := range m.runningRuns {
-		ctx.cancel()
+	m.mu.RLock()
+	runIDs := make([]string, 0, len(m.runningRuns)+len(m.logStores))
+	seen := make(map[string]struct{}, len(m.runningRuns)+len(m.logStores))
+	for runID := range m.runningRuns {
+		runIDs = append(runIDs, runID)
+		seen[runID] = struct{}{}
 	}
-	for runID, store := range m.logStores {
-		if store == nil {
+	for runID := range m.logStores {
+		if _, exists := seen[runID]; exists {
 			continue
 		}
-		logger.Debug("TaskExec", runID, "关闭运行日志存储")
-		store.Close()
+		runIDs = append(runIDs, runID)
+	}
+	m.mu.RUnlock()
+
+	for _, runID := range runIDs {
+		m.finalizeRunResources(runID, nil)
 	}
 }
 
@@ -428,11 +433,7 @@ schedule:
 // executePlan 执行计划
 func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *TaskRun, plan *ExecutionPlan) {
 	handler := NewErrorHandler(run.ID)
-	defer func() {
-		m.mu.Lock()
-		delete(m.runningRuns, run.ID)
-		m.mu.Unlock()
-	}()
+	defer m.finalizeRunResources(run.ID, runtimeCtx)
 
 	// 更新状态为运行中
 	now := time.Now()
@@ -498,6 +499,48 @@ func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *Tas
 
 	// 发射完成事件
 	emitProjectedRunEvent(runtimeCtx, EventTypeRunFinished, EventLevelInfo, fmt.Sprintf("任务完成，状态: %s", finalStatus))
+}
+
+func (m *RuntimeManager) finalizeRunResources(runID string, fallbackCtx *defaultRuntimeContext) {
+	var runtimeCtx *defaultRuntimeContext
+	var store *report.ExecutionLogStore
+
+	m.mu.Lock()
+	runtimeCtx = m.runningRuns[runID]
+	if runtimeCtx == nil {
+		runtimeCtx = fallbackCtx
+	}
+	store = m.logStores[runID]
+	if store == nil && fallbackCtx != nil {
+		store = fallbackCtx.logStore
+	}
+	delete(m.runningRuns, runID)
+	delete(m.logStores, runID)
+	m.mu.Unlock()
+
+	if runtimeCtx != nil && runtimeCtx.cancel != nil {
+		runtimeCtx.cancel()
+	}
+
+	if store == nil {
+		return
+	}
+
+	m.persistFinalSnapshotLogs(runID, store)
+	logger.Debug("TaskExec", runID, "关闭运行日志存储")
+	store.Close()
+}
+
+func (m *RuntimeManager) persistFinalSnapshotLogs(runID string, store *report.ExecutionLogStore) {
+	if m.snapshotHub == nil || store == nil {
+		return
+	}
+	snapshot, ok := m.snapshotHub.Get(runID)
+	if !ok || snapshot == nil {
+		return
+	}
+	enrichSnapshotWithStore(store, snapshot)
+	m.snapshotHub.Update(runID, snapshot)
 }
 
 func (m *RuntimeManager) enrichSnapshotWithLogs(runID string, snapshot *ExecutionSnapshot) {
