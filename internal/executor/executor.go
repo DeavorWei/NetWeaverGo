@@ -175,7 +175,7 @@ func (e *DeviceExecutor) ExecutePlaybookWithEvents(
 		return err
 	}
 
-	// 为了保持向后兼容，根据报告返回 error
+	// Playbook 对外语义：存在命令失败则返回错误。
 	if !report.IsSuccess() {
 		return fmt.Errorf("playbook 执行失败: %d/%d 个命令失败",
 			report.FailureCount(), len(commands))

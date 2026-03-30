@@ -83,10 +83,12 @@ func TestUpdateRun(t *testing.T) {
 	// 更新状态
 	newStatus := string(RunStatusRunning)
 	now := time.Now()
+	lastRunSeq := uint64(12)
 	err = repo.UpdateRun(context.Background(), run.ID, &RunPatch{
-		Status:    &newStatus,
-		Progress:  intPtr(50),
-		StartedAt: &now,
+		Status:     &newStatus,
+		Progress:   intPtr(50),
+		LastRunSeq: &lastRunSeq,
+		StartedAt:  &now,
 	})
 	require.NoError(t, err)
 
@@ -95,6 +97,7 @@ func TestUpdateRun(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, string(RunStatusRunning), found.Status)
 	assert.Equal(t, 50, found.Progress)
+	assert.Equal(t, lastRunSeq, found.LastRunSeq)
 	assert.NotNil(t, found.StartedAt)
 }
 
@@ -178,15 +181,58 @@ func TestEventBus(t *testing.T) {
 	}
 }
 
+func TestEventBusEmitMaintainsHandlerAndEventOrder(t *testing.T) {
+	bus := NewEventBus(10)
+	bus.Start()
+	defer bus.Stop()
+
+	orderCh := make(chan string, 4)
+	bus.Subscribe(func(event *TaskEvent) {
+		orderCh <- "h1:" + event.Message
+		time.Sleep(10 * time.Millisecond)
+	})
+	bus.Subscribe(func(event *TaskEvent) {
+		orderCh <- "h2:" + event.Message
+	})
+
+	bus.Emit(NewTaskEvent("run-1", EventTypeRunProgress, "A"))
+	bus.Emit(NewTaskEvent("run-1", EventTypeRunProgress, "B"))
+
+	got := make([]string, 0, 4)
+	timeout := time.After(2 * time.Second)
+	for len(got) < 4 {
+		select {
+		case msg := <-orderCh:
+			got = append(got, msg)
+		case <-timeout:
+			t.Fatalf("未在超时时间内收到完整顺序，当前=%v", got)
+		}
+	}
+
+	assert.Equal(t, []string{"h1:A", "h2:A", "h1:B", "h2:B"}, got)
+}
+
 func TestTaskEventRepositoryProjector(t *testing.T) {
 	db := setupTestDB(t)
 	repo := NewGormRepository(db)
 	projector := NewTaskEventRepositoryProjector(repo)
 
+	run := &TaskRun{
+		ID:        "run-1",
+		Name:      "投影测试",
+		RunKind:   string(RunKindNormal),
+		Status:    string(RunStatusRunning),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, repo.CreateRun(context.Background(), run))
+
 	event := NewTaskEvent("run-1", EventTypeRunProgress, "任务推进").
 		WithStage("stage-1").
 		WithUnit("unit-1").
-		WithPayload("progress", 50)
+		WithPayload("progress", 50).
+		WithPayload("runSeq", 7).
+		WithPayload("sessionSeq", 3)
 
 	projector(event)
 
@@ -198,7 +244,13 @@ func TestTaskEventRepositoryProjector(t *testing.T) {
 	assert.Equal(t, string(EventTypeRunProgress), events[0].EventType)
 	assert.Equal(t, "stage-1", events[0].StageID)
 	assert.Equal(t, "unit-1", events[0].UnitID)
+	assert.Equal(t, uint64(7), events[0].RunSeq)
+	assert.Equal(t, uint64(3), events[0].SessionSeq)
 	assert.Contains(t, events[0].PayloadJSON, "\"progress\":50")
+
+	updatedRun, err := repo.GetRun(context.Background(), "run-1")
+	require.NoError(t, err)
+	assert.Equal(t, uint64(7), updatedRun.LastRunSeq)
 }
 
 // TestSnapshotBuilder 测试快照构建
@@ -407,6 +459,29 @@ func TestTaskExecutionServiceGetSnapshotDelta(t *testing.T) {
 	require.NotNil(t, delta.Snapshot)
 	assert.Equal(t, run.ID, delta.RunID)
 	assert.Equal(t, delta.Seq, delta.Snapshot.LastRunSeq)
+}
+
+func TestRuntimeManagerGetSnapshotWithoutHubDataFails(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewGormRepository(db)
+	eventBus := NewEventBus(10)
+	snapshotHub := NewSnapshotHub(eventBus)
+	runtime := NewRuntimeManager(repo, eventBus, snapshotHub)
+
+	run := &TaskRun{
+		ID:        "snapshot-miss-run-1",
+		Name:      "snapshot-miss-test",
+		RunKind:   string(RunKindNormal),
+		Status:    string(RunStatusRunning),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, repo.CreateRun(context.Background(), run))
+
+	snapshot, err := runtime.GetSnapshot(run.ID)
+	require.Error(t, err)
+	assert.Nil(t, snapshot)
+	assert.Contains(t, err.Error(), "snapshot not found")
 }
 
 func TestRuntimeManagerProjectCancellationToStages(t *testing.T) {

@@ -150,6 +150,12 @@ const (
 	EventTypeStepStarted EventType = "step_started"
 	// EventTypeStepFinished Step结束
 	EventTypeStepFinished EventType = "step_finished"
+	// EventTypeCommandDispatched 命令已发送
+	EventTypeCommandDispatched EventType = "command_dispatched"
+	// EventTypeCommandCompleted 命令执行完成
+	EventTypeCommandCompleted EventType = "command_completed"
+	// EventTypeCommandFailed 命令执行失败
+	EventTypeCommandFailed EventType = "command_failed"
 	// EventTypeLog 日志
 	EventTypeLog EventType = "log"
 	// EventTypeWarning 警告

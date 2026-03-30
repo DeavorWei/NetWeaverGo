@@ -166,7 +166,7 @@ func (r *ExecutionReport) String() string {
 // 执行事件 (用于实时监控)
 // ============================================================================
 
-// ExecutionEventType 兼容旧链路的事件类型。
+// ExecutionEventType 执行事件类型（供结构化事实流与日志链路使用）。
 type ExecutionEventType string
 
 const (

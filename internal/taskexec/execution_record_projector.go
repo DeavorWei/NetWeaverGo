@@ -124,7 +124,17 @@ func projectExecutorRecord(
 
 	switch event.Kind {
 	case executor.RecordCommandDispatched:
-		runtimeLogger.WriteSummary(scope, fmt.Sprintf("%s[%d/%d]开始: %s", commandNoun, event.Index+1, totalCommands, event.Command))
+		message := fmt.Sprintf("%s[%d/%d]开始: %s", commandNoun, event.Index+1, totalCommands, event.Command)
+		runtimeLogger.WriteSummary(scope, message)
+		ctx.Emit(NewTaskEvent(ctx.RunID(), EventTypeCommandDispatched, message).
+			WithStage(stageID).
+			WithUnit(unitID).
+			WithLevel(EventLevelInfo).
+			WithPayload("command", event.Command).
+			WithPayload("commandIndex", event.Index).
+			WithPayload("totalCommands", totalCommands).
+			WithPayload("sessionSeq", event.SessionSeq).
+			WithPayload("kind", string(event.Kind)))
 
 	case executor.RecordCommandCompleted, executor.RecordCommandFailed:
 		doneSteps := event.Index + 1
@@ -137,11 +147,25 @@ func projectExecutorRecord(
 
 		message := fmt.Sprintf("%s[%d/%d]完成: %s", commandNoun, doneSteps, totalCommands, event.Command)
 		level := EventLevelInfo
+		lifecycleType := EventTypeCommandCompleted
 		if event.Kind == executor.RecordCommandFailed {
 			message = fmt.Sprintf("%s[%d/%d]失败: %s (%s)", commandNoun, doneSteps, totalCommands, event.Command, event.ErrorMessage)
 			level = EventLevelWarn
+			lifecycleType = EventTypeCommandFailed
 		}
 		runtimeLogger.WriteSummary(scope, message)
+
+		ctx.Emit(NewTaskEvent(ctx.RunID(), lifecycleType, message).
+			WithStage(stageID).
+			WithUnit(unitID).
+			WithLevel(level).
+			WithPayload("command", event.Command).
+			WithPayload("commandIndex", event.Index).
+			WithPayload("totalCommands", totalCommands).
+			WithPayload("sessionSeq", event.SessionSeq).
+			WithPayload("kind", string(event.Kind)).
+			WithPayload("errorMessage", event.ErrorMessage))
+
 		ctx.Emit(NewTaskEvent(ctx.RunID(), EventTypeUnitProgress, message).
 			WithStage(stageID).
 			WithUnit(unitID).

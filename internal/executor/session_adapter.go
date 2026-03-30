@@ -85,7 +85,7 @@ func (a *SessionAdapter) CurrentCommand() *CommandContext {
 	return a.newContext.Current
 }
 
-// Results 返回所有已完成的命令结果
+// Results 返回 report-only 的命令结果集合（不参与执行状态机驱动）。
 func (a *SessionAdapter) Results() []*CommandResult {
 	return a.newContext.Results
 }

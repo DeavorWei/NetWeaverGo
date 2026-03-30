@@ -78,6 +78,9 @@ func (r *GormRepository) UpdateRun(ctx context.Context, runID string, patch *Run
 	if patch.Progress != nil {
 		updates["progress"] = *patch.Progress
 	}
+	if patch.LastRunSeq != nil {
+		updates["last_run_seq"] = *patch.LastRunSeq
+	}
 	if patch.StartedAt != nil {
 		updates["started_at"] = *patch.StartedAt
 	}
@@ -230,7 +233,7 @@ func (r *GormRepository) CreateEvent(ctx context.Context, event *TaskRunEvent) e
 // GetEventsByRun 获取Run的Events
 func (r *GormRepository) GetEventsByRun(ctx context.Context, runID string, limit int) ([]TaskRunEvent, error) {
 	var events []TaskRunEvent
-	query := r.db.WithContext(ctx).Where("task_run_id = ?", runID).Order("created_at DESC")
+	query := r.db.WithContext(ctx).Where("task_run_id = ?", runID).Order("run_seq DESC, session_seq DESC, created_at DESC")
 	if limit > 0 {
 		query = query.Limit(limit)
 	}

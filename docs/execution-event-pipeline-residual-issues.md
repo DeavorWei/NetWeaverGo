@@ -67,7 +67,40 @@
 
 ---
 
+## 修复状态（2026-03-30）
+
+### P0
+
+1. **EventBus 顺序稳定性**：已修复。处理器快照按订阅 ID 排序，并在分发环节串行执行，避免 SnapshotHub/Bridge 乱序。
+   - 参考：[`snapshotHandlers()`](../internal/taskexec/eventbus.go:241)、[`dispatchLoop()`](../internal/taskexec/eventbus.go:220)
+
+2. **增量 seq 持久化**：已修复。`run_seq/session_seq` 已写入事件表，`last_run_seq` 回写 run 主记录，快照构建按持久化序号回放。
+   - 参考：[`TaskRun.LastRunSeq`](../internal/taskexec/models.go:87)、[`TaskRunEvent.RunSeq`](../internal/taskexec/models.go:156)、[`UpdateRun()`](../internal/taskexec/persistence.go:70)、[`NewTaskEventRepositoryProjector()`](../internal/taskexec/task_event_projector.go:10)、[`Build()`](../internal/taskexec/snapshot.go:338)
+
+3. **命令生命周期事实流**：已修复。已统一投影 `command_dispatched/command_completed/command_failed`。
+   - 参考：[`EventTypeCommandDispatched`](../internal/taskexec/status.go:154)、[`projectExecutorRecord()`](../internal/taskexec/execution_record_projector.go:83)
+
+### P1
+
+4. **执行链路接口语义收敛**：已修复。`Results()` 明确为 report-only，避免与事实事件语义混用。
+   - 参考：[`Results()`](../internal/executor/session_adapter.go:89)
+
+5. **兼容语义注释清理**：已修复。核心模型注释改为新主链术语。
+   - 参考：[`ExecutionEventType`](../internal/executor/execution_plan.go:170)、[`ExecutePlaybookWithEvents()`](../internal/executor/executor.go:144)
+
+6. **Projector 分层边界**：已收敛。运行时快照读取改为严格从 SnapshotHub 获取；取消运行补偿不再依赖仓库重建 fallback。
+   - 参考：[`GetSnapshot()`](../internal/taskexec/runtime.go:293)、[`CancelRun()`](../internal/taskexec/runtime.go:778)
+
+7. **跨层时序回归测试**：已补齐关键场景。新增/增强 EventBus 顺序、Projector 生命周期、Bridge 过滤与收尾、delta/snapshot 断言等测试。
+   - 参考：[`TestEventBusEmitMaintainsHandlerAndEventOrder()`](../internal/taskexec/taskexec_test.go:184)、[`TestProjectExecutorRecord_EmitsCommandLifecycleEvents()`](../internal/taskexec/execution_record_projector_test.go:136)、[`taskexec_event_bridge_test.go`](../internal/ui/taskexec_event_bridge_test.go)
+
+### P2
+
+8. **仓库级兼容/legacy 治理**：主线关键模块已完成清理；外围模块保留项不影响执行事件链路闭环，可作为后续仓库治理批次独立推进。
+
+---
+
 ## 当前结论
 
-- 核心硬切成果已经成立：前端双发删除、delta patch 协议落地、旧补发链移除。
-- 仍需围绕“顺序稳定性、序号持久化、事实流完整性、测试矩阵”继续收口，才能达到 docs 目标中的严格闭环状态。
+- 执行事件链路主线（Actor -> Projector -> Bridge -> Store）已完成硬切闭环。
+- 已通过 `go test` 与 `build.bat` 全链路验证，当前状态可作为该阶段收口基线。

@@ -84,6 +84,7 @@ type TaskRun struct {
 	Status           string         `json:"status"`  // pending / running / completed / partial / failed / cancelled / aborted
 	CurrentStage     string         `json:"currentStage"`
 	Progress         int            `json:"progress"` // 0-100
+	LastRunSeq       uint64         `gorm:"default:0" json:"lastRunSeq"`
 	StartedAt        *time.Time     `json:"startedAt"`
 	FinishedAt       *time.Time     `json:"finishedAt"`
 	CreatedAt        time.Time      `json:"createdAt"`
@@ -152,6 +153,8 @@ type TaskRunEvent struct {
 	UnitID      string    `gorm:"index" json:"unitId"`
 	EventType   string    `json:"eventType"`  // run_started, stage_started, unit_started, step_finished, etc.
 	EventLevel  string    `json:"eventLevel"` // info / warn / error
+	RunSeq      uint64    `gorm:"index" json:"runSeq"`
+	SessionSeq  uint64    `gorm:"index" json:"sessionSeq"`
 	Message     string    `json:"message"`
 	PayloadJSON string    `gorm:"type:text" json:"payloadJson"` // 扩展数据
 	CreatedAt   time.Time `json:"createdAt"`
@@ -187,6 +190,7 @@ type RunPatch struct {
 	Status       *string    `json:"status,omitempty"`
 	CurrentStage *string    `json:"currentStage,omitempty"`
 	Progress     *int       `json:"progress,omitempty"`
+	LastRunSeq   *uint64    `json:"lastRunSeq,omitempty"`
 	StartedAt    *time.Time `json:"startedAt,omitempty"`
 	FinishedAt   *time.Time `json:"finishedAt,omitempty"`
 }

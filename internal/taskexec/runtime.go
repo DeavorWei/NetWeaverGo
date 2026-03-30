@@ -121,7 +121,7 @@ func (c *defaultRuntimeContext) applyRunPatchToSnapshot(patch *RunPatch) bool {
 			patch.Status != nil, patch.CurrentStage != nil, patch.Progress != nil, patch.StartedAt != nil, patch.FinishedAt != nil)
 		return true
 	}
-	logger.Verbose("TaskExec", c.runID, "增量更新 Run 快照未命中，回退到全量重建")
+	logger.Verbose("TaskExec", c.runID, "增量更新 Run 快照未命中，执行快照重建")
 	return false
 }
 
@@ -134,7 +134,7 @@ func (c *defaultRuntimeContext) applyStagePatchToSnapshot(stageID string, patch 
 			stageID, patch.Status != nil, patch.Progress != nil, patch.CompletedUnits != nil, patch.SuccessUnits != nil, patch.FailedUnits != nil, patch.CancelledUnits != nil)
 		return true
 	}
-	logger.Verbose("TaskExec", c.runID, "增量更新 Stage 快照未命中，回退到全量重建: stage=%s", stageID)
+	logger.Verbose("TaskExec", c.runID, "增量更新 Stage 快照未命中，执行快照重建: stage=%s", stageID)
 	return false
 }
 
@@ -147,7 +147,7 @@ func (c *defaultRuntimeContext) applyUnitPatchToSnapshot(unitID string, patch *U
 			unitID, patch.Status != nil, patch.DoneSteps != nil, patch.ErrorMessage != nil, patch.StartedAt != nil, patch.FinishedAt != nil)
 		return true
 	}
-	logger.Verbose("TaskExec", c.runID, "增量更新 Unit 快照未命中，回退到全量重建: unit=%s", unitID)
+	logger.Verbose("TaskExec", c.runID, "增量更新 Unit 快照未命中，执行快照重建: unit=%s", unitID)
 	return false
 }
 
@@ -295,11 +295,11 @@ func (m *RuntimeManager) GetSnapshot(runID string) (*ExecutionSnapshot, error) {
 		return nil, fmt.Errorf("snapshot hub not initialized")
 	}
 	snapshot, ok := m.snapshotHub.Get(runID)
-	if ok && snapshot != nil {
-		m.enrichSnapshotWithLogs(runID, snapshot)
-		return snapshot, nil
+	if !ok || snapshot == nil {
+		return nil, fmt.Errorf("snapshot not found: %s", runID)
 	}
-	return m.rebuildSnapshotFromRepo(runID)
+	m.enrichSnapshotWithLogs(runID, snapshot)
+	return snapshot, nil
 }
 
 // GetSnapshotDelta 获取指定运行的快照增量。
@@ -313,33 +313,7 @@ func (m *RuntimeManager) GetSnapshotDelta(runID string) (*SnapshotDelta, error) 
 		}
 		return delta, nil
 	}
-	if _, err := m.rebuildSnapshotFromRepo(runID); err != nil {
-		return nil, err
-	}
-	delta, ok := m.snapshotHub.BuildDelta(runID)
-	if !ok || delta == nil {
-		return nil, fmt.Errorf("snapshot delta not found: %s", runID)
-	}
-	if delta.Snapshot != nil {
-		m.enrichSnapshotWithLogs(runID, delta.Snapshot)
-	}
-	return delta, nil
-}
-
-func (m *RuntimeManager) rebuildSnapshotFromRepo(runID string) (*ExecutionSnapshot, error) {
-	run, err := m.repo.GetRun(context.Background(), runID)
-	if err != nil || run == nil {
-		return nil, fmt.Errorf("snapshot not found: %s", runID)
-	}
-	stages, _ := m.repo.GetStagesByRun(context.Background(), runID)
-	units, _ := m.repo.GetUnitsByRun(context.Background(), runID)
-	events, _ := m.repo.GetEventsByRun(context.Background(), runID, 50)
-	builder := NewSnapshotBuilder()
-	snapshot := builder.Build(run, stages, units, events)
-	m.enrichSnapshotWithLogs(runID, snapshot)
-	m.snapshotHub.Update(runID, snapshot)
-	logger.Verbose("TaskExec", runID, "已从仓库重建快照: stages=%d, units=%d, events=%d", len(stages), len(units), len(events))
-	return snapshot, nil
+	return nil, fmt.Errorf("snapshot delta not found: %s", runID)
 }
 
 // ListRunningSnapshots 列出运行中的任务快照
@@ -825,7 +799,12 @@ func (m *RuntimeManager) CancelRun(runID string) error {
 		return fmt.Errorf("补偿取消运行失败: %w", updateErr)
 	}
 	if m.snapshotHub != nil {
-		if snapshot, getErr := m.rebuildSnapshotFromRepo(runID); getErr == nil && snapshot != nil {
+		if snap, ok := m.snapshotHub.Get(runID); ok && snap != nil {
+			status := string(RunStatusCancelled)
+			m.snapshotHub.ApplyRunPatch(runID, &RunPatch{
+				Status:     &status,
+				FinishedAt: &now,
+			})
 			logger.Verbose("TaskExec", runID, "补偿取消后已刷新快照缓存")
 		}
 	}

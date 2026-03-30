@@ -163,6 +163,8 @@ func NewExecutionSnapshotFromRun(run *TaskRun) *ExecutionSnapshot {
 		RunKind:              run.RunKind,
 		Status:               run.Status,
 		Progress:             run.Progress,
+		Revision:             run.LastRunSeq,
+		LastRunSeq:           run.LastRunSeq,
 		UpdatedAt:            time.Now(),
 		CurrentStage:         run.CurrentStage,
 		StartedAt:            run.StartedAt,
@@ -223,8 +225,13 @@ func NewEventSnapshotFromTaskEvent(event *TaskEvent) EventSnapshot {
 	if event == nil {
 		return EventSnapshot{}
 	}
+	seq := uint64(0)
+	if runSeq, ok := payloadUint64(event.Payload, "runSeq"); ok {
+		seq = runSeq
+	}
 	return EventSnapshot{
 		ID:        event.ID,
+		Seq:       seq,
 		Type:      string(event.Type),
 		Level:     string(event.Level),
 		StageID:   event.StageID,
@@ -337,6 +344,8 @@ func (b *SnapshotBuilder) Build(run *TaskRun, stages []TaskRunStage, units []Tas
 		RunKind:              run.RunKind,
 		Status:               run.Status,
 		Progress:             run.Progress,
+		Revision:             run.LastRunSeq,
+		LastRunSeq:           run.LastRunSeq,
 		UpdatedAt:            time.Now(),
 		CurrentStage:         run.CurrentStage,
 		StartedAt:            run.StartedAt,
@@ -363,6 +372,7 @@ func (b *SnapshotBuilder) Build(run *TaskRun, stages []TaskRunStage, units []Tas
 	for _, event := range events {
 		snapshot.Events = append(snapshot.Events, EventSnapshot{
 			ID:        event.ID,
+			Seq:       event.RunSeq,
 			Type:      event.EventType,
 			Level:     event.EventLevel,
 			StageID:   event.StageID,
@@ -370,8 +380,17 @@ func (b *SnapshotBuilder) Build(run *TaskRun, stages []TaskRunStage, units []Tas
 			Message:   event.Message,
 			Timestamp: event.CreatedAt,
 		})
+		if event.RunSeq > snapshot.LastRunSeq {
+			snapshot.LastRunSeq = event.RunSeq
+		}
+		if event.UnitID != "" && event.SessionSeq > snapshot.LastSessionSeqByUnit[event.UnitID] {
+			snapshot.LastSessionSeqByUnit[event.UnitID] = event.SessionSeq
+		}
 	}
 
+	if snapshot.Revision < snapshot.LastRunSeq {
+		snapshot.Revision = snapshot.LastRunSeq
+	}
 	return snapshot
 }
 

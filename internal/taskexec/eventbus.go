@@ -216,6 +216,7 @@ func (b *EventBus) Stop() {
 }
 
 // dispatchLoop 事件分发循环
+// 说明：这里必须按订阅顺序串行执行处理器，避免 SnapshotHub/Bridge 出现跨处理器乱序。
 func (b *EventBus) dispatchLoop() {
 	defer b.wg.Done()
 	for {
@@ -228,15 +229,10 @@ func (b *EventBus) dispatchLoop() {
 			}
 			handlers := b.snapshotHandlers()
 			for _, handler := range handlers {
-				b.wg.Add(1)
-				h := handler
-				go func() {
-					defer b.wg.Done()
-					if b.isClosed() {
-						return
-					}
-					b.safeInvokeHandler(h, event)
-				}()
+				if b.isClosed() {
+					return
+				}
+				b.safeInvokeHandler(handler, event)
 			}
 		}
 	}
@@ -245,9 +241,25 @@ func (b *EventBus) dispatchLoop() {
 func (b *EventBus) snapshotHandlers() []EventHandler {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	handlers := make([]EventHandler, 0, len(b.handlers))
-	for _, h := range b.handlers {
-		handlers = append(handlers, h)
+
+	if len(b.handlers) == 0 {
+		return nil
+	}
+
+	ids := make([]SubscriptionID, 0, len(b.handlers))
+	for id := range b.handlers {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		return ids[i] < ids[j]
+	})
+
+	handlers := make([]EventHandler, 0, len(ids))
+	for _, id := range ids {
+		h := b.handlers[id]
+		if h != nil {
+			handlers = append(handlers, h)
+		}
 	}
 	return handlers
 }
@@ -302,7 +314,7 @@ func (h *SnapshotHub) Update(runID string, snapshot *ExecutionSnapshot) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	cloned := snapshot.Clone()
-	h.touchSnapshotLocked(runID, cloned)
+	h.bumpRevisionLocked(runID, cloned)
 	h.resetDeltaQueueLocked(runID)
 	snapshot.Revision = cloned.Revision
 	snapshot.UpdatedAt = cloned.UpdatedAt
@@ -706,6 +718,10 @@ func (h *SnapshotHub) AppendEvent(event *TaskEvent) bool {
 	}
 	updateSnapshotSessionSeq(snapshot, event)
 	h.touchSnapshotLocked(event.RunID, snapshot)
+	if event.Payload == nil {
+		event.Payload = make(map[string]interface{})
+	}
+	event.Payload["runSeq"] = snapshot.LastRunSeq
 	if len(snapshot.Events) > 0 {
 		snapshot.Events[0].Seq = snapshot.LastRunSeq
 		opEvent := snapshot.Events[0].Clone()
@@ -729,14 +745,22 @@ func (h *SnapshotHub) ensureSnapshotLocked(runID string) *ExecutionSnapshot {
 	return snapshot
 }
 
-func (h *SnapshotHub) touchSnapshotLocked(runID string, snapshot *ExecutionSnapshot) {
+func (h *SnapshotHub) bumpRevisionLocked(runID string, snapshot *ExecutionSnapshot) {
 	h.revisions[runID]++
 	snapshot.Revision = h.revisions[runID]
-	snapshot.LastRunSeq = h.revisions[runID]
 	snapshot.UpdatedAt = time.Now()
 	if snapshot.LastSessionSeqByUnit == nil {
 		snapshot.LastSessionSeqByUnit = map[string]uint64{}
 	}
+}
+
+func (h *SnapshotHub) touchSnapshotLocked(runID string, snapshot *ExecutionSnapshot) {
+	h.bumpRevisionLocked(runID, snapshot)
+	if snapshot.LastRunSeq == 0 {
+		snapshot.LastRunSeq = 1
+		return
+	}
+	snapshot.LastRunSeq++
 }
 
 func (h *SnapshotHub) resetDeltaQueueLocked(runID string) {
@@ -874,6 +898,9 @@ func applyRunModelToSnapshot(snapshot *ExecutionSnapshot, run *TaskRun) bool {
 	if !timesEqual(snapshot.FinishedAt, run.FinishedAt) {
 		snapshot.FinishedAt = cloneTimePtr(run.FinishedAt)
 		changed = true
+	}
+	if run.LastRunSeq > snapshot.LastRunSeq {
+		snapshot.LastRunSeq = run.LastRunSeq
 	}
 	return changed
 }

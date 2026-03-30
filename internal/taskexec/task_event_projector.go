@@ -23,6 +23,8 @@ func NewTaskEventRepositoryProjector(repo Repository) EventHandler {
 			}
 		}
 
+		runSeq, _ := payloadUint64(event.Payload, "runSeq")
+		sessionSeq, _ := payloadUint64(event.Payload, "sessionSeq")
 		record := &TaskRunEvent{
 			ID:          event.ID,
 			TaskRunID:   event.RunID,
@@ -30,6 +32,8 @@ func NewTaskEventRepositoryProjector(repo Repository) EventHandler {
 			UnitID:      event.UnitID,
 			EventType:   string(event.Type),
 			EventLevel:  string(event.Level),
+			RunSeq:      runSeq,
+			SessionSeq:  sessionSeq,
 			Message:     event.Message,
 			PayloadJSON: payloadJSON,
 			CreatedAt:   event.Timestamp,
@@ -39,6 +43,13 @@ func NewTaskEventRepositoryProjector(repo Repository) EventHandler {
 			logger.Warn("TaskExec", event.RunID, "持久化任务事件失败: type=%s, stage=%s, unit=%s, err=%v",
 				event.Type, event.StageID, event.UnitID, err)
 			return
+		}
+
+		if runSeq > 0 {
+			runSeqPatch := runSeq
+			if err := repo.UpdateRun(context.Background(), event.RunID, &RunPatch{LastRunSeq: &runSeqPatch}); err != nil {
+				logger.Warn("TaskExec", event.RunID, "更新运行序号失败: runSeq=%d, err=%v", runSeq, err)
+			}
 		}
 
 		logger.Verbose("TaskExec", event.RunID, "任务事件已持久化: type=%s, stage=%s, unit=%s", event.Type, event.StageID, event.UnitID)
