@@ -160,8 +160,8 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		logger.Error("TaskExec", ctx.RunID(), "Failed to find device %s: %v", deviceIP, err)
 		errMsg := fmt.Sprintf("Device not found: %s", deviceIP)
 		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入设备不存在失败状态", nil)
-		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Device not found: %s", deviceIP))
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordDeviceMissing, fmt.Sprintf("设备不存在: %s", deviceIP), 0, 0)
+		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Device not found: %s", deviceIP))
 		return fmt.Errorf("%s", errMsg)
 	}
 
@@ -237,8 +237,8 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		logger.Error("TaskExec", ctx.RunID(), "Failed to connect to %s: %v", deviceIP, err)
 		errMsg := fmt.Sprintf("connection failed: %v", err)
 		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入连接失败状态", nil)
-		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Connection failed: %v", err))
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnectFailed, fmt.Sprintf("连接失败: %v", err), len(commands), 0)
+		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Connection failed: %v", err))
 		return err
 	}
 	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnected, "SSH 连接成功", len(commands), 0)
@@ -269,8 +269,8 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		logger.Error("TaskExec", ctx.RunID(), "Failed to execute commands on %s: %v", deviceIP, err)
 		errMsg := fmt.Sprintf("command execution failed: %v", err)
 		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入命令执行失败状态", intPtrLocal(len(commands)))
-		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Command execution failed: %v", err))
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, fmt.Sprintf("命令执行失败: %v", err), len(commands), 0)
+		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Command execution failed: %v", err))
 		return err
 	}
 
@@ -314,10 +314,10 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		reportProgress(doneSteps, len(commands))
 	}
 
-	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, eventLevel,
-		fmt.Sprintf("Executed %d commands on %s: %d success, %d failed", len(commands), deviceIP, successCount, failureCount))
 	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, lifecycleRecord,
 		fmt.Sprintf("设备执行完成: status=%s, success=%d, failed=%d", unitStatus, successCount, failureCount), len(commands), successCount)
+	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, eventLevel,
+		fmt.Sprintf("Executed %d commands on %s: %d success, %d failed", len(commands), deviceIP, successCount, failureCount))
 
 	logger.Debug("TaskExec", ctx.RunID(), "Unit completed for device: %s, status=%s", deviceIP, unitStatus)
 	return nil
