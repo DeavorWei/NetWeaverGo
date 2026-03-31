@@ -13,8 +13,14 @@
           class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary min-w-[260px]"
         >
           <option value="">选择拓扑运行</option>
-          <option v-for="run in topologyRuns" :key="run.runId" :value="run.runId">
-            {{ run.taskName || run.runId }} ({{ StatusNames[run.status] || run.status }})
+          <option
+            v-for="run in topologyRuns"
+            :key="run.runId"
+            :value="run.runId"
+          >
+            {{ run.taskName || run.runId }} ({{
+              StatusNames[run.status] || run.status
+            }})
           </option>
         </select>
         <button
@@ -174,6 +180,18 @@
           {{ err }}
         </div>
       </div>
+    </div>
+
+    <div
+      v-if="selectedRunId && graph.edges.length === 0"
+      class="bg-warning/10 border border-warning/30 rounded-lg p-3 space-y-2"
+    >
+      <div class="text-sm text-warning font-medium">
+        当前运行未返回任何拓扑边，图形视图与表格视图都会为空。
+      </div>
+      <ul class="text-xs text-text-muted list-disc pl-5 space-y-1">
+        <li v-for="reason in emptyGraphReasons" :key="reason">{{ reason }}</li>
+      </ul>
     </div>
 
     <!-- 图形视图 -->
@@ -361,11 +379,16 @@ import TopologyGraph from "../components/topology/TopologyGraph.vue";
 // 阶段4: 统一执行框架 - 使用runId替代taskId
 const taskexecStore = useTaskexecStore();
 const selectedRunId = ref("");
+const lastGraphLoadAt = ref<string>("");
 
 // 计算属性：筛选拓扑类型的运行
 const topologyRuns = computed(() => {
-  return taskexecStore.runHistory.filter(r => r.runKind === 'topology')
+  return taskexecStore.runHistory.filter((r) => r.runKind === "topology");
 });
+const selectedRun = computed(
+  () =>
+    topologyRuns.value.find((run) => run.runId === selectedRunId.value) || null,
+);
 const building = ref(false);
 
 const keyword = ref("");
@@ -503,6 +526,37 @@ const filteredEdges = computed(() => {
   });
 });
 
+const emptyGraphReasons = computed(() => {
+  if (!selectedRunId.value) {
+    return ["请先选择一个拓扑运行记录"];
+  }
+
+  const reasons: string[] = [];
+  reasons.push(`当前运行ID: ${selectedRunId.value}`);
+
+  if (selectedRun.value) {
+    reasons.push(
+      `运行状态: ${StatusNames[selectedRun.value.status] || selectedRun.value.status}`,
+    );
+  }
+
+  reasons.push(
+    "后端返回的拓扑边数量为 0，说明问题通常发生在采集、解析或构图阶段，而不是前端渲染阶段",
+  );
+  reasons.push(
+    "请重点查看后端 verbose 日志中的“拓扑采集设备画像解析 / 解析汇总 / 拓扑构建结果 / 查询拓扑图返回空结果”等关键字",
+  );
+  reasons.push(
+    "华为设备必须采集到可被 TextFSM 模板识别的 LLDP verbose 输出，否则无法生成任何链路",
+  );
+
+  if (lastGraphLoadAt.value) {
+    reasons.push(`最近一次刷新时间: ${lastGraphLoadAt.value}`);
+  }
+
+  return reasons;
+});
+
 function statusClass(status: string) {
   const map: Record<string, string> = {
     confirmed: "bg-success/20 text-success",
@@ -539,25 +593,50 @@ function applySummaryFromGraph() {
 
 // 阶段4: 加载拓扑运行列表（从统一运行时）
 async function loadRuns() {
-  await taskexecStore.loadRunHistory(50)
+  await taskexecStore.loadRunHistory(50);
 }
 
 async function loadTasks() {
-  await loadRuns()
+  await loadRuns();
 }
 
 async function refreshGraph() {
   if (!selectedRunId.value) return;
   edgeDetail.value = null;
   deviceDetail.value = null;
+  const startedAt = new Date();
+  console.debug("[Topology] 开始刷新拓扑图", {
+    runId: selectedRunId.value,
+    status: selectedRun.value?.status,
+    taskName: selectedRun.value?.taskName,
+  });
   const g = await TaskExecutionAPI.getTopologyGraph(selectedRunId.value);
   graph.value = g || { taskId: selectedRunId.value, nodes: [], edges: [] };
+  lastGraphLoadAt.value = startedAt.toLocaleString();
   applySummaryFromGraph();
+  console.debug("[Topology] 拓扑图刷新完成", {
+    runId: selectedRunId.value,
+    nodeCount: graph.value.nodes?.length || 0,
+    edgeCount: graph.value.edges?.length || 0,
+    loadedAt: lastGraphLoadAt.value,
+  });
+  if ((graph.value.edges?.length || 0) === 0) {
+    console.warn("[Topology] 当前运行未返回任何拓扑边", {
+      runId: selectedRunId.value,
+      nodeCount: graph.value.nodes?.length || 0,
+      edgeCount: graph.value.edges?.length || 0,
+      status: selectedRun.value?.status,
+      reasons: emptyGraphReasons.value,
+    });
+  }
 }
 
 async function loadEdgeDetail(edgeID: string) {
   if (!selectedRunId.value) return;
-  edgeDetail.value = await TaskExecutionAPI.getTopologyEdgeDetail(selectedRunId.value, edgeID);
+  edgeDetail.value = await TaskExecutionAPI.getTopologyEdgeDetail(
+    selectedRunId.value,
+    edgeID,
+  );
 }
 
 async function openDeviceDetail(deviceID: string) {
@@ -585,19 +664,28 @@ async function openDeviceDetail(deviceID: string) {
       } as ParsedResult;
       return;
     }
-    deviceDetail.value = await TaskExecutionAPI.getTopologyDeviceDetail(selectedRunId.value, deviceID);
+    deviceDetail.value = await TaskExecutionAPI.getTopologyDeviceDetail(
+      selectedRunId.value,
+      deviceID,
+    );
   } finally {
     loadingDeviceDetail.value = false;
   }
 }
 
 watch(selectedRunId, (value) => {
+  console.debug("[Topology] 切换拓扑运行", {
+    runId: value,
+    taskName: selectedRun.value?.taskName,
+    status: selectedRun.value?.status,
+  });
   edgeDetail.value = null;
   deviceDetail.value = null;
   if (value) {
     void refreshGraph();
   } else {
     graph.value = { taskId: "", nodes: [], edges: [] };
+    lastGraphLoadAt.value = "";
     applySummaryFromGraph();
   }
 });

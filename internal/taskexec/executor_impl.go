@@ -471,16 +471,32 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 	}
 
 	// Get vendor profile
-	vendor := device.Vendor
+	inventoryVendor := strings.TrimSpace(device.Vendor)
+	vendor := strings.ToLower(inventoryVendor)
+	vendorSource := "inventory"
 	if vendor == "" {
 		vendor = "generic"
+		vendorSource = "fallback_default"
 	}
+	profile := config.GetDeviceProfile(vendor)
+	if profile == nil {
+		errMsg := fmt.Sprintf("no profile found for vendor: %s", vendor)
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集 Profile 缺失状态", nil)
+		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, errMsg, 0, 0)
+		return fmt.Errorf("no profile found for vendor: %s", vendor)
+	}
+	if profile.Vendor != vendor {
+		logger.Warn("TaskExec", ctx.RunID(), "拓扑采集设备画像发生回退: device=%s, inventoryVendor=%s, requestedVendor=%s, profileVendor=%s", deviceIP, inventoryVendor, vendor, profile.Vendor)
+	}
+	logger.Verbose("TaskExec", ctx.RunID(), "拓扑采集设备画像解析: device=%s, inventoryVendor=%s, vendorSource=%s, requestedVendor=%s, profileVendor=%s", deviceIP, inventoryVendor, vendorSource, vendor, profile.Vendor)
 
 	// Create device executor options
 	execCtx := ctx.Context()
 	opts := executor.ExecutorOptions{
-		Vendor:     vendor,
-		LogSession: logSession,
+		Vendor:        profile.Vendor,
+		DeviceProfile: profile,
+		LogSession:    logSession,
 	}
 
 	// Create device executor
@@ -536,23 +552,15 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 	}
 	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnected, "采集连接成功", 0, 0)
 
-	// Get commands from device profile
-	profile := config.GetDeviceProfile(vendor)
-	if profile == nil {
-		errMsg := fmt.Sprintf("no profile found for vendor: %s", vendor)
-		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集 Profile 缺失状态", nil)
-		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
-		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, errMsg, 0, 0)
-		return fmt.Errorf("no profile found for vendor: %s", vendor)
-	}
-
 	// Build command plan
 	commands := make([]executor.PlannedCommand, 0, len(profile.Commands))
+	commandKeys := make([]string, 0, len(profile.Commands))
 	for _, cmd := range profile.Commands {
 		timeout := time.Duration(cmd.TimeoutSec) * time.Second
 		if timeout == 0 {
 			timeout = cmdTimeout
 		}
+		commandKeys = append(commandKeys, cmd.CommandKey)
 		commands = append(commands, executor.PlannedCommand{
 			Key:             cmd.CommandKey,
 			Command:         cmd.Command,
@@ -560,6 +568,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 			ContinueOnError: true,
 		})
 	}
+	logger.Verbose("TaskExec", ctx.RunID(), "拓扑采集命令计划: device=%s, vendor=%s, commandCount=%d, commandKeys=%v", deviceIP, profile.Vendor, len(commands), commandKeys)
 
 	if len(commands) == 0 {
 		errMsg := fmt.Sprintf("no commands defined for vendor: %s", vendor)
@@ -952,15 +961,19 @@ func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, res
 func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vendor string) error {
 	handler := NewErrorHandler(ctx.RunID())
 	runID := ctx.RunID()
+	vendorSource := "unit_plan"
 	if vendor == "" {
 		var dev TaskRunDevice
 		if err := e.db.Where("task_run_id = ? AND device_ip = ?", runID, deviceIP).First(&dev).Error; err == nil {
 			vendor = strings.ToLower(strings.TrimSpace(dev.Vendor))
+			vendorSource = "run_device"
 		}
 	}
 	if vendor == "" {
 		vendor = "huawei"
+		vendorSource = "default_huawei"
 	}
+	logger.Verbose("TaskExec", runID, "开始解析运行设备: device=%s, vendor=%s, vendorSource=%s", deviceIP, vendor, vendorSource)
 	if err := e.parserEngine.LoadBuiltinTemplates(vendor); err != nil {
 		return fmt.Errorf("load vendor templates failed: %w", err)
 	}
@@ -969,6 +982,10 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 	if err := e.db.Where("task_run_id = ? AND device_ip = ? AND status = ?", runID, deviceIP, "success").
 		Order("created_at ASC").Find(&outputs).Error; err != nil {
 		return fmt.Errorf("load raw outputs failed: %w", err)
+	}
+	logger.Verbose("TaskExec", runID, "解析输入已加载: device=%s, vendor=%s, outputs=%d", deviceIP, vendor, len(outputs))
+	if len(outputs) == 0 {
+		logger.Warn("TaskExec", runID, "设备没有可解析的采集输出: device=%s, vendor=%s", deviceIP, vendor)
 	}
 
 	mapper := parser.GetMapper(vendor)
@@ -1105,6 +1122,10 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 		handler.LogDBErrorWithContext("更新 parse_status", e.db.Model(&TaskRawOutput{}).Where("id = ?", output.ID).
 			Updates(map[string]interface{}{"parse_status": parseStatus, "parse_error": parseError}).Error,
 			map[string]interface{}{"runID": runID, "deviceIP": deviceIP, "outputID": output.ID, "commandKey": output.CommandKey, "parseStatus": parseStatus})
+		logger.Verbose("TaskExec", runID, "解析命令统计: device=%s, cmd=%s, rows=%d, status=%s, interfaces=%d, lldps=%d, fdbs=%d, arps=%d, aggs=%d", deviceIP, output.CommandKey, len(rows), parseStatus, len(interfaces), len(lldps), len(fdbs), len(arps), len(aggs))
+		if parseStatus != "success" {
+			logger.Warn("TaskExec", runID, "解析命令失败: device=%s, cmd=%s, rows=%d, error=%s", deviceIP, output.CommandKey, len(rows), parseError)
+		}
 	}
 
 	if ctx.IsCancelled() {
@@ -1114,7 +1135,12 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 	identity.Vendor = normalize.NormalizeVendor(identity.Vendor)
 	identity.Hostname = normalize.NormalizeDeviceName(identity.Hostname)
 
-	return e.db.Transaction(func(tx *gorm.DB) error {
+	logger.Verbose("TaskExec", runID, "解析汇总: device=%s, vendor=%s, hostname=%s, mgmtIP=%s, interfaces=%d, lldps=%d, fdbs=%d, arps=%d, aggs=%d", deviceIP, identity.Vendor, identity.Hostname, identity.MgmtIP, len(interfaces), len(lldps), len(fdbs), len(arps), len(aggs))
+	if len(lldps) == 0 {
+		logger.Warn("TaskExec", runID, "设备未解析出任何 LLDP 邻居: device=%s, vendor=%s, outputs=%d", deviceIP, identity.Vendor, len(outputs))
+	}
+
+	txErr := e.db.Transaction(func(tx *gorm.DB) error {
 		if ctx.IsCancelled() {
 			return ctx.Context().Err()
 		}
@@ -1257,26 +1283,27 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 		}
 		return nil
 	})
+	if txErr != nil {
+		logger.Warn("TaskExec", runID, "持久化解析结果失败: device=%s, err=%v", deviceIP, txErr)
+		return txErr
+	}
+	logger.Verbose("TaskExec", runID, "解析结果已持久化: device=%s, interfaces=%d, lldps=%d, fdbs=%d, arps=%d, aggs=%d", deviceIP, len(interfaces), len(lldps), len(fdbs), len(arps), len(aggs))
+	return nil
 }
 
 func (e *TopologyBuildExecutor) buildRunTopology(runID string) (*models.TopologyBuildResult, error) {
+	startedAt := time.Now()
 	if err := e.db.Where("task_run_id = ?", runID).Delete(&TaskTopologyEdge{}).Error; err != nil {
 		return nil, err
 	}
+	logger.Verbose("TaskExec", runID, "拓扑构建开始: 已清理旧拓扑边")
 
 	var lldps []TaskParsedLLDPNeighbor
 	if err := e.db.Where("task_run_id = ?", runID).Find(&lldps).Error; err != nil {
 		return nil, err
 	}
 
-	type keyData struct {
-		aDevice string
-		aIf     string
-		bDevice string
-		bIf     string
-	}
 	edges := make(map[string]TaskTopologyEdge)
-
 	buildKey := func(aDevice, aIf, bDevice, bIf string) string {
 		left := aDevice + ":" + aIf
 		right := bDevice + ":" + bIf
@@ -1286,7 +1313,9 @@ func (e *TopologyBuildExecutor) buildRunTopology(runID string) (*models.Topology
 	}
 
 	var devices []TaskRunDevice
-	_ = e.db.Where("task_run_id = ?", runID).Find(&devices).Error
+	if err := e.db.Where("task_run_id = ?", runID).Find(&devices).Error; err != nil {
+		return nil, err
+	}
 	deviceByName := make(map[string]string, len(devices))
 	for _, d := range devices {
 		name := strings.TrimSpace(strings.ToLower(d.NormalizedName))
@@ -1294,25 +1323,43 @@ func (e *TopologyBuildExecutor) buildRunTopology(runID string) (*models.Topology
 			deviceByName[name] = d.DeviceIP
 		}
 	}
+	logger.Verbose("TaskExec", runID, "拓扑构建输入统计: devices=%d, namedDevices=%d, lldpFacts=%d", len(devices), len(deviceByName), len(lldps))
+
+	unresolvedPeerCount := 0
+	missingRemoteIfCount := 0
+	skippedEmptyLocalIfCount := 0
+	resolvedByIPCount := 0
+	resolvedByNameCount := 0
 
 	for _, n := range lldps {
 		localIf := normalize.NormalizeInterfaceName(n.LocalInterface)
 		if localIf == "" {
+			skippedEmptyLocalIfCount++
+			logger.Verbose("TaskExec", runID, "跳过 LLDP 事实: device=%s, reason=empty_local_interface, neighbor=%s, rawRef=%s", n.DeviceIP, n.NeighborName, n.RawRefID)
 			continue
 		}
 		remoteIf := normalize.NormalizeInterfaceName(n.NeighborPort)
 		if remoteIf == "" {
 			remoteIf = "unknown"
+			missingRemoteIfCount++
 		}
 		remoteDevice := ""
+		resolutionSource := ""
 		if strings.TrimSpace(n.NeighborIP) != "" {
 			remoteDevice = strings.TrimSpace(n.NeighborIP)
+			resolutionSource = "neighbor_ip"
+			resolvedByIPCount++
+		} else if candidate := deviceByName[strings.ToLower(strings.TrimSpace(n.NeighborName))]; candidate != "" {
+			remoteDevice = candidate
+			resolutionSource = "neighbor_name"
+			resolvedByNameCount++
 		} else {
-			remoteDevice = deviceByName[strings.ToLower(strings.TrimSpace(n.NeighborName))]
-		}
-		if remoteDevice == "" {
 			remoteDevice = "unknown:" + n.DeviceIP + ":" + localIf
+			resolutionSource = "unknown_peer"
+			unresolvedPeerCount++
 		}
+		logger.Verbose("TaskExec", runID, "LLDP 构图事实: localDevice=%s, localIf=%s, remoteName=%s, remoteIP=%s, remoteIf=%s, resolvedDevice=%s, source=%s", n.DeviceIP, localIf, n.NeighborName, n.NeighborIP, remoteIf, remoteDevice, resolutionSource)
+
 		k := buildKey(n.DeviceIP, localIf, remoteDevice, remoteIf)
 		evidence := EdgeEvidence{
 			Type:       "lldp",
@@ -1361,6 +1408,8 @@ func (e *TopologyBuildExecutor) buildRunTopology(runID string) (*models.Topology
 		}
 	}
 
+	buildDuration := time.Since(startedAt)
+	buildMs := int(buildDuration / time.Millisecond)
 	result := &models.TopologyBuildResult{
 		TaskID:             runID,
 		TotalEdges:         len(saved),
@@ -1368,8 +1417,23 @@ func (e *TopologyBuildExecutor) buildRunTopology(runID string) (*models.Topology
 		SemiConfirmedEdges: 0,
 		InferredEdges:      0,
 		ConflictEdges:      0,
-		BuildTime:          0,
+		BuildTime:          buildDuration,
 		Errors:             []string{},
+	}
+	if len(lldps) == 0 {
+		result.Errors = append(result.Errors, "未解析到任何 LLDP 邻居事实，请重点检查 LLDP 采集命令输出与 TextFSM 模板是否匹配")
+	}
+	if len(lldps) > 0 && len(saved) == 0 {
+		result.Errors = append(result.Errors, "存在 LLDP 邻居事实，但未成功构建出任何拓扑边，请检查接口名规范化和邻居设备映射逻辑")
+	}
+	if unresolvedPeerCount > 0 {
+		result.Errors = append(result.Errors, fmt.Sprintf("有 %d 条 LLDP 邻居无法映射到已采集设备，已降级为 unknown 节点", unresolvedPeerCount))
+	}
+	if missingRemoteIfCount > 0 {
+		result.Errors = append(result.Errors, fmt.Sprintf("有 %d 条 LLDP 邻居缺少远端接口信息，已使用 unknown 接口占位", missingRemoteIfCount))
+	}
+	if skippedEmptyLocalIfCount > 0 {
+		result.Errors = append(result.Errors, fmt.Sprintf("有 %d 条 LLDP 邻居因本端接口为空被跳过", skippedEmptyLocalIfCount))
 	}
 	for _, edge := range saved {
 		switch edge.Status {
@@ -1382,6 +1446,10 @@ func (e *TopologyBuildExecutor) buildRunTopology(runID string) (*models.Topology
 		case "conflict":
 			result.ConflictEdges++
 		}
+	}
+	logger.Verbose("TaskExec", runID, "拓扑构建结果: edges=%d, confirmed=%d, semi=%d, inferred=%d, conflict=%d, unresolvedPeers=%d, missingRemoteIf=%d, skippedEmptyLocalIf=%d, resolvedByIP=%d, resolvedByName=%d, buildMs=%d", len(saved), result.ConfirmedEdges, result.SemiConfirmedEdges, result.InferredEdges, result.ConflictEdges, unresolvedPeerCount, missingRemoteIfCount, skippedEmptyLocalIfCount, resolvedByIPCount, resolvedByNameCount, buildMs)
+	if len(saved) == 0 {
+		logger.Warn("TaskExec", runID, "拓扑构建结果为空: devices=%d, lldpFacts=%d, errors=%v", len(devices), len(lldps), result.Errors)
 	}
 	return result, nil
 }

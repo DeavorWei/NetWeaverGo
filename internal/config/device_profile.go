@@ -148,7 +148,8 @@ func registerVendorProfiles() {
 			{Command: "display version", CommandKey: "version", TimeoutSec: 30},
 			{Command: "display current-configuration | include sysname", CommandKey: "sysname", TimeoutSec: 20},
 			{Command: "display device esn", CommandKey: "esn", TimeoutSec: 20},
-			{Command: "display lldp neighbor", CommandKey: "lldp_neighbor", TimeoutSec: 60},
+			// 统一使用 verbose 版本，确保与 LLDP TextFSM 模板字段（system name / port id / chassis id / management address）一致。
+			{Command: "display lldp neighbor verbose", CommandKey: "lldp_neighbor", TimeoutSec: 60},
 			{Command: "display interface brief", CommandKey: "interface_brief", TimeoutSec: 30},
 			{Command: "display interface", CommandKey: "interface_detail", TimeoutSec: 60},
 			{Command: "display mac-address", CommandKey: "mac_address", TimeoutSec: 60},

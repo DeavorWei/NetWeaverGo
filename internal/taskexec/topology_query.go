@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/NetWeaverGo/core/internal/repository"
@@ -47,8 +48,10 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 		return nil, err
 	}
 	deviceMap := make(map[string]TaskRunDevice, len(devices))
+	deviceStatusStats := make(map[string]int)
 	for _, d := range devices {
 		deviceMap[d.DeviceIP] = d
+		deviceStatusStats[strings.TrimSpace(d.Status)]++
 	}
 
 	nodeSet := make(map[string]struct{})
@@ -93,6 +96,19 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 			Status:          e.Status,
 			Confidence:      e.Confidence,
 		})
+	}
+
+	logger.Verbose("TaskExec", runID, "查询拓扑图: devices=%d, nodes=%d, edges=%d, deviceStatus=%v", len(devices), len(nodes), len(graphEdges), deviceStatusStats)
+	if len(graphEdges) == 0 {
+		var lldpCount int64
+		var rawOutputCount int64
+		var parseFailedCount int64
+		var parseSuccessCount int64
+		_ = s.db.Model(&TaskParsedLLDPNeighbor{}).Where("task_run_id = ?", runID).Count(&lldpCount).Error
+		_ = s.db.Model(&TaskRawOutput{}).Where("task_run_id = ?", runID).Count(&rawOutputCount).Error
+		_ = s.db.Model(&TaskRawOutput{}).Where("task_run_id = ? AND parse_status = ?", runID, "parse_failed").Count(&parseFailedCount).Error
+		_ = s.db.Model(&TaskRawOutput{}).Where("task_run_id = ? AND parse_status = ?", runID, "success").Count(&parseSuccessCount).Error
+		logger.Warn("TaskExec", runID, "查询拓扑图返回空结果: devices=%d, rawOutputs=%d, parseSuccess=%d, parseFailed=%d, lldpFacts=%d, deviceStatus=%v", len(devices), rawOutputCount, parseSuccessCount, parseFailedCount, lldpCount, deviceStatusStats)
 	}
 
 	return &models.TopologyGraphView{
