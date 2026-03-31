@@ -8,6 +8,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/forge"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/repository"
+	"github.com/NetWeaverGo/core/internal/sshutil"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -60,6 +61,28 @@ func (s *DeviceService) GetDeviceByID(id uint) (*models.DeviceAssetResponse, err
 	}
 	resp := device.ToResponse()
 	return resp, nil
+}
+
+// ResetDeviceSSHHostKey 清理指定设备在 known_hosts 中的主机密钥记录。
+func (s *DeviceService) ResetDeviceSSHHostKey(id uint) error {
+	if id == 0 {
+		return fmt.Errorf("无效的设备 ID")
+	}
+
+	device, err := s.repo.FindByID(id)
+	if err != nil {
+		return fmt.Errorf("未找到设备: %d", id)
+	}
+
+	knownHostsPath := config.GetPathManager().GetSSHKnownHostsPath()
+	removed, err := sshutil.RemoveKnownHost(knownHostsPath, device.IP)
+	if err != nil {
+		return fmt.Errorf("重置设备 %s 的 SSH 主机密钥失败: %w", device.IP, err)
+	}
+	if !removed {
+		return fmt.Errorf("设备 %s 未找到可清理的 SSH 主机密钥记录", device.IP)
+	}
+	return nil
 }
 
 // AddDevice 新增设备

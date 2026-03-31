@@ -263,21 +263,32 @@
         </div>
 
         <!-- 操作按钮 -->
-        <div class="flex items-center justify-end gap-3 pt-2">
+        <div class="flex items-center justify-between gap-3 pt-2">
           <button
+            v-if="isEditing"
             type="button"
-            @click="$emit('close')"
-            class="px-4 py-2 text-sm font-medium text-text-secondary bg-bg-panel border border-border rounded-lg hover:bg-bg-hover transition-colors"
-          >
-            取消
-          </button>
-          <button
-            type="submit"
+            @click="emit('reset-ssh-host-key')"
             :disabled="isSaving"
-            class="px-4 py-2 text-sm font-medium text-white bg-accent hover:bg-accent/90 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-4 py-2 text-sm font-medium text-error bg-error/10 border border-error/30 rounded-lg hover:bg-error/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {{ isSaving ? "保存中..." : "确定" }}
+            重置主机SSH密钥
           </button>
+          <div class="flex items-center justify-end gap-3 ml-auto">
+            <button
+              type="button"
+              @click="$emit('close')"
+              class="px-4 py-2 text-sm font-medium text-text-secondary bg-bg-panel border border-border rounded-lg hover:bg-bg-hover transition-colors"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              :disabled="isSaving"
+              class="px-4 py-2 text-sm font-medium text-white bg-accent hover:bg-accent/90 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ isSaving ? "保存中..." : "确定" }}
+            </button>
+          </div>
         </div>
       </form>
     </div>
@@ -307,6 +318,7 @@ const props = withDefaults(defineProps<Props>(), {
 interface Emits {
   (e: "close"): void;
   (e: "save", data: DeviceFormData): void;
+  (e: "reset-ssh-host-key"): void;
 }
 
 const emit = defineEmits<Emits>();

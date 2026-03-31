@@ -40,6 +40,8 @@ export const DeviceAPI = {
   listDevices: DeviceServiceBinding.ListDevices,
   /** 根据 ID 获取单个设备详情（包含密码，用于编辑） */
   getDeviceById: DeviceServiceBinding.GetDeviceByID,
+  /** 重置指定设备的 SSH 主机密钥 */
+  resetDeviceSSHHostKey: DeviceServiceBinding.ResetDeviceSSHHostKey,
   /** 新增设备 */
   addDevice: DeviceServiceBinding.AddDevice,
   /** 批量新增设备 */

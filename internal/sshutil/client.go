@@ -525,6 +525,72 @@ func appendKnownHost(path string, hostname string, key ssh.PublicKey) error {
 	return writer.Flush()
 }
 
+// RemoveKnownHost 删除 known_hosts 中与指定主机完全匹配的记录。
+func RemoveKnownHost(path string, hostname string) (bool, error) {
+	if err := ensureKnownHostsFile(path); err != nil {
+		return false, err
+	}
+
+	normalizedHost := knownhosts.Normalize(strings.TrimSpace(hostname))
+	if normalizedHost == "" {
+		return false, fmt.Errorf("主机地址为空")
+	}
+
+	knownHostsWriteMu.Lock()
+	defer knownHostsWriteMu.Unlock()
+
+	file, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = file.Close() }()
+
+	keptLines := make([]string, 0)
+	removed := false
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			keptLines = append(keptLines, line)
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			keptLines = append(keptLines, line)
+			continue
+		}
+
+		hosts := strings.Split(fields[0], ",")
+		matched := false
+		for _, host := range hosts {
+			if strings.TrimSpace(host) == normalizedHost {
+				matched = true
+				break
+			}
+		}
+		if matched {
+			removed = true
+			continue
+		}
+
+		keptLines = append(keptLines, line)
+	}
+	if err := scanner.Err(); err != nil {
+		return false, err
+	}
+
+	content := strings.Join(keptLines, "\n")
+	if len(keptLines) > 0 {
+		content += "\n"
+	}
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		return false, err
+	}
+	return removed, nil
+}
+
 // NewSSHClient 建立SSH连接并请求交互式 Shell 终端
 func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	logger.Verbose("SSH", cfg.IP, "开始初始化带 Shell 的 SSH 连接 -> %s:%d", cfg.IP, cfg.Port)

@@ -54,6 +54,7 @@
       :protocol-default-ports="protocolDefaultPorts"
       @close="closeModal"
       @save="saveDevice"
+      @reset-ssh-host-key="resetSSHHostKey"
     />
 
     <!-- 批量编辑弹窗 -->
@@ -410,6 +411,34 @@ async function saveDevice(deviceData: DeviceFormData) {
     console.error("保存设备失败:", err);
     const message =
       (err as { message?: string })?.message || "保存失败，请重试";
+    editModalRef.value?.setError(message);
+  } finally {
+    editModalRef.value?.setSaving(false);
+  }
+}
+
+async function resetSSHHostKey() {
+  if (!isEditing.value || !editingDeviceId.value || !formData.value?.ip) {
+    editModalRef.value?.setError("仅编辑已有设备时支持重置主机 SSH 密钥");
+    return;
+  }
+
+  const confirmed = confirm(
+    `确定要清除设备 ${formData.value.ip} 的 SSH 主机密钥记录吗？\n清除后，下次连接会重新学习该主机密钥。`,
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  editModalRef.value?.setSaving(true);
+  editModalRef.value?.setError("");
+  try {
+    await DeviceAPI.resetDeviceSSHHostKey(editingDeviceId.value);
+    showPageNotice(`设备 ${formData.value.ip} 的 SSH 主机密钥已重置`);
+  } catch (err: unknown) {
+    console.error("重置 SSH 主机密钥失败:", err);
+    const message =
+      (err as { message?: string })?.message || "重置 SSH 主机密钥失败，请重试";
     editModalRef.value?.setError(message);
   } finally {
     editModalRef.value?.setSaving(false);
