@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"gorm.io/gorm"
 )
@@ -51,6 +53,14 @@ func NewTaskExecutionService(db *gorm.DB) *TaskExecutionService {
 
 // Start 启动服务
 func (s *TaskExecutionService) Start() {
+	if s.repo != nil {
+		recovered, err := recoverInterruptedRuns(s.repo, time.Now())
+		if err != nil {
+			logger.Error("TaskExec", "-", "启动恢复遗留活跃运行失败: recovered=%v err=%v", recovered, err)
+		} else if len(recovered) > 0 {
+			logger.Warn("TaskExec", "-", "启动时已补偿取消遗留活跃运行: runs=%v", recovered)
+		}
+	}
 	s.runtime.Start()
 }
 

@@ -102,10 +102,15 @@ func (r *GormRepository) ListRuns(ctx context.Context, limit int) ([]TaskRun, er
 	return runs, err
 }
 
-// ListRunningRuns 列出运行中的Runs
+// ListRunningRuns 列出所有活跃 Runs（包括 pending / running）。
 func (r *GormRepository) ListRunningRuns(ctx context.Context) ([]TaskRun, error) {
 	var runs []TaskRun
-	err := r.db.WithContext(ctx).Where("status = ?", RunStatusRunning).Find(&runs).Error
+	statuses := ActiveRunStatuses()
+	values := make([]string, 0, len(statuses))
+	for _, status := range statuses {
+		values = append(values, string(status))
+	}
+	err := r.db.WithContext(ctx).Where("status IN ?", values).Find(&runs).Error
 	return runs, err
 }
 

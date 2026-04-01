@@ -67,6 +67,10 @@ func applyCompensationCancellation(repo Repository, runID string, finishedAt tim
 	}
 
 	for _, stage := range stages {
+		if StageStatus(stage.Status).IsTerminal() {
+			continue
+		}
+
 		stageStatus := string(StageStatusCancelled)
 		if err := repo.UpdateStage(context.Background(), stage.ID, &StagePatch{
 			Status:     &stageStatus,
@@ -98,4 +102,40 @@ func applyCompensationCancellation(repo Repository, runID string, finishedAt tim
 
 	logger.Verbose("TaskExec", runID, "已完成离线运行的补偿取消投影")
 	return nil
+}
+
+func recoverInterruptedRuns(repo Repository, finishedAt time.Time) ([]string, error) {
+	if repo == nil {
+		return nil, fmt.Errorf("repository is nil")
+	}
+
+	runs, err := repo.ListRunningRuns(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if len(runs) == 0 {
+		return nil, nil
+	}
+
+	recovered := make([]string, 0, len(runs))
+	failed := make([]string, 0)
+	for _, run := range runs {
+		if RunStatus(run.Status).IsTerminal() {
+			continue
+		}
+		if err := applyCompensationCancellation(repo, run.ID, finishedAt); err != nil {
+			failed = append(failed, run.ID)
+			logger.Warn("TaskExec", run.ID, "启动恢复补偿取消失败: %v", err)
+			continue
+		}
+		recovered = append(recovered, run.ID)
+	}
+
+	if len(recovered) > 0 {
+		logger.Warn("TaskExec", "-", "检测到异常退出遗留活跃运行，启动时已统一补偿取消: runs=%v", recovered)
+	}
+	if len(failed) > 0 {
+		return recovered, fmt.Errorf("启动恢复补偿取消部分运行失败: %v", failed)
+	}
+	return recovered, nil
 }

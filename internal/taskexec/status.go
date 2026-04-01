@@ -30,6 +30,16 @@ func (s RunStatus) IsTerminal() bool {
 	}
 }
 
+// ActiveRunStatuses 返回所有活跃运行状态。
+func ActiveRunStatuses() []RunStatus {
+	return []RunStatus{RunStatusPending, RunStatusRunning}
+}
+
+// IsActiveRunStatus 判断运行是否仍处于活跃态。
+func IsActiveRunStatus(status string) bool {
+	return !RunStatus(status).IsTerminal()
+}
+
 // StageStatus Stage状态
 type StageStatus string
 
@@ -53,7 +63,7 @@ const (
 // IsTerminal 是否终态
 func (s StageStatus) IsTerminal() bool {
 	switch s {
-	case StageStatusCompleted, StageStatusPartial, StageStatusFailed, StageStatusCancelled:
+	case StageStatusCompleted, StageStatusPartial, StageStatusFailed, StageStatusCancelled, StageStatusSkipped:
 		return true
 	default:
 		return false

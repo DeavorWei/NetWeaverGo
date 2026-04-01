@@ -206,7 +206,7 @@ func (s *TaskGroupService) canEditTaskGroup(taskGroupID uint) bool {
 	}
 	for _, run := range runs {
 		status := strings.TrimSpace(run.Status)
-		if run.TaskGroupID == taskGroupID && (status == string(taskexec.RunStatusPending) || status == string(taskexec.RunStatusRunning)) {
+		if run.TaskGroupID == taskGroupID && taskexec.IsActiveRunStatus(status) {
 			return false
 		}
 	}
@@ -241,22 +241,18 @@ func (s *TaskGroupService) activeRunCounts(runsByTaskGroup map[uint]*taskexec.Ru
 		return result
 	}
 
-	runToTaskGroup := make(map[string]uint, len(runsByTaskGroup))
-	for taskGroupID, run := range runsByTaskGroup {
-		if run == nil || run.RunID == "" || taskGroupID == 0 {
-			continue
-		}
-		runToTaskGroup[run.RunID] = taskGroupID
+	runs, err := s.taskexec.ListRuns(500)
+	if err != nil {
+		return result
 	}
-
-	running := s.taskexec.ListRunning()
-	for _, snapshot := range running {
-		if snapshot == nil {
+	for _, run := range runs {
+		if run == nil || run.TaskGroupID == 0 {
 			continue
 		}
-		if taskGroupID, ok := runToTaskGroup[snapshot.RunID]; ok && taskGroupID != 0 {
-			result[taskGroupID]++
+		if !taskexec.IsActiveRunStatus(strings.TrimSpace(run.Status)) {
+			continue
 		}
+		result[run.TaskGroupID]++
 	}
 	return result
 }
