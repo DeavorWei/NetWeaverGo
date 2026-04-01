@@ -82,7 +82,13 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 			node.SerialNumber = d.SerialNumber
 		} else if strings.HasPrefix(id, "server:") {
 			node.Label = strings.TrimPrefix(id, "server:")
+			node.IP = strings.TrimPrefix(id, "server:")
 			node.Role = "server-inferred"
+			node.Vendor = "endpoint"
+		} else if strings.HasPrefix(id, "terminal:") {
+			node.Label = strings.TrimPrefix(id, "terminal:")
+			node.Role = "terminal-inferred"
+			node.Vendor = "endpoint"
 		}
 		nodes = append(nodes, node)
 	}
@@ -246,6 +252,23 @@ func (s *TaskExecutionService) GetTopologyDeviceDetail(runID, deviceIP string) (
 func (s *TaskExecutionService) getGraphNode(runID, deviceID string) models.GraphNode {
 	if strings.TrimSpace(deviceID) == "" {
 		return models.GraphNode{ID: "unknown", Label: "unknown"}
+	}
+	if strings.HasPrefix(deviceID, "server:") {
+		return models.GraphNode{
+			ID:     deviceID,
+			Label:  strings.TrimPrefix(deviceID, "server:"),
+			IP:     strings.TrimPrefix(deviceID, "server:"),
+			Role:   "server-inferred",
+			Vendor: "endpoint",
+		}
+	}
+	if strings.HasPrefix(deviceID, "terminal:") {
+		return models.GraphNode{
+			ID:     deviceID,
+			Label:  strings.TrimPrefix(deviceID, "terminal:"),
+			Role:   "terminal-inferred",
+			Vendor: "endpoint",
+		}
 	}
 	var dev TaskRunDevice
 	if err := s.db.Where("task_run_id = ? AND device_ip = ?", runID, deviceID).First(&dev).Error; err != nil {
