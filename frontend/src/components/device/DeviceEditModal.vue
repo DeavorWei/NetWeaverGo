@@ -411,12 +411,14 @@ function isValidIp(ip: string): boolean {
 
 function parseIpRange(ip: string): IpRangeHint | null {
   if (!ip) return null;
-  const match = ip.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})-(\d{1,3})$/);
-  if (match && match[1] && match[2] && match[3]) {
+  const match = ip.match(
+    /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})([-~])(\d{1,3})$/,
+  );
+  if (match && match[1] && match[2] && match[4]) {
     const prefix = match[1];
     const start = parseInt(match[2], 10);
-    const end = parseInt(match[3], 10);
-    if (start < end && start >= 0 && end <= 255) {
+    const end = parseInt(match[4], 10);
+    if (start <= end && start >= 0 && end <= 255) {
       return {
         count: end - start + 1,
         start: prefix + start,
@@ -433,16 +435,16 @@ function validateIpInput(ip: string): { valid: boolean; error: string } {
   if (parseIpRange(ip)) return { valid: true, error: "" };
 
   const rangeMatch = ip.match(
-    /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})-(\d{1,3})$/,
+    /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})([-~])(\d{1,3})$/,
   );
-  if (rangeMatch && rangeMatch[2] && rangeMatch[3]) {
+  if (rangeMatch && rangeMatch[2] && rangeMatch[4]) {
     const start = parseInt(rangeMatch[2], 10);
-    const end = parseInt(rangeMatch[3], 10);
+    const end = parseInt(rangeMatch[4], 10);
     if (start > 255 || end > 255) {
       return { valid: false, error: "IP 段值必须在 0-255 范围内" };
     }
-    if (start >= end) {
-      return { valid: false, error: "起始值必须小于结束值" };
+    if (start > end) {
+      return { valid: false, error: "起始值必须小于或等于结束值" };
     }
   }
 

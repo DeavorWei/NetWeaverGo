@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"net"
 	"regexp"
 	"strconv"
@@ -86,8 +87,62 @@ type IPRangeResult struct {
 	Message string   `json:"message"` // 提示信息
 }
 
+var ipv4LastOctetRangePattern = regexp.MustCompile(`^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})([-~])(\d{1,3})$`)
+
+func parseIPv4LastOctetRange(ipRange string) (*IPRangeResult, error) {
+	ipRange = strings.TrimSpace(ipRange)
+	matches := ipv4LastOctetRangePattern.FindStringSubmatch(ipRange)
+	if matches == nil {
+		return nil, nil
+	}
+
+	prefix := matches[1]
+	startStr := matches[2]
+	endStr := matches[4]
+
+	startNum, err := strconv.Atoi(startStr)
+	if err != nil {
+		return nil, fmt.Errorf("IP 范围起始值无效: %s", startStr)
+	}
+	endNum, err := strconv.Atoi(endStr)
+	if err != nil {
+		return nil, fmt.Errorf("IP 范围结束值无效: %s", endStr)
+	}
+
+	if startNum < 0 || startNum > 255 || endNum < 0 || endNum > 255 {
+		return nil, fmt.Errorf("IP 段值必须在 0-255 范围内")
+	}
+	if startNum > endNum {
+		return nil, fmt.Errorf("IP 范围起始值必须小于等于结束值")
+	}
+
+	baseIP := net.ParseIP(prefix + "0")
+	if baseIP == nil || baseIP.To4() == nil {
+		return nil, fmt.Errorf("无效的IP前缀: %s", prefix)
+	}
+
+	count := endNum - startNum + 1
+	if count > 1000 {
+		return nil, fmt.Errorf("IP范围太大，最大支持1000个IP")
+	}
+
+	list := make([]string, 0, count)
+	for i := startNum; i <= endNum; i++ {
+		list = append(list, prefix+strconv.Itoa(i))
+	}
+
+	return &IPRangeResult{
+		IsValid: true,
+		Start:   prefix + strconv.Itoa(startNum),
+		End:     prefix + strconv.Itoa(endNum),
+		Count:   count,
+		List:    list,
+		Message: "成功解析IP范围",
+	}, nil
+}
+
 // ParseIPRange 解析IP范围语法 (Wails Binding)
-// 支持格式: "192.168.1.10-20" -> {start: "192.168.1.10", end: "192.168.1.20", count: 11}
+// 支持格式: "192.168.1.10-20" / "192.168.1.10~20"
 func (s *ForgeService) ParseIPRange(ipRange string) *IPRangeResult {
 	ipRange = strings.TrimSpace(ipRange)
 	if ipRange == "" {
@@ -97,74 +152,21 @@ func (s *ForgeService) ParseIPRange(ipRange string) *IPRangeResult {
 		}
 	}
 
-	// 正则匹配: 前缀 + 起始数字 + 分隔符 + 结束数字
-	// 例如: 192.168.1.10-20
-	re := regexp.MustCompile(`^(.*?)(\d+)([-~])(\d+)$`)
-	matches := re.FindStringSubmatch(ipRange)
-
-	if matches == nil {
+	parsed, err := parseIPv4LastOctetRange(ipRange)
+	if err != nil {
+		return &IPRangeResult{
+			IsValid: false,
+			Message: err.Error(),
+		}
+	}
+	if parsed == nil {
 		return &IPRangeResult{
 			IsValid: false,
 			Message: "无法识别IP范围格式，期望格式如: 192.168.1.10-20",
 		}
 	}
 
-	prefix := matches[1]
-	startStr := matches[2]
-	endStr := matches[4]
-
-	start := net.ParseIP(prefix + startStr)
-	end := net.ParseIP(prefix + endStr)
-
-	if start == nil || end == nil {
-		// 尝试作为数字解析
-		startNum, _ := strconv.Atoi(startStr)
-		endNum, _ := strconv.Atoi(endStr)
-
-		// 验证基础IP部分是否有效
-		baseIP := net.ParseIP(prefix)
-		if baseIP == nil {
-			return &IPRangeResult{
-				IsValid: false,
-				Message: "无效的IP前缀: " + prefix,
-			}
-		}
-
-		// 防呆：范围太大
-		count := endNum - startNum + 1
-		if count > 1000 || count < 0 {
-			return &IPRangeResult{
-				IsValid: false,
-				Message: "IP范围太大或无效，最大支持1000个IP",
-			}
-		}
-
-		// 生成IP列表
-		padLen := len(startStr)
-		list := make([]string, 0, count)
-		for i := startNum; i <= endNum; i++ {
-			numStr := strconv.Itoa(i)
-			// 补零对齐
-			for len(numStr) < padLen {
-				numStr = "0" + numStr
-			}
-			list = append(list, prefix+numStr)
-		}
-
-		return &IPRangeResult{
-			IsValid: true,
-			Start:   prefix + startStr,
-			End:     prefix + endStr,
-			Count:   count,
-			List:    list,
-			Message: "成功解析IP范围",
-		}
-	}
-
-	return &IPRangeResult{
-		IsValid: false,
-		Message: "无法解析IP范围",
-	}
+	return parsed
 }
 
 // IPsValidationResult 批量IP验证结果

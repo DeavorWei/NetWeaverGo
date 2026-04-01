@@ -3,9 +3,9 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/NetWeaverGo/core/internal/config"
-	"github.com/NetWeaverGo/core/internal/forge"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/NetWeaverGo/core/internal/sshutil"
@@ -113,30 +113,40 @@ func (s *DeviceService) AddDevices(devices []models.DeviceAsset) error {
 		return nil
 	}
 
-	// 标准化和校验
+	expandedDevices := make([]models.DeviceAsset, 0, len(devices))
+
 	for i := range devices {
 		config.NormalizeDevice(&devices[i])
+
+		rangeResult, rangeErr := parseIPv4LastOctetRange(devices[i].IP)
+		if rangeErr != nil {
+			return fmt.Errorf("第 %d 台设备: %v", i+1, rangeErr)
+		}
+
+		if rangeResult != nil {
+			for _, ip := range rangeResult.List {
+				newDevice := devices[i]
+				newDevice.IP = ip
+				if err := config.ValidateDevice(&newDevice); err != nil {
+					return fmt.Errorf("第 %d 台设备: 展开后 IP %s 校验失败: %v", i+1, ip, err)
+				}
+				expandedDevices = append(expandedDevices, newDevice)
+			}
+			continue
+		}
+
+		if strings.Contains(devices[i].IP, "-") || strings.Contains(devices[i].IP, "~") {
+			return fmt.Errorf("第 %d 台设备: 无法识别IP范围格式，期望格式如: 192.168.1.10-20", i+1)
+		}
+
 		if err := config.ValidateDevice(&devices[i]); err != nil {
 			return fmt.Errorf("第 %d 台设备: %v", i+1, err)
 		}
-	}
-
-	// 展开 IP 范围语法糖（如 "192.168.1.1-3" 展开为多个 IP）
-	expandedDevices := make([]models.DeviceAsset, 0)
-	for _, device := range devices {
-		ips, err := forge.ExpandSyntaxSugar(device.IP)
-		if err != nil {
-			return fmt.Errorf("IP 地址展开失败: %s, 错误: %v", device.IP, err)
-		}
-		for _, ip := range ips {
-			newDevice := device
-			newDevice.IP = ip
-			expandedDevices = append(expandedDevices, newDevice)
-		}
+		expandedDevices = append(expandedDevices, devices[i])
 	}
 
 	// 检查展开后的重复 IP
-	ipSet := make(map[string]struct{})
+	ipSet := make(map[string]struct{}, len(expandedDevices))
 	for _, d := range expandedDevices {
 		if _, exists := ipSet[d.IP]; exists {
 			return fmt.Errorf("存在重复的 IP 地址: %s", d.IP)
