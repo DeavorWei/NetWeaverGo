@@ -129,50 +129,54 @@
 
       <!-- 执行视图（正在运行时显示） -->
       <template v-if="shouldShowExecutionView">
-        <template v-if="executionView.taskType === 'topology'">
-          <div class="flex-1 flex flex-col gap-4">
-            <!-- Stage 进度展示 (新运行时支持) -->
-            <div v-if="executionStages.length > 0" class="flex-shrink-0">
-              <StageProgress
-                :stages="executionStages"
-                :units="executionUnits"
-              />
-            </div>
-
-            <!-- 原有提示内容 -->
-            <div class="flex-1 flex items-center justify-center">
-              <div
-                class="bg-bg-card border border-border rounded-xl p-8 text-center min-w-[420px]"
-              >
-                <div
-                  class="w-10 h-10 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto"
-                ></div>
-                <p class="mt-4 text-sm text-text-primary font-medium">
-                  {{
-                    topologyExecuting
-                      ? "拓扑任务执行中，请稍候..."
-                      : "拓扑任务已结束"
-                  }}
-                </p>
-                <p class="mt-2 text-xs text-text-muted">
-                  {{
-                    topologyExecuting
-                      ? "任务将自动完成采集→解析→构建流程。"
-                      : "可前往拓扑图谱查看结果。"
-                  }}
-                </p>
+        <div class="flex-1 flex flex-col gap-4">
+          <div
+            class="bg-bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-4"
+          >
+            <div class="space-y-2">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-sm font-semibold text-text-primary">
+                  {{ executionView.taskName || "任务执行" }}
+                </span>
+                <span
+                  class="px-2.5 py-1 rounded-full text-xs border flex items-center gap-1.5"
+                  :class="taskStatusBadge(executionRunStatus)"
+                >
+                  <span
+                    class="w-1.5 h-1.5 rounded-full"
+                    :class="taskStatusDot(executionRunStatus)"
+                  ></span>
+                  {{ taskStatusLabel(executionRunStatus) }}
+                </span>
+                <span
+                  v-if="executionView.taskType === 'topology'"
+                  class="px-2 py-0.5 rounded text-xs bg-accent/10 border border-accent/20 text-accent"
+                >
+                  拓扑采集
+                </span>
               </div>
+              <p class="text-sm text-text-primary">{{ executionStatusSummary }}</p>
+              <p
+                v-if="executionStatusDetail"
+                class="text-xs"
+                :class="executionStatusDetailClass"
+              >
+                {{ executionStatusDetail }}
+              </p>
             </div>
+            <button
+              v-if="executionView.taskType === 'topology' && isExecutionTerminal"
+              @click="router.push('/topology')"
+              class="px-3 py-2 rounded-lg text-sm font-medium border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
+            >
+              查看拓扑图谱
+            </button>
           </div>
-        </template>
 
-        <template v-else>
           <!-- 进度条 -->
           <div class="flex-shrink-0 space-y-1.5">
-            <div
-              class="flex items-center justify-between text-xs text-text-muted"
-            >
-              <span>{{ executionView.taskName }} - 总体进度</span>
+            <div class="flex items-center justify-between text-xs text-text-muted">
+              <span>{{ executionView.taskName || "任务执行" }} - 总体进度</span>
               <span class="font-mono">{{ progressPercent }}%</span>
             </div>
             <div
@@ -197,9 +201,7 @@
             ref="devicesContainer"
           >
             <div
-              v-if="
-                executionUnits.length === 0 && (isRunning || awaitingSnapshot)
-              "
+              v-if="executionUnits.length === 0 && (isRunning || awaitingSnapshot)"
               class="flex flex-col items-center justify-center h-48 text-text-muted gap-3"
             >
               <div
@@ -248,6 +250,20 @@
                       {{ statusLabel(unit.status) }}
                     </span>
                   </div>
+                  <div class="px-4 py-2 border-b border-border bg-bg-card/50 space-y-1">
+                    <div class="flex items-center justify-between gap-3 text-xs">
+                      <span class="text-text-muted">步骤进度</span>
+                      <span class="font-mono text-text-primary"
+                        >{{ unit.doneSteps }}/{{ unit.totalSteps }}</span
+                      >
+                    </div>
+                    <div
+                      v-if="unit.errorMessage"
+                      class="text-xs text-error break-all"
+                    >
+                      {{ unit.errorMessage }}
+                    </div>
+                  </div>
                   <VirtualLogTerminal
                     :logs="unit.logs || []"
                     :total-count="unit.logCount || 0"
@@ -258,15 +274,11 @@
               </div>
 
               <div
-                v-if="
-                  !showAllDevices && executionUnits.length > visibleUnitCount
-                "
+                v-if="!showAllDevices && executionUnits.length > visibleUnitCount"
                 class="text-center py-4 text-text-muted text-sm"
               >
                 还有
-                {{
-                  executionUnits.length - visibleUnitCount
-                }}
+                {{ executionUnits.length - visibleUnitCount }}
                 台设备已完成或等待中
                 <button
                   @click="showAllDevices = true"
@@ -287,7 +299,7 @@
               ← 返回任务列表
             </button>
           </div>
-        </template>
+        </div>
       </template>
 
       <!-- 任务列表视图 -->
@@ -470,10 +482,10 @@
                   </button>
                   <button
                     @click="executeTask(task)"
-                    :disabled="isRunning || topologyExecuting"
+                    :disabled="isRunning || awaitingSnapshot"
                     class="p-1.5 rounded-md text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
                     :class="
-                      isRunning || topologyExecuting
+                      isRunning || awaitingSnapshot
                         ? 'opacity-50 cursor-not-allowed'
                         : ''
                     "
@@ -751,7 +763,6 @@ const executionView = ref({
   taskType: "normal" as "normal" | "topology",
 });
 const awaitingSnapshot = ref(false);
-const topologyExecuting = ref(false);
 let snapshotTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
 const SNAPSHOT_TIMEOUT = 10000;
 let snapshotPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -822,15 +833,17 @@ const progressPercent = computed(() => {
     return 0;
   }
 
+  const runProgress = snapshot.progress ?? 0;
   if (Array.isArray(snapshot.stages) && snapshot.stages.length > 0) {
     const total = snapshot.stages.reduce(
       (sum, stage) => sum + (stage.progress || 0),
       0,
     );
-    return Math.round(total / snapshot.stages.length);
+    const stageProgress = Math.round(total / snapshot.stages.length);
+    return Math.max(runProgress, stageProgress);
   }
 
-  return snapshot.progress ?? 0;
+  return runProgress;
 });
 // ================== 统一运行时 Stage/Unit 数据 (新增) ==================
 const executionStages = computed<StageSnapshot[]>(() => {
@@ -839,6 +852,115 @@ const executionStages = computed<StageSnapshot[]>(() => {
 
 const executionUnits = computed<UnitSnapshot[]>(() => {
   return (executionSnapshot.value as any)?.units || [];
+});
+
+const executionRunStatus = computed(() => {
+  const snapshot = executionSnapshot.value;
+  if (snapshot?.status) {
+    return snapshot.status;
+  }
+  if (awaitingSnapshot.value) {
+    return "pending";
+  }
+  return isRunning.value ? "running" : "pending";
+});
+
+const failedExecutionUnitCount = computed(() => {
+  return executionUnits.value.filter((unit) =>
+    ["failed", "partial", "cancelled"].includes(unit.status),
+  ).length;
+});
+
+const firstExecutionError = computed(() => {
+  return (
+    executionUnits.value.find((unit) => normalizeString(unit.errorMessage))
+      ?.errorMessage ?? ""
+  );
+});
+
+const isExecutionTerminal = computed(() => {
+  return ["completed", "partial", "failed", "cancelled", "aborted"].includes(
+    executionRunStatus.value,
+  );
+});
+
+const executionStatusSummary = computed(() => {
+  const isTopology = executionView.value.taskType === "topology";
+  switch (executionRunStatus.value) {
+    case "pending":
+      return isTopology
+        ? "拓扑采集任务正在初始化，等待首个快照返回。"
+        : "任务正在初始化，等待首个快照返回。";
+    case "running":
+      return isTopology
+        ? "拓扑采集正在执行，页面将实时刷新采集、解析与构建进度。"
+        : "任务正在执行，页面将实时刷新设备日志与阶段进度。";
+    case "completed":
+      return isTopology
+        ? "拓扑采集已完成，所有阶段执行成功。"
+        : "任务执行完成，所有设备均已成功结束。";
+    case "partial":
+      return isTopology
+        ? "拓扑采集部分完成，存在失败设备或失败阶段。"
+        : "任务部分完成，存在失败设备或未完全成功的单元。";
+    case "failed":
+      return isTopology
+        ? "拓扑采集失败，未能完成必要执行阶段。"
+        : "任务执行失败。";
+    case "aborted":
+      return isTopology
+        ? "拓扑采集已中止，关键阶段失败导致后续阶段跳过。"
+        : "任务已中止。";
+    case "cancelled":
+      return isTopology ? "拓扑采集已取消。" : "任务已取消。";
+    default:
+      return isTopology ? "拓扑采集状态未知。" : "任务状态未知。";
+  }
+});
+
+const executionStatusDetail = computed(() => {
+  if (
+    executionRunStatus.value === "running" ||
+    executionRunStatus.value === "pending"
+  ) {
+    return executionView.value.taskType === "topology"
+      ? "执行链路：设备采集 → 数据解析 → 拓扑构建。任一设备失败都会在下方设备卡片中显示。"
+      : "执行链路会按快照持续更新，下方设备卡片与阶段条目会实时反映最新状态。";
+  }
+
+  const failedCount = failedExecutionUnitCount.value;
+  const firstError = normalizeString(firstExecutionError.value);
+  switch (executionRunStatus.value) {
+    case "completed":
+      return executionView.value.taskType === "topology"
+        ? "可以直接前往拓扑图谱页面查看本次采集结果。"
+        : "可以返回任务列表查看执行结果。";
+    case "partial":
+      return failedCount > 0
+        ? `共有 ${failedCount} 个执行单元未成功完成，请优先检查失败设备的错误信息。`
+        : "部分阶段未完全成功，请检查阶段与设备详情。";
+    case "failed":
+    case "aborted":
+      return firstError || "请检查失败设备的日志和错误原因。";
+    case "cancelled":
+      return "任务已停止，未完成的阶段不会继续执行。";
+    default:
+      return "";
+  }
+});
+
+const executionStatusDetailClass = computed(() => {
+  switch (executionRunStatus.value) {
+    case "partial":
+      return "text-warning";
+    case "failed":
+    case "aborted":
+      return "text-error";
+    case "completed":
+      return "text-success";
+    default:
+      return "text-text-muted";
+  }
 });
 
 // ================== 虚拟滚动优化计算属性 ==================
@@ -1016,7 +1138,6 @@ function resetExecutionViewState(reason: string) {
   executionView.value.taskName = "";
   executionView.value.taskType = "normal";
   awaitingSnapshot.value = false;
-  topologyExecuting.value = false;
   clearSnapshotTimeout();
   stopSnapshotPolling();
   taskexecStore.setCurrentRunId(null);
@@ -1149,22 +1270,15 @@ function clearSnapshotTimeout() {
 
 // 执行任务 (阶段3: 统一执行框架 - 统一使用runId驱动)
 async function executeTask(task: TaskGroup) {
-  if (isRunning.value || topologyExecuting.value) return;
+  if (isRunning.value || awaitingSnapshot.value) return;
 
-  // 统一使用统一运行时执行（普通任务和拓扑任务）
   executionView.value = {
     active: true,
     taskId: task.id,
-    runId: "", // 将在启动后设置
+    runId: "",
     taskName: task.name,
     taskType: isTopologyTask(task) ? "topology" : "normal",
   };
-
-  const isTopology = isTopologyTask(task);
-
-  if (isTopology) {
-    topologyExecuting.value = true;
-  }
 
   taskexecStore.clearEventLogs();
   taskexecStore.setCurrentRunId(null);
@@ -1179,37 +1293,13 @@ async function executeTask(task: TaskGroup) {
     taskexecStore.setCurrentRunId(runId);
     await taskexecStore.refreshSnapshot(runId);
     await taskexecStore.loadRunHistory(50);
-
-    if (isTopology) {
-      const checkTopologyComplete = setInterval(async () => {
-        const snapshot = await taskexecStore.refreshSnapshot(runId);
-        if (
-          snapshot &&
-          ["completed", "failed", "cancelled", "partial"].includes(
-            snapshot.status,
-          )
-        ) {
-          clearInterval(checkTopologyComplete);
-          topologyExecuting.value = false;
-          triggerToast("拓扑采集任务已完成", "success");
-          await taskexecStore.loadRunHistory(50);
-          await loadTasks();
-          router.push("/topology");
-        }
-      }, 2000);
-
-      setTimeout(() => {
-        clearInterval(checkTopologyComplete);
-        topologyExecuting.value = false;
-      }, 300000); // 5分钟超时
-    }
+    await loadTasks("task-started");
   } catch (err: any) {
     console.error("执行任务失败:", err);
     triggerToast(`执行失败: ${err?.message || err}`, "error");
     executionView.value.active = false;
     clearSnapshotTimeout();
     stopSnapshotPolling();
-    topologyExecuting.value = false;
   }
 }
 
@@ -1246,7 +1336,7 @@ async function doDelete() {
 
 // 关闭执行视图：仅解绑当前 run，不删除快照缓存
 function closeExecutionView() {
-  if (topologyExecuting.value) return;
+  if (isRunning.value || awaitingSnapshot.value) return;
   console.debug("[TaskExecution] 用户关闭执行视图");
   resetExecutionViewState("close-execution-view");
   void loadTasks("close-execution-view");
