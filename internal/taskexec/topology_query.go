@@ -54,7 +54,12 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 		deviceStatusStats[strings.TrimSpace(d.Status)]++
 	}
 
-	nodeSet := make(map[string]struct{})
+	nodeSet := make(map[string]struct{}, len(devices)+len(edges)*2)
+	for _, d := range devices {
+		if strings.TrimSpace(d.DeviceIP) != "" {
+			nodeSet[d.DeviceIP] = struct{}{}
+		}
+	}
 	for _, e := range edges {
 		if strings.TrimSpace(e.ADeviceID) != "" {
 			nodeSet[e.ADeviceID] = struct{}{}
@@ -108,7 +113,7 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 		_ = s.db.Model(&TaskRawOutput{}).Where("task_run_id = ?", runID).Count(&rawOutputCount).Error
 		_ = s.db.Model(&TaskRawOutput{}).Where("task_run_id = ? AND parse_status = ?", runID, "parse_failed").Count(&parseFailedCount).Error
 		_ = s.db.Model(&TaskRawOutput{}).Where("task_run_id = ? AND parse_status = ?", runID, "success").Count(&parseSuccessCount).Error
-		logger.Warn("TaskExec", runID, "查询拓扑图返回空结果: devices=%d, rawOutputs=%d, parseSuccess=%d, parseFailed=%d, lldpFacts=%d, deviceStatus=%v", len(devices), rawOutputCount, parseSuccessCount, parseFailedCount, lldpCount, deviceStatusStats)
+		logger.Warn("TaskExec", runID, "查询拓扑图无边结果: devices=%d, nodes=%d, rawOutputs=%d, parseSuccess=%d, parseFailed=%d, lldpFacts=%d, deviceStatus=%v", len(devices), len(nodes), rawOutputCount, parseSuccessCount, parseFailedCount, lldpCount, deviceStatusStats)
 	}
 
 	return &models.TopologyGraphView{

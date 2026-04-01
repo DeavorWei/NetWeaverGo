@@ -845,6 +845,47 @@ func TestFinishRunAndStageWithStatus(t *testing.T) {
 	assert.NotNil(t, gotStage.FinishedAt)
 }
 
+func TestGetTopologyGraphReturnsStandaloneDeviceNodesWhenNoEdges(t *testing.T) {
+	db := setupTestDB(t)
+	service := NewTaskExecutionService(db)
+	runID := "topo-run-single-node-1"
+	now := time.Now()
+
+	run := &TaskRun{
+		ID:        runID,
+		Name:      "topology-single-node",
+		RunKind:   string(RunKindTopology),
+		Status:    string(RunStatusCompleted),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	require.NoError(t, db.Create(run).Error)
+
+	device := &TaskRunDevice{
+		TaskRunID:   runID,
+		DeviceIP:    "192.168.58.200",
+		Status:      "completed",
+		DisplayName: "SW",
+		Vendor:      "huawei",
+		Model:       "S6700",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	require.NoError(t, db.Create(device).Error)
+
+	graph, err := service.GetTopologyGraph(runID)
+	require.NoError(t, err)
+	require.NotNil(t, graph)
+	require.Len(t, graph.Nodes, 1)
+	assert.Empty(t, graph.Edges)
+	assert.Equal(t, runID, graph.TaskID)
+	assert.Equal(t, "192.168.58.200", graph.Nodes[0].ID)
+	assert.Equal(t, "SW", graph.Nodes[0].Label)
+	assert.Equal(t, "192.168.58.200", graph.Nodes[0].IP)
+	assert.Equal(t, "huawei", graph.Nodes[0].Vendor)
+	assert.Equal(t, "S6700", graph.Nodes[0].Model)
+}
+
 // mockPlanCompiler 模拟计划编译器
 type mockPlanCompiler struct {
 	kind string

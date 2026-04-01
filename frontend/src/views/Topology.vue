@@ -187,7 +187,11 @@
       class="bg-warning/10 border border-warning/30 rounded-lg p-3 space-y-2"
     >
       <div class="text-sm text-warning font-medium">
-        当前运行未返回任何拓扑边，图形视图与表格视图都会为空。
+        {{
+          graph.nodes.length > 0
+            ? `当前运行未发现任何拓扑链路，但已识别 ${graph.nodes.length} 个设备节点。图形视图会显示孤立节点，表格视图暂无链路记录。`
+            : "当前运行未返回任何拓扑节点和链路，图形视图与表格视图都会为空。"
+        }}
       </div>
       <ul class="text-xs text-text-muted list-disc pl-5 space-y-1">
         <li v-for="reason in emptyGraphReasons" :key="reason">{{ reason }}</li>
@@ -532,7 +536,12 @@ const emptyGraphReasons = computed(() => {
   }
 
   const reasons: string[] = [];
+  const nodeCount = graph.value.nodes?.length || 0;
+  const edgeCount = graph.value.edges?.length || 0;
+
   reasons.push(`当前运行ID: ${selectedRunId.value}`);
+  reasons.push(`当前返回节点数: ${nodeCount}`);
+  reasons.push(`当前返回链路数: ${edgeCount}`);
 
   if (selectedRun.value) {
     reasons.push(
@@ -540,11 +549,27 @@ const emptyGraphReasons = computed(() => {
     );
   }
 
+  if (nodeCount > 0) {
+    reasons.push(
+      "后端已经返回设备节点，说明前端渲染链路并未失败；当前问题是未发现可用链路证据",
+    );
+    if (nodeCount === 1) {
+      reasons.push(
+        "单设备采集且没有 LLDP 邻居时，仅显示一个孤立设备节点属于预期表现",
+      );
+    } else {
+      reasons.push(
+        "如果本次本应存在链路，请继续检查 LLDP/FDB/ARP 解析结果与构图规则是否生成了边",
+      );
+    }
+  } else {
+    reasons.push(
+      "后端返回的拓扑节点和链路都为 0，问题通常发生在采集、解析或构图阶段，而不是前端渲染阶段",
+    );
+  }
+
   reasons.push(
-    "后端返回的拓扑边数量为 0，说明问题通常发生在采集、解析或构图阶段，而不是前端渲染阶段",
-  );
-  reasons.push(
-    "请重点查看后端 verbose 日志中的“拓扑采集设备画像解析 / 解析汇总 / 拓扑构建结果 / 查询拓扑图返回空结果”等关键字",
+    "请重点查看后端 verbose 日志中的“拓扑采集设备画像解析 / 解析汇总 / 拓扑构建结果 / 查询拓扑图无边结果”等关键字",
   );
   reasons.push(
     "华为设备必须采集到可被 TextFSM 模板识别的 LLDP verbose 输出，否则无法生成任何链路",
