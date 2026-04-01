@@ -201,7 +201,7 @@
             ref="devicesContainer"
           >
             <div
-              v-if="executionUnits.length === 0 && (isRunning || awaitingSnapshot)"
+              v-if="deviceCardUnits.length === 0 && (isRunning || awaitingSnapshot)"
               class="flex flex-col items-center justify-center h-48 text-text-muted gap-3"
             >
               <div
@@ -211,13 +211,13 @@
             </div>
             <div v-else>
               <div
-                v-if="executionUnits.length > 50"
+                v-if="deviceCardUnits.length > 50"
                 class="text-xs text-text-muted mb-2 px-1"
               >
-                共 {{ executionUnits.length }} 台设备，显示前
+                共 {{ deviceCardUnits.length }} 台设备，显示前
                 {{ visibleUnitCount }} 台活跃设备
                 <button
-                  v-if="executionUnits.length > visibleUnitCount"
+                  v-if="deviceCardUnits.length > visibleUnitCount"
                   @click="showAllDevices = !showAllDevices"
                   class="ml-2 text-accent hover:underline"
                 >
@@ -274,11 +274,11 @@
               </div>
 
               <div
-                v-if="!showAllDevices && executionUnits.length > visibleUnitCount"
+                v-if="!showAllDevices && deviceCardUnits.length > visibleUnitCount"
                 class="text-center py-4 text-text-muted text-sm"
               >
                 还有
-                {{ executionUnits.length - visibleUnitCount }}
+                {{ deviceCardUnits.length - visibleUnitCount }}
                 台设备已完成或等待中
                 <button
                   @click="showAllDevices = true"
@@ -865,16 +865,87 @@ const executionRunStatus = computed(() => {
   return isRunning.value ? "running" : "pending";
 });
 
+function isDeviceExecutionUnit(unit: UnitSnapshot): boolean {
+  return (
+    normalizeString(unit.kind) === "device" &&
+    normalizeString(unit.targetType) === "device_ip" &&
+    normalizeString(unit.targetKey) !== ""
+  );
+}
+
+function deviceUnitPriority(unit: UnitSnapshot, stageOrderMap: Map<string, number>): number {
+  const statusPriority: Record<string, number> = {
+    running: 700,
+    failed: 600,
+    partial: 550,
+    cancelled: 500,
+    pending: 300,
+    completed: 200,
+  };
+  const stageOrder = stageOrderMap.get(unit.stageId) ?? 0;
+  const progress = Number(unit.progress || 0);
+  const doneSteps = Number(unit.doneSteps || 0);
+  return (statusPriority[unit.status] || 0) * 1000000 + stageOrder * 10000 + progress * 100 + doneSteps;
+}
+
+const deviceCardUnits = computed<UnitSnapshot[]>(() => {
+  const stageOrderMap = new Map<string, number>(
+    executionStages.value.map((stage) => [stage.id, stage.order]),
+  );
+  const groups = new Map<string, UnitSnapshot[]>();
+
+  for (const unit of executionUnits.value) {
+    if (!isDeviceExecutionUnit(unit)) {
+      continue;
+    }
+    const key = normalizeString(unit.targetKey);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key)!.push(unit);
+  }
+
+  const projected = Array.from(groups.values())
+    .map((group) => {
+      const sorted = [...group].sort((left, right) => {
+        const priorityDiff =
+          deviceUnitPriority(right, stageOrderMap) -
+          deviceUnitPriority(left, stageOrderMap);
+        if (priorityDiff !== 0) {
+          return priorityDiff;
+        }
+        return normalizeString(left.id).localeCompare(normalizeString(right.id));
+      });
+      return sorted.length > 0 ? sorted[0] : null;
+    })
+    .filter((unit): unit is UnitSnapshot => unit !== null);
+
+  return projected.sort((left, right) => {
+    const priorityDiff =
+      deviceUnitPriority(right, stageOrderMap) -
+      deviceUnitPriority(left, stageOrderMap);
+    if (priorityDiff !== 0) {
+      return priorityDiff;
+    }
+    return normalizeString(left.targetKey).localeCompare(
+      normalizeString(right.targetKey),
+    );
+  });
+});
+
 const failedExecutionUnitCount = computed(() => {
-  return executionUnits.value.filter((unit) =>
+  return deviceCardUnits.value.filter((unit) =>
     ["failed", "partial", "cancelled"].includes(unit.status),
   ).length;
 });
 
 const firstExecutionError = computed(() => {
   return (
+    deviceCardUnits.value.find((unit) => normalizeString(unit.errorMessage))
+      ?.errorMessage ??
     executionUnits.value.find((unit) => normalizeString(unit.errorMessage))
-      ?.errorMessage ?? ""
+      ?.errorMessage ??
+    ""
   );
 });
 
@@ -965,11 +1036,11 @@ const executionStatusDetailClass = computed(() => {
 
 // ================== 虚拟滚动优化计算属性 ==================
 const visibleUnitCount = computed(() =>
-  showAllDevices.value ? executionUnits.value.length : VISIBLE_DEVICE_LIMIT,
+  showAllDevices.value ? deviceCardUnits.value.length : VISIBLE_DEVICE_LIMIT,
 );
 
 const visibleUnits = computed(() => {
-  const units = executionUnits.value;
+  const units = deviceCardUnits.value;
 
   if (showAllDevices.value) {
     return units;
