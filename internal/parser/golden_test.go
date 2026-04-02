@@ -9,11 +9,20 @@ import (
 	"testing"
 )
 
+// TestHuaweiGoldenParsedFacts 使用正则解析器的 golden 测试
 func TestHuaweiGoldenParsedFacts(t *testing.T) {
-	parser := NewTextFSMParser()
-	if err := parser.LoadBuiltinTemplates("huawei"); err != nil {
-		t.Fatalf("load templates failed: %v", err)
+	// 初始化新解析器管理器
+	manager := NewParserManager()
+	if err := manager.Bootstrap(); err != nil {
+		t.Fatalf("解析器管理器启动失败: %v", err)
 	}
+
+	// 获取华为解析器
+	parser, err := manager.GetParser("huawei")
+	if err != nil {
+		t.Fatalf("获取华为解析器失败: %v", err)
+	}
+
 	mapper := NewHuaweiMapper()
 
 	lldpRawPath := filepath.Join("..", "..", "testdata", "huawei", "raw", "lldp_neighbor_verbose.txt")

@@ -688,13 +688,13 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 
 // ParseExecutor for parsing collected data
 type ParseExecutor struct {
-	db           *gorm.DB
-	parserEngine *parser.TextFSMParser
+	db             *gorm.DB
+	parserProvider parser.ParserProvider
 }
 
 // NewParseExecutor creates executor
-func NewParseExecutor(db *gorm.DB) *ParseExecutor {
-	return &ParseExecutor{db: db, parserEngine: parser.NewTextFSMParser()}
+func NewParseExecutor(db *gorm.DB, provider parser.ParserProvider) *ParseExecutor {
+	return &ParseExecutor{db: db, parserProvider: provider}
 }
 
 // Kind returns executor type
@@ -974,8 +974,11 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 		vendorSource = "default_huawei"
 	}
 	logger.Verbose("TaskExec", runID, "开始解析运行设备: device=%s, vendor=%s, vendorSource=%s", deviceIP, vendor, vendorSource)
-	if err := e.parserEngine.LoadBuiltinTemplates(vendor); err != nil {
-		return fmt.Errorf("load vendor templates failed: %w", err)
+
+	// 获取厂商解析器
+	parserEngine, err := e.parserProvider.GetParser(vendor)
+	if err != nil {
+		return fmt.Errorf("get parser for vendor %s failed: %w", vendor, err)
 	}
 
 	var outputs []TaskRawOutput
@@ -1017,7 +1020,7 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 		if ctx.IsCancelled() {
 			return ctx.Context().Err()
 		}
-		rows, err := e.parserEngine.Parse(output.CommandKey, string(rawText))
+		rows, err := parserEngine.Parse(output.CommandKey, string(rawText))
 		if err != nil {
 			handler.LogDBErrorWithContext("更新 parse_status 为 parse_failed", e.db.Model(&TaskRawOutput{}).Where("id = ?", output.ID).
 				Updates(map[string]interface{}{"parse_status": "parse_failed", "parse_error": err.Error()}).Error,
@@ -1572,7 +1575,7 @@ func (e *TopologyBuildExecutor) buildRunTopology(runID string) (*models.Topology
 		if inferredFromFDBCount > 0 {
 			result.Errors = append(result.Errors, "未解析到任何 LLDP 邻居事实，当前拓扑边来自 FDB/ARP 推断，请重点关注置信度与冲突验证")
 		} else {
-			result.Errors = append(result.Errors, "未解析到任何 LLDP 邻居事实，请重点检查 LLDP 采集命令输出与 TextFSM 模板是否匹配")
+			result.Errors = append(result.Errors, "未解析到任何 LLDP 邻居事实，请重点检查 LLDP 采集命令输出与解析模板是否匹配")
 		}
 	}
 	if len(lldps) > 0 && len(saved) == 0 {

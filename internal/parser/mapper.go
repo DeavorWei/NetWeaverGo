@@ -228,10 +228,22 @@ func (m *HuaweiMapper) ToAggregate(rows []map[string]string) ([]AggregateFact, e
 				}
 			}
 			currentAgg = aggName
+
+			// 检查是否有逗号分隔的成员端口列表（来自新解析器的聚合模式）
+			if ifType := row["if_type"]; ifType != "" {
+				ifTypes := strings.Split(ifType, ",")
+				ifNums := strings.Split(row["if_num"], ",")
+				for i, t := range ifTypes {
+					if i < len(ifNums) {
+						memberPort := normalize.NormalizeInterfaceName(t + ifNums[i])
+						aggMap[currentAgg].MemberPorts = append(aggMap[currentAgg].MemberPorts, memberPort)
+					}
+				}
+			}
 			continue
 		}
 
-		// 成员端口行
+		// 成员端口行（来自 TextFSM 的逐行模式）
 		if ifType := row["if_type"]; ifType != "" && currentAgg != "" {
 			ifNum := row["if_num"]
 			memberPort := normalize.NormalizeInterfaceName(ifType + ifNum)

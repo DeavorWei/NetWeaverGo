@@ -100,8 +100,8 @@
 │  │  │ (SQLite/ORM) │  │ (日志系统)   │  │   (报告收集)             │      │  │
 │  │  └──────────────┘  └──────────────┘  └─────────────────────────┘      │  │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────┐      │  │
-│  │  │   Parser     │  │   TextFSM    │  │   Normalize             │      │  │
-│  │  │ (解析服务)   │  │ (模板引擎)   │  │   (数据规范化)           │      │  │
+│  │  │   Parser     │  │ RegexParser  │  │   Normalize             │      │  │
+│  │  │ (解析服务)   │  │ (正则解析器)  │  │   (数据规范化)           │      │  │
 │  │  └──────────────┘  └──────────────┘  └─────────────────────────┘      │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -300,9 +300,17 @@ stateDiagram-v2
 
 ### 3.5 解析模块 (`internal/parser/`)
 
-#### 3.5.1 TextFSM 解析器
+#### 3.5.1 正则解析器架构
 
-**文件**: `internal/parser/textfsm.go`
+**核心组件**:
+
+| 组件              | 文件                  | 职责                                        |
+| ----------------- | --------------------- | ------------------------------------------- |
+| `RegexParser`     | `regex_parser.go`     | 纯正则解析引擎，支持单行/多行模式           |
+| `AggregateEngine` | `aggregate_engine.go` | 多行聚合引擎，支持 recordStart/captureRules |
+| `CompositeParser` | `composite_parser.go` | 厂商级组合解析器，实现 `CliParser` 接口     |
+| `ParserManager`   | `manager.go`          | 模板管理器，支持热加载和原子替换            |
+| `Mapper`          | `mapper.go`           | 解析结果到领域模型的映射                    |
 
 **支持的厂商模板**:
 
@@ -316,15 +324,33 @@ stateDiagram-v2
 
 ```
 internal/parser/templates/
-├── huawei/
-│   ├── version.textfsm
-│   ├── lldp_neighbor.textfsm
-│   └── ...
-├── h3c/
-│   └── ...
-└── cisco/
-    └── ...
+└── builtin/
+    ├── huawei.json    # 华为设备模板
+    ├── h3c.json       # H3C设备模板
+    └── cisco.json     # Cisco设备模板
 ```
+
+#### 3.5.3 模板 DSL 结构
+
+```json
+{
+  "vendor": "huawei",
+  "commandKey": "lldp_neighbor",
+  "engine": "aggregate",
+  "aggregation": {
+    "recordStart": "^Device ID: (.+)",
+    "captureRules": [
+      { "pattern": "^  Local Interface: (.+)", "field": "local_intf" },
+      { "pattern": "^  Neighbor Interface: (.+)", "field": "neighbor_intf" }
+    ]
+  }
+}
+```
+
+**引擎类型**:
+
+- `regex`: 纯正则引擎，适用于简单单行/多行匹配
+- `aggregate`: 聚合引擎，适用于多行记录聚合（如 LLDP、接口信息）
 
 ---
 
@@ -494,7 +520,7 @@ sequenceDiagram
    │   ├── 执行接口信息采集命令
    │   └── 保存原始输出
    ├── Stage 2: 信息解析 (parse)
-   │   ├── 使用 TextFSM 模板解析 LLDP 输出
+   │   ├── 使用正则解析器解析 LLDP 输出
    │   ├── 解析接口信息
    │   └── 生成结构化数据
    └── Stage 3: 拓扑构建 (topology_build)

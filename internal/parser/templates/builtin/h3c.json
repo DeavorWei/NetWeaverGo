@@ -1,0 +1,71 @@
+{
+  "vendor": "h3c",
+  "templates": {
+    "version": {
+      "commandKey": "version",
+      "engine": "regex",
+      "pattern": "^.*Version\\s+(?P<version>\\S+)|^.*H3C\\s+(?P<model>[A-Za-z0-9\\-_\\/\\.]+)|^.*[Ss]erial\\s*[Nn]umber.*:\\s*(?P<serial_number>\\S+)",
+      "multiline": true,
+      "description": "设备版本信息"
+    },
+    "interface_brief": {
+      "commandKey": "interface_brief",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<interface>\\S+)\\s+(?P<phy_status>\\S+)\\s+(?P<protocol>\\S+)",
+      "multiline": true,
+      "description": "接口简要信息"
+    },
+    "lldp_neighbor": {
+      "commandKey": "lldp_neighbor",
+      "engine": "aggregate",
+      "aggregation": {
+        "recordStart": [
+          "^\\s*\\[(?P<local_if>\\S+)\\]\\s*$",
+          "^\\s*(?P<local_if>\\S+)\\s+has\\s+\\d+\\s+neighbor"
+        ],
+        "captureRules": [
+          {
+            "pattern": "System\\s+name\\s*:\\s*(?P<neighbor_name>.+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "Port\\s+ID\\s*:\\s*(?P<neighbor_port>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "Chassis\\s+ID\\s*:\\s*(?P<chassis_id>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "Management\\s+address\\s*:\\s*(?P<mgmt_ip>\\S+)",
+            "mode": "set"
+          }
+        ],
+        "filldown": ["local_if"],
+        "emitWhen": ["neighbor_name"]
+      },
+      "description": "LLDP邻居多行聚合"
+    },
+    "mac_address": {
+      "commandKey": "mac_address",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<mac>[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})\\s+(?P<vlan>\\d+)\\s+(?P<interface>\\S+)\\s+(?P<type>\\S+)",
+      "multiline": true,
+      "description": "MAC地址表"
+    },
+    "eth_trunk": {
+      "commandKey": "eth_trunk",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<aggregate>\\S+)\\s+(?P<status>\\S+)\\s+(?P<mode>\\S+)",
+      "multiline": true,
+      "description": "聚合口信息"
+    },
+    "arp_all": {
+      "commandKey": "arp_all",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<ip>\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+(?P<mac>[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})\\s+(?P<interface>\\S+)\\s+(?P<type>\\S+)",
+      "multiline": true,
+      "description": "ARP表"
+    }
+  }
+}

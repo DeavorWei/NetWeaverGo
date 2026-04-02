@@ -6,7 +6,6 @@ require (
 	github.com/glebarez/sqlite v1.11.0
 	github.com/google/uuid v1.6.0
 	github.com/pkg/sftp v1.13.10
-	github.com/sirikothe/gotextfsm v1.1.0
 	github.com/stretchr/testify v1.11.1
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.74
 	github.com/xuri/excelize/v2 v2.9.0

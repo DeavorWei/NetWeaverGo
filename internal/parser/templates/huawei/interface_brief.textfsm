@@ -1,8 +1,0 @@
-Value interface (\S+)
-Value phy (\S+)
-Value protocol (\S+)
-Value description (.*)
-
-Start
-  ^${interface}\s+${phy}\s+${protocol}(?:\s+${description})?\s*$$ -> Record
-

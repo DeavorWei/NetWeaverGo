@@ -1,0 +1,106 @@
+{
+  "vendor": "cisco",
+  "templates": {
+    "version": {
+      "commandKey": "version",
+      "engine": "regex",
+      "pattern": "^.*Version\\s+(?P<version>\\S+)|^.*cisco\\s+(?P<model>\\S+)|^.*Processor\\s+board\\s+ID\\s+(?P<serial_number>\\S+)|^(?P<hostname>\\S+)#",
+      "multiline": true,
+      "description": "设备版本信息"
+    },
+    "interface_brief": {
+      "commandKey": "interface_brief",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<interface>\\S+)\\s+(?P<ip_address>\\S+)?\\s*(?P<status>\\S+)\\s+(?P<protocol>\\S+)",
+      "multiline": true,
+      "description": "接口简要信息"
+    },
+    "interface_detail": {
+      "commandKey": "interface_detail",
+      "engine": "aggregate",
+      "aggregation": {
+        "recordStart": ["^(?P<interface>\\S+)\\s+is\\s+"],
+        "captureRules": [
+          {
+            "pattern": "^\\s*Description:\\s*(?P<description>.*)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*Hardware\\s+is\\s+(?P<hardware>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*address\\s+is\\s+(?P<mac>[0-9A-Fa-f\\.]+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*Internet\\s+address\\s+is\\s+(?P<ip>\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*(?P<interface>\\S+)\\s+is\\s+(?P<status>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*line\\s+protocol\\s+is\\s+(?P<protocol>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*BW\\s+(?P<bandwidth>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*duplex\\s*,\\s*(?P<duplex>\\S+)",
+            "mode": "set"
+          }
+        ],
+        "emitWhen": ["interface"]
+      },
+      "description": "接口详情多行聚合"
+    },
+    "lldp_neighbor": {
+      "commandKey": "lldp_neighbor",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<local_if>\\S+)\\s+(?P<neighbor_name>\\S+)\\s+(?P<neighbor_port>\\S+)",
+      "multiline": true,
+      "description": "LLDP邻居信息"
+    },
+    "mac_address": {
+      "commandKey": "mac_address",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<vlan>\\d+)\\s+(?P<mac>[0-9A-Fa-f]{4}\\.[0-9A-Fa-f]{4}\\.[0-9A-Fa-f]{4})\\s+(?P<type>\\S+)\\s+(?P<interface>\\S+)",
+      "multiline": true,
+      "description": "MAC地址表"
+    },
+    "eth_trunk": {
+      "commandKey": "eth_trunk",
+      "engine": "aggregate",
+      "aggregation": {
+        "recordStart": ["^\\s*Port-channel(?P<aggregate_id>\\d+)"],
+        "captureRules": [
+          {
+            "pattern": "^\\s*Port-channel\\d+\\s+(?P<status>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*Members\\s+in\\s+this\\s+channel:\\s*(?P<members>.+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*Mode\\s*:\\s*(?P<mode>\\S+)",
+            "mode": "set"
+          }
+        ],
+        "emitWhen": ["aggregate_id"]
+      },
+      "description": "聚合口信息"
+    },
+    "arp_all": {
+      "commandKey": "arp_all",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<ip>\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+(?P<mac>[0-9A-Fa-f]{4}\\.[0-9A-Fa-f]{4}\\.[0-9A-Fa-f]{4})\\s+(?P<interface>\\S+)",
+      "multiline": true,
+      "description": "ARP表"
+    }
+  }
+}

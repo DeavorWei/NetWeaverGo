@@ -1,0 +1,158 @@
+{
+  "vendor": "huawei",
+  "templates": {
+    "version": {
+      "commandKey": "version",
+      "engine": "regex",
+      "pattern": "^.*[Vv]ersion.*[Vv](?P<version>\\S+)|^Huawei\\s+(?P<model>[A-Za-z0-9\\-_\\/\\.]+)|^.*[Ss]erial\\s*[Nn]umber.*:\\s*(?P<serial_number>\\S+)|^<(?P<hostname>\\S+)>",
+      "multiline": true,
+      "description": "设备版本信息"
+    },
+    "sysname": {
+      "commandKey": "sysname",
+      "engine": "regex",
+      "pattern": "^sysname\\s+(?P<sysname>\\S+)",
+      "multiline": false,
+      "description": "设备系统名称"
+    },
+    "esn": {
+      "commandKey": "esn",
+      "engine": "regex",
+      "pattern": "^\\s*ESN\\s*:\\s*(?P<esn>\\S+)|^\\s*Serial\\s*Number\\s*:\\s*(?P<esn>\\S+)",
+      "multiline": true,
+      "description": "设备ESN序列号"
+    },
+    "device_info": {
+      "commandKey": "device_info",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<name>\\S+)\\s+(?P<value>.+)\\s*$",
+      "multiline": true,
+      "description": "设备信息"
+    },
+    "interface_brief": {
+      "commandKey": "interface_brief",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<interface>\\S+)\\s+(?P<phy_status>\\S+)\\s+(?P<protocol>\\S+)\\s+(?P<in_util>\\S+)?\\s*(?P<out_util>\\S+)?\\s*(?P<in_errors>\\S+)?\\s*(?P<out_errors>\\S+)?",
+      "multiline": true,
+      "description": "接口简要信息"
+    },
+    "interface_detail": {
+      "commandKey": "interface_detail",
+      "engine": "aggregate",
+      "aggregation": {
+        "recordStart": ["^(?P<interface>\\S+)\\s+current\\s+state"],
+        "captureRules": [
+          {
+            "pattern": "^\\s*Description:\\s*(?P<description>.*)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*Hardware\\s+address\\s+is\\s+(?P<mac>[0-9A-Fa-f:\\.-]+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*Internet\\s+Address\\s+is\\s+(?P<ip>\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*Current\\s+state:\\s*(?P<status>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*Line\\s+protocol\\s+current\\s+state:\\s*(?P<protocol>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*Speed\\s*:\\s*(?P<speed>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*Duplex\\s*:\\s*(?P<duplex>\\S+)",
+            "mode": "set"
+          }
+        ],
+        "emitWhen": ["interface"]
+      },
+      "description": "接口详情多行聚合"
+    },
+    "lldp_neighbor": {
+      "commandKey": "lldp_neighbor",
+      "engine": "aggregate",
+      "aggregation": {
+        "recordStart": [
+          "^\\s*\\[(?P<local_if>\\S+)\\]\\s*$",
+          "^\\s*(?P<local_if>\\S+)\\s+has\\s+\\d+\\s+neighbor"
+        ],
+        "captureRules": [
+          {
+            "pattern": "System\\s+name\\s*:\\s*(?P<neighbor_name>.+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "Port\\s+ID\\s*:\\s*(?P<neighbor_port>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "Chassis\\s+ID\\s*:\\s*(?P<chassis_id>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "Management\\s+address\\s*:\\s*(?P<mgmt_ip>\\S+)",
+            "mode": "set"
+          }
+        ],
+        "filldown": ["local_if"],
+        "emitWhen": ["neighbor_name"]
+      },
+      "description": "LLDP邻居多行聚合"
+    },
+    "mac_address": {
+      "commandKey": "mac_address",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<mac>[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})\\s+(?P<vlan>\\d+)\\s+(?P<interface>\\S+)\\s+(?P<type>\\S+)",
+      "multiline": true,
+      "description": "MAC地址表"
+    },
+    "eth_trunk": {
+      "commandKey": "eth_trunk",
+      "engine": "aggregate",
+      "aggregation": {
+        "recordStart": ["^\\s*(?:Eth-Trunk|Trunk)(?P<trunk_id>\\d+)\\s*$"],
+        "captureRules": [
+          {
+            "pattern": "^\\s*(?P<if_type>GE|XGE|10GE|40GE|100GE|GigabitEthernet|XGigabitEthernet)(?P<if_num>\\d+/\\d+/\\d+)\\s*$",
+            "mode": "append"
+          }
+        ],
+        "emitWhen": ["trunk_id"]
+      },
+      "description": "聚合口信息"
+    },
+    "eth_trunk_verbose": {
+      "commandKey": "eth_trunk_verbose",
+      "engine": "aggregate",
+      "aggregation": {
+        "recordStart": ["^\\s*Eth-Trunk(?P<aggregate_id>\\d+)\\s+"],
+        "captureRules": [
+          {
+            "pattern": "^\\s*Eth-Trunk\\d+\\s+(?P<status>\\S+)\\s+(?P<mode>\\S+)",
+            "mode": "set"
+          },
+          {
+            "pattern": "^\\s*MemberPort\\s*:\\s*(?P<member>.+)",
+            "mode": "append"
+          }
+        ],
+        "emitWhen": ["aggregate_id"]
+      },
+      "description": "聚合口详细信息"
+    },
+    "arp_all": {
+      "commandKey": "arp_all",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<ip>\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+(?P<mac>[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})\\s+(?P<interface>\\S+)\\s+(?P<type>\\S+)",
+      "multiline": true,
+      "description": "ARP表"
+    }
+  }
+}

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -162,7 +163,11 @@ func TestExecutionSnapshotBuild(t *testing.T) {
 // TestTaskExecutionService tests the unified service
 func TestTaskExecutionService(t *testing.T) {
 	db := setupTestDB(t)
-	service := NewTaskExecutionService(db)
+	parserManager := parser.NewParserManager()
+	if err := parserManager.Bootstrap(); err != nil {
+		t.Fatalf("解析器管理器启动失败: %v", err)
+	}
+	service := NewTaskExecutionService(db, parserManager)
 
 	// Create normal task
 	normalConfig := &NormalTaskConfig{

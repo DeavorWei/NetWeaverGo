@@ -1,8 +1,0 @@
-Value trunk_id (\d+)
-Value if_type (GE|XGE|10GE|40GE|BAGG)
-Value if_num (\d+/\d+/\d+)
-
-Start
-  ^\s*(?:Bridge-Aggregation|BAGG)${trunk_id}.*$$ -> Record
-  ^\s*${if_type}${if_num}.*$$ -> Record
-

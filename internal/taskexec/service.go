@@ -7,22 +7,24 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"gorm.io/gorm"
 )
 
 // TaskExecutionService 统一任务执行服务
 type TaskExecutionService struct {
-	runtime    *RuntimeManager
-	compiler   *CompilerRegistry
-	snapshot   *SnapshotHub
-	repo       Repository
-	db         *gorm.DB
-	deviceRepo repository.DeviceRepository
+	runtime        *RuntimeManager
+	compiler       *CompilerRegistry
+	snapshot       *SnapshotHub
+	repo           Repository
+	db             *gorm.DB
+	deviceRepo     repository.DeviceRepository
+	parserProvider parser.ParserProvider
 }
 
 // NewTaskExecutionService 创建任务执行服务
-func NewTaskExecutionService(db *gorm.DB) *TaskExecutionService {
+func NewTaskExecutionService(db *gorm.DB, parserProvider parser.ParserProvider) *TaskExecutionService {
 	repo := NewGormRepository(db)
 	eventBus := NewEventBus(1000)
 	snapshotHub := NewSnapshotHub(eventBus)
@@ -36,16 +38,17 @@ func NewTaskExecutionService(db *gorm.DB) *TaskExecutionService {
 	// Register stage executors
 	runtime.RegisterExecutor(NewDeviceCommandExecutor(repository.NewDeviceRepository()))
 	runtime.RegisterExecutor(NewDeviceCollectExecutor(repository.NewDeviceRepository()))
-	runtime.RegisterExecutor(NewParseExecutor(db))
+	runtime.RegisterExecutor(NewParseExecutor(db, parserProvider))
 	runtime.RegisterExecutor(NewTopologyBuildExecutor(db))
 
 	service := &TaskExecutionService{
-		runtime:    runtime,
-		compiler:   compilerReg,
-		snapshot:   snapshotHub,
-		repo:       repo,
-		db:         db,
-		deviceRepo: repository.NewDeviceRepository(),
+		runtime:        runtime,
+		compiler:       compilerReg,
+		snapshot:       snapshotHub,
+		repo:           repo,
+		db:             db,
+		deviceRepo:     repository.NewDeviceRepository(),
+		parserProvider: parserProvider,
 	}
 
 	return service

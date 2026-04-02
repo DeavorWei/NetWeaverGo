@@ -535,7 +535,11 @@ func TestRuntimeManagerGetSnapshotDeltaEnrichesUnitUpsertLogs(t *testing.T) {
 
 func TestTaskExecutionServiceGetSnapshotDelta(t *testing.T) {
 	db := setupTestDB(t)
-	service := NewTaskExecutionService(db)
+	parserManager := parser.NewParserManager()
+	if err := parserManager.Bootstrap(); err != nil {
+		t.Fatalf("解析器管理器启动失败: %v", err)
+	}
+	service := NewTaskExecutionService(db, parserManager)
 	run := &TaskRun{
 		ID:        "delta-run-2",
 		Name:      "service-delta-test",
@@ -849,7 +853,11 @@ func TestFinishRunAndStageWithStatus(t *testing.T) {
 
 func TestGetTopologyGraphReturnsStandaloneDeviceNodesWhenNoEdges(t *testing.T) {
 	db := setupTestDB(t)
-	service := NewTaskExecutionService(db)
+	parserManager := parser.NewParserManager()
+	if err := parserManager.Bootstrap(); err != nil {
+		t.Fatalf("解析器管理器启动失败: %v", err)
+	}
+	service := NewTaskExecutionService(db, parserManager)
 	runID := "topo-run-single-node-1"
 	now := time.Now()
 
@@ -1023,7 +1031,11 @@ func TestResolveEdgeConflictsMarksCloseCandidatesAsConflict(t *testing.T) {
 
 func TestGetTopologyGraphClassifiesServerAndTerminalNodes(t *testing.T) {
 	db := setupTestDB(t)
-	service := NewTaskExecutionService(db)
+	parserManager := parser.NewParserManager()
+	if err := parserManager.Bootstrap(); err != nil {
+		t.Fatalf("解析器管理器启动失败: %v", err)
+	}
+	service := NewTaskExecutionService(db, parserManager)
 	runID := "topo-run-endpoint-nodes-1"
 	now := time.Now()
 

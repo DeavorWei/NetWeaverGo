@@ -8,6 +8,7 @@ import (
 	"github.com/NetWeaverGo/core"
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/NetWeaverGo/core/internal/taskexec"
 	"github.com/NetWeaverGo/core/internal/ui"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -47,8 +48,16 @@ func main() {
 func runGUI() {
 	logger.Info("System", "-", "正在初始化 Wails GUI 环境...")
 
+	// 初始化解析器管理器
+	parserManager := parser.NewParserManager()
+	if err := parserManager.Bootstrap(); err != nil {
+		logger.Error("System", "-", "解析器管理器初始化失败: %v", err)
+		os.Exit(1)
+	}
+	logger.Info("System", "-", "解析器管理器已启动")
+
 	// 创建应用级共享的统一任务执行服务（阶段1：统一运行时服务化）
-	taskExecutionService := taskexec.NewTaskExecutionService(config.DB)
+	taskExecutionService := taskexec.NewTaskExecutionService(config.DB, parserManager)
 	taskExecutionService.Start()
 	logger.Info("System", "-", "统一任务执行服务已启动")
 

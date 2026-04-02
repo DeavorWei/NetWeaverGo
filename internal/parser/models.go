@@ -1,6 +1,10 @@
 package parser
 
-import "time"
+import (
+	"errors"
+	"regexp"
+	"time"
+)
 
 // DeviceIdentity 设备身份信息
 type DeviceIdentity struct {
@@ -106,3 +110,110 @@ type ResultMapper interface {
 	// ToAggregate 将聚合口解析结果映射为聚合信息
 	ToAggregate(rows []map[string]string) ([]AggregateFact, error)
 }
+
+// ============================================================================
+// 解析器管理接口（任务 1.1）
+// ============================================================================
+
+// ParserProvider 解析器提供者接口
+// 用于从管理器获取指定厂商的只读解析器快照
+type ParserProvider interface {
+	// GetParser 获取指定厂商的解析器
+	GetParser(vendor string) (CliParser, error)
+}
+
+// ParserReloader 解析器重载接口
+// 用于在模板变更后刷新解析器快照
+type ParserReloader interface {
+	// ReloadVendor 重载指定厂商的解析器快照
+	ReloadVendor(vendor string) error
+}
+
+// ============================================================================
+// 统一模板 DSL（任务 1.2）
+// ============================================================================
+
+// TemplateEngine 模板引擎类型
+type TemplateEngine string
+
+const (
+	// EngineRegex 纯正则引擎
+	EngineRegex TemplateEngine = "regex"
+	// EngineAggregate 多行聚合引擎
+	EngineAggregate TemplateEngine = "aggregate"
+)
+
+// RegexTemplate 统一模板定义
+type RegexTemplate struct {
+	Vendor       string             `json:"vendor,omitempty"`
+	CommandKey   string             `json:"commandKey"`
+	Engine       TemplateEngine     `json:"engine"`
+	Pattern      string             `json:"pattern,omitempty"`
+	Multiline    bool               `json:"multiline,omitempty"`
+	Aggregation  *AggregationConfig `json:"aggregation,omitempty"`
+	FieldMapping map[string]string  `json:"fieldMapping,omitempty"`
+	Description  string             `json:"description,omitempty"`
+}
+
+// AggregationConfig 多行聚合配置
+type AggregationConfig struct {
+	// RecordStart 记录起始模式列表
+	RecordStart []string `json:"recordStart,omitempty"`
+	// CaptureRules 字段捕获规则
+	CaptureRules []CaptureRule `json:"captureRules,omitempty"`
+	// Filldown 需要向下填充的字段列表
+	Filldown []string `json:"filldown,omitempty"`
+	// EmitWhen 记录输出条件字段列表
+	EmitWhen []string `json:"emitWhen,omitempty"`
+}
+
+// CaptureRule 字段捕获规则
+type CaptureRule struct {
+	// Pattern 正则模式
+	Pattern string `json:"pattern"`
+	// Mode 捕获模式：set / append
+	Mode string `json:"mode"`
+}
+
+// CompiledTemplate 已编译的模板
+type CompiledTemplate struct {
+	RegexTemplate
+	// CompiledPattern 已编译的主正则
+	CompiledPattern *regexp.Regexp
+	// CompiledRecordStart 已编译的记录起始模式
+	CompiledRecordStart []*regexp.Regexp
+	// CompiledCaptureRules 已编译的捕获规则
+	CompiledCaptureRules []CompiledCaptureRule
+}
+
+// CompiledCaptureRule 已编译的捕获规则
+type CompiledCaptureRule struct {
+	Pattern         *regexp.Regexp
+	Mode            string
+	OriginalPattern string
+}
+
+// VendorTemplates 厂商模板集合
+type VendorTemplates struct {
+	Vendor    string                   `json:"vendor"`
+	Templates map[string]RegexTemplate `json:"templates"`
+}
+
+// ============================================================================
+// 解析器错误定义
+// ============================================================================
+
+var (
+	// ErrNilTemplate 模板为空
+	ErrNilTemplate = errors.New("模板为空")
+	// ErrPatternNotCompiled 正则模式未编译
+	ErrPatternNotCompiled = errors.New("正则模式未编译")
+	// ErrTemplateNotFound 模板未找到
+	ErrTemplateNotFound = errors.New("模板未找到")
+	// ErrVendorNotLoaded 厂商解析器未加载
+	ErrVendorNotLoaded = errors.New("厂商解析器未加载")
+	// ErrUnsupportedEngine 不支持的模板引擎
+	ErrUnsupportedEngine = errors.New("不支持的模板引擎")
+	// ErrInvalidAggregationConfig 无效的聚合配置
+	ErrInvalidAggregationConfig = errors.New("无效的聚合配置")
+)
