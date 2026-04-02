@@ -227,8 +227,9 @@ func (s *TopologyCommandService) ResetVendorCommandConfig(vendor string) (*Topol
 func (s *TopologyCommandService) PreviewTopologyCommands(taskVendor string, deviceIDs []uint, overrides []models.TopologyTaskFieldOverride) (*TopologyCommandPreviewView, error) {
 	resolver := taskexec.NewTopologyCommandResolver()
 	preview := &TopologyCommandPreviewView{
-		SupportedVendors: s.GetSupportedTopologyVendors(),
+		SupportedVendors: s.GetTaskTopologyVendors(),
 		FieldCatalog:     taskexec.GetTopologyFieldCatalog(),
+		TaskOverrides:    normalizeTopologyTaskOverrides(overrides),
 		Devices:          make([]TopologyPreviewDeviceView, 0, len(deviceIDs)),
 	}
 
@@ -259,6 +260,45 @@ func (s *TopologyCommandService) PreviewTopologyCommands(taskVendor string, devi
 		return preview.Devices[i].DeviceIP < preview.Devices[j].DeviceIP
 	})
 	return preview, nil
+}
+
+// GetTaskTopologyVendors 返回任务创建/编辑场景的可选厂商（系统支持 + 资产厂商并集）。
+func (s *TopologyCommandService) GetTaskTopologyVendors() []string {
+	supported := s.GetSupportedTopologyVendors()
+	union := make(map[string]struct{}, len(supported))
+	for _, vendor := range supported {
+		normalized := strings.ToLower(strings.TrimSpace(vendor))
+		if normalized == "" {
+			continue
+		}
+		union[normalized] = struct{}{}
+	}
+
+	if s.repo == nil {
+		s.repo = repository.NewDeviceRepository()
+	}
+	if s.repo != nil {
+		devices, err := s.repo.FindAll()
+		if err == nil {
+			for _, device := range devices {
+				vendor := strings.ToLower(strings.TrimSpace(device.Vendor))
+				if vendor == "" {
+					continue
+				}
+				union[vendor] = struct{}{}
+			}
+		}
+	}
+
+	result := make([]string, 0, len(union)+1)
+	for vendor := range union {
+		result = append(result, vendor)
+	}
+	if _, exists := union["huawei"]; !exists {
+		result = append(result, "huawei")
+	}
+	sort.Strings(result)
+	return result
 }
 
 func (s *TopologyCommandService) findDevicesByIDs(deviceIDs []uint) ([]models.DeviceAsset, error) {
@@ -343,6 +383,31 @@ func profileCommandsByKey(profile *config.DeviceProfile) map[string]config.Comma
 		}
 		result[fieldKey] = item
 	}
+	return result
+}
+
+func normalizeTopologyTaskOverrides(overrides []models.TopologyTaskFieldOverride) []models.TopologyTaskFieldOverride {
+	result := make([]models.TopologyTaskFieldOverride, 0, len(overrides))
+	seen := make(map[string]struct{}, len(overrides))
+	for _, item := range overrides {
+		fieldKey := strings.TrimSpace(item.FieldKey)
+		if fieldKey == "" {
+			continue
+		}
+		if _, exists := seen[fieldKey]; exists {
+			continue
+		}
+		seen[fieldKey] = struct{}{}
+		result = append(result, models.TopologyTaskFieldOverride{
+			FieldKey:   fieldKey,
+			Command:    strings.TrimSpace(item.Command),
+			TimeoutSec: item.TimeoutSec,
+			Enabled:    item.Enabled,
+		})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].FieldKey < result[j].FieldKey
+	})
 	return result
 }
 

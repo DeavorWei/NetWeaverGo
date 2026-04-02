@@ -199,6 +199,8 @@ export const TopologyCommandConfigAPI = {
  * @description 提供任务级拓扑命令解析预览
  */
 export const TopologyCommandAPI = {
+  /** 获取任务创建/编辑可选厂商列表（系统支持 + 资产厂商并集） */
+  getTaskTopologyVendors: TopologyCommandServiceBinding.GetTaskTopologyVendors,
   /** 预览当前任务配置下的拓扑命令解析结果 */
   previewTopologyCommands: TopologyCommandServiceBinding.PreviewTopologyCommands,
 } as const

@@ -39,10 +39,11 @@ type TopologyPreviewDeviceView struct {
 
 // TopologyCommandPreviewView 拓扑命令预览结果。
 type TopologyCommandPreviewView struct {
-	SupportedVendors  []string                      `json:"supportedVendors"`
-	FieldCatalog      []models.TopologyFieldSpec    `json:"fieldCatalog"`
-	DefaultResolution TopologyCommandResolutionView `json:"defaultResolution"`
-	Devices           []TopologyPreviewDeviceView   `json:"devices"`
+	SupportedVendors  []string                           `json:"supportedVendors"`
+	FieldCatalog      []models.TopologyFieldSpec         `json:"fieldCatalog"`
+	TaskOverrides     []models.TopologyTaskFieldOverride `json:"taskOverrides"`
+	DefaultResolution TopologyCommandResolutionView      `json:"defaultResolution"`
+	Devices           []TopologyPreviewDeviceView        `json:"devices"`
 }
 
 // TopologyVendorCommandItemView 厂商字段命令配置项。

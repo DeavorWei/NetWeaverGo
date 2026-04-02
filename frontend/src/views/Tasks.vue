@@ -885,10 +885,11 @@ async function confirmCreate() {
 async function loadTopologyVendors() {
   try {
     supportedVendors.value =
-      (await TopologyCommandConfigAPI.getSupportedTopologyVendors()) || [];
+      (await TopologyCommandAPI.getTaskTopologyVendors()) || [];
   } catch (err) {
     console.error("加载拓扑厂商列表失败:", err);
-    supportedVendors.value = [];
+    supportedVendors.value =
+      (await TopologyCommandConfigAPI.getSupportedTopologyVendors()) || [];
   }
 }
 

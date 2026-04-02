@@ -210,16 +210,5 @@ func normalizeTaskGroup(group *models.TaskGroup) {
 }
 
 func topologyFieldCatalogForValidation() []models.TopologyFieldSpec {
-	return []models.TopologyFieldSpec{
-		{FieldKey: "version", Required: true, DefaultEnabled: true},
-		{FieldKey: "sysname", Required: true, DefaultEnabled: true},
-		{FieldKey: "esn", Required: false, DefaultEnabled: true},
-		{FieldKey: "device_info", Required: true, DefaultEnabled: true},
-		{FieldKey: "interface_brief", Required: true, DefaultEnabled: true},
-		{FieldKey: "interface_detail", Required: false, DefaultEnabled: true},
-		{FieldKey: "lldp_neighbor", Required: true, DefaultEnabled: true},
-		{FieldKey: "mac_address", Required: true, DefaultEnabled: true},
-		{FieldKey: "arp_all", Required: true, DefaultEnabled: true},
-		{FieldKey: "eth_trunk", Required: false, DefaultEnabled: true},
-	}
+	return models.DefaultTopologyFieldCatalog()
 }
