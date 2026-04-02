@@ -1,97 +1,224 @@
 # 拓扑还原采集命令可配置化规划设计书
 
-## 1. 背景与目标
+## 1. 文档结论
 
-当前拓扑采集链路的真实执行入口并不在编译器步骤声明，而是在设备画像中的命令列表：[`TopologyTaskCompiler.buildCollectSteps`](internal/taskexec/topology_compiler.go:151) 只声明采集字段键，而 [`DeviceCollectExecutor.executeCollect`](internal/taskexec/executor_impl.go:427) 实际通过 [`config.GetDeviceProfile`](internal/taskexec/executor_impl.go:481) 读取 [`DeviceProfile.Commands`](internal/config/device_profile.go:90) 构建执行计划。
+基于当前项目的新架构，原设计文档的核心方向仍然合理，但需要按现有的统一任务编排链路重新落位。保留的核心结论是：
 
-这导致当前架构存在三个问题：
+1. 拓扑采集必须坚持 固定字段键、可配置命令文本 的设计原则
+2. 解析与构图必须继续绑定稳定字段键，而不能绑定用户输入命令文本
+3. 厂商默认命令映射 与 任务级临时覆盖 的双层模型是合理的
 
-1. 拓扑采集字段与命令文本强绑定在厂商画像中，用户无法输入自定义命令
-2. 拓扑任务界面明确写死了 采集命令固定不可修改 的交互约束，见 [`frontend/src/components/task/TaskEditModal.vue`](frontend/src/components/task/TaskEditModal.vue:22)
-3. 拓扑任务创建页仅能选择厂商与是否自动构图，无法表达字段级命令覆盖，见 [`frontend/src/views/Tasks.vue`](frontend/src/views/Tasks.vue:166)
+但原文存在 4 个需要修正的关键点：
 
-本次规划目标是将 拓扑还原所需采集字段 与 厂商命令映射 解耦，形成 字段固定、命令可配置、任务可覆盖、解析契约稳定 的整体方案。
+1. 没有对齐当前以 [`models.TaskGroup`](internal/models/models.go:161) → [`LaunchNormalizer.normalizeTopology()`](internal/taskexec/launch_service.go:232) → [`TaskExecutionService.CreateTaskDefinitionFromLaunchSpec()`](internal/taskexec/launch_service.go:365) 为核心的任务配置链路
+2. 没有区分 配置持久化 与 运行期证据持久化 两套边界，当前这两部分分别由 [`autoMigrateAll()`](internal/config/db.go:78) 与 [`taskexec.AutoMigrate()`](internal/taskexec/persistence.go:281) 管理
+3. 没有明确说明 [`TopologyTaskConfig.Vendor`](internal/taskexec/config_models.go:45) 在现状下并未真正参与 [`DeviceCollectExecutor.executeCollect()`](internal/taskexec/executor_impl.go:427) 的命令解析优先级
+4. 没有覆盖当前前后端入口，尤其是 [`frontend/src/views/Tasks.vue`](frontend/src/views/Tasks.vue:166)、[`frontend/src/components/task/TaskEditModal.vue`](frontend/src/components/task/TaskEditModal.vue:22)、[`TaskExecutionUIService`](internal/ui/taskexec_ui_service.go:12) 与 [`frontend/src/services/api.ts`](frontend/src/services/api.ts:148)
 
-### 1.1 目标
+因此，本次修订后的正式结论是：
 
-- 固定拓扑采集字段目录，不允许用户临时新增字段类型
-- 支持厂商级默认命令映射，作为长期维护配置
-- 支持任务级临时覆盖，作为单次任务执行覆盖层
-- 保持解析链路仍以字段键驱动，而不是以命令文本驱动
-- 保持原始输出、解析输出、证据链、构图链路可追溯
-- 方案要适配整体拓扑架构，而不是只改某个函数
-
-### 1.2 非目标
-
-- 不在本次方案中开放用户自定义新增解析字段
-- 不在本次方案中改造 TextFSM 模板体系为动态模板平台
-- 不在本次方案中调整拓扑构图算法主逻辑，只保证采集命令来源可配置化
+- 原方案方向正确，但必须按 TaskGroup 持久化、LaunchSpec 归一化、TaskConfig 运行时下发、Runtime 留痕、UI Service 暴露接口 这条真实主链路重构
+- 任务级命令覆盖能力不能只加在 [`TopologyTaskConfig`](internal/taskexec/config_models.go:38)，必须同时落到 [`models.TaskGroup`](internal/models/models.go:161) 与 [`CanonicalTopology`](internal/taskexec/launch_service.go:62)
+- 厂商默认命令配置属于 配置域，不属于 [`taskexec`](internal/taskexec) 运行期事实域
+- 当前项目是新建项目，本次设计无需保留复杂历史兼容路径，直接按目标结构落地更合适
 
 ---
 
-## 2. 现状架构分析
+## 2. 当前架构现状
 
-### 2.1 当前真实链路
+### 2.1 真实配置与执行主链路
 
 ```mermaid
-flowchart LR
-  A[拓扑任务配置] --> B[任务编译器生成阶段]
-  B --> C[设备采集执行器]
-  C --> D[按厂商画像加载命令]
-  D --> E[采集原始输出]
-  E --> F[按 CommandKey 解析]
-  F --> G[事实表入库]
-  G --> H[拓扑构建]
-  H --> I[查询展示]
+flowchart TD
+  A[TaskGroup任务配置] --> B[LaunchNormalizer归一化]
+  B --> C[CanonicalLaunchSpec]
+  C --> D[TaskDefinition]
+  D --> E[TopologyTaskConfig]
+  E --> F[TopologyTaskCompiler]
+  F --> G[DeviceCollectExecutor]
+  G --> H[ParseExecutor]
+  H --> I[TopologyBuildExecutor]
+  I --> J[TopologyQuery和UI]
 ```
 
-当前关键链路如下：
+当前代码中的真实主链路如下：
 
-- 任务配置定义见 [`TopologyTaskConfig`](internal/taskexec/config_models.go:38)
-- 采集阶段编译见 [`TopologyTaskCompiler.Compile`](internal/taskexec/topology_compiler.go:24)
-- 采集命令来源见 [`DeviceProfile.Commands`](internal/config/device_profile.go:90)
-- 实际执行见 [`DeviceCollectExecutor.executeCollect`](internal/taskexec/executor_impl.go:427)
-- 原始输出索引见 [`TaskRawOutput`](internal/taskexec/topology_models.go:35)
-- 解析分发基于 [`switch output.CommandKey`](internal/taskexec/executor_impl.go:1030)
-- 构图读取 LLDP、FDB、ARP、聚合事实见 [`TopologyBuildExecutor.buildRunTopology`](internal/taskexec/executor_impl.go:1274)
+- 任务持久化根对象是 [`models.TaskGroup`](internal/models/models.go:161)
+- 拓扑任务归一化入口是 [`LaunchNormalizer.normalizeTopology()`](internal/taskexec/launch_service.go:232)
+- 运行前配置装配入口是 [`TaskExecutionService.CreateTaskDefinitionFromLaunchSpec()`](internal/taskexec/launch_service.go:365)
+- 运行期拓扑配置对象是 [`TopologyTaskConfig`](internal/taskexec/config_models.go:38)
+- 编译器固定生成拓扑采集阶段与字段步骤，见 [`TopologyTaskCompiler.buildCollectStage()`](internal/taskexec/topology_compiler.go:62) 与 [`TopologyTaskCompiler.buildCollectSteps()`](internal/taskexec/topology_compiler.go:151)
+- 真实命令计划在执行器中构建，见 [`DeviceCollectExecutor.executeCollect()`](internal/taskexec/executor_impl.go:427)
+- 当前执行器直接使用 [`DeviceProfile.Commands`](internal/config/device_profile.go:147) 组装命令，见 [`DeviceCollectExecutor.executeCollect()`](internal/taskexec/executor_impl.go:555)
+- 原始输出与解析索引持久化在 [`TaskRawOutput`](internal/taskexec/topology_models.go:35)
+- 解析阶段仍按 [`output.CommandKey`](internal/taskexec/executor_impl.go:1033) 分发
+- 拓扑查询与展示由 [`TaskExecutionService.GetTopologyGraph()`](internal/taskexec/topology_query.go:40)、[`TaskExecutionService.GetTopologyEdgeDetail()`](internal/taskexec/topology_query.go:132)、[`TaskExecutionService.GetTopologyDeviceDetail()`](internal/taskexec/topology_query.go:154) 提供
 
-### 2.2 当前问题归纳
+### 2.2 当前前端入口
 
-#### 问题一：字段语义与命令文本未解耦
+当前前端入口已经与旧设计阶段不同，需明确对齐：
 
-当前 [`CommandSpec`](internal/config/device_profile.go:76) 同时承担 命令文本、命令键、超时 三种职责，但命令键集合并没有被抽象为拓扑字段目录，导致：
+- 创建拓扑任务入口是 [`frontend/src/views/Tasks.vue`](frontend/src/views/Tasks.vue:166)
+- 编辑拓扑任务入口是 [`frontend/src/components/task/TaskEditModal.vue`](frontend/src/components/task/TaskEditModal.vue:22)
+- 前端任务执行 API 聚合在 [`frontend/src/services/api.ts`](frontend/src/services/api.ts:148)
+- Wails 运行时拓扑查询接口暴露在 [`TaskExecutionUIService`](internal/ui/taskexec_ui_service.go:12)
 
-- 用户只能改整套画像，不能只改某个字段的命令
-- 编译器、执行器、解析器对字段集合没有统一元数据源
-- 前端无法基于字段能力动态渲染配置表单
+现状下，前端仅支持：
 
-#### 问题二：配置层级单一
+- 选择拓扑厂商
+- 选择是否自动构图
+- 查看运行结果
 
-当前只有厂商画像默认值，没有任务级覆盖层：
+尚不支持：
 
-- 设备画像层写死在 [`internal/config/device_profile.go`](internal/config/device_profile.go)
-- 任务配置 [`TopologyTaskConfig`](internal/taskexec/config_models.go:38) 没有命令覆盖字段
-- 前端创建页和编辑页都没有字段级输入入口
+- 厂商默认采集命令维护
+- 任务级字段覆盖编辑
+- 运行详情中展示命令来源与字段启停
 
-#### 问题三：命令可改但解析契约不能乱
+### 2.3 当前持久化边界
 
-解析阶段是按照字段键分发，而不是按命令文本分发，见 [`switch output.CommandKey`](internal/taskexec/executor_impl.go:1030)。
+当前项目已经明显分成两套持久化职责：
 
-这说明命令可配置化的正确方向不是让用户自由定义解析键，而是：
+#### 配置域持久化
 
-- 系统固定字段键，例如 `lldp_neighbor`、`mac_address`、`arp_all`
-- 用户只改这个字段对应的命令文本
-- 执行结果继续以原字段键入库和解析
+由 [`autoMigrateAll()`](internal/config/db.go:78) 管理，负责基础配置与主数据，例如：
 
-这是本次方案的核心设计原则。
+- [`models.DeviceAsset`](internal/models/models.go:11)
+- [`models.CommandGroup`](internal/models/models.go:141)
+- [`models.TaskGroup`](internal/models/models.go:161)
+- [`models.RuntimeSetting`](internal/models/models.go:191)
+
+#### 运行期持久化
+
+由 [`taskexec.AutoMigrate()`](internal/taskexec/persistence.go:281) 管理，负责运行证据与事实，例如：
+
+- [`TaskRunDevice`](internal/taskexec/topology_models.go:5)
+- [`TaskRawOutput`](internal/taskexec/topology_models.go:35)
+- 各类解析事实表，见 [`internal/taskexec/topology_models.go`](internal/taskexec/topology_models.go)
+- [`TaskTopologyEdge`](internal/taskexec/topology_models.go:172)
+
+这意味着：
+
+- 厂商默认命令配置表应放在 配置域
+- 任务运行中解析出的最终命令与来源留痕应放在 运行期域
+- 两者不能混放，否则会破坏当前架构已经形成的职责边界
+
+### 2.4 当前架构的关键缺口
+
+#### 缺口一：任务级覆盖没有持久化链路
+
+原设计只计划改 [`TopologyTaskConfig`](internal/taskexec/config_models.go:38)，但当前任务在真正启动前的持久化根是 [`models.TaskGroup`](internal/models/models.go:161)。
+
+因此如果只改运行期配置对象，会导致：
+
+- 创建任务时能传覆盖值，但任务编辑页无法稳定回显
+- 任务组保存后重新打开时丢失字段覆盖配置
+- [`LaunchNormalizer.normalizeTopology()`](internal/taskexec/launch_service.go:232) 无法把配置带入运行时
+
+结论：任务级覆盖必须贯穿以下 3 层：
+
+1. [`models.TaskGroup`](internal/models/models.go:161)
+2. [`CanonicalTopology`](internal/taskexec/launch_service.go:62)
+3. [`TopologyTaskConfig`](internal/taskexec/config_models.go:38)
+
+#### 缺口二：厂商选择字段没有进入运行期命令解析优先级
+
+当前 UI 提供了拓扑厂商选项，配置会被写入 [`TopologyTaskConfig.Vendor`](internal/taskexec/config_models.go:45)，但 [`DeviceCollectExecutor.executeCollect()`](internal/taskexec/executor_impl.go:427) 当前读取的是设备资产中的 `device.Vendor`，并直接调用 [`config.GetDeviceProfile()`](internal/config/device_profile.go:240)。
+
+也就是说，现状存在一个架构不一致：
+
+- 任务配置层有 Vendor
+- 运行执行层没有真正消费这个 Vendor 作为命令解析优先级输入
+
+结论：修订后的方案必须显式定义 Vendor 决策优先级，避免 `TaskGroup` 配了厂商但执行器忽略。
+
+#### 缺口三：当前支持厂商列表来源不适合配置中心
+
+当前 [`TaskExecutionService.GetSupportedTopologyVendors()`](internal/taskexec/topology_query.go:14) 是从设备资产中动态抽取厂商值，失败时才回退 `huawei`、`h3c`、`cisco`。
+
+这适合任务创建页，但不适合 厂商默认命令配置中心，因为配置中心应面向 系统支持厂商，而不是 当前资产里出现过的厂商。
+
+结论：后续应拆分两个概念：
+
+- 可选拓扑厂商目录：来自系统支持能力
+- 当前资产中出现的厂商：来自设备库存
+
+#### 缺口四：运行期查询接口只负责结果查询，不适合承载配置管理
+
+[`TaskExecutionUIService`](internal/ui/taskexec_ui_service.go:12) 当前暴露的是：
+
+- 快照查询
+- 运行订阅
+- 拓扑图查询
+- 厂商列表查询
+
+它本质是 Runtime Query Service，而不是 Configuration Service。
+
+结论：厂商默认命令配置、字段目录查询、任务字段计划预览，应该由新的配置服务暴露，而不是继续塞进 [`TaskExecutionUIService`](internal/ui/taskexec_ui_service.go:12)。
 
 ---
 
-## 3. 设计原则
+## 3. 对原规划的合理性复核
 
-### 3.1 字段目录固定
+### 3.1 保留结论
 
-系统维护统一拓扑采集字段目录，建议首批字段为：
+以下结论继续保留，并作为正式实施前提：
+
+| 结论                 | 判断 | 说明                                                                                                                                                                         |
+| -------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 固定字段目录         | 合理 | 与 [`TopologyTaskCompiler.buildCollectSteps()`](internal/taskexec/topology_compiler.go:151) 和 [`output.CommandKey`](internal/taskexec/executor_impl.go:1033) 的稳定契约一致 |
+| 命令文本可配置       | 合理 | 命令应从字段语义中解耦，解析仍只面向字段键                                                                                                                                   |
+| 厂商默认 + 任务覆盖  | 合理 | 适配长期维护与单次任务调优两种场景                                                                                                                                           |
+| 原始输出按字段键落盘 | 合理 | 与 [`result.CommandKey+"_raw.txt"`](internal/taskexec/executor_impl.go:632) 的稳定命名一致                                                                                   |
+| 解析失败不阻断框架   | 合理 | 符合当前 [`TaskRawOutput.ParseStatus`](internal/taskexec/topology_models.go:44) 的运行模型                                                                                   |
+
+### 3.2 必须修正的结论
+
+#### 修正一：任务级覆盖的根对象不是运行时配置，而是任务组
+
+原文将重心放在 [`TopologyTaskConfig`](internal/taskexec/config_models.go:38)，这在当前架构下不完整。
+
+正式结论调整为：
+
+- 任务级字段覆盖的持久化根对象应是 [`models.TaskGroup`](internal/models/models.go:161)
+- [`CanonicalTopology`](internal/taskexec/launch_service.go:62) 负责归一化与下发
+- [`TopologyTaskConfig`](internal/taskexec/config_models.go:38) 只是运行时载体
+
+#### 修正二：厂商默认命令配置属于配置域，不属于运行时域
+
+原文建议新增独立配置表，这个方向对，但必须明确表的归属：
+
+- 模型定义应落在 [`internal/models`](internal/models)
+- 迁移入口应挂入 [`autoMigrateAll()`](internal/config/db.go:78)
+- 不能挂到 [`taskexec.AutoMigrate()`](internal/taskexec/persistence.go:281)
+
+#### 修正三：Vendor 解析必须成为正式决策链，而不是隐式依赖资产 Vendor
+
+原文没有把 Vendor 决策写完整。修订后必须明确：
+
+- 任务层显式 Vendor 需要参与命令解析
+- 设备资产 Vendor 只是候选来源之一
+- Profile fallback 仅用于兜底
+
+#### 修正四：迁移策略无需复杂兼容分阶段
+
+项目当前是新建项目，不需要为了历史包袱保留复杂双栈兼容。
+
+正式结论调整为：
+
+- 可以直接引入目标数据结构
+- 内置 [`DeviceProfile.Commands`](internal/config/device_profile.go:147) 仅作为系统种子和最终兜底
+- 不需要长期保留旧模型与新模型并存的复杂逻辑
+
+---
+
+## 4. 修订后的正式目标架构
+
+### 4.1 设计原则
+
+#### 原则一：字段目录固定
+
+系统维护固定拓扑字段目录，首版建议继续使用当前编译器隐含的字段集合：
 
 - `version`
 - `sysname`
@@ -104,76 +231,31 @@ flowchart LR
 - `arp_all`
 - `eth_trunk`
 
-其中字段来源与当前编译器声明保持一致，见 [`buildCollectSteps`](internal/taskexec/topology_compiler.go:154)。
+该集合必须从 [`TopologyTaskCompiler.buildCollectSteps()`](internal/taskexec/topology_compiler.go:151) 中抽离为统一元数据，而不是继续写死在函数体内部。
 
-### 3.2 命令文本可配置
+#### 原则二：配置域与运行时域分离
 
-每个字段对每个厂商都允许配置：
+- 字段目录、厂商默认命令、任务组中的覆盖配置 属于配置域
+- 原始输出、解析事实、拓扑边、运行日志 属于运行时域
 
-- 实际采集命令
-- 超时时间
-- 是否启用
-- 采集说明或备注
+#### 原则三：解析契约只认字段键
 
-### 3.3 解析契约稳定
+- 解析模板绑定 `CommandKey`
+- 构图证据链绑定 `CommandKey`
+- 原始输出文件名绑定 `CommandKey`
+- 用户可改命令文本，但不能改字段语义
 
-解析器、事实表、构图器仍然面向字段键，不面向用户输入命令文本。
+#### 原则四：任务组是可编辑配置的唯一根对象
 
-换句话说：
+所有在 创建任务页 与 编辑任务页 可修改的拓扑配置，都必须最终可落回 [`models.TaskGroup`](internal/models/models.go:161)。
 
-- 字段键决定解析模板与落表行为
-- 命令文本只决定如何拿到对应输出
-- 原始输出仍落到以字段键命名的产物路径中，例如 [`result.CommandKey+"_raw.txt"`](internal/taskexec/executor_impl.go:632)
+#### 原则五：执行器只消费一个统一解析结果
 
-### 3.4 双层配置优先级
+执行器不直接拼接多层来源，而是调用统一解析服务拿到最终命令计划，再执行。
 
-采用两层覆盖模型：
+### 4.2 目标领域对象
 
-1. 厂商默认命令映射
-2. 任务级临时覆盖
-
-最终执行优先级：
-
-`任务级覆盖 > 厂商默认配置 > 系统内置字段默认值`
-
-### 3.5 失败可观测
-
-必须保证用户能看出：
-
-- 某字段是否启用
-- 最终执行命令是什么
-- 该命令来源于默认配置还是任务覆盖
-- 该命令的输出是否被成功解析
-
----
-
-## 4. 总体方案设计
-
-### 4.1 核心设计思路
-
-把当前设备画像中的命令列表重构为三层抽象：
-
-1. 拓扑字段目录层
-2. 厂商默认映射层
-3. 任务级覆盖层
-
-```mermaid
-flowchart TD
-  A[拓扑字段目录] --> B[厂商默认命令映射]
-  B --> C[任务级覆盖]
-  C --> D[最终采集计划]
-  D --> E[执行与产物落库]
-  E --> F[按字段键解析]
-  F --> G[构图与展示]
-```
-
-### 4.2 新的领域对象划分
-
-#### 4.2.1 字段目录对象
-
-建议引入拓扑字段元数据对象，用于定义系统支持哪些字段。
-
-建议模型：
+#### 4.2.1 固定字段目录对象
 
 ```go
 TopologyFieldSpec {
@@ -187,24 +269,12 @@ TopologyFieldSpec {
 }
 ```
 
-建议说明：
-
-- `FieldKey`：固定字段键，例如 `lldp_neighbor`
-- `Name`：界面显示名称
-- `Phase`：归属阶段，例如 identity、interface、neighbor、forwarding
-- `Required`：是否为拓扑构图强相关字段
-- `ParserBinding`：解析绑定键，默认与 `FieldKey` 相同
-- `DefaultEnabled`：该字段默认是否启用
-- `Description`：用户提示信息
-
-建议将字段目录放在拓扑域，而不是直接继续写死在 [`internal/config/device_profile.go`](internal/config/device_profile.go:117)。
+建议放在拓扑配置域，而不是继续隐含在 [`TopologyTaskCompiler.buildCollectSteps()`](internal/taskexec/topology_compiler.go:151) 或 [`DeviceProfile.Commands`](internal/config/device_profile.go:147) 中。
 
 #### 4.2.2 厂商默认命令映射对象
 
-建议引入厂商拓扑命令映射对象：
-
 ```go
-TopologyVendorCommandSetting {
+TopologyVendorFieldCommand {
   Vendor      string
   FieldKey    string
   Command     string
@@ -215,15 +285,13 @@ TopologyVendorCommandSetting {
 }
 ```
 
-含义：
+说明：
 
-- 每个厂商对每个字段有一条独立配置
-- 替代当前画像中一维数组式的 [`Commands []CommandSpec`](internal/config/device_profile.go:90)
-- 更适合前端按表格方式维护
+- 每个厂商对每个字段一条记录
+- 这是配置域对象
+- 应定义在 [`internal/models`](internal/models) 并由 [`autoMigrateAll()`](internal/config/db.go:78) 管理
 
-#### 4.2.3 任务级覆盖对象
-
-建议在拓扑任务配置中增加字段级覆盖：
+#### 4.2.3 任务级字段覆盖对象
 
 ```go
 TopologyTaskFieldOverride {
@@ -236,62 +304,62 @@ TopologyTaskFieldOverride {
 
 说明：
 
-- 只存本次任务需要覆盖的项，不重复存整套默认配置
-- `Enabled` 建议用可空语义，表示是否显式覆盖启停状态
-- 若字段未覆盖，则继续使用厂商默认映射
+- 这是任务组中的 JSON 配置项
+- 需要同时出现在 [`models.TaskGroup`](internal/models/models.go:161)、[`CanonicalTopology`](internal/taskexec/launch_service.go:62)、[`TopologyTaskConfig`](internal/taskexec/config_models.go:38)
+- 只保存变更项，不保存整套默认值
 
----
-
-## 5. 数据模型设计
-
-### 5.1 后端配置模型改造
-
-#### 5.1.1 改造 [`TopologyTaskConfig`](internal/taskexec/config_models.go:38)
-
-建议新增如下字段：
+#### 4.2.4 统一解析结果对象
 
 ```go
-TopologyTaskConfig {
-  DeviceIDs             []uint
-  DeviceIPs             []string
-  GroupNames            []string
-  Vendor                string
-  MaxWorkers            int
-  TimeoutSec            int
-  AutoBuildTopology     bool
-  EnableRawLog          bool
-  FieldOverrides        []TopologyTaskFieldOverride
+ResolvedTopologyCommand {
+  FieldKey       string
+  DisplayName    string
+  Command        string
+  TimeoutSec     int
+  Enabled        bool
+  CommandSource  string
+  ParserBinding  string
+  ResolvedVendor string
+  VendorSource   string
 }
 ```
 
-新增 `FieldOverrides` 后，拓扑任务就具备了任务级临时命令覆盖能力。
+说明：
 
-#### 5.1.2 设备画像模型演进建议
+- 执行器只消费该结构
+- 前端任务预览页也可以复用该结构
+- 运行时落库留痕也应以该结构为事实来源
 
-当前 [`DeviceProfile`](internal/config/device_profile.go:83) 中的 [`Commands`](internal/config/device_profile.go:90) 不建议直接删除，而建议分阶段演进：
+### 4.3 Vendor 决策正式规则
 
-第一阶段：兼容保留
-
-- 继续保留 [`Commands`](internal/config/device_profile.go:90) 作为系统内置兜底来源
-- 新增 Topology 专用默认命令配置读取入口
-- 若新配置缺失，则回退到老画像命令列表
-
-第二阶段：职责收敛
-
-- 将拓扑采集命令全部迁出画像静态常量
-- 画像只保留 PTY、Prompt、Pager、Init 等设备连接特征
-- 拓扑命令由专门的配置服务提供
-
-这是更符合整体架构边界的方向。
-
-### 5.2 持久化模型设计
-
-建议新增独立配置表，而不是把厂商默认命令仍写死在代码里。
-
-建议表一：拓扑厂商字段命令配置表
+修订后必须显式定义 Vendor 决策优先级：
 
 ```text
-net_topology_vendor_field_commands
+任务显式 Vendor > 设备资产 Vendor > Profile 探测回退 > 系统默认 Vendor
+```
+
+具体含义：
+
+1. 如果 [`TopologyTaskConfig.Vendor`](internal/taskexec/config_models.go:45) 非空，则视为本次任务显式指定厂商
+2. 否则使用设备资产中的 `device.Vendor`
+3. 若资产 Vendor 为空或不可信，可使用 [`DetectVendorFromOutput()`](internal/config/device_profile.go:264) 做回退探测
+4. 最终仍无有效结果时再回退到系统默认画像
+
+这个规则要同时决定两件事：
+
+- 使用哪个设备画像处理连接特征与初始化命令
+- 使用哪个厂商默认命令映射解析字段命令
+
+也就是说，Vendor 不能只影响命令文本而不影响连接行为。
+
+### 4.4 持久化设计
+
+#### 4.4.1 配置域新增表
+
+建议新增表：
+
+```text
+topology_vendor_field_commands
 ```
 
 建议字段：
@@ -310,571 +378,408 @@ net_topology_vendor_field_commands
 
 - `vendor + field_key`
 
-建议表二：可选审计表
+该表的模型定义应位于 [`internal/models`](internal/models)，并由 [`autoMigrateAll()`](internal/config/db.go:78) 纳入迁移。
 
-如后续需要历史审计，再增加：
+#### 4.4.2 任务组新增 JSON 字段
 
-```text
-net_topology_vendor_field_command_history
+建议在 [`models.TaskGroup`](internal/models/models.go:161) 中增加：
+
+```go
+TopologyFieldOverrides []TopologyTaskFieldOverride `json:"topologyFieldOverrides" gorm:"serializer:json"`
 ```
 
-但首版不是必须。
+原因：
 
-### 5.3 运行期留痕增强
+- 当前创建页与编辑页都是围绕 TaskGroup 工作
+- 如果不把覆盖配置落回 TaskGroup，任务编辑与回显链路会断裂
 
-当前 [`TaskRawOutput`](internal/taskexec/topology_models.go:35) 已记录：
+#### 4.4.3 运行时留痕增强
 
-- `CommandKey`
-- `Command`
-- `RawFilePath`
-- `ParseFilePath`
-- `ParseStatus`
-
-建议进一步增强留痕信息：
+建议扩展 [`TaskRawOutput`](internal/taskexec/topology_models.go:35)：
 
 ```go
 TaskRawOutput {
   ...
-  CommandSource string
-  FieldEnabled  bool
+  CommandSource  string
+  ResolvedVendor string
+  VendorSource   string
+  FieldEnabled   bool
 }
 ```
 
-其中：
+说明：
 
-- `CommandSource`：`system_default`、`vendor_default`、`task_override`
-- `FieldEnabled`：执行时该字段是否处于启用状态
+- `CommandSource` 用于标记 `builtin_seed`、`vendor_default`、`task_override`
+- `ResolvedVendor` 表示本次字段命令决策最终落到哪个厂商
+- `VendorSource` 表示厂商来源是 task、inventory、detect、default
+- `FieldEnabled` 便于运行详情展示哪些字段被关闭
 
-这样在问题追溯时，可以明确知道某条输出到底是谁决定执行的。
+#### 4.4.4 运行产物建议增加字段计划快照
 
----
+建议额外保存一个执行期字段计划产物，例如：
 
-## 6. 配置解析与优先级设计
+```text
+topology_collection_plan.json
+```
 
-### 6.1 最终命令决策流程
+作为 [`TaskArtifact`](internal/taskexec/models.go:174) 的一个扩展产物，用于：
 
-建议新增一个统一决策服务，例如：
+- 运行后追溯最终命令来源
+- 前端运行详情直接展示
+- 调试覆盖规则与厂商解析问题
 
-- `ResolveTopologyCollectionPlan`
-- 或 `BuildTopologyCollectionCommands`
+### 4.5 服务边界设计
+
+#### 配置服务
+
+建议新增独立配置服务，例如：
+
+- `TopologyCommandConfigService`
+
+职责：
+
+- 获取固定字段目录
+- 获取指定厂商默认命令映射
+- 保存指定厂商默认命令映射
+- 重置厂商默认命令为系统种子值
+- 预览某厂商最终字段计划
+
+该服务不应混入 [`TaskExecutionUIService`](internal/ui/taskexec_ui_service.go:12)。
+
+#### 运行时解析服务
+
+建议新增统一命令解析器，例如：
+
+- `TopologyCommandResolver`
 
 输入：
 
-- 目标厂商
-- 系统字段目录
-- 厂商默认命令映射
+- 字段目录
+- 任务显式 Vendor
+- 设备资产 Vendor
+- 厂商默认命令配置
 - 任务级字段覆盖
-- 系统兜底画像命令
+- 内置种子命令
 
 输出：
 
-- 最终采集字段计划列表
+- `ResolvedTopologyCommand` 列表
 
-建议输出模型：
+#### 执行器
+
+[`DeviceCollectExecutor.executeCollect()`](internal/taskexec/executor_impl.go:427) 的职责应改为：
+
+1. 加载设备资产
+2. 解析最终 Vendor
+3. 读取字段目录与厂商默认配置
+4. 合并任务覆盖得到最终命令计划
+5. 执行计划
+6. 留痕与产物保存
+
+执行器不再直接把 [`DeviceProfile.Commands`](internal/config/device_profile.go:147) 当成唯一命令源。
+
+---
+
+## 5. 具体改造设计
+
+### 5.1 模型改造
+
+#### 5.1.1 改造 [`models.TaskGroup`](internal/models/models.go:161)
+
+新增任务级覆盖字段：
 
 ```go
-ResolvedTopologyCommand {
-  FieldKey       string
-  DisplayName    string
-  Command        string
-  TimeoutSec     int
-  Enabled        bool
-  CommandSource  string
-  ParserBinding  string
+TaskGroup {
+  ...
+  TopologyVendor         string
+  AutoBuildTopology      bool
+  TopologyFieldOverrides []TopologyTaskFieldOverride
 }
 ```
 
-### 6.2 决策规则
+这是本次架构改造中最关键的一项，因为它决定了创建页与编辑页是否有真实落盘位置。
 
-对每个固定字段执行如下流程：
+#### 5.1.2 改造 [`CanonicalTopology`](internal/taskexec/launch_service.go:62)
 
-1. 读取字段目录，确定字段是否存在
-2. 读取厂商默认配置
-3. 读取任务级覆盖
-4. 合并生成最终命令
-5. 若最终 `Enabled=false`，则不进入执行计划
-6. 若最终 `Command` 为空，则按规则处理
+新增：
 
-### 6.3 空命令处理规则
+```go
+CanonicalTopology {
+  DeviceIDs       []uint
+  DeviceIPs       []string
+  Vendor          string
+  FieldOverrides  []TopologyTaskFieldOverride
+}
+```
 
-建议区分三类：
+[`LaunchNormalizer.normalizeTopology()`](internal/taskexec/launch_service.go:232) 负责把 TaskGroup 中的字段覆盖归一化后注入。
 
-#### 场景一：非必选字段为空
+#### 5.1.3 改造 [`TopologyTaskConfig`](internal/taskexec/config_models.go:38)
 
-- 允许保存
-- 执行时跳过
-- 前端提示 该字段未配置，将不采集
+新增：
 
-#### 场景二：关键字段为空
+```go
+TopologyTaskConfig {
+  ...
+  Vendor         string
+  FieldOverrides []TopologyTaskFieldOverride
+}
+```
 
-例如 `lldp_neighbor`、`interface_brief`、`mac_address`、`arp_all` 等关键字段为空时：
+[`TaskExecutionService.CreateTaskDefinitionFromLaunchSpec()`](internal/taskexec/launch_service.go:365) 负责把 [`CanonicalTopology`](internal/taskexec/launch_service.go:62) 中的数据传入运行时配置。
 
-- 厂商默认配置保存阶段即给出校验告警
-- 任务创建阶段若用户关闭或清空关键字段，需要二次确认
-- 允许执行，但任务摘要中需要明确提示 可能影响拓扑还原完整性
+#### 5.1.4 保留 [`DeviceProfile`](internal/config/device_profile.go:82) 的职责边界
 
-#### 场景三：任务覆盖为空字符串
+修订后的职责定义：
 
-任务级覆盖若把命令清空，建议解释为：
+- 保留 PTY、Prompt、Pager、Init 这类连接与交互画像能力
+- `Commands` 仅作为系统内置种子与最终兜底
+- 不再作为拓扑采集命令的主配置源
 
-- 若同时 `Enabled=false`，表示显式关闭字段
-- 若仅命令为空但未关闭，不允许保存
+### 5.2 编译层改造
 
-这样能减少歧义。
+[`TopologyTaskCompiler.buildCollectSteps()`](internal/taskexec/topology_compiler.go:151) 当前写死字段列表，这一方向本身没有错，因为编译器本来就应只描述 字段语义步骤。
 
-### 6.4 优先级规则
+修订后的要求不是让编译器直接携带命令文本，而是：
 
-| 层级 | 来源                 | 说明         |
-| ---- | -------------------- | ------------ |
-| P1   | 任务级覆盖           | 单次任务生效 |
-| P2   | 厂商默认命令映射     | 长期维护配置 |
-| P3   | 系统内置默认画像命令 | 兜底保障     |
+- 把字段数组抽成统一字段目录
+- Step 仍只携带 `CommandKey`
+- 编译器仍不负责拼装最终命令文本
 
-建议最终决策时同时记录每个字段的 `CommandSource`。
+因此编译层的目标职责定义为：
 
----
+- 声明本任务需要哪些固定字段
+- 不负责字段到命令的最终映射
 
-## 7. 执行链路改造设计
+### 5.3 执行层改造
 
-### 7.1 编译层改造
+当前 [`DeviceCollectExecutor.executeCollect()`](internal/taskexec/executor_impl.go:555) 的问题，是直接遍历 [`profile.Commands`](internal/config/device_profile.go:147) 来构建命令计划。
 
-当前 [`TopologyTaskCompiler.buildCollectSteps`](internal/taskexec/topology_compiler.go:151) 是写死字段键数组。
-
-规划建议：
-
-- 编译器不再自行维护写死数组
-- 改为读取统一字段目录
-- Stage Step 仍以字段键作为步骤标识
-- Step 中只描述字段，不携带最终命令文本
-
-建议职责边界：
-
-- 编译器：决定采集哪些字段类别
-- 执行器：结合设备厂商与任务覆盖决策最终命令文本
-
-这样可以保持运行时对设备厂商的动态适配能力。
-
-### 7.2 执行器改造
-
-当前 [`DeviceCollectExecutor.executeCollect`](internal/taskexec/executor_impl.go:555) 直接遍历 [`profile.Commands`](internal/config/device_profile.go:90) 构建执行命令。
-
-规划建议：
-
-1. 获取设备厂商画像用于连接特征，不再直接拿画像命令当最终命令源
-2. 读取任务配置中的 `FieldOverrides`
-3. 读取厂商默认映射
-4. 调用统一命令决策服务，生成最终命令计划
-5. 写入扩展日志，记录每个字段最终命令及来源
-6. 再构建 [`executor.PlannedCommand`](internal/taskexec/executor_impl.go:564)
-
-建议新增日志：
-
-- 拓扑采集字段决策
-- 字段命令覆盖命中
-- 字段被禁用跳过
-- 关键字段缺失告警
-
-### 7.3 原始输出落盘策略
-
-当前原始输出路径以 [`result.CommandKey+"_raw.txt"`](internal/taskexec/executor_impl.go:632) 命名，这个策略应保留。
-
-原因：
-
-- 字段键稳定，命令文本不稳定
-- 命令文本可能包含空格、管道、特殊字符，不适合作为路径名
-- 同一字段不同厂商命令不同，但语义仍然相同
-
-因此建议：
-
-- 路径命名继续基于字段键
-- 数据库存储具体执行命令文本，见 [`TaskRawOutput.Command`](internal/taskexec/topology_models.go:40)
-- 前端展示时显示 字段键 + 实际执行命令 + 来源
-
----
-
-## 8. 解析契约设计
-
-### 8.1 契约核心
-
-解析阶段继续以 [`output.CommandKey`](internal/taskexec/executor_impl.go:1030) 为分发依据，不改为按命令文本匹配。
-
-这是必须坚持的原则，否则会导致：
-
-- TextFSM 模板选择逻辑失稳
-- 相同字段不同命令无法共用解析通道
-- 前后端都无法可靠理解采集语义
-
-### 8.2 字段与解析器绑定关系
-
-建议把字段目录中的 `ParserBinding` 显式化：
-
-| 字段键             | 解析绑定           | 说明                               |
-| ------------------ | ------------------ | ---------------------------------- |
-| `version`          | `version`          | 设备版本解析                       |
-| `sysname`          | `sysname`          | 当前可先仅采集留痕，后续再完善落表 |
-| `esn`              | `esn`              | 当前可先仅采集留痕，后续再完善落表 |
-| `device_info`      | `device_info`      | 当前可先仅采集留痕，后续再完善落表 |
-| `interface_brief`  | `interface_brief`  | 接口摘要                           |
-| `interface_detail` | `interface_detail` | 接口详情                           |
-| `lldp_neighbor`    | `lldp_neighbor`    | LLDP 邻居                          |
-| `mac_address`      | `mac_address`      | FDB 表                             |
-| `arp_all`          | `arp_all`          | ARP 表                             |
-| `eth_trunk`        | `eth_trunk`        | 聚合口                             |
-
-### 8.3 解析失败处理
-
-若用户自定义命令与模板不匹配，属于可预期失败，应强化提示但不阻断框架：
-
-- 原始输出照常落盘
-- `ParseStatus` 标记为 `parse_failed`
-- 错误信息写入 [`TaskRawOutput.ParseError`](internal/taskexec/topology_models.go:45)
-- 运行详情页显示 字段配置可能与模板不匹配
-
-建议增加一条面向用户的判定规则：
-
-- 系统允许用户自定义命令
-- 但要求输出语义与该字段解析模板兼容
-- 这是配置责任边界，而不是系统自动兜底识别自由文本
-
----
-
-## 9. 前端交互设计
-
-### 9.1 设计目标
-
-前端要同时支持两类操作：
-
-1. 维护厂商默认命令映射
-2. 在创建拓扑任务时做本次覆盖
-
-### 9.2 厂商默认命令维护界面
-
-建议新增 拓扑采集配置 页面，或并入设置中心。
-
-展示形式建议为 二维表格：
-
-- 行：固定字段目录
-- 列：命令、超时、是否启用、说明、解析提示
-
-建议字段展示：
-
-| 字段 | 说明 | 是否关键 | 命令 | 超时 | 启用 | 备注 |
-| ---- | ---- | -------- | ---- | ---- | ---- | ---- |
-
-交互要求：
-
-- 切换厂商时加载该厂商所有字段配置
-- 未配置项显示系统兜底值
-- 关键字段关闭时显示黄色告警
-- 支持一键恢复厂商默认内置值
-
-### 9.3 拓扑任务创建页改造
-
-当前 [`frontend/src/views/Tasks.vue`](frontend/src/views/Tasks.vue:166) 的拓扑参数区只有厂商与自动构图。
-
-建议新增 字段级采集计划 面板：
-
-- 默认展示根据所选厂商加载的字段计划
-- 每一行可编辑 命令、超时、是否启用
-- 每一行显示来源标签：默认 或 本次覆盖
-- 支持 仅查看默认值 与 展开编辑 两种模式
-
-建议交互结构：
+修订后的正式执行链路如下：
 
 ```mermaid
 flowchart TD
-  A[选择拓扑任务] --> B[选择厂商]
-  B --> C[加载厂商默认字段计划]
-  C --> D[用户修改部分字段]
-  D --> E[生成任务级覆盖]
-  E --> F[提交拓扑任务]
+  A[TopologyTaskConfig] --> B[ResolveVendor]
+  B --> C[LoadFieldCatalog]
+  C --> D[LoadVendorDefaults]
+  D --> E[MergeTaskOverrides]
+  E --> F[ResolvedCommandPlan]
+  F --> G[ExecutePlan]
+  G --> H[PersistRawOutputs]
+  H --> I[ParseByCommandKey]
+  I --> J[BuildTopology]
 ```
 
-### 9.4 拓扑任务编辑页改造
+执行器内建议步骤：
 
-当前编辑页明确提示拓扑任务命令固定不可修改，见 [`frontend/src/components/task/TaskEditModal.vue`](frontend/src/components/task/TaskEditModal.vue:22)。
+1. 从运行时配置读取任务显式 Vendor
+2. 从资产读取设备 Vendor
+3. 计算最终 `ResolvedVendor`
+4. 用 `ResolvedVendor` 取得连接画像与命令默认值
+5. 按字段目录逐个合并任务覆盖
+6. 生成 `ResolvedTopologyCommand` 列表
+7. 过滤 `Enabled=false` 项
+8. 构建 [`executor.PlannedCommand`](internal/taskexec/executor.go:38)
+9. 执行并写入 [`TaskRawOutput`](internal/taskexec/topology_models.go:35)
 
-建议改为：
+### 5.4 解析层与构图层要求
 
-- 支持查看当前任务绑定的字段计划
-- 支持编辑未运行任务的任务级覆盖
-- 已运行任务仅允许查看，不建议修改
+当前解析与构图链路已经是正确方向，应继续保持：
 
-文案建议从 固定不可修改 调整为：
+- 解析按 [`output.CommandKey`](internal/taskexec/executor_impl.go:1033) 分发
+- 事实表记录 `CommandKey` 与 `RawRefID`
+- 构图证据链继续从事实表读取 `CommandKey`
+- [`TaskExecutionService.GetTopologyDeviceDetail()`](internal/taskexec/topology_query.go:154) 与 [`TaskExecutionService.GetTopologyGraph()`](internal/taskexec/topology_query.go:40) 不需要因为命令可配置化而改变语义
 
-- 厂商默认命令可在配置中心维护
-- 当前任务可查看或覆盖字段命令
-- 已开始运行的任务不允许改命令
-
-### 9.5 运行详情展示增强
-
-建议在任务执行详情与设备详情中增加以下展示：
-
-- 字段键
-- 实际执行命令
-- 命令来源
-- 解析状态
-- 失败原因
-
-这样用户能快速判断是：
-
-- 命令没执行成功
-- 命令执行成功但模板不匹配
-- 字段被关闭，未参与采集
+也就是说，本次改造不应动摇解析和构图的稳定契约。
 
 ---
 
-## 10. 后端接口规划
+## 6. 前端设计修订
 
-### 10.1 建议新增接口
+### 6.1 创建页改造
 
-#### 厂商默认命令配置接口
+当前 [`frontend/src/views/Tasks.vue`](frontend/src/views/Tasks.vue:166) 只有厂商与自动构图选项。
 
-- 获取指定厂商拓扑采集字段配置
-- 保存指定厂商拓扑采集字段配置
-- 重置指定厂商为系统默认配置
-- 获取系统支持的拓扑字段目录
+修订后应新增 字段级采集计划 面板，能力包括：
 
-#### 拓扑任务辅助接口
+- 根据 Vendor 加载默认字段计划
+- 行级编辑 `command`
+- 行级编辑 `timeoutSec`
+- 行级编辑 `enabled`
+- 展示来源标签
+- 展示关键字段告警
 
-- 根据厂商获取本次任务可编辑的字段计划预览
-- 返回字段说明、关键性、默认命令、超时、启用状态
+### 6.2 编辑页改造
 
-### 10.2 返回结构建议
+当前 [`frontend/src/components/task/TaskEditModal.vue`](frontend/src/components/task/TaskEditModal.vue:22) 文案仍写着 拓扑任务采集命令固定不可修改。
 
-建议前端拿到的是 已展平的字段计划，而不是自行拼装多层配置。
+修订后应调整为：
 
-例如：
+- 未启动任务可编辑字段覆盖配置
+- 已启动或已有运行记录的任务仅可查看
+- 厂商默认命令可跳转到配置中心维护
 
-```json
-[
-  {
-    "fieldKey": "lldp_neighbor",
-    "name": "LLDP 邻居",
-    "required": true,
-    "enabled": true,
-    "command": "display lldp neighbor",
-    "timeoutSec": 60,
-    "commandSource": "vendor_default",
-    "description": "用于发现直连邻居"
-  }
-]
-```
+### 6.3 API 设计修订
 
-这样前端开发成本最低，也最适合统一校验。
+当前前端 API 聚合入口位于 [`frontend/src/services/api.ts`](frontend/src/services/api.ts:148)，但没有拓扑命令配置 API。
+
+修订后建议新增一个新的 API 命名空间，例如：
+
+- `TopologyCommandConfigAPI`
+
+建议接口：
+
+- 获取字段目录
+- 获取厂商默认命令配置
+- 保存厂商默认命令配置
+- 重置厂商默认命令配置
+- 预览任务字段计划
+
+### 6.4 Vendor 列表展示修订
+
+需要区分两个列表：
+
+#### 任务创建页 Vendor 列表
+
+可以继续复用 [`TaskExecutionService.GetSupportedTopologyVendors()`](internal/taskexec/topology_query.go:14) 的能力，但建议升级为 资产厂商列表 与 系统支持厂商列表 的并集。
+
+#### 配置中心 Vendor 列表
+
+必须直接来自系统支持能力，不能只来自资产库存。
 
 ---
 
-## 11. 校验策略设计
+## 7. 校验策略
 
-### 11.1 保存厂商默认命令时的校验
+### 7.1 厂商默认命令配置校验
 
-- 字段键必须属于系统固定目录
-- 启用字段的命令不能为空
-- 超时必须大于零
-- 同一厂商字段不能重复
+- `fieldKey` 必须属于固定字段目录
+- 启用字段的 `command` 不能为空
+- `timeoutSec` 必须大于 0
+- 同一 `vendor + fieldKey` 不允许重复
 
-### 11.2 创建任务时的校验
+### 7.2 任务组保存校验
 
-- 覆盖字段必须属于固定目录
-- 若显式启用字段，则命令不能为空
-- 若禁用关键字段，给出风险提示但允许提交
-- 若全部关键拓扑字段都被禁用，阻止提交
+- `TopologyFieldOverrides` 中的字段必须属于固定字段目录
+- 若显式启用某字段，则命令不能为空
+- 若禁用关键字段，应给出风险提示
+- 若所有关键拓扑字段都被关闭，应阻止保存
 
-建议关键字段集合首版定义为：
+### 7.3 执行前校验
 
-- `lldp_neighbor`
-- `interface_brief`
-- `mac_address`
-- `arp_all`
-- `eth_trunk`
-
-### 11.3 执行前校验
-
-执行器在生成最终命令计划前再次校验：
+在 [`DeviceCollectExecutor.executeCollect()`](internal/taskexec/executor_impl.go:427) 中，最终命令计划生成后仍需再次校验：
 
 - 至少存在一条启用命令
-- 若关键字段全部缺失，写入任务级告警
-- 若字段存在但命令为空，跳过并写告警日志
+- 关键字段缺失时写任务级警告
+- 空命令字段不得进入执行计划
+
+### 7.4 解析失败策略
+
+若用户自定义命令文本与模板不兼容，则：
+
+- 原始输出照常落盘
+- [`TaskRawOutput.ParseStatus`](internal/taskexec/topology_models.go:44) 记为 `parse_failed`
+- 错误信息写入 `ParseError`
+- 前端运行详情显示 模板不兼容或命令语义不匹配
 
 ---
 
-## 12. 迁移与兼容策略
+## 8. 迁移与初始化策略
 
-项目当前为新建项目，本次方案无需为了历史包袱做复杂兼容，但仍建议采用平滑演进路径。
+### 8.1 总体原则
 
-### 12.1 初始化策略
+项目为新建项目，本次不采用复杂兼容双轨策略，直接落目标结构。
 
-系统首次启动或迁移时：
+### 8.2 初始化策略
 
-- 读取现有 [`DeviceProfile.Commands`](internal/config/device_profile.go:147)
-- 将其灌入新的厂商默认命令配置表
-- 作为各厂商首版默认数据
+系统初始化时：
 
-### 12.2 过渡期回退策略
+1. 从 [`DeviceProfile.Commands`](internal/config/device_profile.go:147) 生成内置种子数据
+2. 若 [`topology_vendor_field_commands`](internal/models) 为空，则将种子写入配置表
+3. 后续运行默认读配置表
+4. 仅在配置表缺失或异常时，才回退到内置种子
 
-在新配置服务未读到厂商字段映射时：
+### 8.3 回退策略
 
-- 回退到 [`GetDeviceProfile`](internal/config/device_profile.go:241) 提供的旧命令列表
-- 但执行日志中明确标记 `system_default`
+保留最小兜底能力：
 
-### 12.3 最终收敛策略
-
-待新配置稳定后：
-
-- 旧画像中的 [`Commands`](internal/config/device_profile.go:90) 仅保留最小兜底
-- 主逻辑统一迁移到拓扑命令配置服务
+- 配置表读取失败时，回退到 [`GetDeviceProfile()`](internal/config/device_profile.go:240) 的内置命令集合
+- 运行日志与 [`TaskRawOutput`](internal/taskexec/topology_models.go:35) 中明确标记 `CommandSource=builtin_seed`
 
 ---
 
-## 13. 风险分析与控制
+## 9. 推荐代码落点
 
-### 13.1 主要风险
+### 9.1 后端
 
-#### 风险一：用户自定义命令与模板不兼容
+- 固定字段目录：建议新增 `internal/config/topology_fields.go` 或独立拓扑配置模块
+- 厂商默认命令模型：[`internal/models`](internal/models)
+- 配置迁移：[`autoMigrateAll()`](internal/config/db.go:78)
+- 任务组持久化字段：[`models.TaskGroup`](internal/models/models.go:161)
+- 归一化透传：[`LaunchNormalizer.normalizeTopology()`](internal/taskexec/launch_service.go:232)
+- 运行时配置透传：[`TaskExecutionService.CreateTaskDefinitionFromLaunchSpec()`](internal/taskexec/launch_service.go:365)
+- 执行期命令解析：[`DeviceCollectExecutor.executeCollect()`](internal/taskexec/executor_impl.go:427)
+- 运行期留痕：[`TaskRawOutput`](internal/taskexec/topology_models.go:35)
 
-影响：
+### 9.2 前端
 
-- 采集成功但解析失败
-- 构图结果为空或不完整
-
-控制措施：
-
-- 每个字段在界面显示模板兼容提示
-- 运行详情展示 `parse_failed`
-- 为厂商默认值提供一键恢复
-
-#### 风险二：关键字段被关闭导致拓扑严重缺失
-
-影响：
-
-- 链路还原不完整
-- 设备只有节点没有边
-
-控制措施：
-
-- 关键字段在 UI 特殊标识
-- 禁用关键字段时二次确认
-- 任务摘要显示关键字段关闭告警
-
-#### 风险三：配置层级过多导致用户困惑
-
-影响：
-
-- 不理解默认值与覆盖值差异
-
-控制措施：
-
-- 每条字段展示来源标签
-- 提供 恢复默认 按钮
-- 任务级界面默认只展示变更项，支持展开查看全部
-
-#### 风险四：执行日志不可追溯
-
-影响：
-
-- 无法判断本次到底执行了什么
-
-控制措施：
-
-- 在 [`TaskRawOutput`](internal/taskexec/topology_models.go:35) 增加命令来源留痕
-- 日志中打印最终字段计划
-- 前端运行详情展示实际命令文本
+- 创建页：[`frontend/src/views/Tasks.vue`](frontend/src/views/Tasks.vue:166)
+- 编辑页：[`frontend/src/components/task/TaskEditModal.vue`](frontend/src/components/task/TaskEditModal.vue:22)
+- API 聚合：[`frontend/src/services/api.ts`](frontend/src/services/api.ts:148)
+- 运行时类型：[`frontend/src/types/taskexec.ts`](frontend/src/types/taskexec.ts:1)
+- 新增配置中心页面：建议放入 [`frontend/src/views`](frontend/src/views)
 
 ---
 
-## 14. 测试策略
+## 10. 分阶段实施清单
 
-### 14.1 单元测试
+### 阶段一：配置域建模
 
-重点覆盖：
+- 抽取固定字段目录
+- 新增厂商默认命令配置模型与表
+- 为 [`models.TaskGroup`](internal/models/models.go:161) 增加任务级字段覆盖 JSON 字段
+- 提供种子初始化逻辑
 
-1. 字段目录加载测试
-2. 厂商默认命令解析测试
-3. 任务覆盖优先级测试
-4. 空命令与禁用逻辑测试
-5. 最终命令计划构建测试
-6. 回退到系统默认画像测试
+### 阶段二：任务链路透传
 
-### 14.2 集成测试
+- 为 [`CanonicalTopology`](internal/taskexec/launch_service.go:62) 增加字段覆盖
+- 为 [`TopologyTaskConfig`](internal/taskexec/config_models.go:38) 增加字段覆盖
+- 修正 Vendor 解析优先级
 
-重点覆盖：
+### 阶段三：执行器接入
 
-1. 创建拓扑任务并带任务级覆盖
-2. 执行器生成最终命令计划
-3. 原始输出按字段键落盘
-4. 解析仍按字段键生效
-5. 关键字段禁用后的构图退化行为
+- 新增 `TopologyCommandResolver`
+- 改造 [`DeviceCollectExecutor.executeCollect()`](internal/taskexec/executor_impl.go:427)
+- 增强 [`TaskRawOutput`](internal/taskexec/topology_models.go:35) 留痕字段
+- 输出字段计划快照产物
 
-### 14.3 前端测试
+### 阶段四：前端接入
 
-重点覆盖：
+- 改造 [`frontend/src/views/Tasks.vue`](frontend/src/views/Tasks.vue:166)
+- 改造 [`frontend/src/components/task/TaskEditModal.vue`](frontend/src/components/task/TaskEditModal.vue:22)
+- 新增厂商默认命令配置页面
+- 新增对应 API 命名空间
 
-1. 厂商默认字段计划加载
-2. 任务创建页字段覆盖编辑
-3. 来源标签展示
-4. 关键字段关闭告警
-5. 运行详情的字段执行信息展示
+### 阶段五：验证与收敛
 
----
-
-## 15. 分阶段实施步骤
-
-### 阶段一：领域与配置建模
-
-- 建立固定拓扑字段目录
-- 建立厂商默认命令配置表与服务
-- 为任务配置增加字段覆盖结构
-- 提供字段计划解析服务
-
-### 阶段二：执行链路接入
-
-- 改造采集执行器，从字段计划服务获取命令
-- 增强运行日志与原始输出留痕
-- 保证解析链路继续使用固定字段键
-
-### 阶段三：前端配置与任务创建接入
-
-- 增加厂商默认命令维护页面
-- 改造拓扑任务创建页，支持任务级覆盖
-- 改造任务编辑页与运行详情页展示
-
-### 阶段四：测试与收敛
-
-- 完成单元与集成测试
-- 验证厂商默认数据初始化
-- 收敛旧画像中拓扑命令职责
+- 补齐解析优先级测试
+- 补齐任务组回显测试
+- 补齐运行期留痕测试
+- 验证拓扑查询展示与错误提示闭环
 
 ---
 
-## 16. 推荐的代码落点
+## 11. 最终方案结论
 
-### 16.1 后端建议落点
+修订后的最终方案如下：
 
-- 字段目录定义：`internal/taskexec` 或新增拓扑配置域
-- 厂商默认命令配置服务：`internal/config` 下新增拓扑命令配置模块
-- 任务字段覆盖模型：[`internal/taskexec/config_models.go`](internal/taskexec/config_models.go:38)
-- 执行期命令解析：[`internal/taskexec/executor_impl.go`](internal/taskexec/executor_impl.go:427)
-- 运行期留痕：[`internal/taskexec/topology_models.go`](internal/taskexec/topology_models.go:35)
+1. 原方案的 核心设计方向 正确，必须保留 固定字段键、可配置命令文本、解析契约稳定 三个原则
+2. 任务级字段覆盖能力必须从 [`models.TaskGroup`](internal/models/models.go:161) 开始建模，而不是只修改 [`TopologyTaskConfig`](internal/taskexec/config_models.go:38)
+3. 厂商默认命令配置属于配置域，应定义在 [`internal/models`](internal/models) 并接入 [`autoMigrateAll()`](internal/config/db.go:78)
+4. [`DeviceProfile.Commands`](internal/config/device_profile.go:147) 在目标架构中只保留为内置种子与兜底，不再作为主命令源
+5. 执行器必须引入统一的 Vendor 决策与命令解析服务，修复当前 [`TopologyTaskConfig.Vendor`](internal/taskexec/config_models.go:45) 未真正生效的问题
+6. 解析层、事实层、构图层继续坚持基于 `CommandKey` 工作，不因命令可配置化而改变
+7. 前端必须同时补齐 创建页、编辑页、配置中心、运行详情 四个入口，不能只在单一页面做局部打补丁
 
-### 16.2 前端建议落点
-
-- 拓扑任务创建页改造：[`frontend/src/views/Tasks.vue`](frontend/src/views/Tasks.vue:166)
-- 拓扑任务编辑页改造：[`frontend/src/components/task/TaskEditModal.vue`](frontend/src/components/task/TaskEditModal.vue:182)
-- 类型定义扩展：[`frontend/src/types/taskexec.ts`](frontend/src/types/taskexec.ts:1)
-- 若新增设置页，可放入 `frontend/src/views` 或 `frontend/src/components` 下的配置模块
-
----
-
-## 17. 最终方案结论
-
-本次规划的核心结论如下：
-
-1. 拓扑采集字段目录固定，禁止任务侧自由新增字段类型
-2. 命令文本从字段语义中解耦，用户只配置字段对应命令
-3. 采用 厂商默认命令映射 + 任务级临时覆盖 的双层模型
-4. 执行器不再直接依赖 [`DeviceProfile.Commands`](internal/config/device_profile.go:90) 作为唯一命令来源
-5. 解析器与构图器继续基于稳定字段键运行，确保架构闭环不被破坏
-6. 原始输出、执行日志、运行详情必须完整展示 最终命令 与 来源，实现全链路可追溯
-
-该方案兼顾了整体项目架构、配置演进、执行链路、前端交互、测试策略与后续收敛路径，适合作为拓扑还原采集命令可配置化的正式实施蓝图。
+该版本已经按当前项目真实架构重新校准，可直接作为后续实现阶段的正式设计基线。
