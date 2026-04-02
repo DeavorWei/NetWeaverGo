@@ -202,6 +202,8 @@ const (
 	ArtifactTypeParseResult ArtifactType = "parse_result"
 	// ArtifactTypeTopologyGraph 拓扑图
 	ArtifactTypeTopologyGraph ArtifactType = "topology_graph"
+	// ArtifactTypeTopologyCollectionPlan 拓扑采集计划快照
+	ArtifactTypeTopologyCollectionPlan ArtifactType = "topology_collection_plan"
 	// ArtifactTypeReport 报告
 	ArtifactTypeReport ArtifactType = "report"
 )

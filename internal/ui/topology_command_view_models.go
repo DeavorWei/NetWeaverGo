@@ -1,6 +1,10 @@
 package ui
 
-import "github.com/NetWeaverGo/core/internal/models"
+import (
+	"time"
+
+	"github.com/NetWeaverGo/core/internal/models"
+)
 
 // TopologyResolvedCommandView 拓扑命令解析后的前端视图模型。
 type TopologyResolvedCommandView struct {
@@ -39,4 +43,31 @@ type TopologyCommandPreviewView struct {
 	FieldCatalog      []models.TopologyFieldSpec    `json:"fieldCatalog"`
 	DefaultResolution TopologyCommandResolutionView `json:"defaultResolution"`
 	Devices           []TopologyPreviewDeviceView   `json:"devices"`
+}
+
+// TopologyVendorCommandItemView 厂商字段命令配置项。
+type TopologyVendorCommandItemView struct {
+	FieldKey      string    `json:"fieldKey"`
+	DisplayName   string    `json:"displayName"`
+	ParserBinding string    `json:"parserBinding"`
+	Description   string    `json:"description"`
+	Required      bool      `json:"required"`
+	Command       string    `json:"command"`
+	TimeoutSec    int       `json:"timeoutSec"`
+	Enabled       bool      `json:"enabled"`
+	Notes         string    `json:"notes"`
+	Source        string    `json:"source"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+// TopologyVendorCommandSetView 厂商命令配置视图。
+type TopologyVendorCommandSetView struct {
+	Vendor   string                          `json:"vendor"`
+	Commands []TopologyVendorCommandItemView `json:"commands"`
+}
+
+// TopologyVendorCommandSaveRequest 厂商命令保存请求。
+type TopologyVendorCommandSaveRequest struct {
+	Vendor   string                          `json:"vendor"`
+	Commands []TopologyVendorCommandItemView `json:"commands"`
 }

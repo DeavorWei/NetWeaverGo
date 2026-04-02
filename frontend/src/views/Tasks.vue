@@ -466,10 +466,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
-import { DeviceAPI, TaskExecutionAPI, TaskGroupAPI } from "../services/api";
-import type { DeviceAsset, CommandGroup } from "../services/api";
+import {
+  DeviceAPI,
+  TaskGroupAPI,
+  TopologyCommandAPI,
+  TopologyCommandConfigAPI,
+} from "../services/api";
+import type {
+  DeviceAsset,
+  CommandGroup,
+  TopologyCommandPreviewView,
+  TopologyTaskFieldOverride,
+} from "../services/api";
 import DeviceSelector from "../components/task/DeviceSelector.vue";
 import CommandGroupSelector from "../components/task/CommandGroupSelector.vue";
 
@@ -485,6 +495,12 @@ const supportedVendors = ref<string[]>([]);
 const topologyVendor = ref("");
 const autoBuildTopology = ref(true);
 
+const topologyOverrides = ref<TopologyTaskFieldOverride[]>([]);
+const topologyPreview = ref<TopologyCommandPreviewView | null>(null);
+const topologyPreviewLoading = ref(false);
+const topologyPreviewError = ref("");
+const topologyPreviewDirty = ref(false);
+
 // 面板高度控制
 const devicePanelHeight = ref(280); // 设备选择面板默认高度
 const commandPanelMinHeight = 300; // 命令组面板最小高度
@@ -494,6 +510,25 @@ const minHeight = 150; // 面板最小高度限制
 let isResizing = false;
 let startY = 0;
 let startHeight = 0;
+
+const selectedDeviceIDsSignature = computed(() =>
+  [...selectedDevices.value]
+    .map((item) => item.id)
+    .sort((a, b) => a - b)
+    .join(","),
+);
+
+const topologyPreviewCommands = computed(
+  () => topologyPreview.value?.defaultResolution?.commands || [],
+);
+
+const topologyInvalidCount = computed(
+  () =>
+    topologyOverrides.value.filter(
+      (item) =>
+        item.enabled === true && String(item.command || "").trim() === "",
+    ).length,
+);
 
 function startResize(e: MouseEvent) {
   isResizing = true;
@@ -533,9 +568,9 @@ onUnmounted(() => {
 // 是否可以创建任务
 const canCreate = computed(() => {
   if (selectedTaskType.value === "topology") {
-    return selectedDevices.value.length > 0;
+    return selectedDevices.value.length > 0 && topologyInvalidCount.value === 0;
   }
-  return selectedDevices.value.length > 0 && selectedCommandGroupId.value;
+  return selectedDevices.value.length > 0 && selectedCommandGroupId.value > 0;
 });
 
 // Toast 通知
@@ -577,6 +612,10 @@ function generateDefaultName() {
 
 function openCreateModal() {
   if (!canCreate.value) return;
+  if (selectedTaskType.value === "topology" && topologyPreviewDirty.value) {
+    triggerToast("拓扑命令存在未刷新的变更，请先刷新命令预览", "error");
+    return;
+  }
   createModal.value = {
     show: true,
     name: generateDefaultName(),
@@ -597,6 +636,16 @@ function addTag() {
 
 async function confirmCreate() {
   if (!createModal.value.name.trim() || !canCreate.value) return;
+  if (selectedTaskType.value === "topology") {
+    if (topologyInvalidCount.value > 0) {
+      triggerToast("存在无效拓扑覆盖项，请修正后重试", "error");
+      return;
+    }
+    if (topologyPreviewDirty.value) {
+      triggerToast("拓扑命令存在未刷新的变更，请先刷新命令预览", "error");
+      return;
+    }
+  }
 
   try {
     const taskItems =
@@ -626,9 +675,14 @@ async function confirmCreate() {
       timeout: 60,
       mode: "group" as const,
       taskType: selectedTaskType.value,
-      topologyVendor: selectedTaskType.value === "topology" ? topologyVendor.value : "",
-      topologyFieldOverrides: [],
-      autoBuildTopology: selectedTaskType.value === "topology" ? autoBuildTopology.value : false,
+      topologyVendor:
+        selectedTaskType.value === "topology" ? topologyVendor.value : "",
+      topologyFieldOverrides:
+        selectedTaskType.value === "topology"
+          ? cloneTopologyOverrides(topologyOverrides.value)
+          : [],
+      autoBuildTopology:
+        selectedTaskType.value === "topology" ? autoBuildTopology.value : false,
       items: taskItems,
       tags: createModal.value.tags,
       enableRawLog: createModal.value.enableRawLog,
@@ -653,10 +707,147 @@ async function confirmCreate() {
 
 async function loadTopologyVendors() {
   try {
-    supportedVendors.value = (await TaskExecutionAPI.getSupportedTopologyVendors()) || [];
+    supportedVendors.value =
+      (await TopologyCommandConfigAPI.getSupportedTopologyVendors()) || [];
   } catch (err) {
     console.error("加载拓扑厂商列表失败:", err);
     supportedVendors.value = [];
+  }
+}
+
+function cloneTopologyOverrides(
+  overrides?: TopologyTaskFieldOverride[],
+): TopologyTaskFieldOverride[] {
+  return (overrides || []).map((item) => ({
+    fieldKey: String(item.fieldKey || "").trim(),
+    command: String(item.command || ""),
+    timeoutSec: Number(item.timeoutSec || 0),
+    enabled: typeof item.enabled === "boolean" ? item.enabled : undefined,
+  }));
+}
+
+function findTopologyOverride(fieldKey: string) {
+  return topologyOverrides.value.find((item) => item.fieldKey === fieldKey);
+}
+
+function findTopologyOverrideIndex(fieldKey: string) {
+  return topologyOverrides.value.findIndex((item) => item.fieldKey === fieldKey);
+}
+
+function ensureTopologyOverride(fieldKey: string) {
+  const normalizedFieldKey = fieldKey.trim();
+  let item = findTopologyOverride(normalizedFieldKey);
+  if (item) {
+    return item;
+  }
+  item = {
+    fieldKey: normalizedFieldKey,
+    command: "",
+    timeoutSec: 0,
+  };
+  topologyOverrides.value = [...topologyOverrides.value, item];
+  return item;
+}
+
+function compactTopologyOverride(fieldKey: string) {
+  const index = findTopologyOverrideIndex(fieldKey);
+  if (index < 0) {
+    return;
+  }
+  const current = topologyOverrides.value[index];
+  if (!current) {
+    return;
+  }
+  const hasCommand = String(current.command || "") !== "";
+  const hasTimeout = Number(current.timeoutSec || 0) > 0;
+  const hasEnabled = typeof current.enabled === "boolean";
+  if (hasCommand || hasTimeout || hasEnabled) {
+    return;
+  }
+  topologyOverrides.value = topologyOverrides.value.filter(
+    (item) => item.fieldKey !== fieldKey,
+  );
+}
+
+function markTopologyPreviewDirty() {
+  topologyPreviewDirty.value = true;
+}
+
+function topologyCommandValue(fieldKey: string, fallback: string) {
+  const override = findTopologyOverride(fieldKey);
+  if (override && override.command !== "") {
+    return override.command;
+  }
+  return fallback || "";
+}
+
+function topologyTimeoutValue(fieldKey: string, fallback: number) {
+  const override = findTopologyOverride(fieldKey);
+  if (override && Number(override.timeoutSec || 0) > 0) {
+    return Number(override.timeoutSec);
+  }
+  return Number(fallback || 0);
+}
+
+function topologyEnabledValue(fieldKey: string, fallback: boolean) {
+  const override = findTopologyOverride(fieldKey);
+  if (override && typeof override.enabled === "boolean") {
+    return override.enabled;
+  }
+  return Boolean(fallback);
+}
+
+function onTopologyCommandInput(fieldKey: string, event: Event) {
+  const target = event.target as HTMLTextAreaElement | null;
+  const override = ensureTopologyOverride(fieldKey);
+  override.command = target?.value || "";
+  compactTopologyOverride(fieldKey);
+  markTopologyPreviewDirty();
+}
+
+function onTopologyTimeoutInput(fieldKey: string, event: Event) {
+  const target = event.target as HTMLInputElement | null;
+  const value = Number(target?.value || 0);
+  const override = ensureTopologyOverride(fieldKey);
+  override.timeoutSec = Number.isFinite(value) && value > 0 ? value : 0;
+  compactTopologyOverride(fieldKey);
+  markTopologyPreviewDirty();
+}
+
+function onTopologyEnabledChange(fieldKey: string, event: Event) {
+  const target = event.target as HTMLInputElement | null;
+  const override = ensureTopologyOverride(fieldKey);
+  override.enabled = Boolean(target?.checked);
+  compactTopologyOverride(fieldKey);
+  markTopologyPreviewDirty();
+}
+
+async function resetTopologyOverride(fieldKey: string) {
+  topologyOverrides.value = topologyOverrides.value.filter(
+    (item) => item.fieldKey !== fieldKey,
+  );
+  markTopologyPreviewDirty();
+  await loadTopologyPreview();
+}
+
+async function loadTopologyPreview() {
+  if (selectedTaskType.value !== "topology") {
+    return;
+  }
+  topologyPreviewLoading.value = true;
+  topologyPreviewError.value = "";
+  try {
+    topologyPreview.value = await TopologyCommandAPI.previewTopologyCommands(
+      topologyVendor.value,
+      selectedDevices.value.map((item) => item.id),
+      cloneTopologyOverrides(topologyOverrides.value),
+    );
+    topologyPreviewDirty.value = false;
+  } catch (err: any) {
+    console.error("加载拓扑命令预览失败", err);
+    topologyPreviewError.value = `命令预览加载失败: ${err?.message || err}`;
+  } finally {
+    topologyPreviewLoading.value = false;
   }
 }
 
@@ -679,6 +870,10 @@ function goToTaskExecution() {
   router.push("/task-execution");
 }
 
+function goToTopologyCommandConfig() {
+  router.push("/topology-command-config");
+}
+
 // 加载设备列表
 async function loadDevices() {
   try {
@@ -690,6 +885,26 @@ async function loadDevices() {
     deviceList.value = [];
   }
 }
+
+watch(
+  () => [selectedTaskType.value, topologyVendor.value, selectedDeviceIDsSignature.value],
+  async ([taskType]) => {
+    if (taskType !== "topology") {
+      return;
+    }
+    await loadTopologyPreview();
+  },
+);
+
+watch(selectedTaskType, async (value) => {
+  if (value !== "topology") {
+    topologyPreview.value = null;
+    topologyPreviewError.value = "";
+    topologyPreviewDirty.value = false;
+    return;
+  }
+  await loadTopologyPreview();
+});
 
 onMounted(() => {
   loadDevices();

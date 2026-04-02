@@ -96,6 +96,9 @@ func (h *ErrorHandler) ArtifactBestEffort(repo Repository, ctx context.Context, 
 	if repo == nil || artifact == nil {
 		return
 	}
+	if artifact.CreatedAt.IsZero() {
+		artifact.CreatedAt = timeNow()
+	}
 	if err := repo.CreateArtifact(ctx, artifact); err != nil {
 		h.LogUpdateError(fmt.Sprintf("创建产物索引[%s:%s]", artifact.ArtifactType, artifact.ArtifactKey), err)
 	}

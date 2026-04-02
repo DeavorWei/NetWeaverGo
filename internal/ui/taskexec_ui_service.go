@@ -94,3 +94,7 @@ func (s *TaskExecutionUIService) GetTopologyDeviceDetail(runID string, deviceIP 
 func (s *TaskExecutionUIService) GetSupportedTopologyVendors() []string {
 	return s.service.GetSupportedTopologyVendors()
 }
+
+func (s *TaskExecutionUIService) GetRunArtifacts(runID string) ([]taskexec.TaskArtifact, error) {
+	return s.service.GetRunArtifacts(runID)
+}

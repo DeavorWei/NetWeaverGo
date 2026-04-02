@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -179,4 +180,12 @@ func (s *TaskExecutionService) GetRunStatus(runID string) (*TaskRun, error) {
 // GetEventBus 获取事件总线（用于事件桥接）
 func (s *TaskExecutionService) GetEventBus() *EventBus {
 	return s.runtime.GetEventBus()
+}
+
+// GetRunArtifacts 获取指定运行的产物索引。
+func (s *TaskExecutionService) GetRunArtifacts(runID string) ([]TaskArtifact, error) {
+	if strings.TrimSpace(runID) == "" {
+		return nil, fmt.Errorf("runID 不能为空")
+	}
+	return s.repo.GetArtifactsByRun(context.Background(), runID)
 }

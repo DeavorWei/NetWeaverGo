@@ -169,18 +169,33 @@ export const TaskExecutionAPI = {
   getTopologyDeviceDetail: TaskExecutionUIServiceBinding.GetTopologyDeviceDetail,
   /** 获取支持的厂商列表 */
   getSupportedTopologyVendors: TaskExecutionUIServiceBinding.GetSupportedTopologyVendors,
+  /** 获取运行产物索引 */
+  getRunArtifacts: TaskExecutionUIServiceBinding.GetRunArtifacts,
 } as const
 
 // ==================== 拓扑命令 API ====================
 /**
- * 拓扑命令 API
- * @description 提供拓扑字段目录、厂商能力与任务级命令预览
+ * 拓扑命令配置 API
+ * @description 提供字段目录、厂商默认命令查询/保存/重置能力
  */
-export const TopologyCommandAPI = {
+export const TopologyCommandConfigAPI = {
   /** 获取支持的拓扑厂商列表 */
   getSupportedTopologyVendors: TopologyCommandServiceBinding.GetSupportedTopologyVendors,
   /** 获取拓扑字段目录 */
   getTopologyFieldCatalog: TopologyCommandServiceBinding.GetTopologyFieldCatalog,
+  /** 获取厂商默认命令配置 */
+  getVendorCommandConfig: TopologyCommandServiceBinding.GetVendorCommandConfig,
+  /** 保存厂商默认命令配置 */
+  saveVendorCommandConfig: TopologyCommandServiceBinding.SaveVendorCommandConfig,
+  /** 重置厂商默认命令配置 */
+  resetVendorCommandConfig: TopologyCommandServiceBinding.ResetVendorCommandConfig,
+} as const
+
+/**
+ * 拓扑命令预览 API
+ * @description 提供任务级拓扑命令解析预览
+ */
+export const TopologyCommandAPI = {
   /** 预览当前任务配置下的拓扑命令解析结果 */
   previewTopologyCommands: TopologyCommandServiceBinding.PreviewTopologyCommands,
 } as const
@@ -349,6 +364,11 @@ export type {
   TopologyCommandResolutionView,
   TopologyPreviewDeviceView,
   TopologyResolvedCommandView,
+  TopologyVendorCommandItemView,
+  TopologyVendorCommandSaveRequest,
+  TopologyVendorCommandSetView,
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
+
+export type { TaskArtifact } from '../bindings/github.com/NetWeaverGo/core/internal/taskexec/models.js'
 
 export type { ParsedResult } from '../bindings/github.com/NetWeaverGo/core/internal/parser/models.js'

@@ -14,6 +14,7 @@ const ConfigForge = () => import('../views/Tools/ConfigForge.vue')
 const Settings = () => import('../views/Settings.vue')
 const Topology = () => import('../views/Topology.vue')
 const PlanCompare = () => import('../views/PlanCompare.vue')
+const TopologyCommandConfig = () => import('../views/TopologyCommandConfig.vue')
 
 const routes = [
   {
@@ -74,6 +75,11 @@ const routes = [
     path: '/plan-compare',
     name: 'PlanCompare',
     component: PlanCompare
+  },
+  {
+    path: '/topology-command-config',
+    name: 'TopologyCommandConfig',
+    component: TopologyCommandConfig
   }
 ]
 

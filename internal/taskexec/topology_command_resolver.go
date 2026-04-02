@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 )
 
@@ -22,6 +23,7 @@ const (
 	TopologyCommandSourceTaskOverride = "task_override"
 	TopologyCommandSourceVendorConfig = "vendor_config"
 	TopologyCommandSourceProfileSeed  = "profile_seed"
+	TopologyCommandSourceBuiltinSeed  = "builtin_seed"
 	TopologyCommandSourceDisabled     = "disabled"
 )
 
@@ -127,8 +129,11 @@ func (r *TopologyCommandResolver) Resolve(taskVendor string, device *models.Devi
 	}
 
 	vendorCommands, err := config.GetTopologyVendorFieldCommands(profile.Vendor)
+	useBuiltinSeed := false
 	if err != nil {
-		return nil, err
+		logger.Warn("TaskExec", "-", "读取拓扑厂商命令配置失败，回退内置种子: vendor=%s, err=%v", profile.Vendor, err)
+		vendorCommands = nil
+		useBuiltinSeed = true
 	}
 	vendorCommandMap := make(map[string]models.TopologyVendorFieldCommand, len(vendorCommands))
 	for _, item := range vendorCommands {
@@ -165,7 +170,11 @@ func (r *TopologyCommandResolver) Resolve(taskVendor string, device *models.Devi
 			item.Command = strings.TrimSpace(profileItem.Command)
 			item.TimeoutSec = profileItem.TimeoutSec
 			item.Enabled = spec.DefaultEnabled && item.Command != ""
-			item.CommandSource = TopologyCommandSourceProfileSeed
+			if useBuiltinSeed {
+				item.CommandSource = TopologyCommandSourceBuiltinSeed
+			} else {
+				item.CommandSource = TopologyCommandSourceProfileSeed
+			}
 		}
 
 		if override, ok := overrideMap[spec.FieldKey]; ok {
