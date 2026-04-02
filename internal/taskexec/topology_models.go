@@ -39,6 +39,7 @@ type TaskRawOutput struct {
 	DeviceIP       string    `gorm:"index;not null" json:"deviceIp"`
 	CommandKey     string    `gorm:"index" json:"commandKey"`
 	Command        string    `json:"command"`
+	FieldEnabled   bool      `json:"fieldEnabled"`
 	CommandSource  string    `json:"commandSource"`
 	ResolvedVendor string    `json:"resolvedVendor"`
 	VendorSource   string    `json:"vendorSource"`
@@ -52,6 +53,36 @@ type TaskRawOutput struct {
 	LineCount      int       `json:"lineCount"`
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+// TopologyCollectionPlanCommand 拓扑采集计划中的字段命令项。
+type TopologyCollectionPlanCommand struct {
+	FieldKey       string `json:"fieldKey"`
+	DisplayName    string `json:"displayName"`
+	Enabled        bool   `json:"enabled"`
+	Command        string `json:"command"`
+	TimeoutSec     int    `json:"timeoutSec"`
+	CommandSource  string `json:"commandSource"`
+	ResolvedVendor string `json:"resolvedVendor"`
+	VendorSource   string `json:"vendorSource"`
+	ParserBinding  string `json:"parserBinding"`
+	Required       bool   `json:"required"`
+	Description    string `json:"description"`
+}
+
+// TopologyCollectionPlanArtifact 拓扑采集计划快照。
+type TopologyCollectionPlanArtifact struct {
+	RunID           string                          `json:"runId"`
+	StageID         string                          `json:"stageId"`
+	UnitID          string                          `json:"unitId"`
+	DeviceIP        string                          `json:"deviceIp"`
+	ResolvedVendor  string                          `json:"resolvedVendor"`
+	VendorSource    string                          `json:"vendorSource"`
+	CollectedFields []string                        `json:"collectedFields"`
+	Commands        []TopologyCollectionPlanCommand `json:"commands"`
+	GeneratedAt     time.Time                       `json:"generatedAt"`
+	ArtifactKey     string                          `json:"artifactKey,omitempty"`
+	FilePath        string                          `json:"filePath,omitempty"`
 }
 
 func (TaskRawOutput) TableName() string {

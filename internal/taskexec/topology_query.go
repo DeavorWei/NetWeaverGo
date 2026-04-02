@@ -1,6 +1,8 @@
 package taskexec
 
 import (
+	"encoding/json"
+	"os"
 	"strings"
 	"time"
 
@@ -228,6 +230,42 @@ func (s *TaskExecutionService) GetTopologyDeviceDetail(runID, deviceIP string) (
 	}
 
 	return result, nil
+}
+
+// ListTopologyCollectionPlans 查询指定运行的拓扑采集计划快照。
+func (s *TaskExecutionService) ListTopologyCollectionPlans(runID string) ([]TopologyCollectionPlanArtifact, error) {
+	if strings.TrimSpace(runID) == "" {
+		return []TopologyCollectionPlanArtifact{}, nil
+	}
+
+	artifacts, err := s.GetRunArtifacts(runID)
+	if err != nil {
+		return nil, err
+	}
+	plans := make([]TopologyCollectionPlanArtifact, 0)
+	for _, artifact := range artifacts {
+		if strings.TrimSpace(artifact.ArtifactType) != string(ArtifactTypeTopologyCollectionPlan) {
+			continue
+		}
+		filePath := strings.TrimSpace(artifact.FilePath)
+		if filePath == "" {
+			continue
+		}
+		payload, readErr := os.ReadFile(filePath)
+		if readErr != nil {
+			logger.Warn("TaskExec", runID, "读取拓扑采集计划失败: key=%s, path=%s, err=%v", strings.TrimSpace(artifact.ArtifactKey), filePath, readErr)
+			continue
+		}
+		var plan TopologyCollectionPlanArtifact
+		if unmarshalErr := json.Unmarshal(payload, &plan); unmarshalErr != nil {
+			logger.Warn("TaskExec", runID, "解析拓扑采集计划失败: key=%s, path=%s, err=%v", strings.TrimSpace(artifact.ArtifactKey), filePath, unmarshalErr)
+			continue
+		}
+		plan.ArtifactKey = strings.TrimSpace(artifact.ArtifactKey)
+		plan.FilePath = filePath
+		plans = append(plans, plan)
+	}
+	return plans, nil
 }
 
 func (s *TaskExecutionService) getGraphNode(runID, deviceID string) models.GraphNode {

@@ -155,7 +155,9 @@
                   拓扑采集
                 </span>
               </div>
-              <p class="text-sm text-text-primary">{{ executionStatusSummary }}</p>
+              <p class="text-sm text-text-primary">
+                {{ executionStatusSummary }}
+              </p>
               <p
                 v-if="executionStatusDetail"
                 class="text-xs"
@@ -165,7 +167,9 @@
               </p>
             </div>
             <button
-              v-if="executionView.taskType === 'topology' && isExecutionTerminal"
+              v-if="
+                executionView.taskType === 'topology' && isExecutionTerminal
+              "
               @click="router.push('/topology')"
               class="px-3 py-2 rounded-lg text-sm font-medium border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
             >
@@ -175,7 +179,9 @@
 
           <!-- 进度条 -->
           <div class="flex-shrink-0 space-y-1.5">
-            <div class="flex items-center justify-between text-xs text-text-muted">
+            <div
+              class="flex items-center justify-between text-xs text-text-muted"
+            >
               <span>{{ executionView.taskName || "任务执行" }} - 总体进度</span>
               <span class="font-mono">{{ progressPercent }}%</span>
             </div>
@@ -195,13 +201,111 @@
             <StageProgress :stages="executionStages" :units="executionUnits" />
           </div>
 
+          <!-- 拓扑采集计划证据 -->
+          <div
+            v-if="executionView.taskType === 'topology'"
+            class="flex-shrink-0 bg-bg-card border border-border rounded-xl p-4 space-y-3"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h4 class="text-sm font-semibold text-text-primary">
+                  拓扑采集计划证据
+                </h4>
+                <p class="text-xs text-text-muted mt-1">
+                  展示字段启停、命令来源与厂商来源，支持运行后复盘。
+                </p>
+              </div>
+              <div class="text-xs text-text-muted text-right">
+                <div>设备计划: {{ topologyCollectionPlanRows.length }}</div>
+                <div>
+                  启用字段: {{ topologyPlanEnabledCount }} / 禁用字段:
+                  {{ topologyPlanDisabledCount }}
+                </div>
+              </div>
+            </div>
+
+            <div v-if="topologyPlanLoading" class="text-xs text-text-muted">
+              正在加载采集计划快照...
+            </div>
+            <div
+              v-else-if="topologyPlanError"
+              class="text-xs text-error bg-error/10 border border-error/20 rounded-lg px-3 py-2"
+            >
+              加载采集计划失败：{{ topologyPlanError }}
+            </div>
+            <div
+              v-else-if="topologyCollectionPlanRows.length === 0"
+              class="text-xs text-text-muted"
+            >
+              暂无采集计划快照，待设备采集阶段产物生成后自动展示。
+            </div>
+            <div
+              v-else
+              class="space-y-3 max-h-64 overflow-auto scrollbar-custom pr-1"
+            >
+              <div
+                v-for="plan in topologyCollectionPlanRows"
+                :key="`${plan.artifactKey || '-'}:${plan.deviceIp}:${String(plan.generatedAt || '-')}`"
+                class="rounded-lg border border-border bg-bg-panel/40 px-3 py-2 space-y-2"
+              >
+                <div class="flex items-center justify-between gap-3 text-xs">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-mono text-text-primary">{{
+                      plan.deviceIp
+                    }}</span>
+                    <span
+                      class="px-2 py-0.5 rounded border bg-accent/10 border-accent/20 text-accent"
+                    >
+                      厂商: {{ plan.resolvedVendor || "-" }}
+                    </span>
+                    <span class="text-text-muted">
+                      来源: {{ vendorSourceLabel(plan.vendorSource) }}
+                    </span>
+                  </div>
+                  <span class="text-text-muted">
+                    {{ formatDate(String(plan.generatedAt || "")) }}
+                  </span>
+                </div>
+
+                <div class="text-xs text-text-muted">
+                  字段: 启用 {{ enabledCommandCount(plan) }} / 禁用
+                  {{ disabledCommandCount(plan) }}
+                </div>
+
+                <div class="flex flex-wrap gap-1.5">
+                  <span
+                    v-for="cmd in (plan.commands || []).slice(0, 6)"
+                    :key="`${cmd.fieldKey}:${cmd.commandSource}`"
+                    class="px-1.5 py-0.5 rounded border text-[11px]"
+                    :class="
+                      cmd.enabled
+                        ? 'border-success/30 bg-success/10 text-success'
+                        : 'border-border bg-bg-card text-text-muted'
+                    "
+                  >
+                    {{ cmd.fieldKey }} ·
+                    {{ commandSourceLabel(cmd.commandSource) }}
+                  </span>
+                  <span
+                    v-if="(plan.commands || []).length > 6"
+                    class="px-1.5 py-0.5 rounded border border-border text-[11px] text-text-muted"
+                  >
+                    +{{ (plan.commands || []).length - 6 }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- 设备卡片网格 -->
           <div
             class="flex-1 overflow-auto scrollbar-custom min-h-0 relative"
             ref="devicesContainer"
           >
             <div
-              v-if="deviceCardUnits.length === 0 && (isRunning || awaitingSnapshot)"
+              v-if="
+                deviceCardUnits.length === 0 && (isRunning || awaitingSnapshot)
+              "
               class="flex flex-col items-center justify-center h-48 text-text-muted gap-3"
             >
               <div
@@ -250,8 +354,12 @@
                       {{ statusLabel(unit.status) }}
                     </span>
                   </div>
-                  <div class="px-4 py-2 border-b border-border bg-bg-card/50 space-y-1">
-                    <div class="flex items-center justify-between gap-3 text-xs">
+                  <div
+                    class="px-4 py-2 border-b border-border bg-bg-card/50 space-y-1"
+                  >
+                    <div
+                      class="flex items-center justify-between gap-3 text-xs"
+                    >
                       <span class="text-text-muted">步骤进度</span>
                       <span class="font-mono text-text-primary"
                         >{{ unit.doneSteps }}/{{ unit.totalSteps }}</span
@@ -274,7 +382,9 @@
               </div>
 
               <div
-                v-if="!showAllDevices && deviceCardUnits.length > visibleUnitCount"
+                v-if="
+                  !showAllDevices && deviceCardUnits.length > visibleUnitCount
+                "
                 class="text-center py-4 text-text-muted text-sm"
               >
                 还有
@@ -442,7 +552,7 @@
                       !task.canEdit
                         ? '任务存在活跃运行，不可编辑'
                         : isTopologyTask(task)
-                          ? '编辑拓扑任务（命令不可修改）'
+                          ? '编辑拓扑任务（支持字段级覆盖）'
                           : '编辑任务'
                     "
                   >
@@ -733,6 +843,7 @@ import type {
   TaskGroup,
   TaskGroupDetailViewModel,
   TaskGroupListView,
+  TopologyCollectionPlanArtifact,
 } from "../services/api";
 import { useTaskexecStore } from "../stores/taskexecStore";
 import VirtualLogTerminal from "../components/task/VirtualLogTerminal.vue";
@@ -797,6 +908,11 @@ const editReferences = ref({
   devices: [] as DeviceAsset[],
   commandGroups: [] as CommandGroup[],
 });
+
+const topologyCollectionPlanRows = ref<TopologyCollectionPlanArtifact[]>([]);
+const topologyPlanLoading = ref(false);
+const topologyPlanError = ref("");
+const topologyPlanLastRevision = ref(-1);
 
 // 虚拟滚动优化状态
 const showAllDevices = ref(false);
@@ -873,7 +989,10 @@ function isDeviceExecutionUnit(unit: UnitSnapshot): boolean {
   );
 }
 
-function deviceUnitPriority(unit: UnitSnapshot, stageOrderMap: Map<string, number>): number {
+function deviceUnitPriority(
+  unit: UnitSnapshot,
+  stageOrderMap: Map<string, number>,
+): number {
   const statusPriority: Record<string, number> = {
     running: 700,
     failed: 600,
@@ -885,7 +1004,12 @@ function deviceUnitPriority(unit: UnitSnapshot, stageOrderMap: Map<string, numbe
   const stageOrder = stageOrderMap.get(unit.stageId) ?? 0;
   const progress = Number(unit.progress || 0);
   const doneSteps = Number(unit.doneSteps || 0);
-  return (statusPriority[unit.status] || 0) * 1000000 + stageOrder * 10000 + progress * 100 + doneSteps;
+  return (
+    (statusPriority[unit.status] || 0) * 1000000 +
+    stageOrder * 10000 +
+    progress * 100 +
+    doneSteps
+  );
 }
 
 const deviceCardUnits = computed<UnitSnapshot[]>(() => {
@@ -914,7 +1038,9 @@ const deviceCardUnits = computed<UnitSnapshot[]>(() => {
         if (priorityDiff !== 0) {
           return priorityDiff;
         }
-        return normalizeString(left.id).localeCompare(normalizeString(right.id));
+        return normalizeString(left.id).localeCompare(
+          normalizeString(right.id),
+        );
       });
       return sorted.length > 0 ? sorted[0] : null;
     })
@@ -1033,6 +1159,20 @@ const executionStatusDetailClass = computed(() => {
       return "text-text-muted";
   }
 });
+
+const topologyPlanEnabledCount = computed(() =>
+  topologyCollectionPlanRows.value.reduce(
+    (sum, plan) => sum + enabledCommandCount(plan),
+    0,
+  ),
+);
+
+const topologyPlanDisabledCount = computed(() =>
+  topologyCollectionPlanRows.value.reduce(
+    (sum, plan) => sum + disabledCommandCount(plan),
+    0,
+  ),
+);
 
 // ================== 虚拟滚动优化计算属性 ==================
 const visibleUnitCount = computed(() =>
@@ -1212,6 +1352,10 @@ function resetExecutionViewState(reason: string) {
   clearSnapshotTimeout();
   stopSnapshotPolling();
   taskexecStore.setCurrentRunId(null);
+  topologyCollectionPlanRows.value = [];
+  topologyPlanError.value = "";
+  topologyPlanLoading.value = false;
+  topologyPlanLastRevision.value = -1;
 }
 
 // 加载任务列表
@@ -1354,6 +1498,9 @@ async function executeTask(task: TaskGroupListView) {
   taskexecStore.clearEventLogs();
   taskexecStore.setCurrentRunId(null);
   awaitingSnapshot.value = true;
+  topologyCollectionPlanRows.value = [];
+  topologyPlanError.value = "";
+  topologyPlanLastRevision.value = -1;
 
   startSnapshotTimeout();
   startSnapshotPolling();
@@ -1374,6 +1521,60 @@ async function executeTask(task: TaskGroupListView) {
   }
 }
 
+async function loadTopologyCollectionPlans(runId: string) {
+  const normalizedRunID = normalizeString(runId);
+  if (executionView.value.taskType !== "topology" || normalizedRunID === "") {
+    topologyCollectionPlanRows.value = [];
+    topologyPlanError.value = "";
+    topologyPlanLoading.value = false;
+    return;
+  }
+
+  topologyPlanLoading.value = true;
+  topologyPlanError.value = "";
+  try {
+    const plans =
+      await TaskExecutionAPI.getTopologyCollectionPlans(normalizedRunID);
+    topologyCollectionPlanRows.value = Array.isArray(plans)
+      ? plans.filter(Boolean)
+      : [];
+  } catch (err: any) {
+    topologyPlanError.value = err?.message || String(err);
+    topologyCollectionPlanRows.value = [];
+  } finally {
+    topologyPlanLoading.value = false;
+  }
+}
+
+watch(
+  () => executionView.value.runId,
+  (runId, previousRunId) => {
+    if (runId === previousRunId) {
+      return;
+    }
+    topologyPlanLastRevision.value = -1;
+    if (executionView.value.taskType === "topology" && normalizeString(runId)) {
+      void loadTopologyCollectionPlans(runId);
+    }
+  },
+);
+
+watch(
+  () => executionView.value.taskType,
+  (taskType) => {
+    if (taskType !== "topology") {
+      topologyCollectionPlanRows.value = [];
+      topologyPlanError.value = "";
+      topologyPlanLoading.value = false;
+      topologyPlanLastRevision.value = -1;
+      return;
+    }
+    if (normalizeString(executionView.value.runId)) {
+      void loadTopologyCollectionPlans(executionView.value.runId);
+    }
+  },
+);
+
 // 监听快照变化
 watch(executionSnapshot, (snapshot) => {
   if (snapshot) {
@@ -1385,6 +1586,14 @@ watch(executionSnapshot, (snapshot) => {
       snapshot.runKind === "topology" ? "topology" : "normal";
     if (snapshot.taskName) {
       executionView.value.taskName = snapshot.taskName;
+    }
+
+    if (snapshot.runKind === "topology") {
+      const revision = Number(snapshot.revision || 0);
+      if (revision !== topologyPlanLastRevision.value) {
+        topologyPlanLastRevision.value = revision;
+        void loadTopologyCollectionPlans(snapshot.runId);
+      }
     }
   }
 });
@@ -1452,6 +1661,43 @@ function topologyDeviceCount(task: TaskGroupListView | TaskGroup) {
     }
   }
   return set.size;
+}
+
+function enabledCommandCount(plan: TopologyCollectionPlanArtifact): number {
+  if (!Array.isArray(plan?.commands)) {
+    return 0;
+  }
+  return plan.commands.filter((cmd: any) => Boolean(cmd?.enabled)).length;
+}
+
+function disabledCommandCount(plan: TopologyCollectionPlanArtifact): number {
+  if (!Array.isArray(plan?.commands)) {
+    return 0;
+  }
+  return plan.commands.filter((cmd: any) => !Boolean(cmd?.enabled)).length;
+}
+
+function commandSourceLabel(source: string): string {
+  const map: Record<string, string> = {
+    task_override: "任务覆盖",
+    vendor_config: "厂商配置",
+    profile_seed: "画像种子",
+    builtin_seed: "内置种子",
+    disabled: "禁用",
+  };
+  const key = normalizeString(source);
+  return map[key] ?? (key || "未知来源");
+}
+
+function vendorSourceLabel(source: string): string {
+  const map: Record<string, string> = {
+    task: "任务显式",
+    inventory: "资产信息",
+    detect: "自动探测",
+    fallback_default: "默认回退",
+  };
+  const key = normalizeString(source);
+  return map[key] ?? (key || "未知来源");
 }
 
 // 查看执行历史

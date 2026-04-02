@@ -171,6 +171,9 @@ export const TaskExecutionAPI = {
   getSupportedTopologyVendors: TaskExecutionUIServiceBinding.GetSupportedTopologyVendors,
   /** 获取运行产物索引 */
   getRunArtifacts: TaskExecutionUIServiceBinding.GetRunArtifacts,
+  /** 获取拓扑采集计划快照 */
+  getTopologyCollectionPlans:
+    TaskExecutionUIServiceBinding.GetTopologyCollectionPlans,
 } as const
 
 // ==================== 拓扑命令 API ====================
@@ -369,6 +372,10 @@ export type {
   TopologyVendorCommandSetView,
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
-export type { TaskArtifact } from '../bindings/github.com/NetWeaverGo/core/internal/taskexec/models.js'
+export type {
+  TaskArtifact,
+  TopologyCollectionPlanArtifact,
+  TopologyCollectionPlanCommand,
+} from '../bindings/github.com/NetWeaverGo/core/internal/taskexec/models.js'
 
 export type { ParsedResult } from '../bindings/github.com/NetWeaverGo/core/internal/parser/models.js'

@@ -1017,6 +1017,7 @@ func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, res
 		LineCount:      lineCount,
 	}
 	if resolved != nil {
+		output.FieldEnabled = resolved.Enabled
 		output.CommandSource = resolved.CommandSource
 		output.ResolvedVendor = resolved.ResolvedVendor
 		output.VendorSource = resolved.VendorSource

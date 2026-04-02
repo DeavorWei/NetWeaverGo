@@ -16,6 +16,7 @@ const defaultTopologyVendor = "huawei"
 const (
 	TopologyVendorSourceTask      = "task"
 	TopologyVendorSourceInventory = "inventory"
+	TopologyVendorSourceDetect    = "detect"
 	TopologyVendorSourceFallback  = "fallback_default"
 )
 
@@ -216,8 +217,63 @@ func (r *TopologyCommandResolver) resolveVendor(taskVendor string, device *model
 		if vendor := normalizeSupportedVendor(device.Vendor); vendor != "" {
 			return vendor, TopologyVendorSourceInventory
 		}
+		if vendor := detectVendorFromDevice(device); vendor != "" {
+			return vendor, TopologyVendorSourceDetect
+		}
 	}
 	return defaultTopologyVendor, TopologyVendorSourceFallback
+}
+
+func detectVendorFromDevice(device *models.DeviceAsset) string {
+	if device == nil {
+		return ""
+	}
+	hints := []string{
+		strings.TrimSpace(device.Vendor),
+		strings.TrimSpace(device.DisplayName),
+		strings.TrimSpace(device.Description),
+		strings.TrimSpace(device.Role),
+		strings.TrimSpace(device.Site),
+		strings.TrimSpace(device.Group),
+	}
+	joinedRaw := strings.TrimSpace(strings.Join(hints, " "))
+	joinedLower := strings.ToLower(joinedRaw)
+	if !containsVendorHint(joinedLower) {
+		return ""
+	}
+	if detected := normalizeSupportedVendor(config.DetectVendorFromOutput(joinedRaw, joinedRaw)); detected != "" {
+		return detected
+	}
+	return inferVendorFromHint(joinedLower)
+}
+
+func containsVendorHint(value string) bool {
+	if strings.TrimSpace(value) == "" {
+		return false
+	}
+	keywords := []string{"huawei", "h3c", "comware", "cisco", "ios", "vrp"}
+	for _, keyword := range keywords {
+		if strings.Contains(value, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func inferVendorFromHint(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	switch {
+	case strings.Contains(value, "huawei") || strings.Contains(value, "vrp"):
+		return "huawei"
+	case strings.Contains(value, "h3c") || strings.Contains(value, "comware"):
+		return "h3c"
+	case strings.Contains(value, "cisco") || strings.Contains(value, "ios"):
+		return "cisco"
+	default:
+		return ""
+	}
 }
 
 func buildTopologyCommandSeeds() map[string][]models.TopologyVendorFieldCommand {
