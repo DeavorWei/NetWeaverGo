@@ -10,22 +10,22 @@
 
 ## 2. 当前进度总览
 
-| 序号 | 工作项                | 状态           | 说明                                                               |
-| ---- | --------------------- | -------------- | ------------------------------------------------------------------ |
-| 1    | 设计基线对齐          | ✅ Completed   | 已完成目标链路与边界确认                                           |
-| 2    | 后端链路扫描          | ✅ Completed   | 模型、Resolver、执行器、UI Service 已完成核对                      |
-| 3    | 前端现状扫描          | ✅ Completed   | 创建页、编辑页、配置中心能力覆盖已核对                             |
-| 4    | 范围确认              | ✅ Completed   | 明确按全量实施推进                                                 |
-| 5    | 后端配置域服务完善    | ✅ Completed   | 厂商默认命令查询/保存/重置与字段校验已完成                         |
-| 6    | 后端运行期闭环完善    | ✅ Completed   | 字段计划留痕、来源字段一致性、查询透出已完成                       |
-| 7    | 后端任务链路校准      | ⏳ Pending     | TaskGroup → LaunchSpec → TaskConfig 覆盖透传与厂商决策一致性待完成 |
-| 8    | 前端 API 与类型收敛   | ✅ Completed   | 拓扑命令配置/预览 API 命名空间与 DTO 已完成                        |
-| 9    | 前端配置中心页面+路由 | 🔄 In Progress | 页面核心交互已就绪，待与整体任务链路联调后收口                     |
-| 10   | 前端任务创建页改造    | ⏳ Pending     | 脚本逻辑已具备，模板侧覆盖编辑与预览区需落地收敛                   |
-| 11   | 前端任务编辑页收敛    | ⏳ Pending     | 需统一可编辑/只读策略与文案交互一致性                              |
-| 12   | 测试补齐              | ⏳ Pending     | 后端与前端关键路径测试待补齐                                       |
-| 13   | 构建回归              | ✅ Completed   | 已通过 [`build.bat`](build.bat) 完成一次构建验证                   |
-| 14   | 文档沉淀              | 🔄 In Progress | 本进度文档已新增，接口清单与最终交付基线待补充                     |
+| 序号 | 工作项                | 状态           | 说明                                                                |
+| ---- | --------------------- | -------------- | ------------------------------------------------------------------- |
+| 1    | 设计基线对齐          | ✅ Completed   | 已完成目标链路与边界确认                                            |
+| 2    | 后端链路扫描          | ✅ Completed   | 模型、Resolver、执行器、UI Service 已完成核对                       |
+| 3    | 前端现状扫描          | ✅ Completed   | 创建页、编辑页、配置中心能力覆盖已核对                              |
+| 4    | 范围确认              | ✅ Completed   | 明确按全量实施推进                                                  |
+| 5    | 后端配置域服务完善    | ✅ Completed   | 厂商默认命令查询/保存/重置与字段校验已完成                          |
+| 6    | 后端运行期闭环完善    | ✅ Completed   | 字段计划留痕、来源字段一致性、查询透出已完成                        |
+| 7    | 后端任务链路校准      | ✅ Completed   | 已完成 TaskGroup → LaunchSpec → TaskConfig 厂商与覆盖透传一致性校准 |
+| 8    | 前端 API 与类型收敛   | ✅ Completed   | 拓扑命令配置/预览 API 命名空间与 DTO 已完成                         |
+| 9    | 前端配置中心页面+路由 | 🔄 In Progress | 页面核心交互已就绪，待与整体任务链路联调后收口                      |
+| 10   | 前端任务创建页改造    | ✅ Completed   | 已完成字段覆盖编辑区、预览状态块、未刷新提示与字段有效性提示        |
+| 11   | 前端任务编辑页收敛    | ✅ Completed   | 已统一预览刷新门禁、覆盖有效性校验与错误提示文案                    |
+| 12   | 测试补齐              | 🔄 In Progress | 后端链路测试新增完成，前端自动化测试待后续补齐                      |
+| 13   | 构建回归              | ✅ Completed   | 已通过 [`build.bat`](build.bat) 完成一次构建验证                    |
+| 14   | 文档沉淀              | 🔄 In Progress | 本进度文档已新增，接口清单与最终交付基线待补充                      |
 
 ---
 
@@ -45,23 +45,22 @@
 
 ### 3.3 任务创建页当前状态
 
-- 已存在拓扑覆盖与预览脚本能力：[`loadTopologyPreview()`](frontend/src/views/Tasks.vue:833)
-- 已存在覆盖编辑处理函数：[`onTopologyCommandInput()`](frontend/src/views/Tasks.vue:800)
-- 当前主要缺口在模板未完整呈现“字段覆盖 + 预览卡片 + 风险提示”区域
+- 已落地字段覆盖编辑区、来源标签、字段级启停/命令/超时编辑：[`v-for="cmd in topologyPreviewCommands"`](frontend/src/views/Tasks.vue:292)
+- 已落地未刷新提示、错误提示、刷新预览与配置中心入口：[`loadTopologyPreview()`](frontend/src/views/Tasks.vue:1012)
+- 已在创建前强制校验“未刷新变更 + 无效覆盖项”：[`confirmCreate()`](frontend/src/views/Tasks.vue:815)
 
 ### 3.4 任务编辑页当前状态
 
-- 编辑弹窗已有较完整拓扑覆盖编辑区域：[`v-else-if="isTopologyTaskValue"`](frontend/src/components/task/TaskEditModal.vue:348)
-- 已具备刷新预览、恢复继承、字段级启停/命令/超时编辑能力：[`loadTopologyPreview()`](frontend/src/components/task/TaskEditModal.vue:1111)
+- 编辑弹窗已统一覆盖编辑、预览卡片与设备级解析预览：[`v-else-if="isTopologyTaskValue"`](frontend/src/components/task/TaskEditModal.vue:348)
+- 已统一创建页一致性门禁：刷新预览、无效覆盖校验、保存前脏检查：[`submit()`](frontend/src/components/task/TaskEditModal.vue:1204)
 
 ---
 
 ## 4. 当前关键差距
 
-1. 后端任务链路透传一致性仍需最终校准，避免创建/编辑/执行三段配置语义漂移
-2. 创建页模板与脚本存在能力不对齐，导致预览与覆盖能力未完整可视化
-3. 编辑页需与创建页在交互文案、风险提示、状态约束上统一
-4. 自动化测试与回归用例尚未覆盖本轮新增能力
+1. 前端自动化测试尚未覆盖“创建页/编辑页覆盖校验 + 预览脏检查”路径
+2. 配置中心页与任务链路联调验证仍需补充（页面已就绪，联调待收口）
+3. 回归范围已扩展，需继续补齐回归清单与验收记录
 
 ---
 

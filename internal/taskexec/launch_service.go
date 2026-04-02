@@ -379,15 +379,19 @@ func (s *TaskExecutionService) CreateTaskDefinitionFromLaunchSpec(spec *Canonica
 		if spec.Topology == nil {
 			return nil, fmt.Errorf("topology launch spec is nil")
 		}
+		taskVendor := strings.TrimSpace(spec.Topology.Vendor)
+		if taskVendor == "" {
+			taskVendor = strings.TrimSpace(spec.TopologyVendor)
+		}
 		resolver := NewTopologyCommandResolver()
-		resolution, resolveErr := resolver.Resolve(spec.Topology.Vendor, nil, spec.Topology.FieldOverrides)
+		resolution, resolveErr := resolver.Resolve(taskVendor, nil, spec.Topology.FieldOverrides)
 		if resolveErr != nil {
 			return nil, fmt.Errorf("resolve topology commands failed: %w", resolveErr)
 		}
 		configJSON, err = json.Marshal(&TopologyTaskConfig{
 			DeviceIDs:         append([]uint(nil), spec.Topology.DeviceIDs...),
 			DeviceIPs:         append([]string(nil), spec.Topology.DeviceIPs...),
-			Vendor:            strings.TrimSpace(spec.Topology.Vendor),
+			Vendor:            taskVendor,
 			FieldOverrides:    append([]models.TopologyTaskFieldOverride(nil), spec.Topology.FieldOverrides...),
 			ResolvedCommands:  append([]ResolvedTopologyCommand(nil), resolution.Commands...),
 			MaxWorkers:        spec.Concurrency,
@@ -395,7 +399,7 @@ func (s *TaskExecutionService) CreateTaskDefinitionFromLaunchSpec(spec *Canonica
 			AutoBuildTopology: spec.AutoBuildTopology,
 			EnableRawLog:      spec.EnableRawLog,
 		})
-		logger.Debug("TaskLaunchService", "-", "创建拓扑任务定义: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d, vendor=%s, resolvedVendor=%s, overrides=%d", spec.TaskGroupID, len(spec.Topology.DeviceIDs), len(spec.Topology.DeviceIPs), spec.Topology.Vendor, resolution.ResolvedVendor, len(spec.Topology.FieldOverrides))
+		logger.Debug("TaskLaunchService", "-", "创建拓扑任务定义: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d, vendor=%s, resolvedVendor=%s, overrides=%d", spec.TaskGroupID, len(spec.Topology.DeviceIDs), len(spec.Topology.DeviceIPs), taskVendor, resolution.ResolvedVendor, len(spec.Topology.FieldOverrides))
 	default:
 		if spec.Normal == nil {
 			return nil, fmt.Errorf("normal launch spec is nil")

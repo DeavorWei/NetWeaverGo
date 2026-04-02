@@ -56,8 +56,12 @@
     <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
       <div class="flex-1 overflow-y-auto scrollbar-custom pr-1">
         <!-- 任务类型 -->
-        <div class="bg-bg-card border border-border rounded-xl overflow-hidden mb-3">
-          <div class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel">
+        <div
+          class="bg-bg-card border border-border rounded-xl overflow-hidden mb-3"
+        >
+          <div
+            class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel"
+          >
             <span class="text-sm font-medium text-text-primary">任务类型</span>
           </div>
           <div class="p-3 flex gap-2">
@@ -177,17 +181,26 @@
             >
               2
             </div>
-            <span class="text-sm font-medium text-text-primary">拓扑采集参数</span>
+            <span class="text-sm font-medium text-text-primary"
+              >拓扑采集参数</span
+            >
           </div>
           <div class="p-3 space-y-3">
             <div>
-              <label class="block text-xs font-medium text-text-secondary mb-1.5">目标厂商</label>
+              <label
+                class="block text-xs font-medium text-text-secondary mb-1.5"
+                >目标厂商</label
+              >
               <select
                 v-model="topologyVendor"
                 class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
               >
                 <option value="">自动识别</option>
-                <option v-for="vendor in supportedVendors" :key="vendor" :value="vendor">
+                <option
+                  v-for="vendor in supportedVendors"
+                  :key="vendor"
+                  :value="vendor"
+                >
                   {{ vendor }}
                 </option>
               </select>
@@ -195,8 +208,12 @@
             <div class="rounded-lg border border-border bg-bg-panel p-3">
               <label class="flex items-start justify-between gap-4">
                 <div>
-                  <div class="text-xs font-medium text-text-secondary">自动构建拓扑</div>
-                  <p class="text-xs text-text-muted mt-1">采集完成后自动触发拓扑构建。</p>
+                  <div class="text-xs font-medium text-text-secondary">
+                    自动构建拓扑
+                  </div>
+                  <p class="text-xs text-text-muted mt-1">
+                    采集完成后自动触发拓扑构建。
+                  </p>
                 </div>
                 <input
                   v-model="autoBuildTopology"
@@ -204,6 +221,162 @@
                   class="mt-1 h-4 w-4"
                 />
               </label>
+            </div>
+
+            <div
+              class="rounded-lg border border-border bg-bg-panel p-3 space-y-3"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <div>
+                  <div class="text-xs font-medium text-text-secondary">
+                    字段级命令覆盖
+                  </div>
+                  <p class="text-xs text-text-muted mt-1">
+                    在任务维度覆盖默认命令，执行前将按覆盖结果重新生成采集计划。
+                  </p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="loadTopologyPreview"
+                    :disabled="topologyPreviewLoading"
+                    class="px-2.5 py-1.5 rounded-lg text-xs border transition-all"
+                    :class="
+                      topologyPreviewLoading
+                        ? 'bg-bg-card border-border text-text-muted cursor-not-allowed'
+                        : 'bg-bg-card border-accent/30 text-accent hover:bg-accent hover:text-white'
+                    "
+                  >
+                    {{ topologyPreviewLoading ? "刷新中..." : "刷新预览" }}
+                  </button>
+                  <button
+                    @click="goToTopologyCommandConfig"
+                    class="px-2.5 py-1.5 rounded-lg text-xs border border-border text-text-secondary hover:text-text-primary hover:border-accent/40 transition-all"
+                  >
+                    配置中心
+                  </button>
+                </div>
+              </div>
+
+              <div
+                v-if="topologyPreviewDirty"
+                class="text-xs px-2.5 py-2 rounded-lg border border-warning/30 bg-warning/10 text-warning"
+              >
+                检测到未刷新的拓扑命令变更，请先刷新预览后再创建任务。
+              </div>
+
+              <div
+                v-if="topologyPreviewError"
+                class="text-xs px-2.5 py-2 rounded-lg border border-error/30 bg-error/10 text-error"
+              >
+                {{ topologyPreviewError }}
+              </div>
+
+              <div
+                v-if="topologyPreviewLoading"
+                class="text-xs px-2.5 py-2 rounded-lg border border-border bg-bg-card text-text-muted"
+              >
+                正在加载拓扑命令预览...
+              </div>
+
+              <div
+                v-else-if="topologyPreviewCommands.length === 0"
+                class="text-xs px-2.5 py-2 rounded-lg border border-border bg-bg-card text-text-muted"
+              >
+                暂无预览命令。请选择设备后再刷新预览。
+              </div>
+
+              <div
+                v-else
+                class="space-y-2 max-h-[340px] overflow-y-auto scrollbar-custom pr-1"
+              >
+                <div
+                  v-for="cmd in topologyPreviewCommands"
+                  :key="cmd.fieldKey"
+                  class="rounded-lg border border-border bg-bg-card p-2.5 space-y-2"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-xs font-medium text-text-primary">{{
+                          cmd.displayName
+                        }}</span>
+                        <span
+                          class="text-[11px] px-1.5 py-0.5 rounded bg-bg-panel border border-border text-text-muted font-mono"
+                        >
+                          {{ cmd.fieldKey }}
+                        </span>
+                        <span
+                          class="text-[11px] px-1.5 py-0.5 rounded border"
+                          :class="
+                            cmd.required
+                              ? 'border-warning/30 bg-warning/10 text-warning'
+                              : 'border-border bg-bg-panel text-text-muted'
+                          "
+                        >
+                          {{ cmd.required ? "关键字段" : "可选字段" }}
+                        </span>
+                        <span
+                          class="text-[11px] px-1.5 py-0.5 rounded border border-accent/30 bg-accent/10 text-accent"
+                        >
+                          {{ cmd.commandSource || "unknown" }}
+                        </span>
+                      </div>
+                      <p class="text-xs text-text-muted mt-1">
+                        {{ cmd.description || "无描述" }}
+                      </p>
+                    </div>
+                    <label
+                      class="inline-flex items-center gap-1 text-xs text-text-secondary"
+                    >
+                      <input
+                        type="checkbox"
+                        class="h-3.5 w-3.5"
+                        :checked="
+                          topologyEnabledValue(cmd.fieldKey, cmd.enabled)
+                        "
+                        @change="onTopologyEnabledChange(cmd.fieldKey, $event)"
+                      />
+                      启用
+                    </label>
+                  </div>
+
+                  <div
+                    class="grid grid-cols-1 lg:grid-cols-[1fr_120px_auto] gap-2 items-start"
+                  >
+                    <textarea
+                      rows="2"
+                      class="w-full px-2.5 py-1.5 rounded-lg bg-bg-panel border border-border text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/40"
+                      :value="topologyCommandValue(cmd.fieldKey, cmd.command)"
+                      @input="onTopologyCommandInput(cmd.fieldKey, $event)"
+                    ></textarea>
+                    <input
+                      type="number"
+                      min="1"
+                      class="w-full px-2.5 py-1.5 rounded-lg bg-bg-panel border border-border text-xs text-text-primary focus:outline-none focus:border-accent/40"
+                      :value="
+                        topologyTimeoutValue(cmd.fieldKey, cmd.timeoutSec)
+                      "
+                      @input="onTopologyTimeoutInput(cmd.fieldKey, $event)"
+                    />
+                    <button
+                      @click="resetTopologyOverride(cmd.fieldKey)"
+                      class="px-2.5 py-1.5 rounded-lg text-xs border border-border text-text-secondary hover:text-text-primary hover:border-accent/40 transition-all"
+                    >
+                      恢复继承
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-text-muted"
+                  >覆盖项 {{ topologyOverrides.length }} 条</span
+                >
+                <span v-if="topologyInvalidCount > 0" class="text-error">
+                  存在 {{ topologyInvalidCount }} 条已启用但命令为空的覆盖项
+                </span>
+                <span v-else class="text-text-muted">覆盖项校验通过</span>
+              </div>
             </div>
           </div>
         </div>
@@ -213,7 +386,7 @@
     <!-- 底部提示 -->
     <div class="flex-shrink-0 text-center py-2">
       <p class="text-sm text-text-muted">
-        选择设备和命令组后，点击「创建任务」将绑定组合发送到任务执行页
+        选择设备并确认拓扑预览后，点击「创建任务」将绑定组合发送到任务执行页
       </p>
     </div>
 
@@ -344,7 +517,11 @@
                 <span
                   class="px-2 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent font-mono"
                 >
-                  {{ selectedTaskType === "normal" ? (selectedCommandGroup?.name || "未选择命令组") : (topologyVendor || "自动识别厂商") }}
+                  {{
+                    selectedTaskType === "normal"
+                      ? selectedCommandGroup?.name || "未选择命令组"
+                      : topologyVendor || "自动识别厂商"
+                  }}
                 </span>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -525,7 +702,7 @@ const topologyPreviewCommands = computed(
 const topologyInvalidCount = computed(
   () =>
     topologyOverrides.value.filter(
-      (item) =>
+      (item: TopologyTaskFieldOverride) =>
         item.enabled === true && String(item.command || "").trim() === "",
     ).length,
 );
@@ -727,11 +904,15 @@ function cloneTopologyOverrides(
 }
 
 function findTopologyOverride(fieldKey: string) {
-  return topologyOverrides.value.find((item) => item.fieldKey === fieldKey);
+  return topologyOverrides.value.find(
+    (item: TopologyTaskFieldOverride) => item.fieldKey === fieldKey,
+  );
 }
 
 function findTopologyOverrideIndex(fieldKey: string) {
-  return topologyOverrides.value.findIndex((item) => item.fieldKey === fieldKey);
+  return topologyOverrides.value.findIndex(
+    (item: TopologyTaskFieldOverride) => item.fieldKey === fieldKey,
+  );
 }
 
 function ensureTopologyOverride(fieldKey: string) {
@@ -765,7 +946,7 @@ function compactTopologyOverride(fieldKey: string) {
     return;
   }
   topologyOverrides.value = topologyOverrides.value.filter(
-    (item) => item.fieldKey !== fieldKey,
+    (item: TopologyTaskFieldOverride) => item.fieldKey !== fieldKey,
   );
 }
 
@@ -824,7 +1005,7 @@ function onTopologyEnabledChange(fieldKey: string, event: Event) {
 
 async function resetTopologyOverride(fieldKey: string) {
   topologyOverrides.value = topologyOverrides.value.filter(
-    (item) => item.fieldKey !== fieldKey,
+    (item: TopologyTaskFieldOverride) => item.fieldKey !== fieldKey,
   );
   markTopologyPreviewDirty();
   await loadTopologyPreview();
@@ -837,10 +1018,14 @@ async function loadTopologyPreview() {
   topologyPreviewLoading.value = true;
   topologyPreviewError.value = "";
   try {
-    topologyPreview.value = await TopologyCommandAPI.previewTopologyCommands(
+    const nextPreview = await TopologyCommandAPI.previewTopologyCommands(
       topologyVendor.value,
       selectedDevices.value.map((item) => item.id),
       cloneTopologyOverrides(topologyOverrides.value),
+    );
+    topologyPreview.value = nextPreview;
+    topologyOverrides.value = cloneTopologyOverrides(
+      nextPreview?.taskOverrides || [],
     );
     topologyPreviewDirty.value = false;
   } catch (err: any) {
@@ -887,9 +1072,19 @@ async function loadDevices() {
 }
 
 watch(
-  () => [selectedTaskType.value, topologyVendor.value, selectedDeviceIDsSignature.value],
+  () => [
+    selectedTaskType.value,
+    topologyVendor.value,
+    selectedDeviceIDsSignature.value,
+  ],
   async ([taskType]) => {
     if (taskType !== "topology") {
+      return;
+    }
+    if (selectedDevices.value.length === 0) {
+      topologyPreview.value = null;
+      topologyPreviewDirty.value = false;
+      topologyPreviewError.value = "";
       return;
     }
     await loadTopologyPreview();
@@ -898,6 +1093,13 @@ watch(
 
 watch(selectedTaskType, async (value) => {
   if (value !== "topology") {
+    topologyPreview.value = null;
+    topologyPreviewError.value = "";
+    topologyPreviewDirty.value = false;
+    topologyOverrides.value = [];
+    return;
+  }
+  if (selectedDevices.value.length === 0) {
     topologyPreview.value = null;
     topologyPreviewError.value = "";
     topologyPreviewDirty.value = false;
