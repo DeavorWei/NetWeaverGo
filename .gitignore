@@ -2,3 +2,5 @@
 *.exe
 /.codex/
 /frontend/src/bindings/
+/.vscode/
+/.kilo/
