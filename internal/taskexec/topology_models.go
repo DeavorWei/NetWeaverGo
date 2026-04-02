@@ -4,27 +4,28 @@ import "time"
 
 // TaskRunDevice 运行期设备信息
 type TaskRunDevice struct {
-	ID             uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	TaskRunID      string    `gorm:"index;not null" json:"taskRunId"`
-	DeviceID       uint      `json:"deviceId"`
-	DeviceIP       string    `gorm:"index;not null" json:"deviceIp"`
-	Status         string    `json:"status"`
-	ErrorMessage   string    `json:"errorMessage"`
-	Vendor         string    `json:"vendor"`
-	DisplayName    string    `json:"displayName"`
-	Role           string    `json:"role"`
-	Site           string    `json:"site"`
-	Hostname       string    `json:"hostname"`
-	Model          string    `json:"model"`
-	SerialNumber   string    `json:"serialNumber"`
-	Version        string    `json:"version"`
-	MgmtIP         string    `json:"mgmtIp"`
-	NormalizedName string    `json:"normalizedName"`
-	ChassisID      string    `json:"chassisId"`
+	ID             uint       `gorm:"primaryKey;autoIncrement" json:"id"`
+	TaskRunID      string     `gorm:"index;not null" json:"taskRunId"`
+	DeviceID       uint       `json:"deviceId"`
+	DeviceIP       string     `gorm:"index;not null" json:"deviceIp"`
+	Status         string     `json:"status"`
+	ErrorMessage   string     `json:"errorMessage"`
+	Vendor         string     `json:"vendor"`
+	VendorSource   string     `json:"vendorSource"`
+	DisplayName    string     `json:"displayName"`
+	Role           string     `json:"role"`
+	Site           string     `json:"site"`
+	Hostname       string     `json:"hostname"`
+	Model          string     `json:"model"`
+	SerialNumber   string     `json:"serialNumber"`
+	Version        string     `json:"version"`
+	MgmtIP         string     `json:"mgmtIp"`
+	NormalizedName string     `json:"normalizedName"`
+	ChassisID      string     `json:"chassisId"`
 	StartedAt      *time.Time `json:"startedAt"`
 	FinishedAt     *time.Time `json:"finishedAt"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
 }
 
 func (TaskRunDevice) TableName() string {
@@ -38,6 +39,9 @@ type TaskRawOutput struct {
 	DeviceIP       string    `gorm:"index;not null" json:"deviceIp"`
 	CommandKey     string    `gorm:"index" json:"commandKey"`
 	Command        string    `json:"command"`
+	CommandSource  string    `json:"commandSource"`
+	ResolvedVendor string    `json:"resolvedVendor"`
+	VendorSource   string    `json:"vendorSource"`
 	RawFilePath    string    `json:"rawFilePath"`
 	ParseFilePath  string    `json:"parseFilePath"`
 	Status         string    `json:"status"`
@@ -171,21 +175,21 @@ func (TaskParsedAggregateMember) TableName() string {
 
 // TaskTopologyEdge 运行期拓扑边
 type TaskTopologyEdge struct {
-	ID               string    `gorm:"primaryKey" json:"id"`
-	TaskRunID        string    `gorm:"index;not null" json:"taskRunId"`
-	ADeviceID        string    `gorm:"index" json:"aDeviceId"`
-	AIf              string    `json:"aIf"`
-	BDeviceID        string    `gorm:"index" json:"bDeviceId"`
-	BIf              string    `json:"bIf"`
-	LogicalAIf       string    `json:"logicalAIf"`
-	LogicalBIf       string    `json:"logicalBIf"`
-	EdgeType         string    `json:"edgeType"`
-	Status           string    `json:"status"`
-	Confidence       float64   `json:"confidence"`
-	DiscoveryMethods []string  `gorm:"serializer:json" json:"discoveryMethods"`
+	ID               string         `gorm:"primaryKey" json:"id"`
+	TaskRunID        string         `gorm:"index;not null" json:"taskRunId"`
+	ADeviceID        string         `gorm:"index" json:"aDeviceId"`
+	AIf              string         `json:"aIf"`
+	BDeviceID        string         `gorm:"index" json:"bDeviceId"`
+	BIf              string         `json:"bIf"`
+	LogicalAIf       string         `json:"logicalAIf"`
+	LogicalBIf       string         `json:"logicalBIf"`
+	EdgeType         string         `json:"edgeType"`
+	Status           string         `json:"status"`
+	Confidence       float64        `json:"confidence"`
+	DiscoveryMethods []string       `gorm:"serializer:json" json:"discoveryMethods"`
 	Evidence         []EdgeEvidence `gorm:"serializer:json" json:"evidence"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
 }
 
 func (TaskTopologyEdge) TableName() string {
@@ -206,4 +210,3 @@ type EdgeEvidence struct {
 	RemoteIP   string `json:"remoteIp"`
 	Timestamp  string `json:"timestamp,omitempty"`
 }
-

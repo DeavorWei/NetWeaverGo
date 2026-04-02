@@ -29,6 +29,7 @@ import * as QueryServiceBinding from '../bindings/github.com/NetWeaverGo/core/in
 import * as ExecutionHistoryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/executionhistoryservice'
 import * as PlanCompareServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/plancompareservice'
 import * as TaskExecutionUIServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/taskexecutionuiservice'
+import * as TopologyCommandServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/topologycommandservice'
 
 // ==================== 设备管理 API ====================
 /**
@@ -168,6 +169,20 @@ export const TaskExecutionAPI = {
   getTopologyDeviceDetail: TaskExecutionUIServiceBinding.GetTopologyDeviceDetail,
   /** 获取支持的厂商列表 */
   getSupportedTopologyVendors: TaskExecutionUIServiceBinding.GetSupportedTopologyVendors,
+} as const
+
+// ==================== 拓扑命令 API ====================
+/**
+ * 拓扑命令 API
+ * @description 提供拓扑字段目录、厂商能力与任务级命令预览
+ */
+export const TopologyCommandAPI = {
+  /** 获取支持的拓扑厂商列表 */
+  getSupportedTopologyVendors: TopologyCommandServiceBinding.GetSupportedTopologyVendors,
+  /** 获取拓扑字段目录 */
+  getTopologyFieldCatalog: TopologyCommandServiceBinding.GetTopologyFieldCatalog,
+  /** 预览当前任务配置下的拓扑命令解析结果 */
+  previewTopologyCommands: TopologyCommandServiceBinding.PreviewTopologyCommands,
 } as const
 
 // ==================== ConfigForge 服务 API ====================
@@ -312,8 +327,8 @@ export const PlanCompareAPI = {
 } as const
 
 // ==================== 类型导出 ====================
-export type { 
-  DeviceAsset, 
+export type {
+  DeviceAsset,
   GlobalSettings,
   CommandGroup,
   TaskGroup,
@@ -326,6 +341,14 @@ export type {
   CompareResult,
   DiffReportView,
   DiffItem,
+  TopologyTaskFieldOverride,
 } from '../bindings/github.com/NetWeaverGo/core/internal/models/models.js'
+
+export type {
+  TopologyCommandPreviewView,
+  TopologyCommandResolutionView,
+  TopologyPreviewDeviceView,
+  TopologyResolvedCommandView,
+} from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
 export type { ParsedResult } from '../bindings/github.com/NetWeaverGo/core/internal/parser/models.js'

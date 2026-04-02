@@ -627,6 +627,7 @@ async function confirmCreate() {
       mode: "group" as const,
       taskType: selectedTaskType.value,
       topologyVendor: selectedTaskType.value === "topology" ? topologyVendor.value : "",
+      topologyFieldOverrides: [],
       autoBuildTopology: selectedTaskType.value === "topology" ? autoBuildTopology.value : false,
       items: taskItems,
       tags: createModal.value.tags,

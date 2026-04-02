@@ -1,36 +1,17 @@
 package taskexec
 
 import (
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/parser"
-	"github.com/NetWeaverGo/core/internal/repository"
 )
 
 func (s *TaskExecutionService) GetSupportedTopologyVendors() []string {
-	deviceRepo := repository.NewDeviceRepository()
-	devices, err := deviceRepo.FindAll()
-	if err != nil {
-		return []string{"huawei", "h3c", "cisco"}
-	}
-	seen := make(map[string]struct{})
-	vendors := make([]string, 0, 8)
-	for _, d := range devices {
-		v := strings.ToLower(strings.TrimSpace(d.Vendor))
-		if v == "" {
-			continue
-		}
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		vendors = append(vendors, v)
-	}
-	sort.Strings(vendors)
+	resolver := NewTopologyCommandResolver()
+	vendors := resolver.SupportedVendors()
 	if len(vendors) == 0 {
 		return []string{"huawei", "h3c", "cisco"}
 	}

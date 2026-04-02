@@ -1,5 +1,7 @@
 package taskexec
 
+import "github.com/NetWeaverGo/core/internal/models"
+
 // ==================== 普通任务配置模型 ====================
 
 // NormalTaskConfig 普通任务配置
@@ -8,7 +10,7 @@ type NormalTaskConfig struct {
 	Mode string `json:"mode"` // "group" = Mode A, "binding" = Mode B
 
 	// 设备选择
-	DeviceIDs []uint `json:"deviceIDs"` // Mode A: 选择的设备ID列表
+	DeviceIDs []uint   `json:"deviceIDs"` // Mode A: 选择的设备ID列表
 	DeviceIPs []string `json:"deviceIPs"` // Mode A: 解析后的设备IP列表（运行时使用）
 
 	// 命令来源 (Mode A)
@@ -43,6 +45,12 @@ type TopologyTaskConfig struct {
 
 	// 厂商配置
 	Vendor string `json:"vendor"` // 厂商: huawei / h3c / cisco / auto
+
+	// 任务级覆盖配置
+	FieldOverrides []models.TopologyTaskFieldOverride `json:"fieldOverrides"`
+
+	// 统一解析后的采集命令计划
+	ResolvedCommands []ResolvedTopologyCommand `json:"resolvedCommands"`
 
 	// 采集选项
 	MaxWorkers int `json:"maxWorkers"` // 并发数

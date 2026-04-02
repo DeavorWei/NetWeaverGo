@@ -2,6 +2,7 @@ package taskexec
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -336,6 +337,31 @@ func NewDeviceCollectExecutor(repo repository.DeviceRepository) *DeviceCollectEx
 	return &DeviceCollectExecutor{repo: repo, settings: settings, db: config.DB}
 }
 
+type topologyCollectOptions struct {
+	TaskVendor     string
+	FieldOverrides []models.TopologyTaskFieldOverride
+}
+
+func parseTopologyCollectOptions(unit *UnitPlan) (*topologyCollectOptions, error) {
+	result := &topologyCollectOptions{}
+	if unit == nil || len(unit.Steps) == 0 {
+		return result, nil
+	}
+	params := unit.Steps[0].Params
+	if len(params) == 0 {
+		return result, nil
+	}
+	result.TaskVendor = strings.TrimSpace(params["taskVendor"])
+	overridesJSON := strings.TrimSpace(params["fieldOverrides"])
+	if overridesJSON == "" {
+		return result, nil
+	}
+	if err := json.Unmarshal([]byte(overridesJSON), &result.FieldOverrides); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // Kind returns executor type
 func (e *DeviceCollectExecutor) Kind() string {
 	return string(StageKindDeviceCollect)
@@ -470,26 +496,33 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 		return err
 	}
 
-	// Get vendor profile
-	inventoryVendor := strings.TrimSpace(device.Vendor)
-	vendor := strings.ToLower(inventoryVendor)
-	vendorSource := "inventory"
-	if vendor == "" {
-		vendor = "generic"
-		vendorSource = "fallback_default"
+	collectOptions, err := parseTopologyCollectOptions(unit)
+	if err != nil {
+		errMsg := fmt.Sprintf("parse topology collect options failed: %v", err)
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "解析拓扑采集配置失败", nil)
+		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, errMsg, 0, 0)
+		return fmt.Errorf("parse topology collect options failed: %w", err)
 	}
-	profile := config.GetDeviceProfile(vendor)
-	if profile == nil {
-		errMsg := fmt.Sprintf("no profile found for vendor: %s", vendor)
+	resolver := NewTopologyCommandResolver()
+	resolution, err := resolver.Resolve(collectOptions.TaskVendor, device, collectOptions.FieldOverrides)
+	if err != nil {
+		errMsg := fmt.Sprintf("resolve topology commands failed: %v", err)
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "解析拓扑命令计划失败", nil)
+		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, errMsg, 0, 0)
+		return fmt.Errorf("resolve topology commands failed: %w", err)
+	}
+	profile, ok := config.GetDeviceProfileByVendor(resolution.ResolvedVendor)
+	if !ok || profile == nil {
+		errMsg := fmt.Sprintf("no profile found for vendor: %s", resolution.ResolvedVendor)
 		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集 Profile 缺失状态", nil)
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, errMsg, 0, 0)
-		return fmt.Errorf("no profile found for vendor: %s", vendor)
+		return fmt.Errorf("no profile found for vendor: %s", resolution.ResolvedVendor)
 	}
-	if profile.Vendor != vendor {
-		logger.Warn("TaskExec", ctx.RunID(), "拓扑采集设备画像发生回退: device=%s, inventoryVendor=%s, requestedVendor=%s, profileVendor=%s", deviceIP, inventoryVendor, vendor, profile.Vendor)
-	}
-	logger.Verbose("TaskExec", ctx.RunID(), "拓扑采集设备画像解析: device=%s, inventoryVendor=%s, vendorSource=%s, requestedVendor=%s, profileVendor=%s", deviceIP, inventoryVendor, vendorSource, vendor, profile.Vendor)
+	e.updateRunDeviceCollectionContext(ctx.RunID(), deviceIP, resolution.ResolvedVendor, resolution.VendorSource)
+	logger.Verbose("TaskExec", ctx.RunID(), "拓扑采集设备画像解析: device=%s, inventoryVendor=%s, taskVendor=%s, vendorSource=%s, resolvedVendor=%s, overrides=%d", deviceIP, strings.TrimSpace(device.Vendor), collectOptions.TaskVendor, resolution.VendorSource, resolution.ResolvedVendor, len(collectOptions.FieldOverrides))
 
 	// Create device executor options
 	execCtx := ctx.Context()
@@ -553,29 +586,34 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnected, "采集连接成功", 0, 0)
 
 	// Build command plan
-	commands := make([]executor.PlannedCommand, 0, len(profile.Commands))
-	commandKeys := make([]string, 0, len(profile.Commands))
-	for _, cmd := range profile.Commands {
+	commands := make([]executor.PlannedCommand, 0, len(resolution.Commands))
+	commandKeys := make([]string, 0, len(resolution.Commands))
+	resolvedCommandMap := make(map[string]ResolvedTopologyCommand, len(resolution.Commands))
+	for _, cmd := range resolution.Commands {
+		if !cmd.Enabled || strings.TrimSpace(cmd.Command) == "" {
+			continue
+		}
 		timeout := time.Duration(cmd.TimeoutSec) * time.Second
 		if timeout == 0 {
 			timeout = cmdTimeout
 		}
-		commandKeys = append(commandKeys, cmd.CommandKey)
+		commandKeys = append(commandKeys, cmd.FieldKey)
+		resolvedCommandMap[cmd.FieldKey] = cmd
 		commands = append(commands, executor.PlannedCommand{
-			Key:             cmd.CommandKey,
+			Key:             cmd.FieldKey,
 			Command:         cmd.Command,
 			Timeout:         timeout,
 			ContinueOnError: true,
 		})
 	}
-	logger.Verbose("TaskExec", ctx.RunID(), "拓扑采集命令计划: device=%s, vendor=%s, commandCount=%d, commandKeys=%v", deviceIP, profile.Vendor, len(commands), commandKeys)
+	logger.Verbose("TaskExec", ctx.RunID(), "拓扑采集命令计划: device=%s, vendor=%s, commandCount=%d, commandKeys=%v", deviceIP, resolution.ResolvedVendor, len(commands), commandKeys)
 
 	if len(commands) == 0 {
-		errMsg := fmt.Sprintf("no commands defined for vendor: %s", vendor)
+		errMsg := fmt.Sprintf("no commands defined for vendor: %s", resolution.ResolvedVendor)
 		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集命令为空状态", nil)
 		e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordNoCommands, errMsg, 0, 0)
-		return fmt.Errorf("no commands defined for vendor: %s", vendor)
+		return fmt.Errorf("no commands defined for vendor: %s", resolution.ResolvedVendor)
 	}
 
 	if ctx.IsCancelled() {
@@ -653,7 +691,8 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 				}
 			}
 
-			if err := e.createTaskRawOutput(ctx.RunID(), deviceIP, result, rawPath, normalizedPath); err != nil {
+			resolvedCommand := resolvedCommandMap[result.CommandKey]
+			if err := e.createTaskRawOutput(ctx.RunID(), deviceIP, result, rawPath, normalizedPath, &resolvedCommand); err != nil {
 				errMsg := fmt.Sprintf("create task raw output failed: %v", err)
 				failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集原始输出失败状态", &successCount)
 				e.updateRunDeviceStatus(ctx.RunID(), deviceIP, "failed", errMsg)
@@ -795,7 +834,10 @@ func (e *ParseExecutor) executeParse(ctx RuntimeContext, stageID string, unit *U
 
 	vendor := ""
 	if len(unit.Steps) > 0 {
-		vendor = unit.Steps[0].Params["vendor"]
+		vendor = strings.TrimSpace(unit.Steps[0].Params["resolvedVendor"])
+		if vendor == "" {
+			vendor = strings.TrimSpace(unit.Steps[0].Params["vendor"])
+		}
 	}
 	if err := e.parseAndSaveRunDevice(ctx, deviceIP, vendor); err != nil {
 		if IsContextCancelled(ctx, err) {
@@ -930,7 +972,20 @@ func (e *DeviceCollectExecutor) updateRunDeviceStatus(taskID, deviceIP, status, 
 	})
 }
 
-func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, result *executor.CommandResult, rawPath, normalizedPath string) error {
+func (e *DeviceCollectExecutor) updateRunDeviceCollectionContext(taskID, deviceIP, vendor, vendorSource string) {
+	handler := NewErrorHandler(taskID)
+	handler.DBBestEffort(fmt.Sprintf("更新运行设备厂商上下文[%s][%s]", deviceIP, vendor), func() error {
+		return e.db.Model(&TaskRunDevice{}).
+			Where("task_run_id = ? AND device_ip = ?", taskID, deviceIP).
+			Updates(map[string]interface{}{
+				"vendor":        strings.TrimSpace(vendor),
+				"vendor_source": strings.TrimSpace(vendorSource),
+				"updated_at":    time.Now(),
+			}).Error
+	})
+}
+
+func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, result *executor.CommandResult, rawPath, normalizedPath string, resolved *ResolvedTopologyCommand) error {
 	if result == nil {
 		return nil
 	}
@@ -943,7 +998,7 @@ func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, res
 		}
 		lineCount = len(result.NormalizedLines)
 	}
-	return e.db.Create(&TaskRawOutput{
+	output := &TaskRawOutput{
 		TaskRunID:      taskID,
 		DeviceIP:       deviceIP,
 		CommandKey:     result.CommandKey,
@@ -955,7 +1010,13 @@ func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, res
 		RawSize:        rawSize,
 		NormalizedSize: normalizedSize,
 		LineCount:      lineCount,
-	}).Error
+	}
+	if resolved != nil {
+		output.CommandSource = resolved.CommandSource
+		output.ResolvedVendor = resolved.ResolvedVendor
+		output.VendorSource = resolved.VendorSource
+	}
+	return e.db.Create(output).Error
 }
 
 func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vendor string) error {

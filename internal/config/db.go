@@ -83,6 +83,7 @@ func autoMigrateAll(db *gorm.DB) error {
 		&models.CommandGroup{},
 		&models.TaskGroup{},
 		&models.RuntimeSetting{},
+		&models.TopologyVendorFieldCommand{},
 		// 规划比对相关表
 		&models.PlanFile{},
 		&models.PlannedLink{},
@@ -101,6 +102,7 @@ func createIndexes(db *gorm.DB) {
 		"CREATE INDEX IF NOT EXISTS idx_task_groups_name ON task_groups(name)",
 		"CREATE INDEX IF NOT EXISTS idx_runtime_category ON runtime_settings(category)",
 		"CREATE INDEX IF NOT EXISTS idx_runtime_key ON runtime_settings(key)",
+		"CREATE UNIQUE INDEX IF NOT EXISTS idx_topology_vendor_field ON topology_vendor_field_commands(vendor, field_key)",
 		// 规划比对相关索引
 		"CREATE INDEX IF NOT EXISTS idx_plan_files_imported_at ON plan_files(imported_at)",
 		"CREATE INDEX IF NOT EXISTS idx_planned_links_plan_edge_key ON planned_links(plan_file_id, edge_key)",

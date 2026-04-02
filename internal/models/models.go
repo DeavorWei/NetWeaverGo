@@ -160,23 +160,24 @@ func (CommandGroup) TableName() string {
 
 // TaskGroup 任务组
 type TaskGroup struct {
-	ID                uint       `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name              string     `json:"name" gorm:"uniqueIndex;not null"`
-	Description       string     `json:"description"`
-	DeviceGroup       string     `json:"deviceGroup"`
-	CommandGroup      string     `json:"commandGroup"`
-	MaxWorkers        int        `json:"maxWorkers"`
-	Timeout           int        `json:"timeout"`
-	TaskType          string     `json:"taskType"`                     // "normal" | "topology"
-	TopologyVendor    string     `json:"topologyVendor"`               // 拓扑采集厂商（可选，空=自动）
-	AutoBuildTopology bool       `json:"autoBuildTopology"`            // 拓扑采集完成后自动构建拓扑
-	Mode              string     `json:"mode"`                         // "group" 模式A | "binding" 模式B
-	Items             []TaskItem `json:"items" gorm:"serializer:json"` // 任务项列表
-	Status            string     `json:"status"`                       // "pending" | "running" | "completed" | "failed"
-	Tags              []string   `json:"tags" gorm:"serializer:json"`
-	EnableRawLog      bool       `json:"enableRawLog"`
-	CreatedAt         time.Time  `json:"createdAt"`
-	UpdatedAt         time.Time  `json:"updatedAt"`
+	ID                     uint                        `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name                   string                      `json:"name" gorm:"uniqueIndex;not null"`
+	Description            string                      `json:"description"`
+	DeviceGroup            string                      `json:"deviceGroup"`
+	CommandGroup           string                      `json:"commandGroup"`
+	MaxWorkers             int                         `json:"maxWorkers"`
+	Timeout                int                         `json:"timeout"`
+	TaskType               string                      `json:"taskType"`       // "normal" | "topology"
+	TopologyVendor         string                      `json:"topologyVendor"` // 拓扑采集厂商（可选，空=自动）
+	TopologyFieldOverrides []TopologyTaskFieldOverride `json:"topologyFieldOverrides" gorm:"serializer:json"`
+	AutoBuildTopology      bool                        `json:"autoBuildTopology"`            // 拓扑采集完成后自动构建拓扑
+	Mode                   string                      `json:"mode"`                         // "group" 模式A | "binding" 模式B
+	Items                  []TaskItem                  `json:"items" gorm:"serializer:json"` // 任务项列表
+	Status                 string                      `json:"status"`                       // "pending" | "running" | "completed" | "failed"
+	Tags                   []string                    `json:"tags" gorm:"serializer:json"`
+	EnableRawLog           bool                        `json:"enableRawLog"`
+	CreatedAt              time.Time                   `json:"createdAt"`
+	UpdatedAt              time.Time                   `json:"updatedAt"`
 }
 
 // TableName 指定表名

@@ -62,17 +62,17 @@ func (c *TopologyTaskCompiler) Supports(kind string) bool {
 func (c *TopologyTaskCompiler) buildCollectStage(config *TopologyTaskConfig) StagePlan {
 	// 每台设备一个Unit
 	units := make([]UnitPlan, 0, len(config.DeviceIPs))
+	steps := c.buildCollectSteps(config)
 
 	for _, deviceIP := range config.DeviceIPs {
-		// 根据厂商确定采集命令
-		steps := c.buildCollectSteps(config.Vendor)
-
+		unitSteps := make([]StepPlan, len(steps))
+		copy(unitSteps, steps)
 		units = append(units, UnitPlan{
 			ID:      fmt.Sprintf("collect-%s", deviceIP),
 			Kind:    string(UnitKindDevice),
 			Target:  TargetRef{Type: "device_ip", Key: deviceIP},
 			Timeout: time.Duration(config.TimeoutSec) * time.Second,
-			Steps:   steps,
+			Steps:   unitSteps,
 		})
 	}
 
@@ -96,6 +96,7 @@ func (c *TopologyTaskCompiler) buildParseStage(config *TopologyTaskConfig) Stage
 	// 每台设备一个Unit，输入为采集阶段的输出
 	units := make([]UnitPlan, 0, len(config.DeviceIPs))
 
+	resolvedVendor, vendorSource := topologyParseMetadata(config)
 	for _, deviceIP := range config.DeviceIPs {
 		units = append(units, UnitPlan{
 			ID:     fmt.Sprintf("parse-%s", deviceIP),
@@ -106,6 +107,10 @@ func (c *TopologyTaskCompiler) buildParseStage(config *TopologyTaskConfig) Stage
 					ID:   fmt.Sprintf("parse-step-%s", deviceIP),
 					Kind: "parse",
 					Name: "解析设备信息",
+					Params: map[string]string{
+						"resolvedVendor": resolvedVendor,
+						"vendorSource":   vendorSource,
+					},
 				},
 			},
 		})
@@ -148,31 +153,42 @@ func (c *TopologyTaskCompiler) buildTopologyBuildStage(config *TopologyTaskConfi
 }
 
 // buildCollectSteps 构建设备采集步骤
-func (c *TopologyTaskCompiler) buildCollectSteps(vendor string) []StepPlan {
-	// 根据厂商返回标准采集命令集
-	// 实际实现需要从config.GetDeviceProfile获取
-	commandKeys := []string{
-		"version",
-		"sysname",
-		"esn",
-		"device_info",
-		"interface_brief",
-		"interface_detail",
-		"lldp_neighbor",
-		"mac_address",
-		"arp_all",
-		"eth_trunk",
-	}
-
-	steps := make([]StepPlan, 0, len(commandKeys))
-	for i, key := range commandKeys {
+func (c *TopologyTaskCompiler) buildCollectSteps(config *TopologyTaskConfig) []StepPlan {
+	overridesJSON, _ := json.Marshal(config.FieldOverrides)
+	steps := make([]StepPlan, 0, len(config.ResolvedCommands))
+	for i, cmd := range config.ResolvedCommands {
+		if !cmd.Enabled {
+			continue
+		}
+		params := map[string]string{
+			"displayName":          cmd.DisplayName,
+			"commandSource":        cmd.CommandSource,
+			"resolvedVendor":       cmd.ResolvedVendor,
+			"vendorSource":         cmd.VendorSource,
+			"parserBinding":        cmd.ParserBinding,
+			"description":          cmd.Description,
+			"timeoutSec":           fmt.Sprintf("%d", cmd.TimeoutSec),
+			"taskVendor":           config.Vendor,
+			"fieldOverrides":       string(overridesJSON),
+			"previewCommand":       cmd.Command,
+			"previewCommandSource": cmd.CommandSource,
+		}
 		steps = append(steps, StepPlan{
 			ID:         fmt.Sprintf("collect-step-%d", i),
 			Kind:       "command",
-			Name:       key,
-			CommandKey: key,
+			Name:       cmd.DisplayName,
+			CommandKey: cmd.FieldKey,
+			Params:     params,
 		})
 	}
-
 	return steps
+}
+
+func topologyParseMetadata(config *TopologyTaskConfig) (string, string) {
+	for _, cmd := range config.ResolvedCommands {
+		if cmd.ResolvedVendor != "" {
+			return cmd.ResolvedVendor, cmd.VendorSource
+		}
+	}
+	return config.Vendor, "task_config"
 }

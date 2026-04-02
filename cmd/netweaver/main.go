@@ -71,6 +71,7 @@ func runGUI() {
 	executionHistoryService.SetTaskExecutionService(taskExecutionService) // 设置统一运行时服务（阶段5）
 	taskGroupService := ui.NewTaskGroupService()
 	taskGroupService.SetTaskExecutionService(taskExecutionService) // 设置共享运行时（阶段1）
+	topologyCommandService := ui.NewTopologyCommandService()
 	planCompareService := ui.NewPlanCompareService()
 	// 创建统一任务执行UI服务（Wails暴露层）
 	taskExecutionUIService := ui.NewTaskExecutionUIService(taskExecutionService)
@@ -106,6 +107,7 @@ func runGUI() {
 			application.NewService(queryService),
 			application.NewService(forgeService),
 			application.NewService(executionHistoryService),
+			application.NewService(topologyCommandService),
 			application.NewService(planCompareService),
 			application.NewService(taskExecutionUIService), // 统一任务执行UI服务（阶段1）
 		},

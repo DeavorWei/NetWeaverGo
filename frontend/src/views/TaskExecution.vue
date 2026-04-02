@@ -1340,7 +1340,7 @@ function clearSnapshotTimeout() {
 }
 
 // 执行任务 (阶段3: 统一执行框架 - 统一使用runId驱动)
-async function executeTask(task: TaskGroup) {
+async function executeTask(task: TaskGroupListView) {
   if (isRunning.value || awaitingSnapshot.value) return;
 
   executionView.value = {

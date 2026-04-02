@@ -60,9 +60,10 @@ type CanonicalNormalItem struct {
 }
 
 type CanonicalTopology struct {
-	DeviceIDs []uint   `json:"deviceIDs"`
-	DeviceIPs []string `json:"deviceIPs"`
-	Vendor    string   `json:"vendor,omitempty"`
+	DeviceIDs      []uint                             `json:"deviceIDs"`
+	DeviceIPs      []string                           `json:"deviceIPs"`
+	Vendor         string                             `json:"vendor,omitempty"`
+	FieldOverrides []models.TopologyTaskFieldOverride `json:"fieldOverrides,omitempty"`
 }
 
 func NewTaskLaunchService(service *TaskExecutionService) *TaskLaunchService {
@@ -235,11 +236,12 @@ func (n *LaunchNormalizer) normalizeTopology(taskGroup *models.TaskGroup) (*Cano
 		deviceIDs = append(deviceIDs, item.DeviceIDs...)
 	}
 	topology := &CanonicalTopology{
-		DeviceIDs: uniqueSortedUint(deviceIDs),
-		DeviceIPs: uniqueSortedStrings(n.lookupDeviceIPs(deviceIDs)),
-		Vendor:    strings.TrimSpace(taskGroup.TopologyVendor),
+		DeviceIDs:      uniqueSortedUint(deviceIDs),
+		DeviceIPs:      uniqueSortedStrings(n.lookupDeviceIPs(deviceIDs)),
+		Vendor:         strings.TrimSpace(taskGroup.TopologyVendor),
+		FieldOverrides: append([]models.TopologyTaskFieldOverride(nil), taskGroup.TopologyFieldOverrides...),
 	}
-	logger.Verbose("TaskLaunchService", "-", "拓扑任务归一化完成: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d, vendor=%s", taskGroup.ID, len(topology.DeviceIDs), len(topology.DeviceIPs), topology.Vendor)
+	logger.Verbose("TaskLaunchService", "-", "拓扑任务归一化完成: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d, vendor=%s, overrides=%d", taskGroup.ID, len(topology.DeviceIDs), len(topology.DeviceIPs), topology.Vendor, len(topology.FieldOverrides))
 	return topology, nil
 }
 
@@ -377,16 +379,23 @@ func (s *TaskExecutionService) CreateTaskDefinitionFromLaunchSpec(spec *Canonica
 		if spec.Topology == nil {
 			return nil, fmt.Errorf("topology launch spec is nil")
 		}
+		resolver := NewTopologyCommandResolver()
+		resolution, resolveErr := resolver.Resolve(spec.Topology.Vendor, nil, spec.Topology.FieldOverrides)
+		if resolveErr != nil {
+			return nil, fmt.Errorf("resolve topology commands failed: %w", resolveErr)
+		}
 		configJSON, err = json.Marshal(&TopologyTaskConfig{
 			DeviceIDs:         append([]uint(nil), spec.Topology.DeviceIDs...),
 			DeviceIPs:         append([]string(nil), spec.Topology.DeviceIPs...),
 			Vendor:            strings.TrimSpace(spec.Topology.Vendor),
+			FieldOverrides:    append([]models.TopologyTaskFieldOverride(nil), spec.Topology.FieldOverrides...),
+			ResolvedCommands:  append([]ResolvedTopologyCommand(nil), resolution.Commands...),
 			MaxWorkers:        spec.Concurrency,
 			TimeoutSec:        spec.TimeoutSec,
 			AutoBuildTopology: spec.AutoBuildTopology,
 			EnableRawLog:      spec.EnableRawLog,
 		})
-		logger.Debug("TaskLaunchService", "-", "创建拓扑任务定义: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d, vendor=%s", spec.TaskGroupID, len(spec.Topology.DeviceIDs), len(spec.Topology.DeviceIPs), spec.Topology.Vendor)
+		logger.Debug("TaskLaunchService", "-", "创建拓扑任务定义: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d, vendor=%s, resolvedVendor=%s, overrides=%d", spec.TaskGroupID, len(spec.Topology.DeviceIDs), len(spec.Topology.DeviceIPs), spec.Topology.Vendor, resolution.ResolvedVendor, len(spec.Topology.FieldOverrides))
 	default:
 		if spec.Normal == nil {
 			return nil, fmt.Errorf("normal launch spec is nil")

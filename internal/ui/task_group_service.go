@@ -173,8 +173,6 @@ func (s *TaskGroupService) UpdateTaskGroup(id uint, group models.TaskGroup) (*mo
 	group.Status = ""
 	group.Mode = existing.Mode
 	group.TaskType = existing.TaskType
-	group.TopologyVendor = existing.TopologyVendor
-	group.AutoBuildTopology = existing.AutoBuildTopology
 
 	return config.UpdateTaskGroup(id, group)
 }

@@ -95,6 +95,7 @@ const executeSend = async () => {
       timeout: 60,
       taskType: "normal",
       topologyVendor: "",
+      topologyFieldOverrides: [],
       autoBuildTopology: false,
       mode: "binding" as const,
       items,
