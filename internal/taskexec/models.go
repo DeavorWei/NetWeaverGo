@@ -125,16 +125,21 @@ func (TaskRunStage) TableName() string {
 
 // TaskRunUnit 调度单元状态
 type TaskRunUnit struct {
-	ID             string     `gorm:"primaryKey" json:"id"`
-	TaskRunID      string     `gorm:"index" json:"taskRunId"`
-	TaskRunStageID string     `gorm:"index" json:"taskRunStageId"`
-	UnitKind       string     `json:"unitKind"`   // device / run / dataset
-	TargetType     string     `json:"targetType"` // device_ip / task_run / dataset_key
-	TargetKey      string     `json:"targetKey"`  // 目标标识
-	Status         string     `json:"status"`     // pending / running / completed / partial / failed / cancelled
-	TotalSteps     int        `json:"totalSteps"`
-	DoneSteps      int        `json:"doneSteps"`
-	ErrorMessage   string     `json:"errorMessage"`
+	ID             string `gorm:"primaryKey" json:"id"`
+	TaskRunID      string `gorm:"index" json:"taskRunId"`
+	TaskRunStageID string `gorm:"index" json:"taskRunStageId"`
+	UnitKind       string `json:"unitKind"`   // device / run / dataset
+	TargetType     string `json:"targetType"` // device_ip / task_run / dataset_key
+	TargetKey      string `json:"targetKey"`  // 目标标识
+	Status         string `json:"status"`     // pending / running / completed / partial / failed / cancelled
+	TotalSteps     int    `json:"totalSteps"`
+	DoneSteps      int    `json:"doneSteps"`
+	ErrorMessage   string `json:"errorMessage"`
+	// 日志路径字段
+	SummaryLogPath string     `json:"summaryLogPath,omitempty"`
+	DetailLogPath  string     `json:"detailLogPath,omitempty"`
+	RawLogPath     string     `json:"rawLogPath,omitempty"`
+	JournalLogPath string     `json:"journalLogPath,omitempty"`
 	StartedAt      *time.Time `json:"startedAt"`
 	FinishedAt     *time.Time `json:"finishedAt"`
 	CreatedAt      time.Time  `json:"createdAt"`

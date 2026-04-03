@@ -2,9 +2,14 @@ package ui
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strings"
 
+	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/taskexec"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -14,11 +19,17 @@ import (
 type ExecutionHistoryService struct {
 	wailsApp             *application.App
 	taskExecutionService *taskexec.TaskExecutionService
+	repo                 taskexec.Repository // 新增：直接依赖 Repository
 }
 
 // NewExecutionHistoryService 创建历史记录服务实例
 func NewExecutionHistoryService() *ExecutionHistoryService {
 	return &ExecutionHistoryService{}
+}
+
+// SetRepository 设置仓库（由应用启动时注入）
+func (s *ExecutionHistoryService) SetRepository(repo taskexec.Repository) {
+	s.repo = repo
 }
 
 // SetTaskExecutionService 设置统一任务执行服务（阶段5：统一执行历史）
@@ -138,4 +149,163 @@ func (s *ExecutionHistoryService) OpenFileWithDefaultApp(filePath string) error 
 	}
 
 	return nil
+}
+
+// ==================== 删除操作 ====================
+
+// DeleteRunRecordResponse 删除运行记录响应
+type DeleteRunRecordResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// DeleteRunRecord 删除单条运行记录
+func (s *ExecutionHistoryService) DeleteRunRecord(runID string) (*DeleteRunRecordResponse, error) {
+	if s.repo == nil {
+		return nil, fmt.Errorf("仓库未初始化")
+	}
+
+	if strings.TrimSpace(runID) == "" {
+		return &DeleteRunRecordResponse{Success: false, Message: "runID 不能为空"}, nil
+	}
+
+	// 1. 检查是否正在运行
+	run, err := s.repo.GetRun(context.Background(), runID)
+	if err != nil {
+		return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("获取运行记录失败: %v", err)}, nil
+	}
+
+	activeStatuses := taskexec.ActiveRunStatuses()
+	for _, status := range activeStatuses {
+		if run.Status == string(status) {
+			return &DeleteRunRecordResponse{Success: false, Message: "无法删除正在运行的任务"}, nil
+		}
+	}
+
+	// 2. 获取关联数据用于文件删除
+	units, _ := s.repo.GetUnitsByRun(context.Background(), runID)
+	artifacts, _ := s.repo.GetArtifactsByRun(context.Background(), runID)
+
+	// 3. 删除数据库记录
+	if err := s.repo.DeleteRun(context.Background(), runID); err != nil {
+		return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("删除失败: %v", err)}, nil
+	}
+
+	// 4. 异步删除关联文件
+	go s.deleteRunFiles(runID, run.RunKind, units, artifacts)
+
+	logger.Info("ExecutionHistoryService", "-", "已删除运行记录: %s", runID)
+	return &DeleteRunRecordResponse{Success: true, Message: "删除成功"}, nil
+}
+
+// DeleteAllRunRecords 删除所有运行记录
+func (s *ExecutionHistoryService) DeleteAllRunRecords() (*DeleteRunRecordResponse, error) {
+	if s.repo == nil {
+		return nil, fmt.Errorf("仓库未初始化")
+	}
+
+	// 检查是否有正在运行的任务
+	running, err := s.repo.ListRunningRuns(context.Background())
+	if err != nil {
+		return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("检查运行状态失败: %v", err)}, nil
+	}
+	if len(running) > 0 {
+		return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("存在 %d 个正在运行的任务，无法删除全部", len(running))}, nil
+	}
+
+	// 获取所有运行记录用于文件删除
+	runs, _ := s.repo.ListRuns(context.Background(), 0)
+
+	// 删除数据库记录（使用批量删除优化）
+	if err := s.repo.DeleteAllRunsBatch(context.Background()); err != nil {
+		return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("删除失败: %v", err)}, nil
+	}
+
+	// 异步删除所有关联文件
+	go s.deleteAllRunFiles(runs)
+
+	logger.Info("ExecutionHistoryService", "-", "已删除所有运行记录")
+	return &DeleteRunRecordResponse{Success: true, Message: "删除成功"}, nil
+}
+
+// deleteRunFiles 删除运行关联的文件
+func (s *ExecutionHistoryService) deleteRunFiles(runID, runKind string, units []taskexec.TaskRunUnit, artifacts []taskexec.TaskArtifact) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("ExecutionHistoryService", runID, "删除文件时发生panic: %v", r)
+		}
+	}()
+
+	pm := config.GetPathManager()
+
+	// 1. 删除拓扑采集文件目录
+	if runKind == "topology" {
+		rawDir := filepath.Join(pm.TopologyRawDir, "run_"+runID)
+		normalizedDir := filepath.Join(pm.StorageRoot, "topology", "normalized", "run_"+runID)
+
+		if err := os.RemoveAll(rawDir); err != nil {
+			logger.Error("ExecutionHistoryService", runID, "删除原始数据目录失败: %v", err)
+		}
+		if err := os.RemoveAll(normalizedDir); err != nil {
+			logger.Error("ExecutionHistoryService", runID, "删除标准化数据目录失败: %v", err)
+		}
+	}
+
+	// 2. 删除执行日志文件（从 Unit 的日志路径）
+	for _, unit := range units {
+		s.deleteLogFile(unit.SummaryLogPath, runID, "summary")
+		s.deleteLogFile(unit.DetailLogPath, runID, "detail")
+		s.deleteLogFile(unit.RawLogPath, runID, "raw")
+		s.deleteLogFile(unit.JournalLogPath, runID, "journal")
+	}
+
+	// 3. 删除产物文件
+	for _, artifact := range artifacts {
+		if artifact.FilePath != "" {
+			if err := os.Remove(artifact.FilePath); err != nil && !os.IsNotExist(err) {
+				logger.Error("ExecutionHistoryService", runID, "删除产物文件失败 [%s]: %v", artifact.FilePath, err)
+			}
+		}
+	}
+}
+
+// deleteLogFile 安全删除日志文件
+func (s *ExecutionHistoryService) deleteLogFile(path, runID, logType string) {
+	if path == "" {
+		return
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		logger.Error("ExecutionHistoryService", runID, "删除%s日志失败 [%s]: %v", logType, path, err)
+	}
+}
+
+// deleteAllRunFiles 删除所有运行的文件
+func (s *ExecutionHistoryService) deleteAllRunFiles(runs []taskexec.TaskRun) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("ExecutionHistoryService", "-", "批量删除文件时发生panic: %v", r)
+		}
+	}()
+
+	pm := config.GetPathManager()
+
+	// 删除整个拓扑目录
+	if err := os.RemoveAll(pm.TopologyRawDir); err != nil {
+		logger.Error("ExecutionHistoryService", "-", "删除原始数据目录失败: %v", err)
+	}
+
+	normalizedDir := filepath.Join(pm.StorageRoot, "topology", "normalized")
+	if err := os.RemoveAll(normalizedDir); err != nil {
+		logger.Error("ExecutionHistoryService", "-", "删除标准化数据目录失败: %v", err)
+	}
+
+	// 删除执行日志目录
+	if err := os.RemoveAll(pm.ExecutionLiveLogDir); err != nil {
+		logger.Error("ExecutionHistoryService", "-", "删除执行日志目录失败: %v", err)
+	}
+
+	// 重新创建空目录
+	os.MkdirAll(pm.TopologyRawDir, 0755)
+	os.MkdirAll(normalizedDir, 0755)
+	os.MkdirAll(pm.ExecutionLiveLogDir, 0755)
 }

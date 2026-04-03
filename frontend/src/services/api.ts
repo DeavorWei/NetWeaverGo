@@ -282,6 +282,10 @@ export const ExecutionHistoryAPI = {
   listTaskRunRecords: ExecutionHistoryServiceBinding.ListTaskRunRecords,
   /** 使用系统默认应用打开文件 */
   openFileWithDefaultApp: ExecutionHistoryServiceBinding.OpenFileWithDefaultApp,
+  /** 删除单条运行记录 */
+  deleteRunRecord: ExecutionHistoryServiceBinding.DeleteRunRecord,
+  /** 删除所有运行记录 */
+  deleteAllRunRecords: ExecutionHistoryServiceBinding.DeleteAllRunRecords,
 } as const
 
 // 导出历史执行记录相关类型

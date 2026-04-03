@@ -38,6 +38,20 @@ type Repository interface {
 	GetArtifactsByRun(ctx context.Context, runID string) ([]TaskArtifact, error)
 	GetArtifactsByStage(ctx context.Context, stageID string) ([]TaskArtifact, error)
 	GetArtifactsByUnit(ctx context.Context, unitID string) ([]TaskArtifact, error)
+
+	// ==================== 删除操作 ====================
+
+	// DeleteRun 删除运行记录（含级联删除所有关联数据）
+	DeleteRun(ctx context.Context, runID string) error
+
+	// DeleteAllRuns 删除所有运行记录
+	DeleteAllRuns(ctx context.Context) error
+
+	// DeleteAllRunsBatch 批量删除所有运行记录（单事务，性能优化版本）
+	DeleteAllRunsBatch(ctx context.Context) error
+
+	// DeleteRunsByKind 按类型删除运行记录
+	DeleteRunsByKind(ctx context.Context, runKind string) error
 }
 
 // GormRepository GORM实现的运行时仓库
@@ -275,6 +289,148 @@ func (r *GormRepository) GetArtifactsByUnit(ctx context.Context, unitID string) 
 	var artifacts []TaskArtifact
 	err := r.db.WithContext(ctx).Where("unit_id = ?", unitID).Find(&artifacts).Error
 	return artifacts, err
+}
+
+// ==================== Delete Operations ====================
+
+// DeleteRun 删除运行记录（含级联删除所有关联数据）
+func (r *GormRepository) DeleteRun(ctx context.Context, runID string) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. 删除解析数据表（拓扑采集特有）
+		// 1.1 删除拓扑边
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskTopologyEdge{}).Error; err != nil {
+			return fmt.Errorf("删除拓扑边失败: %w", err)
+		}
+
+		// 1.2 删除聚合组成员
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskParsedAggregateMember{}).Error; err != nil {
+			return fmt.Errorf("删除聚合组成员失败: %w", err)
+		}
+
+		// 1.3 删除聚合组
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskParsedAggregateGroup{}).Error; err != nil {
+			return fmt.Errorf("删除聚合组失败: %w", err)
+		}
+
+		// 1.4 删除ARP条目
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskParsedARPEntry{}).Error; err != nil {
+			return fmt.Errorf("删除ARP条目失败: %w", err)
+		}
+
+		// 1.5 删除FDB条目
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskParsedFDBEntry{}).Error; err != nil {
+			return fmt.Errorf("删除FDB条目失败: %w", err)
+		}
+
+		// 1.6 删除LLDP邻居
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskParsedLLDPNeighbor{}).Error; err != nil {
+			return fmt.Errorf("删除LLDP邻居失败: %w", err)
+		}
+
+		// 1.7 删除接口数据
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskParsedInterface{}).Error; err != nil {
+			return fmt.Errorf("删除接口数据失败: %w", err)
+		}
+
+		// 1.8 删除原始输出
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskRawOutput{}).Error; err != nil {
+			return fmt.Errorf("删除原始输出失败: %w", err)
+		}
+
+		// 1.9 删除设备记录
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskRunDevice{}).Error; err != nil {
+			return fmt.Errorf("删除设备记录失败: %w", err)
+		}
+
+		// 2. 删除通用关联数据
+		// 2.1 删除产物
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskArtifact{}).Error; err != nil {
+			return fmt.Errorf("删除产物失败: %w", err)
+		}
+
+		// 2.2 删除事件
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskRunEvent{}).Error; err != nil {
+			return fmt.Errorf("删除事件失败: %w", err)
+		}
+
+		// 2.3 删除单元
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskRunUnit{}).Error; err != nil {
+			return fmt.Errorf("删除单元失败: %w", err)
+		}
+
+		// 2.4 删除阶段
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskRunStage{}).Error; err != nil {
+			return fmt.Errorf("删除阶段失败: %w", err)
+		}
+
+		// 3. 删除主记录
+		if err := tx.Where("id = ?", runID).Delete(&TaskRun{}).Error; err != nil {
+			return fmt.Errorf("删除运行记录失败: %w", err)
+		}
+
+		return nil
+	})
+}
+
+// DeleteAllRuns 删除所有运行记录
+func (r *GormRepository) DeleteAllRuns(ctx context.Context) error {
+	var runIDs []string
+	if err := r.db.WithContext(ctx).Model(&TaskRun{}).Pluck("id", &runIDs).Error; err != nil {
+		return fmt.Errorf("获取运行记录列表失败: %w", err)
+	}
+
+	for _, runID := range runIDs {
+		if err := r.DeleteRun(ctx, runID); err != nil {
+			return fmt.Errorf("删除运行记录 %s 失败: %w", runID, err)
+		}
+	}
+	return nil
+}
+
+// DeleteAllRunsBatch 批量删除所有运行记录（单事务，性能优化版本）
+func (r *GormRepository) DeleteAllRunsBatch(ctx context.Context) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 批量删除所有关联表（按依赖顺序）
+		tables := []interface{}{
+			&TaskTopologyEdge{},
+			&TaskParsedAggregateMember{},
+			&TaskParsedAggregateGroup{},
+			&TaskParsedARPEntry{},
+			&TaskParsedFDBEntry{},
+			&TaskParsedLLDPNeighbor{},
+			&TaskParsedInterface{},
+			&TaskRawOutput{},
+			&TaskRunDevice{},
+			&TaskArtifact{},
+			&TaskRunEvent{},
+			&TaskRunUnit{},
+			&TaskRunStage{},
+			&TaskRun{},
+		}
+
+		for _, table := range tables {
+			if err := tx.Where("1 = 1").Delete(table).Error; err != nil {
+				return fmt.Errorf("清空表 %T 失败: %w", table, err)
+			}
+		}
+
+		return nil
+	})
+}
+
+// DeleteRunsByKind 按类型删除运行记录
+func (r *GormRepository) DeleteRunsByKind(ctx context.Context, runKind string) error {
+	var runIDs []string
+	if err := r.db.WithContext(ctx).Model(&TaskRun{}).Where("run_kind = ?", runKind).Pluck("id", &runIDs).Error; err != nil {
+		return fmt.Errorf("获取运行记录列表失败: %w", err)
+	}
+
+	for _, runID := range runIDs {
+		if err := r.DeleteRun(ctx, runID); err != nil {
+			return fmt.Errorf("删除运行记录 %s 失败: %w", runID, err)
+		}
+	}
+	return nil
 }
 
 // AutoMigrate 自动迁移数据库表

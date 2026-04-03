@@ -388,6 +388,29 @@ export const useTaskexecStore = defineStore('taskexec', () => {
     }
   }
 
+  // ================== 历史记录管理 ==================
+  
+  /**
+   * 从历史记录中移除指定运行
+   */
+  function removeRunFromHistory(runId: string) {
+    const index = runHistory.value.findIndex((r) => r.runId === runId)
+    if (index !== -1) {
+      runHistory.value.splice(index, 1)
+    }
+    // 同时清理快照
+    removeSnapshot(runId)
+  }
+  
+  /**
+   * 清空所有历史记录
+   */
+  function clearAllHistory() {
+    runHistory.value = []
+    // 清理所有快照
+    snapshots.value = {}
+  }
+
   // ================== 导出 ==================
   return {
     // 状态
@@ -416,5 +439,9 @@ export const useTaskexecStore = defineStore('taskexec', () => {
     refreshSnapshot,
     loadRunHistory,
     cancelTask,
+    
+    // 历史记录管理
+    removeRunFromHistory,
+    clearAllHistory,
   }
 })
