@@ -307,10 +307,12 @@ const executeDelete = async () => {
 
   try {
     if (deleteConfirmModal.value.isBatch) {
-      // 删除全部
-      const result = await ExecutionHistoryAPI.deleteAllRunRecords();
+      // 删除全部 - 传递 taskGroupId 进行筛选
+      const result = await ExecutionHistoryAPI.deleteAllRunRecords({
+        taskGroupId: props.taskGroupId || "",
+      });
       if (result?.success) {
-        toast.success("删除成功");
+        toast.success(result.message || "删除成功");
         records.value = [];
         total.value = 0;
         taskexecStore.clearAllHistory();
@@ -319,10 +321,13 @@ const executeDelete = async () => {
         toast.error(result?.message || "删除失败");
       }
     } else {
-      // 删除单条
+      // 删除单条 - 传递 taskGroupId 进行权限验证
       const record = deleteConfirmModal.value.targetRecord;
       if (record) {
-        const result = await ExecutionHistoryAPI.deleteRunRecord(record.id);
+        const result = await ExecutionHistoryAPI.deleteRunRecord({
+          runId: record.id,
+          taskGroupId: props.taskGroupId || "",
+        });
         if (result?.success) {
           toast.success("删除成功");
           const index = records.value.findIndex((r) => r.id === record.id);

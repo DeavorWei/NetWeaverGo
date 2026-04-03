@@ -41,6 +41,14 @@ func (m *MockRepository) ListRuns(ctx context.Context, limit int) ([]taskexec.Ta
 	return args.Get(0).([]taskexec.TaskRun), args.Error(1)
 }
 
+func (m *MockRepository) ListRunsFiltered(ctx context.Context, limit int, taskGroupID uint, runKind, status string) ([]taskexec.TaskRun, error) {
+	args := m.Called(ctx, limit, taskGroupID, runKind, status)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]taskexec.TaskRun), args.Error(1)
+}
+
 func (m *MockRepository) ListRunningRuns(ctx context.Context) ([]taskexec.TaskRun, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
@@ -171,6 +179,11 @@ func (m *MockRepository) DeleteRunsByKind(ctx context.Context, runKind string) e
 	return args.Error(0)
 }
 
+func (m *MockRepository) DeleteRunsByTaskGroup(ctx context.Context, taskGroupID uint) error {
+	args := m.Called(ctx, taskGroupID)
+	return args.Error(0)
+}
+
 // ==================== 测试用例 ====================
 
 func TestDeleteRunRecord_Success(t *testing.T) {
@@ -194,7 +207,7 @@ func TestDeleteRunRecord_Success(t *testing.T) {
 	mockRepo.On("DeleteRun", context.Background(), runID).Return(nil)
 
 	// 执行测试
-	result, err := service.DeleteRunRecord(runID)
+	result, err := service.DeleteRunRecord(DeleteRunRecordRequest{RunID: runID})
 
 	// 验证结果
 	assert.NoError(t, err)
@@ -212,7 +225,7 @@ func TestDeleteRunRecord_EmptyRunID(t *testing.T) {
 	service.SetRepository(mockRepo)
 
 	// 执行测试
-	result, err := service.DeleteRunRecord("")
+	result, err := service.DeleteRunRecord(DeleteRunRecordRequest{RunID: ""})
 
 	// 验证结果
 	assert.NoError(t, err)
@@ -239,7 +252,7 @@ func TestDeleteRunRecord_RunningTask(t *testing.T) {
 	mockRepo.On("GetRun", context.Background(), runID).Return(run, nil)
 
 	// 执行测试
-	result, err := service.DeleteRunRecord(runID)
+	result, err := service.DeleteRunRecord(DeleteRunRecordRequest{RunID: runID})
 
 	// 验证结果
 	assert.NoError(t, err)
@@ -256,7 +269,7 @@ func TestDeleteRunRecord_RepositoryNil(t *testing.T) {
 	// 不设置 repository
 
 	// 执行测试
-	result, err := service.DeleteRunRecord("test-run-id")
+	result, err := service.DeleteRunRecord(DeleteRunRecordRequest{RunID: "test-run-id"})
 
 	// 验证结果
 	assert.Error(t, err)
@@ -264,24 +277,122 @@ func TestDeleteRunRecord_RepositoryNil(t *testing.T) {
 	assert.Nil(t, result)
 }
 
+func TestDeleteRunRecord_TaskGroupIDMismatch(t *testing.T) {
+	service := NewExecutionHistoryService()
+	mockRepo := new(MockRepository)
+	service.SetRepository(mockRepo)
+
+	runID := "test-run-id"
+	now := time.Now()
+	run := &taskexec.TaskRun{
+		ID:          runID,
+		TaskGroupID: 100, // 实际属于任务组 100
+		Status:      "completed",
+		RunKind:     "normal",
+		StartedAt:   &now,
+	}
+
+	// 设置 mock 期望
+	mockRepo.On("GetRun", context.Background(), runID).Return(run, nil)
+
+	// 执行测试 - 传入不同的 taskGroupId
+	result, err := service.DeleteRunRecord(DeleteRunRecordRequest{
+		RunID:       runID,
+		TaskGroupID: "200", // 请求声称属于任务组 200
+	})
+
+	// 验证结果
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.Success)
+	assert.Equal(t, "无权删除该记录", result.Message)
+
+	// 验证 mock 调用
+	mockRepo.AssertExpectations(t)
+}
+
 func TestDeleteAllRunRecords_Success(t *testing.T) {
 	service := NewExecutionHistoryService()
 	mockRepo := new(MockRepository)
 	service.SetRepository(mockRepo)
 
+	now := time.Now()
+	runs := []taskexec.TaskRun{
+		{
+			ID:        "run-1",
+			Status:    "completed",
+			StartedAt: &now,
+		},
+	}
+
 	// 设置 mock 期望
 	mockRepo.On("ListRunningRuns", context.Background()).Return([]taskexec.TaskRun{}, nil)
-	mockRepo.On("ListRuns", context.Background(), 0).Return([]taskexec.TaskRun{}, nil)
+	mockRepo.On("ListRuns", context.Background(), 0).Return(runs, nil)
 	mockRepo.On("DeleteAllRunsBatch", context.Background()).Return(nil)
 
 	// 执行测试
-	result, err := service.DeleteAllRunRecords()
+	result, err := service.DeleteAllRunRecords(DeleteAllRunRecordsRequest{})
 
 	// 验证结果
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.True(t, result.Success)
-	assert.Equal(t, "删除成功", result.Message)
+	assert.Equal(t, "成功删除 1 条记录", result.Message)
+
+	// 验证 mock 调用
+	mockRepo.AssertExpectations(t)
+}
+
+func TestDeleteAllRunRecords_NoRecords(t *testing.T) {
+	service := NewExecutionHistoryService()
+	mockRepo := new(MockRepository)
+	service.SetRepository(mockRepo)
+
+	// 设置 mock 期望 - 返回空列表
+	mockRepo.On("ListRunningRuns", context.Background()).Return([]taskexec.TaskRun{}, nil)
+	mockRepo.On("ListRuns", context.Background(), 0).Return([]taskexec.TaskRun{}, nil)
+
+	// 执行测试
+	result, err := service.DeleteAllRunRecords(DeleteAllRunRecordsRequest{})
+
+	// 验证结果
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.Success)
+	assert.Equal(t, "没有可删除的记录", result.Message)
+
+	// 验证 mock 调用
+	mockRepo.AssertExpectations(t)
+}
+
+func TestDeleteAllRunRecords_WithTaskGroupID(t *testing.T) {
+	service := NewExecutionHistoryService()
+	mockRepo := new(MockRepository)
+	service.SetRepository(mockRepo)
+
+	now := time.Now()
+	runs := []taskexec.TaskRun{
+		{
+			ID:          "run-1",
+			TaskGroupID: 100,
+			Status:      "completed",
+			StartedAt:   &now,
+		},
+	}
+
+	// 设置 mock 期望
+	mockRepo.On("ListRunningRuns", context.Background()).Return([]taskexec.TaskRun{}, nil)
+	mockRepo.On("ListRunsFiltered", context.Background(), 0, uint(100), "", "").Return(runs, nil)
+	mockRepo.On("DeleteRunsByTaskGroup", context.Background(), uint(100)).Return(nil)
+
+	// 执行测试 - 指定 taskGroupId
+	result, err := service.DeleteAllRunRecords(DeleteAllRunRecordsRequest{TaskGroupID: "100"})
+
+	// 验证结果
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.Success)
+	assert.Equal(t, "成功删除 1 条记录", result.Message)
 
 	// 验证 mock 调用
 	mockRepo.AssertExpectations(t)
@@ -305,7 +416,7 @@ func TestDeleteAllRunRecords_HasRunningTasks(t *testing.T) {
 	mockRepo.On("ListRunningRuns", context.Background()).Return(runningTasks, nil)
 
 	// 执行测试
-	result, err := service.DeleteAllRunRecords()
+	result, err := service.DeleteAllRunRecords(DeleteAllRunRecordsRequest{})
 
 	// 验证结果
 	assert.NoError(t, err)
@@ -322,7 +433,7 @@ func TestDeleteAllRunRecords_RepositoryNil(t *testing.T) {
 	// 不设置 repository
 
 	// 执行测试
-	result, err := service.DeleteAllRunRecords()
+	result, err := service.DeleteAllRunRecords(DeleteAllRunRecordsRequest{})
 
 	// 验证结果
 	assert.Error(t, err)

@@ -53,6 +53,9 @@ type Repository interface {
 
 	// DeleteRunsByKind 按类型删除运行记录
 	DeleteRunsByKind(ctx context.Context, runKind string) error
+
+	// DeleteRunsByTaskGroup 按任务组删除运行记录
+	DeleteRunsByTaskGroup(ctx context.Context, taskGroupID uint) error
 }
 
 // GormRepository GORM实现的运行时仓库
@@ -452,6 +455,21 @@ func (r *GormRepository) DeleteAllRunsBatch(ctx context.Context) error {
 func (r *GormRepository) DeleteRunsByKind(ctx context.Context, runKind string) error {
 	var runIDs []string
 	if err := r.db.WithContext(ctx).Model(&TaskRun{}).Where("run_kind = ?", runKind).Pluck("id", &runIDs).Error; err != nil {
+		return fmt.Errorf("获取运行记录列表失败: %w", err)
+	}
+
+	for _, runID := range runIDs {
+		if err := r.DeleteRun(ctx, runID); err != nil {
+			return fmt.Errorf("删除运行记录 %s 失败: %w", runID, err)
+		}
+	}
+	return nil
+}
+
+// DeleteRunsByTaskGroup 按任务组删除运行记录
+func (r *GormRepository) DeleteRunsByTaskGroup(ctx context.Context, taskGroupID uint) error {
+	var runIDs []string
+	if err := r.db.WithContext(ctx).Model(&TaskRun{}).Where("task_group_id = ?", taskGroupID).Pluck("id", &runIDs).Error; err != nil {
 		return fmt.Errorf("获取运行记录列表失败: %w", err)
 	}
 
