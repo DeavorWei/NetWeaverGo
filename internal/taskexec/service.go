@@ -172,6 +172,25 @@ func (s *TaskExecutionService) ListRuns(limit int) ([]*RunSummary, error) {
 	return summaries, nil
 }
 
+// ListRunsFiltered 按条件筛选历史运行记录
+func (s *TaskExecutionService) ListRunsFiltered(limit int, taskGroupID uint, runKind, status string) ([]*RunSummary, error) {
+	runs, err := s.repo.ListRunsFiltered(context.Background(), limit, taskGroupID, runKind, status)
+	if err != nil {
+		return nil, err
+	}
+
+	summaries := make([]*RunSummary, 0, len(runs))
+	builder := NewSnapshotBuilder()
+
+	for _, run := range runs {
+		stages, _ := s.repo.GetStagesByRun(context.Background(), run.ID)
+		summary := builder.BuildSummary(&run, stages)
+		summaries = append(summaries, summary)
+	}
+
+	return summaries, nil
+}
+
 // GetRunStatus 获取运行状态
 func (s *TaskExecutionService) GetRunStatus(runID string) (*TaskRun, error) {
 	return s.repo.GetRun(context.Background(), runID)

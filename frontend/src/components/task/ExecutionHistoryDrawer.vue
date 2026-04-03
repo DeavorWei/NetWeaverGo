@@ -215,6 +215,7 @@ const loadRecords = async () => {
       runKind: "",
       status: filterStatus.value,
       limit: pageSize * currentPage.value,
+      taskGroupId: props.taskGroupId || "",
     });
     records.value = (result?.data || []).map(
       (item: any): ExecutionHistoryRecord => ({

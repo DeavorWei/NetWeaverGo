@@ -14,6 +14,7 @@ type Repository interface {
 	GetRun(ctx context.Context, runID string) (*TaskRun, error)
 	UpdateRun(ctx context.Context, runID string, patch *RunPatch) error
 	ListRuns(ctx context.Context, limit int) ([]TaskRun, error)
+	ListRunsFiltered(ctx context.Context, limit int, taskGroupID uint, runKind, status string) ([]TaskRun, error)
 	ListRunningRuns(ctx context.Context) ([]TaskRun, error)
 
 	// Stage operations
@@ -113,6 +114,35 @@ func (r *GormRepository) UpdateRun(ctx context.Context, runID string, patch *Run
 func (r *GormRepository) ListRuns(ctx context.Context, limit int) ([]TaskRun, error) {
 	var runs []TaskRun
 	err := r.db.WithContext(ctx).Order("created_at DESC").Limit(limit).Find(&runs).Error
+	return runs, err
+}
+
+// ListRunsFiltered 按条件筛选运行记录
+func (r *GormRepository) ListRunsFiltered(ctx context.Context, limit int, taskGroupID uint, runKind, status string) ([]TaskRun, error) {
+	var runs []TaskRun
+	query := r.db.WithContext(ctx).Order("created_at DESC")
+
+	// 按 TaskGroupID 筛选
+	if taskGroupID > 0 {
+		query = query.Where("task_group_id = ?", taskGroupID)
+	}
+
+	// 按 RunKind 筛选
+	if runKind != "" {
+		query = query.Where("run_kind = ?", runKind)
+	}
+
+	// 按 Status 筛选
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	// 应用限制
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+
+	err := query.Find(&runs).Error
 	return runs, err
 }
 

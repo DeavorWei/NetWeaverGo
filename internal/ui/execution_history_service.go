@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/NetWeaverGo/core/internal/config"
@@ -64,9 +65,10 @@ type TaskRunRecordView struct {
 
 // ListTaskRunRecordsRequest 统一运行时历史记录查询请求
 type ListTaskRunRecordsRequest struct {
-	RunKind string `json:"runKind"` // normal / topology / 空表示全部
-	Status  string `json:"status"`  // 状态筛选
-	Limit   int    `json:"limit"`   // 返回数量限制
+	RunKind     string `json:"runKind"`     // normal / topology / 空表示全部
+	Status      string `json:"status"`      // 状态筛选
+	Limit       int    `json:"limit"`       // 返回数量限制
+	TaskGroupID string `json:"taskGroupId"` // 任务组ID筛选
 }
 
 // ListTaskRunRecordsResponse 统一运行时历史记录查询响应
@@ -84,28 +86,28 @@ func (s *ExecutionHistoryService) ListTaskRunRecords(req ListTaskRunRecordsReque
 		}, nil
 	}
 
-	// 从统一运行时获取运行记录
-	runs, err := s.taskExecutionService.ListRuns(req.Limit)
+	// 解析 TaskGroupID
+	var taskGroupID uint
+	if req.TaskGroupID != "" {
+		id, err := strconv.ParseUint(req.TaskGroupID, 10, 64)
+		if err == nil {
+			taskGroupID = uint(id)
+		}
+	}
+
+	// 从统一运行时获取运行记录（支持筛选）
+	runs, err := s.taskExecutionService.ListRunsFiltered(req.Limit, taskGroupID, req.RunKind, req.Status)
 	if err != nil {
 		return nil, err
 	}
 
-	// 筛选和转换
+	// 转换
 	views := make([]TaskRunRecordView, 0, len(runs))
 	for _, run := range runs {
-		// 按 runKind 筛选
-		if req.RunKind != "" && run.RunKind != req.RunKind {
-			continue
-		}
-		// 按状态筛选
-		if req.Status != "" && run.Status != req.Status {
-			continue
-		}
-
 		view := TaskRunRecordView{
 			ID:            run.RunID,
 			RunnerSource:  "taskexec",
-			TaskGroupID:   "",
+			TaskGroupID:   fmt.Sprintf("%d", run.TaskGroupID),
 			TaskGroupName: "",
 			TaskName:      run.TaskName,
 			Mode:          run.RunKind,
