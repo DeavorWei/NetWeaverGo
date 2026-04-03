@@ -1,5 +1,8 @@
 <template>
-  <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center">
+  <div
+    v-if="show"
+    class="fixed inset-0 z-[1100] flex items-center justify-center"
+  >
     <!-- 背景遮罩 -->
     <div
       class="absolute inset-0 bg-black/50 backdrop-blur-sm"
