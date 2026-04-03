@@ -130,6 +130,29 @@
       @close="selectedRecord = null"
       @click.stop
     />
+
+    <!-- 删除确认弹窗 -->
+    <ConfirmModal
+      v-model:show="deleteConfirmModal.show"
+      :type="deleteConfirmModal.isBatch ? 'danger' : 'warning'"
+      :title="deleteConfirmModal.isBatch ? '清空全部记录' : '确认删除'"
+      subtitle="此操作不可恢复"
+      :loading="deleteConfirmModal.deleting"
+      confirm-text="确认删除"
+      @confirm="executeDelete"
+    >
+      <template v-if="deleteConfirmModal.isBatch">
+        确定要删除全部
+        <span class="font-mono text-accent font-bold">{{ total }}</span>
+        条记录吗？
+      </template>
+      <template v-else>
+        确定要删除记录「<span class="font-mono text-accent">{{
+          deleteConfirmModal.targetRecord?.taskName
+        }}</span
+        >」吗？
+      </template>
+    </ConfirmModal>
   </Teleport>
 </template>
 
@@ -140,6 +163,7 @@ import { useTaskexecStore } from "../../stores/taskexecStore";
 import { useToast } from "../../utils/useToast";
 import type { ExecutionHistoryRecord } from "../../types/executionHistory";
 import ExecutionRecordDetail from "./ExecutionRecordDetail.vue";
+import ConfirmModal from "../common/ConfirmModal.vue";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -166,6 +190,14 @@ const totalPages = ref(0);
 // 详情弹窗
 const showDetailModal = ref(false);
 const selectedRecord = ref<ExecutionHistoryRecord | null>(null);
+
+// 删除确认弹窗状态
+const deleteConfirmModal = ref({
+  show: false,
+  isBatch: false,
+  targetRecord: null as ExecutionHistoryRecord | null,
+  deleting: false,
+});
 
 // 计算总页数
 const calculateTotalPages = () => {
@@ -242,60 +274,72 @@ const handleOverlayClick = () => {
   }
 };
 
-// 删除单条记录
-const deleteRecord = async (record: ExecutionHistoryRecord, event: Event) => {
+// 删除单条记录 - 打开确认弹窗
+const deleteRecord = (record: ExecutionHistoryRecord, event: Event) => {
   event.stopPropagation(); // 阻止触发 showDetail
-
-  if (!confirm(`确定要删除记录 "${record.taskName}" 吗？\n此操作不可恢复。`)) {
-    return;
-  }
-
-  try {
-    const result = await ExecutionHistoryAPI.deleteRunRecord(record.id);
-    if (result?.success) {
-      toast.success("删除成功");
-      // 从列表中移除
-      const index = records.value.findIndex((r) => r.id === record.id);
-      if (index !== -1) {
-        records.value.splice(index, 1);
-        total.value--;
-      }
-      // 同步更新 store
-      taskexecStore.removeRunFromHistory(record.id);
-    } else {
-      toast.error(result?.message || "删除失败");
-    }
-  } catch (error) {
-    console.error("删除记录失败:", error);
-    toast.error("删除失败");
-  }
+  deleteConfirmModal.value = {
+    show: true,
+    isBatch: false,
+    targetRecord: record,
+    deleting: false,
+  };
 };
 
-// 删除全部记录
-const deleteAllRecords = async () => {
+// 删除全部记录 - 打开确认弹窗
+const deleteAllRecords = () => {
   if (records.value.length === 0) {
     toast.warning("暂无记录可删除");
     return;
   }
+  deleteConfirmModal.value = {
+    show: true,
+    isBatch: true,
+    targetRecord: null,
+    deleting: false,
+  };
+};
 
-  if (!confirm(`确定要删除全部 ${total.value} 条记录吗？\n此操作不可恢复。`)) {
-    return;
-  }
+// 执行删除确认
+const executeDelete = async () => {
+  deleteConfirmModal.value.deleting = true;
 
   try {
-    const result = await ExecutionHistoryAPI.deleteAllRunRecords();
-    if (result?.success) {
-      toast.success("删除成功");
-      records.value = [];
-      total.value = 0;
-      // 同步更新 store
-      taskexecStore.clearAllHistory();
+    if (deleteConfirmModal.value.isBatch) {
+      // 删除全部
+      const result = await ExecutionHistoryAPI.deleteAllRunRecords();
+      if (result?.success) {
+        toast.success("删除成功");
+        records.value = [];
+        total.value = 0;
+        taskexecStore.clearAllHistory();
+        deleteConfirmModal.value.show = false;
+      } else {
+        toast.error(result?.message || "删除失败");
+      }
     } else {
-      toast.error(result?.message || "删除失败");
+      // 删除单条
+      const record = deleteConfirmModal.value.targetRecord;
+      if (record) {
+        const result = await ExecutionHistoryAPI.deleteRunRecord(record.id);
+        if (result?.success) {
+          toast.success("删除成功");
+          const index = records.value.findIndex((r) => r.id === record.id);
+          if (index !== -1) {
+            records.value.splice(index, 1);
+            total.value--;
+          }
+          taskexecStore.removeRunFromHistory(record.id);
+          deleteConfirmModal.value.show = false;
+        } else {
+          toast.error(result?.message || "删除失败");
+        }
+      }
     }
   } catch (error) {
-    console.error("删除全部记录失败:", error);
+    console.error("删除记录失败:", error);
     toast.error("删除失败");
+  } finally {
+    deleteConfirmModal.value.deleting = false;
   }
 };
 

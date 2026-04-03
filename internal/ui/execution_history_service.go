@@ -161,23 +161,31 @@ type DeleteRunRecordResponse struct {
 
 // DeleteRunRecord 删除单条运行记录
 func (s *ExecutionHistoryService) DeleteRunRecord(runID string) (*DeleteRunRecordResponse, error) {
+	logger.Debug("ExecutionHistoryService", "-", "开始删除运行记录: runID=%s", runID)
+
 	if s.repo == nil {
+		logger.Error("ExecutionHistoryService", "-", "仓库未初始化，无法删除记录")
 		return nil, fmt.Errorf("仓库未初始化")
 	}
 
 	if strings.TrimSpace(runID) == "" {
+		logger.Warn("ExecutionHistoryService", "-", "删除失败：runID 为空")
 		return &DeleteRunRecordResponse{Success: false, Message: "runID 不能为空"}, nil
 	}
 
 	// 1. 检查是否正在运行
 	run, err := s.repo.GetRun(context.Background(), runID)
 	if err != nil {
+		logger.Error("ExecutionHistoryService", runID, "获取运行记录失败: %v", err)
 		return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("获取运行记录失败: %v", err)}, nil
 	}
+
+	logger.Verbose("ExecutionHistoryService", runID, "运行记录状态: status=%s, runKind=%s", run.Status, run.RunKind)
 
 	activeStatuses := taskexec.ActiveRunStatuses()
 	for _, status := range activeStatuses {
 		if run.Status == string(status) {
+			logger.Warn("ExecutionHistoryService", runID, "无法删除正在运行的任务: status=%s", run.Status)
 			return &DeleteRunRecordResponse{Success: false, Message: "无法删除正在运行的任务"}, nil
 		}
 	}
@@ -185,46 +193,58 @@ func (s *ExecutionHistoryService) DeleteRunRecord(runID string) (*DeleteRunRecor
 	// 2. 获取关联数据用于文件删除
 	units, _ := s.repo.GetUnitsByRun(context.Background(), runID)
 	artifacts, _ := s.repo.GetArtifactsByRun(context.Background(), runID)
+	logger.Debug("ExecutionHistoryService", runID, "获取关联数据: units=%d, artifacts=%d", len(units), len(artifacts))
 
 	// 3. 删除数据库记录
 	if err := s.repo.DeleteRun(context.Background(), runID); err != nil {
+		logger.Error("ExecutionHistoryService", runID, "删除数据库记录失败: %v", err)
 		return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("删除失败: %v", err)}, nil
 	}
 
 	// 4. 异步删除关联文件
 	go s.deleteRunFiles(runID, run.RunKind, units, artifacts)
 
-	logger.Info("ExecutionHistoryService", "-", "已删除运行记录: %s", runID)
+	logger.Info("ExecutionHistoryService", runID, "运行记录删除成功")
 	return &DeleteRunRecordResponse{Success: true, Message: "删除成功"}, nil
 }
 
 // DeleteAllRunRecords 删除所有运行记录
 func (s *ExecutionHistoryService) DeleteAllRunRecords() (*DeleteRunRecordResponse, error) {
+	logger.Debug("ExecutionHistoryService", "-", "开始删除所有运行记录")
+
 	if s.repo == nil {
+		logger.Error("ExecutionHistoryService", "-", "仓库未初始化，无法删除记录")
 		return nil, fmt.Errorf("仓库未初始化")
 	}
 
 	// 检查是否有正在运行的任务
 	running, err := s.repo.ListRunningRuns(context.Background())
 	if err != nil {
+		logger.Error("ExecutionHistoryService", "-", "检查运行状态失败: %v", err)
 		return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("检查运行状态失败: %v", err)}, nil
 	}
+
+	logger.Verbose("ExecutionHistoryService", "-", "检查运行中的任务: count=%d", len(running))
+
 	if len(running) > 0 {
+		logger.Warn("ExecutionHistoryService", "-", "存在正在运行的任务，无法删除全部: count=%d", len(running))
 		return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("存在 %d 个正在运行的任务，无法删除全部", len(running))}, nil
 	}
 
 	// 获取所有运行记录用于文件删除
 	runs, _ := s.repo.ListRuns(context.Background(), 0)
+	logger.Debug("ExecutionHistoryService", "-", "获取所有运行记录: count=%d", len(runs))
 
 	// 删除数据库记录（使用批量删除优化）
 	if err := s.repo.DeleteAllRunsBatch(context.Background()); err != nil {
+		logger.Error("ExecutionHistoryService", "-", "批量删除数据库记录失败: %v", err)
 		return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("删除失败: %v", err)}, nil
 	}
 
 	// 异步删除所有关联文件
 	go s.deleteAllRunFiles(runs)
 
-	logger.Info("ExecutionHistoryService", "-", "已删除所有运行记录")
+	logger.Info("ExecutionHistoryService", "-", "所有运行记录删除成功: count=%d", len(runs))
 	return &DeleteRunRecordResponse{Success: true, Message: "删除成功"}, nil
 }
 

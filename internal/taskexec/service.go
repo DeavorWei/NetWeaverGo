@@ -189,3 +189,8 @@ func (s *TaskExecutionService) GetRunArtifacts(runID string) ([]TaskArtifact, er
 	}
 	return s.repo.GetArtifactsByRun(context.Background(), runID)
 }
+
+// GetRepository 获取仓库实例（供其他服务使用）
+func (s *TaskExecutionService) GetRepository() Repository {
+	return s.repo
+}
