@@ -98,6 +98,7 @@
                   title="删除此记录"
                 >
                   <i class="icon-trash"></i>
+                  <span>删除</span>
                 </button>
               </div>
             </div>
@@ -413,7 +414,8 @@ watch(
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background-color: var(--overlay-bg);
+  backdrop-filter: blur(4px);
 }
 
 .drawer-content {
@@ -421,8 +423,8 @@ watch(
   width: 480px;
   max-width: 90vw;
   height: 100%;
-  background: var(--card-bg, #1a1d23);
-  border-left: 1px solid var(--border-color, #2d333b);
+  background-color: var(--color-bg-secondary);
+  border-left: 1px solid var(--color-border-default);
   display: flex;
   flex-direction: column;
 }
@@ -432,7 +434,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color, #2d333b);
+  border-bottom: 1px solid var(--color-border-default);
 }
 
 .drawer-title {
@@ -442,15 +444,15 @@ watch(
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary, #e6edf3);
+  color: var(--color-text-primary);
 }
 
 .task-name {
   font-size: 13px;
   font-weight: normal;
-  color: var(--text-secondary, #8b949e);
+  color: var(--color-text-secondary);
   padding: 2px 8px;
-  background: var(--bg-tertiary, #21262d);
+  background-color: var(--color-bg-tertiary);
   border-radius: 4px;
   margin-left: 8px;
 }
@@ -458,7 +460,7 @@ watch(
 .btn-close {
   background: none;
   border: none;
-  color: var(--text-secondary, #8b949e);
+  color: var(--color-text-secondary);
   font-size: 24px;
   cursor: pointer;
   padding: 0;
@@ -471,13 +473,13 @@ watch(
 }
 
 .btn-close:hover {
-  background: var(--bg-tertiary, #21262d);
-  color: var(--text-primary, #e6edf3);
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
 }
 
 .drawer-filter {
   padding: 12px 20px;
-  border-bottom: 1px solid var(--border-color, #2d333b);
+  border-bottom: 1px solid var(--color-border-default);
   display: flex;
   gap: 12px;
   align-items: center;
@@ -486,16 +488,16 @@ watch(
 .filter-select {
   flex: 1;
   padding: 8px 12px;
-  background: var(--bg-secondary, #161b22);
-  border: 1px solid var(--border-color, #2d333b);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
   border-radius: 6px;
-  color: var(--text-primary, #e6edf3);
+  color: var(--color-text-primary);
   font-size: 13px;
 }
 
 .btn-delete-all {
   padding: 8px 12px;
-  background: var(--danger-color, #f85149);
+  background-color: var(--color-error);
   border: none;
   border-radius: 6px;
   color: white;
@@ -509,7 +511,8 @@ watch(
 }
 
 .btn-delete-all:hover {
-  background: var(--danger-hover, #da3633);
+  background-color: var(--color-error);
+  opacity: 0.9;
 }
 
 .drawer-body {
@@ -525,15 +528,15 @@ watch(
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-  color: var(--text-secondary, #8b949e);
+  color: var(--color-text-secondary);
   gap: 12px;
 }
 
 .spinner {
   width: 32px;
   height: 32px;
-  border: 2px solid var(--border-color, #2d333b);
-  border-top-color: var(--primary-color, #58a6ff);
+  border: 2px solid var(--color-border-default);
+  border-top-color: var(--color-accent-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -552,9 +555,9 @@ watch(
 
 .record-item {
   padding: 16px;
-  padding-right: 48px; /* 为删除按钮留出空间 */
-  background: var(--bg-secondary, #161b22);
-  border: 1px solid var(--border-color, #2d333b);
+  padding-right: 70px; /* 为删除按钮留出空间 */
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-default);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -562,7 +565,7 @@ watch(
 }
 
 .record-item:hover {
-  border-color: var(--primary-color, #58a6ff);
+  border-color: var(--color-accent-primary);
   transform: translateX(4px);
 }
 
@@ -571,39 +574,40 @@ watch(
   top: 50%;
   right: 12px;
   transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: var(--text-muted, #6e7681);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-muted);
   cursor: pointer;
-  padding: 6px;
-  border-radius: 4px;
-  opacity: 0;
-  transition: all 0.2s ease;
-}
-
-.record-item:hover .btn-delete {
+  padding: 6px 10px;
+  border-radius: 6px;
   opacity: 1;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
 }
 
 .btn-delete:hover {
-  background: var(--danger-bg, rgba(248, 81, 73, 0.1));
-  color: var(--danger-color, #f85149);
+  background-color: var(--color-error-bg);
+  border-color: var(--color-error);
+  color: var(--color-error);
 }
 
 .record-item.status-completed {
-  border-left: 3px solid #238636;
+  border-left: 3px solid var(--color-success);
 }
 
 .record-item.status-partial {
-  border-left: 3px solid #9e6a03;
+  border-left: 3px solid var(--color-warning);
 }
 
 .record-item.status-failed {
-  border-left: 3px solid #da3633;
+  border-left: 3px solid var(--color-error);
 }
 
 .record-item.status-cancelled {
-  border-left: 3px solid #8b949e;
+  border-left: 3px solid var(--color-text-muted);
 }
 
 .record-header {
@@ -621,34 +625,34 @@ watch(
 }
 
 .record-status.status-completed {
-  background: rgba(35, 134, 54, 0.2);
-  color: #3fb950;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .record-status.status-partial {
-  background: rgba(158, 106, 3, 0.2);
-  color: #d29922;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .record-status.status-failed {
-  background: rgba(218, 54, 51, 0.2);
-  color: #f85149;
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .record-status.status-cancelled {
-  background: rgba(139, 148, 158, 0.2);
-  color: #8b949e;
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-muted);
 }
 
 .record-time {
   font-size: 12px;
-  color: var(--text-secondary, #8b949e);
+  color: var(--color-text-secondary);
 }
 
 .record-task {
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-primary, #e6edf3);
+  color: var(--color-text-primary);
   margin-bottom: 8px;
 }
 
@@ -657,15 +661,15 @@ watch(
   flex-wrap: wrap;
   gap: 12px;
   font-size: 12px;
-  color: var(--text-secondary, #8b949e);
+  color: var(--color-text-secondary);
 }
 
 .record-stats .success {
-  color: #3fb950;
+  color: var(--color-success);
 }
 
 .record-stats .error {
-  color: #f85149;
+  color: var(--color-error);
 }
 
 .record-stats .duration {
@@ -680,15 +684,15 @@ watch(
   gap: 16px;
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid var(--border-color, #2d333b);
+  border-top: 1px solid var(--color-border-default);
 }
 
 .pagination button {
   padding: 6px 12px;
-  background: var(--bg-secondary, #161b22);
-  border: 1px solid var(--border-color, #2d333b);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
   border-radius: 6px;
-  color: var(--text-primary, #e6edf3);
+  color: var(--color-text-primary);
   font-size: 13px;
   cursor: pointer;
 }
@@ -699,12 +703,12 @@ watch(
 }
 
 .pagination button:hover:not(:disabled) {
-  background: var(--bg-tertiary, #21262d);
+  background-color: var(--color-bg-tertiary);
 }
 
 .pagination span {
   font-size: 13px;
-  color: var(--text-secondary, #8b949e);
+  color: var(--color-text-secondary);
 }
 
 /* 动画 */
