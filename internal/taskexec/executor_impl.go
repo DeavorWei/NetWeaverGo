@@ -894,7 +894,30 @@ func (e *TopologyBuildExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 	// Emit build started event
 	emitProjectedStageEvent(ctx, stage.ID, EventTypeStageStarted, EventLevelInfo, "Starting topology build...")
 
-	result, err := e.buildRunTopology(ctx.RunID())
+	var result *models.TopologyBuildResult
+	var err error
+
+	// 检查是否使用新构建逻辑
+	if config.ResolveTopologyUseNewBuilder() {
+		logger.Info("TaskExec", ctx.RunID(), "Using new topology builder")
+		output, buildErr := BuildTopologyWithNewLogic(e.db, ctx.RunID())
+		if buildErr != nil {
+			err = buildErr
+		} else if output != nil {
+			result = &models.TopologyBuildResult{
+				TaskID:             ctx.RunID(),
+				TotalEdges:         output.Statistics.TotalEdges,
+				ConfirmedEdges:     output.Statistics.ConfirmedEdges,
+				SemiConfirmedEdges: output.Statistics.SemiConfirmedEdges,
+				InferredEdges:      output.Statistics.InferredEdges,
+				ConflictEdges:      output.Statistics.ConflictEdges,
+				BuildTime:          output.Statistics.BuildDuration,
+				Errors:             output.Errors,
+			}
+		}
+	} else {
+		result, err = e.buildRunTopology(ctx.RunID())
+	}
 	if err != nil {
 		if IsContextCancelled(ctx, err) {
 			return err

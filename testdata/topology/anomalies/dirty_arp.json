@@ -1,0 +1,108 @@
+{
+  "description": "异常样例 - 脏 ARP 场景：ARP 表中存在错误或过期的 MAC-IP 映射",
+  "scenario": "ARP 表包含漂移 IP、重复 IP 或伪造 MAC 地址",
+  "devices": [
+    {
+      "deviceIP": "192.168.30.1",
+      "hostname": "Core-SW01",
+      "vendor": "huawei",
+      "model": "CE12800",
+      "mgmtIP": "192.168.30.1",
+      "chassisID": "00-e0-fc-30-00-01"
+    },
+    {
+      "deviceIP": "192.168.30.2",
+      "hostname": "Server-01",
+      "vendor": "unknown",
+      "model": "Server",
+      "mgmtIP": "192.168.30.2"
+    },
+    {
+      "deviceIP": "192.168.30.3",
+      "hostname": "Server-02",
+      "vendor": "unknown",
+      "model": "Server",
+      "mgmtIP": "192.168.30.3"
+    }
+  ],
+  "fdbFacts": [
+    {
+      "deviceIP": "192.168.30.1",
+      "macAddress": "00-aa-bb-cc-dd-01",
+      "interface": "GigabitEthernet0/0/1",
+      "vlan": 100,
+      "type": "dynamic"
+    },
+    {
+      "deviceIP": "192.168.30.1",
+      "macAddress": "00-aa-bb-cc-dd-02",
+      "interface": "GigabitEthernet0/0/2",
+      "vlan": 100,
+      "type": "dynamic"
+    },
+    {
+      "deviceIP": "192.168.30.1",
+      "macAddress": "00-aa-bb-cc-dd-03",
+      "interface": "GigabitEthernet0/0/3",
+      "vlan": 100,
+      "type": "dynamic"
+    }
+  ],
+  "arpFacts": [
+    {
+      "deviceIP": "192.168.30.1",
+      "macAddress": "00-aa-bb-cc-dd-01",
+      "ipAddress": "192.168.30.10",
+      "interface": "Vlanif100"
+    },
+    {
+      "deviceIP": "192.168.30.1",
+      "macAddress": "00-aa-bb-cc-dd-02",
+      "ipAddress": "192.168.30.10",
+      "interface": "Vlanif100"
+    },
+    {
+      "deviceIP": "192.168.30.1",
+      "macAddress": "00-aa-bb-cc-dd-03",
+      "ipAddress": "192.168.30.11",
+      "interface": "Vlanif100"
+    }
+  ],
+  "expectedBehavior": {
+    "description": "同一 IP 对应多个 MAC 应标记为冲突或可疑",
+    "detectionRules": [
+      "同一 IP 出现在多个 MAC -> IP 冲突/漂移",
+      "同一 MAC 出现在多个接口 -> MAC 漂移",
+      "应降低相关候选的置信度"
+    ],
+    "expectedEdges": [
+      {
+        "aDeviceId": "192.168.30.1",
+        "aIf": "GigabitEthernet0/0/1",
+        "bDeviceId": "server:00-aa-bb-cc-dd-01",
+        "bIf": "access",
+        "status": "inferred",
+        "source": "fdb_arp",
+        "note": "IP 冲突场景，置信度降低"
+      },
+      {
+        "aDeviceId": "192.168.30.1",
+        "aIf": "GigabitEthernet0/0/2",
+        "bDeviceId": "server:00-aa-bb-cc-dd-02",
+        "bIf": "access",
+        "status": "inferred",
+        "source": "fdb_arp",
+        "note": "IP 冲突场景，置信度降低"
+      },
+      {
+        "aDeviceId": "192.168.30.1",
+        "aIf": "GigabitEthernet0/0/3",
+        "bDeviceId": "server:00-aa-bb-cc-dd-03",
+        "bIf": "access",
+        "status": "inferred",
+        "source": "fdb_arp",
+        "note": "正常推断"
+      }
+    ]
+  }
+}

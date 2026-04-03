@@ -119,19 +119,148 @@ func (s *TaskExecutionService) GetTopologyEdgeDetail(runID, edgeID string) (*mod
 	}
 
 	return &models.TopologyEdgeDetailView{
-		ID:               edge.ID,
-		ADevice:          s.getGraphNode(runID, edge.ADeviceID),
-		AIf:              edge.AIf,
-		LogicalAIf:       edge.LogicalAIf,
-		BDevice:          s.getGraphNode(runID, edge.BDeviceID),
-		BIf:              edge.BIf,
-		LogicalBIf:       edge.LogicalBIf,
-		EdgeType:         edge.EdgeType,
-		Status:           edge.Status,
-		Confidence:       edge.Confidence,
-		DiscoveryMethods: append([]string(nil), edge.DiscoveryMethods...),
-		Evidence:         convertToModelEvidence(edge.Evidence),
+		ID:                  edge.ID,
+		ADevice:             s.getGraphNode(runID, edge.ADeviceID),
+		AIf:                 edge.AIf,
+		LogicalAIf:          edge.LogicalAIf,
+		BDevice:             s.getGraphNode(runID, edge.BDeviceID),
+		BIf:                 edge.BIf,
+		LogicalBIf:          edge.LogicalBIf,
+		EdgeType:            edge.EdgeType,
+		Status:              edge.Status,
+		Confidence:          edge.Confidence,
+		DiscoveryMethods:    append([]string(nil), edge.DiscoveryMethods...),
+		Evidence:            convertToModelEvidence(edge.Evidence),
+		ConfidenceBreakdown: edge.ConfidenceBreakdown,
+		DecisionReason:      edge.DecisionReason,
+		CandidateID:         edge.CandidateID,
+		TraceID:             edge.TraceID,
 	}, nil
+}
+
+// GetTopologyEdgeExplain 获取边的完整解释视图（包含候选和决策轨迹）
+func (s *TaskExecutionService) GetTopologyEdgeExplain(runID, edgeID string) (*models.TopologyEdgeExplainView, error) {
+	// 获取边详情
+	edgeDetail, err := s.GetTopologyEdgeDetail(runID, edgeID)
+	if err != nil {
+		return nil, err
+	}
+
+	view := &models.TopologyEdgeExplainView{
+		Edge: *edgeDetail,
+	}
+
+	// 获取关联的候选列表
+	candidates := make([]models.TopologyCandidateView, 0)
+	if edgeDetail.CandidateID != "" {
+		// 查询同一端点组的所有候选
+		var allCandidates []TopologyEdgeCandidate
+		if err := s.db.Where("task_run_id = ?", runID).Find(&allCandidates).Error; err == nil {
+			for _, c := range allCandidates {
+				// 筛选与当前边相关的候选（同一端点组）
+				if s.isRelatedCandidate(c, edgeDetail) {
+					candidates = append(candidates, models.TopologyCandidateView{
+						CandidateID:    c.CandidateID,
+						ADeviceID:      c.ADeviceID,
+						AIf:            c.AIf,
+						LogicalAIf:     c.LogicalAIf,
+						BDeviceID:      c.BDeviceID,
+						BIf:            c.BIf,
+						LogicalBIf:     c.LogicalBIf,
+						Source:         c.Source,
+						Status:         c.Status,
+						TotalScore:     c.TotalScore,
+						ScoreBreakdown: c.ScoreBreakdown,
+						Features:       c.Features,
+						DecisionReason: c.DecisionReason,
+					})
+				}
+			}
+		}
+	}
+	view.Candidates = candidates
+
+	// 获取决策轨迹
+	if edgeDetail.TraceID != "" {
+		var trace TopologyDecisionTrace
+		if err := s.db.Where("task_run_id = ? AND trace_id = ?", runID, edgeDetail.TraceID).First(&trace).Error; err == nil {
+			view.DecisionTrace = &models.TopologyDecisionTraceView{
+				TraceID:              trace.TraceID,
+				DecisionType:         trace.DecisionType,
+				DecisionGroup:        trace.DecisionGroup,
+				DecisionResult:       trace.DecisionResult,
+				DecisionReason:       trace.DecisionReason,
+				DecisionBasis:        trace.DecisionBasis,
+				RetainedCandidateIDs: trace.RetainedCandidateIDs,
+				RejectedCandidateIDs: trace.RejectedCandidateIDs,
+				Candidates:           trace.Candidates,
+			}
+		}
+	}
+
+	return view, nil
+}
+
+// isRelatedCandidate 判断候选是否与指定边相关
+func (s *TaskExecutionService) isRelatedCandidate(c TopologyEdgeCandidate, edge *models.TopologyEdgeDetailView) bool {
+	// 检查候选是否与边共享同一端点
+	aMatch := c.ADeviceID == edge.ADevice.ID &&
+		(c.AIf == edge.AIf || c.LogicalAIf == edge.LogicalAIf)
+	bMatch := c.BDeviceID == edge.BDevice.ID &&
+		(c.BIf == edge.BIf || c.LogicalBIf == edge.LogicalBIf)
+	return aMatch || bMatch
+}
+
+// GetTopologyCandidatesByRun 获取运行的所有候选边
+func (s *TaskExecutionService) GetTopologyCandidatesByRun(runID string) ([]models.TopologyCandidateView, error) {
+	var candidates []TopologyEdgeCandidate
+	if err := s.db.Where("task_run_id = ?", runID).Find(&candidates).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]models.TopologyCandidateView, 0, len(candidates))
+	for _, c := range candidates {
+		result = append(result, models.TopologyCandidateView{
+			CandidateID:    c.CandidateID,
+			ADeviceID:      c.ADeviceID,
+			AIf:            c.AIf,
+			LogicalAIf:     c.LogicalAIf,
+			BDeviceID:      c.BDeviceID,
+			BIf:            c.BIf,
+			LogicalBIf:     c.LogicalBIf,
+			Source:         c.Source,
+			Status:         c.Status,
+			TotalScore:     c.TotalScore,
+			ScoreBreakdown: c.ScoreBreakdown,
+			Features:       c.Features,
+			DecisionReason: c.DecisionReason,
+		})
+	}
+	return result, nil
+}
+
+// GetTopologyDecisionTracesByRun 获取运行的所有决策轨迹
+func (s *TaskExecutionService) GetTopologyDecisionTracesByRun(runID string) ([]models.TopologyDecisionTraceView, error) {
+	var traces []TopologyDecisionTrace
+	if err := s.db.Where("task_run_id = ?", runID).Find(&traces).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]models.TopologyDecisionTraceView, 0, len(traces))
+	for _, t := range traces {
+		result = append(result, models.TopologyDecisionTraceView{
+			TraceID:              t.TraceID,
+			DecisionType:         t.DecisionType,
+			DecisionGroup:        t.DecisionGroup,
+			DecisionResult:       t.DecisionResult,
+			DecisionReason:       t.DecisionReason,
+			DecisionBasis:        t.DecisionBasis,
+			RetainedCandidateIDs: t.RetainedCandidateIDs,
+			RejectedCandidateIDs: t.RejectedCandidateIDs,
+			Candidates:           t.Candidates,
+		})
+	}
+	return result, nil
 }
 
 func (s *TaskExecutionService) GetTopologyDeviceDetail(runID, deviceIP string) (*parser.ParsedResult, error) {

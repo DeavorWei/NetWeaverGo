@@ -219,8 +219,14 @@ type TaskTopologyEdge struct {
 	Confidence       float64        `json:"confidence"`
 	DiscoveryMethods []string       `gorm:"serializer:json" json:"discoveryMethods"`
 	Evidence         []EdgeEvidence `gorm:"serializer:json" json:"evidence"`
-	CreatedAt        time.Time      `json:"createdAt"`
-	UpdatedAt        time.Time      `json:"updatedAt"`
+	// Phase A 扩展字段：置信度拆解与决策解释
+	ConfidenceBreakdown string    `gorm:"type:text" json:"confidenceBreakdown"` // JSON 序列化的评分明细
+	DecisionReason      string    `json:"decisionReason"`                       // 决策原因
+	EvidenceRefs        []string  `gorm:"serializer:json" json:"evidenceRefs"`  // 证据引用 ID 列表
+	CandidateID         string    `json:"candidateId"`                          // 关联的候选 ID
+	TraceID             string    `json:"traceId"`                              // 关联的决策轨迹 ID
+	CreatedAt           time.Time `json:"createdAt"`
+	UpdatedAt           time.Time `json:"updatedAt"`
 }
 
 func (TaskTopologyEdge) TableName() string {

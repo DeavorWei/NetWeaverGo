@@ -1,0 +1,113 @@
+{
+  "description": "多厂商混合拓扑样例 - 包含华为、H3C、Cisco设备",
+  "devices": [
+    {
+      "deviceIP": "192.168.1.1",
+      "hostname": "HW-Core-SW01",
+      "vendor": "huawei",
+      "model": "CE12800",
+      "mgmtIP": "192.168.1.1",
+      "chassisID": "00-e0-fc-01-00-01"
+    },
+    {
+      "deviceIP": "192.168.1.2",
+      "hostname": "H3C-Agg-SW01",
+      "vendor": "h3c",
+      "model": "S12500",
+      "mgmtIP": "192.168.1.2",
+      "chassisID": "00-e0-fc-02-00-01"
+    },
+    {
+      "deviceIP": "192.168.1.3",
+      "hostname": "Cisco-Access-SW01",
+      "vendor": "cisco",
+      "model": "Nexus9000",
+      "mgmtIP": "192.168.1.3",
+      "chassisID": "00-e0-fc-03-00-01"
+    },
+    {
+      "deviceIP": "192.168.1.4",
+      "hostname": "HW-Access-SW02",
+      "vendor": "huawei",
+      "model": "S5700",
+      "mgmtIP": "192.168.1.4",
+      "chassisID": "00-e0-fc-04-00-01"
+    }
+  ],
+  "lldpFacts": [
+    {
+      "deviceIP": "192.168.1.1",
+      "localInterface": "Eth-Trunk1",
+      "neighborName": "H3C-Agg-SW01",
+      "neighborChassis": "00-e0-fc-02-00-01",
+      "neighborPort": "Bridge-Aggregation1",
+      "neighborIP": "192.168.1.2"
+    },
+    {
+      "deviceIP": "192.168.1.2",
+      "localInterface": "Bridge-Aggregation1",
+      "neighborName": "HW-Core-SW01",
+      "neighborChassis": "00-e0-fc-01-00-01",
+      "neighborPort": "Eth-Trunk1",
+      "neighborIP": "192.168.1.1"
+    },
+    {
+      "deviceIP": "192.168.1.2",
+      "localInterface": "GigabitEthernet1/0/1",
+      "neighborName": "Cisco-Access-SW01",
+      "neighborChassis": "00-e0-fc-03-00-01",
+      "neighborPort": "Ethernet1/1",
+      "neighborIP": "192.168.1.3"
+    },
+    {
+      "deviceIP": "192.168.1.3",
+      "localInterface": "Ethernet1/1",
+      "neighborName": "H3C-Agg-SW01",
+      "neighborChassis": "00-e0-fc-02-00-01",
+      "neighborPort": "GigabitEthernet1/0/1",
+      "neighborIP": "192.168.1.2"
+    },
+    {
+      "deviceIP": "192.168.1.1",
+      "localInterface": "XGigabitEthernet0/0/1",
+      "neighborName": "HW-Access-SW02",
+      "neighborChassis": "00-e0-fc-04-00-01",
+      "neighborPort": "XGigabitEthernet0/0/1",
+      "neighborIP": "192.168.1.4"
+    },
+    {
+      "deviceIP": "192.168.1.4",
+      "localInterface": "XGigabitEthernet0/0/1",
+      "neighborName": "HW-Core-SW01",
+      "neighborChassis": "00-e0-fc-01-00-01",
+      "neighborPort": "XGigabitEthernet0/0/1",
+      "neighborIP": "192.168.1.1"
+    }
+  ],
+  "expectedEdges": [
+    {
+      "aDeviceId": "192.168.1.1",
+      "aIf": "Eth-Trunk1",
+      "bDeviceId": "192.168.1.2",
+      "bIf": "Bridge-Aggregation1",
+      "status": "confirmed",
+      "source": "lldp"
+    },
+    {
+      "aDeviceId": "192.168.1.2",
+      "aIf": "GigabitEthernet1/0/1",
+      "bDeviceId": "192.168.1.3",
+      "bIf": "Ethernet1/1",
+      "status": "confirmed",
+      "source": "lldp"
+    },
+    {
+      "aDeviceId": "192.168.1.1",
+      "aIf": "XGigabitEthernet0/0/1",
+      "bDeviceId": "192.168.1.4",
+      "bIf": "XGigabitEthernet0/0/1",
+      "status": "confirmed",
+      "source": "lldp"
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "description": "异常样例 - 单边 LLDP 场景：只有一端能看到邻居，另一端 LLDP 未启用或不可达",
+  "scenario": "设备 A 开启 LLDP，设备 B 未开启 LLDP 或 LLDP 被过滤",
+  "devices": [
+    {
+      "deviceIP": "192.168.20.1",
+      "hostname": "HW-SW01",
+      "vendor": "huawei",
+      "model": "S5700",
+      "mgmtIP": "192.168.20.1",
+      "chassisID": "00-e0-fc-20-00-01"
+    },
+    {
+      "deviceIP": "192.168.20.2",
+      "hostname": "H3C-SW02",
+      "vendor": "h3c",
+      "model": "S5120",
+      "mgmtIP": "192.168.20.2",
+      "chassisID": "00-e0-fc-20-00-02"
+    }
+  ],
+  "lldpFacts": [
+    {
+      "deviceIP": "192.168.20.1",
+      "localInterface": "GigabitEthernet0/0/1",
+      "neighborName": "H3C-SW02",
+      "neighborChassis": "00-e0-fc-20-00-02",
+      "neighborPort": "GigabitEthernet1/0/1",
+      "neighborIP": "192.168.20.2"
+    }
+  ],
+  "fdbFacts": [
+    {
+      "deviceIP": "192.168.20.1",
+      "macAddress": "00-e0-fc-20-00-02",
+      "interface": "GigabitEthernet0/0/1",
+      "vlan": 1,
+      "type": "dynamic"
+    },
+    {
+      "deviceIP": "192.168.20.2",
+      "macAddress": "00-e0-fc-20-00-01",
+      "interface": "GigabitEthernet1/0/1",
+      "vlan": 1,
+      "type": "dynamic"
+    }
+  ],
+  "arpFacts": [
+    {
+      "deviceIP": "192.168.20.1",
+      "macAddress": "00-e0-fc-20-00-02",
+      "ipAddress": "192.168.20.2",
+      "interface": "Vlanif1"
+    },
+    {
+      "deviceIP": "192.168.20.2",
+      "macAddress": "00-e0-fc-20-00-01",
+      "ipAddress": "192.168.20.1",
+      "interface": "Vlan-interface1"
+    }
+  ],
+  "expectedBehavior": {
+    "description": "单边 LLDP 应标记为 semi_confirmed，通过 FDB/ARP 补充验证",
+    "expectedEdges": [
+      {
+        "aDeviceId": "192.168.20.1",
+        "aIf": "GigabitEthernet0/0/1",
+        "bDeviceId": "192.168.20.2",
+        "bIf": "GigabitEthernet1/0/1",
+        "status": "semi_confirmed",
+        "source": "lldp",
+        "note": "单边 LLDP，通过 FDB/ARP 交叉验证"
+      }
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "description": "异常样例 - 名称漂移场景：设备名称变更导致 LLDP 邻居名称与实际设备名不匹配",
+  "scenario": "设备 HW-SW01 更名后，邻居设备仍缓存旧名称，导致名称解析失败",
+  "devices": [
+    {
+      "deviceIP": "192.168.10.1",
+      "hostname": "HW-SW01-NEW",
+      "vendor": "huawei",
+      "model": "S5700",
+      "mgmtIP": "192.168.10.1",
+      "chassisID": "00-e0-fc-10-00-01",
+      "normalizedName": "hw-sw01-new"
+    },
+    {
+      "deviceIP": "192.168.10.2",
+      "hostname": "HW-SW02",
+      "vendor": "huawei",
+      "model": "S5700",
+      "mgmtIP": "192.168.10.2",
+      "chassisID": "00-e0-fc-10-00-02"
+    }
+  ],
+  "lldpFacts": [
+    {
+      "deviceIP": "192.168.10.1",
+      "localInterface": "GigabitEthernet0/0/1",
+      "neighborName": "HW-SW02",
+      "neighborChassis": "00-e0-fc-10-00-02",
+      "neighborPort": "GigabitEthernet0/0/1",
+      "neighborIP": "192.168.10.2"
+    },
+    {
+      "deviceIP": "192.168.10.2",
+      "localInterface": "GigabitEthernet0/0/1",
+      "neighborName": "HW-SW01-OLD",
+      "neighborChassis": "00-e0-fc-10-00-01",
+      "neighborPort": "GigabitEthernet0/0/1",
+      "neighborIP": "192.168.10.1"
+    }
+  ],
+  "expectedBehavior": {
+    "description": "应通过 chassis_id 或 IP 匹配正确识别设备，而非依赖名称",
+    "resolutionStrategy": "chassis_id 匹配优先，名称仅作为辅助验证",
+    "expectedEdges": [
+      {
+        "aDeviceId": "192.168.10.1",
+        "aIf": "GigabitEthernet0/0/1",
+        "bDeviceId": "192.168.10.2",
+        "bIf": "GigabitEthernet0/0/1",
+        "status": "confirmed",
+        "source": "lldp",
+        "note": "通过 chassis_id 和 IP 双重验证确认"
+      }
+    ]
+  }
+}

@@ -79,4 +79,46 @@ type TopologyEdgeDetailView struct {
 	Confidence       float64        `json:"confidence"`
 	DiscoveryMethods []string       `json:"discoveryMethods"`
 	Evidence         []EdgeEvidence `json:"evidence"`
+	// Phase A 扩展：决策解释字段
+	ConfidenceBreakdown string `json:"confidenceBreakdown"` // JSON 序列化的评分明细
+	DecisionReason      string `json:"decisionReason"`      // 决策原因
+	CandidateID         string `json:"candidateId"`         // 关联的候选 ID
+	TraceID             string `json:"traceId"`             // 关联的决策轨迹 ID
+}
+
+// TopologyEdgeExplainView 边解释视图（包含候选和决策轨迹）
+type TopologyEdgeExplainView struct {
+	Edge          TopologyEdgeDetailView     `json:"edge"`
+	Candidates    []TopologyCandidateView    `json:"candidates"`    // 所有候选（包括被淘汰的）
+	DecisionTrace *TopologyDecisionTraceView `json:"decisionTrace"` // 决策轨迹
+}
+
+// TopologyCandidateView 候选边视图
+type TopologyCandidateView struct {
+	CandidateID    string   `json:"candidateId"`
+	ADeviceID      string   `json:"aDeviceId"`
+	AIf            string   `json:"aIf"`
+	LogicalAIf     string   `json:"logicalAIf"`
+	BDeviceID      string   `json:"bDeviceId"`
+	BIf            string   `json:"bIf"`
+	LogicalBIf     string   `json:"logicalBIf"`
+	Source         string   `json:"source"` // lldp, fdb_arp, manual
+	Status         string   `json:"status"` // pending, retained, rejected, merged, conflict
+	TotalScore     float64  `json:"totalScore"`
+	ScoreBreakdown string   `json:"scoreBreakdown"` // JSON 序列化的评分明细
+	Features       []string `json:"features"`
+	DecisionReason string   `json:"decisionReason"` // 为何被保留或淘汰
+}
+
+// TopologyDecisionTraceView 决策轨迹视图
+type TopologyDecisionTraceView struct {
+	TraceID              string   `json:"traceId"`
+	DecisionType         string   `json:"decisionType"`   // conflict_resolution, candidate_selection, edge_merge
+	DecisionGroup        string   `json:"decisionGroup"`  // 决策分组标识
+	DecisionResult       string   `json:"decisionResult"` // retained, rejected, merged, conflict
+	DecisionReason       string   `json:"decisionReason"` // 决策原因描述
+	DecisionBasis        string   `json:"decisionBasis"`  // 决策依据（量化数据）
+	RetainedCandidateIDs []string `json:"retainedCandidateIds"`
+	RejectedCandidateIDs []string `json:"rejectedCandidateIds"`
+	Candidates           string   `json:"candidates"` // JSON 序列化的候选列表快照
 }

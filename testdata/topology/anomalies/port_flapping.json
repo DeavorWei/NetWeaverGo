@@ -1,0 +1,79 @@
+{
+  "description": "异常样例 - 端口震荡场景：接口状态频繁变化导致拓扑不稳定",
+  "scenario": "接口因链路问题、STP 重新计算或硬件故障频繁 up/down",
+  "devices": [
+    {
+      "deviceIP": "192.168.40.1",
+      "hostname": "Core-SW01",
+      "vendor": "huawei",
+      "model": "CE12800",
+      "mgmtIP": "192.168.40.1",
+      "chassisID": "00-e0-fc-40-00-01"
+    },
+    {
+      "deviceIP": "192.168.40.2",
+      "hostname": "Access-SW01",
+      "vendor": "huawei",
+      "model": "S5700",
+      "mgmtIP": "192.168.40.2",
+      "chassisID": "00-e0-fc-40-00-02"
+    }
+  ],
+  "interfaceFacts": [
+    {
+      "deviceIP": "192.168.40.1",
+      "interfaceName": "GigabitEthernet0/0/1",
+      "status": "down",
+      "speed": "1000",
+      "duplex": "full",
+      "description": "To-Access-SW01"
+    },
+    {
+      "deviceIP": "192.168.40.2",
+      "interfaceName": "GigabitEthernet0/0/1",
+      "status": "up",
+      "speed": "1000",
+      "duplex": "full",
+      "description": "To-Core-SW01"
+    }
+  ],
+  "lldpFacts": [
+    {
+      "deviceIP": "192.168.40.2",
+      "localInterface": "GigabitEthernet0/0/1",
+      "neighborName": "Core-SW01",
+      "neighborChassis": "00-e0-fc-40-00-01",
+      "neighborPort": "GigabitEthernet0/0/1",
+      "neighborIP": "192.168.40.1"
+    }
+  ],
+  "fdbFacts": [
+    {
+      "deviceIP": "192.168.40.2",
+      "macAddress": "00-e0-fc-40-00-01",
+      "interface": "GigabitEthernet0/0/1",
+      "vlan": 1,
+      "type": "dynamic"
+    }
+  ],
+  "expectedBehavior": {
+    "description": "接口状态不一致时应降低置信度，但仍保留边",
+    "detectionRules": [
+      "一端 up 一端 down -> 链路状态不一致",
+      "LLDP 存在但接口 down -> 可能是震荡场景",
+      "应标记为 semi_confirmed 或降低置信度"
+    ],
+    "expectedEdges": [
+      {
+        "aDeviceId": "192.168.40.1",
+        "aIf": "GigabitEthernet0/0/1",
+        "bDeviceId": "192.168.40.2",
+        "bIf": "GigabitEthernet0/0/1",
+        "status": "semi_confirmed",
+        "source": "lldp",
+        "confidence": 0.6,
+        "note": "接口状态不一致，可能存在端口震荡"
+      }
+    ]
+  }
+}
