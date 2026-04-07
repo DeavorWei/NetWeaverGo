@@ -1388,7 +1388,36 @@ async function syncExecutionView() {
   try {
     const running = await TaskExecutionAPI.listRunningTasks();
     console.debug(`[TaskExecution] 同步执行视图: running=${running.length}`);
+
     if (!running.length) {
+      // 没有运行中的任务，检查当前任务是否已完成
+      const currentRunId =
+        executionView.value.runId || taskexecStore.currentRunId;
+
+      if (currentRunId) {
+        // 主动刷新当前 runId 的快照，确认是否终态
+        const snapshot = await taskexecStore.refreshSnapshot(currentRunId);
+        if (snapshot) {
+          // 检查刷新后的快照是否终态
+          const terminalStatuses = [
+            "completed",
+            "partial",
+            "failed",
+            "cancelled",
+            "aborted",
+          ];
+          if (terminalStatuses.includes(snapshot.status)) {
+            // 任务已完成，保留执行视图，停止轮询
+            console.debug(
+              `[TaskExecution] 任务已完成，保留执行视图，status=${snapshot.status}`,
+            );
+            stopSnapshotPolling();
+            return;
+          }
+        }
+      }
+
+      // 没有当前 runId 或快照刷新失败或非终态，重置执行视图
       resetExecutionViewState("no-running-snapshots");
       return;
     }
@@ -1426,6 +1455,11 @@ function startSnapshotPolling() {
   if (snapshotPollTimer) return;
   snapshotPollTimer = setInterval(() => {
     if (!executionView.value.active) {
+      stopSnapshotPolling();
+      return;
+    }
+    // 任务完成后停止轮询（终态不再变化）
+    if (!awaitingSnapshot.value && isExecutionTerminal.value) {
       stopSnapshotPolling();
       return;
     }
