@@ -248,10 +248,20 @@ export const useTaskexecStore = defineStore('taskexec', () => {
     }
 
     if (!current) {
+      // 没有当前快照，主动拉取全量
+      console.warn(
+        `[TaskExec] No current snapshot for runId=${delta.runId}, refreshing...`
+      )
+      refreshSnapshot(delta.runId).catch(console.error)
       return false
     }
 
+    // 检测到 gap 时，主动刷新全量快照
     if ((delta.baseSeq ?? 0) !== currentSeq) {
+      console.warn(
+        `[TaskExec] Delta gap detected: current=${currentSeq}, base=${delta.baseSeq}, seq=${delta.seq}, refreshing...`
+      )
+      refreshSnapshot(delta.runId).catch(console.error)
       return false
     }
 

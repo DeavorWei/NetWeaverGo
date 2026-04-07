@@ -335,6 +335,7 @@ func (h *SnapshotHub) Get(runID string) (*ExecutionSnapshot, bool) {
 
 // BuildDelta 基于当前快照构建增量消息。
 // 当存在 pending ops 时只返回 patch；否则返回全量快照用于初始化。
+// 当检测到终态变更时，返回全量快照以确保前端状态一致性。
 func (h *SnapshotHub) BuildDelta(runID string) (*SnapshotDelta, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -345,7 +346,22 @@ func (h *SnapshotHub) BuildDelta(runID string) (*SnapshotDelta, bool) {
 	cloned := snapshot.Clone()
 
 	ops := h.pendingOps[runID]
-	if len(ops) == 0 {
+
+	// 检测是否包含终态变更
+	hasTerminalChange := false
+	for _, op := range ops {
+		if op.Type == SnapshotDeltaOpRunPatch && op.Status != nil {
+			if RunStatus(*op.Status).IsTerminal() {
+				hasTerminalChange = true
+				break
+			}
+		}
+	}
+
+	// 终态变更或无 ops 时返回全量快照
+	if len(ops) == 0 || hasTerminalChange {
+		h.pendingOps[runID] = nil
+		delete(h.pendingBaseSeq, runID)
 		return &SnapshotDelta{
 			RunID:     runID,
 			BaseSeq:   0,

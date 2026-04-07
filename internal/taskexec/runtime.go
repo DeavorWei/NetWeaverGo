@@ -499,6 +499,9 @@ func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *Tas
 	finalStatus := m.calculateFinalStatus(runtimeCtx, run.ID)
 	finishRunWithStatus(handler, runtimeCtx, finalStatus, "写入运行终态")
 
+	// 终态时强制刷新并发送全量快照，确保前端状态一致性
+	m.emitTerminalSnapshot(runtimeCtx, finalStatus)
+
 	// 发射完成事件
 	emitProjectedRunEvent(runtimeCtx, EventTypeRunFinished, EventLevelInfo, fmt.Sprintf("任务完成，状态: %s", finalStatus))
 }
@@ -960,4 +963,38 @@ func (m *RuntimeManager) projectCancellationToUnits(runtimeCtx *defaultRuntimeCo
 
 func strPtr(v string) *string {
 	return &v
+}
+
+// emitTerminalSnapshot 终态时发送全量快照，确保前端状态一致性
+func (m *RuntimeManager) emitTerminalSnapshot(runtimeCtx *defaultRuntimeContext, finalStatus string) {
+	if m.snapshotHub == nil {
+		return
+	}
+
+	// 刷新快照以确保包含最新状态
+	runtimeCtx.refreshSnapshot()
+
+	// 构建并发送全量快照增量
+	delta, ok := m.snapshotHub.BuildDelta(runtimeCtx.runID)
+	if !ok || delta == nil {
+		logger.Warn("TaskExec", runtimeCtx.runID, "终态时构建快照增量失败")
+		return
+	}
+
+	// 确保 Snapshot 字段存在
+	if delta.Snapshot == nil {
+		snapshot, exists := m.snapshotHub.Get(runtimeCtx.runID)
+		if exists && snapshot != nil {
+			delta.Snapshot = snapshot.Clone()
+		}
+	}
+
+	// 发送包含全量快照的事件
+	event := NewTaskEvent(runtimeCtx.runID, EventTypeRunProgress, fmt.Sprintf("任务终态快照: %s", finalStatus)).
+		WithLevel(EventLevelInfo).
+		WithPayload("snapshot", delta.Snapshot).
+		WithPayload("terminal", true)
+	m.eventBus.EmitSync(event)
+
+	logger.Verbose("TaskExec", runtimeCtx.runID, "已发送终态全量快照: status=%s", finalStatus)
 }
