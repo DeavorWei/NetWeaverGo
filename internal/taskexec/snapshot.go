@@ -399,10 +399,22 @@ func (b *SnapshotBuilder) Build(run *TaskRun, stages []TaskRunStage, units []Tas
 // BuildSummary 构建运行摘要
 func (b *SnapshotBuilder) BuildSummary(run *TaskRun, stages []TaskRunStage) *RunSummary {
 	completedStages := 0
+	totalUnits := 0
+	successUnits := 0
+	failedUnits := 0
+	cancelledUnits := 0
+	partialUnits := 0
+
 	for _, s := range stages {
 		if StageStatus(s.Status).IsTerminal() {
 			completedStages++
 		}
+		// 聚合所有 stage 的单元统计
+		totalUnits += s.TotalUnits
+		successUnits += s.SuccessUnits
+		failedUnits += s.FailedUnits
+		cancelledUnits += s.CancelledUnits
+		partialUnits += s.PartialUnits
 	}
 
 	durationMs := int64(0)
@@ -429,6 +441,9 @@ func (b *SnapshotBuilder) BuildSummary(run *TaskRun, stages []TaskRunStage) *Run
 		Progress:         run.Progress,
 		TotalStages:      len(stages),
 		CompletedStages:  completedStages,
+		TotalUnits:       totalUnits,
+		SuccessUnits:     successUnits,
+		FailedUnits:      failedUnits,
 		StartedAt:        startedAt,
 		FinishedAt:       finishedAt,
 		DurationMs:       durationMs,
