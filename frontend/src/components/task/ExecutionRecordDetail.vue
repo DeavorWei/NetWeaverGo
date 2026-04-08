@@ -98,7 +98,10 @@
                   <span class="stat-value">{{ record.errorCount }}</span>
                   <span class="stat-label">失败</span>
                 </div>
-                <div class="stat-item warning" v-if="(record.abortedCount || 0) > 0">
+                <div
+                  class="stat-item warning"
+                  v-if="(record.abortedCount || 0) > 0"
+                >
                   <span class="stat-value">{{ record.abortedCount || 0 }}</span>
                   <span class="stat-label">中止</span>
                 </div>
@@ -109,89 +112,94 @@
               </div>
             </div>
 
-            <!-- 设备列表 -->
-            <div
-              class="devices-section"
-              v-if="record.devices && record.devices.length > 0"
-            >
-              <h4>设备执行明细</h4>
-              <div class="device-list">
-                <div
-                  v-for="device in record.devices"
-                  :key="device.ip"
-                  class="device-item"
-                  :class="`status-${getDeviceStatusClass(device.status)}`"
+            <!-- 设备执行进度列表 -->
+            <div class="section">
+              <div class="section-header">
+                <h4>设备执行进度</h4>
+                <span class="device-count"
+                  >{{ deviceDetails.length }} 台设备</span
                 >
-                  <div class="device-header">
-                    <span class="device-ip">{{ device.ip }}</span>
-                    <div class="device-actions">
-                      <button
-                        v-if="resolveDetailLogPath(device)"
-                        class="btn-open-log-icon"
-                        @click="openDeviceDetailLog(device)"
-                        title="打开详细日志"
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          width="12"
-                          height="12"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                        >
-                          <path
-                            d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
-                          ></path>
-                          <polyline points="15 3 21 3 21 9"></polyline>
-                          <line x1="10" y1="14" x2="21" y2="3"></line>
-                        </svg>
-                      </button>
-                      <button
-                        v-if="device.rawLogPath"
-                        class="btn-open-log-icon"
-                        @click="openRawLog(device)"
-                        title="打开原始日志"
-                      >
-                        RAW
-                      </button>
-                      <span
-                        class="device-status"
-                        :class="`status-${getDeviceStatusClass(device.status)}`"
-                      >
-                        {{ device.status }}
-                      </span>
-                    </div>
-                  </div>
-                  <div class="device-info">
-                    <span
-                      >命令: {{ device.execCmd }}/{{ device.totalCmd }}</span
-                    >
-                    <span v-if="(device.logCount || 0) > 0"
-                      >日志: {{ device.logCount }}条</span
-                    >
-                  </div>
-                  <div v-if="device.errorMsg" class="device-error">
-                    {{ device.errorMsg }}
-                  </div>
-                  <div
-                    class="device-logs-header"
-                    v-if="device.logTail && device.logTail.length > 0"
-                  >
-                    <span class="logs-label">日志预览</span>
-                  </div>
-                  <div
-                    v-if="device.logTail && device.logTail.length > 0"
-                    class="device-logs"
-                  >
-                    <div
-                      v-for="(log, idx) in device.logTail"
-                      :key="idx"
-                      class="log-line"
-                    >
-                      {{ log }}
-                    </div>
-                  </div>
+              </div>
+              <DeviceExecutionProgressList
+                :run-id="record.id"
+                :devices="deviceDetails"
+                :loading="loadingDevices"
+                @select="handleDeviceSelect"
+              />
+            </div>
+
+            <!-- 选中设备的文件操作 -->
+            <div v-if="selectedDevice" class="section device-files-section">
+              <div class="section-header">
+                <h4>{{ selectedDevice.deviceIp }} - 文件操作</h4>
+              </div>
+              <div class="device-files-grid">
+                <!-- 详细日志 -->
+                <div class="file-item">
+                  <span class="file-label">详细日志</span>
+                  <FileOperationButtons
+                    :run-id="record.id"
+                    :unit-id="selectedDevice.unitId"
+                    file-type="detail"
+                    :has-file="!!selectedDevice.detailLogPath"
+                    :exists="selectedDevice.detailLogExists"
+                    size="small"
+                  />
                 </div>
+
+                <!-- 原始日志 -->
+                <div v-if="selectedDevice.rawLogPath" class="file-item">
+                  <span class="file-label">原始日志</span>
+                  <FileOperationButtons
+                    :run-id="record.id"
+                    :unit-id="selectedDevice.unitId"
+                    file-type="raw"
+                    :has-file="true"
+                    :exists="selectedDevice.rawLogExists"
+                    size="small"
+                  />
+                </div>
+
+                <!-- 摘要日志 -->
+                <div v-if="selectedDevice.summaryLogPath" class="file-item">
+                  <span class="file-label">摘要日志</span>
+                  <FileOperationButtons
+                    :run-id="record.id"
+                    :unit-id="selectedDevice.unitId"
+                    file-type="summary"
+                    :has-file="true"
+                    :exists="selectedDevice.summaryLogExists"
+                    size="small"
+                  />
+                </div>
+
+                <!-- 流水日志 -->
+                <div v-if="selectedDevice.journalLogPath" class="file-item">
+                  <span class="file-label">流水日志</span>
+                  <FileOperationButtons
+                    :run-id="record.id"
+                    :unit-id="selectedDevice.unitId"
+                    file-type="journal"
+                    :has-file="true"
+                    :exists="selectedDevice.journalLogExists"
+                    size="small"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- 报告文件操作 -->
+            <div v-if="reportPath" class="section">
+              <div class="section-header">
+                <h4>执行报告</h4>
+                <FileOperationButtons
+                  :run-id="record.id"
+                  file-type="report"
+                  :has-file="true"
+                  :exists="reportExists"
+                  size="medium"
+                  show-text
+                />
               </div>
             </div>
           </div>
@@ -202,9 +210,15 @@
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from "vue";
 import { ExecutionHistoryAPI } from "../../services/api";
-import type { ExecutionHistoryDeviceRecord, ExecutionHistoryRecord } from "../../types/executionHistory";
+import type {
+  ExecutionHistoryRecord,
+  DeviceExecutionView,
+} from "../../types/executionHistory";
 import { useToast } from "../../utils/useToast";
+import DeviceExecutionProgressList from "./DeviceExecutionProgressList.vue";
+import FileOperationButtons from "./FileOperationButtons.vue";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -218,46 +232,86 @@ const emit = defineEmits<{
 
 const toast = useToast();
 
+// 设备详情相关
+const deviceDetails = ref<DeviceExecutionView[]>([]);
+const loadingDevices = ref(false);
+const selectedDevice = ref<DeviceExecutionView | null>(null);
+const reportPath = ref("");
+const reportExists = ref(false);
+
 const closeModal = () => {
   emit("update:modelValue", false);
   emit("close");
 };
 
+// 加载设备详情
+const loadDeviceDetails = async () => {
+  if (!props.record?.id) return;
+
+  loadingDevices.value = true;
+  try {
+    const response = await ExecutionHistoryAPI.getDeviceDetails({
+      runId: props.record.id,
+    });
+    deviceDetails.value = response?.devices || [];
+  } catch (error) {
+    console.error("加载设备详情失败:", error);
+    deviceDetails.value = [];
+  } finally {
+    loadingDevices.value = false;
+  }
+};
+
+// 加载报告路径
+const loadReportPath = async () => {
+  if (!props.record?.id) return;
+
+  try {
+    const response = await ExecutionHistoryAPI.getReportPath({
+      runId: props.record.id,
+    });
+    reportPath.value = response?.reportPath || "";
+    reportExists.value = response?.exists || false;
+  } catch (error) {
+    console.error("加载报告路径失败:", error);
+    reportPath.value = "";
+    reportExists.value = false;
+  }
+};
+
+// 处理设备选择
+const handleDeviceSelect = (device: DeviceExecutionView) => {
+  selectedDevice.value = device;
+};
+
+// 监听记录变化，重新加载数据
+watch(
+  () => props.record?.id,
+  () => {
+    if (props.modelValue && props.record) {
+      loadDeviceDetails();
+      loadReportPath();
+      selectedDevice.value = null;
+    }
+  },
+  { immediate: true },
+);
+
 // 打开报告文件
 const openReportFile = async () => {
-  if (!props.record?.reportPath) return;
+  if (!props.record?.id) return;
 
   try {
-    await ExecutionHistoryAPI.openFileWithDefaultApp(props.record.reportPath);
+    const result = await ExecutionHistoryAPI.openFileWithDefaultApp({
+      runId: props.record.id,
+      unitId: "",
+      fileType: "report",
+    });
+    if (result && !result.success) {
+      toast.error(result.message || "打开报告文件失败");
+    }
   } catch (error) {
     toast.error(`打开报告文件失败: ${error}`);
-  }
-};
-
-const resolveDetailLogPath = (device: ExecutionHistoryDeviceRecord) => {
-  return device.detailLogPath || device.logFilePath;
-};
-
-// 打开设备详细日志文件
-const openDeviceDetailLog = async (device: ExecutionHistoryDeviceRecord) => {
-  const detailLogPath = resolveDetailLogPath(device);
-  if (!detailLogPath) return;
-
-  try {
-    await ExecutionHistoryAPI.openFileWithDefaultApp(detailLogPath);
-  } catch (error) {
-    toast.error(`打开详细日志失败: ${error}`);
-  }
-};
-
-// 打开设备原始日志文件
-const openRawLog = async (device: ExecutionHistoryDeviceRecord) => {
-  if (!device.rawLogPath) return;
-
-  try {
-    await ExecutionHistoryAPI.openFileWithDefaultApp(device.rawLogPath);
-  } catch (error) {
-    toast.error(`打开原始日志失败: ${error}`);
   }
 };
 
@@ -304,19 +358,6 @@ const getModeText = (mode: string) => {
     backup: "备份执行",
   };
   return modeMap[mode] || mode;
-};
-
-// 获取设备状态样式类
-const getDeviceStatusClass = (status: string) => {
-  const statusMap: Record<string, string> = {
-    Success: "success",
-    Error: "error",
-    Aborted: "error",
-    Warning: "warning",
-    Running: "running",
-    Init: "waiting",
-  };
-  return statusMap[status] || "waiting";
 };
 </script>
 
@@ -757,6 +798,58 @@ const getDeviceStatusClass = (status: string) => {
 
 .log-line:last-child {
   border-bottom: none;
+}
+
+/* 新增：section 样式 */
+.section {
+  margin-bottom: 20px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.section-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #e6edf3);
+}
+
+.device-count {
+  font-size: 12px;
+  color: var(--text-secondary, #8b949e);
+}
+
+/* 新增：设备文件操作区域 */
+.device-files-section {
+  background: var(--bg-secondary, #161b22);
+  border: 1px solid var(--border-color, #2d333b);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.device-files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-tertiary, #21262d);
+  border-radius: 6px;
+}
+
+.file-label {
+  font-size: 13px;
+  color: var(--text-primary, #e6edf3);
 }
 
 /* 动画 */

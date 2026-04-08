@@ -286,6 +286,12 @@ export const ExecutionHistoryAPI = {
   deleteRunRecord: ExecutionHistoryServiceBinding.DeleteRunRecord,
   /** 删除所有运行记录 */
   deleteAllRunRecords: ExecutionHistoryServiceBinding.DeleteAllRunRecords,
+  /** 获取任务设备执行详情 */
+  getDeviceDetails: ExecutionHistoryServiceBinding.GetDeviceDetails,
+  /** 获取任务报告路径 */
+  getReportPath: ExecutionHistoryServiceBinding.GetReportPath,
+  /** 打开文件所在文件夹并选中文件（安全版：通过 RunID+UnitID+FileType 解析路径） */
+  openFileLocation: ExecutionHistoryServiceBinding.OpenFileLocation,
 } as const
 
 // 导出历史执行记录相关类型
@@ -293,6 +299,14 @@ export type {
   ListTaskRunRecordsRequest,
   ListTaskRunRecordsResponse,
   TaskRunRecordView,
+  DeviceDetailsRequest,
+  DeviceDetailsResponse,
+  DeviceExecutionView,
+  FileLocationRequest,
+  FileLocationResponse,
+  OpenFileWithDefaultAppRequest,
+  ReportPathRequest,
+  ReportPathResponse,
 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
 
 // ==================== 查询服务 API ====================
