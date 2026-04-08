@@ -183,10 +183,30 @@ func (m *StreamMatcher) IsPrompt(chunk string) bool {
 	return false
 }
 
+// knownPromptPrefixes 已知的提示符前缀列表
+// 这些前缀会出现在华为设备提示符的尖括号/方括号之前
+var knownPromptPrefixes = []string{
+	"HRP_M", // 华为双机热备 - 主设备
+	"HRP_S", // 华为双机热备 - 备设备
+}
+
+// isValidPromptPrefix 检查前缀是否是已知的有效提示符前缀
+func isValidPromptPrefix(prefix string) bool {
+	if prefix == "" {
+		return true // 无前缀是有效的（标准格式）
+	}
+	for _, p := range knownPromptPrefixes {
+		if prefix == p {
+			return true
+		}
+	}
+	return false
+}
+
 // IsPromptStrict 严格提示符检测（用于初始化阶段和分页后）
 // 只接受"整行就是提示符"的格式，不接受混合行
-// 华为格式: 整行必须是 <主机名>
-// 方括号格式: 整行必须是 [主机名]
+// 华为格式: <主机名> 或 已知前缀<主机名>（如 HRP_M<FW-1>、HRP_S<FW-2>）
+// 方括号格式: [主机名] 或 已知前缀[主机名]（如 HRP_M[FW-1]、HRP_S[FW-2]）
 // Cisco/Huawei 特权模式: 整行必须是 主机名# 或 主机名>
 func (m *StreamMatcher) IsPromptStrict(line string) bool {
 	line = strings.TrimSpace(line)
@@ -194,23 +214,32 @@ func (m *StreamMatcher) IsPromptStrict(line string) bool {
 		return false
 	}
 
-	// 华为格式: 整行必须是 <主机名>
+	// 华为尖括号格式（支持已知前缀）
+	// 匹配: <hostname>, HRP_M<hostname>, HRP_S<hostname>
 	// 排除 "<The current login time...>" 这类混合行
-	if strings.HasPrefix(line, "<") && strings.HasSuffix(line, ">") {
-		inner := strings.TrimPrefix(strings.TrimSuffix(line, ">"), "<")
-		// 内部不能有空格（排除混合行）
-		if inner != "" && !strings.Contains(inner, " ") {
-			//logger.Verbose("Matcher", "-", "严格模式检测到华为格式提示符: '%s'", line)
-			return true
+	if idx := strings.Index(line, "<"); idx >= 0 {
+		if strings.HasSuffix(line, ">") {
+			inner := line[idx+1 : len(line)-1]
+			prefix := line[:idx]
+			// 主机名不能包含空格，前缀必须是已知的（或为空）
+			if inner != "" && !strings.Contains(inner, " ") && isValidPromptPrefix(prefix) {
+				//logger.Verbose("Matcher", "-", "严格模式检测到华为尖括号格式提示符: '%s'", line)
+				return true
+			}
 		}
 	}
 
-	// 方括号格式: 整行必须是 [主机名]
-	if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-		inner := strings.TrimPrefix(strings.TrimSuffix(line, "]"), "[")
-		if inner != "" && !strings.Contains(inner, " ") {
-			//logger.Verbose("Matcher", "-", "严格模式检测到方括号格式提示符: '%s'", line)
-			return true
+	// 方括号格式（支持已知前缀）
+	// 匹配: [hostname], HRP_M[hostname], HRP_S[hostname]
+	if idx := strings.Index(line, "["); idx >= 0 {
+		if strings.HasSuffix(line, "]") {
+			inner := line[idx+1 : len(line)-1]
+			prefix := line[:idx]
+			// 主机名不能包含空格，前缀必须是已知的（或为空）
+			if inner != "" && !strings.Contains(inner, " ") && isValidPromptPrefix(prefix) {
+				//logger.Verbose("Matcher", "-", "严格模式检测到方括号格式提示符: '%s'", line)
+				return true
+			}
 		}
 	}
 
@@ -219,8 +248,8 @@ func (m *StreamMatcher) IsPromptStrict(line string) bool {
 	for _, suffix := range []string{"#", ">"} {
 		if strings.HasSuffix(line, suffix) {
 			prefix := strings.TrimSuffix(line, suffix)
-			// 主机名不能包含空格，不能包含 <（排除华为格式的变体）
-			if prefix != "" && !strings.Contains(prefix, " ") && !strings.Contains(prefix, "<") {
+			// 主机名不能包含空格，不能包含 < 或 [（排除华为格式的变体）
+			if prefix != "" && !strings.Contains(prefix, " ") && !strings.Contains(prefix, "<") && !strings.Contains(prefix, "[") {
 				//logger.Verbose("Matcher", "-", "严格模式检测到特权模式提示符: '%s'", line)
 				return true
 			}
