@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/normalize"
 	"gorm.io/gorm"
 )
@@ -92,6 +93,7 @@ func (b *TopologyBuilder) Build(ctx context.Context, runID string) (*TopologyBui
 }
 
 // NormalizedFacts 标准化的事实数据
+// 阶段3架构演进：支持全量IP映射和多IP设备
 type NormalizedFacts struct {
 	Devices           map[string]*DeviceInfo // key: DeviceIP
 	LLDPNeighbors     []NormalizedLLDPNeighbor
@@ -103,19 +105,24 @@ type NormalizedFacts struct {
 	DeviceByName      map[string]string              // key: NormalizedName -> DeviceIP
 	DeviceByMgmtIP    map[string]string              // key: MgmtIP -> DeviceIP
 	DeviceByChassisID map[string]string              // key: ChassisID -> DeviceIP
+	AllDeviceIPs      map[string]string              // 阶段3新增：key: 任意IP -> DeviceIP（支持多IP设备）
 	ARPMACToDevice    map[string]string              // key: MAC -> DeviceIP
 	ARPMACToIP        map[string]string              // key: MAC -> IP
 }
 
 // DeviceInfo 设备信息
+// 阶段3架构演进：支持NodeUUID和多IP
 type DeviceInfo struct {
+	NodeUUID       string // 阶段3新增：全局唯一节点标识
 	DeviceIP       string
+	AllIPs         []string // 阶段3新增：设备所有IP地址（包括Loopback、SVI等）
 	NormalizedName string
 	ChassisID      string
 	MgmtIP         string
 	Hostname       string
 	Vendor         string
 	Model          string
+	NodeType       NodeType // 阶段3新增：节点类型
 }
 
 // NormalizedLLDPNeighbor 标准化的 LLDP 邻居
@@ -251,6 +258,10 @@ func (b *TopologyBuilder) createFactSnapshot(input *TopologyBuildInput) Topology
 }
 
 // normalizeFacts 标准化事实
+// 阶段3架构演进：
+// 1. 为每个设备生成 NodeUUID
+// 2. 建立全量IP映射表支持多IP设备
+// 3. 设置节点类型为 Managed
 func (b *TopologyBuilder) normalizeFacts(input *TopologyBuildInput) *NormalizedFacts {
 	n := &NormalizedFacts{
 		Devices:           make(map[string]*DeviceInfo),
@@ -263,20 +274,34 @@ func (b *TopologyBuilder) normalizeFacts(input *TopologyBuildInput) *NormalizedF
 		DeviceByName:      make(map[string]string),
 		DeviceByMgmtIP:    make(map[string]string),
 		DeviceByChassisID: make(map[string]string),
+		AllDeviceIPs:      make(map[string]string), // 阶段3新增：全量IP映射表
 		ARPMACToDevice:    make(map[string]string),
 		ARPMACToIP:        make(map[string]string),
 	}
 
+	// 阶段3新增：DeviceIP -> NodeUUID 映射（用于边生成时查找）
+	deviceUUIDMap := make(map[string]string)
+
 	// 标准化设备
 	for _, d := range input.Devices {
+		// 阶段3：为每个设备生成唯一的 NodeUUID
+		nodeUUID := d.NodeUUID
+		if nodeUUID == "" {
+			nodeUUID = newNodeUUID()
+		}
+		deviceUUIDMap[d.DeviceIP] = nodeUUID
+
 		info := &DeviceInfo{
+			NodeUUID:       nodeUUID,
 			DeviceIP:       d.DeviceIP,
+			AllIPs:         []string{}, // 初始化为空，后续从接口信息补充
 			NormalizedName: strings.ToLower(strings.TrimSpace(d.NormalizedName)),
 			ChassisID:      strings.TrimSpace(d.ChassisID),
 			MgmtIP:         strings.TrimSpace(d.MgmtIP),
 			Hostname:       d.Hostname,
 			Vendor:         d.Vendor,
 			Model:          d.Model,
+			NodeType:       NodeTypeManaged, // 阶段3：采集列表中的设备标记为 Managed
 		}
 		n.Devices[d.DeviceIP] = info
 
@@ -284,9 +309,14 @@ func (b *TopologyBuilder) normalizeFacts(input *TopologyBuildInput) *NormalizedF
 		if info.NormalizedName != "" {
 			n.DeviceByName[info.NormalizedName] = d.DeviceIP
 		}
-		// 建立 MgmtIP 索引
-		if info.MgmtIP != "" {
+		// 阶段3：建立全量IP映射（DeviceIP + MgmtIP）
+		if d.DeviceIP != "" {
+			n.DeviceByMgmtIP[d.DeviceIP] = d.DeviceIP
+			n.AllDeviceIPs[d.DeviceIP] = d.DeviceIP // 加入全量映射
+		}
+		if info.MgmtIP != "" && info.MgmtIP != d.DeviceIP {
 			n.DeviceByMgmtIP[info.MgmtIP] = d.DeviceIP
+			n.AllDeviceIPs[info.MgmtIP] = d.DeviceIP // MgmtIP 也加入全量映射
 		}
 		// 建立 ChassisID 索引
 		if info.ChassisID != "" {
@@ -505,32 +535,53 @@ func (b *TopologyBuilder) recalculateLLDPScore(score ScoreBreakdown) float64 {
 }
 
 // resolveLLDPPeer 解析 LLDP 对端设备
+// 穿透式匹配：IP → ChassisID → Name，任一维度匹配失败不中断
 func (b *TopologyBuilder) resolveLLDPPeer(lldp NormalizedLLDPNeighbor, n *NormalizedFacts) (string, string) {
-	// 优先使用 NeighborIP
+	// 1. 优先尝试 NeighborIP 匹配（依赖 DeviceIP 已入库 DeviceByMgmtIP）
 	if lldp.NeighborIP != "" {
 		if deviceIP, ok := n.DeviceByMgmtIP[lldp.NeighborIP]; ok {
+			logger.Verbose("TopologyBuilder", lldp.DeviceIP,
+				"resolveLLDPPeer: localIf=%s, neighborIP=%s → matched via neighbor_ip → deviceIP=%s",
+				lldp.LocalIf, lldp.NeighborIP, deviceIP)
 			return deviceIP, "neighbor_ip"
 		}
-		return lldp.NeighborIP, "neighbor_ip"
+		// ⚠ 不要在这里 return！继续尝试其他维度
 	}
 
-	// 其次使用 NeighborName
-	if lldp.NeighborName != "" {
-		normalizedName := strings.ToLower(strings.TrimSpace(lldp.NeighborName))
-		if deviceIP, ok := n.DeviceByName[normalizedName]; ok {
-			return deviceIP, "neighbor_name"
-		}
-	}
-
-	// 尝试使用 ChassisID
+	// 2. 其次尝试 ChassisID 匹配（硬件 MAC 比设备名更可靠）
 	if lldp.NeighborChassis != "" {
 		if deviceIP, ok := n.DeviceByChassisID[lldp.NeighborChassis]; ok {
+			logger.Verbose("TopologyBuilder", lldp.DeviceIP,
+				"resolveLLDPPeer: localIf=%s, neighborChassis=%s → matched via chassis_id → deviceIP=%s",
+				lldp.LocalIf, lldp.NeighborChassis, deviceIP)
 			return deviceIP, "chassis_id"
 		}
 	}
 
-	// 无法解析
-	return "unknown:" + lldp.DeviceIP + ":" + lldp.LocalIf, "unknown_peer"
+	// 3. 最后尝试 NeighborName 匹配
+	if lldp.NeighborName != "" {
+		normalizedName := strings.ToLower(strings.TrimSpace(lldp.NeighborName))
+		if deviceIP, ok := n.DeviceByName[normalizedName]; ok {
+			logger.Verbose("TopologyBuilder", lldp.DeviceIP,
+				"resolveLLDPPeer: localIf=%s, neighborName=%s → matched via neighbor_name → deviceIP=%s",
+				lldp.LocalIf, lldp.NeighborName, deviceIP)
+			return deviceIP, "neighbor_name"
+		}
+	}
+
+	// 4. 全部匹配失败 → 标记为未管设备 (Unmanaged Node)
+	//    优先使用 IP 作为占位标识，其次 ChassisID，最后拼接 DeviceIP+LocalIf
+	fallbackID := lldp.NeighborIP
+	if fallbackID == "" {
+		fallbackID = lldp.NeighborChassis
+	}
+	if fallbackID == "" {
+		fallbackID = lldp.DeviceIP + ":" + lldp.LocalIf
+	}
+	logger.Verbose("TopologyBuilder", lldp.DeviceIP,
+		"resolveLLDPPeer: localIf=%s, neighborIP=%s, neighborChassis=%s, neighborName=%s → no match → unmanaged:%s",
+		lldp.LocalIf, lldp.NeighborIP, lldp.NeighborChassis, lldp.NeighborName, fallbackID)
+	return "unmanaged:" + fallbackID, "unknown_peer"
 }
 
 // scoreLLDPCandidate 计算 LLDP 候选评分

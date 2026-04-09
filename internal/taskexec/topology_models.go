@@ -2,12 +2,25 @@ package taskexec
 
 import "time"
 
+// NodeType 节点类型定义
+type NodeType string
+
+const (
+	NodeTypeManaged   NodeType = "managed"   // 已管理设备（在采集列表中且已成功采集）
+	NodeTypeUnmanaged NodeType = "unmanaged" // 未管理设备（LLDP发现但不在采集列表中）
+	NodeTypeInferred  NodeType = "inferred"  // 推断设备（通过FDB/ARP推断的终端设备）
+	NodeTypeUnknown   NodeType = "unknown"   // 未知类型
+)
+
 // TaskRunDevice 运行期设备信息
+// 阶段3架构演进：引入NodeUUID作为主键，支持多IP设备
 type TaskRunDevice struct {
 	ID             uint       `gorm:"primaryKey;autoIncrement" json:"id"`
 	TaskRunID      string     `gorm:"index;not null" json:"taskRunId"`
+	NodeUUID       string     `gorm:"index" json:"nodeUuid"` // 阶段3新增：全局唯一节点标识
 	DeviceID       uint       `json:"deviceId"`
 	DeviceIP       string     `gorm:"index;not null" json:"deviceIp"`
+	AllIPs         string     `gorm:"type:text" json:"allIps"` // 阶段3新增：所有IP地址JSON数组
 	Status         string     `json:"status"`
 	ErrorMessage   string     `json:"errorMessage"`
 	Vendor         string     `json:"vendor"`
@@ -22,6 +35,7 @@ type TaskRunDevice struct {
 	MgmtIP         string     `json:"mgmtIp"`
 	NormalizedName string     `json:"normalizedName"`
 	ChassisID      string     `json:"chassisId"`
+	NodeType       NodeType   `json:"nodeType"` // 阶段3新增：节点类型
 	StartedAt      *time.Time `json:"startedAt"`
 	FinishedAt     *time.Time `json:"finishedAt"`
 	CreatedAt      time.Time  `json:"createdAt"`

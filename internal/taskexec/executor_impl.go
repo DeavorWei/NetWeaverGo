@@ -1520,16 +1520,52 @@ func (e *TopologyBuildExecutor) buildRunTopology(runID string) (*models.Topology
 		}
 		remoteDevice := ""
 		resolutionSource := ""
-		if strings.TrimSpace(n.NeighborIP) != "" {
-			remoteDevice = strings.TrimSpace(n.NeighborIP)
-			resolutionSource = "neighbor_ip"
-			resolvedByIPCount++
-		} else if candidate := deviceByName[strings.ToLower(strings.TrimSpace(n.NeighborName))]; candidate != "" {
-			remoteDevice = candidate
-			resolutionSource = "neighbor_name"
-			resolvedByNameCount++
-		} else {
-			remoteDevice = "unknown:" + n.DeviceIP + ":" + localIf
+		resolved := false
+
+		// 1. 优先尝试 NeighborIP 匹配（通过 deviceByMgmtIP 索引）
+		if neighborIP := strings.TrimSpace(n.NeighborIP); neighborIP != "" {
+			if candidate, ok := deviceByMgmtIP[neighborIP]; ok {
+				remoteDevice = candidate
+				resolutionSource = "neighbor_ip"
+				resolvedByIPCount++
+				resolved = true
+			}
+		}
+
+		// 2. NeighborIP 未匹配，尝试通过 ChassisID 匹配（穿透式匹配）
+		if !resolved && n.NeighborChassis != "" {
+			// 从 deviceByMgmtIP 中查找是否有匹配的 chassis（需要额外索引，这里简化处理）
+			// 注意：旧构建器缺少 deviceByChassisID 索引，这里做基础防护
+			for _, d := range devices {
+				if strings.EqualFold(strings.TrimSpace(d.ChassisID), n.NeighborChassis) {
+					remoteDevice = d.DeviceIP
+					resolutionSource = "chassis_id"
+					resolved = true
+					break
+				}
+			}
+		}
+
+		// 3. 最后尝试 NeighborName 匹配
+		if !resolved {
+			if candidate := deviceByName[strings.ToLower(strings.TrimSpace(n.NeighborName))]; candidate != "" {
+				remoteDevice = candidate
+				resolutionSource = "neighbor_name"
+				resolvedByNameCount++
+				resolved = true
+			}
+		}
+
+		// 4. 全部匹配失败 → 标记为未管设备
+		if !resolved {
+			fallbackID := strings.TrimSpace(n.NeighborIP)
+			if fallbackID == "" {
+				fallbackID = strings.TrimSpace(n.NeighborChassis)
+			}
+			if fallbackID == "" {
+				fallbackID = n.DeviceIP + ":" + localIf
+			}
+			remoteDevice = "unmanaged:" + fallbackID
 			resolutionSource = "unknown_peer"
 			unresolvedPeerCount++
 		}

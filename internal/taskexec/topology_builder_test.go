@@ -2,6 +2,7 @@ package taskexec
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -445,4 +446,246 @@ func TestEnrichCandidatesWithInterfaceFacts(t *testing.T) {
 	// 验证总分增加了接口加分（IfUpBonus = 3.0）
 	// 初始 75.0 + IfUpBonus 3.0 = 78.0
 	assert.Equal(t, 78.0, candidates[0].TotalScore, "总分应增加 IfUpBonus")
+}
+
+// =============================================================================
+// Phase 2.2: 拓扑重复问题修复 - 单元测试覆盖
+// =============================================================================
+
+// TestResolveLLDPPeer 测试 LLDP 对端设备解析的多维穿透匹配
+func TestResolveLLDPPeer(t *testing.T) {
+	cfg := DefaultTopologyBuildConfig()
+	builder := &TopologyBuilder{config: cfg}
+
+	// 创建标准化事实数据
+	n := &NormalizedFacts{
+		Devices:           make(map[string]*DeviceInfo),
+		DeviceByName:      make(map[string]string),
+		DeviceByMgmtIP:    make(map[string]string),
+		DeviceByChassisID: make(map[string]string),
+	}
+
+	// 设置设备信息（模拟 MgmtIP 为空的情况）
+	n.Devices["192.168.1.1"] = &DeviceInfo{
+		DeviceIP:       "192.168.1.1",
+		NormalizedName: "switch-a",
+		ChassisID:      "00:11:22:33:44:55",
+		MgmtIP:         "", // MgmtIP 为空
+	}
+	n.Devices["192.168.1.2"] = &DeviceInfo{
+		DeviceIP:       "192.168.1.2",
+		NormalizedName: "switch-b",
+		ChassisID:      "00:11:22:33:44:66",
+		MgmtIP:         "10.0.0.2", // MgmtIP 与 DeviceIP 不同
+	}
+
+	// 建立索引（与 normalizeFacts 逻辑一致）
+	// DeviceIP 应入库 DeviceByMgmtIP（阶段 1.1 修复）
+	n.DeviceByMgmtIP["192.168.1.1"] = "192.168.1.1"
+	n.DeviceByMgmtIP["192.168.1.2"] = "192.168.1.2"
+	n.DeviceByMgmtIP["10.0.0.2"] = "192.168.1.2"
+
+	n.DeviceByName["switch-a"] = "192.168.1.1"
+	n.DeviceByName["switch-b"] = "192.168.1.2"
+
+	n.DeviceByChassisID["00:11:22:33:44:55"] = "192.168.1.1"
+	n.DeviceByChassisID["00:11:22:33:44:66"] = "192.168.1.2"
+
+	// TC-01: MgmtIP 为空，NeighborIP == DeviceIP - 应通过 DeviceIP 索引匹配
+	t.Run("TC-01: MgmtIP为空_NeighborIP匹配DeviceIP", func(t *testing.T) {
+		lldp := NormalizedLLDPNeighbor{
+			DeviceIP:     "192.168.1.2",
+			LocalIf:      "Gi0/0/1",
+			NeighborIP:   "192.168.1.1", // 指向 DeviceIP（因为 MgmtIP 为空）
+			NeighborName: "Switch-A",
+		}
+		deviceIP, source := builder.resolveLLDPPeer(lldp, n)
+		assert.Equal(t, "192.168.1.1", deviceIP, "应通过 DeviceIP 索引匹配到设备")
+		assert.Equal(t, "neighbor_ip", source)
+	})
+
+	// TC-02: MgmtIP != DeviceIP，NeighborIP == MgmtIP - 应通过 MgmtIP 索引匹配
+	t.Run("TC-02: NeighborIP匹配MgmtIP", func(t *testing.T) {
+		lldp := NormalizedLLDPNeighbor{
+			DeviceIP:     "192.168.1.1",
+			LocalIf:      "Gi0/0/1",
+			NeighborIP:   "10.0.0.2", // 指向 MgmtIP
+			NeighborName: "Switch-B",
+		}
+		deviceIP, source := builder.resolveLLDPPeer(lldp, n)
+		assert.Equal(t, "192.168.1.2", deviceIP, "应通过 MgmtIP 索引匹配到设备")
+		assert.Equal(t, "neighbor_ip", source)
+	})
+
+	// TC-03: MgmtIP != DeviceIP，NeighborIP == DeviceIP - 应通过 DeviceIP 索引匹配
+	t.Run("TC-03: NeighborIP匹配DeviceIP而非MgmtIP", func(t *testing.T) {
+		lldp := NormalizedLLDPNeighbor{
+			DeviceIP:     "192.168.1.1",
+			LocalIf:      "Gi0/0/1",
+			NeighborIP:   "192.168.1.2", // 指向 DeviceIP
+			NeighborName: "Switch-B",
+		}
+		deviceIP, source := builder.resolveLLDPPeer(lldp, n)
+		assert.Equal(t, "192.168.1.2", deviceIP, "应通过 DeviceIP 索引匹配到设备")
+		assert.Equal(t, "neighbor_ip", source)
+	})
+
+	// TC-04: NeighborIP 匹配失败，ChassisID 匹配成功 - 穿透匹配
+	t.Run("TC-04: ChassisID穿透匹配", func(t *testing.T) {
+		lldp := NormalizedLLDPNeighbor{
+			DeviceIP:        "192.168.1.2",
+			LocalIf:         "Gi0/0/1",
+			NeighborIP:      "192.168.99.99",     // 不存在的 IP
+			NeighborChassis: "00:11:22:33:44:55", // 但 ChassisID 匹配
+			NeighborName:    "Switch-A",
+		}
+		deviceIP, source := builder.resolveLLDPPeer(lldp, n)
+		assert.Equal(t, "192.168.1.1", deviceIP, "应通过 ChassisID 穿透匹配到设备")
+		assert.Equal(t, "chassis_id", source)
+	})
+
+	// TC-05: NeighborIP 匹配失败，NeighborName 匹配成功 - 穿透匹配
+	t.Run("TC-05: NeighborName穿透匹配", func(t *testing.T) {
+		lldp := NormalizedLLDPNeighbor{
+			DeviceIP:     "192.168.1.2",
+			LocalIf:      "Gi0/0/1",
+			NeighborIP:   "192.168.99.99", // 不存在的 IP
+			NeighborName: "Switch-A",      // 但名称匹配
+		}
+		deviceIP, source := builder.resolveLLDPPeer(lldp, n)
+		assert.Equal(t, "192.168.1.1", deviceIP, "应通过 NeighborName 穿透匹配到设备")
+		assert.Equal(t, "neighbor_name", source)
+	})
+
+	// TC-06: 所有维度均失败 - 应返回 unmanaged 前缀
+	t.Run("TC-06: 所有维度失败返回unmanaged", func(t *testing.T) {
+		lldp := NormalizedLLDPNeighbor{
+			DeviceIP:     "192.168.1.1",
+			LocalIf:      "Gi0/0/1",
+			NeighborIP:   "192.168.99.99",  // 不存在的 IP
+			NeighborName: "Unknown-Switch", // 不存在的名称
+		}
+		deviceIP, source := builder.resolveLLDPPeer(lldp, n)
+		assert.True(t, strings.HasPrefix(deviceIP, "unmanaged:"), "应返回 unmanaged: 前缀")
+		assert.Equal(t, "unknown_peer", source)
+	})
+
+	// TC-07: ChassisID 优先级高于 Name（MAC 比名称更可靠）
+	t.Run("TC-07: ChassisID优先级高于Name", func(t *testing.T) {
+		lldp := NormalizedLLDPNeighbor{
+			DeviceIP:        "192.168.1.2",
+			LocalIf:         "Gi0/0/1",
+			NeighborIP:      "", // 无 IP
+			NeighborChassis: "00:11:22:33:44:55",
+			NeighborName:    "Wrong-Name", // 错误的名称（但 ChassisID 正确）
+		}
+		deviceIP, source := builder.resolveLLDPPeer(lldp, n)
+		assert.Equal(t, "192.168.1.1", deviceIP)
+		assert.Equal(t, "chassis_id", source, "ChassisID 应优先于 Name 匹配")
+	})
+}
+
+// TestNormalizeFacts_DeviceIPIndexing 测试 DeviceIP 入库 DeviceByMgmtIP 索引
+func TestNormalizeFacts_DeviceIPIndexing(t *testing.T) {
+	builder := &TopologyBuilder{config: DefaultTopologyBuildConfig()}
+
+	input := &TopologyBuildInput{
+		Devices: []TaskRunDevice{
+			{
+				DeviceIP:       "192.168.1.1",
+				NormalizedName: "switch-a",
+				MgmtIP:         "", // MgmtIP 为空
+			},
+			{
+				DeviceIP:       "192.168.1.2",
+				NormalizedName: "switch-b",
+				MgmtIP:         "10.0.0.2", // MgmtIP 与 DeviceIP 不同
+			},
+		},
+	}
+
+	n := builder.normalizeFacts(input)
+
+	// 验证 DeviceIP 已入库 DeviceByMgmtIP（阶段 1.1 修复）
+	assert.Equal(t, "192.168.1.1", n.DeviceByMgmtIP["192.168.1.1"], "DeviceIP 应入库 DeviceByMgmtIP")
+	assert.Equal(t, "192.168.1.2", n.DeviceByMgmtIP["192.168.1.2"], "DeviceIP 应入库 DeviceByMgmtIP")
+
+	// 验证 MgmtIP 也已入库
+	assert.Equal(t, "192.168.1.2", n.DeviceByMgmtIP["10.0.0.2"], "MgmtIP 应入库 DeviceByMgmtIP")
+
+	// 验证 Devices 映射正确
+	assert.Equal(t, "192.168.1.1", n.Devices["192.168.1.1"].DeviceIP)
+	assert.Equal(t, "192.168.1.2", n.Devices["192.168.1.2"].DeviceIP)
+}
+
+// TestTopologyDuplicationFix_Integration 拓扑重复问题修复集成测试
+// 模拟 5 台设备（MgmtIP 全部置空）的场景，验证不会产生重复节点
+func TestTopologyDuplicationFix_Integration(t *testing.T) {
+	builder := &TopologyBuilder{config: DefaultTopologyBuildConfig()}
+
+	// 模拟 5 台设备，所有 MgmtIP 为空
+	input := &TopologyBuildInput{
+		Devices: []TaskRunDevice{
+			{DeviceIP: "192.168.1.1", NormalizedName: "switch-1", ChassisID: "00:11:22:33:44:01"},
+			{DeviceIP: "192.168.1.2", NormalizedName: "switch-2", ChassisID: "00:11:22:33:44:02"},
+			{DeviceIP: "192.168.1.3", NormalizedName: "switch-3", ChassisID: "00:11:22:33:44:03"},
+			{DeviceIP: "192.168.1.4", NormalizedName: "switch-4", ChassisID: "00:11:22:33:44:04"},
+			{DeviceIP: "192.168.1.5", NormalizedName: "switch-5", ChassisID: "00:11:22:33:44:05"},
+		},
+		LLDPNeighbors: []TaskParsedLLDPNeighbor{
+			// switch-1 看到 switch-2
+			{DeviceIP: "192.168.1.1", LocalInterface: "Gi0/0/1", NeighborName: "switch-2", NeighborChassis: "00:11:22:33:44:02", NeighborPort: "Gi0/0/1"},
+			// switch-2 看到 switch-1 和 switch-3
+			{DeviceIP: "192.168.1.2", LocalInterface: "Gi0/0/1", NeighborName: "switch-1", NeighborChassis: "00:11:22:33:44:01", NeighborPort: "Gi0/0/1"},
+			{DeviceIP: "192.168.1.2", LocalInterface: "Gi0/0/2", NeighborName: "switch-3", NeighborChassis: "00:11:22:33:44:03", NeighborPort: "Gi0/0/1"},
+			// switch-3 看到 switch-2 和 switch-4
+			{DeviceIP: "192.168.1.3", LocalInterface: "Gi0/0/1", NeighborName: "switch-2", NeighborChassis: "00:11:22:33:44:02", NeighborPort: "Gi0/0/2"},
+			{DeviceIP: "192.168.1.3", LocalInterface: "Gi0/0/2", NeighborName: "switch-4", NeighborChassis: "00:11:22:33:44:04", NeighborPort: "Gi0/0/1"},
+			// switch-4 看到 switch-3 和 switch-5
+			{DeviceIP: "192.168.1.4", LocalInterface: "Gi0/0/1", NeighborName: "switch-3", NeighborChassis: "00:11:22:33:44:03", NeighborPort: "Gi0/0/2"},
+			{DeviceIP: "192.168.1.4", LocalInterface: "Gi0/0/2", NeighborName: "switch-5", NeighborChassis: "00:11:22:33:44:05", NeighborPort: "Gi0/0/1"},
+			// switch-5 看到 switch-4
+			{DeviceIP: "192.168.1.5", LocalInterface: "Gi0/0/1", NeighborName: "switch-4", NeighborChassis: "00:11:22:33:44:04", NeighborPort: "Gi0/0/2"},
+		},
+	}
+
+	n := builder.normalizeFacts(input)
+
+	// 验证所有 DeviceIP 都已入库 DeviceByMgmtIP
+	for _, d := range input.Devices {
+		assert.Equal(t, d.DeviceIP, n.DeviceByMgmtIP[d.DeviceIP],
+			"设备 %s 的 DeviceIP 应入库 DeviceByMgmtIP", d.DeviceIP)
+	}
+
+	// 验证 LLDP 对端解析不会产生重复
+	resolvedDevices := make(map[string]bool)
+	for _, lldp := range n.LLDPNeighbors {
+		deviceIP, source := builder.resolveLLDPPeer(lldp, n)
+		resolvedDevices[deviceIP] = true
+
+		// 验证解析结果不是裸 IP（应该是设备 IP 或 unmanaged: 前缀）
+		assert.True(t,
+			strings.HasPrefix(deviceIP, "unmanaged:") || n.Devices[deviceIP] != nil,
+			"LLDP 对端应解析为已知设备或标记为 unmanaged，而不是裸 IP")
+
+		// 验证解析来源正确
+		assert.Contains(t, []string{"neighbor_ip", "chassis_id", "neighbor_name", "unknown_peer"}, source)
+	}
+
+	// 验证所有设备都被正确解析（没有产生额外节点）
+	// 5 台设备应该只产生 5 个节点标识
+	expectedDevices := map[string]bool{
+		"192.168.1.1": true,
+		"192.168.1.2": true,
+		"192.168.1.3": true,
+		"192.168.1.4": true,
+		"192.168.1.5": true,
+	}
+
+	for deviceIP := range resolvedDevices {
+		if !strings.HasPrefix(deviceIP, "unmanaged:") {
+			assert.True(t, expectedDevices[deviceIP],
+				"解析结果 %s 应该是 5 台设备之一，不应产生重复节点", deviceIP)
+		}
+	}
 }

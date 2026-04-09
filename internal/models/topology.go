@@ -39,16 +39,31 @@ type TopologyGraphView struct {
 	Edges  []GraphEdge `json:"edges"`
 }
 
+// NodeType 节点类型（与 internal/taskexec/topology_models.go 保持一致）
+type NodeType string
+
+const (
+	NodeTypeManaged   NodeType = "managed"   // 已管理设备
+	NodeTypeUnmanaged NodeType = "unmanaged" // 未管理设备（LLDP发现但不在采集列表）
+	NodeTypeInferred  NodeType = "inferred"  // 推断设备（通过FDB/ARP推断）
+	NodeTypeUnknown   NodeType = "unknown"   // 未知类型
+)
+
 // GraphNode 图节点
+// 阶段3架构演进：支持NodeUUID和NodeType，区分设备类型
 type GraphNode struct {
-	ID           string `json:"id"`
-	Label        string `json:"label"`
-	IP           string `json:"ip"`
-	Vendor       string `json:"vendor"`
-	Model        string `json:"model"`
-	Role         string `json:"role"`
-	Site         string `json:"site"`
-	SerialNumber string `json:"serialNumber"`
+	ID           string   `json:"id"`       // 兼容旧版：通常为DeviceIP
+	NodeUUID     string   `json:"nodeUuid"` // 阶段3新增：全局唯一节点标识
+	Label        string   `json:"label"`
+	IP           string   `json:"ip"`
+	AllIPs       []string `json:"allIps"` // 阶段3新增：设备所有IP地址
+	Vendor       string   `json:"vendor"`
+	Model        string   `json:"model"`
+	Role         string   `json:"role"`
+	Site         string   `json:"site"`
+	SerialNumber string   `json:"serialNumber"`
+	NodeType     NodeType `json:"nodeType"`  // 阶段3新增：节点类型
+	ChassisID    string   `json:"chassisId"` // 阶段3新增：硬件标识
 }
 
 // GraphEdge 图边

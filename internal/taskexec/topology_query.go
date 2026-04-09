@@ -72,6 +72,12 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 			node.Label = strings.TrimPrefix(id, "terminal:")
 			node.Role = "terminal-inferred"
 			node.Vendor = "endpoint"
+		} else if strings.HasPrefix(id, "unmanaged:") {
+			unmanagedID := strings.TrimPrefix(id, "unmanaged:")
+			node.Label = unmanagedID
+			node.IP = unmanagedID
+			node.Role = "unmanaged"
+			node.Vendor = "unknown"
 		}
 		nodes = append(nodes, node)
 	}
