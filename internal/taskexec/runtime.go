@@ -2,9 +2,12 @@ package taskexec
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -502,6 +505,11 @@ func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *Tas
 	// 终态时强制刷新并发送全量快照，确保前端状态一致性
 	m.emitTerminalSnapshot(runtimeCtx, finalStatus)
 
+	// 生成执行报告并创建 artifact 记录
+	if finalStatus == string(RunStatusCompleted) || finalStatus == string(RunStatusPartial) || finalStatus == string(RunStatusFailed) {
+		m.generateAndPersistReport(run.ID, finalStatus)
+	}
+
 	// 发射完成事件
 	emitProjectedRunEvent(runtimeCtx, EventTypeRunFinished, EventLevelInfo, fmt.Sprintf("任务完成，状态: %s", finalStatus))
 }
@@ -997,4 +1005,93 @@ func (m *RuntimeManager) emitTerminalSnapshot(runtimeCtx *defaultRuntimeContext,
 	m.eventBus.EmitSync(event)
 
 	logger.Verbose("TaskExec", runtimeCtx.runID, "已发送终态全量快照: status=%s", finalStatus)
+}
+
+// generateAndPersistReport 生成执行报告并创建 artifact 记录
+func (m *RuntimeManager) generateAndPersistReport(runID string, finalStatus string) {
+	if m.snapshotHub == nil {
+		return
+	}
+
+	snapshot, ok := m.snapshotHub.Get(runID)
+	if !ok || snapshot == nil {
+		logger.Warn("TaskExec", runID, "无法获取快照，跳过报告生成")
+		return
+	}
+
+	// 生成报告文件
+	reportPath, err := m.exportExecutionReportCSV(runID, snapshot)
+	if err != nil {
+		logger.Error("TaskExec", runID, "生成报告失败: %v", err)
+		return
+	}
+
+	if reportPath == "" {
+		return
+	}
+
+	// 创建 artifact 记录
+	handler := NewErrorHandler(runID)
+	artifact := &TaskArtifact{
+		ID:           newArtifactID(),
+		TaskRunID:    runID,
+		StageID:      "",
+		UnitID:       "",
+		ArtifactType: string(ArtifactTypeReport),
+		ArtifactKey:  "execution_report",
+		FilePath:     reportPath,
+	}
+	handler.ArtifactBestEffort(m.repo, context.Background(), artifact)
+	logger.Info("TaskExec", runID, "执行报告已生成: %s", reportPath)
+}
+
+// exportExecutionReportCSV 生成执行报告 CSV 文件
+func (m *RuntimeManager) exportExecutionReportCSV(runID string, snapshot *ExecutionSnapshot) (string, error) {
+	if snapshot == nil {
+		return "", nil
+	}
+
+	outputDir := config.GetPathManager().GetExecutionReportDir()
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return "", fmt.Errorf("创建报告目录失败: %v", err)
+	}
+
+	reportName := fmt.Sprintf("report_%s_%s.csv", runID, time.Now().Format("20060102_150405"))
+	reportPath := filepath.Join(outputDir, reportName)
+
+	file, err := os.Create(reportPath)
+	if err != nil {
+		return "", fmt.Errorf("创建报告文件失败: %v", err)
+	}
+	defer file.Close()
+
+	// 写入 UTF-8 BOM，以防止在中文系统的 Excel 中被默认以 ANSI/GBK 格式打开导致乱码
+	file.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// 写入表头
+	if err := writer.Write([]string{"Target IP", "Final Status", "Commands Executed", "Total Commands", "Message/Error"}); err != nil {
+		return "", fmt.Errorf("写入表头失败: %v", err)
+	}
+
+	// 写入设备执行数据
+	for _, unit := range snapshot.Units {
+		if unit.TargetType != "device_ip" {
+			continue
+		}
+		row := []string{
+			unit.TargetKey,
+			unit.Status,
+			fmt.Sprintf("%d", unit.DoneSteps),
+			fmt.Sprintf("%d", unit.TotalSteps),
+			strings.ReplaceAll(strings.ReplaceAll(unit.ErrorMessage, "\r", ""), "\n", " | "),
+		}
+		if err := writer.Write(row); err != nil {
+			return "", fmt.Errorf("写入数据行失败: %v", err)
+		}
+	}
+
+	return reportPath, nil
 }
