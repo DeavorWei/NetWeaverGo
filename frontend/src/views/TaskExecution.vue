@@ -42,7 +42,28 @@
           </svg>
           创建新任务
         </button>
+        <!-- 执行详情视图时显示返回按钮，否则显示刷新按钮 -->
         <button
+          v-if="shouldShowExecutionView"
+          @click="closeExecutionView"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          返回任务列表
+        </button>
+        <button
+          v-else
           @click="refreshTaskList"
           class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
         >
@@ -398,16 +419,6 @@
                 </button>
               </div>
             </div>
-          </div>
-
-          <!-- 返回列表按钮 -->
-          <div v-if="!isRunning" class="flex-shrink-0 text-center py-2">
-            <button
-              @click="closeExecutionView"
-              class="text-sm text-accent hover:text-accent-glow transition-colors"
-            >
-              ← 返回任务列表
-            </button>
           </div>
         </div>
       </template>
@@ -1407,11 +1418,12 @@ async function syncExecutionView() {
             "aborted",
           ];
           if (terminalStatuses.includes(snapshot.status)) {
-            // 任务已完成，保留执行视图，停止轮询
+            // 任务已完成（终态），重置执行视图返回任务列表
+            // 用户离开页面后返回，应该看到任务列表而非已完成的执行详情
             console.debug(
-              `[TaskExecution] 任务已完成，保留执行视图，status=${snapshot.status}`,
+              `[TaskExecution] 任务已完成，重置执行视图，status=${snapshot.status}`,
             );
-            stopSnapshotPolling();
+            resetExecutionViewState("task-completed-on-mount");
             return;
           }
         }
