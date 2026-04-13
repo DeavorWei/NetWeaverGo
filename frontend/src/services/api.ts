@@ -181,6 +181,15 @@ export const TaskExecutionAPI = {
   listReplayableRuns: TaskExecutionUIServiceBinding.ListReplayableRuns,
   /** 获取重放历史 */
   getReplayHistory: TaskExecutionUIServiceBinding.GetReplayHistory,
+  /** 获取Raw文件预览 */
+  getRawFilePreview: TaskExecutionUIServiceBinding.GetRawFilePreview,
+  /** 列出指定设备的Raw文件 */
+  listRawFiles: TaskExecutionUIServiceBinding.ListRawFiles,
+  // 决策轨迹
+  /** 获取边解释视图（包含候选和决策轨迹） */
+  getTopologyEdgeExplain: TaskExecutionUIServiceBinding.GetTopologyEdgeExplain,
+  /** 获取运行的所有决策轨迹 */
+  getTopologyDecisionTracesByRun: TaskExecutionUIServiceBinding.GetTopologyDecisionTracesByRun,
 } as const
 
 // ==================== 拓扑命令 API ====================

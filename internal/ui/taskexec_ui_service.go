@@ -122,3 +122,23 @@ func (s *TaskExecutionUIService) ListReplayableRuns(limit int) ([]taskexec.Repla
 func (s *TaskExecutionUIService) GetReplayHistory(originalRunID string) ([]taskexec.TopologyReplayRecord, error) {
 	return s.service.GetReplayHistory(originalRunID)
 }
+
+// GetRawFilePreview 获取Raw文件预览
+func (s *TaskExecutionUIService) GetRawFilePreview(runID string, deviceIP string, commandKey string) (*taskexec.RawFilePreview, error) {
+	return s.service.GetRawFilePreview(runID, deviceIP, commandKey)
+}
+
+// ListRawFiles 列出指定设备的Raw文件
+func (s *TaskExecutionUIService) ListRawFiles(runID string, deviceIP string) ([]taskexec.RawFileInfo, error) {
+	return s.service.ListRawFiles(runID, deviceIP)
+}
+
+// GetTopologyEdgeExplain 获取边解释视图（包含候选和决策轨迹）
+func (s *TaskExecutionUIService) GetTopologyEdgeExplain(runID string, edgeID string) (*models.TopologyEdgeExplainView, error) {
+	return s.service.GetTopologyEdgeExplain(runID, edgeID)
+}
+
+// GetTopologyDecisionTracesByRun 获取运行的所有决策轨迹
+func (s *TaskExecutionUIService) GetTopologyDecisionTracesByRun(runID string) ([]models.TopologyDecisionTraceView, error) {
+	return s.service.GetTopologyDecisionTracesByRun(runID)
+}

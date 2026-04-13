@@ -807,3 +807,439 @@ func (e *ReplayExecutor) GetReplayHistory(originalRunID string) ([]TopologyRepla
 	}
 	return records, nil
 }
+
+// =============================================================================
+// 对比功能
+// =============================================================================
+
+// CompareReplayResults 对比两次运行的解析结果
+func (e *ReplayExecutor) CompareReplayResults(runID1, runID2 string) (*ParseResultDiff, error) {
+	diff := &ParseResultDiff{
+		RunID1: runID1,
+		RunID2: runID2,
+	}
+
+	// 对比 LLDP
+	lldp1, err := e.getLLDPEntries(runID1)
+	if err != nil {
+		return nil, fmt.Errorf("获取LLDP数据失败(run1): %w", err)
+	}
+	lldp2, err := e.getLLDPEntries(runID2)
+	if err != nil {
+		return nil, fmt.Errorf("获取LLDP数据失败(run2): %w", err)
+	}
+	diff.LLDPDiff = e.compareLLDP(lldp1, lldp2)
+
+	// 对比 FDB
+	fdb1, err := e.getFDBEntries(runID1)
+	if err != nil {
+		return nil, fmt.Errorf("获取FDB数据失败(run1): %w", err)
+	}
+	fdb2, err := e.getFDBEntries(runID2)
+	if err != nil {
+		return nil, fmt.Errorf("获取FDB数据失败(run2): %w", err)
+	}
+	diff.FDBDiff = e.compareFDB(fdb1, fdb2)
+
+	// 对比 ARP
+	arp1, err := e.getARPEntries(runID1)
+	if err != nil {
+		return nil, fmt.Errorf("获取ARP数据失败(run1): %w", err)
+	}
+	arp2, err := e.getARPEntries(runID2)
+	if err != nil {
+		return nil, fmt.Errorf("获取ARP数据失败(run2): %w", err)
+	}
+	diff.ARPDiff = e.compareARP(arp1, arp2)
+
+	// 对比接口
+	if1, err := e.getInterfaceEntries(runID1)
+	if err != nil {
+		return nil, fmt.Errorf("获取接口数据失败(run1): %w", err)
+	}
+	if2, err := e.getInterfaceEntries(runID2)
+	if err != nil {
+		return nil, fmt.Errorf("获取接口数据失败(run2): %w", err)
+	}
+	diff.InterfaceDiff = e.compareInterface(if1, if2)
+
+	return diff, nil
+}
+
+// CompareTopologyEdges 对比两次运行的拓扑边
+func (e *ReplayExecutor) CompareTopologyEdges(runID1, runID2 string) (*TopologyEdgeDiff, error) {
+	diff := &TopologyEdgeDiff{
+		RunID1: runID1,
+		RunID2: runID2,
+	}
+
+	// 获取边数据
+	edges1, err := e.getTopologyEdges(runID1)
+	if err != nil {
+		return nil, fmt.Errorf("获取拓扑边失败(run1): %w", err)
+	}
+	edges2, err := e.getTopologyEdges(runID2)
+	if err != nil {
+		return nil, fmt.Errorf("获取拓扑边失败(run2): %w", err)
+	}
+
+	// 构建边索引
+	edgeMap1 := make(map[string]*TaskTopologyEdge)
+	for _, edge := range edges1 {
+		key := e.edgeKey(edge.ADeviceID, edge.AIf, edge.BDeviceID, edge.BIf)
+		edgeMap1[key] = &edge
+	}
+
+	edgeMap2 := make(map[string]*TaskTopologyEdge)
+	for _, edge := range edges2 {
+		key := e.edgeKey(edge.ADeviceID, edge.AIf, edge.BDeviceID, edge.BIf)
+		edgeMap2[key] = &edge
+	}
+
+	// 查找差异
+	for key, edge1 := range edgeMap1 {
+		if edge2, exists := edgeMap2[key]; exists {
+			// 两边都存在，检查是否修改
+			if edge1.Status != edge2.Status || edge1.Confidence != edge2.Confidence {
+				diff.ModifiedEdges = append(diff.ModifiedEdges, EdgeDiffItem{
+					ADeviceID:  edge1.ADeviceID,
+					AIf:        edge1.AIf,
+					BDeviceID:  edge1.BDeviceID,
+					BIf:        edge1.BIf,
+					Status:     edge2.Status,
+					Confidence: edge2.Confidence,
+					EdgeType:   edge2.EdgeType,
+				})
+			} else {
+				diff.UnchangedCount++
+			}
+		} else {
+			// 只在run1中存在，已删除
+			diff.RemovedEdges = append(diff.RemovedEdges, EdgeDiffItem{
+				ADeviceID:  edge1.ADeviceID,
+				AIf:        edge1.AIf,
+				BDeviceID:  edge1.BDeviceID,
+				BIf:        edge1.BIf,
+				Status:     edge1.Status,
+				Confidence: edge1.Confidence,
+				EdgeType:   edge1.EdgeType,
+			})
+		}
+	}
+
+	for key, edge2 := range edgeMap2 {
+		if _, exists := edgeMap1[key]; !exists {
+			// 只在run2中存在，新增
+			diff.AddedEdges = append(diff.AddedEdges, EdgeDiffItem{
+				ADeviceID:  edge2.ADeviceID,
+				AIf:        edge2.AIf,
+				BDeviceID:  edge2.BDeviceID,
+				BIf:        edge2.BIf,
+				Status:     edge2.Status,
+				Confidence: edge2.Confidence,
+				EdgeType:   edge2.EdgeType,
+			})
+		}
+	}
+
+	return diff, nil
+}
+
+// =============================================================================
+// 对比辅助方法
+// =============================================================================
+
+func (e *ReplayExecutor) getLLDPEntries(runID string) ([]TaskParsedLLDPNeighbor, error) {
+	var entries []TaskParsedLLDPNeighbor
+	if err := e.db.Where("task_run_id = ?", runID).Find(&entries).Error; err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func (e *ReplayExecutor) getFDBEntries(runID string) ([]TaskParsedFDBEntry, error) {
+	var entries []TaskParsedFDBEntry
+	if err := e.db.Where("task_run_id = ?", runID).Find(&entries).Error; err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func (e *ReplayExecutor) getARPEntries(runID string) ([]TaskParsedARPEntry, error) {
+	var entries []TaskParsedARPEntry
+	if err := e.db.Where("task_run_id = ?", runID).Find(&entries).Error; err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func (e *ReplayExecutor) getInterfaceEntries(runID string) ([]TaskParsedInterface, error) {
+	var entries []TaskParsedInterface
+	if err := e.db.Where("task_run_id = ?", runID).Find(&entries).Error; err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func (e *ReplayExecutor) getTopologyEdges(runID string) ([]TaskTopologyEdge, error) {
+	var edges []TaskTopologyEdge
+	if err := e.db.Where("task_run_id = ?", runID).Find(&edges).Error; err != nil {
+		return nil, err
+	}
+	return edges, nil
+}
+
+func (e *ReplayExecutor) compareLLDP(entries1, entries2 []TaskParsedLLDPNeighbor) LLDPDiffSummary {
+	diff := LLDPDiffSummary{}
+
+	// 构建索引：使用 DeviceIP + LocalInterface + NeighborChassis 作为唯一标识
+	map1 := make(map[string]*TaskParsedLLDPNeighbor)
+	for i, e := range entries1 {
+		key := fmt.Sprintf("%s|%s|%s", e.DeviceIP, e.LocalInterface, e.NeighborChassis)
+		map1[key] = &entries1[i]
+	}
+
+	map2 := make(map[string]*TaskParsedLLDPNeighbor)
+	for i, e := range entries2 {
+		key := fmt.Sprintf("%s|%s|%s", e.DeviceIP, e.LocalInterface, e.NeighborChassis)
+		map2[key] = &entries2[i]
+	}
+
+	for key, e1 := range map1 {
+		if e2, exists := map2[key]; exists {
+			// 检查是否修改（比较NeighborPort等字段）
+			if e1.NeighborPort != e2.NeighborPort || e1.NeighborName != e2.NeighborName || e1.NeighborIP != e2.NeighborIP {
+				diff.Modified++
+			} else {
+				diff.Unchanged++
+			}
+		} else {
+			diff.OnlyIn1++
+		}
+	}
+
+	for key := range map2 {
+		if _, exists := map1[key]; !exists {
+			diff.OnlyIn2++
+		}
+	}
+
+	return diff
+}
+
+func (e *ReplayExecutor) compareFDB(entries1, entries2 []TaskParsedFDBEntry) FDBDiffSummary {
+	diff := FDBDiffSummary{}
+
+	// 使用 DeviceIP + MACAddress + VLAN 作为唯一标识
+	map1 := make(map[string]*TaskParsedFDBEntry)
+	for i, e := range entries1 {
+		key := fmt.Sprintf("%s|%s|%d", e.DeviceIP, e.MACAddress, e.VLAN)
+		map1[key] = &entries1[i]
+	}
+
+	map2 := make(map[string]*TaskParsedFDBEntry)
+	for i, e := range entries2 {
+		key := fmt.Sprintf("%s|%s|%d", e.DeviceIP, e.MACAddress, e.VLAN)
+		map2[key] = &entries2[i]
+	}
+
+	for key, e1 := range map1 {
+		if e2, exists := map2[key]; exists {
+			// 检查是否修改（比较Interface, Type）
+			if e1.Interface != e2.Interface || e1.Type != e2.Type {
+				diff.Modified++
+			} else {
+				diff.Unchanged++
+			}
+		} else {
+			diff.OnlyIn1++
+		}
+	}
+
+	for key := range map2 {
+		if _, exists := map1[key]; !exists {
+			diff.OnlyIn2++
+		}
+	}
+
+	return diff
+}
+
+func (e *ReplayExecutor) compareARP(entries1, entries2 []TaskParsedARPEntry) ARPDiffSummary {
+	diff := ARPDiffSummary{}
+
+	// 使用 DeviceIP + IPAddress + MACAddress 作为唯一标识
+	map1 := make(map[string]*TaskParsedARPEntry)
+	for i, e := range entries1 {
+		key := fmt.Sprintf("%s|%s|%s", e.DeviceIP, e.IPAddress, e.MACAddress)
+		map1[key] = &entries1[i]
+	}
+
+	map2 := make(map[string]*TaskParsedARPEntry)
+	for i, e := range entries2 {
+		key := fmt.Sprintf("%s|%s|%s", e.DeviceIP, e.IPAddress, e.MACAddress)
+		map2[key] = &entries2[i]
+	}
+
+	for key, e1 := range map1 {
+		if e2, exists := map2[key]; exists {
+			// 检查是否修改（比较Interface, Type）
+			if e1.Interface != e2.Interface || e1.Type != e2.Type {
+				diff.Modified++
+			} else {
+				diff.Unchanged++
+			}
+		} else {
+			diff.OnlyIn1++
+		}
+	}
+
+	for key := range map2 {
+		if _, exists := map1[key]; !exists {
+			diff.OnlyIn2++
+		}
+	}
+
+	return diff
+}
+
+func (e *ReplayExecutor) compareInterface(entries1, entries2 []TaskParsedInterface) InterfaceDiffSummary {
+	diff := InterfaceDiffSummary{}
+
+	// 使用 DeviceIP + InterfaceName 作为唯一标识
+	map1 := make(map[string]*TaskParsedInterface)
+	for i, e := range entries1 {
+		key := fmt.Sprintf("%s|%s", e.DeviceIP, e.InterfaceName)
+		map1[key] = &entries1[i]
+	}
+
+	map2 := make(map[string]*TaskParsedInterface)
+	for i, e := range entries2 {
+		key := fmt.Sprintf("%s|%s", e.DeviceIP, e.InterfaceName)
+		map2[key] = &entries2[i]
+	}
+
+	for key, e1 := range map1 {
+		if e2, exists := map2[key]; exists {
+			// 检查是否修改（比较Description, Status, Speed等）
+			if e1.Description != e2.Description || e1.Status != e2.Status || e1.Speed != e2.Speed {
+				diff.Modified++
+			} else {
+				diff.Unchanged++
+			}
+		} else {
+			diff.OnlyIn1++
+		}
+	}
+
+	for key := range map2 {
+		if _, exists := map1[key]; !exists {
+			diff.OnlyIn2++
+		}
+	}
+
+	return diff
+}
+
+func (e *ReplayExecutor) edgeKey(aDevice, aIf, bDevice, bIf string) string {
+	// 保证边的方向一致性（较小的设备ID在前）
+	if aDevice < bDevice {
+		return fmt.Sprintf("%s|%s|%s|%s", aDevice, aIf, bDevice, bIf)
+	}
+	return fmt.Sprintf("%s|%s|%s|%s", bDevice, bIf, aDevice, aIf)
+}
+
+// =============================================================================
+// Raw文件预览功能
+// =============================================================================
+
+// RawFilePreview Raw文件预览结果
+type RawFilePreview struct {
+	DeviceIP   string `json:"deviceIp"`
+	CommandKey string `json:"commandKey"`
+	FilePath   string `json:"filePath"`
+	Content    string `json:"content"`
+	Size       int64  `json:"size"`
+	Exists     bool   `json:"exists"`
+}
+
+// GetRawFilePreview 获取Raw文件预览
+func (e *ReplayExecutor) GetRawFilePreview(runID, deviceIP, commandKey string) (*RawFilePreview, error) {
+	preview := &RawFilePreview{
+		DeviceIP:   deviceIP,
+		CommandKey: commandKey,
+		Exists:     false,
+	}
+
+	// 构建文件路径
+	rawDir := filepath.Join(e.pathManager.TopologyRawDir, runID, deviceIP)
+	filePath := filepath.Join(rawDir, commandKey+"_raw.txt")
+
+	// 检查文件是否存在
+	info, err := os.Stat(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return preview, nil
+		}
+		return nil, fmt.Errorf("获取文件信息失败: %w", err)
+	}
+
+	preview.FilePath = filePath
+	preview.Size = info.Size()
+	preview.Exists = true
+
+	// 读取文件内容（限制大小，避免内存溢出）
+	const maxSize = 10 * 1024 * 1024 // 10MB
+	if info.Size() > maxSize {
+		// 只读取前10MB
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("读取文件失败: %w", err)
+		}
+		preview.Content = string(content[:maxSize]) + "\n... (文件过大，已截断)"
+	} else {
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("读取文件失败: %w", err)
+		}
+		preview.Content = string(content)
+	}
+
+	return preview, nil
+}
+
+// ListRawFiles 列出指定设备和运行ID的所有Raw文件
+func (e *ReplayExecutor) ListRawFiles(runID, deviceIP string) ([]RawFileInfo, error) {
+	rawDir := filepath.Join(e.pathManager.TopologyRawDir, runID, deviceIP)
+
+	if _, err := os.Stat(rawDir); os.IsNotExist(err) {
+		return []RawFileInfo{}, nil
+	}
+
+	var files []RawFileInfo
+	err := filepath.Walk(rawDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		if strings.HasSuffix(info.Name(), "_raw.txt") {
+			commandKey := strings.TrimSuffix(info.Name(), "_raw.txt")
+			files = append(files, RawFileInfo{
+				DeviceIP:   deviceIP,
+				CommandKey: commandKey,
+				FilePath:   path,
+				FileSize:   info.Size(),
+			})
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("扫描Raw文件失败: %w", err)
+	}
+
+	return files, nil
+}

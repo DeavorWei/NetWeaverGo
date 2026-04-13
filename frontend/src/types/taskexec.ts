@@ -217,5 +217,22 @@ export interface TopologyReplayRecord {
   errorMessage: string
   statistics: string
   createdAt: string
-  updatedAt: string
+}
+
+/** Raw文件信息 */
+export interface RawFileInfo {
+  deviceIp: string
+  commandKey: string
+  filePath: string
+  fileSize: number
+}
+
+/** Raw文件预览 */
+export interface RawFilePreview {
+  deviceIp: string
+  commandKey: string
+  filePath: string
+  content: string
+  size: number
+  exists: boolean
 }
