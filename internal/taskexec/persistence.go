@@ -499,6 +499,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&TaskParsedAggregateGroup{},
 		&TaskParsedAggregateMember{},
 		&TaskTopologyEdge{},
+		// 离线重放模式新增表
+		&TopologyReplayRecord{},
 	)
 }
 

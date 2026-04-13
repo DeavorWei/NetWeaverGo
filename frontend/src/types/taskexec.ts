@@ -142,3 +142,80 @@ export const StatusBgClasses: Record<string, string> = {
   'aborted': 'bg-error/20',
   'skipped': 'bg-bg-panel'
 }
+
+// =============================================================================
+// 离线重放模式类型定义
+// =============================================================================
+
+/** 重放选项 */
+export interface ReplayOptions {
+  /** 是否清除现有解析结果后重新构建 */
+  clearExisting: boolean
+  /** 指定解析器版本（空则使用当前版本） */
+  parserVersion: string
+  /** 指定要重放的设备列表（空则重放所有设备） */
+  deviceIps: string[]
+  /** 是否跳过构建阶段（仅执行解析） */
+  skipBuild: boolean
+}
+
+/** 重放统计信息 */
+export interface ReplayStatistics {
+  totalRawFiles: number
+  totalDevices: number
+  totalCommandKeys: number
+  parsedDevices: number
+  parsedCommands: number
+  failedCommands: number
+  lldpCount: number
+  fdbCount: number
+  arpCount: number
+  interfaceCount: number
+  totalCandidates: number
+  retainedEdges: number
+  rejectedEdges: number
+  conflictEdges: number
+  scanDurationMs: number
+  parseDurationMs: number
+  buildDurationMs: number
+  totalDurationMs: number
+}
+
+/** 重放结果 */
+export interface ReplayResult {
+  replayRunId: string
+  status: string
+  statistics: ReplayStatistics
+  errors: string[]
+  startedAt: string
+  finishedAt: string
+}
+
+/** 可重放的运行信息 */
+export interface ReplayableRunInfo {
+  runId: string
+  taskName: string
+  status: string
+  runKind: string
+  deviceCount: number
+  rawFileCount: number
+  createdAt: string
+  hasRawFiles: boolean
+}
+
+/** 重放记录 */
+export interface TopologyReplayRecord {
+  id: number
+  originalRunId: string
+  replayRunId: string
+  status: string
+  triggerSource: string
+  parserVersion: string
+  builderVersion: string
+  startedAt?: string | null
+  finishedAt?: string | null
+  errorMessage: string
+  statistics: string
+  createdAt: string
+  updatedAt: string
+}
