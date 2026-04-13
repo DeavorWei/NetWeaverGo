@@ -14,16 +14,19 @@
 
 LLDP 邻居信息从设备采集后，解析器正确提取了以下字段：
 
-**文件**: [`internal/parser/models.go:40-42`](internal/parser/models.go:40)
+**文件**: [`internal/parser/models.go:37-47`](internal/parser/models.go:37)
 
 ```go
+// LLDPFact LLDP邻居信息
 type LLDPFact struct {
     LocalInterface  string `json:"localInterface"`  // 本地接口
     NeighborName    string `json:"neighborName"`    // 邻居设备名
-    NeighborChassis string `json:"neighborChassis"` // 邻居机箱ID (MAC)
+    NeighborChassis string `json:"neighborChassis"` // 邻居机箱ID
     NeighborPort    string `json:"neighborPort"`    // 邻居端口
-    NeighborIP      string `json:"neighborIp"`      // 邻居IP
+    NeighborIP      string `json:"neighborIp"`      // 邻居管理IP
     NeighborDesc    string `json:"neighborDesc"`    // 邻居描述
+    CommandKey      string `json:"commandKey"`      // 来源命令
+    RawRefID        string `json:"rawRefId"`        // 原始输出引用ID
 }
 ```
 
@@ -31,17 +34,23 @@ type LLDPFact struct {
 
 LLDP 事实存储到数据库时，包含完整字段：
 
-**文件**: [`internal/taskexec/topology_models.go:128-143`](internal/taskexec/topology_models.go:128)
+**文件**: [`internal/taskexec/topology_models.go:128-147`](internal/taskexec/topology_models.go:128)
 
 ```go
 type TaskParsedLLDPNeighbor struct {
-    LocalInterface  string `json:"localInterface"`
-    NeighborName    string `json:"neighborName"`
-    NeighborChassis string `json:"neighborChassis"`  // MAC 地址
-    NeighborPort    string `json:"neighborPort"`
-    NeighborIP      string `json:"neighborIp"`
-    NeighborDesc    string `json:"neighborDesc"`
-    // ...
+    ID              uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+    TaskRunID       string    `gorm:"index;not null" json:"taskRunId"`
+    DeviceIP        string    `gorm:"index;not null" json:"deviceIp"`
+    LocalInterface  string    `gorm:"index" json:"localInterface"`
+    NeighborName    string    `json:"neighborName"`
+    NeighborChassis string    `json:"neighborChassis"`
+    NeighborPort    string    `json:"neighborPort"`
+    NeighborIP      string    `json:"neighborIp"`
+    NeighborDesc    string    `json:"neighborDesc"`
+    CommandKey      string    `json:"commandKey"`
+    RawRefID        string    `json:"rawRefId"`
+    CreatedAt       time.Time `json:"createdAt"`
+    UpdatedAt       time.Time `json:"updatedAt"`
 }
 ```
 
@@ -52,6 +61,7 @@ type TaskParsedLLDPNeighbor struct {
 **文件**: [`internal/taskexec/topology_builder.go:459-472`](internal/taskexec/topology_builder.go:459)
 
 ```go
+// 构建证据
 evidence := EdgeEvidence{
     Type:       "lldp",
     Source:     "lldp",
@@ -63,15 +73,36 @@ evidence := EdgeEvidence{
     RemoteIf:   remoteIf,              // ✅ 远端接口
     RemoteMAC:  lldp.NeighborChassis,  // ✅ MAC 地址
     RemoteIP:   lldp.NeighborIP,       // ✅ IP 地址
-    Summary:    fmt.Sprintf("..."),
+    Summary:    fmt.Sprintf("LLDP %s -> %s(%s)", chooseValue(localLogicalIf, lldp.LocalIf), lldp.NeighborName, chooseValue(remoteLogicalIf, remoteIf)),
 }
 ```
 
 ### 4. 数据模型层（完整）
 
-边证据模型定义了完整字段：
+边证据模型在 DTO 层和运行时模型层都有完整定义：
 
-**文件**: [`internal/taskexec/topology_models.go:250-263`](internal/taskexec/topology_models.go:250)
+**DTO 层**: [`internal/models/topology.go:6-21`](internal/models/topology.go:6)
+
+```go
+// EdgeEvidence 链路证据
+// 仅作为统一运行时拓扑详情视图的嵌套 DTO。
+type EdgeEvidence struct {
+    Type       string `json:"type"`
+    DeviceID   string `json:"deviceId"`
+    Command    string `json:"command"`
+    RawRefID   string `json:"rawRefId"`
+    Summary    string `json:"summary"`
+    Source     string `json:"source"`
+    LocalIf    string `json:"localIf"`
+    RemoteName string `json:"remoteName"`  // ✅ 已定义
+    RemoteIf   string `json:"remoteIf"`    // ✅ 已定义
+    RemoteMAC  string `json:"remoteMac"`   // ✅ 已定义
+    RemoteIP   string `json:"remoteIp"`    // ✅ 已定义
+    Timestamp  string `json:"timestamp,omitempty"`
+}
+```
+
+**运行时模型层**: [`internal/taskexec/topology_models.go:250-263`](internal/taskexec/topology_models.go:250)
 
 ```go
 type EdgeEvidence struct {
@@ -90,36 +121,122 @@ type EdgeEvidence struct {
 }
 ```
 
-### 5. API 返回层（完整）
+### 5. API 转换层（完整）
+
+运行时模型转换为 DTO 模型时，完整保留所有字段：
+
+**文件**: [`internal/taskexec/topology_query.go:452-471`](internal/taskexec/topology_query.go:452)
+
+```go
+func convertToModelEvidence(items []EdgeEvidence) []models.EdgeEvidence {
+    result := make([]models.EdgeEvidence, 0, len(items))
+    for _, e := range items {
+        result = append(result, models.EdgeEvidence{
+            Type:       e.Type,
+            DeviceID:   e.DeviceID,
+            Command:    e.Command,
+            RawRefID:   e.RawRefID,
+            Summary:    e.Summary,
+            Source:     e.Source,
+            LocalIf:    e.LocalIf,
+            RemoteName: e.RemoteName,  // ✅ 完整转换
+            RemoteIf:   e.RemoteIf,    // ✅ 完整转换
+            RemoteMAC:  e.RemoteMAC,   // ✅ 完整转换
+            RemoteIP:   e.RemoteIP,    // ✅ 完整转换
+            Timestamp:  e.Timestamp,
+        })
+    }
+    return result
+}
+```
+
+### 6. API 返回层（完整）
 
 查询接口正确返回边详情：
 
-**文件**: [`internal/taskexec/topology_query.go:121-144`](internal/taskexec/topology_query.go:121)
+**文件**: [`internal/taskexec/topology_query.go:121-145`](internal/taskexec/topology_query.go:121)
 
 ```go
 func (s *TaskExecutionService) GetTopologyEdgeDetail(runID, edgeID string) (*models.TopologyEdgeDetailView, error) {
-    // ...
+    var edge TaskTopologyEdge
+    if err := s.db.Where("task_run_id = ? AND id = ?", runID, edgeID).First(&edge).Error; err != nil {
+        return nil, err
+    }
+
     return &models.TopologyEdgeDetailView{
-        // ...
-        Evidence: convertToModelEvidence(edge.Evidence),  // ✅ 包含完整证据
-        // ...
+        ID:                  edge.ID,
+        ADevice:             s.getGraphNode(runID, edge.ADeviceID),
+        AIf:                 edge.AIf,
+        LogicalAIf:          edge.LogicalAIf,
+        BDevice:             s.getGraphNode(runID, edge.BDeviceID),
+        BIf:                 edge.BIf,
+        LogicalBIf:          edge.LogicalBIf,
+        EdgeType:            edge.EdgeType,
+        Status:              edge.Status,
+        Confidence:          edge.Confidence,
+        DiscoveryMethods:    append([]string(nil), edge.DiscoveryMethods...),
+        Evidence:            convertToModelEvidence(edge.Evidence),  // ✅ 包含完整证据
+        ConfidenceBreakdown: edge.ConfidenceBreakdown,
+        DecisionReason:      edge.DecisionReason,
+        CandidateID:         edge.CandidateID,
+        TraceID:             edge.TraceID,
     }, nil
 }
 ```
 
-### 6. 前端显示层（问题所在）
+### 7. 前端类型定义层（完整）
 
-**文件**: [`frontend/src/views/Topology.vue:311-326`](frontend/src/views/Topology.vue:311)
+前端 TypeScript 绑定文件已正确定义了完整的 `EdgeEvidence` 类型：
+
+**文件**: [`frontend/src/bindings/github.com/NetWeaverGo/core/internal/models/models.ts:570-634`](frontend/src/bindings/github.com/NetWeaverGo/core/internal/models/models.ts:570)
+
+```typescript
+/**
+ * EdgeEvidence 链路证据
+ * 仅作为统一运行时拓扑详情视图的嵌套 DTO。
+ */
+export class EdgeEvidence {
+  "type": string;
+  "deviceId": string;
+  "command": string;
+  "rawRefId": string;
+  "summary": string;
+  "source": string;
+  "localIf": string;
+  "remoteName": string; // ✅ 已定义
+  "remoteIf": string; // ✅ 已定义
+  "remoteMac": string; // ✅ 已定义
+  "remoteIp": string; // ✅ 已定义
+  "timestamp"?: string;
+
+  /** Creates a new EdgeEvidence instance. */
+  constructor($$source: Partial<EdgeEvidence> = {}) {
+    // ... 构造函数实现
+  }
+}
+```
+
+### 8. 前端显示层（问题所在）
+
+**文件**: [`frontend/src/views/Topology.vue:322-336`](frontend/src/views/Topology.vue:322)
 
 前端在显示证据时，只展示了部分字段：
 
 ```vue
-<div v-for="(ev, idx) in edgeDetail.evidence" :key="idx" class="text-xs bg-bg-panel border border-border rounded px-2 py-1">
-  <div class="text-text-primary">
-    {{ ev.type }} | {{ ev.summary || "-" }}
-  </div>
-  <div class="text-text-muted font-mono">
-    device={{ ev.deviceId }} cmd={{ ev.command }} raw={{ ev.rawRefId }}
+<div class="space-y-1 max-h-[220px] overflow-auto scrollbar-custom">
+  <div
+    v-for="(ev, idx) in edgeDetail.evidence"
+    :key="idx"
+    class="text-xs bg-bg-panel border border-border rounded px-2 py-1"
+  >
+    <div class="text-text-primary">
+      {{ ev.type }} | {{ ev.summary || "-" }}
+    </div>
+    <div class="text-text-muted font-mono">
+      device={{ ev.deviceId }} cmd={{ ev.command }} raw={{
+        ev.rawRefId
+      }}
+    </div>
   </div>
 </div>
 ```
@@ -139,22 +256,28 @@ func (s *TaskExecutionService) GetTopologyEdgeDetail(runID, edgeID string) (*mod
 
 ### 方案一：增强前端证据显示（推荐）
 
-修改 [`frontend/src/views/Topology.vue`](frontend/src/views/Topology.vue:311) 的证据显示区域，增加互联详情展示：
+修改 [`frontend/src/views/Topology.vue`](frontend/src/views/Topology.vue:322) 的证据显示区域，增加互联详情展示：
 
 ```vue
-<div v-for="(ev, idx) in edgeDetail.evidence" :key="idx" class="text-xs bg-bg-panel border border-border rounded px-2 py-1">
-  <div class="text-text-primary">
-    {{ ev.type }} | {{ ev.summary || "-" }}
-  </div>
-  <div class="text-text-muted font-mono">
-    device={{ ev.deviceId }} cmd={{ ev.command }} raw={{ ev.rawRefId }}
-  </div>
-  <!-- 新增：互联详情 -->
-  <div v-if="ev.remoteName || ev.remoteIf || ev.remoteMac || ev.remoteIp" class="text-text-muted font-mono mt-1 pt-1 border-t border-border">
-    <span v-if="ev.remoteName">远端设备: {{ ev.remoteName }}</span>
-    <span v-if="ev.remoteIf"> | 接口: {{ ev.remoteIf }}</span>
-    <span v-if="ev.remoteMac"> | MAC: {{ ev.remoteMac }}</span>
-    <span v-if="ev.remoteIp"> | IP: {{ ev.remoteIp }}</span>
+<div class="space-y-1 max-h-[220px] overflow-auto scrollbar-custom">
+  <div
+    v-for="(ev, idx) in edgeDetail.evidence"
+    :key="idx"
+    class="text-xs bg-bg-panel border border-border rounded px-2 py-1"
+  >
+    <div class="text-text-primary">
+      {{ ev.type }} | {{ ev.summary || "-" }}
+    </div>
+    <div class="text-text-muted font-mono">
+      device={{ ev.deviceId }} cmd={{ ev.command }} raw={{ ev.rawRefId }}
+    </div>
+    <!-- 新增：互联详情 -->
+    <div v-if="ev.remoteName || ev.remoteIf || ev.remoteMac || ev.remoteIp" class="text-text-muted font-mono mt-1 pt-1 border-t border-border">
+      <span v-if="ev.remoteName">远端设备: {{ ev.remoteName }}</span>
+      <span v-if="ev.remoteIf"> | 接口: {{ ev.remoteIf }}</span>
+      <span v-if="ev.remoteMac"> | MAC: {{ ev.remoteMac }}</span>
+      <span v-if="ev.remoteIp"> | IP: {{ ev.remoteIp }}</span>
+    </div>
   </div>
 </div>
 ```
@@ -211,21 +334,30 @@ flowchart TB
         F --> G[TaskTopologyEdge 表]
     end
 
+    subgraph API转换层
+        G --> H[convertToModelEvidence]
+        H --> I[models.EdgeEvidence DTO]
+    end
+
     subgraph API层
-        G --> H[GetTopologyEdgeDetail]
-        H --> I[TopologyEdgeDetailView JSON]
+        I --> J[GetTopologyEdgeDetail]
+        J --> K[TopologyEdgeDetailView JSON]
     end
 
-    subgraph 前端层
-        I --> J[Topology.vue]
-        J --> K[证据显示区域]
-        K --> L{显示完整?}
-        L -->|否| M[❌ 缺失 remoteMac/remoteIp 等]
-        L -->|修复后| N[✅ 显示完整互联信息]
+    subgraph 前端类型层
+        K --> L[EdgeEvidence TypeScript 类型]
     end
 
-    style M fill:#ffcccc
-    style N fill:#ccffcc
+    subgraph 前端显示层
+        L --> M[Topology.vue]
+        M --> N[证据显示区域]
+        N --> O{显示完整?}
+        O -->|否| P[❌ 缺失 remoteMac/remoteIp 等]
+        O -->|修复后| Q[✅ 显示完整互联信息]
+    end
+
+    style P fill:#ffcccc
+    style Q fill:#ccffcc
 ```
 
 ## 影响范围
@@ -234,7 +366,7 @@ flowchart TB
 | ---- | --------------------------------- | ------------------------------ |
 | 前端 | `frontend/src/views/Topology.vue` | 增强证据显示，添加互联详情字段 |
 
-后端无需修改，数据已完整。
+后端无需修改，数据已完整。前端类型定义也已完整，仅需修改显示组件。
 
 ## 验证方法
 
@@ -246,14 +378,39 @@ flowchart TB
    - 远端 MAC 地址
    - 远端 IP 地址
 
+## 补充说明：数据链路完整性验证
+
+### LLDP 数据流转完整路径
+
+| 层级       | 文件/位置                                   | 数据结构               | remoteName | remoteIf | remoteMac | remoteIp |
+| ---------- | ------------------------------------------- | ---------------------- | :--------: | :------: | :-------: | :------: |
+| 采集解析   | `internal/parser/models.go:37`              | LLDPFact               |     ✅     |    ✅    |    ✅     |    ✅    |
+| 数据存储   | `internal/taskexec/topology_models.go:128`  | TaskParsedLLDPNeighbor |     ✅     |    ✅    |    ✅     |    ✅    |
+| 拓扑构建   | `internal/taskexec/topology_builder.go:459` | EdgeEvidence           |     ✅     |    ✅    |    ✅     |    ✅    |
+| 运行时模型 | `internal/taskexec/topology_models.go:250`  | EdgeEvidence           |     ✅     |    ✅    |    ✅     |    ✅    |
+| DTO模型    | `internal/models/topology.go:6`             | EdgeEvidence           |     ✅     |    ✅    |    ✅     |    ✅    |
+| API转换    | `internal/taskexec/topology_query.go:452`   | convertToModelEvidence |     ✅     |    ✅    |    ✅     |    ✅    |
+| 前端绑定   | `frontend/src/bindings/.../models.ts:570`   | EdgeEvidence           |     ✅     |    ✅    |    ✅     |    ✅    |
+| 前端显示   | `frontend/src/views/Topology.vue:322`       | 模板渲染               |     ❌     |    ❌    |    ❌     |    ❌    |
+
+### 问题定位确认
+
+通过全链路代码审查确认：
+
+1. **后端数据链路 100% 完整**：从 LLDP 解析到 API 返回，所有字段均被正确传递
+2. **前端类型定义完整**：TypeScript 绑定文件包含所有字段
+3. **唯一缺失点**：`Topology.vue` 第 328-336 行的模板渲染仅显示部分字段
+
 ## 总结
 
-| 项目     | 状态            |
-| -------- | --------------- |
-| 数据采集 | ✅ 完整         |
-| 数据存储 | ✅ 完整         |
-| 数据模型 | ✅ 完整         |
-| API 返回 | ✅ 完整         |
-| 前端显示 | ❌ 缺失关键字段 |
+| 项目         | 状态            |
+| ------------ | --------------- |
+| 数据采集     | ✅ 完整         |
+| 数据存储     | ✅ 完整         |
+| 数据模型     | ✅ 完整         |
+| API转换层    | ✅ 完整         |
+| API 返回     | ✅ 完整         |
+| 前端类型定义 | ✅ 完整         |
+| 前端显示     | ❌ 缺失关键字段 |
 
-**结论**：问题出在前端显示层，后端数据链路完整。只需修改前端 `Topology.vue` 即可解决问题。
+**结论**：问题出在前端显示层，后端数据链路完整，前端类型定义也已完整。只需修改前端 `Topology.vue` 的显示逻辑即可解决问题。
