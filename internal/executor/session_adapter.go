@@ -24,13 +24,15 @@ type SessionAdapter struct {
 
 // NewSessionAdapter 创建新的会话适配器
 func NewSessionAdapter(width int, commands []string, m *matcher.StreamMatcher) *SessionAdapter {
+	reducer := NewSessionReducer(commands, m)
+
 	adapter := &SessionAdapter{
 		detector:          NewSessionDetector(m),
-		reducer:           NewSessionReducer(commands, m),
+		reducer:           reducer,
 		replayer:          terminal.NewReplayer(width),
 		matcher:           m,
-		newState:          NewStateInitAwaitPrompt,
-		newContext:        NewSessionContext(commands),
+		newState:          reducer.State(),     // 使用 reducer 的状态
+		newContext:        reducer.Context(),   // 复用 reducer 的上下文，避免双实例问题
 		newCommittedLines: make([]string, 0),
 	}
 
@@ -39,6 +41,11 @@ func NewSessionAdapter(width int, commands []string, m *matcher.StreamMatcher) *
 
 // FeedTransitionBatch 消费原始 chunk，返回 reducer 批次结果。
 func (a *SessionAdapter) FeedTransitionBatch(chunk string) *TransitionBatch {
+	// 当存在活跃命令时，将原始 chunk 追加到当前命令的 RawBuffer
+	if a.newContext.Current != nil {
+		a.newContext.Current.AppendRawData([]byte(chunk))
+	}
+
 	// 1. 使用 Replayer 处理 chunk
 	events := a.replayer.Process(chunk)
 	newLines := make([]string, 0)

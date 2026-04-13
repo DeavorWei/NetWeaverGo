@@ -30,7 +30,18 @@
         >
           刷新图谱
         </button>
-        <!-- 构建按钮已移除：新架构下拓扑自动构建 -->
+        <!-- 离线重放按钮 -->
+        <button
+          @click="openReplayDialog"
+          :disabled="!selectedRunId"
+          class="px-4 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 disabled:opacity-50"
+          title="从历史Raw文件重新解析构建拓扑"
+        >
+          <svg class="w-4 h-4 inline mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          离线重放
+        </button>
       </div>
     </div>
 
@@ -365,6 +376,15 @@
       </div>
     </div>
   </div>
+
+  <!-- 离线重放对话框 -->
+  <ReplayDialog
+    :visible="showReplayDialog"
+    :original-run-id="selectedRunId"
+    :run-info="replayRunInfo"
+    @close="showReplayDialog = false"
+    @complete="handleReplayComplete"
+  />
 </template>
 
 <script setup lang="ts">
@@ -377,13 +397,18 @@ import {
   type TopologyGraphView,
 } from "../services/api";
 import { useTaskexecStore } from "../stores/taskexecStore";
-import { StatusNames } from "../types/taskexec";
+import { StatusNames, type ReplayableRunInfo } from "../types/taskexec";
 import TopologyGraph from "../components/topology/TopologyGraph.vue";
+import ReplayDialog from "../components/topology/ReplayDialog.vue";
 
 // 阶段4: 统一执行框架 - 使用runId替代taskId
 const taskexecStore = useTaskexecStore();
 const selectedRunId = ref("");
 const lastGraphLoadAt = ref<string>("");
+
+// 离线重放对话框状态
+const showReplayDialog = ref(false);
+const replayRunInfo = ref<ReplayableRunInfo | null>(null);
 
 // 计算属性：筛选拓扑类型的运行
 const topologyRuns = computed(() => {
@@ -718,4 +743,33 @@ watch(selectedRunId, (value) => {
 onMounted(() => {
   void loadTasks();
 });
+
+// 离线重放功能
+function openReplayDialog() {
+  if (!selectedRunId.value) return;
+  
+  // 构建可重放运行信息
+  const run = selectedRun.value;
+  if (run) {
+    replayRunInfo.value = {
+      runId: run.runId,
+      taskName: run.taskName || run.runId,
+      status: run.status,
+      runKind: run.runKind,
+      deviceCount: 0, // 将由对话框加载
+      rawFileCount: 0, // 将由对话框加载
+      createdAt: run.startedAt || new Date().toISOString(),
+      hasRawFiles: true // 假设已选择运行都有Raw文件
+    };
+  }
+  showReplayDialog.value = true;
+}
+
+function handleReplayComplete(result: { replayRunId: string }) {
+  showReplayDialog.value = false;
+  // 切换到新的重放运行ID
+  selectedRunId.value = result.replayRunId;
+  // 刷新历史记录
+  void loadTasks();
+}
 </script>

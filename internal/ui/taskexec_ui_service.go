@@ -102,3 +102,23 @@ func (s *TaskExecutionUIService) GetRunArtifacts(runID string) ([]taskexec.TaskA
 func (s *TaskExecutionUIService) GetTopologyCollectionPlans(runID string) ([]taskexec.TopologyCollectionPlanArtifact, error) {
 	return s.service.ListTopologyCollectionPlans(runID)
 }
+
+// =============================================================================
+// 离线重放模式 API
+// =============================================================================
+
+// ReplayTopologyFromRaw 从Raw文件重放拓扑构建
+// 跳过采集阶段，直接执行 Parse -> TopologyBuild
+func (s *TaskExecutionUIService) ReplayTopologyFromRaw(originalRunID string, opts taskexec.ReplayOptions) (*taskexec.ReplayResult, error) {
+	return s.service.ReplayTopologyFromRaw(originalRunID, opts)
+}
+
+// ListReplayableRuns 列出可重放的运行记录
+func (s *TaskExecutionUIService) ListReplayableRuns(limit int) ([]taskexec.ReplayableRunInfo, error) {
+	return s.service.ListReplayableRuns(limit)
+}
+
+// GetReplayHistory 获取重放历史
+func (s *TaskExecutionUIService) GetReplayHistory(originalRunID string) ([]taskexec.TopologyReplayRecord, error) {
+	return s.service.GetReplayHistory(originalRunID)
+}
