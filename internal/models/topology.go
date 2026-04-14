@@ -64,6 +64,9 @@ type GraphNode struct {
 	SerialNumber string   `json:"serialNumber"`
 	NodeType     NodeType `json:"nodeType"`  // 阶段3新增：节点类型
 	ChassisID    string   `json:"chassisId"` // 阶段3新增：硬件标识
+	// 推断节点MAC地址字段
+	MACAddress   string   `json:"macAddress"`   // 推断节点的主MAC地址
+	MACAddresses []string `json:"macAddresses"` // 推断节点的所有MAC地址（多网卡场景）
 }
 
 // GraphEdge 图边

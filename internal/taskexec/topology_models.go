@@ -239,8 +239,11 @@ type TaskTopologyEdge struct {
 	EvidenceRefs        []string  `gorm:"serializer:json" json:"evidenceRefs"`  // 证据引用 ID 列表
 	CandidateID         string    `json:"candidateId"`                          // 关联的候选 ID
 	TraceID             string    `json:"traceId"`                              // 关联的决策轨迹 ID
-	CreatedAt           time.Time `json:"createdAt"`
-	UpdatedAt           time.Time `json:"updatedAt"`
+	// 推断节点MAC地址字段（用于IP标识时保留MAC信息）
+	BDeviceMAC  string `json:"bDeviceMac"`  // B端设备的主MAC地址（推断节点）
+	BDeviceMACs string `gorm:"type:text" json:"bDeviceMacs"` // B端设备的多MAC（JSON数组）
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 func (TaskTopologyEdge) TableName() string {

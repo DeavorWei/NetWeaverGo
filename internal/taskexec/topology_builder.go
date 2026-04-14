@@ -684,12 +684,16 @@ func (b *TopologyBuilder) buildFDBARPCandidates(n *NormalizedFacts) []*TopologyE
 		// 解析逻辑接口
 		localLogicalIf := b.resolveAggregateInterface(n, deviceIP, localIf)
 
-		// 统计候选对端
-		candidatePeers := make(map[string]int) // remoteDevice -> count
+		// 统计候选对端（同时收集MAC信息）
+		candidatePeers := make(map[string]int)           // remoteDevice -> count
+		candidatePeerMACs := make(map[string][]string)   // remoteDevice -> []mac
 		for _, mac := range g.macs {
-			remoteDevice, _, _ := b.resolveFDBRemoteEndpoint(deviceIP, mac, n)
+			remoteDevice, _, _, resolvedMAC := b.resolveFDBRemoteEndpoint(deviceIP, mac, n)
 			if remoteDevice != "" && remoteDevice != deviceIP {
 				candidatePeers[remoteDevice]++
+				if resolvedMAC != "" {
+					candidatePeerMACs[remoteDevice] = append(candidatePeerMACs[remoteDevice], resolvedMAC)
+				}
 			}
 		}
 
@@ -720,7 +724,8 @@ func (b *TopologyBuilder) buildFDBARPCandidates(n *NormalizedFacts) []*TopologyE
 			// 构建候选键
 			candidateKey := b.buildCandidateKey(deviceIP, localLogicalIf, localIf, remoteDevice, "", remoteIf)
 
-			// 构建证据
+			// 构建证据（保留MAC信息）
+			macList := candidatePeerMACs[remoteDevice]
 			evidence := EdgeEvidence{
 				Type:       "fdb_arp",
 				Source:     "fdb",
@@ -730,6 +735,7 @@ func (b *TopologyBuilder) buildFDBARPCandidates(n *NormalizedFacts) []*TopologyE
 				LocalIf:    localIf,
 				RemoteName: remoteDevice,
 				RemoteIf:   remoteIf,
+				RemoteMAC:  strings.Join(macList, ","), // 保留所有MAC
 				RemoteIP:   remoteIP,
 				Summary:    fmt.Sprintf("FDB/ARP 推断 %s -> %s via %s, macs=%d, kind=%s", deviceIP, remoteDevice, chooseValue(localLogicalIf, localIf), macCount, remoteKind),
 			}
@@ -788,10 +794,12 @@ func (b *TopologyBuilder) recalculateFDBARPScore(score ScoreBreakdown) float64 {
 }
 
 // resolveFDBRemoteEndpoint 解析 FDB 远端端点
-func (b *TopologyBuilder) resolveFDBRemoteEndpoint(deviceIP, mac string, n *NormalizedFacts) (string, string, string) {
+// 返回值: (节点标识, 节点类型, IP地址, MAC地址)
+// 混合标识方案：使用IP作为节点标识，同时返回MAC用于追溯
+func (b *TopologyBuilder) resolveFDBRemoteEndpoint(deviceIP, mac string, n *NormalizedFacts) (nodeID, kind, ip, resolvedMAC string) {
 	// 检查 MAC 是否属于已知设备
 	if deviceIP, ok := n.ARPMACToDevice[mac]; ok {
-		return deviceIP, "device", ""
+		return deviceIP, "device", "", mac
 	}
 
 	// 检查 MAC 是否有 ARP 记录
@@ -801,11 +809,12 @@ func (b *TopologyBuilder) resolveFDBRemoteEndpoint(deviceIP, mac string, n *Norm
 		if strings.HasPrefix(ip, "192.168.") || strings.HasPrefix(ip, "10.") {
 			kind = "server"
 		}
-		return kind + ":" + mac, kind, ip
+		// 使用IP作为标识，同时返回MAC用于追溯
+		return kind + ":" + ip, kind, ip, mac
 	}
 
-	// 未知 MAC
-	return "unknown:" + mac, "unknown", ""
+	// 未知 MAC - 仍使用MAC作为标识（因为没有IP）
+	return "unknown:" + mac, "unknown", "", mac
 }
 
 // classifyEndpoint 分类端点类型

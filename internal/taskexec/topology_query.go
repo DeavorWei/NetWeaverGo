@@ -63,21 +63,32 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 			node.Role = d.Role
 			node.Site = d.Site
 			node.SerialNumber = d.SerialNumber
+			node.NodeType = models.NodeTypeManaged
 		} else if strings.HasPrefix(id, "server:") {
-			node.Label = strings.TrimPrefix(id, "server:")
-			node.IP = strings.TrimPrefix(id, "server:")
+			ip := strings.TrimPrefix(id, "server:")
+			node.Label = ip
+			node.IP = ip
 			node.Role = "server-inferred"
 			node.Vendor = "endpoint"
+			node.NodeType = models.NodeTypeInferred
+			// 从边信息中提取MAC地址
+			node.MACAddress = extractMACFromEdges(edges, id)
 		} else if strings.HasPrefix(id, "terminal:") {
-			node.Label = strings.TrimPrefix(id, "terminal:")
+			ip := strings.TrimPrefix(id, "terminal:")
+			node.Label = ip
+			node.IP = ip
 			node.Role = "terminal-inferred"
 			node.Vendor = "endpoint"
+			node.NodeType = models.NodeTypeInferred
+			// 从边信息中提取MAC地址
+			node.MACAddress = extractMACFromEdges(edges, id)
 		} else if strings.HasPrefix(id, "unmanaged:") {
 			unmanagedID := strings.TrimPrefix(id, "unmanaged:")
 			node.Label = unmanagedID
 			node.IP = unmanagedID
 			node.Role = "unmanaged"
 			node.Vendor = "unknown"
+			node.NodeType = models.NodeTypeUnmanaged
 		}
 		nodes = append(nodes, node)
 	}
@@ -129,7 +140,7 @@ func (s *TaskExecutionService) GetTopologyEdgeDetail(runID, edgeID string) (*mod
 		ADevice:             s.getGraphNode(runID, edge.ADeviceID),
 		AIf:                 edge.AIf,
 		LogicalAIf:          edge.LogicalAIf,
-		BDevice:             s.getGraphNode(runID, edge.BDeviceID),
+		BDevice:             s.getGraphNode(runID, edge.BDeviceID, edge.BDeviceMAC),
 		BIf:                 edge.BIf,
 		LogicalBIf:          edge.LogicalBIf,
 		EdgeType:            edge.EdgeType,
@@ -403,26 +414,39 @@ func (s *TaskExecutionService) ListTopologyCollectionPlans(runID string) ([]Topo
 	return plans, nil
 }
 
-func (s *TaskExecutionService) getGraphNode(runID, deviceID string) models.GraphNode {
+func (s *TaskExecutionService) getGraphNode(runID, deviceID string, macAddress ...string) models.GraphNode {
 	if strings.TrimSpace(deviceID) == "" {
 		return models.GraphNode{ID: "unknown", Label: "unknown"}
 	}
 	if strings.HasPrefix(deviceID, "server:") {
-		return models.GraphNode{
-			ID:     deviceID,
-			Label:  strings.TrimPrefix(deviceID, "server:"),
-			IP:     strings.TrimPrefix(deviceID, "server:"),
-			Role:   "server-inferred",
-			Vendor: "endpoint",
+		ip := strings.TrimPrefix(deviceID, "server:")
+		node := models.GraphNode{
+			ID:        deviceID,
+			Label:     ip,
+			IP:        ip,
+			Role:      "server-inferred",
+			Vendor:    "endpoint",
+			NodeType:  models.NodeTypeInferred,
 		}
+		if len(macAddress) > 0 && macAddress[0] != "" {
+			node.MACAddress = macAddress[0]
+		}
+		return node
 	}
 	if strings.HasPrefix(deviceID, "terminal:") {
-		return models.GraphNode{
-			ID:     deviceID,
-			Label:  strings.TrimPrefix(deviceID, "terminal:"),
-			Role:   "terminal-inferred",
-			Vendor: "endpoint",
+		ip := strings.TrimPrefix(deviceID, "terminal:")
+		node := models.GraphNode{
+			ID:        deviceID,
+			Label:     ip,
+			IP:        ip,
+			Role:      "terminal-inferred",
+			Vendor:    "endpoint",
+			NodeType:  models.NodeTypeInferred,
 		}
+		if len(macAddress) > 0 && macAddress[0] != "" {
+			node.MACAddress = macAddress[0]
+		}
+		return node
 	}
 	var dev TaskRunDevice
 	if err := s.db.Where("task_run_id = ? AND device_ip = ?", runID, deviceID).First(&dev).Error; err != nil {
@@ -437,6 +461,7 @@ func (s *TaskExecutionService) getGraphNode(runID, deviceID string) models.Graph
 		Role:         dev.Role,
 		Site:         dev.Site,
 		SerialNumber: dev.SerialNumber,
+		NodeType:     models.NodeTypeManaged,
 	}
 }
 
@@ -472,4 +497,15 @@ func convertToModelEvidence(items []EdgeEvidence) []models.EdgeEvidence {
 
 func makeTaskEdgeID() string {
 	return newEdgeID()
+}
+
+// extractMACFromEdges 从边信息中提取推断节点的MAC地址
+// 用于server:和terminal:类型的推断节点
+func extractMACFromEdges(edges []TaskTopologyEdge, deviceID string) string {
+	for _, e := range edges {
+		if e.BDeviceID == deviceID && e.BDeviceMAC != "" {
+			return e.BDeviceMAC
+		}
+	}
+	return ""
 }
