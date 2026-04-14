@@ -420,8 +420,43 @@ func (e *ReplayExecutor) executeParse(ctx context.Context, replayRunID string, r
 						identity.MgmtIP = id.MgmtIP
 					}
 				}
-
-			case "interface_brief", "interface_detail":
+	
+				case "sysname", "esn":
+					// 合并身份字段（hostname、mgmt_ip、chassis_id等）
+					for _, row := range rows {
+						if v, ok := row["hostname"]; ok {
+							if s := strings.TrimSpace(v); s != "" {
+								identity.Hostname = s
+							}
+						}
+						if v, ok := row["sysname"]; ok {
+							if s := strings.TrimSpace(v); s != "" {
+								identity.Hostname = s
+							}
+						}
+						if v, ok := row["mgmt_ip"]; ok {
+							if s := strings.TrimSpace(v); s != "" {
+								identity.MgmtIP = s
+							}
+						}
+						if v, ok := row["management_ip"]; ok {
+							if s := strings.TrimSpace(v); s != "" {
+								identity.MgmtIP = s
+							}
+						}
+						if v, ok := row["chassis_id"]; ok {
+							if s := strings.TrimSpace(v); s != "" {
+								identity.ChassisID = s
+							}
+						}
+						if v, ok := row["serial_number"]; ok {
+							if s := strings.TrimSpace(v); s != "" {
+								identity.SerialNumber = s
+							}
+						}
+					}
+	
+				case "interface_brief", "interface_detail":
 				items, mapErr := mapper.ToInterfaces(rows)
 				if mapErr != nil {
 					logger.Warn("Replay", replayRunID, "映射接口失败: %v", mapErr)

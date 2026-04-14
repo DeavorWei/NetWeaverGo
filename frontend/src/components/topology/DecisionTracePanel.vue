@@ -257,7 +257,7 @@ async function loadTrace() {
       const traces = await TaskExecutionAPI.getTopologyDecisionTracesByRun(
         props.runId,
       );
-      trace.value = traces.find((t) => t.traceId === props.traceId) || null;
+      trace.value = traces.find((t: { traceId: string }) => t.traceId === props.traceId) || null;
     } else if (props.edgeId) {
       // 如果有 edgeId，获取边解释视图
       const explain = await TaskExecutionAPI.getTopologyEdgeExplain(
