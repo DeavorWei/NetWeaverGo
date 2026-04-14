@@ -333,6 +333,16 @@
                     ev.rawRefId
                   }}
                 </div>
+                <!-- 互联详情：展示远端设备信息 -->
+                <div
+                  v-if="ev.remoteName || ev.remoteIf || ev.remoteMac || ev.remoteIp"
+                  class="text-text-muted font-mono mt-1 pt-1 border-t border-border"
+                >
+                  <span v-if="ev.remoteName" class="mr-2">远端设备: {{ ev.remoteName }}</span>
+                  <span v-if="ev.remoteIf" class="mr-2">接口: {{ ev.remoteIf }}</span>
+                  <span v-if="ev.remoteMac" class="mr-2">MAC: {{ ev.remoteMac }}</span>
+                  <span v-if="ev.remoteIp">IP: {{ ev.remoteIp }}</span>
+                </div>
               </div>
             </div>
           </div>

@@ -67,9 +67,8 @@ func runGUI() {
 	settingsService := ui.NewSettingsService()
 	queryService := ui.NewQueryService()
 	forgeService := ui.NewForgeService()
-	executionHistoryService := ui.NewExecutionHistoryService()
-	executionHistoryService.SetTaskExecutionService(taskExecutionService)       // 设置统一运行时服务（阶段5）
-	executionHistoryService.SetRepository(taskExecutionService.GetRepository()) // 注入 Repository
+	executionHistoryService := ui.NewExecutionHistoryService(taskExecutionService.GetRepository())
+	executionHistoryService.SetTaskExecutionService(taskExecutionService) // 设置统一运行时服务（阶段5）
 	taskGroupService := ui.NewTaskGroupService()
 	taskGroupService.SetTaskExecutionService(taskExecutionService) // 设置共享运行时（阶段1）
 	topologyCommandService := ui.NewTopologyCommandService()

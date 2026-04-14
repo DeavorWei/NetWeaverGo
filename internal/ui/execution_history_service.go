@@ -24,13 +24,8 @@ type ExecutionHistoryService struct {
 }
 
 // NewExecutionHistoryService 创建历史记录服务实例
-func NewExecutionHistoryService() *ExecutionHistoryService {
-	return &ExecutionHistoryService{}
-}
-
-// SetRepository 设置仓库（由应用启动时注入）
-func (s *ExecutionHistoryService) SetRepository(repo taskexec.Repository) {
-	s.repo = repo
+func NewExecutionHistoryService(repo taskexec.Repository) *ExecutionHistoryService {
+	return &ExecutionHistoryService{repo: repo}
 }
 
 // SetTaskExecutionService 设置统一任务执行服务（阶段5：统一执行历史）

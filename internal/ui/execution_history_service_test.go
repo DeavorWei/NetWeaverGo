@@ -187,9 +187,8 @@ func (m *MockRepository) DeleteRunsByTaskGroup(ctx context.Context, taskGroupID 
 // ==================== 测试用例 ====================
 
 func TestDeleteRunRecord_Success(t *testing.T) {
-	service := NewExecutionHistoryService()
 	mockRepo := new(MockRepository)
-	service.SetRepository(mockRepo)
+	service := NewExecutionHistoryService(mockRepo)
 
 	runID := "test-run-id"
 	now := time.Now()
@@ -220,9 +219,8 @@ func TestDeleteRunRecord_Success(t *testing.T) {
 }
 
 func TestDeleteRunRecord_EmptyRunID(t *testing.T) {
-	service := NewExecutionHistoryService()
 	mockRepo := new(MockRepository)
-	service.SetRepository(mockRepo)
+	service := NewExecutionHistoryService(mockRepo)
 
 	// 执行测试
 	result, err := service.DeleteRunRecord(DeleteRunRecordRequest{RunID: ""})
@@ -235,9 +233,8 @@ func TestDeleteRunRecord_EmptyRunID(t *testing.T) {
 }
 
 func TestDeleteRunRecord_RunningTask(t *testing.T) {
-	service := NewExecutionHistoryService()
 	mockRepo := new(MockRepository)
-	service.SetRepository(mockRepo)
+	service := NewExecutionHistoryService(mockRepo)
 
 	runID := "test-run-id"
 	now := time.Now()
@@ -265,8 +262,7 @@ func TestDeleteRunRecord_RunningTask(t *testing.T) {
 }
 
 func TestDeleteRunRecord_RepositoryNil(t *testing.T) {
-	service := NewExecutionHistoryService()
-	// 不设置 repository
+	service := NewExecutionHistoryService(nil)
 
 	// 执行测试
 	result, err := service.DeleteRunRecord(DeleteRunRecordRequest{RunID: "test-run-id"})
@@ -278,9 +274,8 @@ func TestDeleteRunRecord_RepositoryNil(t *testing.T) {
 }
 
 func TestDeleteRunRecord_TaskGroupIDMismatch(t *testing.T) {
-	service := NewExecutionHistoryService()
 	mockRepo := new(MockRepository)
-	service.SetRepository(mockRepo)
+	service := NewExecutionHistoryService(mockRepo)
 
 	runID := "test-run-id"
 	now := time.Now()
@@ -312,9 +307,8 @@ func TestDeleteRunRecord_TaskGroupIDMismatch(t *testing.T) {
 }
 
 func TestDeleteAllRunRecords_Success(t *testing.T) {
-	service := NewExecutionHistoryService()
 	mockRepo := new(MockRepository)
-	service.SetRepository(mockRepo)
+	service := NewExecutionHistoryService(mockRepo)
 
 	now := time.Now()
 	runs := []taskexec.TaskRun{
@@ -344,9 +338,8 @@ func TestDeleteAllRunRecords_Success(t *testing.T) {
 }
 
 func TestDeleteAllRunRecords_NoRecords(t *testing.T) {
-	service := NewExecutionHistoryService()
 	mockRepo := new(MockRepository)
-	service.SetRepository(mockRepo)
+	service := NewExecutionHistoryService(mockRepo)
 
 	// 设置 mock 期望 - 返回空列表
 	mockRepo.On("ListRunningRuns", context.Background()).Return([]taskexec.TaskRun{}, nil)
@@ -366,9 +359,8 @@ func TestDeleteAllRunRecords_NoRecords(t *testing.T) {
 }
 
 func TestDeleteAllRunRecords_WithTaskGroupID(t *testing.T) {
-	service := NewExecutionHistoryService()
 	mockRepo := new(MockRepository)
-	service.SetRepository(mockRepo)
+	service := NewExecutionHistoryService(mockRepo)
 
 	now := time.Now()
 	runs := []taskexec.TaskRun{
@@ -399,9 +391,8 @@ func TestDeleteAllRunRecords_WithTaskGroupID(t *testing.T) {
 }
 
 func TestDeleteAllRunRecords_HasRunningTasks(t *testing.T) {
-	service := NewExecutionHistoryService()
 	mockRepo := new(MockRepository)
-	service.SetRepository(mockRepo)
+	service := NewExecutionHistoryService(mockRepo)
 
 	now := time.Now()
 	runningTasks := []taskexec.TaskRun{
@@ -429,8 +420,7 @@ func TestDeleteAllRunRecords_HasRunningTasks(t *testing.T) {
 }
 
 func TestDeleteAllRunRecords_RepositoryNil(t *testing.T) {
-	service := NewExecutionHistoryService()
-	// 不设置 repository
+	service := NewExecutionHistoryService(nil)
 
 	// 执行测试
 	result, err := service.DeleteAllRunRecords(DeleteAllRunRecordsRequest{})
