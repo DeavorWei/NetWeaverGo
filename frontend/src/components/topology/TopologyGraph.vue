@@ -73,6 +73,38 @@ import dagre from "cytoscape-dagre";
 
 cytoscape.use(dagre);
 
+// 获取当前主题相关的颜色配置
+// 直接从 CSS 变量读取，确保与实际主题一致
+function getThemeColors() {
+  if (typeof window === 'undefined') {
+    return {
+      nodeLabel: '#e5e7eb',
+      edgeLabelBg: '#111827',
+      edgeLabel: '#9ca3af',
+      nodeBorder: '#374151',
+    };
+  }
+  
+  const style = getComputedStyle(document.documentElement);
+  
+  // 从 CSS 变量读取颜色
+  const textPrimary = style.getPropertyValue('--color-text-primary').trim();
+  const textMuted = style.getPropertyValue('--color-text-muted').trim();
+  const borderDefault = style.getPropertyValue('--color-border-default').trim();
+  const bgSecondary = style.getPropertyValue('--color-bg-secondary').trim();
+  
+  return {
+    // 节点标签颜色：使用主文字颜色
+    nodeLabel: textPrimary || '#1f2937',
+    // 边标签背景色：使用次背景色
+    edgeLabelBg: bgSecondary || '#f3f4f6',
+    // 边标签文字颜色：使用弱化文字颜色
+    edgeLabel: textMuted || '#4b5563',
+    // 节点边框颜色
+    nodeBorder: borderDefault || '#d1d5db',
+  };
+}
+
 export interface GraphNode {
   id: string;
   label: string;
@@ -126,6 +158,9 @@ const roleColors: Record<string, string> = {
 function initGraph() {
   if (!cyContainer.value) return;
 
+  // 获取当前主题颜色
+  const themeColors = getThemeColors();
+
   const elements: cytoscape.ElementDefinition[] = [
     ...props.nodes.map((n) => ({
       data: {
@@ -164,9 +199,9 @@ function initGraph() {
           "font-size": "11px",
           "text-valign": "bottom",
           "text-margin-y": 6,
-          color: "#e5e7eb",
+          color: themeColors.nodeLabel,
           "border-width": 2,
-          "border-color": "#374151",
+          "border-color": themeColors.nodeBorder,
         },
       },
       {
@@ -200,11 +235,11 @@ function initGraph() {
           "source-label": "data(sourceIf)",
           "target-label": "data(targetIf)",
           "font-size": "9px",
-          color: "#9ca3af",
+          color: themeColors.edgeLabel,
           "text-opacity": 0.95,
           "text-wrap": "wrap",
           "text-max-width": "80px",
-          "text-background-color": "#111827",
+          "text-background-color": themeColors.edgeLabelBg,
           "text-background-opacity": 0.88,
           "text-background-padding": "2px",
           "text-background-shape": "roundrectangle",
@@ -284,6 +319,31 @@ watch(
   },
   { deep: true },
 );
+
+// 监听主题变化：通过 MutationObserver 监听 data-theme 属性变化
+let themeObserver: MutationObserver | null = null;
+
+onMounted(() => {
+  // 初始化 MutationObserver 监听主题变化
+  themeObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type === 'attributes' && mutation.attributeName === 'data-theme') {
+        cy?.destroy();
+        initGraph();
+        break;
+      }
+    }
+  });
+  
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme', 'class'],
+  });
+});
+
+onUnmounted(() => {
+  themeObserver?.disconnect();
+});
 
 defineExpose({
   fitToScreen,
