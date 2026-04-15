@@ -227,10 +227,19 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 
 		// Perform single ping
 		pingResult, err := PingOne(ip, e.config.Timeout, e.config.DataSize)
+		
+		// Handle PingOne function errors (API level errors)
 		if err != nil {
 			logger.Debug("BatchPing", ipStr, "第 %d 次 ping 返回错误: %v", i+1, err)
 			result.ErrorMsg = err.Error()
 			lastError = err.Error()
+			continue
+		}
+
+		// Critical fix: Handle nil pingResult (should not happen, but safety check)
+		if pingResult == nil {
+			logger.Debug("BatchPing", ipStr, "第 %d 次 ping 返回 nil 结果", i+1)
+			lastError = "Ping returned nil result"
 			continue
 		}
 
@@ -251,9 +260,12 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 		} else {
 			// 记录失败原因
 			logger.Debug("BatchPing", ipStr, "第 %d 次 ping 失败: status=%s, error=%s", i+1, pingResult.Status, pingResult.Error)
-			// 保存错误信息
+			// Critical fix: Always save error message from pingResult.Error
 			if pingResult.Error != "" {
 				lastError = pingResult.Error
+			} else if pingResult.Status != "" {
+				// Fallback to status if Error is empty
+				lastError = pingResult.Status
 			}
 		}
 

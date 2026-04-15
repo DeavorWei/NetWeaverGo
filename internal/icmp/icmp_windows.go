@@ -153,9 +153,19 @@ func IcmpSendEcho(handle syscall.Handle, destAddr uint32, sendData []byte, timeo
 		OptionsData: 0,
 	}
 
-	// Calculate buffer size: reply structure + data
-	replySize := uint32(unsafe.Sizeof(ICMP_ECHO_REPLY{})) + uint32(len(sendData))
+	// Calculate buffer size: reply structure + data + ICMP header overhead (8 bytes) + extra padding
+	// According to Microsoft docs, need to account for ICMP header (8 bytes)
+	// Minimum recommended buffer size is 250 bytes to accommodate error messages
+	minBufferSize := uint32(256)
+	calculatedSize := uint32(unsafe.Sizeof(ICMP_ECHO_REPLY{})) + uint32(len(sendData)) + 8
+	replySize := calculatedSize
+	if replySize < minBufferSize {
+		replySize = minBufferSize
+	}
 	replyBuffer := make([]byte, replySize)
+
+	logger.Verbose("ICMP", "-", "IcmpSendEcho 缓冲区: replySize=%d (最小=%d, 计算=%d, 结构体=%d + 数据=%d + ICMP头=8)",
+		replySize, minBufferSize, calculatedSize, unsafe.Sizeof(ICMP_ECHO_REPLY{}), len(sendData))
 
 	// Send ICMP echo request
 	ret, _, err := procIcmpSendEcho.Call(
@@ -172,9 +182,21 @@ func IcmpSendEcho(handle syscall.Handle, destAddr uint32, sendData []byte, timeo
 	logger.Debug("ICMP", "-", "IcmpSendEcho 返回: ret=%d, err=%v", ret, err)
 
 	if ret == 0 {
-		// Check for timeout or other errors
-		logger.Debug("ICMP", "-", "IcmpSendEcho 无响应或错误: err=%v", err)
-		return nil, nil, err
+		// Even when ret == 0, we may have reply data with error status
+		// Parse reply buffer to get detailed error status
+		if len(replyBuffer) >= int(unsafe.Sizeof(ICMP_ECHO_REPLY{})) {
+			reply := (*ICMP_ECHO_REPLY)(unsafe.Pointer(&replyBuffer[0]))
+			statusStr := icmpStatusToString(reply.Status)
+			logger.Debug("ICMP", "-", "IcmpSendEcho 失败: status=%d(%s)", reply.Status, statusStr)
+			return nil, nil, fmt.Errorf("ICMP error: %s (code: %d)", statusStr, reply.Status)
+		}
+		// No valid reply data, return syscall error
+		if err != nil {
+			logger.Debug("ICMP", "-", "IcmpSendEcho 无响应或错误: err=%v", err)
+			return nil, nil, fmt.Errorf("ICMP send failed: %w", err)
+		}
+		logger.Debug("ICMP", "-", "IcmpSendEcho 无响应")
+		return nil, nil, fmt.Errorf("ICMP send failed: no reply")
 	}
 
 	// Parse reply
@@ -238,7 +260,7 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 	}
 	defer IcmpCloseHandle(handle)
 
-	// Prepare send data - 使用新的准备函数
+	// Prepare send data
 	sendData := prepareSendData(dataSize)
 	logger.Verbose("ICMP", ipStr, "准备发送数据: size=%d", len(sendData))
 
@@ -246,32 +268,36 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 	destAddr := binary.BigEndian.Uint32(ip)
 
 	// Send ICMP echo request with default TTL of 128
-	logger.Debug("ICMP", ipStr, "发送 ICMP 请求: destAddr=%08x, timeout=%dms", destAddr, timeout)
+	logger.Debug("ICMP", ipStr, "发送 ICMP 请求: destAddr=%08x, timeout=%dms, ttl=128", destAddr, timeout)
 	reply, _, err := IcmpSendEcho(handle, destAddr, sendData, timeout, 128)
 
 	result := &PingResult{
 		IP: ip.String(),
 	}
 
+	// Handle IcmpSendEcho errors
 	if err != nil {
 		result.Success = false
 		result.Status = "Error"
 		result.Error = err.Error()
-		logger.Info("ICMP", ipStr, "Ping 失败: status=%s, error=%s", result.Status, result.Error)
+		logger.Info("ICMP", ipStr, "Ping 失败 (API错误): status=%s, error=%s", result.Status, result.Error)
 		return result, nil
 	}
 
+	// Handle nil reply (should not happen if err is nil, but just in case)
 	if reply == nil {
 		result.Success = false
 		result.Status = "No Reply"
 		result.Error = "No reply received"
-		logger.Info("ICMP", ipStr, "Ping 失败: status=%s, error=%s", result.Status, result.Error)
+		logger.Info("ICMP", ipStr, "Ping 失败 (无响应): status=%s, error=%s", result.Status, result.Error)
 		return result, nil
 	}
 
+	// Extract reply data
 	result.RoundTripTime = float64(reply.RoundTripTime)
 	result.TTL = reply.Options.TTL
 
+	// Check reply status
 	if reply.Status == IP_SUCCESS {
 		result.Success = true
 		result.Status = "Success"
@@ -279,8 +305,9 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 	} else {
 		result.Success = false
 		result.Status = icmpStatusToString(reply.Status)
+		// Critical fix: Always set Error field with status description
 		result.Error = result.Status
-		logger.Info("ICMP", ipStr, "Ping 失败: status=%s, error=%s", result.Status, result.Error)
+		logger.Info("ICMP", ipStr, "Ping 失败 (状态码错误): status=%s, code=%d", result.Status, reply.Status)
 	}
 
 	return result, nil
@@ -306,7 +333,7 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 	}
 	defer IcmpCloseHandle(handle)
 
-	// Prepare send data - 使用新的准备函数
+	// Prepare send data
 	sendData := prepareSendData(dataSize)
 
 	// Convert IP to network byte order (uint32)
@@ -320,25 +347,29 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 		IP: ip.String(),
 	}
 
+	// Handle IcmpSendEcho errors
 	if err != nil {
 		result.Success = false
 		result.Status = "Error"
 		result.Error = err.Error()
-		logger.Info("ICMP", ipStr, "Ping 失败: status=%s, error=%s", result.Status, result.Error)
+		logger.Info("ICMP", ipStr, "Ping 失败 (API错误): status=%s, error=%s", result.Status, result.Error)
 		return result, nil
 	}
 
+	// Handle nil reply
 	if reply == nil {
 		result.Success = false
 		result.Status = "No Reply"
 		result.Error = "No reply received"
-		logger.Info("ICMP", ipStr, "Ping 失败: status=%s, error=%s", result.Status, result.Error)
+		logger.Info("ICMP", ipStr, "Ping 失败 (无响应): status=%s, error=%s", result.Status, result.Error)
 		return result, nil
 	}
 
+	// Extract reply data
 	result.RoundTripTime = float64(reply.RoundTripTime)
 	result.TTL = reply.Options.TTL
 
+	// Check reply status
 	if reply.Status == IP_SUCCESS {
 		result.Success = true
 		result.Status = "Success"
@@ -346,8 +377,9 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 	} else {
 		result.Success = false
 		result.Status = icmpStatusToString(reply.Status)
+		// Critical fix: Always set Error field with status description
 		result.Error = result.Status
-		logger.Info("ICMP", ipStr, "Ping 失败: status=%s, error=%s", result.Status, result.Error)
+		logger.Info("ICMP", ipStr, "Ping 失败 (状态码错误): status=%s, code=%d", result.Status, reply.Status)
 	}
 
 	return result, nil
