@@ -410,6 +410,22 @@
     @close="showReplayDialog = false"
     @complete="handleReplayComplete"
   />
+
+  <!-- 设备详情弹窗 -->
+  <TopologyDeviceDetailModal
+    v-model:show="showDeviceModal"
+    :loading="loadingDeviceDetail"
+    :device-detail="deviceDetail"
+    :node-info="nodeByID.get(selectedDeviceID)"
+    :device-id="selectedDeviceID"
+  />
+
+  <!-- 链路详情弹窗 -->
+  <TopologyEdgeDetailModal
+    v-model:show="showEdgeModal"
+    :edge-detail="edgeDetail"
+    @device-click="openDeviceDetail"
+  />
 </template>
 
 <script setup lang="ts">
@@ -425,6 +441,8 @@ import { useTaskexecStore } from "../stores/taskexecStore";
 import { StatusNames, type ReplayableRunInfo } from "../types/taskexec";
 import TopologyGraph, { type GraphNode } from "../components/topology/TopologyGraph.vue";
 import ReplayDialog from "../components/topology/ReplayDialog.vue";
+import TopologyDeviceDetailModal from "../components/topology/TopologyDeviceDetailModal.vue";
+import TopologyEdgeDetailModal from "../components/topology/TopologyEdgeDetailModal.vue";
 
 // 阶段4: 统一执行框架 - 使用runId替代taskId
 const taskexecStore = useTaskexecStore();
@@ -473,6 +491,10 @@ const edgeDetail = ref<TopologyEdgeDetailView | null>(null);
 const deviceDetail = ref<ParsedResult | null>(null);
 const selectedDeviceID = ref("");
 const loadingDeviceDetail = ref(false);
+
+// 图形视图弹窗状态
+const showDeviceModal = ref(false);
+const showEdgeModal = ref(false);
 
 const nodeByID = computed(() => {
   const map = new Map<string, (typeof graph.value.nodes)[number]>();
@@ -718,6 +740,7 @@ async function refreshGraph() {
 
 async function loadEdgeDetail(edgeID: string) {
   if (!selectedRunId.value) return;
+  showEdgeModal.value = true;
   edgeDetail.value = await TaskExecutionAPI.getTopologyEdgeDetail(
     selectedRunId.value,
     edgeID,
@@ -727,6 +750,7 @@ async function loadEdgeDetail(edgeID: string) {
 async function openDeviceDetail(deviceID: string) {
   selectedDeviceID.value = deviceID;
   loadingDeviceDetail.value = true;
+  showDeviceModal.value = true;
   try {
     if (
       !selectedRunId.value ||
