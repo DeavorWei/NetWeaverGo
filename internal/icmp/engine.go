@@ -62,15 +62,29 @@ func safeCallback(fn func(*BatchPingProgress), progress *BatchPingProgress) {
 func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*BatchPingProgress)) *BatchPingProgress {
 	// Create cancellable context
 	runCtx, cancel := context.WithCancel(ctx)
-	e.setRunning(true)
+
+	e.runningMu.Lock()
+	// 双重检查：如果已经在运行，不启动新任务
+	if e.running {
+		e.runningMu.Unlock()
+		cancel()
+		return NewBatchPingProgress(len(ips))
+	}
+	e.running = true
 	e.cancel = cancel
+	e.runningMu.Unlock()
 
 	progress := NewBatchPingProgress(len(ips))
 
-	// Ensure we mark as finished when done
+	// 统一的清理逻辑 - 这是唯一设置 running = false 的地方
 	defer func() {
-		e.setRunning(false)
+		e.runningMu.Lock()
+		e.running = false
+		e.cancel = nil
+		e.runningMu.Unlock()
+
 		progress.Finish()
+		safeCallback(onUpdate, progress)
 	}()
 
 	if len(ips) == 0 {
@@ -138,12 +152,20 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 
 			progressMu.Lock()
 			progress.SetResult(index, result) // 按索引存储，保持顺序
-			safeCallback(onUpdate, progress)
+			// 只在非取消状态下触发回调，避免取消后不必要的更新
+			select {
+			case <-runCtx.Done():
+				// 已取消，不触发回调
+			default:
+				safeCallback(onUpdate, progress)
+			}
 			progressMu.Unlock()
 		}(i, ipStr)
 	}
 
 	wg.Wait()
+	// 完成后触发最终回调
+	safeCallback(onUpdate, progress)
 	return progress
 }
 
@@ -156,9 +178,9 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 	}
 
 	var successCount int
-	var rttSum uint32
-	var minRtt uint32 = 0 // 初始化为 0 表示无效值
-	var maxRtt uint32
+	var rttSum float64
+	var minRtt float64 = 0 // 初始化为 0 表示无效值
+	var maxRtt float64
 	var lastTTL uint8
 
 	for i := 0; i < e.config.Count; i++ {
@@ -212,7 +234,7 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 	if successCount > 0 {
 		result.Alive = true
 		result.Status = "online"
-		result.AvgRtt = rttSum / uint32(successCount)
+		result.AvgRtt = rttSum / float64(successCount)
 		result.MinRtt = minRtt
 		result.MaxRtt = maxRtt
 		result.TTL = lastTTL
@@ -225,14 +247,18 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 	return result
 }
 
-// Stop cancels the running batch ping operation.
+// Stop 停止正在运行的批量 Ping 操作
+// 仅触发 context 取消，状态管理由 Run() 生命周期控制
 func (e *BatchPingEngine) Stop() {
 	e.runningMu.Lock()
-	defer e.runningMu.Unlock()
-	if e.cancel != nil {
-		e.cancel()
+	cancel := e.cancel
+	e.runningMu.Unlock()
+
+	// 在锁外调用 cancel，避免死锁
+	if cancel != nil {
+		cancel()
 	}
-	e.running = false
+	// 注意：不直接修改 running 状态，由 Run() 的 defer 统一处理
 }
 
 // IsRunning returns whether the engine is currently running.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -177,6 +178,30 @@ func IcmpSendEcho(handle syscall.Handle, destAddr uint32, sendData []byte, timeo
 	return reply, replyData, nil
 }
 
+// prepareSendData 准备 ICMP 发送数据
+// 使用固定填充模式 + 时间戳，模拟标准 ping 行为
+func prepareSendData(dataSize uint16) []byte {
+	sendData := make([]byte, dataSize)
+
+	if dataSize == 0 {
+		return sendData
+	}
+
+	// 前 8 字节存储时间戳（用于验证响应）
+	timestamp := time.Now().UnixNano()
+	for i := 0; i < 8 && i < int(dataSize); i++ {
+		sendData[i] = byte(timestamp >> (i * 8))
+	}
+
+	// 剩余部分使用固定填充模式 (模拟 Windows ping 的 ABCD... 模式)
+	pattern := []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	for i := 8; i < int(dataSize); i++ {
+		sendData[i] = pattern[(i-8)%len(pattern)]
+	}
+
+	return sendData
+}
+
 // PingOne performs a single ICMP echo request to the specified IP address.
 func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 	// Convert IP to 4-byte representation
@@ -192,11 +217,8 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 	}
 	defer IcmpCloseHandle(handle)
 
-	// Prepare send data
-	sendData := make([]byte, dataSize)
-	for i := range sendData {
-		sendData[i] = byte(i % 256)
-	}
+	// Prepare send data - 使用新的准备函数
+	sendData := prepareSendData(dataSize)
 
 	// Convert IP to network byte order (uint32)
 	destAddr := binary.BigEndian.Uint32(ip)
@@ -222,7 +244,7 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 		return result, nil
 	}
 
-	result.RoundTripTime = reply.RoundTripTime
+	result.RoundTripTime = float64(reply.RoundTripTime)
 	result.TTL = reply.Options.TTL
 
 	if reply.Status == IP_SUCCESS {
@@ -252,11 +274,8 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 	}
 	defer IcmpCloseHandle(handle)
 
-	// Prepare send data
-	sendData := make([]byte, dataSize)
-	for i := range sendData {
-		sendData[i] = byte(i % 256)
-	}
+	// Prepare send data - 使用新的准备函数
+	sendData := prepareSendData(dataSize)
 
 	// Convert IP to network byte order (uint32)
 	destAddr := binary.BigEndian.Uint32(ip)
@@ -282,7 +301,7 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 		return result, nil
 	}
 
-	result.RoundTripTime = reply.RoundTripTime
+	result.RoundTripTime = float64(reply.RoundTripTime)
 	result.TTL = reply.Options.TTL
 
 	if reply.Status == IP_SUCCESS {

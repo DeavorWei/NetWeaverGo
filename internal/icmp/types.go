@@ -5,12 +5,12 @@ import "time"
 
 // PingResult represents the result of a single ICMP echo request.
 type PingResult struct {
-	IP            string // Target IP address
-	Success       bool   // Whether the ping was successful
-	RoundTripTime uint32 // Round trip time in milliseconds
-	TTL           uint8  // Time to live
-	Status        string // Status message (e.g., "Success", "Timeout", "Network Unreachable")
-	Error         string // Error message if any
+	IP            string  // Target IP address
+	Success       bool    // Whether the ping was successful
+	RoundTripTime float64 // Round trip time in milliseconds (支持亚毫秒精度)
+	TTL           uint8   // Time to live
+	Status        string  // Status message (e.g., "Success", "Timeout", "Network Unreachable")
+	Error         string  // Error message if any
 }
 
 // PingConfig holds the configuration for ping operations.
@@ -40,9 +40,9 @@ type PingHostResult struct {
 	SentCount int     `json:"sentCount"` // Number of packets sent
 	RecvCount int     `json:"recvCount"` // Number of packets received
 	LossRate  float64 `json:"lossRate"`  // Packet loss rate (0-100)
-	MinRtt    uint32  `json:"minRtt"`    // Minimum round trip time in ms
-	MaxRtt    uint32  `json:"maxRtt"`    // Maximum round trip time in ms
-	AvgRtt    uint32  `json:"avgRtt"`    // Average round trip time in ms
+	MinRtt    float64 `json:"minRtt"`    // Minimum round trip time in ms (支持亚毫秒精度)
+	MaxRtt    float64 `json:"maxRtt"`    // Maximum round trip time in ms (支持亚毫秒精度)
+	AvgRtt    float64 `json:"avgRtt"`    // Average round trip time in ms (支持亚毫秒精度)
 	TTL       uint8   `json:"ttl"`       // Time to live
 	Status    string  `json:"status"`    // Status: "online", "offline", "error", "pending"
 	ErrorMsg  string  `json:"errorMsg"`  // Error message if any

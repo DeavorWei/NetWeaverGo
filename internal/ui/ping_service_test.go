@@ -256,12 +256,12 @@ func TestFormatRtt(t *testing.T) {
 		expected string
 	}{
 		{0, "-"},
-		{1, "1"},
-		{100, "100"},
+		{1, "1.00ms"},
+		{100, "100.00ms"},
 	}
 
 	for _, tt := range tests {
-		result := formatRtt(tt.rtt)
+		result := formatRtt(float64(tt.rtt))
 		if result != tt.expected {
 			t.Errorf("formatRtt(%d) = %s, expected %s", tt.rtt, result, tt.expected)
 		}

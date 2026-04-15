@@ -23,6 +23,12 @@ const config = ref<PingConfig>({
 const progress = ref<BatchPingProgress | null>(null)
 const isRunning = computed(() => progress.value?.isRunning ?? false)
 
+// 轮询相关
+const POLLING_INTERVAL = 2000 // 2秒轮询间隔
+let pollingTimer: ReturnType<typeof setInterval> | null = null
+let lastProgressTime = 0 // 上次收到进度的时间戳
+let unlistenProgress: (() => void) | null = null // 取消事件监听的函数
+
 // 设备导入相关状态
 const showDeviceModal = ref(false)
 const devices = ref<DeviceAssetListItem[]>([])
@@ -86,6 +92,41 @@ const importDevices = async () => {
   }
 }
 
+// 启动轮询兜底
+const startPolling = () => {
+  if (pollingTimer) return
+
+  pollingTimer = setInterval(async () => {
+    // 只在运行中时轮询
+    if (!isRunning.value) {
+      stopPolling()
+      return
+    }
+
+    try {
+      const currentProgress = await PingService.GetPingProgress()
+      if (currentProgress) {
+        // 检查是否需要更新（Event 可能已更新）
+        const now = Date.now()
+        // 如果超过 3 秒没收到 Event，使用轮询数据
+        if (now - lastProgressTime > 3000) {
+          progress.value = currentProgress
+        }
+      }
+    } catch (err) {
+      console.error('Polling progress failed:', err)
+    }
+  }, POLLING_INTERVAL)
+}
+
+// 停止轮询
+const stopPolling = () => {
+  if (pollingTimer) {
+    clearInterval(pollingTimer)
+    pollingTimer = null
+  }
+}
+
 // Methods
 const startPing = async () => {
   // 验证输入
@@ -102,6 +143,11 @@ const startPing = async () => {
     }
     const result = await PingService.StartBatchPing(request)
     progress.value = result
+    lastProgressTime = Date.now()
+
+    // 启动轮询兜底
+    startPolling()
+
     toast.success('批量 Ping 已启动')
   } catch (err: any) {
     console.error('Failed to start ping:', err)
@@ -113,6 +159,7 @@ const startPing = async () => {
 const stopPing = async () => {
   try {
     await PingService.StopBatchPing()
+    stopPolling()
     toast.info('正在停止...')
   } catch (err: any) {
     console.error('Failed to stop ping:', err)
@@ -150,9 +197,13 @@ const clearResults = () => {
 }
 
 const formatRtt = (rtt: number, status?: string): string => {
-  // 离线或错误状态，或 rtt 为 0 时显示 "-"
-  if (status !== 'online' || rtt === 0) return '-'
-  return `${rtt}ms`
+  // 离线或错误状态，或 rtt 为 0 或负数时显示 "-"
+  if (status !== 'online' || rtt <= 0) return '-'
+  // 支持亚毫秒精度显示
+  if (rtt < 1) {
+    return `${rtt.toFixed(3)}ms`
+  }
+  return `${rtt.toFixed(2)}ms`
 }
 
 const formatElapsed = (ms: number): string => {
@@ -194,6 +245,7 @@ const getStatusText = (status: string): string => {
 // Event handling
 const handleProgressEvent = (ev: { name: string; data: BatchPingProgress }) => {
   progress.value = ev.data
+  lastProgressTime = Date.now() // 记录 Event 收到时间
 }
 
 // Lifecycle
@@ -208,13 +260,18 @@ onMounted(async () => {
     console.error('Failed to get default config:', err)
   }
 
-  // Subscribe to events
-  Events.On('ping:progress', handleProgressEvent)
+  // Subscribe to events - Events.On 返回取消函数
+  unlistenProgress = Events.On('ping:progress', handleProgressEvent)
 })
 
 onUnmounted(() => {
-  // 传入回调引用才能正确移除监听器
-  Events.Off('ping:progress', handleProgressEvent)
+  // 移除事件监听器 - 调用取消函数
+  if (unlistenProgress) {
+    unlistenProgress()
+    unlistenProgress = null
+  }
+  // 停止轮询
+  stopPolling()
 })
 </script>
 
@@ -300,7 +357,7 @@ onUnmounted(() => {
                 type="number"
                 :disabled="isRunning"
                 min="100"
-                max="10000"
+                max="30000"
                 class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
               />
             </div>
@@ -332,7 +389,7 @@ onUnmounted(() => {
                 v-model.number="config.DataSize"
                 type="number"
                 :disabled="isRunning"
-                min="1"
+                min="32"
                 max="65500"
                 class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
               />

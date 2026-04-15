@@ -416,12 +416,12 @@ func (s *PingService) mergeWithDefaultPingConfig(config icmp.PingConfig) icmp.Pi
 		config.Interval = defaults.Interval
 	}
 
-	// Apply limits
-	if config.Timeout > 10000 {
-		config.Timeout = 10000 // Max 10 seconds
+	// Apply limits - 允许最大 ICMP 数据包
+	if config.Timeout > 30000 {
+		config.Timeout = 30000 // Max 30 seconds
 	}
 	if config.DataSize > 65500 {
-		config.DataSize = 65500 // Max ICMP data size
+		config.DataSize = 65500 // Max ICMP payload size
 	}
 	if config.Count > 10 {
 		config.Count = 10 // Max 10 attempts
@@ -451,9 +451,13 @@ func (s *PingService) emitProgress(progress *icmp.BatchPingProgress) {
 }
 
 // formatRtt formats RTT value for display.
-func formatRtt(rtt uint32) string {
-	if rtt == 0 {
+func formatRtt(rtt float64) string {
+	if rtt <= 0 {
 		return "-"
 	}
-	return fmt.Sprintf("%d", rtt)
+	// 支持显示小数点后两位
+	if rtt < 1 {
+		return fmt.Sprintf("%.3fms", rtt)
+	}
+	return fmt.Sprintf("%.2fms", rtt)
 }
