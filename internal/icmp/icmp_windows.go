@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 // Windows ICMP API constants
@@ -115,24 +117,33 @@ func icmpStatusToString(status uint32) string {
 
 // IcmpCreateFile creates a handle for sending ICMP echo requests.
 func IcmpCreateFile() (syscall.Handle, error) {
+	logger.Verbose("ICMP", "-", "调用 IcmpCreateFile()")
 	ret, _, err := procIcmpCreateFile.Call()
 	if ret == uintptr(syscall.InvalidHandle) {
+		logger.Debug("ICMP", "-", "IcmpCreateFile 失败: %v", err)
 		return syscall.InvalidHandle, err
 	}
+	logger.Verbose("ICMP", "-", "IcmpCreateFile 成功: handle=%v", ret)
 	return syscall.Handle(ret), nil
 }
 
 // IcmpCloseHandle closes an ICMP handle.
 func IcmpCloseHandle(handle syscall.Handle) error {
+	logger.Verbose("ICMP", "-", "调用 IcmpCloseHandle: handle=%v", handle)
 	ret, _, _ := procIcmpCloseHandle.Call(uintptr(handle))
 	if ret == 0 {
+		logger.Debug("ICMP", "-", "IcmpCloseHandle 失败")
 		return fmt.Errorf("failed to close ICMP handle")
 	}
+	logger.Verbose("ICMP", "-", "IcmpCloseHandle 成功")
 	return nil
 }
 
 // IcmpSendEcho sends an ICMP echo request and returns the reply.
 func IcmpSendEcho(handle syscall.Handle, destAddr uint32, sendData []byte, timeout uint32, ttl uint8) (*ICMP_ECHO_REPLY, []byte, error) {
+	logger.Verbose("ICMP", "-", "调用 IcmpSendEcho: destAddr=%08x, dataSize=%d, timeout=%dms, ttl=%d",
+		destAddr, len(sendData), timeout, ttl)
+
 	// Prepare options
 	options := IP_OPTION_INFORMATION32{
 		TTL:         ttl,
@@ -158,13 +169,18 @@ func IcmpSendEcho(handle syscall.Handle, destAddr uint32, sendData []byte, timeo
 		uintptr(timeout),
 	)
 
+	logger.Debug("ICMP", "-", "IcmpSendEcho 返回: ret=%d, err=%v", ret, err)
+
 	if ret == 0 {
 		// Check for timeout or other errors
+		logger.Debug("ICMP", "-", "IcmpSendEcho 无响应或错误: err=%v", err)
 		return nil, nil, err
 	}
 
 	// Parse reply
 	reply := (*ICMP_ECHO_REPLY)(unsafe.Pointer(&replyBuffer[0]))
+	logger.Debug("ICMP", "-", "IcmpSendEcho 响应: status=%d(%s), rtt=%dms, ttl=%d",
+		reply.Status, icmpStatusToString(reply.Status), reply.RoundTripTime, reply.Options.TTL)
 
 	// Extract reply data
 	var replyData []byte
@@ -204,26 +220,33 @@ func prepareSendData(dataSize uint16) []byte {
 
 // PingOne performs a single ICMP echo request to the specified IP address.
 func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
+	ipStr := ip.String()
+	logger.Verbose("ICMP", ipStr, "开始 Ping: timeout=%dms, dataSize=%d", timeout, dataSize)
+
 	// Convert IP to 4-byte representation
 	ip = ip.To4()
 	if ip == nil {
+		logger.Error("ICMP", ipStr, "无效的 IPv4 地址")
 		return nil, fmt.Errorf("invalid IPv4 address")
 	}
 
 	// Create ICMP handle
 	handle, err := IcmpCreateFile()
 	if err != nil {
+		logger.Error("ICMP", ipStr, "创建 ICMP 句柄失败: %v", err)
 		return nil, fmt.Errorf("failed to create ICMP handle: %w", err)
 	}
 	defer IcmpCloseHandle(handle)
 
 	// Prepare send data - 使用新的准备函数
 	sendData := prepareSendData(dataSize)
+	logger.Verbose("ICMP", ipStr, "准备发送数据: size=%d", len(sendData))
 
 	// Convert IP to network byte order (uint32)
 	destAddr := binary.BigEndian.Uint32(ip)
 
 	// Send ICMP echo request with default TTL of 128
+	logger.Debug("ICMP", ipStr, "发送 ICMP 请求: destAddr=%08x, timeout=%dms", destAddr, timeout)
 	reply, _, err := IcmpSendEcho(handle, destAddr, sendData, timeout, 128)
 
 	result := &PingResult{
@@ -234,6 +257,7 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 		result.Success = false
 		result.Status = "Error"
 		result.Error = err.Error()
+		logger.Info("ICMP", ipStr, "Ping 失败: status=%s, error=%s", result.Status, result.Error)
 		return result, nil
 	}
 
@@ -241,6 +265,7 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 		result.Success = false
 		result.Status = "No Reply"
 		result.Error = "No reply received"
+		logger.Info("ICMP", ipStr, "Ping 失败: status=%s, error=%s", result.Status, result.Error)
 		return result, nil
 	}
 
@@ -250,10 +275,12 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 	if reply.Status == IP_SUCCESS {
 		result.Success = true
 		result.Status = "Success"
+		logger.Info("ICMP", ipStr, "Ping 成功: rtt=%.2fms, ttl=%d", result.RoundTripTime, result.TTL)
 	} else {
 		result.Success = false
 		result.Status = icmpStatusToString(reply.Status)
 		result.Error = result.Status
+		logger.Info("ICMP", ipStr, "Ping 失败: status=%s, error=%s", result.Status, result.Error)
 	}
 
 	return result, nil
@@ -261,15 +288,20 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 
 // PingOneWithTTL performs a single ICMP echo request with specified TTL.
 func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*PingResult, error) {
+	ipStr := ip.String()
+	logger.Verbose("ICMP", ipStr, "开始 Ping (带TTL): timeout=%dms, dataSize=%d, ttl=%d", timeout, dataSize, ttl)
+
 	// Convert IP to 4-byte representation
 	ip = ip.To4()
 	if ip == nil {
+		logger.Error("ICMP", ipStr, "无效的 IPv4 地址")
 		return nil, fmt.Errorf("invalid IPv4 address")
 	}
 
 	// Create ICMP handle
 	handle, err := IcmpCreateFile()
 	if err != nil {
+		logger.Error("ICMP", ipStr, "创建 ICMP 句柄失败: %v", err)
 		return nil, fmt.Errorf("failed to create ICMP handle: %w", err)
 	}
 	defer IcmpCloseHandle(handle)
@@ -281,6 +313,7 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 	destAddr := binary.BigEndian.Uint32(ip)
 
 	// Send ICMP echo request
+	logger.Debug("ICMP", ipStr, "发送 ICMP 请求: destAddr=%08x, timeout=%dms, ttl=%d", destAddr, timeout, ttl)
 	reply, _, err := IcmpSendEcho(handle, destAddr, sendData, timeout, ttl)
 
 	result := &PingResult{
@@ -291,6 +324,7 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 		result.Success = false
 		result.Status = "Error"
 		result.Error = err.Error()
+		logger.Info("ICMP", ipStr, "Ping 失败: status=%s, error=%s", result.Status, result.Error)
 		return result, nil
 	}
 
@@ -298,6 +332,7 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 		result.Success = false
 		result.Status = "No Reply"
 		result.Error = "No reply received"
+		logger.Info("ICMP", ipStr, "Ping 失败: status=%s, error=%s", result.Status, result.Error)
 		return result, nil
 	}
 
@@ -307,10 +342,12 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 	if reply.Status == IP_SUCCESS {
 		result.Success = true
 		result.Status = "Success"
+		logger.Info("ICMP", ipStr, "Ping 成功: rtt=%.2fms, ttl=%d", result.RoundTripTime, result.TTL)
 	} else {
 		result.Success = false
 		result.Status = icmpStatusToString(reply.Status)
 		result.Error = result.Status
+		logger.Info("ICMP", ipStr, "Ping 失败: status=%s, error=%s", result.Status, result.Error)
 	}
 
 	return result, nil

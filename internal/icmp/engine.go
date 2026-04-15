@@ -8,6 +8,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 // BatchPingEngine handles batch ping operations with concurrency control.
@@ -60,12 +62,16 @@ func safeCallback(fn func(*BatchPingProgress), progress *BatchPingProgress) {
 // Run executes the batch ping operation for the given IP addresses.
 // The onUpdate callback is called whenever progress is made.
 func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*BatchPingProgress)) *BatchPingProgress {
+	logger.Info("BatchPing", "-", "批量 Ping 开始: totalIPs=%d, concurrency=%d, timeout=%dms, count=%d",
+		len(ips), e.config.Concurrency, e.config.Timeout, e.config.Count)
+
 	// Create cancellable context
 	runCtx, cancel := context.WithCancel(ctx)
 
 	e.runningMu.Lock()
 	// 双重检查：如果已经在运行，不启动新任务
 	if e.running {
+		logger.Warn("BatchPing", "-", "引擎已在运行中，拒绝启动新任务")
 		e.runningMu.Unlock()
 		cancel()
 		return NewBatchPingProgress(len(ips))
@@ -78,16 +84,20 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 
 	// 统一的清理逻辑 - 这是唯一设置 running = false 的地方
 	defer func() {
+		logger.Debug("BatchPing", "-", "批量 Ping 清理资源，标记完成状态")
 		e.runningMu.Lock()
 		e.running = false
 		e.cancel = nil
 		e.runningMu.Unlock()
 
 		progress.Finish()
+		logger.Info("BatchPing", "-", "批量 Ping 完成: total=%d, online=%d, offline=%d, error=%d, elapsed=%dms",
+			progress.TotalIPs, progress.OnlineCount, progress.OfflineCount, progress.ErrorCount, progress.ElapsedMs)
 		safeCallback(onUpdate, progress)
 	}()
 
 	if len(ips) == 0 {
+		logger.Warn("BatchPing", "-", "IP 列表为空，立即返回")
 		return progress
 	}
 
@@ -96,24 +106,35 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 	var wg sync.WaitGroup
 	var progressMu sync.Mutex
 
+	logger.Debug("BatchPing", "-", "并发控制初始化: concurrency=%d", e.config.Concurrency)
+
 	for i, ipStr := range ips {
 		// Check for cancellation
 		select {
 		case <-runCtx.Done():
+			logger.Debug("BatchPing", "-", "检测到取消信号，停止添加新任务")
 			return progress
 		default:
 		}
 
+		logger.Verbose("BatchPing", ipStr, "等待获取信号量, index=%d", i)
 		sem <- struct{}{}
+		logger.Verbose("BatchPing", ipStr, "获取信号量成功, index=%d", i)
 		wg.Add(1)
 
 		go func(index int, targetIP string) {
 			defer wg.Done()
-			defer func() { <-sem }()
+			defer func() {
+				logger.Verbose("BatchPing", targetIP, "释放信号量, index=%d", index)
+				<-sem
+			}()
+
+			logger.Debug("BatchPing", targetIP, "开始处理, index=%d", index)
 
 			// Check for cancellation before starting
 			select {
 			case <-runCtx.Done():
+				logger.Debug("BatchPing", targetIP, "任务被取消, index=%d", index)
 				progressMu.Lock()
 				progress.SetResult(index, PingHostResult{
 					IP:        targetIP,
@@ -132,6 +153,7 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 			// Parse IP
 			ip := net.ParseIP(targetIP)
 			if ip == nil {
+				logger.Error("BatchPing", targetIP, "无效的 IP 地址, index=%d", index)
 				progressMu.Lock()
 				progress.SetResult(index, PingHostResult{
 					IP:        targetIP,
@@ -152,10 +174,12 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 
 			progressMu.Lock()
 			progress.SetResult(index, result) // 按索引存储，保持顺序
+			logger.Debug("BatchPing", targetIP, "处理完成, index=%d, status=%s, errorMsg=%s",
+				index, result.Status, result.ErrorMsg)
 			// 只在非取消状态下触发回调，避免取消后不必要的更新
 			select {
 			case <-runCtx.Done():
-				// 已取消，不触发回调
+				logger.Verbose("BatchPing", targetIP, "已取消，不触发回调, index=%d", index)
 			default:
 				safeCallback(onUpdate, progress)
 			}
@@ -164,6 +188,7 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 	}
 
 	wg.Wait()
+	logger.Debug("BatchPing", "-", "所有 worker 已完成")
 	// 完成后触发最终回调
 	safeCallback(onUpdate, progress)
 	return progress
@@ -171,8 +196,11 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 
 // pingHost performs multiple ping attempts to a single host and aggregates results.
 func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResult {
+	ipStr := ip.String()
+	logger.Debug("BatchPing", ipStr, "开始 ping 主机: count=%d", e.config.Count)
+
 	result := PingHostResult{
-		IP:        ip.String(),
+		IP:        ipStr,
 		Status:    "pending",
 		SentCount: e.config.Count,
 	}
@@ -182,23 +210,32 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 	var minRtt float64 = 0 // 初始化为 0 表示无效值
 	var maxRtt float64
 	var lastTTL uint8
+	var lastError string // 记录最后一次错误信息
 
 	for i := 0; i < e.config.Count; i++ {
 		// Check for cancellation
 		select {
 		case <-ctx.Done():
+			logger.Debug("BatchPing", ipStr, "ping 被取消")
 			result.Status = "error"
 			result.ErrorMsg = "Cancelled"
 			return result
 		default:
 		}
 
+		logger.Verbose("BatchPing", ipStr, "第 %d/%d 次 ping", i+1, e.config.Count)
+
 		// Perform single ping
 		pingResult, err := PingOne(ip, e.config.Timeout, e.config.DataSize)
 		if err != nil {
+			logger.Debug("BatchPing", ipStr, "第 %d 次 ping 返回错误: %v", i+1, err)
 			result.ErrorMsg = err.Error()
+			lastError = err.Error()
 			continue
 		}
+
+		logger.Verbose("BatchPing", ipStr, "第 %d 次 ping 结果: success=%v, rtt=%.2fms, status=%s, error=%s",
+			i+1, pingResult.Success, pingResult.RoundTripTime, pingResult.Status, pingResult.Error)
 
 		if pingResult.Success {
 			successCount++
@@ -211,12 +248,20 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 				maxRtt = pingResult.RoundTripTime
 			}
 			lastTTL = pingResult.TTL
+		} else {
+			// 记录失败原因
+			logger.Debug("BatchPing", ipStr, "第 %d 次 ping 失败: status=%s, error=%s", i+1, pingResult.Status, pingResult.Error)
+			// 保存错误信息
+			if pingResult.Error != "" {
+				lastError = pingResult.Error
+			}
 		}
 
 		// Wait for interval between pings (if specified)
 		if i < e.config.Count-1 && e.config.Interval > 0 {
 			select {
 			case <-ctx.Done():
+				logger.Debug("BatchPing", ipStr, "等待间隔时被取消")
 				result.Status = "error"
 				result.ErrorMsg = "Cancelled"
 				return result
@@ -238,10 +283,16 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 		result.MinRtt = minRtt
 		result.MaxRtt = maxRtt
 		result.TTL = lastTTL
+		logger.Debug("BatchPing", ipStr, "主机在线: success=%d/%d, avgRtt=%.2fms, minRtt=%.2fms, maxRtt=%.2fms",
+			successCount, e.config.Count, result.AvgRtt, result.MinRtt, result.MaxRtt)
 	} else {
 		result.Alive = false
 		result.Status = "offline"
-		// minRtt 保持为 0，前端会显示为 "-"
+		// 关键修复：设置错误信息
+		if result.ErrorMsg == "" && lastError != "" {
+			result.ErrorMsg = lastError
+		}
+		logger.Debug("BatchPing", ipStr, "主机离线: error=%s", result.ErrorMsg)
 	}
 
 	return result
@@ -252,11 +303,15 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 func (e *BatchPingEngine) Stop() {
 	e.runningMu.Lock()
 	cancel := e.cancel
+	running := e.running
 	e.runningMu.Unlock()
 
 	// 在锁外调用 cancel，避免死锁
 	if cancel != nil {
+		logger.Info("BatchPing", "-", "正在停止批量 Ping 操作...")
 		cancel()
+	} else {
+		logger.Debug("BatchPing", "-", "停止请求已收到，但没有活动的取消函数 (running=%v)", running)
 	}
 	// 注意：不直接修改 running 状态，由 Run() 的 defer 统一处理
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/icmp"
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -56,47 +57,78 @@ func (s *PingService) ServiceStartup(ctx context.Context, options application.Se
 
 // StartBatchPing starts a batch ping operation.
 func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, error) {
+	// 辅助函数：截断字符串
+	truncateString := func(s string, maxLen int) string {
+		if len(s) > maxLen {
+			return s[:maxLen] + "..."
+		}
+		return s
+	}
+
+	logger.Info("PingService", "-", "收到批量 Ping 请求: targets=%s, deviceIds=%v",
+		truncateString(req.Targets, 100), req.DeviceIDs)
+
 	// 1. 前置参数处理（无需锁，减少锁持有时间）
 	ips, err := s.resolveTargets(req.Targets, req.DeviceIDs)
 	if err != nil {
+		logger.Error("PingService", "-", "解析目标失败: %v", err)
 		return nil, err
 	}
 
+	logger.Debug("PingService", "-", "解析目标完成: ipCount=%d", len(ips))
+	for i, ip := range ips {
+		if i >= 10 {
+			logger.Debug("PingService", "-", "  ... 还有 %d 个 IP", len(ips)-10)
+			break
+		}
+		logger.Debug("PingService", "-", "  [%d] %s", i, ip)
+	}
+
 	if len(ips) == 0 {
+		logger.Error("PingService", "-", "未提供有效的 IP 地址")
 		return nil, fmt.Errorf("未提供有效的 IP 地址")
 	}
 
 	// Limit maximum IPs
 	if len(ips) > 10000 {
+		logger.Error("PingService", "-", "IP 数量超过限制: %d (最大 10000)", len(ips))
 		return nil, fmt.Errorf("IP 数量超过限制 (最大 10000): 当前 %d 个", len(ips))
 	}
 
 	// Merge config with defaults
 	config := s.mergeWithDefaultPingConfig(req.Config)
+	logger.Debug("PingService", "-", "Ping 配置: timeout=%dms, count=%d, dataSize=%d, concurrency=%d",
+		config.Timeout, config.Count, config.DataSize, config.Concurrency)
 
 	// 2. 关键区域加锁：检查-设置过程
 	s.engineMu.Lock()
 	if s.isRunningLocked() {
 		s.engineMu.Unlock()
+		logger.Warn("PingService", "-", "批量 Ping 正在运行中，拒绝启动新任务")
 		return nil, fmt.Errorf("批量 Ping 正在运行中，请先停止当前任务")
 	}
 
 	// Create new engine（在锁保护下创建）
 	s.engine = icmp.NewBatchPingEngine(config)
+	logger.Debug("PingService", "-", "创建新的 Ping 引擎")
 
 	// 初始化 progress
 	initialProgress := icmp.NewBatchPingProgress(len(ips))
 	s.setProgress(initialProgress)
 	s.engineMu.Unlock() // 尽早释放锁
 
+	logger.Info("PingService", "-", "批量 Ping 已启动: totalIPs=%d", len(ips))
+
 	// 3. 后台执行（无需锁）
 	go func() {
+		logger.Debug("PingService", "-", "启动后台执行 goroutine")
 		progress := s.engine.Run(context.Background(), ips, func(p *icmp.BatchPingProgress) {
 			s.setProgress(p)
 			s.emitProgress(p)
 		})
 		s.setProgress(progress)
 		s.emitProgress(progress)
+		logger.Info("PingService", "-", "批量 Ping 后台执行完成")
 	}()
 
 	return s.GetPingProgress(), nil
@@ -104,11 +136,14 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 
 // StopBatchPing stops the current batch ping operation.
 func (s *PingService) StopBatchPing() error {
+	logger.Info("PingService", "-", "收到停止批量 Ping 请求")
 	s.engineMu.Lock()
 	defer s.engineMu.Unlock()
 	if s.engine == nil {
+		logger.Debug("PingService", "-", "没有正在运行的引擎，无需停止")
 		return nil
 	}
+	logger.Debug("PingService", "-", "调用引擎停止方法")
 	s.engine.Stop()
 	return nil
 }
@@ -445,6 +480,10 @@ func (s *PingService) setProgress(progress *icmp.BatchPingProgress) {
 
 // emitProgress emits progress event to frontend.
 func (s *PingService) emitProgress(progress *icmp.BatchPingProgress) {
+	if progress != nil {
+		logger.Verbose("PingService", "-", "发送进度事件: progress=%.1f%%, completed=%d/%d, running=%v",
+			progress.Progress, progress.CompletedIPs, progress.TotalIPs, progress.IsRunning)
+	}
 	if s.wailsApp != nil && s.wailsApp.Event != nil {
 		s.wailsApp.Event.Emit("ping:progress", progress)
 	}
