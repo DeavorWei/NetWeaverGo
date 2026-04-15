@@ -58,7 +58,9 @@ type TopologyEdgeCandidate struct {
 	// 决策原因（为何被保留或淘汰）
 	DecisionReason string `json:"decisionReason"`
 	// 最终边 ID（如果被保留，指向最终的 TaskTopologyEdge）
-	FinalEdgeID string    `json:"finalEdgeId"`
+	FinalEdgeID string `json:"finalEdgeId"`
+	// B端设备的MAC地址列表（用于IP标识时保留MAC信息）
+	BDeviceMACs []string `gorm:"serializer:json" json:"bDeviceMacs"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }

@@ -71,17 +71,37 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 			node.Role = "server-inferred"
 			node.Vendor = "endpoint"
 			node.NodeType = models.NodeTypeInferred
-			// 从边信息中提取MAC地址
-			node.MACAddress = extractMACFromEdges(edges, id)
+			// 从边信息中提取MAC地址（优先从BDeviceMAC字段）
+			mac, macs := extractMACFromEdges(edges, id)
+			node.MACAddress = mac
+			node.MACAddresses = macs
 		} else if strings.HasPrefix(id, "terminal:") {
-			ip := strings.TrimPrefix(id, "terminal:")
-			node.Label = ip
-			node.IP = ip
+			ipOrMAC := strings.TrimPrefix(id, "terminal:")
+			// 判断是IP还是MAC（检查是否为有效IP）
+			if isValidIP(ipOrMAC) {
+				node.Label = ipOrMAC
+				node.IP = ipOrMAC
+			} else {
+				node.Label = ipOrMAC
+				node.MACAddress = ipOrMAC
+			}
 			node.Role = "terminal-inferred"
 			node.Vendor = "endpoint"
 			node.NodeType = models.NodeTypeInferred
 			// 从边信息中提取MAC地址
-			node.MACAddress = extractMACFromEdges(edges, id)
+			mac, macs := extractMACFromEdges(edges, id)
+			if node.MACAddress == "" {
+				node.MACAddress = mac
+			}
+			node.MACAddresses = macs
+		} else if strings.HasPrefix(id, "unknown:") {
+			// 处理未知MAC节点
+			mac := strings.TrimPrefix(id, "unknown:")
+			node.Label = mac
+			node.MACAddress = mac
+			node.Role = "unknown-inferred"
+			node.Vendor = "unknown"
+			node.NodeType = models.NodeTypeUnknown
 		} else if strings.HasPrefix(id, "unmanaged:") {
 			unmanagedID := strings.TrimPrefix(id, "unmanaged:")
 			node.Label = unmanagedID
@@ -501,11 +521,28 @@ func makeTaskEdgeID() string {
 
 // extractMACFromEdges 从边信息中提取推断节点的MAC地址
 // 用于server:和terminal:类型的推断节点
-func extractMACFromEdges(edges []TaskTopologyEdge, deviceID string) string {
+// 返回: (主MAC, 所有MAC列表)
+func extractMACFromEdges(edges []TaskTopologyEdge, deviceID string) (string, []string) {
 	for _, e := range edges {
-		if e.BDeviceID == deviceID && e.BDeviceMAC != "" {
-			return e.BDeviceMAC
+		if e.BDeviceID == deviceID {
+			// 优先从BDeviceMAC字段读取
+			if e.BDeviceMAC != "" {
+				var macs []string
+				if e.BDeviceMACs != "" {
+					json.Unmarshal([]byte(e.BDeviceMACs), &macs)
+				}
+				if len(macs) == 0 && e.BDeviceMAC != "" {
+					macs = []string{e.BDeviceMAC}
+				}
+				return e.BDeviceMAC, macs
+			}
+			// 降级：从Evidence中提取
+			for _, ev := range e.Evidence {
+				if ev.RemoteMAC != "" {
+					return ev.RemoteMAC, nil
+				}
+			}
 		}
 	}
-	return ""
+	return "", nil
 }

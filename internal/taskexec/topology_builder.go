@@ -773,6 +773,7 @@ func (b *TopologyBuilder) buildFDBARPCandidates(n *NormalizedFacts) []*TopologyE
 					TotalScore:     score.TotalScore,
 					Features:       features,
 					EvidenceRefs:   []EdgeEvidence{evidence},
+					BDeviceMACs:    macList, // 保留所有MAC地址
 				}
 				candidates = append(candidates, candidate)
 				candidateMap[candidateKey] = candidate
@@ -1088,6 +1089,26 @@ func (b *TopologyBuilder) materializeEdges(candidates []*TopologyEdgeCandidate, 
 			status = "conflict"
 		}
 
+		// 提取B端设备MAC信息
+		bDeviceMAC := ""
+		bDeviceMACsJSON := ""
+		if len(c.BDeviceMACs) > 0 {
+			bDeviceMAC = c.BDeviceMACs[0] // 主MAC
+			if len(c.BDeviceMACs) > 1 {
+				// 多MAC序列化为JSON数组
+				macsJSON, _ := json.Marshal(c.BDeviceMACs)
+				bDeviceMACsJSON = string(macsJSON)
+			}
+		} else {
+			// 从Evidence中提取MAC（兼容旧逻辑）
+			for _, ev := range c.EvidenceRefs {
+				if ev.RemoteMAC != "" {
+					bDeviceMAC = ev.RemoteMAC
+					break
+				}
+			}
+		}
+
 		edge := TaskTopologyEdge{
 			ID:                  makeTaskEdgeID(),
 			TaskRunID:           runID,
@@ -1095,6 +1116,8 @@ func (b *TopologyBuilder) materializeEdges(candidates []*TopologyEdgeCandidate, 
 			AIf:                 c.AIf,
 			BDeviceID:           c.BDeviceID,
 			BIf:                 c.BIf,
+			BDeviceMAC:          bDeviceMAC,      // 填充B端MAC
+			BDeviceMACs:         bDeviceMACsJSON, // 填充多MAC
 			LogicalAIf:          c.LogicalAIf,
 			LogicalBIf:          c.LogicalBIf,
 			EdgeType:            c.EdgeType,

@@ -78,6 +78,11 @@ export interface GraphNode {
   label: string;
   role?: string;
   site?: string;
+  ip?: string;
+  nodeType?: string;      // managed, unmanaged, inferred, unknown
+  macAddress?: string;    // 推断节点的主MAC地址
+  macAddresses?: string[];// 推断节点的所有MAC地址
+  vendor?: string;
 }
 
 export interface GraphEdge {
@@ -127,6 +132,8 @@ function initGraph() {
         id: n.id,
         label: n.label || n.id,
         role: n.role,
+        nodeType: n.nodeType,
+        macAddress: n.macAddress,
       },
     })),
     ...props.edges.map((e) => ({
@@ -167,6 +174,16 @@ function initGraph() {
         style: {
           "border-color": "#3b82f6",
           "border-width": 3,
+        },
+      },
+      // 推断节点样式：使用虚线边框和不同颜色
+      {
+        selector: 'node[nodeType="inferred"], node[nodeType="unknown"]',
+        style: {
+          "border-style": "dashed",
+          "border-width": 3,
+          "border-color": "#f59e0b",
+          "background-color": "#78716c", // 灰色背景表示推断节点
         },
       },
       {

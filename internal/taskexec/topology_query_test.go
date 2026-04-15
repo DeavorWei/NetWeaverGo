@@ -144,8 +144,8 @@ func TestExtractMACFromEdges(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractMACFromEdges(edges, tt.deviceID)
-			assert.Equal(t, tt.expected, result)
+			mac, _ := extractMACFromEdges(edges, tt.deviceID)
+			assert.Equal(t, tt.expected, mac)
 		})
 	}
 }

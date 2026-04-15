@@ -364,20 +364,35 @@
               }}
             </div>
             <div class="text-text-muted">IP: {{ deviceDetail.deviceIp }}</div>
-            <div class="text-text-muted">
-              厂商: {{ deviceDetail.identity?.vendor || "-" }}
+            <!-- 推断节点显示MAC信息 -->
+            <div v-if="isInferredNode(nodeByID.get(selectedDeviceID))" class="space-y-1">
+              <div class="text-warning font-medium">推断节点</div>
+              <div v-if="nodeByID.get(selectedDeviceID)?.macAddress" class="text-text-muted">
+                MAC: {{ nodeByID.get(selectedDeviceID)?.macAddress }}
+              </div>
+              <div v-if="(nodeByID.get(selectedDeviceID)?.macAddresses?.length ?? 0) > 1" class="text-text-muted">
+                多MAC: {{ nodeByID.get(selectedDeviceID)?.macAddresses?.join(', ') }}
+              </div>
+              <div class="text-text-muted text-xs italic">
+                此设备通过FDB/ARP推断，未直接采集
+              </div>
             </div>
-            <div class="text-text-muted">
-              型号: {{ deviceDetail.identity?.model || "-" }}
-            </div>
-            <div class="text-text-muted">
-              版本: {{ deviceDetail.identity?.version || "-" }}
-            </div>
-            <div class="pt-2 border-t border-border text-text-muted">
-              接口 {{ deviceDetail.interfaces?.length || 0 }} | LLDP
-              {{ deviceDetail.lldpNeighbors?.length || 0 }} | 聚合
-              {{ deviceDetail.aggregates?.length || 0 }}
-            </div>
+            <template v-else>
+              <div class="text-text-muted">
+                厂商: {{ deviceDetail.identity?.vendor || "-" }}
+              </div>
+              <div class="text-text-muted">
+                型号: {{ deviceDetail.identity?.model || "-" }}
+              </div>
+              <div class="text-text-muted">
+                版本: {{ deviceDetail.identity?.version || "-" }}
+              </div>
+              <div class="pt-2 border-t border-border text-text-muted">
+                接口 {{ deviceDetail.interfaces?.length || 0 }} | LLDP
+                {{ deviceDetail.lldpNeighbors?.length || 0 }} | 聚合
+                {{ deviceDetail.aggregates?.length || 0 }}
+              </div>
+            </template>
           </div>
           <div v-else class="p-4 text-xs text-text-muted">
             点击设备名称查看详情
@@ -408,7 +423,7 @@ import {
 } from "../services/api";
 import { useTaskexecStore } from "../stores/taskexecStore";
 import { StatusNames, type ReplayableRunInfo } from "../types/taskexec";
-import TopologyGraph from "../components/topology/TopologyGraph.vue";
+import TopologyGraph, { type GraphNode } from "../components/topology/TopologyGraph.vue";
 import ReplayDialog from "../components/topology/ReplayDialog.vue";
 
 // 阶段4: 统一执行框架 - 使用runId替代taskId
@@ -494,6 +509,11 @@ const graphNodes = computed(() =>
     label: n.label || n.id,
     role: n.role,
     site: n.site,
+    ip: n.ip,
+    nodeType: n.nodeType,
+    macAddress: n.macAddress,
+    macAddresses: n.macAddresses,
+    vendor: n.vendor,
   })),
 );
 
@@ -634,6 +654,11 @@ function countByStatus(status: string) {
 function displayNodeLabel(nodeID: string) {
   const node = nodeByID.value.get(nodeID);
   return node?.label || nodeID;
+}
+
+// 判断是否为推断节点
+function isInferredNode(node: GraphNode | undefined): boolean {
+  return node?.nodeType === 'inferred' || node?.nodeType === 'unknown';
 }
 
 function applySummaryFromGraph() {
