@@ -74,7 +74,7 @@ func NewBatchPingProgress(totalIPs int) *BatchPingProgress {
 		IsRunning:    true,
 		StartTime:    time.Now(),
 		ElapsedMs:    0,
-		Results:      make([]PingHostResult, 0, totalIPs),
+		Results:      make([]PingHostResult, totalIPs), // 预分配固定大小，保持顺序
 	}
 }
 
@@ -87,8 +87,37 @@ func (p *BatchPingProgress) UpdateProgress() {
 }
 
 // AddResult adds a result to the progress and updates counters.
+// Deprecated: Use SetResult for ordered results.
 func (p *BatchPingProgress) AddResult(result PingHostResult) {
 	p.Results = append(p.Results, result)
+	p.CompletedIPs++
+
+	switch result.Status {
+	case "online":
+		p.OnlineCount++
+	case "offline":
+		p.OfflineCount++
+	case "error":
+		p.ErrorCount++
+	}
+
+	p.UpdateProgress()
+}
+
+// SetResult sets a result at the specified index and updates counters.
+// This method ensures results are stored in input order.
+// This method is thread-safe when called with the progressMu lock held.
+func (p *BatchPingProgress) SetResult(index int, result PingHostResult) {
+	if index < 0 || index >= p.TotalIPs {
+		return
+	}
+
+	// 检查是否已设置（防止重复计数）
+	if p.Results[index].Status != "" && p.Results[index].Status != "pending" {
+		return
+	}
+
+	p.Results[index] = result
 	p.CompletedIPs++
 
 	switch result.Status {

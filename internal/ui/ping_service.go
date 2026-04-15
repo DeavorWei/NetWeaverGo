@@ -236,8 +236,11 @@ func (s *PingService) resolveTargets(targets string, deviceIDs []uint) ([]string
 		}
 	}
 
-	// Parse target string
-	lines := strings.Split(targets, "\n")
+	// 使用 FieldsFunc 同时处理换行、逗号、空格和分号分隔符
+	lines := strings.FieldsFunc(targets, func(r rune) bool {
+		return r == '\n' || r == ',' || r == ' ' || r == '\t' || r == ';'
+	})
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -409,6 +412,9 @@ func (s *PingService) mergeWithDefaultPingConfig(config icmp.PingConfig) icmp.Pi
 	if config.Concurrency == 0 {
 		config.Concurrency = defaults.Concurrency
 	}
+	if config.Interval == 0 {
+		config.Interval = defaults.Interval
+	}
 
 	// Apply limits
 	if config.Timeout > 10000 {
@@ -422,6 +428,9 @@ func (s *PingService) mergeWithDefaultPingConfig(config icmp.PingConfig) icmp.Pi
 	}
 	if config.Concurrency > 256 {
 		config.Concurrency = 256 // Max 256 concurrent
+	}
+	if config.Interval > 5000 {
+		config.Interval = 5000 // Max 5 seconds between pings
 	}
 
 	return config

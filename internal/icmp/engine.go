@@ -4,6 +4,7 @@ package icmp
 
 import (
 	"context"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -40,6 +41,20 @@ func NewBatchPingEngine(config PingConfig) *BatchPingEngine {
 	return &BatchPingEngine{
 		config: config,
 	}
+}
+
+// safeCallback safely invokes the progress callback with panic recovery.
+func safeCallback(fn func(*BatchPingProgress), progress *BatchPingProgress) {
+	if fn == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			// 记录 panic 信息，便于排查问题
+			log.Printf("Ping progress callback panic recovered: %v", r)
+		}
+	}()
+	fn(progress)
 }
 
 // Run executes the batch ping operation for the given IP addresses.
@@ -85,6 +100,17 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 			// Check for cancellation before starting
 			select {
 			case <-runCtx.Done():
+				progressMu.Lock()
+				progress.SetResult(index, PingHostResult{
+					IP:        targetIP,
+					Status:    "error",
+					ErrorMsg:  "Cancelled",
+					SentCount: 1,
+					RecvCount: 0,
+					LossRate:  100,
+				})
+				safeCallback(onUpdate, progress)
+				progressMu.Unlock()
 				return
 			default:
 			}
@@ -93,7 +119,7 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 			ip := net.ParseIP(targetIP)
 			if ip == nil {
 				progressMu.Lock()
-				progress.AddResult(PingHostResult{
+				progress.SetResult(index, PingHostResult{
 					IP:        targetIP,
 					Alive:     false,
 					Status:    "error",
@@ -102,9 +128,7 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 					RecvCount: 0,
 					LossRate:  100,
 				})
-				if onUpdate != nil {
-					onUpdate(progress.Clone()) // 深拷贝
-				}
+				safeCallback(onUpdate, progress)
 				progressMu.Unlock()
 				return
 			}
@@ -113,10 +137,8 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 			result := e.pingHost(runCtx, ip)
 
 			progressMu.Lock()
-			progress.AddResult(result)
-			if onUpdate != nil {
-				onUpdate(progress.Clone()) // 深拷贝
-			}
+			progress.SetResult(index, result) // 按索引存储，保持顺序
+			safeCallback(onUpdate, progress)
 			progressMu.Unlock()
 		}(i, ipStr)
 	}
@@ -135,7 +157,7 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 
 	var successCount int
 	var rttSum uint32
-	var minRtt uint32 = ^uint32(0) // Max uint32
+	var minRtt uint32 = 0 // 初始化为 0 表示无效值
 	var maxRtt uint32
 	var lastTTL uint8
 
@@ -159,7 +181,8 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 		if pingResult.Success {
 			successCount++
 			rttSum += pingResult.RoundTripTime
-			if pingResult.RoundTripTime < minRtt {
+			// 仅在第一次成功或更小时更新 minRtt
+			if minRtt == 0 || pingResult.RoundTripTime < minRtt {
 				minRtt = pingResult.RoundTripTime
 			}
 			if pingResult.RoundTripTime > maxRtt {
@@ -196,6 +219,7 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 	} else {
 		result.Alive = false
 		result.Status = "offline"
+		// minRtt 保持为 0，前端会显示为 "-"
 	}
 
 	return result
