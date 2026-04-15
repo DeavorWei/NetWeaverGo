@@ -11,6 +11,7 @@ const TaskExecution = () => import('../views/TaskExecution.vue')
 const NetworkCalc = () => import('../views/Tools/NetworkCalc.vue')
 const ProtocolRef = () => import('../views/Tools/ProtocolRef.vue')
 const ConfigForge = () => import('../views/Tools/ConfigForge.vue')
+const BatchPing = () => import('../views/Tools/BatchPing.vue')
 const Settings = () => import('../views/Settings.vue')
 const Topology = () => import('../views/Topology.vue')
 const PlanCompare = () => import('../views/PlanCompare.vue')
@@ -56,6 +57,11 @@ const routes = [
     path: '/tools/config',
     name: 'ConfigForge',
     component: ConfigForge
+  },
+  {
+    path: '/tools/ping',
+    name: 'BatchPing',
+    component: BatchPing
   },
   {
     path: '/settings',

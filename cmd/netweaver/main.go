@@ -73,6 +73,7 @@ func runGUI() {
 	taskGroupService.SetTaskExecutionService(taskExecutionService) // 设置共享运行时（阶段1）
 	topologyCommandService := ui.NewTopologyCommandService()
 	planCompareService := ui.NewPlanCompareService()
+	pingService := ui.NewPingService() // 批量 Ping 服务
 	// 创建统一任务执行UI服务（Wails暴露层）
 	taskExecutionUIService := ui.NewTaskExecutionUIService(taskExecutionService)
 
@@ -109,6 +110,7 @@ func runGUI() {
 			application.NewService(executionHistoryService),
 			application.NewService(topologyCommandService),
 			application.NewService(planCompareService),
+			application.NewService(pingService),            // 批量 Ping 服务
 			application.NewService(taskExecutionUIService), // 统一任务执行UI服务（阶段1）
 		},
 		Assets: application.AssetOptions{
