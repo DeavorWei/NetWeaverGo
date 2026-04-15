@@ -108,3 +108,25 @@ func (p *BatchPingProgress) Finish() {
 	p.IsRunning = false
 	p.UpdateProgress()
 }
+
+// Clone creates a deep copy of BatchPingProgress.
+func (p *BatchPingProgress) Clone() *BatchPingProgress {
+	if p == nil {
+		return nil
+	}
+
+	clone := &BatchPingProgress{
+		TotalIPs:     p.TotalIPs,
+		CompletedIPs: p.CompletedIPs,
+		OnlineCount:  p.OnlineCount,
+		OfflineCount: p.OfflineCount,
+		ErrorCount:   p.ErrorCount,
+		Progress:     p.Progress,
+		IsRunning:    p.IsRunning,
+		StartTime:    p.StartTime,
+		ElapsedMs:    p.ElapsedMs,
+		Results:      make([]PingHostResult, len(p.Results)),
+	}
+	copy(clone.Results, p.Results)
+	return clone
+}

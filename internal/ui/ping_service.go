@@ -37,6 +37,7 @@ type PingService struct {
 	engine     *icmp.BatchPingEngine
 	progress   *icmp.BatchPingProgress
 	progressMu sync.RWMutex
+	engineMu   sync.Mutex // 保护 engine 创建和状态检查
 	repo       repository.DeviceRepository
 }
 
@@ -55,12 +56,7 @@ func (s *PingService) ServiceStartup(ctx context.Context, options application.Se
 
 // StartBatchPing starts a batch ping operation.
 func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, error) {
-	// Check if already running
-	if s.IsRunning() {
-		return nil, fmt.Errorf("批量 Ping 正在运行中，请先停止当前任务")
-	}
-
-	// Resolve targets to IP list
+	// 1. 前置参数处理（无需锁，减少锁持有时间）
 	ips, err := s.resolveTargets(req.Targets, req.DeviceIDs)
 	if err != nil {
 		return nil, err
@@ -78,10 +74,22 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 	// Merge config with defaults
 	config := s.mergeWithDefaultPingConfig(req.Config)
 
-	// Create new engine
+	// 2. 关键区域加锁：检查-设置过程
+	s.engineMu.Lock()
+	if s.isRunningLocked() {
+		s.engineMu.Unlock()
+		return nil, fmt.Errorf("批量 Ping 正在运行中，请先停止当前任务")
+	}
+
+	// Create new engine（在锁保护下创建）
 	s.engine = icmp.NewBatchPingEngine(config)
 
-	// Run in background
+	// 初始化 progress
+	initialProgress := icmp.NewBatchPingProgress(len(ips))
+	s.setProgress(initialProgress)
+	s.engineMu.Unlock() // 尽早释放锁
+
+	// 3. 后台执行（无需锁）
 	go func() {
 		progress := s.engine.Run(context.Background(), ips, func(p *icmp.BatchPingProgress) {
 			s.setProgress(p)
@@ -91,12 +99,13 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 		s.emitProgress(progress)
 	}()
 
-	// Return initial progress
 	return s.GetPingProgress(), nil
 }
 
 // StopBatchPing stops the current batch ping operation.
 func (s *PingService) StopBatchPing() error {
+	s.engineMu.Lock()
+	defer s.engineMu.Unlock()
 	if s.engine == nil {
 		return nil
 	}
@@ -111,11 +120,17 @@ func (s *PingService) GetPingProgress() *icmp.BatchPingProgress {
 	return s.progress
 }
 
+// isRunningLocked 在已持有 engineMu 锁的情况下检查运行状态
+// 必须在 engineMu.Lock() 保护下调用
+func (s *PingService) isRunningLocked() bool {
+	return s.engine != nil && s.engine.IsRunning()
+}
+
 // IsRunning returns whether a ping operation is running.
 func (s *PingService) IsRunning() bool {
-	s.progressMu.RLock()
-	defer s.progressMu.RUnlock()
-	return s.progress != nil && s.progress.IsRunning
+	s.engineMu.Lock()
+	defer s.engineMu.Unlock()
+	return s.isRunningLocked()
 }
 
 // ExportPingResultCSV exports the ping results as CSV.
@@ -131,8 +146,8 @@ func (s *PingService) ExportPingResultCSV() (*PingCSVResult, error) {
 
 	writer := csv.NewWriter(&buf)
 
-	// Write header
-	header := []string{"序号", "IP 地址", "状态", "延迟 (ms)", "最小延迟 (ms)", "最大延迟 (ms)", "平均延迟 (ms)", "TTL", "发送次数", "接收次数", "丢包率 (%)", "错误信息"}
+	// Write header - 修正表头
+	header := []string{"序号", "IP 地址", "状态", "平均延迟 (ms)", "最小延迟 (ms)", "最大延迟 (ms)", "TTL", "发送次数", "接收次数", "丢包率 (%)", "错误信息"}
 	if err := writer.Write(header); err != nil {
 		return nil, err
 	}
@@ -146,14 +161,14 @@ func (s *PingService) ExportPingResultCSV() (*PingCSVResult, error) {
 			status = "错误"
 		}
 
+		// 修正数据行 - 删除重复的 AvgRtt
 		row := []string{
 			strconv.Itoa(i + 1),
 			result.IP,
 			status,
-			formatRtt(result.AvgRtt),
-			formatRtt(result.MinRtt),
-			formatRtt(result.MaxRtt),
-			formatRtt(result.AvgRtt),
+			formatRtt(result.AvgRtt), // 平均延迟
+			formatRtt(result.MinRtt), // 最小延迟
+			formatRtt(result.MaxRtt), // 最大延迟
 			strconv.Itoa(int(result.TTL)),
 			strconv.Itoa(result.SentCount),
 			strconv.Itoa(result.RecvCount),

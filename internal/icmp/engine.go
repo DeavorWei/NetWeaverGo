@@ -103,7 +103,7 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 					LossRate:  100,
 				})
 				if onUpdate != nil {
-					onUpdate(progress)
+					onUpdate(progress.Clone()) // 深拷贝
 				}
 				progressMu.Unlock()
 				return
@@ -115,7 +115,7 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 			progressMu.Lock()
 			progress.AddResult(result)
 			if onUpdate != nil {
-				onUpdate(progress)
+				onUpdate(progress.Clone()) // 深拷贝
 			}
 			progressMu.Unlock()
 		}(i, ipStr)
