@@ -179,6 +179,11 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 	// Merge options with defaults
 	options := s.mergeWithDefaultPingOptions(req.Options)
 
+	// 调试日志：确认选项值
+	logger.Debug("PingService", "-", "Ping 选项: EnableRealtime=%v, ResolveHostName=%v, DNSTimeout=%v, RealtimeThrottle=%v",
+		options.EnableRealtime, options.ResolveHostName, options.DNSTimeout, options.RealtimeThrottle)
+	logger.Debug("PingService", "-", "原始请求选项: %+v", req.Options)
+
 	// 2. 关键区域加锁：检查-设置过程
 	s.engineMu.Lock()
 	if s.isRunningLocked() {
@@ -216,33 +221,47 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 
 		// 准备 Realtime 的分发通道及节流
 		var lastRealtime sync.Map // map[string]int64 IP -> time
+		var realtimeCallCount int // 调试：统计回调调用次数
+		var realtimeThrottleCount int // 调试：统计被节流的次数
 		var onSinglePing func(icmp.SinglePingResult)
 		if options.EnableRealtime {
+			logger.Debug("PingService", "-", "启用实时进度回调: EnableRealtime=true")
 			onSinglePing = func(spr icmp.SinglePingResult) {
+				realtimeCallCount++
 				now := time.Now().UnixMilli()
 				if val, ok := lastRealtime.Load(spr.IP); ok {
 					if now-val.(int64) < adaptiveThrottle.Milliseconds() {
+						realtimeThrottleCount++
+						logger.Verbose("PingService", spr.IP, "实时事件被节流: seq=%d, throttleCount=%d", spr.Seq, realtimeThrottleCount)
 						return // Throttled
 					}
 				}
 				lastRealtime.Store(spr.IP, now)
+				logger.Verbose("PingService", spr.IP, "发送实时事件: seq=%d, success=%v, rtt=%.2fms", spr.Seq, spr.Success, spr.RoundTripTime)
 				s.emitRealtime(spr)
 			}
 		}
 
 		// 准备 HostUpdate 回调（用于实时状态更新）
 		var lastHostUpdate sync.Map // map[string]int64 IP -> time
+		var hostUpdateCallCount int // 调试：统计回调调用次数
+		var hostUpdateThrottleCount int // 调试：统计被节流的次数
 		var onHostUpdate func(icmp.HostPingUpdate)
 		if options.EnableRealtime {
+			logger.Debug("PingService", "-", "启用主机状态更新回调: EnableRealtime=true")
 			onHostUpdate = func(hpu icmp.HostPingUpdate) {
+				hostUpdateCallCount++
 				// 节流：避免同一IP过于频繁的更新
 				now := time.Now().UnixMilli()
 				if val, ok := lastHostUpdate.Load(hpu.IP); ok {
 					if now-val.(int64) < adaptiveThrottle.Milliseconds() {
+						hostUpdateThrottleCount++
+						logger.Verbose("PingService", hpu.IP, "主机更新被节流: seq=%d, throttleCount=%d", hpu.CurrentSeq, hostUpdateThrottleCount)
 						return // Throttled
 					}
 				}
 				lastHostUpdate.Store(hpu.IP, now)
+				logger.Verbose("PingService", hpu.IP, "发送主机更新: seq=%d, isComplete=%v", hpu.CurrentSeq, hpu.IsComplete)
 				s.emitHostUpdate(hpu)
 			}
 		}
