@@ -28,15 +28,22 @@ const (
 
 // PingRequest represents the request for batch ping operation.
 type PingRequest struct {
-	Targets   string     `json:"targets"`   // IP addresses, CIDR, or ranges (newline separated)
+	Targets   string         `json:"targets"`   // IP addresses, CIDR, or ranges (newline separated)
 	Config    icmp.PingConfig `json:"config"`    // Ping configuration
-	DeviceIDs []uint     `json:"deviceIds"` // Optional: device IDs to import IPs from
+	DeviceIDs []uint         `json:"deviceIds"` // Optional: device IDs to import IPs from
+	Options   icmp.PingOptions `json:"options"`   // Ping options (new)
 }
 
 // PingCSVResult represents the CSV export result.
 type PingCSVResult struct {
 	FileName string `json:"fileName"`
 	Content  string `json:"content"`
+}
+
+// dnsCacheEntry DNS 缓存条目
+type dnsCacheEntry struct {
+	hostName  string
+	timestamp time.Time
 }
 
 // PingService provides batch ping functionality.
@@ -47,19 +54,64 @@ type PingService struct {
 	progressMu sync.RWMutex
 	engineMu   sync.Mutex // 保护 engine 创建和状态检查
 	repo       repository.DeviceRepository
+
+	// DNS 缓存
+	dnsCache    map[string]dnsCacheEntry
+	dnsCacheMu  sync.RWMutex
+	dnsCacheTTL time.Duration
+
+	// 清理控制
+	cleanupStopCh chan struct{}
 }
 
 // NewPingService creates a new PingService instance.
 func NewPingService() *PingService {
 	return &PingService{
-		repo: repository.NewDeviceRepository(),
+		repo:          repository.NewDeviceRepository(),
+		dnsCache:      make(map[string]dnsCacheEntry),
+		dnsCacheTTL:   5 * time.Minute,
+		cleanupStopCh: make(chan struct{}),
 	}
 }
 
 // ServiceStartup Wails service startup lifecycle hook.
 func (s *PingService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	s.wailsApp = application.Get()
+	s.startDNSCacheCleanup() // 启动定期清理
 	return nil
+}
+
+// ServiceShutdown Wails service shutdown lifecycle hook.
+func (s *PingService) ServiceShutdown() error {
+	s.stopDNSCacheCleanup() // 终止定时清理，防泄漏
+	return nil
+}
+
+// 启动定期清理
+func (s *PingService) startDNSCacheCleanup() {
+	if s.cleanupStopCh == nil {
+		s.cleanupStopCh = make(chan struct{})
+	}
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				s.cleanupDNSCache()
+			case <-s.cleanupStopCh:
+				return
+			}
+		}
+	}()
+}
+
+// 停止定期清理
+func (s *PingService) stopDNSCacheCleanup() {
+	if s.cleanupStopCh != nil {
+		close(s.cleanupStopCh)
+		s.cleanupStopCh = nil
+	}
 }
 
 // StartBatchPing starts a batch ping operation.
@@ -72,8 +124,8 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 		return s
 	}
 
-	logger.Info("PingService", "-", "收到批量 Ping 请求: targets=%s, deviceIds=%v",
-		truncateString(req.Targets, 100), req.DeviceIDs)
+	logger.Info("PingService", "-", "收到批量 Ping 请求: targets=%s, deviceIds=%v, resolveHostName=%v",
+		truncateString(req.Targets, 100), req.DeviceIDs, req.Options.ResolveHostName)
 
 	// 1. 前置参数处理（无需锁，减少锁持有时间）
 	ips, err := s.resolveTargets(req.Targets, req.DeviceIDs)
@@ -124,6 +176,9 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 			config.DataSize, MTULimit)
 	}
 
+	// Merge options with defaults
+	options := s.mergeWithDefaultPingOptions(req.Options)
+
 	// 2. 关键区域加锁：检查-设置过程
 	s.engineMu.Lock()
 	if s.isRunningLocked() {
@@ -146,10 +201,53 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 	// 3. 后台执行（无需锁）
 	go func() {
 		logger.Debug("PingService", "-", "启动后台执行 goroutine")
+
+		// DNS 预解析（如果启用）
+		var hostNameMap map[string]string
+		if options.ResolveHostName {
+			logger.Debug("PingService", "-", "开始 DNS 预解析: ipCount=%d, timeout=%v", len(ips), options.DNSTimeout)
+			hostNameMap = s.resolveHostNames(context.Background(), ips, options.DNSTimeout)
+			logger.Debug("PingService", "-", "DNS 预解析完成: resolvedCount=%d", len(hostNameMap))
+		}
+
+		// 准备 Realtime 的分发通道及节流
+		var lastRealtime sync.Map // map[string]int64 IP -> time
+		var onSinglePing func(icmp.SinglePingResult)
+		if options.EnableRealtime {
+			onSinglePing = func(spr icmp.SinglePingResult) {
+				now := time.Now().UnixMilli()
+				if val, ok := lastRealtime.Load(spr.IP); ok {
+					if now-val.(int64) < options.RealtimeThrottle.Milliseconds() {
+						return // Throttled
+					}
+				}
+				lastRealtime.Store(spr.IP, now)
+				s.emitRealtime(spr)
+			}
+		}
+
 		progress := s.engine.Run(context.Background(), ips, func(p *icmp.BatchPingProgress) {
+			// 合并 DNS 结果到 progress
+			if hostNameMap != nil {
+				for i := range p.Results {
+					if hostName, ok := hostNameMap[p.Results[i].IP]; ok {
+						p.Results[i].HostName = hostName
+					}
+				}
+			}
 			s.setProgress(p)
 			s.emitProgress(p)
-		})
+		}, onSinglePing)
+
+		// 最终结果也合并 DNS
+		if hostNameMap != nil {
+			for i := range progress.Results {
+				if hostName, ok := hostNameMap[progress.Results[i].IP]; ok {
+					progress.Results[i].HostName = hostName
+				}
+			}
+		}
+
 		s.setProgress(progress)
 		s.emitProgress(progress)
 		logger.Info("PingService", "-", "批量 Ping 后台执行完成")
@@ -192,7 +290,7 @@ func (s *PingService) IsRunning() bool {
 	return s.isRunningLocked()
 }
 
-// ExportPingResultCSV exports the ping results as CSV.
+// ExportPingResultCSV exports the ping results as CSV with extended columns.
 func (s *PingService) ExportPingResultCSV() (*PingCSVResult, error) {
 	progress := s.GetPingProgress()
 	if progress == nil || len(progress.Results) == 0 {
@@ -205,8 +303,13 @@ func (s *PingService) ExportPingResultCSV() (*PingCSVResult, error) {
 
 	writer := csv.NewWriter(&buf)
 
-	// Write header - 修正表头
-	header := []string{"序号", "IP 地址", "状态", "平均延迟 (ms)", "最小延迟 (ms)", "最大延迟 (ms)", "TTL", "发送次数", "接收次数", "丢包率 (%)", "错误信息"}
+	// Write header - 扩展表头
+	header := []string{
+		"序号", "IP 地址", "主机名", "状态",
+		"发送次数", "成功次数", "失败次数", "丢包率(%)",
+		"最小延迟(ms)", "最大延迟(ms)", "平均延迟(ms)", "最后延迟(ms)",
+		"TTL", "最后成功时间", "最后失败时间", "错误信息",
+	}
 	if err := writer.Write(header); err != nil {
 		return nil, err
 	}
@@ -220,18 +323,22 @@ func (s *PingService) ExportPingResultCSV() (*PingCSVResult, error) {
 			status = "错误"
 		}
 
-		// 修正数据行 - 删除重复的 AvgRtt
 		row := []string{
 			strconv.Itoa(i + 1),
 			result.IP,
+			result.HostName,
 			status,
-			formatRtt(result.AvgRtt), // 平均延迟
-			formatRtt(result.MinRtt), // 最小延迟
-			formatRtt(result.MaxRtt), // 最大延迟
-			strconv.Itoa(int(result.TTL)),
 			strconv.Itoa(result.SentCount),
 			strconv.Itoa(result.RecvCount),
-			fmt.Sprintf("%.1f", result.LossRate),
+			strconv.Itoa(result.FailedCount),
+			fmt.Sprintf("%.2f", result.LossRate),
+			formatRttForCSV(result.MinRtt),
+			formatRttForCSV(result.MaxRtt),
+			formatRttForCSV(result.AvgRtt),
+			formatRttForCSV(result.LastRtt),
+			strconv.Itoa(int(result.TTL)),
+			formatTimestamp(result.LastSucceedAt),
+			formatTimestamp(result.LastFailedAt),
 			result.ErrorMsg,
 		}
 		if err := writer.Write(row); err != nil {
@@ -495,6 +602,28 @@ func (s *PingService) mergeWithDefaultPingConfig(config icmp.PingConfig) icmp.Pi
 	return config
 }
 
+// mergeWithDefaultPingOptions merges user options with defaults.
+func (s *PingService) mergeWithDefaultPingOptions(options icmp.PingOptions) icmp.PingOptions {
+	defaults := icmp.DefaultPingOptions()
+
+	if options.DNSTimeout == 0 {
+		options.DNSTimeout = defaults.DNSTimeout
+	}
+	if options.RealtimeThrottle == 0 {
+		options.RealtimeThrottle = defaults.RealtimeThrottle
+	}
+
+	// Apply limits
+	if options.DNSTimeout > 30*time.Second {
+		options.DNSTimeout = 30 * time.Second
+	}
+	if options.RealtimeThrottle < 10*time.Millisecond {
+		options.RealtimeThrottle = 10 * time.Millisecond
+	}
+
+	return options
+}
+
 // setProgress sets the current progress.
 func (s *PingService) setProgress(progress *icmp.BatchPingProgress) {
 	s.progressMu.Lock()
@@ -513,6 +642,13 @@ func (s *PingService) emitProgress(progress *icmp.BatchPingProgress) {
 	}
 }
 
+// emitRealtime 发送单次 Ping 结果到前端
+func (s *PingService) emitRealtime(result icmp.SinglePingResult) {
+	if s.wailsApp != nil && s.wailsApp.Event != nil {
+		s.wailsApp.Event.Emit("ping:realtime", result)
+	}
+}
+
 // formatRtt formats RTT value for display.
 func formatRtt(rtt float64) string {
 	if rtt <= 0 {
@@ -523,4 +659,115 @@ func formatRtt(rtt float64) string {
 		return fmt.Sprintf("%.3fms", rtt)
 	}
 	return fmt.Sprintf("%.2fms", rtt)
+}
+
+// formatRttForCSV formats RTT value for CSV export.
+func formatRttForCSV(rtt float64) string {
+	if rtt < 0 {
+		return "-"
+	}
+	return fmt.Sprintf("%.3f", rtt)
+}
+
+// formatTimestamp formats Unix millisecond timestamp for display.
+func formatTimestamp(ts int64) string {
+	if ts == 0 {
+		return ""
+	}
+	return time.UnixMilli(ts).Format("2006-01-02 15:04:05")
+}
+
+// resolveHostNames 并行解析主机名（带缓存）
+func (s *PingService) resolveHostNames(ctx context.Context, ips []string, timeout time.Duration) map[string]string {
+	results := make(map[string]string)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	// 并发控制：限制同时进行的 DNS 查询数
+	sem := make(chan struct{}, 10)
+
+	// 先从缓存获取
+	var needResolve []string
+	now := time.Now()
+	for _, ip := range ips {
+		s.dnsCacheMu.RLock()
+		entry, ok := s.dnsCache[ip]
+		s.dnsCacheMu.RUnlock()
+
+		if ok && now.Sub(entry.timestamp) < s.dnsCacheTTL {
+			results[ip] = entry.hostName
+		} else {
+			needResolve = append(needResolve, ip)
+		}
+	}
+
+	// 并行解析未缓存的 IP
+	for _, ip := range needResolve {
+		select {
+		case <-ctx.Done():
+			return results
+		default:
+		}
+
+		wg.Add(1)
+		go func(targetIP string) {
+			defer wg.Done()
+
+			select {
+			case <-ctx.Done():
+				return
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			}
+
+			resolveCtx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+
+			// 使用 net.Resolver 支持带 context 的 DNS 查询
+			resolver := &net.Resolver{}
+			names, err := resolver.LookupAddr(resolveCtx, targetIP)
+			if err == nil && len(names) > 0 {
+				hostName := strings.TrimSuffix(names[0], ".")
+				mu.Lock()
+				results[targetIP] = hostName
+				mu.Unlock()
+
+				// 更新缓存
+				s.dnsCacheMu.Lock()
+				s.dnsCache[targetIP] = dnsCacheEntry{
+					hostName:  hostName,
+					timestamp: time.Now(),
+				}
+				s.dnsCacheMu.Unlock()
+			}
+		}(ip)
+	}
+
+	wg.Wait()
+	return results
+}
+
+// clearDNSCache 清除 DNS 缓存
+func (s *PingService) clearDNSCache() {
+	s.dnsCacheMu.Lock()
+	defer s.dnsCacheMu.Unlock()
+	s.dnsCache = make(map[string]dnsCacheEntry)
+}
+
+// cleanupDNSCache 清理过期缓存条目（可定期调用）
+func (s *PingService) cleanupDNSCache() {
+	s.dnsCacheMu.Lock()
+	defer s.dnsCacheMu.Unlock()
+
+	now := time.Now()
+	for ip, entry := range s.dnsCache {
+		if now.Sub(entry.timestamp) > s.dnsCacheTTL {
+			delete(s.dnsCache, ip)
+		}
+	}
+}
+
+// GetPingDefaultOptions returns the default ping options.
+func (s *PingService) GetPingDefaultOptions() icmp.PingOptions {
+	return icmp.DefaultPingOptions()
 }

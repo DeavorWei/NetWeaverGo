@@ -3,9 +3,10 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { Events } from '@wailsio/runtime'
 import * as PingService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/pingservice'
 import * as DeviceService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/deviceservice'
-import type { PingConfig, BatchPingProgress } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
+import type { PingConfig, BatchPingProgress, SinglePingResult, PingHostResult } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
 import type { PingRequest } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 import type { DeviceAssetListItem } from '@/bindings/github.com/NetWeaverGo/core/internal/models/models'
+import { Duration } from '@/bindings/time/models'
 import { useToast } from '@/utils/useToast'
 
 const toast = useToast()
@@ -24,6 +25,64 @@ const config = ref<PingConfig>({
   DataSize: 32,
   Concurrency: 64
 })
+
+// Ping options
+const resolveHostName = ref(false)
+const enableRealtime = ref(false)
+const realtimeThrottle = ref(100) // ms
+
+// 列配置
+export interface ColumnConfig {
+  key: string
+  label: string
+  visible: boolean
+  width?: number
+}
+
+const defaultColumns: ColumnConfig[] = [
+  { key: 'index', label: '#', visible: true, width: 50 },
+  { key: 'ip', label: 'IP 地址', visible: true, width: 120 },
+  { key: 'hostName', label: '主机名', visible: false, width: 150 },
+  { key: 'status', label: '状态', visible: true, width: 80 },
+  { key: 'successFailed', label: '成功/失败', visible: true, width: 100 },
+  { key: 'latency', label: '延迟(Avg/Last)', visible: true, width: 120 },
+  { key: 'ttl', label: 'TTL', visible: true, width: 60 },
+  { key: 'lossRate', label: '丢包率', visible: true, width: 80 },
+  { key: 'lastSucceedAt', label: '最后成功', visible: false, width: 140 },
+  { key: 'lastFailedAt', label: '最后失败', visible: false, width: 140 },
+  { key: 'errorMsg', label: '错误信息', visible: true, width: 200 },
+]
+
+const columns = ref<ColumnConfig[]>([...defaultColumns])
+const showColumnConfig = ref(false)
+
+const loadColumnConfig = () => {
+  const saved = localStorage.getItem('pingColumns')
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved)
+      columns.value = defaultColumns.map((col: ColumnConfig) => {
+        const savedCol = parsed.find((c: ColumnConfig) => c.key === col.key)
+        return savedCol ? { ...col, visible: savedCol.visible } : col
+      })
+    } catch { /* ignored */ }
+  }
+}
+
+const saveColumnConfig = () => {
+  localStorage.setItem('pingColumns', JSON.stringify(columns.value))
+  showColumnConfig.value = false
+  toast.success('列配置已保存')
+}
+
+const resetColumnConfig = () => {
+  columns.value = defaultColumns.map(col => ({ ...col }))
+  localStorage.removeItem('pingColumns')
+}
+
+const isColumnVisible = (key: string): boolean => {
+  return columns.value.find(c => c.key === key)?.visible ?? false
+}
 
 // 数据包大小警告状态
 const dataSizeWarning = computed(() => {
@@ -174,7 +233,13 @@ const startPing = async () => {
     const request: PingRequest = {
       targets: targetInput.value,
       config: config.value,
-      deviceIds: []
+      deviceIds: [],
+      options: {
+        resolveHostName: resolveHostName.value,
+        dnsTimeout: 2 * Duration.Second, // 2 seconds
+        enableRealtime: enableRealtime.value,
+        realtimeThrottle: realtimeThrottle.value * Duration.Millisecond
+      }
     }
     const result = await PingService.StartBatchPing(request)
     progress.value = result
@@ -241,6 +306,37 @@ const formatRtt = (rtt: number, status?: string): string => {
   return `${rtt.toFixed(2)}ms`
 }
 
+const formatTime = (timestamp: number | undefined): string => {
+  if (!timestamp || timestamp === 0) return '-'
+  
+  const date = new Date(timestamp)
+  if (isNaN(date.getTime())) return '-'
+  
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  
+  // 处理未来时间或时钟偏差，直接显示绝对时间
+  if (diffMs < 0) {
+    return date.toLocaleString('zh-CN', {
+      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'
+    })
+  }
+
+  const diffSec = Math.floor(diffMs / 1000)
+  
+  if (diffSec < 60) return '刚刚'
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} 分钟前`
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} 小时前`
+  
+  // 超过 24 小时显示具体时间
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 const formatElapsed = (ms: number): string => {
   if (ms < 1000) return `${ms}ms`
   const seconds = Math.floor(ms / 1000)
@@ -283,8 +379,24 @@ const handleProgressEvent = (ev: { name: string; data: BatchPingProgress }) => {
   lastProgressTime = Date.now() // 记录 Event 收到时间
 }
 
+let unlistenRealtime: (() => void) | null = null
+
+const handleRealtimeEvent = (ev: { name: string; data: SinglePingResult }) => {
+  const result = ev.data
+  if (progress.value) {
+    // 根据单条请求去反查本地表并呈现某些微动画，或简单替换
+    const exist = progress.value.results?.find((r: PingHostResult) => r.ip === result.ip)
+    if (exist) {
+        // 这里仅为了展示可达性，更全面的更新应依赖 progress 推进
+        // 如果你需要细粒度可独立更新 UI，那可以在此处将单项数据挂载在 vue ref 上
+    }
+  }
+}
+
 // Lifecycle
 onMounted(async () => {
+  loadColumnConfig()
+
   // Get default config
   try {
     const defaultConfig = await PingService.GetPingDefaultConfig()
@@ -297,6 +409,7 @@ onMounted(async () => {
 
   // Subscribe to events - Events.On 返回取消函数
   unlistenProgress = Events.On('ping:progress', handleProgressEvent)
+  unlistenRealtime = Events.On('ping:realtime', handleRealtimeEvent)
 })
 
 onUnmounted(() => {
@@ -304,6 +417,10 @@ onUnmounted(() => {
   if (unlistenProgress) {
     unlistenProgress()
     unlistenProgress = null
+  }
+  if (unlistenRealtime) {
+    unlistenRealtime()
+    unlistenRealtime = null
   }
   // 停止轮询
   stopPolling()
@@ -450,6 +567,57 @@ onUnmounted(() => {
                 class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
               />
             </div>
+            <!-- 解析主机名选项 -->
+            <div class="flex items-center justify-between pt-2 border-t border-border/50">
+              <label class="text-sm text-text-secondary flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                </svg>
+                解析主机名
+              </label>
+              <button
+                @click="resolveHostName = !resolveHostName"
+                :disabled="isRunning"
+                class="relative w-10 h-5 rounded-full transition-colors"
+                :class="resolveHostName ? 'bg-accent' : 'bg-bg-tertiary'"
+              >
+                <span
+                  class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform"
+                  :class="resolveHostName ? 'translate-x-5' : ''"
+                ></span>
+              </button>
+            </div>
+            <!-- 实时进度选项 -->
+            <div class="flex items-center justify-between pt-2 border-t border-border/50">
+              <label class="text-sm text-text-secondary flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                启用实时进度
+              </label>
+              <button
+                @click="enableRealtime = !enableRealtime"
+                :disabled="isRunning"
+                class="relative w-10 h-5 rounded-full transition-colors"
+                :class="enableRealtime ? 'bg-accent' : 'bg-bg-tertiary'"
+              >
+                <span
+                  class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform"
+                  :class="enableRealtime ? 'translate-x-5' : ''"
+                ></span>
+              </button>
+            </div>
+            <div v-if="enableRealtime" class="flex items-center justify-between">
+              <label class="text-sm text-text-secondary">更新间隔(ms)</label>
+              <input
+                v-model.number="realtimeThrottle"
+                type="number"
+                :disabled="isRunning"
+                min="10"
+                max="5000"
+                class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
+              />
+            </div>
           </div>
         </section>
       </div>
@@ -507,6 +675,13 @@ onUnmounted(() => {
             </h2>
             <div class="flex gap-2">
               <button
+                @click="showColumnConfig = true"
+                :disabled="isRunning"
+                class="px-3 py-1.5 bg-bg-tertiary hover:bg-bg-hover border border-border rounded-lg text-sm text-text-primary transition-colors disabled:opacity-50"
+              >
+                列配置
+              </button>
+              <button
                 @click="exportCSV"
                 :disabled="!progress || progress.results.length === 0"
                 class="px-3 py-1.5 bg-bg-tertiary hover:bg-bg-hover border border-border rounded-lg text-sm text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
@@ -530,13 +705,17 @@ onUnmounted(() => {
             <table v-if="progress && progress.results.length > 0" class="w-full text-sm">
               <thead class="sticky top-0 bg-bg-secondary">
                 <tr class="text-left text-text-muted border-b border-border">
-                  <th class="py-2 px-3 font-medium">#</th>
-                  <th class="py-2 px-3 font-medium">IP 地址</th>
-                  <th class="py-2 px-3 font-medium">状态</th>
-                  <th class="py-2 px-3 font-medium">延迟</th>
-                  <th class="py-2 px-3 font-medium">TTL</th>
-                  <th class="py-2 px-3 font-medium">丢包率</th>
-                  <th class="py-2 px-3 font-medium">错误信息</th>
+                  <th v-if="isColumnVisible('index')" class="py-2 px-3 font-medium">#</th>
+                  <th v-if="isColumnVisible('ip')" class="py-2 px-3 font-medium">IP 地址</th>
+                  <th v-if="isColumnVisible('hostName') && resolveHostName" class="py-2 px-3 font-medium">主机名</th>
+                  <th v-if="isColumnVisible('status')" class="py-2 px-3 font-medium">状态</th>
+                  <th v-if="isColumnVisible('successFailed')" class="py-2 px-3 font-medium">成功/失败</th>
+                  <th v-if="isColumnVisible('latency')" class="py-2 px-3 font-medium">延迟(Avg/Last)</th>
+                  <th v-if="isColumnVisible('ttl')" class="py-2 px-3 font-medium">TTL</th>
+                  <th v-if="isColumnVisible('lossRate')" class="py-2 px-3 font-medium">丢包率</th>
+                  <th v-if="isColumnVisible('lastSucceedAt')" class="py-2 px-3 font-medium">最后成功</th>
+                  <th v-if="isColumnVisible('lastFailedAt')" class="py-2 px-3 font-medium">最后失败</th>
+                  <th v-if="isColumnVisible('errorMsg')" class="py-2 px-3 font-medium">错误信息</th>
                 </tr>
               </thead>
               <tbody>
@@ -545,9 +724,10 @@ onUnmounted(() => {
                   :key="result.ip"
                   class="border-b border-border/50 hover:bg-bg-hover/50 transition-colors"
                 >
-                  <td class="py-2 px-3 text-text-muted">{{ index + 1 }}</td>
-                  <td class="py-2 px-3 text-text-primary font-mono">{{ result.ip }}</td>
-                  <td class="py-2 px-3">
+                  <td v-if="isColumnVisible('index')" class="py-2 px-3 text-text-muted">{{ index + 1 }}</td>
+                  <td v-if="isColumnVisible('ip')" class="py-2 px-3 text-text-primary font-mono">{{ result.ip }}</td>
+                  <td v-if="isColumnVisible('hostName') && resolveHostName" class="py-2 px-3 text-text-secondary text-xs">{{ result.hostName || '-' }}</td>
+                  <td v-if="isColumnVisible('status')" class="py-2 px-3">
                     <span class="flex items-center gap-1">
                       <span>{{ getStatusIcon(result.status) }}</span>
                       <span :class="{
@@ -558,16 +738,30 @@ onUnmounted(() => {
                       }">{{ getStatusText(result.status) }}</span>
                     </span>
                   </td>
-                  <td class="py-2 px-3 text-text-primary">{{ formatRtt(result.avgRtt) }}</td>
-                  <td class="py-2 px-3 text-text-primary">{{ result.ttl || '-' }}</td>
-                  <td class="py-2 px-3">
+                  <td v-if="isColumnVisible('successFailed')" class="py-2 px-3 text-text-primary">
+                    <span class="text-green-400">{{ result.recvCount }}</span>
+                    <span class="text-text-muted">/</span>
+                    <span class="text-red-400">{{ result.failedCount }}</span>
+                  </td>
+                  <td v-if="isColumnVisible('latency')" class="py-2 px-3 text-text-primary">
+                    <span>{{ formatRtt(result.avgRtt) }}</span>
+                    <span v-if="result.lastRtt && result.lastRtt > 0" class="text-text-muted text-xs">({{ formatRtt(result.lastRtt!) }})</span>
+                  </td>
+                  <td v-if="isColumnVisible('ttl')" class="py-2 px-3 text-text-primary">{{ result.ttl || '-' }}</td>
+                  <td v-if="isColumnVisible('lossRate')" class="py-2 px-3">
                     <span :class="{
                       'text-green-400': result.lossRate === 0,
                       'text-yellow-400': result.lossRate > 0 && result.lossRate < 100,
                       'text-red-400': result.lossRate === 100
                     }">{{ result.lossRate.toFixed(1) }}%</span>
                   </td>
-                  <td class="py-2 px-3 text-text-muted text-xs">{{ result.errorMsg || '-' }}</td>
+                  <td v-if="isColumnVisible('lastSucceedAt')" class="py-2 px-3 text-text-secondary text-xs">
+                    {{ formatTime(result.lastSucceedAt) }}
+                  </td>
+                  <td v-if="isColumnVisible('lastFailedAt')" class="py-2 px-3 text-text-secondary text-xs">
+                    {{ formatTime(result.lastFailedAt) }}
+                  </td>
+                  <td v-if="isColumnVisible('errorMsg')" class="py-2 px-3 text-text-muted text-xs">{{ result.errorMsg || '-' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -583,6 +777,32 @@ onUnmounted(() => {
         </section>
       </div>
     </div>
+
+    <!-- 列配置弹窗 -->
+    <Teleport to="body">
+      <div v-if="showColumnConfig" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" @click.self="showColumnConfig = false">
+        <div class="bg-bg-secondary border border-border rounded-xl shadow-xl w-[400px]">
+          <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="text-lg font-semibold text-text-primary">列配置</h3>
+            <button @click="showColumnConfig = false" class="text-text-muted hover:text-text-primary">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <div class="p-4 space-y-2 max-h-[60vh] overflow-auto">
+            <div v-for="col in columns" :key="col.key" class="flex items-center justify-between p-2 bg-bg-tertiary/30 rounded-lg">
+              <span class="text-sm text-text-primary">{{ col.label }}</span>
+              <button @click="col.visible = !col.visible" class="relative w-10 h-5 rounded-full transition-colors" :class="col.visible ? 'bg-accent' : 'bg-bg-tertiary'">
+                <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform" :class="col.visible ? 'translate-x-5' : ''"></span>
+              </button>
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 p-4 border-t border-border">
+            <button @click="resetColumnConfig" class="px-4 py-2 text-text-secondary hover:text-text-primary transition-colors">重置</button>
+            <button @click="saveColumnConfig" class="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors">保存</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- 设备选择弹窗 -->
     <Teleport to="body">

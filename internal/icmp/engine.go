@@ -61,7 +61,7 @@ func safeCallback(fn func(*BatchPingProgress), progress *BatchPingProgress) {
 
 // Run executes the batch ping operation for the given IP addresses.
 // The onUpdate callback is called whenever progress is made.
-func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*BatchPingProgress)) *BatchPingProgress {
+func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*BatchPingProgress), onSinglePing func(SinglePingResult)) *BatchPingProgress {
 	logger.Info("BatchPing", "-", "批量 Ping 开始: totalIPs=%d, concurrency=%d, timeout=%dms, count=%d",
 		len(ips), e.config.Concurrency, e.config.Timeout, e.config.Count)
 
@@ -170,7 +170,7 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 			}
 
 			// Perform ping attempts
-			result := e.pingHost(runCtx, ip)
+			result := e.pingHost(runCtx, ip, onSinglePing)
 
 			progressMu.Lock()
 			progress.SetResult(index, result) // 按索引存储，保持顺序
@@ -195,7 +195,7 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 }
 
 // pingHost performs multiple ping attempts to a single host and aggregates results.
-func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResult {
+func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP, onSinglePing func(SinglePingResult)) PingHostResult {
 	ipStr := ip.String()
 	logger.Debug("BatchPing", ipStr, "开始 ping 主机: count=%d", e.config.Count)
 
@@ -203,14 +203,19 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 		IP:        ipStr,
 		Status:    "pending",
 		SentCount: e.config.Count,
+		MinRtt:    -1, // 使用 -1 表示无效值
 	}
 
 	var successCount int
+	var failedCount int
 	var rttSum float64
-	var minRtt float64 = 0 // 初始化为 0 表示无效值
+	var minRtt float64 = -1 // 使用 -1 表示无效值
 	var maxRtt float64
 	var lastTTL uint8
-	var lastError string // 记录最后一次错误信息
+	var lastError string
+	var lastRtt float64
+	var lastSucceedAt int64
+	var lastFailedAt int64
 
 	for i := 0; i < e.config.Count; i++ {
 		// Check for cancellation
@@ -227,19 +232,42 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 
 		// Perform single ping
 		pingResult, err := PingOne(ip, e.config.Timeout, e.config.DataSize)
-		
+
+		singleResult := SinglePingResult{
+			IP:        ipStr,
+			Seq:       i + 1,
+			Timestamp: time.Now().UnixMilli(),
+		}
+
 		// Handle PingOne function errors (API level errors)
 		if err != nil {
 			logger.Debug("BatchPing", ipStr, "第 %d 次 ping 返回错误: %v", i+1, err)
-			result.ErrorMsg = err.Error()
+			failedCount++
+			lastFailedAt = time.Now().UnixMilli()
 			lastError = err.Error()
+
+			singleResult.Success = false
+			singleResult.Status = "error"
+			singleResult.Error = err.Error()
+			if onSinglePing != nil {
+				onSinglePing(singleResult)
+			}
 			continue
 		}
 
 		// Critical fix: Handle nil pingResult (should not happen, but safety check)
 		if pingResult == nil {
 			logger.Debug("BatchPing", ipStr, "第 %d 次 ping 返回 nil 结果", i+1)
+			failedCount++
+			lastFailedAt = time.Now().UnixMilli()
 			lastError = "Ping returned nil result"
+
+			singleResult.Success = false
+			singleResult.Status = "error"
+			singleResult.Error = "Ping returned nil result"
+			if onSinglePing != nil {
+				onSinglePing(singleResult)
+			}
 			continue
 		}
 
@@ -248,25 +276,44 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 
 		if pingResult.Success {
 			successCount++
+
+			// 更新 RTT 统计
 			rttSum += pingResult.RoundTripTime
-			// 仅在第一次成功或更小时更新 minRtt
-			if minRtt == 0 || pingResult.RoundTripTime < minRtt {
+			if minRtt < 0 || pingResult.RoundTripTime < minRtt {
 				minRtt = pingResult.RoundTripTime
 			}
 			if pingResult.RoundTripTime > maxRtt {
 				maxRtt = pingResult.RoundTripTime
 			}
+
+			// 记录最后一次成功信息
+			lastSucceedAt = time.Now().UnixMilli()
+			lastRtt = pingResult.RoundTripTime
 			lastTTL = pingResult.TTL
+
+			singleResult.Success = true
+			singleResult.RoundTripTime = pingResult.RoundTripTime
+			singleResult.TTL = pingResult.TTL
+			singleResult.Status = "success"
 		} else {
-			// 记录失败原因
-			logger.Debug("BatchPing", ipStr, "第 %d 次 ping 失败: status=%s, error=%s", i+1, pingResult.Status, pingResult.Error)
-			// Critical fix: Always save error message from pingResult.Error
+			failedCount++
+
+			// 记录最后一次失败信息
+			lastFailedAt = time.Now().UnixMilli()
 			if pingResult.Error != "" {
 				lastError = pingResult.Error
 			} else if pingResult.Status != "" {
-				// Fallback to status if Error is empty
 				lastError = pingResult.Status
 			}
+			logger.Debug("BatchPing", ipStr, "第 %d 次 ping 失败: status=%s, error=%s", i+1, pingResult.Status, pingResult.Error)
+
+			singleResult.Success = false
+			singleResult.Status = pingResult.Status
+			singleResult.Error = lastError
+		}
+
+		if onSinglePing != nil {
+			onSinglePing(singleResult)
 		}
 
 		// Wait for interval between pings (if specified)
@@ -284,6 +331,12 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 
 	// Calculate statistics
 	result.RecvCount = successCount
+	result.FailedCount = failedCount
+	result.LastSucceedAt = lastSucceedAt
+	result.LastFailedAt = lastFailedAt
+	result.LastRtt = lastRtt
+	result.TTL = lastTTL
+
 	if result.SentCount > 0 {
 		result.LossRate = float64(result.SentCount-successCount) / float64(result.SentCount) * 100
 	}
@@ -294,14 +347,13 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP) PingHostResul
 		result.AvgRtt = rttSum / float64(successCount)
 		result.MinRtt = minRtt
 		result.MaxRtt = maxRtt
-		result.TTL = lastTTL
 		logger.Debug("BatchPing", ipStr, "主机在线: success=%d/%d, avgRtt=%.2fms, minRtt=%.2fms, maxRtt=%.2fms",
 			successCount, e.config.Count, result.AvgRtt, result.MinRtt, result.MaxRtt)
 	} else {
 		result.Alive = false
 		result.Status = "offline"
 		// 关键修复：设置错误信息
-		if result.ErrorMsg == "" && lastError != "" {
+		if lastError != "" {
 			result.ErrorMsg = lastError
 		}
 		logger.Debug("BatchPing", ipStr, "主机离线: error=%s", result.ErrorMsg)

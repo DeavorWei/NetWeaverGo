@@ -1,7 +1,10 @@
 // Package icmp provides Windows ICMP API wrappers for batch ping operations.
 package icmp
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // PingResult represents the result of a single ICMP echo request.
 type PingResult struct {
@@ -33,19 +36,81 @@ func DefaultPingConfig() PingConfig {
 	}
 }
 
+// PingOptions holds extended options for ping operations (UI layer features).
+type PingOptions struct {
+	ResolveHostName  bool          `json:"resolveHostName"`  // Whether to resolve hostnames via reverse DNS
+	DNSTimeout       time.Duration `json:"dnsTimeout"`       // DNS resolution timeout (default 2s)
+	EnableRealtime   bool          `json:"enableRealtime"`   // Whether to enable single ping realtime progress
+	RealtimeThrottle time.Duration `json:"realtimeThrottle"` // Minimum interval between realtime updates (default 100ms)
+}
+
+// DefaultPingOptions returns the default ping options.
+func DefaultPingOptions() PingOptions {
+	return PingOptions{
+		ResolveHostName:  false,
+		DNSTimeout:       2 * time.Second,
+		EnableRealtime:   false,
+		RealtimeThrottle: 100 * time.Millisecond,
+	}
+}
+
+// Validate validates the ping options.
+func (o *PingOptions) Validate() error {
+	if o.DNSTimeout < 0 {
+		return fmt.Errorf("DNS timeout cannot be negative")
+	}
+	if o.DNSTimeout > 30*time.Second {
+		return fmt.Errorf("DNS timeout too long: %v (max 30s)", o.DNSTimeout)
+	}
+	if o.RealtimeThrottle < 10*time.Millisecond {
+		return fmt.Errorf("realtime throttle too small: %v (min 10ms)", o.RealtimeThrottle)
+	}
+	return nil
+}
+
+// SinglePingResult represents the result of a single ping attempt, used for realtime progress callbacks.
+type SinglePingResult struct {
+	IP            string  `json:"ip"`            // Target IP address
+	Seq           int     `json:"seq"`           // Sequence number (1-based)
+	Success       bool    `json:"success"`       // Whether the ping was successful
+	RoundTripTime float64 `json:"roundTripTime"` // Round trip time in milliseconds
+	TTL           uint8   `json:"ttl"`           // Time to live
+	Status        string  `json:"status"`        // Status description
+	Error         string  `json:"error"`         // Error message
+	Timestamp     int64   `json:"timestamp"`     // Unix millisecond timestamp
+}
+
 // PingHostResult represents the aggregated result for a single host.
 type PingHostResult struct {
-	IP        string  `json:"ip"`        // Target IP address
-	Alive     bool    `json:"alive"`     // Whether the host is alive
-	SentCount int     `json:"sentCount"` // Number of packets sent
-	RecvCount int     `json:"recvCount"` // Number of packets received
-	LossRate  float64 `json:"lossRate"`  // Packet loss rate (0-100)
-	MinRtt    float64 `json:"minRtt"`    // Minimum round trip time in ms (支持亚毫秒精度)
-	MaxRtt    float64 `json:"maxRtt"`    // Maximum round trip time in ms (支持亚毫秒精度)
-	AvgRtt    float64 `json:"avgRtt"`    // Average round trip time in ms (支持亚毫秒精度)
-	TTL       uint8   `json:"ttl"`       // Time to live
-	Status    string  `json:"status"`    // Status: "online", "offline", "error", "pending"
-	ErrorMsg  string  `json:"errorMsg"`  // Error message if any
+	// === Basic Information ===
+	IP       string `json:"ip"`                 // Target IP address
+	HostName string `json:"hostName,omitempty"` // Reverse DNS resolved hostname (new)
+
+	// === Status Information ===
+	Alive    bool   `json:"alive"`              // Whether the host is alive
+	Status   string `json:"status"`             // Status: "online", "offline", "error", "pending"
+	ErrorMsg string `json:"errorMsg,omitempty"` // Error message if any
+
+	// === Count Statistics ===
+	SentCount   int `json:"sentCount"`   // Number of packets sent
+	RecvCount   int `json:"recvCount"`   // Number of packets received (success count)
+	FailedCount int `json:"failedCount"` // Number of failed pings (new)
+
+	// === Packet Loss ===
+	LossRate float64 `json:"lossRate"` // Packet loss rate (0-100)
+
+	// === RTT Statistics ===
+	MinRtt  float64 `json:"minRtt"`            // Minimum RTT (ms), -1 indicates invalid
+	MaxRtt  float64 `json:"maxRtt"`            // Maximum RTT (ms)
+	AvgRtt  float64 `json:"avgRtt"`            // Average RTT (ms)
+	LastRtt float64 `json:"lastRtt,omitempty"` // Last ping RTT (ms) (new)
+
+	// === TTL Information ===
+	TTL uint8 `json:"ttl"` // Last successful TTL, 0 indicates no valid value
+
+	// === Timestamps (Unix milliseconds) ===
+	LastSucceedAt int64 `json:"lastSucceedAt,omitempty"` // Last success timestamp (new)
+	LastFailedAt  int64 `json:"lastFailedAt,omitempty"`  // Last failure timestamp (new)
 }
 
 // BatchPingProgress represents the progress of a batch ping operation.
