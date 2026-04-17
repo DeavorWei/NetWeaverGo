@@ -224,3 +224,36 @@ func (p *BatchPingProgress) Clone() *BatchPingProgress {
 	copy(clone.Results, p.Results)
 	return clone
 }
+
+// PartialStats represents partial statistics during ping progress.
+// Used for real-time updates before a host completes all ping attempts.
+type PartialStats struct {
+	SentCount   int     `json:"sentCount"`   // Number of packets sent so far
+	RecvCount   int     `json:"recvCount"`   // Number of packets received (success count)
+	FailedCount int     `json:"failedCount"` // Number of failed pings
+	LossRate    float64 `json:"lossRate"`    // Packet loss rate (0-100)
+	LastRtt     float64 `json:"lastRtt"`     // Last ping RTT (ms)
+	MinRtt      float64 `json:"minRtt"`      // Minimum RTT (ms), -1 indicates invalid
+	MaxRtt      float64 `json:"maxRtt"`      // Maximum RTT (ms)
+	AvgRtt      float64 `json:"avgRtt"`      // Average RTT (ms)
+}
+
+// HostPingUpdate represents intermediate state update during host ping progress.
+// This is emitted after each individual ping attempt to provide real-time feedback.
+// Named distinctly from PingHostResult to avoid confusion (this is for updates, not final results).
+type HostPingUpdate struct {
+	IP           string       `json:"ip"`           // Target IP address
+	Index        int          `json:"index"`        // Index in the IP list (0-based)
+	CurrentSeq   int          `json:"currentSeq"`   // Current ping sequence number (1-based)
+	PartialStats PartialStats `json:"partialStats"` // Partial statistics
+	IsComplete   bool         `json:"isComplete"`   // Whether this host has completed all pings
+	Timestamp    int64        `json:"timestamp"`    // Update timestamp (Unix milliseconds, for ordering)
+}
+
+// RunOptions holds optional callbacks for batch ping operations.
+// Uses functional options pattern for backward compatibility.
+type RunOptions struct {
+	OnUpdate     func(*BatchPingProgress) // Called when overall progress updates
+	OnSinglePing func(SinglePingResult)   // Called after each individual ping attempt
+	OnHostUpdate func(HostPingUpdate)     // Called when host intermediate state changes (new)
+}

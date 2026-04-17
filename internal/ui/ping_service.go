@@ -210,6 +210,10 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 			logger.Debug("PingService", "-", "DNS 预解析完成: resolvedCount=%d", len(hostNameMap))
 		}
 
+		// 自适应节流：根据IP数量调整节流间隔
+		adaptiveThrottle := s.calculateAdaptiveThrottle(len(ips), options.RealtimeThrottle)
+		logger.Debug("PingService", "-", "自适应节流间隔: ipCount=%d, throttle=%v", len(ips), adaptiveThrottle)
+
 		// 准备 Realtime 的分发通道及节流
 		var lastRealtime sync.Map // map[string]int64 IP -> time
 		var onSinglePing func(icmp.SinglePingResult)
@@ -217,7 +221,7 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 			onSinglePing = func(spr icmp.SinglePingResult) {
 				now := time.Now().UnixMilli()
 				if val, ok := lastRealtime.Load(spr.IP); ok {
-					if now-val.(int64) < options.RealtimeThrottle.Milliseconds() {
+					if now-val.(int64) < adaptiveThrottle.Milliseconds() {
 						return // Throttled
 					}
 				}
@@ -226,18 +230,39 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 			}
 		}
 
-		progress := s.engine.Run(context.Background(), ips, func(p *icmp.BatchPingProgress) {
-			// 合并 DNS 结果到 progress
-			if hostNameMap != nil {
-				for i := range p.Results {
-					if hostName, ok := hostNameMap[p.Results[i].IP]; ok {
-						p.Results[i].HostName = hostName
+		// 准备 HostUpdate 回调（用于实时状态更新）
+		var lastHostUpdate sync.Map // map[string]int64 IP -> time
+		var onHostUpdate func(icmp.HostPingUpdate)
+		if options.EnableRealtime {
+			onHostUpdate = func(hpu icmp.HostPingUpdate) {
+				// 节流：避免同一IP过于频繁的更新
+				now := time.Now().UnixMilli()
+				if val, ok := lastHostUpdate.Load(hpu.IP); ok {
+					if now-val.(int64) < adaptiveThrottle.Milliseconds() {
+						return // Throttled
 					}
 				}
+				lastHostUpdate.Store(hpu.IP, now)
+				s.emitHostUpdate(hpu)
 			}
-			s.setProgress(p)
-			s.emitProgress(p)
-		}, onSinglePing)
+		}
+
+		progress := s.engine.RunWithOptions(context.Background(), ips, icmp.RunOptions{
+			OnUpdate: func(p *icmp.BatchPingProgress) {
+				// 合并 DNS 结果到 progress
+				if hostNameMap != nil {
+					for i := range p.Results {
+						if hostName, ok := hostNameMap[p.Results[i].IP]; ok {
+							p.Results[i].HostName = hostName
+						}
+					}
+				}
+				s.setProgress(p)
+				s.emitProgress(p)
+			},
+			OnSinglePing: onSinglePing,
+			OnHostUpdate: onHostUpdate,
+		})
 
 		// 最终结果也合并 DNS
 		if hostNameMap != nil {
@@ -589,9 +614,7 @@ func (s *PingService) mergeWithDefaultPingConfig(config icmp.PingConfig) icmp.Pi
 	if config.DataSize > 65500 {
 		config.DataSize = 65500 // Max ICMP payload size
 	}
-	if config.Count > 10 {
-		config.Count = 10 // Max 10 attempts
-	}
+	// Count 不设上限，允许用户自由配置重试次数
 	if config.Concurrency > 256 {
 		config.Concurrency = 256 // Max 256 concurrent
 	}
@@ -646,6 +669,13 @@ func (s *PingService) emitProgress(progress *icmp.BatchPingProgress) {
 func (s *PingService) emitRealtime(result icmp.SinglePingResult) {
 	if s.wailsApp != nil && s.wailsApp.Event != nil {
 		s.wailsApp.Event.Emit("ping:realtime", result)
+	}
+}
+
+// emitHostUpdate 发送主机中间状态更新到前端
+func (s *PingService) emitHostUpdate(update icmp.HostPingUpdate) {
+	if s.wailsApp != nil && s.wailsApp.Event != nil {
+		s.wailsApp.Event.Emit("ping:host-update", update)
 	}
 }
 
@@ -770,4 +800,38 @@ func (s *PingService) cleanupDNSCache() {
 // GetPingDefaultOptions returns the default ping options.
 func (s *PingService) GetPingDefaultOptions() icmp.PingOptions {
 	return icmp.DefaultPingOptions()
+}
+
+// calculateAdaptiveThrottle calculates adaptive throttle interval based on IP count.
+// This helps balance UI responsiveness with performance for large batch operations.
+func (s *PingService) calculateAdaptiveThrottle(ipCount int, baseThrottle time.Duration) time.Duration {
+	// If baseThrottle is already set, use it as a reference
+	minThrottle := baseThrottle
+
+	// Adaptive throttling based on IP count
+	switch {
+	case ipCount < 100:
+		// Small batch: frequent updates for better UX
+		if minThrottle < 50*time.Millisecond {
+			minThrottle = 50 * time.Millisecond
+		}
+	case ipCount < 500:
+		// Medium batch: moderate throttling
+		if minThrottle < 100*time.Millisecond {
+			minThrottle = 100 * time.Millisecond
+		}
+	default:
+		// Large batch: aggressive throttling to prevent UI lag
+		if minThrottle < 200*time.Millisecond {
+			minThrottle = 200 * time.Millisecond
+		}
+	}
+
+	return minThrottle
+}
+
+// GetPingEventTypes returns empty instances of event types for frontend type generation.
+// This method exists solely to ensure Wails3 generates TypeScript bindings for these types.
+func (s *PingService) GetPingEventTypes() (icmp.SinglePingResult, icmp.HostPingUpdate, icmp.PartialStats) {
+	return icmp.SinglePingResult{}, icmp.HostPingUpdate{}, icmp.PartialStats{}
 }

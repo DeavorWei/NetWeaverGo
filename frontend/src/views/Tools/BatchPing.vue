@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { Events } from '@wailsio/runtime'
 import * as PingService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/pingservice'
 import * as DeviceService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/deviceservice'
-import type { PingConfig, BatchPingProgress, SinglePingResult, PingHostResult } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
+import type { PingConfig, BatchPingProgress, SinglePingResult, HostPingUpdate } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
 import type { PingRequest } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 import type { DeviceAssetListItem } from '@/bindings/github.com/NetWeaverGo/core/internal/models/models'
 import { Duration } from '@/bindings/time/models'
@@ -104,11 +104,123 @@ const dataSizeWarning = computed(() => {
 const progress = ref<BatchPingProgress | null>(null)
 const isRunning = computed(() => progress.value?.isRunning ?? false)
 
+// 实时更新覆盖层状态（用于跟踪正在ping的主机）
+interface RealtimeOverlayItem {
+  currentSeq: number
+  lastUpdateTimestamp: number
+  status: 'pinging' | 'completed'
+}
+const realtimeOverlay = ref<Map<string, RealtimeOverlayItem>>(new Map())
+
+// 合并显示数据（计算属性）
+const displayResults = computed(() => {
+  if (!progress.value?.results) return []
+  
+  return progress.value.results.map((result) => {
+    const overlay = realtimeOverlay.value.get(result.ip)
+    
+    if (!overlay || overlay.status === 'completed') {
+      return { ...result, isPinging: false, displaySeq: undefined }
+    }
+    
+    return {
+      ...result,
+      isPinging: true,
+      displaySeq: overlay.currentSeq,
+    }
+  })
+})
+
+// 实时统计面板数据
+const realtimeStats = computed(() => {
+  if (!progress.value) return null
+  
+  const results = displayResults.value
+  const totalPings = results.reduce((sum, r) => sum + (r.sentCount || 0), 0)
+  const totalSuccess = results.reduce((sum, r) => sum + (r.recvCount || 0), 0)
+  const totalFailed = results.reduce((sum, r) => sum + (r.failedCount || 0), 0)
+  const pingingCount = results.filter(r => r.isPinging).length
+  
+  // 计算平均延迟（只计算有响应的主机）
+  const hostsWitRtt = results.filter(r => r.avgRtt > 0)
+  const avgRtt = hostsWitRtt.length > 0
+    ? hostsWitRtt.reduce((sum, r) => sum + r.avgRtt, 0) / hostsWitRtt.length
+    : 0
+  
+  return {
+    totalPings,
+    totalSuccess,
+    totalFailed,
+    pingingCount,
+    avgRtt,
+    overallLossRate: totalPings > 0 ? (totalFailed / totalPings * 100) : 0
+  }
+})
+
+// 前端事件批处理（使用 requestAnimationFrame）
+const pendingHostUpdates = new Map<string, HostPingUpdate>()
+let flushScheduled = false
+
+const scheduleFlush = () => {
+  if (flushScheduled) return
+  flushScheduled = true
+  requestAnimationFrame(() => {
+    pendingHostUpdates.forEach((update) => {
+      applyHostUpdate(update)
+    })
+    pendingHostUpdates.clear()
+    flushScheduled = false
+  })
+}
+
+// 应用主机更新（内部函数）
+const applyHostUpdate = (update: HostPingUpdate) => {
+  if (!progress.value?.results) return
+  
+  const host = progress.value.results[update.index]
+  if (!host || host.ip !== update.ip) return
+  
+  // 防乱序：检查时间戳
+  const overlay = realtimeOverlay.value.get(update.ip)
+  if (overlay && update.timestamp < overlay.lastUpdateTimestamp) {
+    return
+  }
+  
+  // 更新部分统计
+  if (update.partialStats) {
+    host.sentCount = update.partialStats.sentCount
+    host.recvCount = update.partialStats.recvCount
+    host.failedCount = update.partialStats.failedCount
+    host.lossRate = update.partialStats.lossRate
+    host.lastRtt = update.partialStats.lastRtt
+    host.minRtt = update.partialStats.minRtt
+    host.maxRtt = update.partialStats.maxRtt
+    host.avgRtt = update.partialStats.avgRtt
+  }
+  
+  // 更新覆盖层状态
+  realtimeOverlay.value.set(update.ip, {
+    currentSeq: update.currentSeq,
+    lastUpdateTimestamp: update.timestamp,
+    status: update.isComplete ? 'completed' : 'pinging',
+  })
+  
+  // 如果完成，更新最终状态
+  if (update.isComplete) {
+    host.status = host.recvCount > 0 ? 'online' : 'offline'
+    host.alive = host.recvCount > 0
+  }
+  
+  // 触发响应式更新
+  progress.value = { ...progress.value }
+}
+
 // 轮询相关
 const POLLING_INTERVAL = 2000 // 2秒轮询间隔
 let pollingTimer: ReturnType<typeof setInterval> | null = null
 let lastProgressTime = 0 // 上次收到进度的时间戳
 let unlistenProgress: (() => void) | null = null // 取消事件监听的函数
+let unlistenHostUpdate: (() => void) | null = null // 主机状态更新事件监听
 
 // 设备导入相关状态
 const showDeviceModal = ref(false)
@@ -377,20 +489,74 @@ const getStatusText = (status: string): string => {
 const handleProgressEvent = (ev: { name: string; data: BatchPingProgress }) => {
   progress.value = ev.data
   lastProgressTime = Date.now() // 记录 Event 收到时间
+  
+  // 清理已完成的覆盖层状态
+  ev.data.results?.forEach((result) => {
+    if (result.status !== 'pending') {
+      const overlay = realtimeOverlay.value.get(result.ip)
+      if (overlay) {
+        overlay.status = 'completed'
+      }
+    }
+  })
 }
 
 let unlistenRealtime: (() => void) | null = null
 
+// 处理单次ping结果 - 直接更新 progress 数据源
 const handleRealtimeEvent = (ev: { name: string; data: SinglePingResult }) => {
   const result = ev.data
-  if (progress.value) {
-    // 根据单条请求去反查本地表并呈现某些微动画，或简单替换
-    const exist = progress.value.results?.find((r: PingHostResult) => r.ip === result.ip)
-    if (exist) {
-        // 这里仅为了展示可达性，更全面的更新应依赖 progress 推进
-        // 如果你需要细粒度可独立更新 UI，那可以在此处将单项数据挂载在 vue ref 上
-    }
+  if (!progress.value?.results) return
+  
+  // 查找对应的主机结果
+  const hostIndex = progress.value.results.findIndex(r => r.ip === result.ip)
+  if (hostIndex === -1) return
+  
+  const host = progress.value.results[hostIndex]
+  if (!host) return
+  
+  // 防乱序：检查时间戳
+  const overlay = realtimeOverlay.value.get(result.ip)
+  if (overlay && result.timestamp < overlay.lastUpdateTimestamp) {
+    return  // 丢弃过期数据
   }
+  
+  // 直接更新 progress 中的数据
+  host.lastRtt = result.roundTripTime
+  host.sentCount = result.seq
+  if (result.success) {
+    host.recvCount = (host.recvCount || 0) + 1
+    host.lastSucceedAt = result.timestamp
+  } else {
+    host.failedCount = (host.failedCount || 0) + 1
+    host.lastFailedAt = result.timestamp
+    if (result.error) host.errorMsg = result.error
+  }
+  
+  // 计算丢包率
+  if (host.sentCount > 0) {
+    host.lossRate = (host.failedCount / host.sentCount) * 100
+  }
+  
+  // 更新覆盖层状态
+  realtimeOverlay.value.set(result.ip, {
+    currentSeq: result.seq,
+    lastUpdateTimestamp: result.timestamp,
+    status: 'pinging',
+  })
+  
+  // 触发响应式更新
+  progress.value = { ...progress.value }
+}
+
+// 处理主机状态更新事件（使用批处理优化）
+const handleHostUpdateEvent = (ev: { name: string; data: HostPingUpdate }) => {
+  const update = ev.data
+  if (!progress.value?.results) return
+  
+  // 使用批处理：将更新加入待处理队列
+  pendingHostUpdates.set(update.ip, update)
+  scheduleFlush()
 }
 
 // Lifecycle
@@ -410,6 +576,7 @@ onMounted(async () => {
   // Subscribe to events - Events.On 返回取消函数
   unlistenProgress = Events.On('ping:progress', handleProgressEvent)
   unlistenRealtime = Events.On('ping:realtime', handleRealtimeEvent)
+  unlistenHostUpdate = Events.On('ping:host-update', handleHostUpdateEvent)
 })
 
 onUnmounted(() => {
@@ -422,8 +589,14 @@ onUnmounted(() => {
     unlistenRealtime()
     unlistenRealtime = null
   }
+  if (unlistenHostUpdate) {
+    unlistenHostUpdate()
+    unlistenHostUpdate = null
+  }
   // 停止轮询
   stopPolling()
+  // 清理覆盖层状态
+  realtimeOverlay.value.clear()
 })
 </script>
 
@@ -520,7 +693,6 @@ onUnmounted(() => {
                 type="number"
                 :disabled="isRunning"
                 min="1"
-                max="10"
                 class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
               />
             </div>
@@ -662,6 +834,38 @@ onUnmounted(() => {
               <span class="text-yellow-400 font-medium">{{ progress.errorCount }}</span>
             </span>
           </div>
+          
+          <!-- 实时统计面板 -->
+          <div v-if="realtimeStats && enableRealtime" class="mt-3 pt-3 border-t border-border/50">
+            <div class="grid grid-cols-6 gap-4 text-center">
+              <div class="bg-bg-tertiary/30 rounded-lg p-2">
+                <div class="text-xs text-text-muted">总Ping次数</div>
+                <div class="text-lg font-bold text-text-primary">{{ realtimeStats.totalPings }}</div>
+              </div>
+              <div class="bg-bg-tertiary/30 rounded-lg p-2">
+                <div class="text-xs text-text-muted">成功次数</div>
+                <div class="text-lg font-bold text-green-400">{{ realtimeStats.totalSuccess }}</div>
+              </div>
+              <div class="bg-bg-tertiary/30 rounded-lg p-2">
+                <div class="text-xs text-text-muted">失败次数</div>
+                <div class="text-lg font-bold text-red-400">{{ realtimeStats.totalFailed }}</div>
+              </div>
+              <div class="bg-bg-tertiary/30 rounded-lg p-2">
+                <div class="text-xs text-text-muted">检测中</div>
+                <div class="text-lg font-bold text-accent animate-pulse">{{ realtimeStats.pingingCount }}</div>
+              </div>
+              <div class="bg-bg-tertiary/30 rounded-lg p-2">
+                <div class="text-xs text-text-muted">平均延迟</div>
+                <div class="text-lg font-bold text-text-primary">{{ realtimeStats.avgRtt > 0 ? realtimeStats.avgRtt.toFixed(1) + 'ms' : '-' }}</div>
+              </div>
+              <div class="bg-bg-tertiary/30 rounded-lg p-2">
+                <div class="text-xs text-text-muted">总丢包率</div>
+                <div class="text-lg font-bold" :class="realtimeStats.overallLossRate === 0 ? 'text-green-400' : realtimeStats.overallLossRate < 50 ? 'text-yellow-400' : 'text-red-400'">
+                  {{ realtimeStats.overallLossRate.toFixed(1) }}%
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- Results Table -->
@@ -720,28 +924,35 @@ onUnmounted(() => {
               </thead>
               <tbody>
                 <tr
-                  v-for="(result, index) in progress.results"
+                  v-for="(result, index) in displayResults"
                   :key="result.ip"
                   class="border-b border-border/50 hover:bg-bg-hover/50 transition-colors"
+                  :class="{ 'bg-accent/5': result.isPinging }"
                 >
                   <td v-if="isColumnVisible('index')" class="py-2 px-3 text-text-muted">{{ index + 1 }}</td>
                   <td v-if="isColumnVisible('ip')" class="py-2 px-3 text-text-primary font-mono">{{ result.ip }}</td>
                   <td v-if="isColumnVisible('hostName') && resolveHostName" class="py-2 px-3 text-text-secondary text-xs">{{ result.hostName || '-' }}</td>
                   <td v-if="isColumnVisible('status')" class="py-2 px-3">
                     <span class="flex items-center gap-1">
-                      <span>{{ getStatusIcon(result.status) }}</span>
+                      <span v-if="result.isPinging" class="ping-animation">🏓</span>
+                      <span v-else>{{ getStatusIcon(result.status) }}</span>
                       <span :class="{
-                        'text-green-400': result.status === 'online',
-                        'text-red-400': result.status === 'offline',
-                        'text-yellow-400': result.status === 'error',
-                        'text-text-muted': result.status === 'pending'
-                      }">{{ getStatusText(result.status) }}</span>
+                        'text-accent animate-pulse': result.isPinging,
+                        'text-green-400': !result.isPinging && result.status === 'online',
+                        'text-red-400': !result.isPinging && result.status === 'offline',
+                        'text-yellow-400': !result.isPinging && result.status === 'error',
+                        'text-text-muted': !result.isPinging && result.status === 'pending'
+                      }">{{ result.isPinging ? '检测中' : getStatusText(result.status) }}</span>
                     </span>
                   </td>
                   <td v-if="isColumnVisible('successFailed')" class="py-2 px-3 text-text-primary">
                     <span class="text-green-400">{{ result.recvCount }}</span>
                     <span class="text-text-muted">/</span>
                     <span class="text-red-400">{{ result.failedCount }}</span>
+                    <!-- 进度指示 -->
+                    <span v-if="result.isPinging && result.displaySeq" class="text-xs text-text-muted ml-1">
+                      ({{ result.displaySeq }}/{{ result.sentCount }})
+                    </span>
                   </td>
                   <td v-if="isColumnVisible('latency')" class="py-2 px-3 text-text-primary">
                     <span>{{ formatRtt(result.avgRtt) }}</span>
@@ -897,5 +1108,15 @@ onUnmounted(() => {
 
 .shadow-glow {
   box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+/* Ping 动画效果 */
+.ping-animation {
+  animation: bounce 0.5s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }
 </style>

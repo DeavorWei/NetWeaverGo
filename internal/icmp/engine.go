@@ -61,7 +61,17 @@ func safeCallback(fn func(*BatchPingProgress), progress *BatchPingProgress) {
 
 // Run executes the batch ping operation for the given IP addresses.
 // The onUpdate callback is called whenever progress is made.
+// This method maintains backward compatibility with existing code.
 func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*BatchPingProgress), onSinglePing func(SinglePingResult)) *BatchPingProgress {
+	return e.RunWithOptions(ctx, ips, RunOptions{
+		OnUpdate:     onUpdate,
+		OnSinglePing: onSinglePing,
+	})
+}
+
+// RunWithOptions executes the batch ping operation with extended callback options.
+// This is the preferred method for new code that needs host intermediate state updates.
+func (e *BatchPingEngine) RunWithOptions(ctx context.Context, ips []string, opts RunOptions) *BatchPingProgress {
 	logger.Info("BatchPing", "-", "批量 Ping 开始: totalIPs=%d, concurrency=%d, timeout=%dms, count=%d",
 		len(ips), e.config.Concurrency, e.config.Timeout, e.config.Count)
 
@@ -93,7 +103,7 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 		progress.Finish()
 		logger.Info("BatchPing", "-", "批量 Ping 完成: total=%d, online=%d, offline=%d, error=%d, elapsed=%dms",
 			progress.TotalIPs, progress.OnlineCount, progress.OfflineCount, progress.ErrorCount, progress.ElapsedMs)
-		safeCallback(onUpdate, progress)
+		safeCallback(opts.OnUpdate, progress)
 	}()
 
 	if len(ips) == 0 {
@@ -144,7 +154,7 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 					RecvCount: 0,
 					LossRate:  100,
 				})
-				safeCallback(onUpdate, progress)
+				safeCallback(opts.OnUpdate, progress)
 				progressMu.Unlock()
 				return
 			default:
@@ -164,13 +174,13 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 					RecvCount: 0,
 					LossRate:  100,
 				})
-				safeCallback(onUpdate, progress)
+				safeCallback(opts.OnUpdate, progress)
 				progressMu.Unlock()
 				return
 			}
 
-			// Perform ping attempts
-			result := e.pingHost(runCtx, ip, onSinglePing)
+			// Perform ping attempts with host update callback
+			result := e.pingHostWithOptions(runCtx, ip, index, opts.OnSinglePing, opts.OnHostUpdate)
 
 			progressMu.Lock()
 			progress.SetResult(index, result) // 按索引存储，保持顺序
@@ -181,7 +191,7 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 			case <-runCtx.Done():
 				logger.Verbose("BatchPing", targetIP, "已取消，不触发回调, index=%d", index)
 			default:
-				safeCallback(onUpdate, progress)
+				safeCallback(opts.OnUpdate, progress)
 			}
 			progressMu.Unlock()
 		}(i, ipStr)
@@ -190,12 +200,19 @@ func (e *BatchPingEngine) Run(ctx context.Context, ips []string, onUpdate func(*
 	wg.Wait()
 	logger.Debug("BatchPing", "-", "所有 worker 已完成")
 	// 完成后触发最终回调
-	safeCallback(onUpdate, progress)
+	safeCallback(opts.OnUpdate, progress)
 	return progress
 }
 
 // pingHost performs multiple ping attempts to a single host and aggregates results.
+// This method is kept for backward compatibility.
 func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP, onSinglePing func(SinglePingResult)) PingHostResult {
+	return e.pingHostWithOptions(ctx, ip, 0, onSinglePing, nil)
+}
+
+// pingHostWithOptions performs multiple ping attempts to a single host with intermediate state callbacks.
+// The onHostUpdate callback is called after each ping attempt to provide real-time progress updates.
+func (e *BatchPingEngine) pingHostWithOptions(ctx context.Context, ip net.IP, index int, onSinglePing func(SinglePingResult), onHostUpdate func(HostPingUpdate)) PingHostResult {
 	ipStr := ip.String()
 	logger.Debug("BatchPing", ipStr, "开始 ping 主机: count=%d", e.config.Count)
 
@@ -216,6 +233,42 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP, onSinglePing 
 	var lastRtt float64
 	var lastSucceedAt int64
 	var lastFailedAt int64
+
+	// Helper function to emit host update
+	emitHostUpdate := func(currentSeq int, isComplete bool) {
+		if onHostUpdate == nil {
+			return
+		}
+
+		// Calculate partial statistics
+		partialStats := PartialStats{
+			SentCount:   currentSeq,
+			RecvCount:   successCount,
+			FailedCount: failedCount,
+			LastRtt:     lastRtt,
+			MinRtt:      minRtt,
+			MaxRtt:      maxRtt,
+		}
+
+		// Calculate loss rate
+		if currentSeq > 0 {
+			partialStats.LossRate = float64(currentSeq-successCount) / float64(currentSeq) * 100
+		}
+
+		// Calculate average RTT
+		if successCount > 0 {
+			partialStats.AvgRtt = rttSum / float64(successCount)
+		}
+
+		onHostUpdate(HostPingUpdate{
+			IP:           ipStr,
+			Index:        index,
+			CurrentSeq:   currentSeq,
+			PartialStats: partialStats,
+			IsComplete:   isComplete,
+			Timestamp:    time.Now().UnixMilli(),
+		})
+	}
 
 	for i := 0; i < e.config.Count; i++ {
 		// Check for cancellation
@@ -252,6 +305,9 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP, onSinglePing 
 			if onSinglePing != nil {
 				onSinglePing(singleResult)
 			}
+
+			// Emit intermediate state update
+			emitHostUpdate(i+1, false)
 			continue
 		}
 
@@ -268,6 +324,9 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP, onSinglePing 
 			if onSinglePing != nil {
 				onSinglePing(singleResult)
 			}
+
+			// Emit intermediate state update
+			emitHostUpdate(i+1, false)
 			continue
 		}
 
@@ -316,6 +375,9 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP, onSinglePing 
 			onSinglePing(singleResult)
 		}
 
+		// Emit intermediate state update after each ping
+		emitHostUpdate(i+1, false)
+
 		// Wait for interval between pings (if specified)
 		if i < e.config.Count-1 && e.config.Interval > 0 {
 			select {
@@ -358,6 +420,9 @@ func (e *BatchPingEngine) pingHost(ctx context.Context, ip net.IP, onSinglePing 
 		}
 		logger.Debug("BatchPing", ipStr, "主机离线: error=%s", result.ErrorMsg)
 	}
+
+	// Emit final host update with completion flag
+	emitHostUpdate(e.config.Count, true)
 
 	return result
 }

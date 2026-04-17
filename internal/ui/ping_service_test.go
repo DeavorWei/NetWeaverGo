@@ -221,8 +221,8 @@ func TestMergeWithDefaultPingConfig_Limits(t *testing.T) {
 	config := svc.mergeWithDefaultPingConfig(icmp.PingConfig{
 		Timeout:     20000, // Over limit
 		Concurrency: 500,   // Over limit
-		Count:        20,    // Over limit
-		DataSize:     65535, // Over limit (max uint16)
+		Count:       100,   // 不再限制，允许任意值
+		DataSize:    65535, // Over limit (max uint16)
 	})
 
 	if config.Timeout > 30000 {
@@ -233,8 +233,9 @@ func TestMergeWithDefaultPingConfig_Limits(t *testing.T) {
 		t.Errorf("Concurrency should be capped at 256, got %d", config.Concurrency)
 	}
 
-	if config.Count > 10 {
-		t.Errorf("Count should be capped at 10, got %d", config.Count)
+	// Count 不再设上限，验证用户设置的值被保留
+	if config.Count != 100 {
+		t.Errorf("Count should be preserved as user set, expected 100, got %d", config.Count)
 	}
 
 	if config.DataSize > 65500 {
