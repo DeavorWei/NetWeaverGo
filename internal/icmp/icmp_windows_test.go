@@ -29,7 +29,7 @@ func TestPingOne_Localhost(t *testing.T) {
 	}
 
 	if result.RoundTripTime > 100 {
-		t.Logf("Warning: localhost RTT is high: %dms", result.RoundTripTime)
+		t.Logf("Warning: localhost RTT is high: %.2fms", result.RoundTripTime)
 	}
 }
 
@@ -240,5 +240,68 @@ func TestIcmpStatusToString(t *testing.T) {
 		if result != tt.expected {
 			t.Errorf("icmpStatusToString(%d) = %s, expected %s", tt.status, result, tt.expected)
 		}
+	}
+}
+
+func TestPingOne_LargeDataSize(t *testing.T) {
+	testCases := []struct {
+		name        string
+		dataSize    uint16
+		expectError bool // localhost may not support very large packets
+	}{
+		{"Small_32", 32, false},
+		{"Medium_300", 300, false},      // Previously failed before fix
+		{"Large_1000", 1000, false},
+		{"Large_8000", 8000, false},     // Test larger but reasonable size
+		// Note: 65500 is skipped because localhost loopback interface
+		// typically doesn't support maximum-sized ICMP packets
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ip := net.ParseIP("127.0.0.1")
+			if ip == nil {
+				t.Fatal("Failed to parse localhost IP")
+			}
+
+			result, err := PingOne(ip, 2000, tc.dataSize)
+			if err != nil {
+				t.Fatalf("PingOne failed for dataSize=%d: %v", tc.dataSize, err)
+			}
+
+			if !result.Success && !tc.expectError {
+				t.Errorf("Expected success for dataSize=%d, got: %s (error: %s)",
+					tc.dataSize, result.Status, result.Error)
+			}
+
+			if result.RoundTripTime > 100 {
+				t.Logf("Warning: localhost RTT is high for dataSize=%d: %.2fms",
+					tc.dataSize, result.RoundTripTime)
+			}
+
+			t.Logf("dataSize=%d: success=%v, rtt=%.2fms, ttl=%d",
+				tc.dataSize, result.Success, result.RoundTripTime, result.TTL)
+		})
+	}
+}
+
+func TestBatchPingEngine_LargeDataSize(t *testing.T) {
+	config := DefaultPingConfig()
+	config.DataSize = 1000
+	config.Concurrency = 4
+	config.Timeout = 2000
+
+	engine := NewBatchPingEngine(config)
+
+	ips := []string{"127.0.0.1"}
+	progress := engine.Run(context.Background(), ips, nil)
+
+	if len(progress.Results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(progress.Results))
+	}
+
+	if !progress.Results[0].Alive {
+		t.Errorf("Expected localhost to be alive with dataSize=1000, got: %s",
+			progress.Results[0].ErrorMsg)
 	}
 }

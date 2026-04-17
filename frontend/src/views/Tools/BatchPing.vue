@@ -10,6 +10,11 @@ import { useToast } from '@/utils/useToast'
 
 const toast = useToast()
 
+// 数据包大小限制常量
+const MAX_DATA_SIZE = 65500  // Windows API 理论最大值
+const RECOMMENDED_MAX_SIZE = 8000  // 推荐最大值（考虑 MTU 和分片）
+const MTU_LIMIT = 1472  // 以太网 MTU 边界（不分片最大 ICMP 数据）
+
 // State
 const targetInput = ref('')
 const config = ref<PingConfig>({
@@ -18,6 +23,23 @@ const config = ref<PingConfig>({
   Count: 1,
   DataSize: 32,
   Concurrency: 64
+})
+
+// 数据包大小警告状态
+const dataSizeWarning = computed(() => {
+  const size = config.value.DataSize
+  if (size > RECOMMENDED_MAX_SIZE) {
+    return {
+      type: 'error',
+      message: `数据包大小超过推荐值 ${RECOMMENDED_MAX_SIZE} 字节，可能因 MTU 限制或系统资源不足而失败`
+    }
+  } else if (size > MTU_LIMIT) {
+    return {
+      type: 'warning',
+      message: `数据包大小超过 ${MTU_LIMIT} 字节，需要 IP 分片，可能在某些网络环境下失败`
+    }
+  }
+  return null
 })
 
 const progress = ref<BatchPingProgress | null>(null)
@@ -133,6 +155,19 @@ const startPing = async () => {
   if (!targetInput.value.trim()) {
     toast.error('请输入目标 IP 地址')
     return
+  }
+
+  // 验证数据包大小
+  if (config.value.DataSize > MAX_DATA_SIZE) {
+    toast.error(`数据包大小超过 Windows API 限制 (最大 ${MAX_DATA_SIZE} 字节)`)
+    return
+  }
+
+  // 大数据包警告提示
+  if (config.value.DataSize > RECOMMENDED_MAX_SIZE) {
+    toast.warning(`数据包大小 ${config.value.DataSize} 字节超过推荐值，可能因 MTU 限制或系统资源不足而失败`)
+  } else if (config.value.DataSize > MTU_LIMIT) {
+    toast.warning(`数据包大小 ${config.value.DataSize} 字节需要 IP 分片，某些网络环境可能失败`)
   }
 
   try {
@@ -393,6 +428,16 @@ onUnmounted(() => {
                 max="65500"
                 class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
               />
+            </div>
+            <!-- 数据包大小警告 -->
+            <div v-if="dataSizeWarning" class="mt-2 p-2 rounded-lg text-xs"
+                 :class="dataSizeWarning.type === 'error' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'">
+              <div class="flex items-start gap-2">
+                <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>{{ dataSizeWarning.message }}</span>
+              </div>
             </div>
             <div class="flex items-center justify-between">
               <label class="text-sm text-text-secondary">间隔 (ms)</label>

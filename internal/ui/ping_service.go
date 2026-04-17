@@ -19,6 +19,13 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+// Data size limits for ICMP ping
+const (
+	MaxAllowedDataSize     = 65500 // Windows API maximum allowed value
+	MaxRecommendedDataSize = 8000  // Recommended maximum (considering MTU and fragmentation)
+	MTULimit               = 1472  // Ethernet MTU boundary (max ICMP data without fragmentation)
+)
+
 // PingRequest represents the request for batch ping operation.
 type PingRequest struct {
 	Targets   string     `json:"targets"`   // IP addresses, CIDR, or ranges (newline separated)
@@ -99,6 +106,23 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 	config := s.mergeWithDefaultPingConfig(req.Config)
 	logger.Debug("PingService", "-", "Ping 配置: timeout=%dms, count=%d, dataSize=%d, concurrency=%d",
 		config.Timeout, config.Count, config.DataSize, config.Concurrency)
+
+	// Validate data size limits
+	if config.DataSize > MaxAllowedDataSize {
+		logger.Error("PingService", "-", "数据包大小超过 Windows API 限制: dataSize=%d (最大 %d)",
+			config.DataSize, MaxAllowedDataSize)
+		return nil, fmt.Errorf("数据包大小超过 Windows API 限制 (最大 %d): 当前 %d",
+			MaxAllowedDataSize, config.DataSize)
+	}
+
+	// Log warning for large data sizes that may fail due to MTU limits
+	if config.DataSize > MaxRecommendedDataSize {
+		logger.Warn("PingService", "-", "⚠️ 大数据包警告: dataSize=%d 超过推荐值 %d，可能因 MTU 限制或系统资源不足而失败",
+			config.DataSize, MaxRecommendedDataSize)
+	} else if config.DataSize > MTULimit {
+		logger.Warn("PingService", "-", "⚠️ 数据包大小 %d 超过 MTU 边界 %d，需要 IP 分片，某些网络环境可能失败",
+			config.DataSize, MTULimit)
+	}
 
 	// 2. 关键区域加锁：检查-设置过程
 	s.engineMu.Lock()

@@ -35,6 +35,13 @@ const (
 	IP_OPTION_TOO_BIG      = 11017
 	IP_BAD_DESTINATION     = 11018
 	IP_GENERAL_FAILURE     = 11050
+
+	// Buffer size constants for IcmpSendEcho
+	// Windows IcmpSendEcho requires more buffer space than the theoretical calculation
+	// Reference: https://docs.microsoft.com/en-us/windows/win32/api/icmpapi/nf-icmpapi-icmpsendecho
+	minBufferSize = 256  // Minimum recommended buffer size
+	extraPadding  = 128  // Extra padding for IP headers and internal processing
+	alignment     = 8    // 8-byte alignment for Windows API compatibility
 )
 
 // IP_OPTION_INFORMATION32 - 32-bit version for 64-bit Windows compatibility
@@ -153,19 +160,28 @@ func IcmpSendEcho(handle syscall.Handle, destAddr uint32, sendData []byte, timeo
 		OptionsData: 0,
 	}
 
-	// Calculate buffer size: reply structure + data + ICMP header overhead (8 bytes) + extra padding
-	// According to Microsoft docs, need to account for ICMP header (8 bytes)
-	// Minimum recommended buffer size is 250 bytes to accommodate error messages
-	minBufferSize := uint32(256)
-	calculatedSize := uint32(unsafe.Sizeof(ICMP_ECHO_REPLY{})) + uint32(len(sendData)) + 8
-	replySize := calculatedSize
+	// Calculate buffer size with extra padding and alignment
+	// Windows IcmpSendEcho requires more buffer space than the theoretical calculation
+	// Reference: https://docs.microsoft.com/en-us/windows/win32/api/icmpapi/nf-icmpapi-icmpsendecho
+
+	// Calculate base size: reply structure + data + ICMP header overhead (8 bytes)
+	baseSize := uint32(unsafe.Sizeof(ICMP_ECHO_REPLY{})) + uint32(len(sendData)) + 8
+
+	// Add extra padding for Windows internal processing (IP headers, error messages, etc.)
+	calculatedSize := baseSize + extraPadding
+
+	// Align to 8-byte boundary for Windows API compatibility
+	alignedSize := (calculatedSize + alignment - 1) &^ (alignment - 1)
+
+	// Ensure minimum buffer size
+	replySize := alignedSize
 	if replySize < minBufferSize {
 		replySize = minBufferSize
 	}
 	replyBuffer := make([]byte, replySize)
 
-	logger.Verbose("ICMP", "-", "IcmpSendEcho 缓冲区: replySize=%d (最小=%d, 计算=%d, 结构体=%d + 数据=%d + ICMP头=8)",
-		replySize, minBufferSize, calculatedSize, unsafe.Sizeof(ICMP_ECHO_REPLY{}), len(sendData))
+	logger.Verbose("ICMP", "-", "IcmpSendEcho 缓冲区计算: baseSize=%d (结构体=%d + 数据=%d + ICMP头=8), extraPadding=%d, alignedSize=%d, finalSize=%d",
+		baseSize, unsafe.Sizeof(ICMP_ECHO_REPLY{}), len(sendData), extraPadding, alignedSize, replySize)
 
 	// Send ICMP echo request
 	ret, _, err := procIcmpSendEcho.Call(
