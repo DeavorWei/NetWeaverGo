@@ -84,13 +84,13 @@ func (e *BatchPingEngine) RunWithOptions(ctx context.Context, ips []string, opts
 		logger.Warn("BatchPing", "-", "引擎已在运行中，拒绝启动新任务")
 		e.runningMu.Unlock()
 		cancel()
-		return NewBatchPingProgress(len(ips))
+		return NewBatchPingProgress(ips)
 	}
 	e.running = true
 	e.cancel = cancel
 	e.runningMu.Unlock()
 
-	progress := NewBatchPingProgress(len(ips))
+	progress := NewBatchPingProgress(ips)
 
 	// 统一的清理逻辑 - 这是唯一设置 running = false 的地方
 	defer func() {

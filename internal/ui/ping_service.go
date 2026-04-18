@@ -197,7 +197,7 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 	logger.Debug("PingService", "-", "创建新的 Ping 引擎")
 
 	// 初始化 progress
-	initialProgress := icmp.NewBatchPingProgress(len(ips))
+	initialProgress := icmp.NewBatchPingProgress(ips)
 	s.setProgress(initialProgress)
 	s.engineMu.Unlock() // 尽早释放锁
 
@@ -251,15 +251,20 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 			logger.Debug("PingService", "-", "启用主机状态更新回调: EnableRealtime=true")
 			onHostUpdate = func(hpu icmp.HostPingUpdate) {
 				hostUpdateCallCount++
-				// 节流：避免同一IP过于频繁的更新
 				now := time.Now().UnixMilli()
-				if val, ok := lastHostUpdate.Load(hpu.IP); ok {
-					if now-val.(int64) < adaptiveThrottle.Milliseconds() {
-						hostUpdateThrottleCount++
-						logger.Verbose("PingService", hpu.IP, "主机更新被节流: seq=%d, throttleCount=%d", hpu.CurrentSeq, hostUpdateThrottleCount)
-						return // Throttled
+
+				// isComplete=true 的事件豁免节流，确保最终状态始终送达前端
+				if !hpu.IsComplete {
+					// 节流：避免同一IP过于频繁的更新
+					if val, ok := lastHostUpdate.Load(hpu.IP); ok {
+						if now-val.(int64) < adaptiveThrottle.Milliseconds() {
+							hostUpdateThrottleCount++
+							logger.Verbose("PingService", hpu.IP, "主机更新被节流: seq=%d, throttleCount=%d", hpu.CurrentSeq, hostUpdateThrottleCount)
+							return // Throttled
+						}
 					}
 				}
+
 				lastHostUpdate.Store(hpu.IP, now)
 				logger.Verbose("PingService", hpu.IP, "发送主机更新: seq=%d, isComplete=%v", hpu.CurrentSeq, hpu.IsComplete)
 				s.emitHostUpdate(hpu)
@@ -700,8 +705,12 @@ func (s *PingService) emitHostUpdate(update icmp.HostPingUpdate) {
 
 // formatRtt formats RTT value for display.
 func formatRtt(rtt float64) string {
-	if rtt <= 0 {
+	if rtt < 0 {
 		return "-"
+	}
+	// rtt == 0 是有效值（Windows IcmpSendEcho 毫秒精度限制，实际延迟 <1ms）
+	if rtt == 0 {
+		return "<1ms"
 	}
 	// 支持显示小数点后两位
 	if rtt < 1 {

@@ -4,6 +4,7 @@ package icmp
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -180,7 +181,12 @@ func TestDefaultPingConfig(t *testing.T) {
 }
 
 func TestBatchPingProgress_UpdateProgress(t *testing.T) {
-	progress := NewBatchPingProgress(100)
+	// 构造 100 个测试 IP
+	testIPs := make([]string, 100)
+	for i := range testIPs {
+		testIPs[i] = fmt.Sprintf("192.168.0.%d", i+1)
+	}
+	progress := NewBatchPingProgress(testIPs)
 
 	if progress.TotalIPs != 100 {
 		t.Errorf("Expected TotalIPs=100, got %d", progress.TotalIPs)
@@ -199,7 +205,7 @@ func TestBatchPingProgress_UpdateProgress(t *testing.T) {
 }
 
 func TestBatchPingProgress_AddResult(t *testing.T) {
-	progress := NewBatchPingProgress(1)
+	progress := NewBatchPingProgress([]string{"192.168.1.1"})
 
 	result := PingHostResult{
 		IP:     "192.168.1.1",
@@ -207,10 +213,8 @@ func TestBatchPingProgress_AddResult(t *testing.T) {
 		Status: "online",
 	}
 
-	// 模拟引擎实际行为
+	// 模拟引擎实际行为（SetResult 内部已更新计数器，无需手动 ++）
 	progress.SetResult(0, result)
-	progress.CompletedIPs++
-	progress.OnlineCount++
 
 	if progress.CompletedIPs != 1 {
 		t.Errorf("Expected CompletedIPs=1, got %d", progress.CompletedIPs)

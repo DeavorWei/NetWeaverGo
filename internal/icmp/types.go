@@ -128,8 +128,11 @@ type BatchPingProgress struct {
 }
 
 // NewBatchPingProgress creates a new BatchPingProgress instance.
-func NewBatchPingProgress(totalIPs int) *BatchPingProgress {
-	return &BatchPingProgress{
+// ips is the list of target IP addresses, used to pre-populate Results with IP fields
+// so that frontend realtime event handlers can match results by IP immediately.
+func NewBatchPingProgress(ips []string) *BatchPingProgress {
+	totalIPs := len(ips)
+	p := &BatchPingProgress{
 		TotalIPs:     totalIPs,
 		CompletedIPs: 0,
 		OnlineCount:  0,
@@ -141,6 +144,13 @@ func NewBatchPingProgress(totalIPs int) *BatchPingProgress {
 		ElapsedMs:    0,
 		Results:      make([]PingHostResult, totalIPs), // 预分配固定大小，保持顺序
 	}
+	// 初始化每个 result 的业务初始值，避免 Go 零值导致前端误判
+	for i := range p.Results {
+		p.Results[i].IP = ips[i]     // 预填充 IP，确保前端实时事件能按 IP 匹配
+		p.Results[i].Status = "pending"
+		p.Results[i].MinRtt = -1
+	}
+	return p
 }
 
 // UpdateProgress updates the progress based on completed IPs.

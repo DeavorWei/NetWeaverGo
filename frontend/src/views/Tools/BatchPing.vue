@@ -6,8 +6,11 @@ import * as DeviceService from '@/bindings/github.com/NetWeaverGo/core/internal/
 import type { PingConfig, BatchPingProgress, SinglePingResult, HostPingUpdate } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
 import type { PingRequest } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 import type { DeviceAssetListItem } from '@/bindings/github.com/NetWeaverGo/core/internal/models/models'
-import { Duration } from '@/bindings/time/models'
 import { useToast } from '@/utils/useToast'
+
+// Duration 常量 (纳秒)
+const MILLISECOND = 1000000  // 1ms = 1,000,000 ns
+const SECOND = 1000000000    // 1s = 1,000,000,000 ns
 
 const toast = useToast()
 
@@ -198,13 +201,19 @@ const applyHostUpdate = (update: HostPingUpdate) => {
     host.avgRtt = update.partialStats.avgRtt
   }
   
+  // 已完成防护：overlay 已为 completed 且当前事件 isComplete=false 时，不回退状态
+  const isCompletedOverlay = overlay?.status === 'completed'
+  const shouldUpdateOverlay = !isCompletedOverlay || update.isComplete
+
   // 更新覆盖层状态
-  realtimeOverlay.value.set(update.ip, {
-    currentSeq: update.currentSeq,
-    lastUpdateTimestamp: update.timestamp,
-    status: update.isComplete ? 'completed' : 'pinging',
-  })
-  
+  if (shouldUpdateOverlay) {
+    realtimeOverlay.value.set(update.ip, {
+      currentSeq: update.currentSeq,
+      lastUpdateTimestamp: update.timestamp,
+      status: update.isComplete ? 'completed' : 'pinging',
+    })
+  }
+
   // 如果完成，更新最终状态
   if (update.isComplete) {
     host.status = host.recvCount > 0 ? 'online' : 'offline'
@@ -348,9 +357,9 @@ const startPing = async () => {
       deviceIds: [],
       options: {
         resolveHostName: resolveHostName.value,
-        dnsTimeout: 2 * Duration.Second, // 2 seconds
+        dnsTimeout: 2 * SECOND, // 2 seconds = 2 * 1,000,000,000 ns
         enableRealtime: enableRealtime.value,
-        realtimeThrottle: realtimeThrottle.value * Duration.Millisecond
+        realtimeThrottle: realtimeThrottle.value * MILLISECOND // ms to ns
       }
     }
     const result = await PingService.StartBatchPing(request)
@@ -409,8 +418,12 @@ const clearResults = () => {
 }
 
 const formatRtt = (rtt: number, status?: string): string => {
-  // 离线或错误状态，或 rtt 为 0 或负数时显示 "-"
-  if (status !== 'online' || rtt <= 0) return '-'
+  // 离线或错误状态显示 "-"
+  if (status !== 'online') return '-'
+  // rtt < 0 表示无效值（如 MinRtt 初始值 -1）
+  if (rtt < 0) return '-'
+  // rtt === 0 是有效值（Windows IcmpSendEcho 毫秒精度限制，实际延迟 <1ms）
+  if (rtt === 0) return '<1ms'
   // 支持亚毫秒精度显示
   if (rtt < 1) {
     return `${rtt.toFixed(3)}ms`
@@ -487,18 +500,64 @@ const getStatusText = (status: string): string => {
 
 // Event handling
 const handleProgressEvent = (ev: { name: string; data: BatchPingProgress }) => {
-  progress.value = ev.data
   lastProgressTime = Date.now() // 记录 Event 收到时间
-  
-  // 清理已完成的覆盖层状态
-  ev.data.results?.forEach((result) => {
-    if (result.status !== 'pending') {
-      const overlay = realtimeOverlay.value.get(result.ip)
-      if (overlay) {
-        overlay.status = 'completed'
+
+  // 首次收到事件，直接赋值
+  if (!progress.value) {
+    progress.value = ev.data
+    return
+  }
+
+  // 合并更新：顶层字段直接更新，results 按状态合并
+  const current = progress.value
+  const incoming = ev.data
+
+  // 更新顶层统计字段
+  current.totalIPs = incoming.totalIPs
+  current.completedIPs = incoming.completedIPs
+  current.onlineCount = incoming.onlineCount
+  current.offlineCount = incoming.offlineCount
+  current.errorCount = incoming.errorCount
+  current.progress = incoming.progress
+  current.isRunning = incoming.isRunning
+  current.elapsedMs = incoming.elapsedMs
+
+  // 合并更新 results：只更新已完成的 IP，不覆盖实时数据
+  if (incoming.results) {
+    for (let i = 0; i < incoming.results.length; i++) {
+      const incomingResult = incoming.results[i]
+      if (!incomingResult) continue
+
+      const status = incomingResult.status
+
+      // 跳过 pending 或空字符串状态的 IP（保留前端实时数据）
+      if (!status || status === 'pending') {
+        // 仅更新 IP 字段（首次设置）
+        const currentResult = current.results[i]
+        if (currentResult && !currentResult.ip && incomingResult.ip) {
+          currentResult.ip = incomingResult.ip
+        }
+        continue
+      }
+
+      // 已完成的 IP：用后端最终结果覆盖
+      if (current.results[i]) {
+        current.results[i] = incomingResult
+      }
+
+      // 标记 overlay 为 completed
+      if (incomingResult.ip) {
+        realtimeOverlay.value.set(incomingResult.ip, {
+          currentSeq: incomingResult.sentCount || 0,
+          lastUpdateTimestamp: Date.now(),
+          status: 'completed',
+        })
       }
     }
-  })
+  }
+
+  // 触发响应式更新
+  progress.value = { ...current }
 }
 
 let unlistenRealtime: (() => void) | null = null
@@ -538,12 +597,15 @@ const handleRealtimeEvent = (ev: { name: string; data: SinglePingResult }) => {
     host.lossRate = (host.failedCount / host.sentCount) * 100
   }
   
-  // 更新覆盖层状态
-  realtimeOverlay.value.set(result.ip, {
-    currentSeq: result.seq,
-    lastUpdateTimestamp: result.timestamp,
-    status: 'pinging',
-  })
+  // 更新覆盖层状态（不覆盖已完成的 completed 状态）
+  const existingOverlay = realtimeOverlay.value.get(result.ip)
+  if (!existingOverlay || existingOverlay.status !== 'completed') {
+    realtimeOverlay.value.set(result.ip, {
+      currentSeq: result.seq,
+      lastUpdateTimestamp: result.timestamp,
+      status: 'pinging',
+    })
+  }
   
   // 触发响应式更新
   progress.value = { ...progress.value }
@@ -955,8 +1017,8 @@ onUnmounted(() => {
                     </span>
                   </td>
                   <td v-if="isColumnVisible('latency')" class="py-2 px-3 text-text-primary">
-                    <span>{{ formatRtt(result.avgRtt) }}</span>
-                    <span v-if="result.lastRtt && result.lastRtt > 0" class="text-text-muted text-xs">({{ formatRtt(result.lastRtt!) }})</span>
+                    <span>{{ formatRtt(result.avgRtt, result.status) }}</span>
+                    <span v-if="result.lastRtt !== undefined && result.lastRtt >= 0 && result.status === 'online'" class="text-text-muted text-xs">({{ formatRtt(result.lastRtt!, result.status) }})</span>
                   </td>
                   <td v-if="isColumnVisible('ttl')" class="py-2 px-3 text-text-primary">{{ result.ttl || '-' }}</td>
                   <td v-if="isColumnVisible('lossRate')" class="py-2 px-3">
