@@ -7,6 +7,7 @@ import type { PingConfig, BatchPingProgress, HostPingUpdate } from '@/bindings/g
 import type { PingRequest } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 import type { DeviceAssetListItem } from '@/bindings/github.com/NetWeaverGo/core/internal/models/models'
 import { useToast } from '@/utils/useToast'
+import PingSettingsModal from '@/components/tools/PingSettingsModal.vue'
 
 // Duration 常量 (纳秒)
 const MILLISECOND = 1000000  // 1ms = 1,000,000 ns
@@ -58,6 +59,7 @@ const defaultColumns: ColumnConfig[] = [
 
 const columns = ref<ColumnConfig[]>([...defaultColumns])
 const showColumnConfig = ref(false)
+const showSettingsModal = ref(false)
 
 const loadColumnConfig = () => {
   const saved = localStorage.getItem('pingColumns')
@@ -86,23 +88,6 @@ const resetColumnConfig = () => {
 const isColumnVisible = (key: string): boolean => {
   return columns.value.find(c => c.key === key)?.visible ?? false
 }
-
-// 数据包大小警告状态
-const dataSizeWarning = computed(() => {
-  const size = config.value.DataSize
-  if (size > RECOMMENDED_MAX_SIZE) {
-    return {
-      type: 'error',
-      message: `数据包大小超过推荐值 ${RECOMMENDED_MAX_SIZE} 字节，可能因 MTU 限制或系统资源不足而失败`
-    }
-  } else if (size > MTU_LIMIT) {
-    return {
-      type: 'warning',
-      message: `数据包大小超过 ${MTU_LIMIT} 字节，需要 IP 分片，可能在某些网络环境下失败`
-    }
-  }
-  return null
-})
 
 const progress = ref<BatchPingProgress | null>(null)
 const isRunning = computed(() => progress.value?.isRunning ?? false)
@@ -595,6 +580,11 @@ onMounted(async () => {
     console.error('Failed to get default config:', err)
   }
 
+  // 首次打开且目标输入为空时，自动弹出设置弹窗
+  if (!targetInput.value.trim()) {
+    showSettingsModal.value = true
+  }
+
   // Subscribe to events - Events.On 返回取消函数
   unlistenProgress = Events.On('ping:progress', handleProgressEvent)
   unlistenHostUpdate = Events.On('ping:host-update', handleHostUpdateEvent)
@@ -626,6 +616,18 @@ onUnmounted(() => {
         批量 Ping 检测
       </h1>
       <div class="flex gap-2">
+        <!-- 设置按钮 -->
+        <button
+          @click="showSettingsModal = true"
+          :disabled="isRunning"
+          class="px-4 py-2 bg-bg-tertiary hover:bg-bg-hover border border-border text-text-primary rounded-lg font-medium transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          设置
+        </button>
         <!-- 导入设备按钮 -->
         <button
           v-if="!isRunning"
@@ -663,157 +665,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Main Content -->
-    <div class="flex-1 flex gap-4 overflow-hidden">
-      <!-- Left Panel: Input -->
-      <div class="w-80 flex flex-col gap-4">
-        <!-- Target Input -->
-        <section class="bg-bg-secondary/60 glass border border-border rounded-xl shadow-card p-4">
-          <h2 class="text-sm font-semibold text-text-primary mb-3 flex items-center">
-            <svg class="w-5 h-5 mr-2 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            目标输入
-          </h2>
-          <textarea
-            v-model="targetInput"
-            :disabled="isRunning"
-            placeholder="输入 IP 地址&#10;支持格式：&#10;• 单个 IP: 192.168.1.1&#10;• CIDR: 192.168.1.0/24&#10;• 范围: 192.168.1.1-100&#10;• 多个 IP: 192.168.1.1, 192.168.1.2&#10;• 混合: 192.168.1.1, 192.168.1.0/30"
-            class="w-full h-40 bg-bg-tertiary/50 border border-border rounded-lg p-3 text-sm text-text-primary placeholder-text-muted resize-none focus:outline-none focus:border-accent transition-colors"
-          ></textarea>
-        </section>
-
-        <!-- Config Panel -->
-        <section class="bg-bg-secondary/60 glass border border-border rounded-xl shadow-card p-4">
-          <h2 class="text-sm font-semibold text-text-primary mb-3 flex items-center">
-            <svg class="w-5 h-5 mr-2 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            配置参数
-          </h2>
-          <div class="space-y-3">
-            <div class="flex items-center justify-between">
-              <label class="text-sm text-text-secondary">超时 (ms)</label>
-              <input
-                v-model.number="config.Timeout"
-                type="number"
-                :disabled="isRunning"
-                min="100"
-                max="30000"
-                class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
-              />
-            </div>
-            <div class="flex items-center justify-between">
-              <label class="text-sm text-text-secondary">重试次数</label>
-              <input
-                v-model.number="config.Count"
-                type="number"
-                :disabled="isRunning"
-                min="1"
-                max="1000"
-                class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
-              />
-            </div>
-            <div class="flex items-center justify-between">
-              <label class="text-sm text-text-secondary">并发数</label>
-              <input
-                v-model.number="config.Concurrency"
-                type="number"
-                :disabled="isRunning"
-                min="1"
-                max="256"
-                class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
-              />
-            </div>
-            <div class="flex items-center justify-between">
-              <label class="text-sm text-text-secondary">包大小 (bytes)</label>
-              <input
-                v-model.number="config.DataSize"
-                type="number"
-                :disabled="isRunning"
-                min="32"
-                max="65500"
-                class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
-              />
-            </div>
-            <!-- 数据包大小警告 -->
-            <div v-if="dataSizeWarning" class="mt-2 p-2 rounded-lg text-xs"
-                 :class="dataSizeWarning.type === 'error' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'">
-              <div class="flex items-start gap-2">
-                <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <span>{{ dataSizeWarning.message }}</span>
-              </div>
-            </div>
-            <div class="flex items-center justify-between">
-              <label class="text-sm text-text-secondary">间隔 (ms)</label>
-              <input
-                v-model.number="config.Interval"
-                type="number"
-                :disabled="isRunning"
-                min="0"
-                max="5000"
-                class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
-              />
-            </div>
-            <!-- 解析主机名选项 -->
-            <div class="flex items-center justify-between pt-2 border-t border-border/50">
-              <label class="text-sm text-text-secondary flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                </svg>
-                解析主机名
-              </label>
-              <button
-                @click="resolveHostName = !resolveHostName"
-                :disabled="isRunning"
-                class="relative w-10 h-5 rounded-full transition-colors"
-                :class="resolveHostName ? 'bg-accent' : 'bg-bg-tertiary'"
-              >
-                <span
-                  class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform"
-                  :class="resolveHostName ? 'translate-x-5' : ''"
-                ></span>
-              </button>
-            </div>
-            <!-- 实时进度选项 -->
-            <div class="flex items-center justify-between pt-2 border-t border-border/50">
-              <label class="text-sm text-text-secondary flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                启用实时进度
-              </label>
-              <button
-                @click="enableRealtime = !enableRealtime"
-                :disabled="isRunning"
-                class="relative w-10 h-5 rounded-full transition-colors"
-                :class="enableRealtime ? 'bg-accent' : 'bg-bg-tertiary'"
-              >
-                <span
-                  class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform"
-                  :class="enableRealtime ? 'translate-x-5' : ''"
-                ></span>
-              </button>
-            </div>
-            <div v-if="enableRealtime" class="flex items-center justify-between">
-              <label class="text-sm text-text-secondary">更新间隔(ms)</label>
-              <input
-                v-model.number="realtimeThrottle"
-                type="number"
-                :disabled="isRunning"
-                min="10"
-                max="5000"
-                class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
-              />
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <!-- Right Panel: Results -->
-      <div class="flex-1 flex flex-col gap-4 overflow-hidden">
+    <div class="flex-1 flex flex-col gap-4 overflow-hidden">
         <!-- Progress Bar -->
         <section v-if="progress" class="bg-bg-secondary/60 glass border border-border rounded-xl shadow-card p-4">
           <div class="flex items-center justify-between mb-2">
@@ -1000,8 +852,19 @@ onUnmounted(() => {
             </div>
           </div>
         </section>
-      </div>
     </div>
+
+    <!-- 设置弹窗 -->
+    <PingSettingsModal
+      v-model:show="showSettingsModal"
+      v-model:targetInput="targetInput"
+      v-model:config="config"
+      v-model:resolveHostName="resolveHostName"
+      v-model:enableRealtime="enableRealtime"
+      v-model:realtimeThrottle="realtimeThrottle"
+      :disabled="isRunning"
+      @confirm="showSettingsModal = false"
+    />
 
     <!-- 列配置弹窗 -->
     <Teleport to="body">
