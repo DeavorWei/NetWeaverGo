@@ -4,6 +4,7 @@ package icmp
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"sync"
@@ -128,7 +129,14 @@ func (e *BatchPingEngine) RunWithOptions(ctx context.Context, ips []string, opts
 		}
 
 		logger.Verbose("BatchPing", ipStr, "等待获取信号量, index=%d", i)
-		sem <- struct{}{}
+		// 使用 select 同时等待信号量和取消信号，避免信号量阻塞导致取消响应延迟
+		select {
+		case sem <- struct{}{}:
+			// 获取信号量成功，继续执行
+		case <-runCtx.Done():
+			logger.Debug("BatchPing", "-", "等待信号量时检测到取消信号，停止添加新任务")
+			return progress
+		}
 		logger.Verbose("BatchPing", ipStr, "获取信号量成功, index=%d", i)
 		wg.Add(1)
 
@@ -242,12 +250,16 @@ func (e *BatchPingEngine) pingHostWithOptions(ctx context.Context, ip net.IP, in
 
 		// Calculate partial statistics
 		partialStats := PartialStats{
-			SentCount:   currentSeq,
-			RecvCount:   successCount,
-			FailedCount: failedCount,
-			LastRtt:     lastRtt,
-			MinRtt:      minRtt,
-			MaxRtt:      maxRtt,
+			SentCount:     currentSeq,
+			RecvCount:     successCount,
+			FailedCount:   failedCount,
+			LastRtt:       lastRtt,
+			MinRtt:        minRtt,
+			MaxRtt:        maxRtt,
+			ErrorMsg:      lastError,
+			LastSucceedAt: lastSucceedAt,
+			LastFailedAt:  lastFailedAt,
+			TTL:           lastTTL,
 		}
 
 		// Calculate loss rate
@@ -275,6 +287,12 @@ func (e *BatchPingEngine) pingHostWithOptions(ctx context.Context, ip net.IP, in
 		select {
 		case <-ctx.Done():
 			logger.Debug("BatchPing", ipStr, "ping 被取消")
+			result.SentCount = i
+			result.FailedCount = i - successCount
+			result.RecvCount = successCount
+			if result.SentCount > 0 {
+				result.LossRate = float64(result.SentCount-successCount) / float64(result.SentCount) * 100
+			}
 			result.Status = "error"
 			result.ErrorMsg = "Cancelled"
 			return result
@@ -383,6 +401,12 @@ func (e *BatchPingEngine) pingHostWithOptions(ctx context.Context, ip net.IP, in
 			select {
 			case <-ctx.Done():
 				logger.Debug("BatchPing", ipStr, "等待间隔时被取消")
+				result.SentCount = i + 1
+				result.FailedCount = (i + 1) - successCount
+				result.RecvCount = successCount
+				if result.SentCount > 0 {
+					result.LossRate = float64(result.SentCount-successCount) / float64(result.SentCount) * 100
+				}
 				result.Status = "error"
 				result.ErrorMsg = "Cancelled"
 				return result
@@ -452,19 +476,17 @@ func (e *BatchPingEngine) IsRunning() bool {
 	return e.running
 }
 
-// setRunning sets the running state.
-func (e *BatchPingEngine) setRunning(running bool) {
-	e.runningMu.Lock()
-	defer e.runningMu.Unlock()
-	e.running = running
-}
-
 // GetConfig returns the current configuration.
 func (e *BatchPingEngine) GetConfig() PingConfig {
 	return e.config
 }
 
 // SetConfig updates the configuration.
-func (e *BatchPingEngine) SetConfig(config PingConfig) {
+// Returns an error if the engine is currently running.
+func (e *BatchPingEngine) SetConfig(config PingConfig) error {
+	if e.IsRunning() {
+		return fmt.Errorf("cannot set config while engine is running")
+	}
 	e.config = config
+	return nil
 }

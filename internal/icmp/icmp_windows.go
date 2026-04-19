@@ -258,6 +258,11 @@ func prepareSendData(dataSize uint16) []byte {
 
 // PingOne performs a single ICMP echo request to the specified IP address.
 func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
+	// 防止 dataSize=0 导致 prepareSendData 返回空切片，进而引发 IcmpSendEcho panic
+	if dataSize == 0 {
+		dataSize = 32
+	}
+
 	ipStr := ip.String()
 	logger.Verbose("ICMP", ipStr, "开始 Ping: timeout=%dms, dataSize=%d", timeout, dataSize)
 
@@ -331,6 +336,11 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 
 // PingOneWithTTL performs a single ICMP echo request with specified TTL.
 func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*PingResult, error) {
+	// 防止 dataSize=0 导致 prepareSendData 返回空切片，进而引发 IcmpSendEcho panic
+	if dataSize == 0 {
+		dataSize = 32
+	}
+
 	ipStr := ip.String()
 	logger.Verbose("ICMP", ipStr, "开始 Ping (带TTL): timeout=%dms, dataSize=%d, ttl=%d", timeout, dataSize, ttl)
 

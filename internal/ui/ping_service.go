@@ -55,6 +55,10 @@ type PingService struct {
 	engineMu   sync.Mutex // 保护 engine 创建和状态检查
 	repo       repository.DeviceRepository
 
+	// DNS 预解析取消控制
+	dnsCancelMu sync.Mutex
+	dnsCancel    context.CancelFunc
+
 	// DNS 缓存
 	dnsCache    map[string]dnsCacheEntry
 	dnsCacheMu  sync.RWMutex
@@ -211,7 +215,11 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 		var hostNameMap map[string]string
 		if options.ResolveHostName {
 			logger.Debug("PingService", "-", "开始 DNS 预解析: ipCount=%d, timeout=%v", len(ips), options.DNSTimeout)
-			hostNameMap = s.resolveHostNames(context.Background(), ips, options.DNSTimeout)
+			dnsCtx, dnsCancel := context.WithCancel(context.Background())
+			s.dnsCancelMu.Lock()
+			s.dnsCancel = dnsCancel
+			s.dnsCancelMu.Unlock()
+			hostNameMap = s.resolveHostNames(dnsCtx, ips, options.DNSTimeout)
 			logger.Debug("PingService", "-", "DNS 预解析完成: resolvedCount=%d", len(hostNameMap))
 		}
 
@@ -219,38 +227,12 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 		adaptiveThrottle := s.calculateAdaptiveThrottle(len(ips), options.RealtimeThrottle)
 		logger.Debug("PingService", "-", "自适应节流间隔: ipCount=%d, throttle=%v", len(ips), adaptiveThrottle)
 
-		// 准备 Realtime 的分发通道及节流
-		var lastRealtime sync.Map // map[string]int64 IP -> time
-		var realtimeCallCount int // 调试：统计回调调用次数
-		var realtimeThrottleCount int // 调试：统计被节流的次数
-		var onSinglePing func(icmp.SinglePingResult)
-		if options.EnableRealtime {
-			logger.Debug("PingService", "-", "启用实时进度回调: EnableRealtime=true")
-			onSinglePing = func(spr icmp.SinglePingResult) {
-				realtimeCallCount++
-				now := time.Now().UnixMilli()
-				if val, ok := lastRealtime.Load(spr.IP); ok {
-					if now-val.(int64) < adaptiveThrottle.Milliseconds() {
-						realtimeThrottleCount++
-						logger.Verbose("PingService", spr.IP, "实时事件被节流: seq=%d, throttleCount=%d", spr.Seq, realtimeThrottleCount)
-						return // Throttled
-					}
-				}
-				lastRealtime.Store(spr.IP, now)
-				logger.Verbose("PingService", spr.IP, "发送实时事件: seq=%d, success=%v, rtt=%.2fms", spr.Seq, spr.Success, spr.RoundTripTime)
-				s.emitRealtime(spr)
-			}
-		}
-
 		// 准备 HostUpdate 回调（用于实时状态更新）
 		var lastHostUpdate sync.Map // map[string]int64 IP -> time
-		var hostUpdateCallCount int // 调试：统计回调调用次数
-		var hostUpdateThrottleCount int // 调试：统计被节流的次数
 		var onHostUpdate func(icmp.HostPingUpdate)
 		if options.EnableRealtime {
 			logger.Debug("PingService", "-", "启用主机状态更新回调: EnableRealtime=true")
 			onHostUpdate = func(hpu icmp.HostPingUpdate) {
-				hostUpdateCallCount++
 				now := time.Now().UnixMilli()
 
 				// isComplete=true 的事件豁免节流，确保最终状态始终送达前端
@@ -258,8 +240,7 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 					// 节流：避免同一IP过于频繁的更新
 					if val, ok := lastHostUpdate.Load(hpu.IP); ok {
 						if now-val.(int64) < adaptiveThrottle.Milliseconds() {
-							hostUpdateThrottleCount++
-							logger.Verbose("PingService", hpu.IP, "主机更新被节流: seq=%d, throttleCount=%d", hpu.CurrentSeq, hostUpdateThrottleCount)
+							logger.Verbose("PingService", hpu.IP, "主机更新被节流: seq=%d", hpu.CurrentSeq)
 							return // Throttled
 						}
 					}
@@ -273,18 +254,20 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 
 		progress := s.engine.RunWithOptions(context.Background(), ips, icmp.RunOptions{
 			OnUpdate: func(p *icmp.BatchPingProgress) {
-				// 合并 DNS 结果到 progress
+				// 合并 DNS 结果到 progress（加锁保护，避免与 GetPingProgress 并发读取竞争）
 				if hostNameMap != nil {
+					s.progressMu.Lock()
 					for i := range p.Results {
 						if hostName, ok := hostNameMap[p.Results[i].IP]; ok {
 							p.Results[i].HostName = hostName
 						}
 					}
+					s.progressMu.Unlock()
 				}
 				s.setProgress(p)
 				s.emitProgress(p)
 			},
-			OnSinglePing: onSinglePing,
+			OnSinglePing: nil, // 不再使用 realtime 事件
 			OnHostUpdate: onHostUpdate,
 		})
 
@@ -308,22 +291,55 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 // StopBatchPing stops the current batch ping operation.
 func (s *PingService) StopBatchPing() error {
 	logger.Info("PingService", "-", "收到停止批量 Ping 请求")
+
+	// 取消 DNS 预解析（并发安全）
+	s.dnsCancelMu.Lock()
+	if s.dnsCancel != nil {
+		s.dnsCancel()
+		s.dnsCancel = nil
+	}
+	s.dnsCancelMu.Unlock()
+
 	s.engineMu.Lock()
-	defer s.engineMu.Unlock()
 	if s.engine == nil {
+		s.engineMu.Unlock()
 		logger.Debug("PingService", "-", "没有正在运行的引擎，无需停止")
 		return nil
 	}
+	engine := s.engine
+	s.engine = nil // 立即清理引用，防止后续误用已停止的引擎
+	s.engineMu.Unlock()
+
 	logger.Debug("PingService", "-", "调用引擎停止方法")
-	s.engine.Stop()
-	return nil
+	engine.Stop()
+
+	// 等待引擎实际停止（带超时，避免永久阻塞）
+	timeout := time.After(5 * time.Second)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if !engine.IsRunning() {
+				logger.Debug("PingService", "-", "引擎已停止")
+				return nil
+			}
+		case <-timeout:
+			logger.Warn("PingService", "-", "等待引擎停止超时(5s)，引擎最终会自行停止")
+			return nil
+		}
+	}
 }
 
-// GetPingProgress returns the current progress.
+// GetPingProgress returns a deep copy of the current progress.
+// 返回深拷贝以避免调用者与 OnUpdate 回调之间的数据竞争。
 func (s *PingService) GetPingProgress() *icmp.BatchPingProgress {
 	s.progressMu.RLock()
 	defer s.progressMu.RUnlock()
-	return s.progress
+	if s.progress == nil {
+		return nil
+	}
+	return s.progress.Clone()
 }
 
 // isRunningLocked 在已持有 engineMu 锁的情况下检查运行状态
@@ -525,7 +541,10 @@ func (s *PingService) expandCIDR(cidr string) ([]string, error) {
 
 	var ips []string
 	for addr := prefix.Addr(); prefix.Contains(addr); addr = addr.Next() {
-		// Skip network and broadcast addresses for /31 and larger
+		// CIDR 前缀长度的边界处理：
+		// - /32（单主机）：返回 1 个 IP，不跳过
+		// - /31（点对点）：返回 2 个 IP（RFC 3021），不跳过
+		// - /30 及更小：跳过网络地址和广播地址
 		if prefix.Bits() < 31 {
 			if addr == prefix.Addr() || !prefix.Contains(addr.Next()) {
 				continue
@@ -576,7 +595,7 @@ func (s *PingService) parseIPRange(rangeStr string) ([]string, error) {
 		if !ip.Equal(endIP) {
 			// Verify same network (first 3 octets)
 			if ip[0] != endIP[0] || ip[1] != endIP[1] || ip[2] != endIP[2] {
-				return nil, fmt.Errorf("IP 范围必须在同一子网: %s - %s", baseIP, endPart)
+				return nil, fmt.Errorf("IP 范围仅支持同一 /24 子网内，如 192.168.1.1-100")
 			}
 		}
 		endPart = strconv.Itoa(int(endIP[3]))
@@ -639,6 +658,10 @@ func (s *PingService) mergeWithDefaultPingConfig(config icmp.PingConfig) icmp.Pi
 		config.DataSize = 65500 // Max ICMP payload size
 	}
 	// Count 不设上限，允许用户自由配置重试次数
+	// 但设置合理上限防止资源耗尽
+	if config.Count > 1000 {
+		config.Count = 1000
+	}
 	if config.Concurrency > 256 {
 		config.Concurrency = 256 // Max 256 concurrent
 	}
@@ -686,13 +709,6 @@ func (s *PingService) emitProgress(progress *icmp.BatchPingProgress) {
 	}
 	if s.wailsApp != nil && s.wailsApp.Event != nil {
 		s.wailsApp.Event.Emit("ping:progress", progress)
-	}
-}
-
-// emitRealtime 发送单次 Ping 结果到前端
-func (s *PingService) emitRealtime(result icmp.SinglePingResult) {
-	if s.wailsApp != nil && s.wailsApp.Event != nil {
-		s.wailsApp.Event.Emit("ping:realtime", result)
 	}
 }
 
@@ -760,10 +776,15 @@ func (s *PingService) resolveHostNames(ctx context.Context, ips []string, timeou
 	}
 
 	// 并行解析未缓存的 IP
+	cancelled := false
 	for _, ip := range needResolve {
+		if cancelled {
+			break
+		}
 		select {
 		case <-ctx.Done():
-			return results
+			cancelled = true // 停止添加新任务，但继续等待已有任务完成
+			break
 		default:
 		}
 

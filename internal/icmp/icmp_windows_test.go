@@ -204,7 +204,7 @@ func TestBatchPingProgress_UpdateProgress(t *testing.T) {
 	}
 }
 
-func TestBatchPingProgress_AddResult(t *testing.T) {
+func TestBatchPingProgress_SetResult(t *testing.T) {
 	progress := NewBatchPingProgress([]string{"192.168.1.1"})
 
 	result := PingHostResult{

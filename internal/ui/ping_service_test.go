@@ -258,7 +258,7 @@ func TestFormatRtt(t *testing.T) {
 		rtt      uint32
 		expected string
 	}{
-		{0, "-"},
+		{0, "<1ms"},
 		{1, "1.00ms"},
 		{100, "100.00ms"},
 	}

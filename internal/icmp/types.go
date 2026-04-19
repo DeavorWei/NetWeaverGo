@@ -161,24 +161,6 @@ func (p *BatchPingProgress) UpdateProgress() {
 	p.ElapsedMs = time.Since(p.StartTime).Milliseconds()
 }
 
-// AddResult adds a result to the progress and updates counters.
-// Deprecated: Use SetResult for ordered results.
-func (p *BatchPingProgress) AddResult(result PingHostResult) {
-	p.Results = append(p.Results, result)
-	p.CompletedIPs++
-
-	switch result.Status {
-	case "online":
-		p.OnlineCount++
-	case "offline":
-		p.OfflineCount++
-	case "error":
-		p.ErrorCount++
-	}
-
-	p.UpdateProgress()
-}
-
 // SetResult sets a result at the specified index and updates counters.
 // This method ensures results are stored in input order.
 // This method is thread-safe when called with the progressMu lock held.
@@ -187,7 +169,8 @@ func (p *BatchPingProgress) SetResult(index int, result PingHostResult) {
 		return
 	}
 
-	// 检查是否已设置（防止重复计数）
+	// 防御性防护：防止未来代码变更引入对同一 index 的重复调用
+	// 当前 RunWithOptions 中每个 goroutine 的三条 SetResult 调用路径互斥，不会重复调用
 	if p.Results[index].Status != "" && p.Results[index].Status != "pending" {
 		return
 	}
@@ -238,14 +221,18 @@ func (p *BatchPingProgress) Clone() *BatchPingProgress {
 // PartialStats represents partial statistics during ping progress.
 // Used for real-time updates before a host completes all ping attempts.
 type PartialStats struct {
-	SentCount   int     `json:"sentCount"`   // Number of packets sent so far
-	RecvCount   int     `json:"recvCount"`   // Number of packets received (success count)
-	FailedCount int     `json:"failedCount"` // Number of failed pings
-	LossRate    float64 `json:"lossRate"`    // Packet loss rate (0-100)
-	LastRtt     float64 `json:"lastRtt"`     // Last ping RTT (ms)
-	MinRtt      float64 `json:"minRtt"`      // Minimum RTT (ms), -1 indicates invalid
-	MaxRtt      float64 `json:"maxRtt"`      // Maximum RTT (ms)
-	AvgRtt      float64 `json:"avgRtt"`      // Average RTT (ms)
+	SentCount     int     `json:"sentCount"`               // Number of packets sent so far
+	RecvCount     int     `json:"recvCount"`               // Number of packets received (success count)
+	FailedCount   int     `json:"failedCount"`             // Number of failed pings
+	LossRate      float64 `json:"lossRate"`                // Packet loss rate (0-100)
+	LastRtt       float64 `json:"lastRtt"`                 // Last ping RTT (ms)
+	MinRtt        float64 `json:"minRtt"`                  // Minimum RTT (ms), -1 indicates invalid
+	MaxRtt        float64 `json:"maxRtt"`                  // Maximum RTT (ms)
+	AvgRtt        float64 `json:"avgRtt"`                  // Average RTT (ms)
+	ErrorMsg      string  `json:"errorMsg,omitempty"`      // Last error message
+	LastSucceedAt int64   `json:"lastSucceedAt,omitempty"` // Last success timestamp (Unix ms)
+	LastFailedAt  int64   `json:"lastFailedAt,omitempty"` // Last failure timestamp (Unix ms)
+	TTL           uint8   `json:"ttl"`                     // Last successful TTL
 }
 
 // HostPingUpdate represents intermediate state update during host ping progress.
