@@ -217,8 +217,13 @@ func IcmpSendEcho(handle syscall.Handle, destAddr uint32, sendData []byte, timeo
 
 	// Parse reply
 	reply := (*ICMP_ECHO_REPLY)(unsafe.Pointer(&replyBuffer[0]))
-	logger.Debug("ICMP", "-", "IcmpSendEcho 响应: status=%d(%s), rtt=%dms, ttl=%d",
-		reply.Status, icmpStatusToString(reply.Status), reply.RoundTripTime, reply.Options.TTL)
+	// 将 reply.Address 转换为可读 IP 用于日志
+	// reply.Address 是 in_addr 结构，在 x86 小端序上 Go 读取后为小端序 uint32，
+	// 需要用 LittleEndian 反向解析回 IP 字节
+	replyIP := make(net.IP, 4)
+	binary.LittleEndian.PutUint32(replyIP, reply.Address)
+	logger.Debug("ICMP", "-", "IcmpSendEcho 响应: status=%d(%s), rtt=%dms, ttl=%d, replyAddr=%s (%08x)",
+		reply.Status, icmpStatusToString(reply.Status), reply.RoundTripTime, reply.Options.TTL, replyIP.String(), reply.Address)
 
 	// Extract reply data
 	var replyData []byte
@@ -285,8 +290,12 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 	sendData := prepareSendData(dataSize)
 	logger.Verbose("ICMP", ipStr, "准备发送数据: size=%d", len(sendData))
 
-	// Convert IP to network byte order (uint32)
-	destAddr := binary.BigEndian.Uint32(ip)
+	// Convert IP to uint32 in the format expected by Windows IcmpSendEcho.
+	// IcmpSendEcho's DestinationAddress parameter is an in_addr structure (network byte order),
+	// but when passed as a uintptr on little-endian x86, the bytes in memory must be
+	// laid out as [byte0, byte1, byte2, byte3] where the IP is byte0.byte1.byte2.byte3.
+	// Using LittleEndian.Uint32 achieves this correct memory layout on x86.
+	destAddr := binary.LittleEndian.Uint32(ip)
 
 	// Send ICMP echo request with default TTL of 128
 	logger.Debug("ICMP", ipStr, "发送 ICMP 请求: destAddr=%08x, timeout=%dms, ttl=128", destAddr, timeout)
@@ -320,6 +329,18 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 
 	// Check reply status
 	if reply.Status == IP_SUCCESS {
+		// 校验响应地址是否与请求目标匹配
+		// 修复高并发场景下的响应交叉投递问题
+		if reply.Address != destAddr {
+			replyIP := make(net.IP, 4)
+			binary.LittleEndian.PutUint32(replyIP, reply.Address)
+			result.Success = false
+			result.Status = "Address Mismatch"
+			result.Error = fmt.Sprintf("响应地址不匹配: 期望 %s, 实际 %s", ip.String(), replyIP.String())
+			logger.Warn("ICMP", ipStr, "Ping 响应地址不匹配: expected=%s, actual=%s (%08x), rtt=%dms",
+				ip.String(), replyIP.String(), reply.Address, reply.RoundTripTime)
+			return result, nil
+		}
 		result.Success = true
 		result.Status = "Success"
 		logger.Info("ICMP", ipStr, "Ping 成功: rtt=%.2fms, ttl=%d", result.RoundTripTime, result.TTL)
@@ -362,8 +383,12 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 	// Prepare send data
 	sendData := prepareSendData(dataSize)
 
-	// Convert IP to network byte order (uint32)
-	destAddr := binary.BigEndian.Uint32(ip)
+	// Convert IP to uint32 in the format expected by Windows IcmpSendEcho.
+	// IcmpSendEcho's DestinationAddress parameter is an in_addr structure (network byte order),
+	// but when passed as a uintptr on little-endian x86, the bytes in memory must be
+	// laid out as [byte0, byte1, byte2, byte3] where the IP is byte0.byte1.byte2.byte3.
+	// Using LittleEndian.Uint32 achieves this correct memory layout on x86.
+	destAddr := binary.LittleEndian.Uint32(ip)
 
 	// Send ICMP echo request
 	logger.Debug("ICMP", ipStr, "发送 ICMP 请求: destAddr=%08x, timeout=%dms, ttl=%d", destAddr, timeout, ttl)
@@ -397,6 +422,18 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 
 	// Check reply status
 	if reply.Status == IP_SUCCESS {
+		// 校验响应地址是否与请求目标匹配
+		// 修复高并发场景下的响应交叉投递问题
+		if reply.Address != destAddr {
+			replyIP := make(net.IP, 4)
+			binary.LittleEndian.PutUint32(replyIP, reply.Address)
+			result.Success = false
+			result.Status = "Address Mismatch"
+			result.Error = fmt.Sprintf("响应地址不匹配: 期望 %s, 实际 %s", ip.String(), replyIP.String())
+			logger.Warn("ICMP", ipStr, "Ping 响应地址不匹配: expected=%s, actual=%s (%08x), rtt=%dms",
+				ip.String(), replyIP.String(), reply.Address, reply.RoundTripTime)
+			return result, nil
+		}
 		result.Success = true
 		result.Status = "Success"
 		logger.Info("ICMP", ipStr, "Ping 成功: rtt=%.2fms, ttl=%d", result.RoundTripTime, result.TTL)
