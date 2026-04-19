@@ -818,9 +818,6 @@ func (s *PingService) resolveHostNames(ctx context.Context, ips []string, timeou
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	// 并发控制：限制同时进行的 DNS 查询数
-	sem := make(chan struct{}, 10)
-
 	// 先从缓存获取
 	var needResolve []string
 	now := time.Now()
@@ -836,15 +833,11 @@ func (s *PingService) resolveHostNames(ctx context.Context, ips []string, timeou
 		}
 	}
 
-	// 并行解析未缓存的 IP
-	cancelled := false
+	// 并行解析未缓存的 IP（无并发限制，依赖 context 超时控制）
 	for _, ip := range needResolve {
-		if cancelled {
-			break
-		}
 		select {
 		case <-ctx.Done():
-			cancelled = true // 停止添加新任务，但继续等待已有任务完成
+			// 上下文已取消，停止添加新任务
 			break
 		default:
 		}
@@ -853,11 +846,11 @@ func (s *PingService) resolveHostNames(ctx context.Context, ips []string, timeou
 		go func(targetIP string) {
 			defer wg.Done()
 
+			// 检查上下文是否已取消
 			select {
 			case <-ctx.Done():
 				return
-			case sem <- struct{}{}:
-				defer func() { <-sem }()
+			default:
 			}
 
 			resolveCtx, cancel := context.WithTimeout(ctx, timeout)
