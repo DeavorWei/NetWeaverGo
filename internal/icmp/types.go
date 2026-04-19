@@ -30,9 +30,9 @@ func DefaultPingConfig() PingConfig {
 	return PingConfig{
 		Timeout:     1000,  // 1 second
 		DataSize:    32,    // 32 bytes
-		Count:       1,     // 1 attempt
-		Interval:    0,     // No interval
-		Concurrency: 64,    // 64 concurrent goroutines
+		Count:       3,     // 3 attempts (retry count)
+		Interval:    1000,  // 1000ms interval between pings
+		Concurrency: 0,     // 0 = auto (same as target count)
 	}
 }
 

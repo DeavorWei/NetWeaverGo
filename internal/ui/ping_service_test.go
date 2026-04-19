@@ -192,8 +192,17 @@ func TestMergeWithDefaultPingConfig_Empty(t *testing.T) {
 		t.Errorf("Expected default Timeout=1000, got %d", config.Timeout)
 	}
 
-	if config.Concurrency != 64 {
-		t.Errorf("Expected default Concurrency=64, got %d", config.Concurrency)
+	// Concurrency == 0 means "auto", should NOT be filled with default
+	if config.Concurrency != 0 {
+		t.Errorf("Expected Concurrency=0 (auto), got %d", config.Concurrency)
+	}
+
+	if config.Count != 3 {
+		t.Errorf("Expected default Count=3, got %d", config.Count)
+	}
+
+	if config.Interval != 1000 {
+		t.Errorf("Expected default Interval=1000, got %d", config.Interval)
 	}
 }
 
@@ -219,8 +228,8 @@ func TestMergeWithDefaultPingConfig_Limits(t *testing.T) {
 
 	// Test max limits
 	config := svc.mergeWithDefaultPingConfig(icmp.PingConfig{
-		Timeout:     20000, // Over limit
-		Concurrency: 500,   // Over limit
+		Timeout:     35000, // Over limit
+		Concurrency: 500,   // No longer capped, just warned
 		Count:       100,   // 不再限制，允许任意值
 		DataSize:    65535, // Over limit (max uint16)
 	})
@@ -229,8 +238,9 @@ func TestMergeWithDefaultPingConfig_Limits(t *testing.T) {
 		t.Errorf("Timeout should be capped at 30000, got %d", config.Timeout)
 	}
 
-	if config.Concurrency > 256 {
-		t.Errorf("Concurrency should be capped at 256, got %d", config.Concurrency)
+	// Concurrency 不再设上限，验证用户设置的值被保留（仅记录警告）
+	if config.Concurrency != 500 {
+		t.Errorf("Concurrency should be preserved as user set (no hard cap), expected 500, got %d", config.Concurrency)
 	}
 
 	// Count 不再设上限，验证用户设置的值被保留

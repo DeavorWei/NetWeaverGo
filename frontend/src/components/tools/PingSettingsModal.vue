@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import type { PingConfig } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
+import * as PingService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/pingservice'
 
 // 数据包大小限制常量
 const RECOMMENDED_MAX_SIZE = 8000
@@ -28,6 +29,10 @@ const emit = defineEmits<{
   confirm: []
 }>()
 
+// 语法糖展开状态
+const expandStatus = ref<'idle' | 'expanding' | 'done' | 'error'>('idle')
+const expandMessage = ref('')
+
 // 数据包大小警告
 const dataSizeWarning = computed(() => {
   const size = props.config.DataSize
@@ -44,6 +49,45 @@ const dataSizeWarning = computed(() => {
   }
   return null
 })
+
+// 并发数警告（高并发时提示）
+const concurrencyWarning = computed(() => {
+  const concurrency = props.config.Concurrency
+  if (concurrency > 256) {
+    return {
+      type: 'warning',
+      message: `高并发设置 (${concurrency})，可能影响系统稳定性或触发网络设备防护`
+    }
+  }
+  return null
+})
+
+// 处理目标输入框失去焦点 - 自动展开语法糖
+const handleTargetBlur = async () => {
+  const input = props.targetInput.trim()
+  if (!input) return
+  
+  // 检查是否包含语法糖特征（CIDR、范围、逗号分隔等）
+  const hasSyntaxSugar = /[-~/,\/]/.test(input)
+  if (!hasSyntaxSugar) return
+  
+  expandStatus.value = 'expanding'
+  try {
+    const result = await PingService.ExpandPingTargets(input)
+    if (result && result.ips && result.ips.length > 0) {
+      emit('update:targetInput', result.ips.join('\n'))
+      expandStatus.value = 'done'
+      expandMessage.value = result.message || `已展开为 ${result.count} 个 IP`
+    } else {
+      expandStatus.value = 'error'
+      expandMessage.value = result?.message || '无法展开'
+    }
+  } catch (err) {
+    expandStatus.value = 'error'
+    expandMessage.value = '展开失败'
+    console.error('ExpandPingTargets failed:', err)
+  }
+}
 
 const handleConfirm = () => {
   emit('confirm')
@@ -92,10 +136,30 @@ const updateConfig = <K extends keyof PingConfig>(key: K, value: PingConfig[K]) 
               <textarea
                 :value="targetInput"
                 @input="emit('update:targetInput', ($event.target as HTMLTextAreaElement).value)"
+                @blur="handleTargetBlur"
                 :disabled="disabled"
-                placeholder="输入 IP 地址&#10;支持格式：&#10;• 单个 IP: 192.168.1.1&#10;• CIDR: 192.168.1.0/24&#10;• 范围: 192.168.1.1-100&#10;• 多个 IP: 192.168.1.1, 192.168.1.2&#10;• 混合: 192.168.1.1, 192.168.1.0/30"
+                placeholder="输入 IP 地址&#10;支持格式：&#10;• 单个 IP: 192.168.1.1&#10;• CIDR: 192.168.1.0/24&#10;• 范围: 192.168.1.1-100 或 192.168.1.1~100&#10;• 多个 IP: 192.168.1.1, 192.168.1.2&#10;• 混合: 192.168.1.1, 192.168.1.0/30&#10;&#10;失去焦点时自动展开语法糖"
                 class="w-full h-40 bg-bg-tertiary/50 border border-border rounded-lg p-3 text-sm text-text-primary placeholder-text-muted resize-none focus:outline-none focus:border-accent transition-colors font-mono"
               ></textarea>
+              <!-- 语法糖展开状态提示 -->
+              <div v-if="expandStatus !== 'idle'" class="mt-2 text-xs flex items-center gap-1"
+                   :class="{
+                     'text-text-muted': expandStatus === 'expanding',
+                     'text-green-400': expandStatus === 'done',
+                     'text-red-400': expandStatus === 'error'
+                   }">
+                <svg v-if="expandStatus === 'expanding'" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <svg v-else-if="expandStatus === 'done'" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <svg v-else-if="expandStatus === 'error'" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span>{{ expandMessage }}</span>
+              </div>
             </div>
 
             <!-- 配置参数 -->
@@ -133,16 +197,28 @@ const updateConfig = <K extends keyof PingConfig>(key: K, value: PingConfig[K]) 
                   />
                 </div>
                 <div class="flex items-center justify-between">
-                  <label class="text-sm text-text-secondary">并发数</label>
+                  <label class="text-sm text-text-secondary">
+                    并发数
+                    <span class="text-xs text-text-muted ml-1">（0=自动）</span>
+                  </label>
                   <input
                     :value="config.Concurrency"
                     @input="updateConfig('Concurrency', Number(($event.target as HTMLInputElement).value))"
                     type="number"
                     :disabled="disabled"
-                    min="1"
-                    max="256"
+                    min="0"
+                    placeholder="自动"
                     class="w-24 bg-bg-tertiary/50 border border-border rounded px-2 py-1 text-sm text-text-primary text-right focus:outline-none focus:border-accent"
                   />
+                </div>
+                <!-- 并发数警告 -->
+                <div v-if="concurrencyWarning" class="mt-1 p-2 rounded-lg text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                  <div class="flex items-start gap-2">
+                    <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>{{ concurrencyWarning.message }}</span>
+                  </div>
                 </div>
                 <div class="flex items-center justify-between">
                   <label class="text-sm text-text-secondary">包大小 (bytes)</label>

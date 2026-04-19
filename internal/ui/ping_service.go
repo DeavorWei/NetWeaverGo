@@ -160,6 +160,16 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 
 	// Merge config with defaults
 	config := s.mergeWithDefaultPingConfig(req.Config)
+
+	// 动态并发数：Concurrency == 0 表示"自动"（与目标数一致）
+	if config.Concurrency == 0 {
+		config.Concurrency = len(ips)
+		// 移除硬编码上限，仅在高并发时记录警告
+		if config.Concurrency > 256 {
+			logger.Warn("PingService", "-", "自动并发数较高: %d，可能影响系统稳定性或触发网络设备防护", config.Concurrency)
+		}
+	}
+
 	logger.Debug("PingService", "-", "Ping 配置: timeout=%dms, count=%d, dataSize=%d, concurrency=%d",
 		config.Timeout, config.Count, config.DataSize, config.Concurrency)
 
@@ -431,6 +441,55 @@ func (s *PingService) GetPingDefaultConfig() icmp.PingConfig {
 	return icmp.DefaultPingConfig()
 }
 
+// PingTargetExpandResult represents the result of expanding ping target syntax sugar.
+type PingTargetExpandResult struct {
+	IPs     []string `json:"ips"`     // Expanded IP list
+	Count   int      `json:"count"`   // Total IP count
+	Message string   `json:"message"` // Status message
+}
+
+// ExpandPingTargets expands ping target syntax sugar (Wails Binding).
+// Supports: CIDR notation, IP ranges (192.168.1.1-10), comma/newline separated IPs.
+// Returns expanded IP list for frontend to display.
+func (s *PingService) ExpandPingTargets(targets string) *PingTargetExpandResult {
+	targets = strings.TrimSpace(targets)
+	if targets == "" {
+		return &PingTargetExpandResult{
+			IPs:     []string{},
+			Count:   0,
+			Message: "目标地址为空",
+		}
+	}
+
+	ips, err := s.resolveTargets(targets, nil)
+	if err != nil {
+		return &PingTargetExpandResult{
+			IPs:     []string{},
+			Count:   0,
+			Message: fmt.Sprintf("解析失败: %v", err),
+		}
+	}
+
+	if len(ips) == 0 {
+		return &PingTargetExpandResult{
+			IPs:     []string{},
+			Count:   0,
+			Message: "未找到有效的 IP 地址",
+		}
+	}
+
+	message := fmt.Sprintf("成功展开为 %d 个 IP", len(ips))
+	if len(ips) > 256 {
+		message = fmt.Sprintf("已展开为 %d 个 IP（数量较多，请注意并发设置）", len(ips))
+	}
+
+	return &PingTargetExpandResult{
+		IPs:     ips,
+		Count:   len(ips),
+		Message: message,
+	}
+}
+
 // GetDeviceIPsForPing returns IP addresses for the specified device IDs.
 func (s *PingService) GetDeviceIPsForPing(deviceIDs []uint) ([]string, error) {
 	if len(deviceIDs) == 0 {
@@ -631,6 +690,7 @@ func (s *PingService) parseIPRange(rangeStr string) ([]string, error) {
 }
 
 // mergeWithDefaultPingConfig merges user config with defaults.
+// Note: Concurrency == 0 means "auto" (same as target count), not filled with default here.
 func (s *PingService) mergeWithDefaultPingConfig(config icmp.PingConfig) icmp.PingConfig {
 	defaults := icmp.DefaultPingConfig()
 
@@ -643,9 +703,8 @@ func (s *PingService) mergeWithDefaultPingConfig(config icmp.PingConfig) icmp.Pi
 	if config.Count == 0 {
 		config.Count = defaults.Count
 	}
-	if config.Concurrency == 0 {
-		config.Concurrency = defaults.Concurrency
-	}
+	// Concurrency == 0 means "auto", will be set dynamically in StartBatchPing
+	// Do NOT fill with default value here
 	if config.Interval == 0 {
 		config.Interval = defaults.Interval
 	}
@@ -662,8 +721,10 @@ func (s *PingService) mergeWithDefaultPingConfig(config icmp.PingConfig) icmp.Pi
 	if config.Count > 1000 {
 		config.Count = 1000
 	}
+	// 移除并发数硬编码上限，改为警告日志
+	// 用户可自行决定并发数，但高并发时记录警告
 	if config.Concurrency > 256 {
-		config.Concurrency = 256 // Max 256 concurrent
+		logger.Warn("PingService", "-", "⚠️ 高并发设置: concurrency=%d，可能影响系统稳定性或触发网络设备防护", config.Concurrency)
 	}
 	if config.Interval > 5000 {
 		config.Interval = 5000 // Max 5 seconds between pings

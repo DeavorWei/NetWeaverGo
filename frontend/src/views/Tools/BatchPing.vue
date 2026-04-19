@@ -24,10 +24,10 @@ const MTU_LIMIT = 1472  // 以太网 MTU 边界（不分片最大 ICMP 数据）
 const targetInput = ref('')
 const config = ref<PingConfig>({
   Timeout: 1000,
-  Interval: 0,
-  Count: 1,
+  Interval: 1000,   // 默认 1000ms 间隔
+  Count: 3,         // 默认重试 3 次
   DataSize: 32,
-  Concurrency: 64
+  Concurrency: 0    // 0 = 自动（与目标数一致）
 })
 
 // Ping options
