@@ -32,7 +32,7 @@ const config = ref<PingConfig>({
 
 // Ping options
 const resolveHostName = ref(false)
-const enableRealtime = ref(false)
+const enableRealtime = ref(true)  // 默认开启实时进度
 const realtimeThrottle = ref(100) // ms
 
 // 列配置
@@ -49,7 +49,10 @@ const defaultColumns: ColumnConfig[] = [
   { key: 'hostName', label: '主机名', visible: false, width: 150 },
   { key: 'status', label: '状态', visible: true, width: 80 },
   { key: 'successFailed', label: '成功/失败', visible: true, width: 100 },
-  { key: 'latency', label: '延迟(Avg/Last)', visible: true, width: 120 },
+  { key: 'minLatency', label: '最小延迟', visible: true, width: 80 },
+  { key: 'maxLatency', label: '最大延迟', visible: true, width: 80 },
+  { key: 'avgLatency', label: '平均延迟', visible: true, width: 80 },
+  { key: 'lastLatency', label: '最后延迟', visible: true, width: 80 },
   { key: 'ttl', label: 'TTL', visible: true, width: 60 },
   { key: 'lossRate', label: '丢包率', visible: true, width: 80 },
   { key: 'lastSucceedAt', label: '最后成功', visible: false, width: 140 },
@@ -129,6 +132,16 @@ const realtimeStats = computed(() => {
   const avgRtt = hostsWitRtt.length > 0
     ? hostsWitRtt.reduce((sum, r) => sum + r.avgRtt, 0) / hostsWitRtt.length
     : 0
+
+  // 全局最小延迟（取所有在线主机中最小的 minRtt）
+  const globalMinRtt = hostsWitRtt.length > 0
+    ? Math.min(...hostsWitRtt.map(r => r.minRtt).filter((v: number) => v >= 0))
+    : -1
+
+  // 全局最大延迟（取所有在线主机中最大的 maxRtt）
+  const globalMaxRtt = hostsWitRtt.length > 0
+    ? Math.max(...hostsWitRtt.map(r => r.maxRtt).filter((v: number) => v >= 0))
+    : -1
   
   return {
     totalPings,
@@ -136,6 +149,8 @@ const realtimeStats = computed(() => {
     totalFailed,
     pingingCount,
     avgRtt,
+    globalMinRtt,
+    globalMaxRtt,
     overallLossRate: totalPings > 0 ? (totalFailed / totalPings * 100) : 0
   }
 })
@@ -411,20 +426,6 @@ const exportCSV = async () => {
 const clearResults = () => {
   progress.value = null
   realtimeOverlay.value.clear()
-}
-
-const formatRtt = (rtt: number, status?: string): string => {
-  // 离线或错误状态显示 "-"
-  if (status !== 'online') return '-'
-  // rtt < 0 表示无效值（如 MinRtt 初始值 -1）
-  if (rtt < 0) return '-'
-  // rtt === 0 是有效值（Windows IcmpSendEcho 毫秒精度限制，实际延迟 <1ms）
-  if (rtt === 0) return '<1ms'
-  // 支持亚毫秒精度显示
-  if (rtt < 1) {
-    return `${rtt.toFixed(3)}ms`
-  }
-  return `${rtt.toFixed(2)}ms`
 }
 
 const formatTime = (timestamp: number | undefined): string => {
@@ -707,7 +708,7 @@ onUnmounted(() => {
           
           <!-- 实时统计面板 -->
           <div v-if="realtimeStats && enableRealtime" class="mt-3 pt-3 border-t border-border/50">
-            <div class="grid grid-cols-6 gap-4 text-center">
+            <div class="grid grid-cols-8 gap-4 text-center">
               <div class="bg-bg-tertiary/30 rounded-lg p-2">
                 <div class="text-xs text-text-muted">总Ping次数</div>
                 <div class="text-lg font-bold text-text-primary">{{ realtimeStats.totalPings }}</div>
@@ -723,6 +724,14 @@ onUnmounted(() => {
               <div class="bg-bg-tertiary/30 rounded-lg p-2">
                 <div class="text-xs text-text-muted">检测中</div>
                 <div class="text-lg font-bold text-accent animate-pulse">{{ realtimeStats.pingingCount }}</div>
+              </div>
+              <div class="bg-bg-tertiary/30 rounded-lg p-2">
+                <div class="text-xs text-text-muted">最小延迟</div>
+                <div class="text-lg font-bold text-cyan-400">{{ realtimeStats.globalMinRtt >= 0 ? realtimeStats.globalMinRtt.toFixed(1) + 'ms' : '-' }}</div>
+              </div>
+              <div class="bg-bg-tertiary/30 rounded-lg p-2">
+                <div class="text-xs text-text-muted">最大延迟</div>
+                <div class="text-lg font-bold text-orange-400">{{ realtimeStats.globalMaxRtt >= 0 ? realtimeStats.globalMaxRtt.toFixed(1) + 'ms' : '-' }}</div>
               </div>
               <div class="bg-bg-tertiary/30 rounded-lg p-2">
                 <div class="text-xs text-text-muted">平均延迟</div>
@@ -784,7 +793,10 @@ onUnmounted(() => {
                   <th v-if="isColumnVisible('hostName') && resolveHostName" class="py-2 px-3 font-medium">主机名</th>
                   <th v-if="isColumnVisible('status')" class="py-2 px-3 font-medium">状态</th>
                   <th v-if="isColumnVisible('successFailed')" class="py-2 px-3 font-medium">成功/失败</th>
-                  <th v-if="isColumnVisible('latency')" class="py-2 px-3 font-medium">延迟(Avg/Last)</th>
+                  <th v-if="isColumnVisible('minLatency')" class="py-2 px-3 font-medium">最小延迟</th>
+                  <th v-if="isColumnVisible('maxLatency')" class="py-2 px-3 font-medium">最大延迟</th>
+                  <th v-if="isColumnVisible('avgLatency')" class="py-2 px-3 font-medium">平均延迟</th>
+                  <th v-if="isColumnVisible('lastLatency')" class="py-2 px-3 font-medium">最后延迟</th>
                   <th v-if="isColumnVisible('ttl')" class="py-2 px-3 font-medium">TTL</th>
                   <th v-if="isColumnVisible('lossRate')" class="py-2 px-3 font-medium">丢包率</th>
                   <th v-if="isColumnVisible('lastSucceedAt')" class="py-2 px-3 font-medium">最后成功</th>
@@ -820,9 +832,21 @@ onUnmounted(() => {
                     <span class="text-text-muted">/</span>
                     <span class="text-red-400">{{ result.failedCount }}</span>
                   </td>
-                  <td v-if="isColumnVisible('latency')" class="py-2 px-3 text-text-primary">
-                    <span>{{ formatRtt(result.avgRtt, result.status) }}</span>
-                    <span v-if="result.lastRtt !== undefined && result.lastRtt >= 0 && result.status === 'online'" class="text-text-muted text-xs">({{ formatRtt(result.lastRtt!, result.status) }})</span>
+                  <td v-if="isColumnVisible('minLatency')" class="py-2 px-3 font-mono text-xs">
+                    <span v-if="result.status === 'online' && result.minRtt >= 0" class="text-cyan-400">{{ result.minRtt.toFixed(1) }}ms</span>
+                    <span v-else class="text-text-muted">-</span>
+                  </td>
+                  <td v-if="isColumnVisible('maxLatency')" class="py-2 px-3 font-mono text-xs">
+                    <span v-if="result.status === 'online' && result.maxRtt >= 0" class="text-orange-400">{{ result.maxRtt.toFixed(1) }}ms</span>
+                    <span v-else class="text-text-muted">-</span>
+                  </td>
+                  <td v-if="isColumnVisible('avgLatency')" class="py-2 px-3 font-mono text-xs">
+                    <span v-if="result.status === 'online' && result.avgRtt >= 0" class="text-text-primary">{{ result.avgRtt.toFixed(1) }}ms</span>
+                    <span v-else class="text-text-muted">-</span>
+                  </td>
+                  <td v-if="isColumnVisible('lastLatency')" class="py-2 px-3 font-mono text-xs">
+                    <span v-if="result.status === 'online' && result.lastRtt !== undefined && result.lastRtt >= 0" class="text-text-secondary">{{ result.lastRtt.toFixed(1) }}ms</span>
+                    <span v-else class="text-text-muted">-</span>
                   </td>
                   <td v-if="isColumnVisible('ttl')" class="py-2 px-3 text-text-primary">{{ result.ttl != null ? result.ttl : '-' }}</td>
                   <td v-if="isColumnVisible('lossRate')" class="py-2 px-3">
