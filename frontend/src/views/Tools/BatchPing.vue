@@ -128,7 +128,8 @@ const realtimeStats = computed(() => {
   const pingingCount = results.filter(r => r.isPinging).length
   
   // 计算平均延迟（包含 avgRtt=0 的在线主机，如本机 RTT <1ms）
-  const hostsWitRtt = results.filter(r => r.status === 'online' && r.avgRtt >= 0)
+  // 同时包含正在检测中的主机，以实现实时延迟统计
+  const hostsWitRtt = results.filter(r => (r.status === 'online' || r.isPinging) && r.avgRtt >= 0)
   const avgRtt = hostsWitRtt.length > 0
     ? hostsWitRtt.reduce((sum, r) => sum + r.avgRtt, 0) / hostsWitRtt.length
     : 0
@@ -833,22 +834,22 @@ onUnmounted(() => {
                     <span class="text-red-400">{{ result.failedCount }}</span>
                   </td>
                   <td v-if="isColumnVisible('minLatency')" class="py-2 px-3 font-mono text-xs">
-                    <span v-if="result.status === 'online' && result.minRtt >= 0" class="text-cyan-400">{{ result.minRtt.toFixed(1) }}ms</span>
+                    <span v-if="(result.status === 'online' || result.isPinging) && result.minRtt >= 0" class="text-cyan-400">{{ result.minRtt.toFixed(1) }}ms</span>
                     <span v-else class="text-text-muted">-</span>
                   </td>
                   <td v-if="isColumnVisible('maxLatency')" class="py-2 px-3 font-mono text-xs">
-                    <span v-if="result.status === 'online' && result.maxRtt >= 0" class="text-orange-400">{{ result.maxRtt.toFixed(1) }}ms</span>
+                    <span v-if="(result.status === 'online' || result.isPinging) && result.maxRtt >= 0" class="text-orange-400">{{ result.maxRtt.toFixed(1) }}ms</span>
                     <span v-else class="text-text-muted">-</span>
                   </td>
                   <td v-if="isColumnVisible('avgLatency')" class="py-2 px-3 font-mono text-xs">
-                    <span v-if="result.status === 'online' && result.avgRtt >= 0" class="text-text-primary">{{ result.avgRtt.toFixed(1) }}ms</span>
+                    <span v-if="(result.status === 'online' || result.isPinging) && result.avgRtt >= 0" class="text-text-primary">{{ result.avgRtt.toFixed(1) }}ms</span>
                     <span v-else class="text-text-muted">-</span>
                   </td>
                   <td v-if="isColumnVisible('lastLatency')" class="py-2 px-3 font-mono text-xs">
-                    <span v-if="result.status === 'online' && result.lastRtt !== undefined && result.lastRtt >= 0" class="text-text-secondary">{{ result.lastRtt.toFixed(1) }}ms</span>
+                    <span v-if="(result.status === 'online' || result.isPinging) && result.lastRtt !== undefined && result.lastRtt >= 0" class="text-text-secondary">{{ result.lastRtt.toFixed(1) }}ms</span>
                     <span v-else class="text-text-muted">-</span>
                   </td>
-                  <td v-if="isColumnVisible('ttl')" class="py-2 px-3 text-text-primary">{{ result.ttl != null ? result.ttl : '-' }}</td>
+                  <td v-if="isColumnVisible('ttl')" class="py-2 px-3 text-text-primary">{{ result.ttl > 0 ? result.ttl : '-' }}</td>
                   <td v-if="isColumnVisible('lossRate')" class="py-2 px-3">
                     <span :class="{
                       'text-green-400': result.lossRate === 0,
