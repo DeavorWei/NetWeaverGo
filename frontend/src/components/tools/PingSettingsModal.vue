@@ -27,6 +27,7 @@ const emit = defineEmits<{
   'update:enableRealtime': [value: boolean]
   'update:realtimeThrottle': [value: number]
   confirm: []
+  importDevices: []
 }>()
 
 // 语法糖展开状态
@@ -127,12 +128,24 @@ const updateConfig = <K extends keyof PingConfig>(key: K, value: PingConfig[K]) 
         <div class="flex-1 overflow-y-auto p-4 space-y-4">
             <!-- 目标输入 -->
             <div class="glass-card p-4">
-              <h3 class="text-sm font-semibold text-text-primary mb-3 flex items-center">
-                <svg class="w-5 h-5 mr-2 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                目标输入
-              </h3>
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-semibold text-text-primary flex items-center">
+                  <svg class="w-5 h-5 mr-2 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  目标输入
+                </h3>
+                <button
+                  @click="emit('importDevices')"
+                  :disabled="disabled"
+                  class="px-3 py-1 bg-bg-tertiary hover:bg-bg-hover border border-border rounded-lg text-sm text-text-primary transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                  导入设备
+                </button>
+              </div>
               <textarea
                 :value="targetInput"
                 @input="emit('update:targetInput', ($event.target as HTMLTextAreaElement).value)"
