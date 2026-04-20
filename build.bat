@@ -77,6 +77,7 @@ if %ERRORLEVEL% neq 0 (
      wails3 generate bindings -b ./cmd/netweaver -d ./frontend/src/bindings -ts
     if %ERRORLEVEL% neq 0 (
         echo [ERROR] Failed to generate Wails bindings
+        pause
         exit /b 1
     )
     echo [SUCCESS] Wails bindings generated to frontend/src/bindings
@@ -95,6 +96,7 @@ cd /d "%PROJECT_ROOT%frontend"
 where node >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Node.js not found, please install Node.js first
+    pause
     exit /b 1
 )
 
@@ -104,6 +106,7 @@ if not exist "node_modules" (
     call npm install
     if %ERRORLEVEL% neq 0 (
         echo [ERROR] Frontend dependencies installation failed
+        pause
         exit /b 1
     )
 )
@@ -113,6 +116,7 @@ echo [INFO] Building frontend assets...
 call npm run build
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Frontend build failed
+    pause
     exit /b 1
 )
 
@@ -131,6 +135,7 @@ cd /d "%PROJECT_ROOT%"
 where go >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Go not found, please install Go first
+    pause
     exit /b 1
 )
 
@@ -148,6 +153,7 @@ echo [INFO] Building backend program...
 go build  -o "dist\netWeaverGo.exe" ./cmd/netweaver
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Backend build failed
+    pause
     exit /b 1
 )
 
