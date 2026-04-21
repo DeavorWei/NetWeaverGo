@@ -202,6 +202,14 @@ const menuItems = [
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
     </svg>`,
   },
+  {
+    key: "BatchPing",
+    label: "批量 Ping",
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
+      <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+    </svg>`,
+  },
 
   {
     key: "Settings",
@@ -223,6 +231,7 @@ const titleMap: Record<string, string> = {
   NetworkCalc: "子网计算器",
   ProtocolRef: "端口速查",
   ConfigForge: "配置生成",
+  BatchPing: "批量 Ping 检测",
   TopologyCommandConfig: "拓扑命令配置中心",
   Settings: "系统设置",
 };
