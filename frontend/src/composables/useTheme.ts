@@ -55,10 +55,10 @@ export function useTheme() {
     // 更新 meta theme-color（移动端浏览器地址栏颜色）
     const metaThemeColor = document.querySelector('meta[name="theme-color"]')
     if (metaThemeColor) {
-      metaThemeColor.setAttribute(
-        'content',
-        theme === 'dark' ? '#0f1117' : '#f8fafc'
-      )
+      // 从 CSS 变量读取背景色，确保与主题一致
+      const bgColor = getComputedStyle(document.documentElement)
+        .getPropertyValue('--color-bg-primary').trim()
+      metaThemeColor.setAttribute('content', bgColor)
     }
 
     // 更新 CSS 自定义属性供 Tailwind 使用

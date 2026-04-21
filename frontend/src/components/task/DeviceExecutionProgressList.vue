@@ -179,16 +179,9 @@ const formatDuration = (ms: number): string => {
 
 /* 加载动画 */
 .spinner {
-  @apply w-8 h-8 mb-3 rounded-full;
+  @apply w-8 h-8 mb-3 rounded-full animate-spin;
   border: 3px solid var(--color-border-default);
   border-top-color: var(--color-accent-primary);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* 设备列表容器 */

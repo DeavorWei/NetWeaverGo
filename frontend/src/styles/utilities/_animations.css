@@ -363,4 +363,25 @@
   .algo-modal-leave-to {
     opacity: 0;
   }
+
+  /* ========================================
+     Ping 弹跳动画
+     ======================================== */
+
+  @keyframes pingBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+
+  .animate-ping-bounce {
+    animation: pingBounce 0.5s ease-in-out infinite;
+  }
+
+  /* ========================================
+     表单工具类
+     ======================================== */
+
+  .accent-theme {
+    accent-color: var(--color-accent-primary);
+  }
 }

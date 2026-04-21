@@ -768,12 +768,12 @@ onMounted(() => {
 /* 网格布局 */
 .global-settings-panels-flow {
   @apply grid gap-4;
-  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  grid-template-columns: var(--grid-settings-panel);
 }
 
 .settings-auto-grid {
   @apply grid gap-3.5 items-start;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: var(--grid-settings-section);
 }
 
 .settings-auto-grid > * {
@@ -974,7 +974,7 @@ onMounted(() => {
 
 .algo-modal-grid {
   @apply grid gap-3;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: var(--grid-settings-form);
 }
 
 .algo-modal-body .algo-options-list {

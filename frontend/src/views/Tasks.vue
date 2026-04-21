@@ -1115,6 +1115,3 @@ onMounted(() => {
 });
 </script>
 
-<style scoped>
-/* modal 和 toast 过渡动画已移至全局 _animations.css */
-</style>

@@ -10,7 +10,7 @@ const activeTab = ref<'ipv4' | 'ipv6'>('ipv4')
   <div class="h-full w-full flex flex-col relative bg-transparent">
     <!-- V4/V6 切换开关 -->
     <div class="w-full relative z-10 mb-6 flex justify-center">
-      <div class="bg-bg-tertiary/20 glass p-1 rounded-xl border border-border inline-flex">
+      <div class="bg-bg-tertiary/20 backdrop-blur-sm p-1 rounded-xl border border-border inline-flex">
         <button 
           @click="activeTab = 'ipv4'"
           :class="[
@@ -45,6 +45,3 @@ const activeTab = ref<'ipv4' | 'ipv6'>('ipv4')
   </div>
 </template>
 
-<style scoped>
-/* fade 过渡动画已移至全局 _animations.css */
-</style>

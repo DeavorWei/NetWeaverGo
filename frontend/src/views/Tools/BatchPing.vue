@@ -658,7 +658,7 @@ onUnmounted(() => {
     <!-- Main Content -->
     <div class="flex-1 flex flex-col gap-4 overflow-hidden">
         <!-- Progress Bar -->
-        <section v-if="progress" class="bg-bg-secondary/60 glass border border-border rounded-xl shadow-card p-4">
+        <section v-if="progress" class="bg-bg-secondary/60 backdrop-blur-sm border border-border rounded-xl shadow-md p-4">
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-4">
               <span class="text-sm text-text-secondary">
@@ -738,7 +738,7 @@ onUnmounted(() => {
         </section>
 
         <!-- Results Table -->
-        <section class="flex-1 bg-bg-secondary/60 glass border border-border rounded-xl shadow-card p-4 overflow-hidden flex flex-col">
+        <section class="flex-1 bg-bg-secondary/60 backdrop-blur-sm border border-border rounded-xl shadow-md p-4 overflow-hidden flex flex-col">
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-sm font-semibold text-text-primary flex items-center">
               <svg class="w-5 h-5 mr-2 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -806,7 +806,7 @@ onUnmounted(() => {
                   <td v-if="isColumnVisible('hostName') && resolveHostName" class="py-2 px-3 text-text-secondary text-xs">{{ result.hostName || '-' }}</td>
                   <td v-if="isColumnVisible('status')" class="py-2 px-3">
                     <span class="flex items-center gap-1">
-                      <span v-if="result.isPinging" class="ping-animation">🏓</span>
+                      <span v-if="result.isPinging" class="animate-ping-bounce">🏓</span>
                       <span v-else>{{ getStatusIcon(result.status) }}</span>
                       <span :class="{
                         'text-accent animate-pulse': result.isPinging,
@@ -989,24 +989,3 @@ onUnmounted(() => {
   </div>
 </template>
 
-<style scoped>
-/* 玻璃态效果 - 使用 backdrop-blur-sm 替代 */
-.glass {
-  backdrop-filter: blur(10px);
-}
-
-/* 卡片阴影 - 使用 shadow-lg 替代 */
-.shadow-card {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-/* Ping 动画效果 */
-.ping-animation {
-  animation: bounce 0.5s ease-in-out infinite;
-}
-
-@keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
-}
-</style>

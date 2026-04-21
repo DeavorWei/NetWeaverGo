@@ -108,7 +108,7 @@ const copyText = (val: string) => {
 <template>
   <div class="space-y-4">
     <section
-      class="bg-bg-secondary/60 glass border border-border rounded-xl shadow-card p-4 md:p-5"
+      class="bg-bg-secondary/60 backdrop-blur-sm border border-border rounded-xl shadow-md p-4 md:p-5"
     >
       <h2
         class="text-sm font-semibold text-text-primary mb-3 flex items-center"
@@ -292,7 +292,7 @@ const copyText = (val: string) => {
     <transition name="fade">
       <section
         v-if="v6SubnetEvaluation.subnets.length > 0"
-        class="bg-bg-secondary/60 glass border border-border rounded-xl shadow-card p-4 md:p-5"
+        class="bg-bg-secondary/60 backdrop-blur-sm border border-border rounded-xl shadow-md p-4 md:p-5"
       >
         <div
           class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2"
@@ -394,7 +394,8 @@ const copyText = (val: string) => {
                   <div class="flex items-center">
                     <span
                       v-if="item.isIncluded"
-                      class="w-1.5 h-1.5 rounded-full bg-success mr-2 shadow-[0_0_8px_rgba(34,197,94,0.8)]"
+                      class="w-1.5 h-1.5 rounded-full bg-success mr-2"
+                      style="box-shadow: var(--shadow-success-glow);"
                     ></span>
                     {{ item.index }}
                   </div>
@@ -426,7 +427,7 @@ const copyText = (val: string) => {
     <transition name="fade">
       <section
         v-if="evaluation.records.length > 0"
-        class="bg-bg-secondary/60 glass border border-border rounded-xl shadow-card p-4 md:p-5"
+        class="bg-bg-secondary/60 backdrop-blur-sm border border-border rounded-xl shadow-md p-4 md:p-5"
       >
         <h2
           class="text-sm font-semibold text-text-primary mb-3 flex items-center"
@@ -484,7 +485,4 @@ const copyText = (val: string) => {
   </div>
 </template>
 
-<style scoped>
-/* fade 过渡动画已移至全局 _animations.css */
-</style>
 

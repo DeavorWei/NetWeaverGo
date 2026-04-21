@@ -263,6 +263,6 @@ onUnmounted(() => {
 }
 
 .titlebar-btn-close:hover {
-  @apply bg-[#e81123] text-white;
+  @apply bg-window-close text-white;
 }
 </style>

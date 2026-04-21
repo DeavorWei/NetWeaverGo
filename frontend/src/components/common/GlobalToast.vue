@@ -54,6 +54,3 @@ const toastClasses = computed(() => {
 })
 </script>
 
-<style scoped>
-/* toast 过渡动画已移至全局 _animations.css */
-</style>

@@ -140,26 +140,62 @@ const emit = defineEmits<{
 const cyContainer = ref<HTMLDivElement>();
 let cy: Core | null = null;
 
-const statusColors: Record<string, string> = {
-  confirmed: "#22c55e",
-  semi_confirmed: "#f59e0b",
-  inferred: "#f59e0b",
-  conflict: "#ef4444",
-};
+// 从 CSS 变量读取状态颜色
+function getStatusColors(): Record<string, string> {
+  if (typeof window === 'undefined') {
+    return {
+      confirmed: '#22c55e',
+      semi_confirmed: '#f59e0b',
+      inferred: '#f59e0b',
+      conflict: '#ef4444',
+    };
+  }
+  
+  const style = getComputedStyle(document.documentElement);
+  return {
+    confirmed: style.getPropertyValue('--color-topology-status-confirmed').trim() || '#22c55e',
+    semi_confirmed: style.getPropertyValue('--color-topology-status-semi-confirmed').trim() || '#f59e0b',
+    inferred: style.getPropertyValue('--color-topology-status-inferred').trim() || '#f59e0b',
+    conflict: style.getPropertyValue('--color-topology-status-conflict').trim() || '#ef4444',
+  };
+}
 
-const roleColors: Record<string, string> = {
-  core: "#3b82f6",
-  aggregation: "#8b5cf6",
-  access: "#06b6d4",
-  firewall: "#ef4444",
-  server: "#6b7280",
-};
+// 从 CSS 变量读取角色颜色
+function getRoleColors(): Record<string, string> {
+  if (typeof window === 'undefined') {
+    return {
+      core: '#3b82f6',
+      aggregation: '#8b5cf6',
+      access: '#06b6d4',
+      firewall: '#ef4444',
+      server: '#6b7280',
+    };
+  }
+  
+  const style = getComputedStyle(document.documentElement);
+  return {
+    core: style.getPropertyValue('--color-topology-role-core').trim() || '#3b82f6',
+    aggregation: style.getPropertyValue('--color-topology-role-aggregation').trim() || '#8b5cf6',
+    access: style.getPropertyValue('--color-topology-role-access').trim() || '#06b6d4',
+    firewall: style.getPropertyValue('--color-topology-role-firewall').trim() || '#ef4444',
+    server: style.getPropertyValue('--color-topology-role-server').trim() || '#6b7280',
+  };
+}
 
 function initGraph() {
   if (!cyContainer.value) return;
 
   // 获取当前主题颜色
   const themeColors = getThemeColors();
+  const statusColors = getStatusColors();
+  const roleColors = getRoleColors();
+
+  // 获取额外颜色变量
+  const style = getComputedStyle(document.documentElement);
+  const nodeSelectedBorder = style.getPropertyValue('--color-topology-node-selected-border').trim() || '#3b82f6';
+  const inferredBorder = style.getPropertyValue('--color-topology-inferred-border').trim() || '#f59e0b';
+  const inferredBg = style.getPropertyValue('--color-topology-inferred-bg').trim() || '#78716c';
+  const edgeDefault = style.getPropertyValue('--color-topology-edge-default').trim() || '#6b7280';
 
   const elements: cytoscape.ElementDefinition[] = [
     ...props.nodes.map((n) => ({
@@ -192,7 +228,7 @@ function initGraph() {
         selector: "node",
         style: {
           "background-color": (ele: NodeSingular) =>
-            roleColors[ele.data("role")] || "#3b82f6",
+            roleColors[ele.data("role")] || nodeSelectedBorder,
           label: "data(label)",
           width: 50,
           height: 50,
@@ -207,7 +243,7 @@ function initGraph() {
       {
         selector: "node:selected",
         style: {
-          "border-color": "#3b82f6",
+          "border-color": nodeSelectedBorder,
           "border-width": 3,
         },
       },
@@ -217,8 +253,8 @@ function initGraph() {
         style: {
           "border-style": "dashed",
           "border-width": 3,
-          "border-color": "#f59e0b",
-          "background-color": "#78716c", // 灰色背景表示推断节点
+          "border-color": inferredBorder,
+          "background-color": inferredBg,
         },
       },
       {
@@ -226,9 +262,9 @@ function initGraph() {
         style: {
           width: 2,
           "line-color": (ele: EdgeSingular) =>
-            statusColors[ele.data("status")] || "#6b7280",
+            statusColors[ele.data("status")] || edgeDefault,
           "target-arrow-color": (ele: EdgeSingular) =>
-            statusColors[ele.data("status")] || "#6b7280",
+            statusColors[ele.data("status")] || edgeDefault,
           "target-arrow-shape": "triangle",
           "curve-style": "bezier",
           label: "",
@@ -258,8 +294,8 @@ function initGraph() {
         selector: "edge:selected",
         style: {
           width: 3,
-          "line-color": "#3b82f6",
-          "target-arrow-color": "#3b82f6",
+          "line-color": nodeSelectedBorder,
+          "target-arrow-color": nodeSelectedBorder,
         },
       },
     ],

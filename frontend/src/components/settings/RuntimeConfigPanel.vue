@@ -783,12 +783,12 @@ onMounted(() => {
 
 .runtime-settings-panels-flow {
   @apply grid gap-4 mb-2;
-  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  grid-template-columns: var(--grid-settings-panel);
 }
 
 .settings-auto-grid {
   @apply grid gap-3.5 items-start;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: var(--grid-settings-section);
 }
 
 .settings-auto-grid > * {

@@ -34,7 +34,7 @@ defineProps<{
   @apply transition-opacity duration-200;
   bottom: calc(100% + 10px);
   transform: translateY(4px);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-tooltip);
 }
 
 /* 伪元素 - 需保留原始 CSS */

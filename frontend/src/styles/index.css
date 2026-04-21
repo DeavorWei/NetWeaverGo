@@ -97,6 +97,30 @@
   /* 自定义阴影 */
   --shadow-card: var(--shadow-card);
   --shadow-glow: var(--shadow-glow);
+  --shadow-tooltip: var(--shadow-tooltip);
+  --shadow-success-glow: var(--shadow-success-glow);
+
+  /* 拓扑图颜色 */
+  --color-topology-node-label: var(--color-topology-node-label);
+  --color-topology-edge-label-bg: var(--color-topology-edge-label-bg);
+  --color-topology-edge-label: var(--color-topology-edge-label);
+  --color-topology-node-border: var(--color-topology-node-border);
+  --color-topology-node-selected-border: var(--color-topology-node-selected-border);
+  --color-topology-inferred-border: var(--color-topology-inferred-border);
+  --color-topology-inferred-bg: var(--color-topology-inferred-bg);
+  --color-topology-edge-default: var(--color-topology-edge-default);
+  --color-topology-status-confirmed: var(--color-topology-status-confirmed);
+  --color-topology-status-semi-confirmed: var(--color-topology-status-semi-confirmed);
+  --color-topology-status-inferred: var(--color-topology-status-inferred);
+  --color-topology-status-conflict: var(--color-topology-status-conflict);
+  --color-topology-role-core: var(--color-topology-role-core);
+  --color-topology-role-aggregation: var(--color-topology-role-aggregation);
+  --color-topology-role-access: var(--color-topology-role-access);
+  --color-topology-role-firewall: var(--color-topology-role-firewall);
+  --color-topology-role-server: var(--color-topology-role-server);
+
+  /* 窗口控制按钮 */
+  --color-window-close: var(--color-window-close);
 
   /* 自定义动画 - 使用 _animations.css 中定义的动画 */
   --animate-fade-in: fadeIn 0.3s ease-out;
