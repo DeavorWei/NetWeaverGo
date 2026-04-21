@@ -990,16 +990,14 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* 玻璃态效果 - 使用 backdrop-blur-sm 替代 */
 .glass {
   backdrop-filter: blur(10px);
 }
 
+/* 卡片阴影 - 使用 shadow-lg 替代 */
 .shadow-card {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-.shadow-glow {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
 }
 
 /* Ping 动画效果 */

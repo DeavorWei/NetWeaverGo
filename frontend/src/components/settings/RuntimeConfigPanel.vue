@@ -758,128 +758,83 @@ onMounted(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="postcss">
+@reference "../../styles/index.css";
+
 .runtime-config-panel {
-  width: 100%;
-  max-width: none;
+  @apply w-full max-w-none;
 }
 
 .runtime-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  @apply flex flex-col gap-4 max-w-[1400px] mx-auto;
 }
 
 .runtime-header {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
+  @apply flex items-center gap-2;
 }
 
 .runtime-title {
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--color-text-primary);
+  @apply text-base font-bold tracking-tight text-text-primary;
 }
 
 .runtime-subtitle {
-  font-size: 0.78rem;
-  color: var(--color-text-muted);
-  margin: 0;
+  @apply text-[0.78rem] text-text-muted m-0;
 }
 
 .runtime-settings-panels-flow {
-  display: grid;
+  @apply grid gap-4 mb-2;
   grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
-  gap: 1rem;
-  margin-bottom: 0.5rem;
 }
 
 .settings-auto-grid {
-  display: grid;
+  @apply grid gap-3.5 items-start;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.85rem 1rem;
-  align-items: start;
 }
 
 .settings-auto-grid > * {
-  min-width: 0;
+  @apply min-w-0;
 }
 
 .settings-panel-card {
-  width: 100%;
+  @apply w-full;
 }
 
 .runtime-card {
-  overflow: visible;
-  border-radius: 1rem;
-  border: 1px solid var(--color-border-default);
-  background: var(--color-bg-secondary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  transition:
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
+  @apply overflow-visible rounded-xl border border-border bg-bg-secondary;
+  @apply shadow-sm transition-shadow duration-200 transition-colors;
 }
 
 .runtime-card:hover {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
-  border-color: var(--color-border-focus);
+  @apply shadow-md border-border-focus;
 }
 
-.settings-panel-card
-  :is(input:not([type="checkbox"]):not([type="radio"]), select) {
-  width: 100%;
-  min-height: 2.35rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--color-border-default);
-  background: var(--color-bg-primary);
-  padding-inline: 0.8rem;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background-color 0.2s ease;
+.settings-panel-card :is(input:not([type="checkbox"]):not([type="radio"]), select) {
+  @apply w-full min-h-[2.35rem] rounded-xl border border-border bg-bg-primary;
+  @apply px-3.5 transition-colors duration-200;
 }
 
-.settings-panel-card
-  :is(input:not([type="checkbox"]):not([type="radio"]), select):focus {
-  border-color: var(--color-accent);
+.settings-panel-card :is(input:not([type="checkbox"]):not([type="radio"]), select):focus {
+  @apply border-accent;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 
 .settings-panel-card :is(label) {
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
+  @apply text-[0.76rem] font-semibold text-text-secondary;
 }
 
 .settings-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
+  @apply inline-flex items-center gap-1.5 text-[0.76rem] font-semibold text-text-secondary;
 }
 
 .settings-panel-card :is(p.text-xs) {
-  line-height: 1.45;
+  @apply leading-relaxed;
 }
 
 .runtime-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  border: 1px solid var(--color-border-default);
-  border-radius: 1rem;
+  @apply sticky bottom-0 z-[5] flex justify-end gap-3 p-3;
+  @apply border border-border rounded-xl;
   background: color-mix(in srgb, var(--color-bg-primary) 84%, transparent);
-  backdrop-filter: blur(8px);
+  @apply backdrop-blur-sm;
 }
 
 @media (max-width: 960px) {
@@ -888,9 +843,7 @@ onMounted(() => {
   }
 
   .runtime-actions {
-    position: static;
-    flex-wrap: wrap;
-    justify-content: flex-start;
+    @apply static flex-wrap justify-start;
   }
 }
 </style>

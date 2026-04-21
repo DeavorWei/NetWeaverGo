@@ -103,8 +103,7 @@ const emit = defineEmits<{
                   variables = newVars;
                 }
               "
-              class="input input-sm input-mono text-center tracking-wider"
-              style="width: 150px"
+              class="input input-sm input-mono text-center tracking-wider w-[150px]"
               :class="
                 ipBindingEnabled && index === 0 ? 'text-warning font-bold' : ''
               "

@@ -234,30 +234,6 @@ function handleDeviceClick(deviceId: string) {
 </script>
 
 <style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.scrollbar-custom::-webkit-scrollbar {
-  width: 6px;
-}
-
-.scrollbar-custom::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.scrollbar-custom::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
-.scrollbar-custom::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.35);
-}
+/* modal 过渡动画已移至全局 _animations.css */
+/* 滚动条样式已移至全局 _scrollbar.css，请使用 scrollbar-custom 类 */
 </style>

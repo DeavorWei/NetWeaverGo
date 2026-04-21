@@ -1998,26 +1998,5 @@ function formatDate(dateStr: string) {
 </script>
 
 <style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s ease;
-}
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-.toast-enter-active {
-  transition: all 0.3s ease-out;
-}
-.toast-leave-active {
-  transition: all 0.2s ease-in;
-}
-.toast-enter-from {
-  opacity: 0;
-  transform: translateX(-50%) translateY(20px);
-}
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(10px);
-}
+/* modal 和 toast 过渡动画已移至全局 _animations.css */
 </style>

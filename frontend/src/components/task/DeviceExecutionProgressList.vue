@@ -155,41 +155,34 @@ const formatDuration = (ms: number): string => {
 };
 </script>
 
-<style scoped>
+<style scoped lang="postcss">
+@reference "../../styles/index.css";
+
+/* 容器 */
 .device-progress-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  @apply flex flex-col gap-3;
 }
 
+/* 加载/空状态 */
 .loading-state,
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  color: var(--text-secondary, #8b949e);
+  @apply flex flex-col items-center justify-center p-10 text-text-muted;
 }
 
 .empty-state svg {
-  margin-bottom: 12px;
-  opacity: 0.5;
+  @apply mb-3 opacity-50;
 }
 
 .empty-state p {
-  margin: 0;
-  font-size: 14px;
+  @apply m-0 text-sm;
 }
 
+/* 加载动画 */
 .spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--border-color, #2d333b);
-  border-top-color: var(--primary-color, #58a6ff);
-  border-radius: 50%;
+  @apply w-8 h-8 mb-3 rounded-full;
+  border: 3px solid var(--color-border-default);
+  border-top-color: var(--color-accent-primary);
   animation: spin 1s linear infinite;
-  margin-bottom: 12px;
 }
 
 @keyframes spin {
@@ -198,144 +191,115 @@ const formatDuration = (ms: number): string => {
   }
 }
 
+/* 设备列表容器 */
 .devices-container {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 400px;
-  overflow-y: auto;
+  @apply flex flex-col gap-2 max-h-[400px] overflow-y-auto;
 }
 
+/* 设备卡片 */
 .device-card {
-  padding: 12px;
-  background: var(--bg-secondary, #161b22);
-  border: 1px solid var(--border-color, #2d333b);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  @apply p-3 bg-bg-secondary border border-border rounded-lg cursor-pointer;
+  @apply transition-all duration-200;
 }
 
 .device-card:hover {
-  border-color: var(--primary-color, #58a6ff);
-  background: var(--bg-tertiary, #21262d);
+  @apply border-accent bg-bg-tertiary;
 }
 
 .device-card.selected {
-  border-color: var(--primary-color, #58a6ff);
-  background: rgba(88, 166, 255, 0.1);
-  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.3);
+  @apply border-accent;
+  background: var(--color-accent-bg);
+  box-shadow: 0 0 0 2px var(--color-accent-glow);
 }
 
+/* 设备头部 */
 .device-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+  @apply flex justify-between items-center mb-2;
 }
 
 .device-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  @apply flex items-center gap-2;
 }
 
 .device-ip {
-  font-weight: 600;
-  color: var(--text-primary, #e6edf3);
-  font-family: monospace;
+  @apply font-semibold text-text-primary font-mono;
 }
 
+/* 状态徽章 */
 .device-status-badge {
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
+  @apply px-2 py-0.5 rounded text-[11px] font-medium;
 }
 
 .device-status-badge.status-pending {
-  background: rgba(139, 148, 158, 0.2);
-  color: #8b949e;
+  background: var(--color-bg-hover);
+  @apply text-text-muted;
 }
 
 .device-status-badge.status-running {
-  background: rgba(88, 166, 255, 0.2);
-  color: #58a6ff;
+  background: var(--color-accent-bg);
+  @apply text-accent;
 }
 
 .device-status-badge.status-completed {
-  background: rgba(35, 134, 54, 0.2);
-  color: #3fb950;
+  background: var(--color-success-bg);
+  @apply text-success;
 }
 
 .device-status-badge.status-failed,
 .device-status-badge.status-cancelled {
-  background: rgba(218, 54, 51, 0.2);
-  color: #f85149;
+  background: var(--color-error-bg);
+  @apply text-error;
 }
 
 .device-status-badge.status-partial {
-  background: rgba(158, 106, 3, 0.2);
-  color: #d29922;
+  background: var(--color-warning-bg);
+  @apply text-warning;
 }
 
+/* 进度文本 */
 .device-progress-text {
-  font-size: 12px;
-  color: var(--text-secondary, #8b949e);
-  font-family: monospace;
+  @apply text-xs text-text-secondary font-mono;
 }
 
+/* 进度条容器 */
 .progress-bar-container {
-  height: 6px;
-  background: var(--bg-tertiary, #21262d);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 8px;
+  @apply h-1.5 bg-bg-tertiary rounded overflow-hidden mb-2;
 }
 
+/* 进度条 */
 .progress-bar {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s ease;
+  @apply h-full rounded transition-[width] duration-300;
 }
 
 .progress-bar.status-pending {
-  background: #8b949e;
+  @apply bg-text-muted;
 }
 
 .progress-bar.status-running {
-  background: #58a6ff;
+  @apply bg-accent;
 }
 
 .progress-bar.status-completed {
-  background: #3fb950;
+  @apply bg-success;
 }
 
 .progress-bar.status-failed,
 .progress-bar.status-cancelled {
-  background: #f85149;
+  @apply bg-error;
 }
 
 .progress-bar.status-partial {
-  background: #d29922;
+  @apply bg-warning;
 }
 
+/* 错误信息 */
 .device-error {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px;
-  background: rgba(218, 54, 51, 0.1);
-  border-radius: 4px;
-  margin-top: 8px;
-  font-size: 12px;
-  color: #f85149;
+  @apply flex items-center gap-1.5 p-2 rounded mt-2 text-xs text-error;
+  background: var(--color-error-bg);
 }
 
+/* 时间信息 */
 .device-time-info {
-  display: flex;
-  gap: 16px;
-  margin-top: 8px;
-  font-size: 11px;
-  color: var(--text-secondary, #8b949e);
+  @apply flex gap-4 mt-2 text-[11px] text-text-secondary;
 }
 </style>

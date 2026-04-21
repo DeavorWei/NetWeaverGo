@@ -2,7 +2,7 @@
  * 工具类样式入口
  * Utility Classes Entry
  * 
- * 提供常用的工具类，可在整个项目中复用
+ * 仅保留 Tailwind 无法直接实现的工具类
  */
 
 /* 导入独立工具类模块 - 必须在 @layer 之前 */
@@ -12,7 +12,7 @@
 
 @layer utilities {
   /* ========================================
-     文本截断
+     文本截断 - 多行截断
      ======================================== */
 
   .truncate-2 {
@@ -101,29 +101,6 @@
   }
 
   /* ========================================
-     可调整大小
-     ======================================== */
-
-  .resize-y {
-    resize: vertical;
-    overflow: auto;
-  }
-
-  .resize-x {
-    resize: horizontal;
-    overflow: auto;
-  }
-
-  .resize-both {
-    resize: both;
-    overflow: auto;
-  }
-
-  .resize-none {
-    resize: none;
-  }
-
-  /* ========================================
      拖拽手柄指示器
      ======================================== */
 
@@ -162,160 +139,5 @@
 
   .resize-handle-x:hover::after {
     background-color: var(--color-accent-primary);
-  }
-
-  /* ========================================
-     光标类型
-     ======================================== */
-
-  .cursor-ns-resize {
-    cursor: ns-resize;
-  }
-
-  .cursor-ew-resize {
-    cursor: ew-resize;
-  }
-
-  .cursor-nwse-resize {
-    cursor: nwse-resize;
-  }
-
-  .cursor-grab {
-    cursor: grab;
-  }
-
-  .cursor-grabbing {
-    cursor: grabbing;
-  }
-
-  .cursor-not-allowed {
-    cursor: not-allowed;
-  }
-
-  .cursor-pointer {
-    cursor: pointer;
-  }
-
-  /* ========================================
-     选中状态
-     ======================================== */
-
-  .select-none {
-    user-select: none;
-    -webkit-user-select: none;
-  }
-
-  .select-text {
-    user-select: text;
-    -webkit-user-select: text;
-  }
-
-  .select-all {
-    user-select: all;
-    -webkit-user-select: all;
-  }
-
-  /* ========================================
-     文字装饰
-     ======================================== */
-
-  .underline-offset-2 {
-    text-underline-offset: 2px;
-  }
-
-  .underline-offset-4 {
-    text-underline-offset: 4px;
-  }
-
-  .underline-dotted {
-    text-decoration-style: dotted;
-  }
-
-  .underline-dashed {
-    text-decoration-style: dashed;
-  }
-
-  /* ========================================
-     缩放变换
-     ======================================== */
-
-  .scale-95 {
-    transform: scale(0.95);
-  }
-
-  .scale-100 {
-    transform: scale(1);
-  }
-
-  .scale-105 {
-    transform: scale(1.05);
-  }
-
-  .scale-110 {
-    transform: scale(1.1);
-  }
-
-  /* ========================================
-     安全区域
-     ======================================== */
-
-  .safe-top {
-    padding-top: env(safe-area-inset-top);
-  }
-
-  .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  .safe-left {
-    padding-left: env(safe-area-inset-left);
-  }
-
-  .safe-right {
-    padding-right: env(safe-area-inset-right);
-  }
-
-  /* ========================================
-     禁用交互
-     ======================================== */
-
-  .pointer-events-none {
-    pointer-events: none;
-  }
-
-  .pointer-events-auto {
-    pointer-events: auto;
-  }
-
-  /* ========================================
-     触摸操作
-     ======================================== */
-
-  .touch-none {
-    touch-action: none;
-  }
-
-  .touch-pan-x {
-    touch-action: pan-x;
-  }
-
-  .touch-pan-y {
-    touch-action: pan-y;
-  }
-
-  .touch-manipulation {
-    touch-action: manipulation;
-  }
-
-  /* ========================================
-     隔离与堆叠上下文
-     ======================================== */
-
-  .isolate {
-    isolation: isolate;
-  }
-
-  .isolation-auto {
-    isolation: auto;
   }
 }

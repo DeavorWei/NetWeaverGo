@@ -264,8 +264,8 @@ const handleCopyAll = async () => {
       <!-- Column 1: 配置模版 -->
       <TemplateEditor
         v-model="templateText"
+        class="w-full md:w-auto"
         :style="{
-          width: windowWidth < 768 ? '100%' : 'auto',
           flex: windowWidth < 768 ? 'none' : `${leftColWidth} 1 0%`,
         }"
       />
@@ -280,8 +280,8 @@ const handleCopyAll = async () => {
       <VariablesPanel
         v-model:variables="variables"
         v-model:ipBindingEnabled="ipBindingEnabled"
+        class="w-full md:w-auto"
         :style="{
-          width: windowWidth < 768 ? '100%' : 'auto',
           flex: windowWidth < 768 ? 'none' : `${midColWidth} 1 0%`,
         }"
         @add-variable="handleAddVariable"
@@ -302,8 +302,8 @@ const handleCopyAll = async () => {
         :is-building="isBuilding"
         :ip-binding-enabled="ipBindingEnabled"
         :is-copied="isCopied"
+        class="w-full md:w-auto"
         :style="{
-          width: windowWidth < 768 ? '100%' : 'auto',
           flex: windowWidth < 768 ? 'none' : `${rightColWidth} 1 0%`,
         }"
         @send-command="openSendModal"

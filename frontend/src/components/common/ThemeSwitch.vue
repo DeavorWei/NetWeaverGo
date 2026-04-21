@@ -13,7 +13,7 @@ const { isDark, toggleTheme } = useTheme()
 <template>
   <button
     @click="toggleTheme"
-    class="flex items-center justify-center w-9 h-9 rounded-lg border border-border-default bg-bg-tertiary hover:bg-bg-hover text-text-muted hover:text-text-primary transition-all duration-200 shadow-sm"
+    class="group flex items-center justify-center w-9 h-9 rounded-lg border border-border-default bg-bg-tertiary hover:bg-bg-hover text-text-muted hover:text-text-primary transition-all duration-200 shadow-sm"
     :title="isDark ? '切换到浅色模式' : '切换到深色模式'"
     :aria-label="isDark ? '切换到浅色模式' : '切换到深色模式'"
   >
@@ -21,7 +21,7 @@ const { isDark, toggleTheme } = useTheme()
     <svg
       v-if="isDark"
       xmlns="http://www.w3.org/2000/svg"
-      class="w-[18px] h-[18px]"
+      class="w-[18px] h-[18px] transition-transform duration-300 group-hover:rotate-[15deg]"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -44,7 +44,7 @@ const { isDark, toggleTheme } = useTheme()
     <svg
       v-else
       xmlns="http://www.w3.org/2000/svg"
-      class="w-[18px] h-[18px]"
+      class="w-[18px] h-[18px] transition-transform duration-300 group-hover:rotate-[15deg]"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -57,13 +57,4 @@ const { isDark, toggleTheme } = useTheme()
   </button>
 </template>
 
-<style scoped>
-/* 可选：添加旋转动画效果 */
-button svg {
-  transition: transform 0.3s ease;
-}
-
-button:hover svg {
-  transform: rotate(15deg);
-}
-</style>
+<!-- 旋转动画已迁移至 Tailwind group-hover 类，无需 style 块 -->

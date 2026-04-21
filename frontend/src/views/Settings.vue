@@ -728,242 +728,166 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="postcss">
+@reference "../styles/index.css";
+
+/* 页面容器 */
 .settings-page {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding-bottom: 1rem;
+  @apply flex flex-col gap-5 max-w-[1400px] mx-auto pb-4;
 }
 
+/* 页面头部 */
 .settings-page-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.25rem 0.25rem 0;
+  @apply flex items-end justify-between gap-4 pt-1 pl-1;
 }
 
 .settings-page-title {
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--color-text-primary);
+  @apply text-[1.35rem] font-bold tracking-tight text-text-primary;
 }
 
 .settings-page-subtitle {
-  font-size: 0.82rem;
-  color: var(--color-text-muted);
+  @apply text-[0.82rem] text-text-muted;
 }
 
 .settings-page-badge {
-  padding: 0.35rem 0.7rem;
-  border-radius: 9999px;
-  border: 1px solid var(--color-border-default);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-secondary);
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  @apply px-2.5 py-1.5 rounded-full border border-border bg-bg-secondary;
+  @apply text-text-secondary text-[0.72rem] tracking-wide uppercase;
 }
 
+/* 加载状态 */
 .settings-loading {
-  min-height: 220px;
-  border: 1px solid var(--color-border-default);
-  border-radius: 1rem;
-  background: var(--color-bg-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @apply min-h-[220px] border border-border rounded-xl bg-bg-secondary;
+  @apply flex items-center justify-center;
 }
 
+/* 内容区域 */
 .settings-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+  @apply flex flex-col gap-5;
 }
 
+/* 网格布局 */
 .global-settings-panels-flow {
-  display: grid;
+  @apply grid gap-4;
   grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
-  gap: 1rem;
 }
 
 .settings-auto-grid {
-  display: grid;
+  @apply grid gap-3.5 items-start;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.85rem 1rem;
-  align-items: start;
 }
 
 .settings-auto-grid > * {
-  min-width: 0;
+  @apply min-w-0;
 }
 
+/* 卡片 */
 .settings-panel-card {
-  width: 100%;
+  @apply w-full;
 }
 
 .settings-card {
-  overflow: visible;
-  border-radius: 1rem;
-  border: 1px solid var(--color-border-default);
-  background: var(--color-bg-secondary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  @apply overflow-visible rounded-xl border border-border bg-bg-secondary;
+  @apply shadow-sm transition-shadow duration-200 transition-colors;
 }
 
 .settings-card:hover {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
-  border-color: var(--color-border-focus);
+  @apply shadow-md border-border-focus;
 }
 
+/* 表单元素 */
 .settings-panel-card :is(input:not([type="checkbox"]):not([type="radio"]), select) {
-  width: 100%;
-  min-height: 2.35rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--color-border-default);
-  background: var(--color-bg-primary);
-  padding-inline: 0.8rem;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  @apply w-full min-h-[2.35rem] rounded-xl border border-border bg-bg-primary;
+  @apply px-3.5 transition-colors duration-200;
 }
 
 .settings-panel-card :is(input:not([type="checkbox"]):not([type="radio"]), select):focus {
-  border-color: var(--color-accent);
+  @apply border-accent;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 
 .settings-panel-card :is(label) {
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
+  @apply text-[0.76rem] font-semibold text-text-secondary;
 }
 
 .settings-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
+  @apply inline-flex items-center gap-1.5 text-[0.76rem] font-semibold text-text-secondary;
 }
 
 .settings-panel-card :is(p.text-xs) {
-  line-height: 1.45;
+  @apply leading-relaxed;
 }
 
+/* 算法配置区域 */
 .algo-custom-summary {
-  border: 1px solid var(--color-border-default);
-  border-radius: 0.75rem;
+  @apply border border-border rounded-xl p-3.5 flex flex-col gap-3;
   background: color-mix(in srgb, var(--color-bg-secondary) 70%, transparent);
-  padding: 0.8rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
 }
 
 .algo-summary-grid {
-  display: grid;
+  @apply grid gap-2.5;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.6rem;
 }
 
 .algo-summary-item {
-  border: 1px solid var(--color-border-default);
-  border-radius: 0.65rem;
-  padding: 0.55rem 0.65rem;
-  background: var(--color-bg-primary);
+  @apply border border-border rounded-[0.65rem] p-2 px-2.5 bg-bg-primary;
 }
 
 .algo-summary-title {
-  font-size: 0.74rem;
-  color: var(--color-text-secondary);
-  line-height: 1.35;
+  @apply text-[0.74rem] text-text-secondary leading-tight;
 }
 
 .algo-summary-count {
-  margin-top: 0.2rem;
-  font-size: 0.72rem;
-  color: var(--color-text-muted);
+  @apply mt-1 text-[0.72rem] text-text-muted;
 }
 
 .algo-open-modal-btn {
-  align-self: flex-start;
-  border: 1px solid var(--color-accent);
+  @apply self-start border border-accent rounded-[0.65rem];
+  @apply text-[0.78rem] font-semibold px-2 py-1.5;
+  @apply transition-colors duration-200;
   background: color-mix(in srgb, var(--color-accent) 14%, transparent);
-  color: var(--color-accent);
-  border-radius: 0.65rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0.45rem 0.9rem;
-  transition: all 0.2s ease;
+  @apply text-accent;
 }
 
 .algo-open-modal-btn:hover {
   background: color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
+/* 算法区块 */
 .algo-section {
-  border: 1px solid var(--color-border-default);
-  border-radius: 0.75rem;
-  padding: 0.75rem;
+  @apply border border-border rounded-xl p-3;
   background: color-mix(in srgb, var(--color-bg-secondary) 70%, transparent);
 }
 
 .algo-toolbar {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
+  @apply flex gap-2 items-center;
 }
 
 .algo-search-input {
-  flex: 1;
-  min-height: 2rem;
-  border-radius: 0.65rem;
-  border: 1px solid var(--color-border-default);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  padding: 0.35rem 0.65rem;
-  font-size: 0.8rem;
+  @apply flex-1 min-h-8 rounded-[0.65rem] border border-border bg-bg-primary;
+  @apply text-text-primary px-2.5 py-1.5 text-sm;
 }
 
 .algo-action-btn {
-  border: 1px solid var(--color-border-default);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-secondary);
-  border-radius: 0.6rem;
-  font-size: 0.75rem;
-  padding: 0.3rem 0.6rem;
-  transition: all 0.2s ease;
+  @apply border border-border bg-bg-secondary text-text-secondary;
+  @apply rounded-[0.6rem] text-[0.75rem] px-2 py-1;
+  @apply transition-colors duration-200;
 }
 
 .algo-action-btn:hover {
-  border-color: var(--color-border-focus);
-  color: var(--color-text-primary);
+  @apply border-border-focus text-text-primary;
 }
 
 .algo-count-line {
-  font-size: 0.72rem;
-  color: var(--color-text-muted);
+  @apply text-[0.72rem] text-text-muted;
 }
 
 .algo-options-list {
-  max-height: 11rem;
-  overflow-y: auto;
-  border: 1px solid var(--color-border-default);
-  border-radius: 0.65rem;
-  background: var(--color-bg-primary);
+  @apply max-h-44 overflow-y-auto border border-border rounded-[0.65rem] bg-bg-primary;
 }
 
 .algo-option-item {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.45rem 0.6rem;
+  @apply flex items-center gap-2 px-2.5 py-1.5 cursor-pointer;
   border-bottom: 1px solid color-mix(in srgb, var(--color-border-default) 70%, transparent);
-  cursor: pointer;
 }
 
 .algo-option-item:last-child {
@@ -975,157 +899,106 @@ onMounted(() => {
 }
 
 .algo-option-checkbox {
-  width: 0.9rem;
-  height: 0.9rem;
+  @apply w-3.5 h-3.5 flex-shrink-0;
   accent-color: var(--color-accent);
-  flex-shrink: 0;
 }
 
 .algo-option-name {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.78rem;
-  color: var(--color-text-primary);
-  flex: 1;
-  min-width: 0;
-  word-break: break-all;
+  @apply flex-1 min-w-0 text-[0.78rem] text-text-primary font-mono;
+  @apply break-all;
 }
 
 .algo-badge {
-  font-size: 0.65rem;
-  border-radius: 9999px;
-  padding: 0.1rem 0.45rem;
-  line-height: 1.3;
+  @apply text-[0.65rem] rounded-full px-1.5 py-0.5 leading-tight;
 }
 
 .algo-badge-secure {
   background: color-mix(in srgb, var(--color-success) 15%, transparent);
-  color: var(--color-success);
+  @apply text-success;
 }
 
 .algo-badge-insecure {
   background: color-mix(in srgb, var(--color-warning) 20%, transparent);
-  color: var(--color-warning);
+  @apply text-warning;
 }
 
 .algo-badge-legacy {
   background: color-mix(in srgb, var(--color-info) 18%, transparent);
-  color: var(--color-info);
+  @apply text-info;
 }
 
 .algo-empty {
-  padding: 0.75rem;
-  text-align: center;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
+  @apply p-3 text-center text-[0.75rem] text-text-muted;
 }
 
+/* 算法模态框 */
 .algo-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1300;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-  padding: 1rem;
+  @apply fixed inset-0 z-[1300] flex items-center justify-center;
+  @apply bg-black/55 p-4;
 }
 
 .algo-modal-panel {
-  width: min(1120px, 96vw);
-  max-height: 88vh;
-  display: flex;
-  flex-direction: column;
+  @apply w-[min(1120px,96vw)] max-h-[88vh] flex flex-col;
 }
 
 .algo-modal-panel:hover {
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
-  border-color: var(--color-border-default);
+  @apply shadow-2xl border-border;
 }
 
 .algo-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-  padding: 0.95rem 1rem;
-  border-bottom: 1px solid var(--color-border-default);
+  @apply flex items-center justify-between gap-4 px-4 py-4;
+  @apply border-b border-border;
 }
 
 .algo-modal-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
+  @apply text-[0.95rem] font-bold text-text-primary;
 }
 
 .algo-modal-subtitle {
-  margin-top: 0.2rem;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
+  @apply mt-1 text-[0.75rem] text-text-muted;
 }
 
 .algo-modal-close {
-  border: 1px solid var(--color-border-default);
-  background: var(--color-bg-primary);
-  color: var(--color-text-secondary);
-  border-radius: 0.6rem;
-  font-size: 0.75rem;
-  padding: 0.35rem 0.7rem;
-  transition: all 0.2s ease;
+  @apply border border-border bg-bg-primary text-text-secondary;
+  @apply rounded-[0.6rem] text-[0.75rem] px-2 py-1;
+  @apply transition-colors duration-200;
 }
 
 .algo-modal-close:hover {
-  color: var(--color-text-primary);
-  border-color: var(--color-border-focus);
+  @apply text-text-primary border-border-focus;
 }
 
 .algo-modal-body {
-  overflow-y: auto;
-  padding: 1rem;
+  @apply overflow-y-auto p-4;
 }
 
 .algo-modal-grid {
-  display: grid;
+  @apply grid gap-3;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.8rem;
 }
 
 .algo-modal-body .algo-options-list {
-  max-height: 15rem;
+  @apply max-h-60;
 }
 
-.algo-modal-enter-active,
-.algo-modal-leave-active {
-  transition: opacity 0.2s ease;
-}
+/* algo-modal 过渡动画已移至全局 _animations.css */
 
-.algo-modal-enter-from,
-.algo-modal-leave-to {
-  opacity: 0;
-}
-
+/* 操作按钮区域 */
 .settings-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  border: 1px solid var(--color-border-default);
-  border-radius: 1rem;
+  @apply sticky bottom-0 z-[5] flex justify-end gap-3 p-3;
+  @apply border border-border rounded-xl;
   background: color-mix(in srgb, var(--color-bg-primary) 84%, transparent);
-  backdrop-filter: blur(8px);
+  @apply backdrop-blur-sm;
 }
 
 .runtime-panel-wrap {
-  border-top: 1px solid var(--color-border-default);
-  padding-top: 1rem;
+  @apply border-t border-border pt-4;
 }
 
+/* 响应式 */
 @media (max-width: 960px) {
   .settings-page-header {
-    flex-direction: column;
-    align-items: flex-start;
+    @apply flex-col items-start;
   }
 
   .global-settings-panels-flow {
@@ -1133,9 +1006,7 @@ onMounted(() => {
   }
 
   .settings-actions {
-    position: static;
-    flex-wrap: wrap;
-    justify-content: flex-start;
+    @apply static flex-wrap justify-start;
   }
 
   .algo-modal-grid {

@@ -258,12 +258,14 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="postcss">
+@reference "../../styles/index.css";
+
 .command-editor {
-  display: inline-flex;
+  @apply inline-flex;
 }
 
-/* 面板滑入滑出动画 */
+/* 面板滑入滑出动画 - 特殊过渡，保留组件内定义 */
 .slide-enter-active,
 .slide-leave-active {
   transition: opacity 0.3s ease;
@@ -284,13 +286,5 @@ onMounted(() => {
   transform: translateX(100%);
 }
 
-/* 终端背景色 */
-.bg-terminal-bg {
-  background-color: var(--color-terminal-bg);
-}
-
-/* 终端文字颜色 */
-.text-terminal-text {
-  color: var(--color-terminal-text);
-}
+/* 终端颜色类已移至全局 index.css */
 </style>

@@ -217,82 +217,52 @@ onUnmounted(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="postcss">
+@reference "../../styles/index.css";
+
 .titlebar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 32px;
-  padding-left: 12px;
-  background-color: var(--color-bg-secondary);
-  border-bottom: 1px solid var(--color-border-muted);
-  user-select: none;
-  flex-shrink: 0;
-  cursor: default;
+  @apply flex items-center justify-between h-8 pl-3;
+  @apply bg-bg-secondary border-b border-border-muted;
+  @apply select-none shrink-0 cursor-default;
 }
 
 .titlebar-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  @apply flex items-center gap-2;
 }
 
 .titlebar-logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  background-color: var(--color-accent-primary);
-  color: white;
+  @apply flex items-center justify-center w-5 h-5 rounded;
+  @apply bg-accent text-white;
 }
 
 .titlebar-logo svg {
-  width: 12px;
-  height: 12px;
+  @apply w-3 h-3;
 }
 
 .titlebar-title {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  letter-spacing: 0.01em;
+  @apply text-xs font-medium text-text-secondary tracking-wide;
 }
 
 .titlebar-controls {
-  display: flex;
-  align-items: stretch;
-  height: 100%;
+  @apply flex items-stretch h-full;
   --wails-draggable: no-drag;
 }
 
 .titlebar-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 100%;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: background-color 150ms ease;
+  @apply flex items-center justify-center w-[46px] h-full p-0;
+  @apply border-none bg-transparent text-text-secondary;
+  @apply cursor-pointer transition-colors duration-150;
 }
 
 .titlebar-btn svg {
-  width: 16px;
-  height: 16px;
+  @apply w-4 h-4;
 }
 
 .titlebar-btn:hover {
-  background-color: var(--color-bg-hover);
-  color: var(--color-text-primary);
+  @apply bg-bg-hover text-text-primary;
 }
 
 .titlebar-btn-close:hover {
-  background-color: #e81123;
-  color: #ffffff;
+  @apply bg-[#e81123] text-white;
 }
 </style>

@@ -1326,21 +1326,6 @@ function modeLabel(mode: string) {
 </script>
 
 <style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.bg-terminal-bg {
-  background-color: var(--color-terminal-bg);
-}
-
-.text-terminal-text {
-  color: var(--color-terminal-text);
-}
+/* modal 过渡动画已移至全局 _animations.css */
+/* 终端颜色类已移至全局 index.css */
 </style>

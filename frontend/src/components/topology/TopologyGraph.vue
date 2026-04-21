@@ -351,19 +351,14 @@ defineExpose({
 });
 </script>
 
-<style scoped>
+<style scoped lang="postcss">
+@reference "../../styles/index.css";
+
 .topology-graph-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 500px;
-  background: var(--bg-panel);
-  border-radius: 0.5rem;
+  @apply relative w-full h-full min-h-[500px] bg-bg-panel rounded-lg;
 }
 
 .cy-container {
-  width: 100%;
-  height: 100%;
-  min-height: 500px;
+  @apply w-full h-full min-h-[500px];
 }
 </style>

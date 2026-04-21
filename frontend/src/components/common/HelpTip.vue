@@ -11,56 +11,33 @@ defineProps<{
 }>()
 </script>
 
-<style scoped>
+<style scoped lang="postcss">
+@reference "../../styles/index.css";
+
 .help-tip {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  vertical-align: middle;
-  cursor: help;
-  outline: none;
-  z-index: 120;
+  @apply relative inline-flex items-center justify-center align-middle;
+  @apply cursor-help outline-none z-[120];
 }
 
 .help-tip-icon {
-  width: 16px;
-  height: 16px;
-  border-radius: 9999px;
-  border: 1px solid var(--color-border-default);
-  background: var(--color-bg-panel);
-  color: var(--color-text-muted);
-  font-size: 11px;
-  line-height: 1;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+  @apply w-4 h-4 rounded-full border border-border bg-bg-panel;
+  @apply text-text-muted text-[11px] leading-none font-bold;
+  @apply inline-flex items-center justify-center;
+  @apply transition-colors duration-200;
 }
 
 .help-tip-bubble {
-  position: absolute;
-  left: 0;
+  @apply absolute left-0 w-max max-w-[260px] p-2 px-2.5;
+  @apply rounded-[10px] border border-border bg-bg-primary;
+  @apply text-text-primary text-xs leading-relaxed;
+  @apply whitespace-normal opacity-0 pointer-events-none z-[200];
+  @apply transition-opacity duration-200;
   bottom: calc(100% + 10px);
   transform: translateY(4px);
-  width: max-content;
-  max-width: 260px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--color-border-default);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  font-size: 12px;
-  line-height: 1.45;
-  white-space: normal;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.15);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 200;
-  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
+/* 伪元素 - 需保留原始 CSS */
 .help-tip-bubble::after {
   content: "";
   position: absolute;
@@ -72,13 +49,12 @@ defineProps<{
 
 .help-tip:hover .help-tip-icon,
 .help-tip:focus-visible .help-tip-icon {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  @apply border-accent text-accent;
 }
 
 .help-tip:hover .help-tip-bubble,
 .help-tip:focus-visible .help-tip-bubble {
-  opacity: 1;
+  @apply opacity-100;
   transform: translateY(0);
 }
 </style>

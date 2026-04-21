@@ -1,31 +1,34 @@
 <template>
   <Teleport to="body">
     <Transition name="drawer">
-      <div v-if="modelValue" class="execution-history-drawer">
+      <div v-if="modelValue" class="fixed inset-0 z-[1000] flex justify-end">
         <!-- 遮罩 -->
         <div class="drawer-overlay" @click="handleOverlayClick" />
 
         <!-- 抽屉内容 -->
-        <div class="drawer-content">
+        <div class="drawer-container">
           <!-- 头部 -->
           <div class="drawer-header">
             <h3 class="drawer-title">
               <i class="icon-history"></i>
               执行历史记录
-              <span v-if="taskGroupName" class="task-name">{{
-                taskGroupName
-              }}</span>
+              <span v-if="taskGroupName" class="text-xs font-normal text-text-secondary px-2 py-0.5 bg-bg-tertiary rounded ml-2">
+                {{ taskGroupName }}
+              </span>
             </h3>
-            <button class="btn-close" @click="closeDrawer">
-              <span>×</span>
+            <button class="btn-icon-close" @click="closeDrawer">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
             </button>
           </div>
 
           <!-- 筛选栏 -->
-          <div class="drawer-filter">
+          <div class="px-5 py-3 border-b border-border flex gap-3 items-center">
             <select
               v-model="filterStatus"
-              class="filter-select"
+              class="input flex-1"
               @change="loadRecords"
             >
               <option value="">全部状态</option>
@@ -36,7 +39,7 @@
             </select>
             <button
               v-if="records.length > 0"
-              class="btn-delete-all"
+              class="btn-danger-solid"
               @click="deleteAllRecords"
               title="删除全部记录"
             >
@@ -47,53 +50,50 @@
 
           <!-- 列表内容 -->
           <div class="drawer-body">
-            <div v-if="loading" class="loading-state">
-              <div class="spinner"></div>
-              <span>加载中...</span>
+            <!-- 加载状态 -->
+            <div v-if="loading" class="flex flex-col items-center justify-center py-16 gap-3">
+              <div class="w-8 h-8 border-2 border-border border-t-accent rounded-full animate-spin"></div>
+              <span class="text-text-secondary">加载中...</span>
             </div>
 
-            <div v-else-if="records.length === 0" class="empty-state">
-              <i class="icon-empty"></i>
-              <p>暂无历史执行记录</p>
+            <!-- 空状态 -->
+            <div v-else-if="records.length === 0" class="flex flex-col items-center justify-center py-16 gap-3">
+              <i class="icon-empty text-text-muted"></i>
+              <p class="text-text-secondary">暂无历史执行记录</p>
             </div>
 
-            <div v-else class="record-list">
+            <!-- 记录列表 -->
+            <div v-else class="flex flex-col gap-3">
               <div
                 v-for="record in records"
                 :key="record.id"
                 class="record-item"
-                :class="`status-${record.status}`"
+                :class="`record-item-${record.status}`"
                 @click="showDetail(record)"
               >
                 <div class="record-header">
                   <span
-                    class="record-status"
-                    :class="`status-${record.status}`"
+                    class="status-badge"
+                    :class="`status-badge-${getStatusClass(record.status)}`"
                   >
                     {{ getStatusText(record.status) }}
                   </span>
-                  <span class="record-time">{{
-                    formatTime(record.startedAt)
-                  }}</span>
+                  <span class="record-time">{{ formatTime(record.startedAt) }}</span>
                 </div>
 
                 <div class="record-info">
                   <div class="record-task">{{ record.taskName }}</div>
                   <div class="record-stats">
                     <span>设备: {{ record.totalDevices }}</span>
-                    <span class="success">成功: {{ record.successCount }}</span>
-                    <span class="error" v-if="record.errorCount > 0"
-                      >失败: {{ record.errorCount }}</span
-                    >
-                    <span class="duration">{{
-                      formatDuration(record.durationMs)
-                    }}</span>
+                    <span class="text-success">成功: {{ record.successCount }}</span>
+                    <span v-if="record.errorCount > 0" class="text-error">失败: {{ record.errorCount }}</span>
+                    <span class="duration">{{ formatDuration(record.durationMs) }}</span>
                   </div>
                 </div>
 
                 <!-- 删除按钮 -->
                 <button
-                  class="btn-delete"
+                  class="btn-delete absolute top-1/2 right-3 -translate-y-1/2"
                   @click="deleteRecord(record, $event)"
                   title="删除此记录"
                 >
@@ -106,6 +106,7 @@
             <!-- 分页 -->
             <div v-if="totalPages > 1" class="pagination">
               <button
+                class="btn btn-sm"
                 :disabled="currentPage <= 1"
                 @click="changePage(currentPage - 1)"
               >
@@ -113,6 +114,7 @@
               </button>
               <span>{{ currentPage }} / {{ totalPages }}</span>
               <button
+                class="btn btn-sm"
                 :disabled="currentPage >= totalPages"
                 @click="changePage(currentPage + 1)"
               >
@@ -389,6 +391,17 @@ const getStatusText = (status: string) => {
   return statusMap[status] || status;
 };
 
+// 获取状态样式类名
+const getStatusClass = (status: string) => {
+  const classMap: Record<string, string> = {
+    completed: "success",
+    partial: "warning",
+    failed: "error",
+    cancelled: "muted",
+  };
+  return classMap[status] || "muted";
+};
+
 // 监听显示状态
 watch(
   () => props.modelValue,
@@ -402,334 +415,27 @@ watch(
 );
 </script>
 
-<style scoped>
-.execution-history-drawer {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1000;
-  display: flex;
-  justify-content: flex-end;
-}
+<style scoped lang="postcss">
+@reference "../../styles/index.css";
 
-.drawer-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--overlay-bg);
-  backdrop-filter: blur(4px);
-}
-
-.drawer-content {
-  position: relative;
-  width: 480px;
-  max-width: 90vw;
-  height: 100%;
-  background-color: var(--color-bg-secondary);
-  border-left: 1px solid var(--color-border-default);
-  display: flex;
-  flex-direction: column;
-}
-
-.drawer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--color-border-default);
-}
-
+/* 组件特有样式 */
 .drawer-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.task-name {
-  font-size: 13px;
-  font-weight: normal;
-  color: var(--color-text-secondary);
-  padding: 2px 8px;
-  background-color: var(--color-bg-tertiary);
-  border-radius: 4px;
-  margin-left: 8px;
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  color: var(--color-text-secondary);
-  font-size: 24px;
-  cursor: pointer;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-}
-
-.btn-close:hover {
-  background-color: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
-}
-
-.drawer-filter {
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--color-border-default);
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.filter-select {
-  flex: 1;
-  padding: 8px 12px;
-  background-color: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-default);
-  border-radius: 6px;
-  color: var(--color-text-primary);
-  font-size: 13px;
-}
-
-.btn-delete-all {
-  padding: 8px 12px;
-  background-color: var(--color-error);
-  border: none;
-  border-radius: 6px;
-  color: white;
-  font-size: 13px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.btn-delete-all:hover {
-  background-color: var(--color-error);
-  opacity: 0.9;
-}
-
-.drawer-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 20px;
-}
-
-.loading-state,
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  color: var(--color-text-secondary);
-  gap: 12px;
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 2px solid var(--color-border-default);
-  border-top-color: var(--color-accent-primary);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.record-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.record-item {
-  padding: 16px;
-  padding-right: 70px; /* 为删除按钮留出空间 */
-  background-color: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border-default);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-}
-
-.record-item:hover {
-  border-color: var(--color-accent-primary);
-  transform: translateX(4px);
-}
-
-.btn-delete {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
-  background-color: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border-default);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 6px;
-  opacity: 1;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-}
-
-.btn-delete:hover {
-  background-color: var(--color-error-bg);
-  border-color: var(--color-error);
-  color: var(--color-error);
-}
-
-.record-item.status-completed {
-  border-left: 3px solid var(--color-success);
-}
-
-.record-item.status-partial {
-  border-left: 3px solid var(--color-warning);
-}
-
-.record-item.status-failed {
-  border-left: 3px solid var(--color-error);
-}
-
-.record-item.status-cancelled {
-  border-left: 3px solid var(--color-text-muted);
-}
-
-.record-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.record-status {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.record-status.status-completed {
-  background-color: var(--color-success-bg);
-  color: var(--color-success);
-}
-
-.record-status.status-partial {
-  background-color: var(--color-warning-bg);
-  color: var(--color-warning);
-}
-
-.record-status.status-failed {
-  background-color: var(--color-error-bg);
-  color: var(--color-error);
-}
-
-.record-status.status-cancelled {
-  background-color: var(--color-bg-hover);
-  color: var(--color-text-muted);
-}
-
-.record-time {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.record-task {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  margin-bottom: 8px;
-}
-
-.record-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.record-stats .success {
-  color: var(--color-success);
-}
-
-.record-stats .error {
-  color: var(--color-error);
-}
-
-.record-stats .duration {
-  margin-left: auto;
-  font-family: monospace;
-}
-
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border-default);
-}
-
-.pagination button {
-  padding: 6px 12px;
-  background-color: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-default);
-  border-radius: 6px;
-  color: var(--color-text-primary);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.pagination button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.pagination button:hover:not(:disabled) {
-  background-color: var(--color-bg-tertiary);
-}
-
-.pagination span {
-  font-size: 13px;
-  color: var(--color-text-secondary);
+  @apply flex items-center gap-2 m-0 text-base font-semibold text-text-primary;
 }
 
 /* 动画 */
 .drawer-enter-active,
 .drawer-leave-active {
-  transition: all 0.3s ease;
+  @apply transition-all duration-300;
 }
 
 .drawer-enter-from,
 .drawer-leave-to {
-  opacity: 0;
+  @apply opacity-0;
 }
 
-.drawer-enter-from .drawer-content,
-.drawer-leave-to .drawer-content {
+.drawer-enter-from .drawer-container,
+.drawer-leave-to .drawer-container {
   transform: translateX(100%);
 }
 </style>

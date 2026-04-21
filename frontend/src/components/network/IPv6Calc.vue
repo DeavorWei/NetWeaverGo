@@ -485,16 +485,6 @@ const copyText = (val: string) => {
 </template>
 
 <style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition:
-    opacity 0.3s ease,
-    transform 0.3s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
-}
+/* fade 过渡动画已移至全局 _animations.css */
 </style>
 

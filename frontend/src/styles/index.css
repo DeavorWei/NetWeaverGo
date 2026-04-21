@@ -3,7 +3,7 @@
  * Main Styles Entry File
  *
  * 统一管理所有样式导入
- * 采用分层架构：令牌层 → 主题层 → 组件层 → 布局层 → 工具层
+ * 采用分层架构：令牌层 → 主题层 → 工具层
  */
 
 /* ============================================
@@ -17,21 +17,10 @@
 /* 第二层：主题变量 (Theme Variables) */
 @import "./themes/_variables.css";
 
-/* 第2.5层：组件级变量 (Component Variables) */
-@import "./themes/_components.css";
-
-/* 第三层：组件样式 (Component Styles) */
-@import "./components/index.css";
-
-/* 第三.五层：布局样式 (Layout Styles) */
-@import "./layouts/_sidebar.css";
-@import "./layouts/_header.css";
-@import "./layouts/_page.css";
-
-/* 第四层：基础重置样式 (Base Reset) */
+/* 第三层：基础重置样式 (Base Reset) */
 @import "./foundation/_reset.css";
 
-/* 第五层：工具类 (Utility Classes) */
+/* 第四层：工具类 (Utility Classes) */
 @import "./utilities/_index.css";
 
 /* Tailwind CSS 基础 */
@@ -51,6 +40,11 @@
 /* ============================================
    Tailwind 主题扩展
    将语义化变量映射到 Tailwind
+   
+   注意：左右两侧变量名相同是故意的设计
+   Tailwind CSS v4 的 @theme 块用于将 CSS 变量注册为 Tailwind 主题值
+   这样可以在模板中使用 bg-bg-primary、text-text-primary 等工具类
+   变量的实际值在 themes/_variables.css 的 :root 中定义
    ============================================ */
 @theme {
   /* 背景色 */
@@ -104,30 +98,10 @@
   --shadow-card: var(--shadow-card);
   --shadow-glow: var(--shadow-glow);
 
-  /* 自定义动画 */
+  /* 自定义动画 - 使用 _animations.css 中定义的动画 */
   --animate-fade-in: fadeIn 0.3s ease-out;
-  --animate-slide-in: slideIn 0.3s ease-out;
+  --animate-slide-in-up: slideInUp 0.3s ease-out;
   --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-
-  /* 关键帧动画 */
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
 }
 
 /* ============================================
@@ -157,5 +131,583 @@
     transition:
       background-color 0.3s,
       color 0.3s;
+  }
+}
+
+/* ============================================
+   组件层样式
+   使用 Tailwind @apply 定义可复用的组件模式
+   ============================================ */
+@layer components {
+  /* ===== 按钮组件 ===== */
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2
+           px-4 py-2 text-sm font-medium leading-none
+           rounded-lg border border-border bg-bg-tertiary text-text-primary
+           cursor-pointer transition-all duration-200
+           whitespace-nowrap select-none;
+  }
+
+  .btn:hover {
+    @apply bg-bg-hover border-border;
+  }
+
+  .btn:active {
+    @apply scale-[0.98];
+  }
+
+  .btn:disabled {
+    @apply opacity-50 cursor-not-allowed pointer-events-none;
+  }
+
+  .btn-primary {
+    @apply bg-accent text-white border-none;
+  }
+
+  .btn-primary:hover {
+    @apply bg-accent-secondary shadow-glow;
+  }
+
+  .btn-secondary {
+    @apply bg-transparent text-text-primary border-border;
+  }
+
+  .btn-secondary:hover {
+    @apply bg-bg-hover;
+  }
+
+  .btn-success {
+    @apply bg-success text-white border-success;
+  }
+
+  .btn-success:hover {
+    @apply shadow-[0_0_15px_rgba(34,197,94,0.4)];
+  }
+
+  .btn-sm {
+    @apply px-3 py-1 text-xs;
+  }
+
+  /* ===== 弹窗组件 ===== */
+
+  .modal-overlay {
+    @apply fixed inset-0 z-50 bg-black/50
+           transition-opacity duration-200 backdrop-blur-[4px];
+  }
+
+  .modal-container {
+    @apply fixed inset-0 z-[51] flex items-center justify-center p-4
+           pointer-events-none;
+  }
+
+  .modal {
+    @apply relative z-[52] w-full max-w-[32rem] max-h-[90vh] overflow-hidden
+           bg-bg-secondary border border-border rounded-2xl shadow-xl
+           pointer-events-auto
+           transition-all duration-200 scale-95 opacity-0;
+  }
+
+  .modal-active .modal {
+    @apply scale-100 opacity-100;
+  }
+
+  .modal-lg {
+    @apply max-w-[48rem];
+  }
+
+  .modal-xl {
+    @apply max-w-[64rem];
+  }
+
+  .modal-glass {
+    @apply backdrop-blur-[20px];
+  }
+
+  .modal-header {
+    @apply flex items-center justify-between px-6 py-4
+           border-b border-border;
+  }
+
+  .modal-header-title {
+    @apply flex items-center gap-2 text-lg font-semibold text-text-primary;
+  }
+
+  .modal-close {
+    @apply flex items-center justify-center w-8 h-8
+           text-text-muted bg-transparent border-none rounded-md
+           cursor-pointer transition-all duration-150;
+  }
+
+  .modal-close:hover {
+    @apply text-text-primary bg-bg-hover;
+  }
+
+  .modal-body {
+    @apply p-6 overflow-y-auto max-h-[calc(90vh-140px)];
+  }
+
+  .modal-footer {
+    @apply flex items-center justify-end gap-3 px-6 py-4
+           border-t border-border bg-bg-tertiary;
+  }
+
+  /* ===== 卡片头部 ===== */
+
+  .card-header {
+    @apply flex items-center justify-between px-5 py-4
+           border-b border-border bg-bg-secondary;
+  }
+
+  .card-header-title {
+    @apply flex items-center gap-2 text-sm font-semibold text-text-primary;
+  }
+
+  /* ===== 玻璃面板 ===== */
+
+  .glass-panel {
+    @apply bg-bg-secondary border border-border rounded-2xl backdrop-blur-[12px];
+    box-shadow: var(--shadow-card);
+    transition: box-shadow var(--transition-normal) var(--ease-in-out);
+  }
+
+  .glass-panel:hover {
+    box-shadow: var(--shadow-lg);
+  }
+
+  .glass-card {
+    @apply p-4 bg-bg-secondary/60 border border-border-muted rounded-xl backdrop-blur-[12px];
+  }
+
+  /* ===== 输入框组件 ===== */
+
+  .input {
+    @apply block w-full px-3 py-2.5
+           text-sm font-sans leading-normal
+           text-text-primary bg-bg-secondary
+           border border-border rounded-lg
+           outline-none transition-all duration-150;
+  }
+
+  .input::placeholder {
+    @apply text-text-muted;
+  }
+
+  .input:hover {
+    @apply border-text-muted;
+  }
+
+  .input:focus {
+    @apply border-border-focus shadow-[0_0_0_3px_var(--color-accent-bg)];
+  }
+
+  .input:disabled {
+    @apply opacity-50 cursor-not-allowed bg-bg-tertiary;
+  }
+
+  .input-sm {
+    @apply px-2.5 py-1.5 text-xs;
+  }
+
+  .input-lg {
+    @apply px-4 py-3 text-base;
+  }
+
+  .input-mono {
+    @apply font-mono tracking-wider;
+  }
+
+  /* ===== Toast 组件 ===== */
+
+  .toast-container {
+    @apply fixed z-[100] flex flex-col gap-3 pointer-events-none;
+  }
+
+  .toast-container-top-center {
+    @apply top-6 left-1/2 -translate-x-1/2;
+  }
+
+  .toast-container-top-right {
+    @apply top-6 right-6;
+  }
+
+  .toast-container-bottom-center {
+    @apply bottom-6 left-1/2 -translate-x-1/2;
+  }
+
+  .toast-container-bottom-right {
+    @apply bottom-6 right-6;
+  }
+
+  .toast {
+    @apply flex items-center gap-3
+           min-w-[280px] max-w-[420px] px-5 py-3
+           bg-bg-secondary border border-border rounded-xl
+           shadow-lg pointer-events-auto
+           transition-all duration-200 -translate-y-[10px] opacity-0;
+  }
+
+  .toast-visible {
+    @apply translate-y-0 opacity-100;
+  }
+
+  .toast-icon {
+    @apply flex-shrink-0 w-5 h-5;
+  }
+
+  .toast-content {
+    @apply flex-1 min-w-0;
+  }
+
+  .toast-title {
+    @apply text-sm font-semibold text-text-primary;
+  }
+
+  .toast-message {
+    @apply text-sm text-text-secondary leading-relaxed;
+  }
+
+  .toast-close {
+    @apply flex-shrink-0 flex items-center justify-center
+           w-6 h-6 text-text-muted bg-transparent border-none rounded-md
+           cursor-pointer transition-all duration-150;
+  }
+
+  .toast-close:hover {
+    @apply text-text-primary bg-bg-hover;
+  }
+
+  .toast-success {
+    @apply border-l-4 border-l-success;
+  }
+
+  .toast-success .toast-icon {
+    @apply text-success;
+  }
+
+  .toast-error {
+    @apply border-l-4 border-l-error;
+  }
+
+  .toast-error .toast-icon {
+    @apply text-error;
+  }
+
+  .toast-warning {
+    @apply border-l-4 border-l-warning;
+  }
+
+  .toast-warning .toast-icon {
+    @apply text-warning;
+  }
+
+  .toast-info {
+    @apply border-l-4 border-l-info;
+  }
+
+  .toast-info .toast-icon {
+    @apply text-info;
+  }
+
+  .toast-link {
+    @apply text-accent text-sm font-medium
+           bg-transparent border-none cursor-pointer
+           hover:underline transition-all duration-150;
+  }
+
+  /* ===== 按钮变体 - 用于任务组件 ===== */
+
+  /* 图标关闭按钮 */
+  .btn-icon-close {
+    @apply flex items-center justify-center w-8 h-8
+           text-text-muted bg-transparent border-none rounded-md
+           cursor-pointer transition-all duration-150;
+  }
+
+  .btn-icon-close:hover {
+    @apply text-text-primary bg-bg-hover;
+  }
+
+  /* 文件操作按钮 */
+  .btn-file {
+    @apply inline-flex items-center justify-center gap-1
+           px-2.5 py-1.5 text-xs font-medium
+           border border-border rounded-md
+           bg-bg-secondary text-text-secondary
+           cursor-pointer transition-all duration-150;
+  }
+
+  .btn-file:hover:not(:disabled) {
+    @apply bg-bg-tertiary border-accent text-accent;
+  }
+
+  .btn-file:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .btn-file.btn-file-sm {
+    @apply px-1.5 py-1 text-[11px];
+  }
+
+  .btn-file.btn-file-lg {
+    @apply px-3 py-2 text-sm;
+  }
+
+  /* 删除按钮 */
+  .btn-delete {
+    @apply inline-flex items-center gap-1
+           px-2.5 py-1.5 text-xs font-medium
+           border border-border rounded-md
+           bg-bg-tertiary text-text-muted
+           cursor-pointer transition-all duration-150;
+  }
+
+  .btn-delete:hover {
+    @apply bg-error-bg border-error text-error;
+  }
+
+  /* 危险操作按钮（实心） */
+  .btn-danger-solid {
+    @apply inline-flex items-center gap-1.5
+           px-3 py-2 text-xs font-medium
+           bg-error text-white border-none rounded-md
+           cursor-pointer transition-all duration-150;
+  }
+
+  .btn-danger-solid:hover {
+    @apply opacity-90;
+  }
+
+  /* ===== 模态框变体 - 用于详情弹窗 ===== */
+
+  /* 详情模态框容器 */
+  .modal-detail {
+    @apply fixed inset-0 z-[1100] flex items-center justify-center p-5
+           bg-black/70 backdrop-blur-[4px];
+  }
+
+  .modal-detail-content {
+    @apply relative w-full max-w-[800px] max-h-[90vh]
+           bg-bg-tertiary border border-border rounded-xl
+           flex flex-col overflow-hidden;
+  }
+
+  /* ===== 抽屉组件 ===== */
+
+  .drawer-overlay {
+    @apply absolute inset-0 bg-black/50 backdrop-blur-[4px];
+  }
+
+  .drawer-container {
+    @apply relative w-[480px] max-w-[90vw] h-full
+           bg-bg-secondary border-l border-border
+           flex flex-col;
+  }
+
+  .drawer-header {
+    @apply flex items-center justify-between px-5 py-4
+           border-b border-border;
+  }
+
+  .drawer-title {
+    @apply flex items-center gap-2 m-0 text-base font-semibold text-text-primary;
+  }
+
+  .drawer-body {
+    @apply flex-1 overflow-y-auto p-4;
+  }
+
+  /* ===== 状态徽章 ===== */
+
+  .status-badge {
+    @apply inline-flex items-center px-2 py-0.5
+           text-xs font-semibold rounded-md;
+  }
+
+  .status-badge-success {
+    @apply bg-success-bg text-success;
+  }
+
+  .status-badge-error {
+    @apply bg-error-bg text-error;
+  }
+
+  .status-badge-warning {
+    @apply bg-warning-bg text-warning;
+  }
+
+  .status-badge-info {
+    @apply bg-info-bg text-info;
+  }
+
+  .status-badge-muted {
+    @apply bg-bg-hover text-text-muted;
+  }
+
+  /* ===== 信息展示组件 ===== */
+
+  .info-section {
+    @apply bg-bg-secondary border border-border rounded-lg p-4 mb-5;
+  }
+
+  .info-row {
+    @apply flex justify-between items-center py-2
+           border-b border-border;
+  }
+
+  .info-row:last-child {
+    @apply border-b-0;
+  }
+
+  .info-label {
+    @apply text-xs text-text-secondary;
+  }
+
+  .info-value {
+    @apply text-xs text-text-primary font-medium;
+  }
+
+  .info-value-with-action {
+    @apply flex items-center gap-2;
+  }
+
+  /* 统计卡片 */
+  .stat-card {
+    @apply bg-bg-secondary border border-border rounded-lg p-4 text-center;
+  }
+
+  .stat-value {
+    @apply block text-2xl font-bold text-text-primary mb-1;
+  }
+
+  .stat-label {
+    @apply text-xs text-text-secondary;
+  }
+
+  .stat-card.stat-card-success .stat-value {
+    @apply text-success;
+  }
+
+  .stat-card.stat-card-error .stat-value {
+    @apply text-error;
+  }
+
+  .stat-card.stat-card-warning .stat-value {
+    @apply text-warning;
+  }
+
+  /* ===== 记录列表组件 ===== */
+
+  .record-item {
+    @apply relative p-4 pr-[70px]
+           bg-bg-tertiary border border-border rounded-lg
+           cursor-pointer transition-all duration-150;
+  }
+
+  .record-item:hover {
+    @apply border-accent translate-x-1;
+  }
+
+  .record-item.record-item-success {
+    @apply border-l-[3px] border-l-success;
+  }
+
+  .record-item.record-item-error {
+    @apply border-l-[3px] border-l-error;
+  }
+
+  .record-item.record-item-warning {
+    @apply border-l-[3px] border-l-warning;
+  }
+
+  .record-item.record-item-muted {
+    @apply border-l-[3px] border-l-text-muted;
+  }
+
+  .record-header {
+    @apply flex justify-between items-center mb-2;
+  }
+
+  .record-info {
+    @apply flex flex-col gap-2;
+  }
+
+  .record-task {
+    @apply text-sm font-medium text-text-primary;
+  }
+
+  .record-stats {
+    @apply flex flex-wrap gap-3 text-xs text-text-secondary;
+  }
+
+  .record-stats .success {
+    @apply text-success;
+  }
+
+  .record-stats .error {
+    @apply text-error;
+  }
+
+  .record-stats .duration {
+    @apply ml-auto font-mono;
+  }
+
+  .record-time {
+    @apply text-xs text-text-secondary;
+  }
+
+  /* ===== 分页组件 ===== */
+
+  .pagination {
+    @apply flex items-center justify-center gap-4 mt-5 pt-4
+           border-t border-border;
+  }
+
+  .pagination button {
+    @apply px-3 py-1.5 text-xs
+           bg-bg-secondary border border-border rounded-md
+           text-text-primary cursor-pointer
+           transition-all duration-150;
+  }
+
+  .pagination button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .pagination button:hover:not(:disabled) {
+    @apply bg-bg-tertiary;
+  }
+
+  .pagination span {
+    @apply text-xs text-text-secondary;
+  }
+
+  /* ===== 设备文件操作区域 ===== */
+
+  .device-files-section {
+    @apply bg-bg-secondary border border-border rounded-lg p-4;
+  }
+
+  .device-files-grid {
+    @apply grid gap-3;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+
+  .file-item {
+    @apply flex justify-between items-center p-2 px-3 bg-bg-tertiary rounded-md;
+  }
+
+  .file-label {
+    @apply text-sm text-text-primary;
+  }
+
+  /* ===== 终端颜色 ===== */
+
+  .bg-terminal-bg {
+    background-color: var(--color-terminal-bg);
+  }
+
+  .text-terminal-text {
+    color: var(--color-terminal-text);
   }
 }

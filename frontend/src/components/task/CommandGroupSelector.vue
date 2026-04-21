@@ -171,14 +171,5 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s ease;
-}
-
-.slide-enter-from,
-.slide-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
-}
+/* slide 过渡动画已移至全局 _animations.css */
 </style>

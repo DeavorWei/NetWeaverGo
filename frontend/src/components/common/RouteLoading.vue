@@ -9,27 +9,16 @@
 // 复用项目现有的 spinner 样式
 </script>
 
-<style scoped>
+<style scoped lang="postcss">
+@reference "../../styles/index.css";
+
 .route-loading-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  width: 100%;
+  @apply flex items-center justify-center min-h-[200px] w-full;
 }
 
 .route-loading-spinner {
-  width: 2rem;
-  height: 2rem;
-  border: 2px solid var(--accent, #3b82f6);
+  @apply w-8 h-8 rounded-full animate-spin;
+  border: 2px solid var(--color-accent-primary);
   border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

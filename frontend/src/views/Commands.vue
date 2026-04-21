@@ -324,8 +324,7 @@
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="closePreviewModal"></div>
         <div 
           ref="previewModalRef"
-          class="relative bg-bg-card border border-border rounded-xl shadow-2xl mx-4 animate-slide-in flex flex-col min-w-[400px] min-h-[400px] max-w-[95vw] max-h-[90vh]"
-          style="width: 700px; height: 600px;"
+          class="relative bg-bg-card border border-border rounded-xl shadow-2xl mx-4 animate-slide-in flex flex-col min-w-[400px] min-h-[400px] max-w-[95vw] max-h-[90vh] w-[700px] h-[600px]"
         >
           <!-- 拖拽调整指示器 - 右下角 -->
           <div 
@@ -815,52 +814,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.line-clamp-1 {
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  line-clamp: 1;
-  overflow: hidden;
-}
-
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  line-clamp: 2;
-  overflow: hidden;
-}
-
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: all 0.3s ease;
-}
-
-.toast-enter-from {
-  opacity: 0;
-  transform: translate(-50%, 20px);
-}
-
-.toast-leave-to {
-  opacity: 0;
-  transform: translate(-50%, -10px);
-}
-
-.bg-terminal-bg {
-  background-color: var(--color-terminal-bg, #1a1a1a);
-}
-
-.text-terminal-text {
-  color: var(--color-terminal-text, #e0e0e0);
-}
+/* line-clamp 已由 Tailwind 内置支持，无需自定义 */
+/* modal 和 toast 过渡动画已移至全局 _animations.css */
+/* 终端颜色类已移至全局 index.css */
 </style>

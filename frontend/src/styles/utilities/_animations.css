@@ -2,34 +2,15 @@
  * 动画工具类
  * Animation Utilities
  * 
- * 提供统一的动画效果，确保整个应用的动画一致性
+ * 仅保留项目特有动画，Tailwind 内置动画不再重复定义
  */
 
 @layer utilities {
   /* ========================================
-     关键帧定义
+     关键帧定义 - 项目特有动画
      ======================================== */
 
-  /* 淡入淡出 */
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes fadeOut {
-    from {
-      opacity: 1;
-    }
-    to {
-      opacity: 0;
-    }
-  }
-
-  /* 从上方滑入 */
+  /* 从上方滑入/滑出 */
   @keyframes slideInDown {
     from {
       opacity: 0;
@@ -52,7 +33,7 @@
     }
   }
 
-  /* 从下方滑入 */
+  /* 从下方滑入/滑出 */
   @keyframes slideInUp {
     from {
       opacity: 0;
@@ -75,7 +56,7 @@
     }
   }
 
-  /* 从左侧滑入 */
+  /* 从左侧滑入/滑出 */
   @keyframes slideInLeft {
     from {
       opacity: 0;
@@ -98,7 +79,7 @@
     }
   }
 
-  /* 从右侧滑入 */
+  /* 从右侧滑入/滑出 */
   @keyframes slideInRight {
     from {
       opacity: 0;
@@ -121,30 +102,7 @@
     }
   }
 
-  /* 缩放 */
-  @keyframes scaleIn {
-    from {
-      opacity: 0;
-      transform: scale(0.95);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-
-  @keyframes scaleOut {
-    from {
-      opacity: 1;
-      transform: scale(1);
-    }
-    to {
-      opacity: 0;
-      transform: scale(0.95);
-    }
-  }
-
-  /* 弹性缩放 */
+  /* 弹性缩放 - Tailwind 无此效果 */
   @keyframes bounceIn {
     0% {
       opacity: 0;
@@ -162,7 +120,7 @@
     }
   }
 
-  /* 抖动 (用于错误提示) */
+  /* 抖动 - 用于错误提示 */
   @keyframes shake {
     0%,
     100% {
@@ -180,38 +138,6 @@
     60%,
     80% {
       transform: translateX(0.25rem);
-    }
-  }
-
-  /* 脉冲 */
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.5;
-    }
-  }
-
-  /* 旋转 */
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  /* 弹跳 */
-  @keyframes bounce {
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-0.5rem);
     }
   }
 
@@ -238,18 +164,21 @@
     }
   }
 
+  /* 滑出动画 (slide-up 用于 Toast 等) */
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   /* ========================================
      动画应用类
      ======================================== */
-
-  /* 淡入淡出 */
-  .animate-fade-in {
-    animation: fadeIn var(--duration-normal, 200ms) ease-out;
-  }
-
-  .animate-fade-out {
-    animation: fadeOut var(--duration-normal, 200ms) ease-out;
-  }
 
   /* 滑入滑出 - 上/下 */
   .animate-slide-in-down {
@@ -285,15 +214,7 @@
     animation: slideOutRight var(--duration-normal, 200ms) ease-out;
   }
 
-  /* 缩放 */
-  .animate-scale-in {
-    animation: scaleIn var(--duration-normal, 200ms) ease-out;
-  }
-
-  .animate-scale-out {
-    animation: scaleOut var(--duration-normal, 200ms) ease-out;
-  }
-
+  /* 弹性缩放 */
   .animate-bounce-in {
     animation: bounceIn var(--duration-slow, 400ms) ease-out;
   }
@@ -301,21 +222,6 @@
   /* 抖动 */
   .animate-shake {
     animation: shake var(--duration-slow, 400ms) ease-in-out;
-  }
-
-  /* 脉冲 */
-  .animate-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  /* 旋转 */
-  .animate-spin {
-    animation: spin 1s linear infinite;
-  }
-
-  /* 弹跳 */
-  .animate-bounce {
-    animation: bounce 1s ease-in-out infinite;
   }
 
   /* 发光 */
@@ -339,110 +245,9 @@
     );
   }
 
-  /* ========================================
-     动画持续时间
-     ======================================== */
-
-  .duration-fast {
-    --duration-fast: 100ms;
-    animation-duration: 100ms;
-  }
-
-  .duration-normal {
-    --duration-normal: 200ms;
-    animation-duration: 200ms;
-  }
-
-  .duration-slow {
-    --duration-slow: 400ms;
-    animation-duration: 400ms;
-  }
-
-  .duration-slower {
-    animation-duration: 600ms;
-  }
-
-  .duration-slowest {
-    animation-duration: 1000ms;
-  }
-
-  /* ========================================
-     动画延迟
-     ======================================== */
-
-  .delay-75 {
-    animation-delay: 75ms;
-  }
-
-  .delay-100 {
-    animation-delay: 100ms;
-  }
-
-  .delay-150 {
-    animation-delay: 150ms;
-  }
-
-  .delay-200 {
-    animation-delay: 200ms;
-  }
-
-  .delay-300 {
-    animation-delay: 300ms;
-  }
-
-  .delay-500 {
-    animation-delay: 500ms;
-  }
-
-  .delay-700 {
-    animation-delay: 700ms;
-  }
-
-  .delay-1000 {
-    animation-delay: 1000ms;
-  }
-
-  /* ========================================
-     过渡效果
-     ======================================== */
-
-  .transition-none {
-    transition: none;
-  }
-
-  .transition-all {
-    transition: all var(--transition-normal, 200ms) ease;
-  }
-
-  .transition-colors {
-    transition:
-      color var(--transition-normal, 200ms) ease,
-      background-color var(--transition-normal, 200ms) ease,
-      border-color var(--transition-normal, 200ms) ease;
-  }
-
-  .transition-opacity {
-    transition: opacity var(--transition-normal, 200ms) ease;
-  }
-
-  .transition-transform {
-    transition: transform var(--transition-normal, 200ms) ease;
-  }
-
-  .transition-shadow {
-    transition: box-shadow var(--transition-normal, 200ms) ease;
-  }
-
-  /* ========================================
-     动画播放状态
-     ======================================== */
-
-  .animation-running {
-    animation-play-state: running;
-  }
-
-  .animation-paused {
-    animation-play-state: paused;
+  /* 滑出动画 */
+  .animate-slide-up {
+    animation: slide-up var(--duration-normal, 200ms) ease-out;
   }
 
   /* ========================================
@@ -474,5 +279,88 @@
 
   .hover-glow:hover {
     box-shadow: 0 0 15px var(--color-accent-primary);
+  }
+
+  /* ========================================
+     Vue 过渡动画类
+     用于 <Transition> 组件
+     ======================================== */
+
+  /* Modal 过渡 */
+  .modal-enter-active,
+  .modal-leave-active {
+    transition: all 0.2s ease;
+  }
+
+  .modal-enter-from,
+  .modal-leave-to {
+    opacity: 0;
+  }
+
+  .modal-enter-from .modal,
+  .modal-leave-to .modal {
+    transform: scale(0.95);
+  }
+
+  /* Fade 过渡 */
+  .fade-enter-active,
+  .fade-leave-active {
+    transition: opacity 0.2s ease;
+  }
+
+  .fade-enter-from,
+  .fade-leave-to {
+    opacity: 0;
+  }
+
+  /* Slide 过渡 */
+  .slide-enter-active,
+  .slide-leave-active {
+    transition: all 0.3s ease;
+  }
+
+  .slide-enter-from,
+  .slide-leave-to {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+
+  /* Toast 过渡 */
+  .toast-enter-active,
+  .toast-leave-active {
+    transition: all 0.3s ease;
+  }
+
+  .toast-enter-from,
+  .toast-leave-to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  /* Drawer 过渡 */
+  .drawer-enter-active,
+  .drawer-leave-active {
+    transition: all 0.3s ease;
+  }
+
+  .drawer-enter-from,
+  .drawer-leave-to {
+    opacity: 0;
+  }
+
+  .drawer-enter-from .drawer-container,
+  .drawer-leave-to .drawer-container {
+    transform: translateX(100%);
+  }
+
+  /* algo-modal 过渡 - 用于 Settings.vue */
+  .algo-modal-enter-active,
+  .algo-modal-leave-active {
+    transition: opacity 0.2s ease;
+  }
+
+  .algo-modal-enter-from,
+  .algo-modal-leave-to {
+    opacity: 0;
   }
 }

@@ -1,12 +1,12 @@
 <template>
-  <div class="file-operation-buttons">
+  <div class="inline-flex items-center gap-1.5">
     <template v-if="hasFile">
       <!-- 打开文件按钮 -->
       <button
-        class="btn-file-op btn-open"
+        class="btn-file"
         :class="{
-          'btn-small': size === 'small',
-          'btn-large': size === 'large',
+          'btn-file-sm': size === 'small',
+          'btn-file-lg': size === 'large',
         }"
         :title="`打开${fileTypeText}`"
         @click="handleOpenFile"
@@ -31,10 +31,10 @@
 
       <!-- 打开文件夹按钮 -->
       <button
-        class="btn-file-op btn-folder"
+        class="btn-file"
         :class="{
-          'btn-small': size === 'small',
-          'btn-large': size === 'large',
+          'btn-file-sm': size === 'small',
+          'btn-file-lg': size === 'large',
         }"
         :title="`打开${fileTypeText}所在文件夹`"
         @click="handleOpenFolder"
@@ -59,10 +59,14 @@
     </template>
 
     <!-- 文件不存在提示 -->
-    <span v-if="hasFile && !exists" class="file-not-exists"> 文件不存在 </span>
+    <span v-if="hasFile && !exists" class="text-xs text-text-muted italic">
+      文件不存在
+    </span>
 
     <!-- 无文件提示 -->
-    <span v-else-if="!hasFile" class="no-file"> 无{{ fileTypeText }} </span>
+    <span v-else-if="!hasFile" class="text-xs text-text-muted italic">
+      无{{ fileTypeText }}
+    </span>
   </div>
 </template>
 
@@ -130,75 +134,8 @@ const handleOpenFolder = async () => {
 };
 </script>
 
-<style scoped>
-.file-operation-buttons {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
+<style scoped lang="postcss">
+@reference "../../styles/index.css";
 
-.btn-file-op {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 6px 10px;
-  border: 1px solid var(--border-color, #2d333b);
-  border-radius: 6px;
-  background: var(--bg-secondary, #161b22);
-  color: var(--text-secondary, #8b949e);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 12px;
-}
-
-.btn-file-op:hover:not(:disabled) {
-  background: var(--bg-tertiary, #21262d);
-  border-color: var(--primary-color, #58a6ff);
-  color: var(--primary-color, #58a6ff);
-}
-
-.btn-file-op:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-file-op.btn-small {
-  padding: 4px 6px;
-}
-
-.btn-file-op.btn-small svg {
-  width: 12px;
-  height: 12px;
-}
-
-.btn-file-op.btn-large {
-  padding: 8px 14px;
-  font-size: 13px;
-}
-
-.btn-open {
-  color: var(--info-color, #58a6ff);
-}
-
-.btn-open:hover:not(:disabled) {
-  background: rgba(88, 166, 255, 0.1);
-  border-color: var(--info-color, #58a6ff);
-}
-
-.btn-folder {
-  color: var(--text-secondary, #8b949e);
-}
-
-.btn-folder:hover:not(:disabled) {
-  background: var(--bg-tertiary, #21262d);
-  border-color: var(--text-secondary, #8b949e);
-}
-
-.file-not-exists,
-.no-file {
-  font-size: 12px;
-  color: var(--text-muted, #6e7681);
-  font-style: italic;
-}
+/* 组件已完全使用 index.css 中的类，无需额外样式 */
 </style>
