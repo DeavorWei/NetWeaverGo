@@ -201,6 +201,8 @@ interface Props {
   groupData?: GroupData[];
   /** 标签数据（可选） */
   tagData?: { key: string; label: string }[];
+  /** 协议数据（可选） */
+  protocolData?: { key: string; label: string }[];
   /** 组件配置 */
   config?: Partial<SelectorConfig>;
   /** 加载状态 */
@@ -211,6 +213,7 @@ const props = withDefaults(defineProps<Props>(), {
   targetData: () => [],
   groupData: () => [],
   tagData: () => [],
+  protocolData: () => [],
   config: () => ({}),
   loading: false,
 });
@@ -277,6 +280,9 @@ const filterOptions = computed(() => {
   if (mergedConfig.value.enableTagFilter && props.tagData.length > 0) {
     options.push({ label: "按标签", value: "tag" });
   }
+  if (props.protocolData.length > 0) {
+    options.push({ label: "按协议", value: "protocol" });
+  }
   return options;
 });
 
@@ -284,7 +290,8 @@ const filterOptions = computed(() => {
 const showSubFilter = computed(() => {
   return (
     (currentFilter.value === "group" && props.groupData.length > 0) ||
-    (currentFilter.value === "tag" && props.tagData.length > 0)
+    (currentFilter.value === "tag" && props.tagData.length > 0) ||
+    (currentFilter.value === "protocol" && props.protocolData.length > 0)
   );
 });
 
@@ -292,6 +299,7 @@ const showSubFilter = computed(() => {
 const subFilterLabel = computed(() => {
   if (currentFilter.value === "group") return "分组";
   if (currentFilter.value === "tag") return "标签";
+  if (currentFilter.value === "protocol") return "协议";
   return "";
 });
 
@@ -316,6 +324,20 @@ const subFilterOptions = computed(() => {
       label: tag.label,
       value: tag.key,
       count: tagCounts.get(tag.key) || 0,
+    }));
+  }
+  if (currentFilter.value === "protocol") {
+    // 统计每个协议的数量
+    const protocolCounts = new Map<string, number>();
+    props.sourceData.forEach((item) => {
+      if (item.protocol) {
+        protocolCounts.set(item.protocol, (protocolCounts.get(item.protocol) || 0) + 1);
+      }
+    });
+    return props.protocolData.map((protocol) => ({
+      label: protocol.label,
+      value: protocol.key,
+      count: protocolCounts.get(protocol.key) || 0,
     }));
   }
   return [];

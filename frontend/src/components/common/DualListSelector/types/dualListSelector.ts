@@ -20,7 +20,7 @@ export interface GroupData {
 
 /** 筛选配置 */
 export interface FilterConfig {
-  type: "group" | "tag" | "all";
+  type: "group" | "tag" | "protocol" | "all";
   label: string;
   options?: { label: string; value: string; count?: number }[];
 }

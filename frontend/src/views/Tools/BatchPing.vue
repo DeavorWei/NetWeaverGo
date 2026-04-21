@@ -8,6 +8,8 @@ import type { PingRequest } from '@/bindings/github.com/NetWeaverGo/core/interna
 import type { DeviceAssetListItem } from '@/bindings/github.com/NetWeaverGo/core/internal/models/models'
 import { useToast } from '@/utils/useToast'
 import PingSettingsModal from '@/components/tools/PingSettingsModal.vue'
+import { DualListSelector } from '@/components/common/DualListSelector'
+import type { ListItem, GroupData, SelectorConfig } from '@/components/common/DualListSelector'
 
 // Duration 常量 (纳秒)
 const MILLISECOND = 1000000  // 1ms = 1,000,000 ns
@@ -240,21 +242,55 @@ let unlistenProgress: (() => void) | null = null // 取消事件监听的函数
 let unlistenHostUpdate: (() => void) | null = null // 主机状态更新事件监听
 
 // 设备导入相关状态
-const showDeviceModal = ref(false)
+const showDeviceSelector = ref(false)
 const devices = ref<DeviceAssetListItem[]>([])
-const selectedDeviceIds = ref<number[]>([])
 const loadingDevices = ref(false)
-const deviceSearchQuery = ref('')
 
-// 过滤后的设备列表
-const filteredDevices = computed(() => {
-  if (!deviceSearchQuery.value) return devices.value
-  const query = deviceSearchQuery.value.toLowerCase()
-  return devices.value.filter((d: DeviceAssetListItem) =>
-    d.displayName.toLowerCase().includes(query) ||
-    d.ip.toLowerCase().includes(query)
-  )
+// DualListSelector 数据映射
+const deviceSourceData = computed<ListItem[]>(() =>
+  devices.value.map(d => ({
+    key: d.id,
+    label: d.displayName,
+    description: `${d.ip} · ${d.vendor}`,
+    ip: d.ip,
+    vendor: d.vendor,
+    group: d.group || '未分组',
+    protocol: d.protocol,
+    tags: d.tags
+  }))
+)
+
+const deviceTargetData = ref<ListItem[]>([])
+
+const deviceGroupData = computed<GroupData[]>(() => {
+  const groups = new Map<string, DeviceAssetListItem[]>()
+  devices.value.forEach(d => {
+    const g = d.group || '未分组'
+    if (!groups.has(g)) groups.set(g, [])
+    groups.get(g)!.push(d)
+  })
+  return Array.from(groups.entries()).map(([key, items]) => ({
+    key,
+    label: key,
+    items: items.map(d => ({
+      key: d.id,
+      label: d.displayName,
+      description: `${d.ip} · ${d.vendor}`
+    }))
+  }))
 })
+
+const deviceSelectorConfig: Partial<SelectorConfig> = {
+  modalTitle: '选择设备',
+  sourceTitle: '可用设备',
+  targetTitle: '已选设备',
+  enableSearch: true,
+  enableGrouping: true,
+  enableTagFilter: false,
+  searchFields: ['label', 'description', 'ip'],
+  confirmText: '导入选中设备',
+  cancelText: '取消'
+}
 
 // 加载设备列表
 const loadDevices = async () => {
@@ -271,28 +307,28 @@ const loadDevices = async () => {
 }
 
 // 打开设备选择弹窗
-const openDeviceModal = async () => {
+const openDeviceSelector = async () => {
   await loadDevices()
-  selectedDeviceIds.value = []
-  deviceSearchQuery.value = ''
-  showDeviceModal.value = true
+  deviceTargetData.value = []
+  showDeviceSelector.value = true
 }
 
 // 确认导入设备
-const importDevices = async () => {
-  if (selectedDeviceIds.value.length === 0) {
+const handleDeviceConfirm = async (items: ListItem[]) => {
+  const selectedIds = items.map(item => item.key as number)
+
+  if (selectedIds.length === 0) {
     toast.warning('请选择至少一个设备')
     return
   }
 
   try {
-    const ips = await PingService.GetDeviceIPsForPing(selectedDeviceIds.value)
+    const ips = await PingService.GetDeviceIPsForPing(selectedIds)
     if (ips && ips.length > 0) {
       const existing = targetInput.value.trim()
       const newIps = ips.join('\n')
       targetInput.value = existing ? existing + '\n' + newIps : newIps
       toast.success(`已导入 ${ips.length} 个设备 IP`)
-      showDeviceModal.value = false
     } else {
       toast.warning('所选设备没有有效的 IP 地址')
     }
@@ -878,7 +914,7 @@ onUnmounted(() => {
       v-model:realtimeThrottle="realtimeThrottle"
       :disabled="isRunning"
       @confirm="showSettingsModal = false"
-      @importDevices="openDeviceModal"
+      @importDevices="openDeviceSelector"
     />
 
     <!-- 列配置弹窗 -->
@@ -908,84 +944,15 @@ onUnmounted(() => {
     </Teleport>
 
     <!-- 设备选择弹窗 -->
-    <Teleport to="body">
-      <div v-if="showDeviceModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showDeviceModal = false">
-        <div class="bg-bg-secondary border border-border rounded-xl shadow-xl w-[600px] max-h-[80vh] flex flex-col">
-          <div class="flex items-center justify-between p-4 border-b border-border">
-            <h3 class="text-lg font-semibold text-text-primary">选择设备</h3>
-            <button @click="showDeviceModal = false" class="text-text-muted hover:text-text-primary">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <!-- 搜索框 -->
-          <div class="p-4 border-b border-border">
-            <input
-              v-model="deviceSearchQuery"
-              type="text"
-              placeholder="搜索设备名称或 IP..."
-              class="w-full bg-bg-tertiary/50 border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
-            />
-          </div>
-
-          <div class="flex-1 overflow-auto p-4">
-            <div v-if="loadingDevices" class="flex items-center justify-center py-8">
-              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
-            </div>
-
-            <div v-else-if="devices.length === 0" class="text-center py-8 text-text-muted">
-              暂无设备数据
-            </div>
-
-            <div v-else-if="filteredDevices.length === 0" class="text-center py-8 text-text-muted">
-              未找到匹配的设备
-            </div>
-
-            <div v-else class="space-y-2">
-              <div class="flex items-center gap-2 p-2 bg-bg-tertiary/50 rounded-lg text-sm text-text-secondary">
-                <input
-                  type="checkbox"
-                  :checked="selectedDeviceIds.length === filteredDevices.length"
-                  @change="(e: Event) => selectedDeviceIds = (e.target as HTMLInputElement).checked ? filteredDevices.map((d: DeviceAssetListItem) => d.id) : []"
-                  class="rounded border-border"
-                />
-                <span>全选</span>
-                <span class="ml-auto">已选择 {{ selectedDeviceIds.length }} 个</span>
-              </div>
-
-              <div v-for="device in filteredDevices" :key="device.id"
-                   class="flex items-center gap-3 p-3 border border-border rounded-lg hover:bg-bg-tertiary/30 transition-colors">
-                <input
-                  type="checkbox"
-                  :value="device.id"
-                  v-model="selectedDeviceIds"
-                  class="rounded border-border"
-                />
-                <div class="flex-1">
-                  <div class="text-text-primary font-medium">{{ device.displayName }}</div>
-                  <div class="text-sm text-text-secondary">{{ device.ip }} · {{ device.vendor }}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex justify-end gap-2 p-4 border-t border-border">
-            <button @click="showDeviceModal = false" class="px-4 py-2 text-text-secondary hover:text-text-primary transition-colors">
-              取消
-            </button>
-            <button
-              @click="importDevices"
-              :disabled="selectedDeviceIds.length === 0"
-              class="px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-            >
-              导入选中设备
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <DualListSelector
+      v-model:visible="showDeviceSelector"
+      :source-data="deviceSourceData"
+      :target-data="deviceTargetData"
+      :group-data="deviceGroupData"
+      :config="deviceSelectorConfig"
+      :loading="loadingDevices"
+      @confirm="handleDeviceConfirm"
+    />
   </div>
 </template>
 

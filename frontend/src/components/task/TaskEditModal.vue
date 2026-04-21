@@ -304,43 +304,17 @@
                     >已选 {{ groupForm.deviceIDs.length }} 台</span
                   >
                 </div>
-                <div
-                  class="grid grid-cols-2 gap-2 max-h-[420px] overflow-y-auto scrollbar-custom"
+                <button
+                  @click="openDeviceSelector"
+                  class="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white transition-colors"
                 >
-                  <label
-                    v-for="device in allDevices"
-                    :key="device.id"
-                    class="flex items-start gap-3 rounded-lg border border-border bg-bg-card px-3 py-2 hover:border-accent/40 transition-colors cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      :checked="groupForm.deviceIDs.includes(device.id)"
-                      @change="toggleGroupDevice(device.id)"
-                      class="mt-1"
-                    />
-                    <div class="min-w-0">
-                      <div class="font-mono text-sm text-text-primary">
-                        {{ device.ip }}
-                      </div>
-                      <div class="text-xs text-text-muted mt-1">
-                        分组: {{ device.group || "未分组" }}
-                      </div>
-                      <div class="flex flex-wrap gap-1 mt-2">
-                        <span
-                          v-for="tag in device.tags"
-                          :key="tag"
-                          class="px-1.5 py-0.5 rounded text-xs bg-accent/10 text-accent"
-                        >
-                          {{ tag }}
-                        </span>
-                        <span
-                          v-if="device.tags.length === 0"
-                          class="text-xs text-text-muted"
-                          >无标签</span
-                        >
-                      </div>
-                    </div>
-                  </label>
+                  点击选择设备
+                </button>
+                <div v-if="groupForm.deviceIDs.length > 0" class="mt-3 text-xs text-text-muted">
+                  已选设备预览:
+                  <span class="font-mono text-text-primary">
+                    {{ selectedDevicesPreview }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -443,46 +417,18 @@
                       >已选 {{ groupForm.deviceIDs.length }} 台</span
                     >
                   </div>
-                  <div
-                    class="grid grid-cols-2 gap-2 max-h-[280px] overflow-y-auto scrollbar-custom"
+                  <button
+                    @click="openDeviceSelector"
+                    class="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white transition-colors"
                   >
-                    <label
-                      v-for="device in allDevices"
-                      :key="device.id"
-                      class="flex items-start gap-3 rounded-lg border border-border bg-bg-card px-3 py-2 hover:border-accent/40 transition-colors cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        :checked="groupForm.deviceIDs.includes(device.id)"
-                        @change="toggleGroupDevice(device.id)"
-                        class="mt-1"
-                      />
-                      <div class="min-w-0">
-                        <div class="font-mono text-sm text-text-primary">
-                          {{ device.ip }}
-                        </div>
-                        <div class="text-xs text-text-muted mt-1">
-                          分组: {{ device.group || "未分组" }}
-                        </div>
-                        <div class="text-xs text-text-muted mt-1">
-                          库存厂商: {{ device.vendor || "未知" }}
-                        </div>
-                        <div class="flex flex-wrap gap-1 mt-2">
-                          <span
-                            v-for="tag in device.tags"
-                            :key="tag"
-                            class="px-1.5 py-0.5 rounded text-xs bg-accent/10 text-accent"
-                          >
-                            {{ tag }}
-                          </span>
-                          <span
-                            v-if="device.tags.length === 0"
-                            class="text-xs text-text-muted"
-                            >无标签</span
-                          >
-                        </div>
-                      </div>
-                    </label>
+                    点击选择设备
+                  </button>
+                  <div v-if="groupForm.deviceIDs.length > 0" class="mt-3 text-xs text-text-muted">
+                    已选设备预览:
+                    <span class="font-mono text-text-primary">
+                      {{ selectedDevicesPreview }}
+                    </span>
+                  </div>
                   </div>
 
                   <div
@@ -808,6 +754,15 @@
       </div>
     </div>
   </Transition>
+
+  <!-- 设备选择弹窗 -->
+  <DeviceSelectorModal
+    v-model:visible="showDeviceSelector"
+    :devices="allDevices"
+    :selected-i-ps="selectedTopologyDevices.map(d => d.ip)"
+    title="选择目标设备"
+    @confirm="handleDeviceConfirm"
+  />
 </template>
 
 <script setup lang="ts">
@@ -821,6 +776,7 @@ import type {
   TopologyCommandPreviewView,
   TopologyTaskFieldOverride,
 } from "../../services/api";
+import DeviceSelectorModal from "./DeviceSelectorModal.vue";
 
 type TaskGroupWithTopologyOverrides = TaskGroup & {
   topologyFieldOverrides?: TopologyTaskFieldOverride[];
@@ -879,6 +835,19 @@ const topologyPreviewLoading = ref(false);
 const topologyPreviewError = ref("");
 const topologyPreviewDirty = ref(false);
 
+// 设备选择弹窗状态
+const showDeviceSelector = ref(false);
+
+// 打开设备选择弹窗
+const openDeviceSelector = () => {
+  showDeviceSelector.value = true;
+};
+
+// 确认设备选择
+const handleDeviceConfirm = (devices: DeviceAsset[]) => {
+  groupForm.deviceIDs = devices.map(d => d.id);
+};
+
 watch(
   () => [props.task, props.modelValue] as const,
   ([task, visible]) => {
@@ -920,6 +889,11 @@ const topologyVendorOptions = computed(() => {
 
 const selectedTopologyDevices = computed(() =>
   props.allDevices.filter((device) => groupForm.deviceIDs.includes(device.id)),
+);
+
+// 已选设备预览文本
+const selectedDevicesPreview = computed(() =>
+  selectedTopologyDevices.value.map(d => d.ip).join(', '),
 );
 
 const topologyPreviewCommands = computed(
@@ -1019,14 +993,6 @@ function addTag() {
 
 function removeTag(index: number) {
   form.tags.splice(index, 1);
-}
-
-function toggleGroupDevice(deviceID: number) {
-  if (groupForm.deviceIDs.includes(deviceID)) {
-    groupForm.deviceIDs.splice(groupForm.deviceIDs.indexOf(deviceID), 1);
-    return;
-  }
-  groupForm.deviceIDs.push(deviceID);
 }
 
 function addBindingItem() {

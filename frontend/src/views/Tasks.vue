@@ -119,10 +119,18 @@
             </button>
           </div>
           <div class="p-3 h-[calc(100%-45px)] overflow-y-auto scrollbar-custom">
-            <DeviceSelector
-              :devices="deviceList"
-              @selectionChange="onDeviceSelectionChange"
-            />
+            <button
+              @click="showDeviceSelector = true"
+              class="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white transition-colors"
+            >
+              点击选择设备
+            </button>
+            <div v-if="selectedDevices.length > 0" class="mt-3 text-xs text-text-muted">
+              已选设备预览:
+              <span class="font-mono text-text-primary">
+                {{ selectedDevices.map(d => d.ip).slice(0, 5).join(', ') }}{{ selectedDevices.length > 5 ? '...' : '' }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -639,6 +647,15 @@
         </div>
       </div>
     </Transition>
+
+    <!-- 设备选择弹窗 -->
+    <DeviceSelectorModal
+      v-model:visible="showDeviceSelector"
+      :devices="deviceList"
+      :selected-i-ps="selectedDevices.map(d => d.ip)"
+      title="选择目标设备"
+      @confirm="onDeviceSelectionConfirm"
+    />
   </div>
 </template>
 
@@ -657,7 +674,7 @@ import type {
   TopologyCommandPreviewView,
   TopologyTaskFieldOverride,
 } from "../services/api";
-import DeviceSelector from "../components/task/DeviceSelector.vue";
+import DeviceSelectorModal from "../components/task/DeviceSelectorModal.vue";
 import CommandGroupSelector from "../components/task/CommandGroupSelector.vue";
 
 const router = useRouter();
@@ -665,6 +682,7 @@ const router = useRouter();
 // 设备列表和选择状态
 const deviceList = ref<DeviceAsset[]>([]);
 const selectedDevices = ref<DeviceAsset[]>([]);
+const showDeviceSelector = ref(false);
 const selectedTaskType = ref<"normal" | "topology">("normal");
 const selectedCommandGroupId = ref<number>(0);
 const selectedCommandGroup = ref<CommandGroup | null>(null);
@@ -1037,8 +1055,8 @@ async function loadTopologyPreview() {
   }
 }
 
-// 设备选择变化
-function onDeviceSelectionChange(devs: DeviceAsset[]) {
+// 设备选择确认
+function onDeviceSelectionConfirm(devs: DeviceAsset[]) {
   selectedDevices.value = devs;
 }
 
