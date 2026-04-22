@@ -1,5 +1,6 @@
 <template>
-  <Transition name="modal">
+  <div>
+    <Transition name="modal">
     <div
       v-if="modelValue"
       class="fixed inset-0 z-50 flex items-center justify-center"
@@ -429,7 +430,6 @@
                       {{ selectedDevicesPreview }}
                     </span>
                   </div>
-                  </div>
 
                   <div
                     class="mt-4 rounded-lg border border-border bg-bg-card p-3"
@@ -755,14 +755,15 @@
     </div>
   </Transition>
 
-  <!-- 设备选择弹窗 -->
-  <DeviceSelectorModal
-    v-model:visible="showDeviceSelector"
-    :devices="allDevices"
-    :selected-i-ps="selectedTopologyDevices.map(d => d.ip)"
-    title="选择目标设备"
-    @confirm="handleDeviceConfirm"
-  />
+    <!-- 设备选择弹窗 -->
+    <DeviceSelectorModal
+      v-model:visible="showDeviceSelector"
+      :devices="allDevices"
+      :selected-i-ps="selectedTopologyDevices.map(d => d.ip)"
+      title="选择目标设备"
+      @confirm="handleDeviceConfirm"
+    />
+  </div>
 </template>
 
 <script setup lang="ts">

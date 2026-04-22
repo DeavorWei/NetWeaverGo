@@ -42,7 +42,7 @@
           <!-- 内容区 -->
           <div class="flex-1 p-6 overflow-hidden">
             <!-- 筛选栏 -->
-            <div class="filter-bar">
+            <div class="flex items-center gap-4 p-4 bg-bg-panel/50 rounded-lg border border-border/50 mb-4">
               <div class="flex items-center gap-3">
                 <span
                   class="text-xs font-medium text-text-muted uppercase tracking-wider"
@@ -95,7 +95,7 @@
                     v-model="searchKeyword"
                     type="text"
                     placeholder="搜索..."
-                    class="search-input pl-9"
+                    class="w-48 px-3 py-1.5 text-sm rounded-md bg-bg-card border border-border text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50 transition-all pl-9"
                   />
                   <svg
                     class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted"
@@ -112,7 +112,7 @@
             </div>
 
             <!-- 主选择区 -->
-            <div class="selector-content">
+            <div class="flex items-center justify-center gap-4 flex-1 min-h-0">
               <!-- 左栏 -->
               <SourcePanel
                 :title="mergedConfig.sourceTitle"
@@ -145,7 +145,7 @@
             </div>
 
             <!-- 底部信息 -->
-            <div class="footer-info">
+            <div class="flex items-center justify-between px-4 py-3 mt-4 bg-bg-panel/50 rounded-lg border border-border/50">
               <span class="text-sm text-text-secondary">
                 已选择
                 <span class="font-semibold text-accent">{{
@@ -161,12 +161,12 @@
 
           <!-- 底部按钮 -->
           <div
-            class="footer-actions px-6 py-4 border-t border-border bg-bg-panel"
+            class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-bg-panel"
           >
-            <button class="btn-cancel" @click="handleCancel">
+            <button class="px-4 py-2 text-sm font-medium text-text-secondary bg-bg-panel border border-border rounded-lg hover:bg-bg-hover transition-colors" @click="handleCancel">
               {{ mergedConfig.cancelText }}
             </button>
-            <button class="btn-confirm" @click="handleConfirm">
+            <button class="px-4 py-2 text-sm font-medium text-white bg-accent rounded-lg hover:bg-accent/90 transition-colors" @click="handleConfirm">
               {{ mergedConfig.confirmText }}
             </button>
           </div>
@@ -400,35 +400,6 @@ const handleCancel = () => {
 </script>
 
 <style scoped>
-.filter-bar {
-  @apply flex items-center gap-4 p-4 bg-bg-panel/50 rounded-lg border border-border/50 mb-4;
-}
-
-.selector-content {
-  @apply flex items-center justify-center gap-4 flex-1 min-h-0;
-}
-
-.search-input {
-  @apply w-48 px-3 py-1.5 text-sm rounded-md bg-bg-card border border-border text-text-primary placeholder:text-text-muted;
-  @apply focus:outline-none focus:border-accent/50 transition-all;
-}
-
-.footer-info {
-  @apply flex items-center justify-between px-4 py-3 mt-4 bg-bg-panel/50 rounded-lg border border-border/50;
-}
-
-.footer-actions {
-  @apply flex items-center justify-end gap-3;
-}
-
-.btn-cancel {
-  @apply px-4 py-2 text-sm font-medium text-text-secondary bg-bg-panel border border-border rounded-lg hover:bg-bg-hover transition-colors;
-}
-
-.btn-confirm {
-  @apply px-4 py-2 text-sm font-medium text-white bg-accent rounded-lg hover:bg-accent/90 transition-colors;
-}
-
 /* Modal 动画 */
 .modal-enter-active,
 .modal-leave-active {

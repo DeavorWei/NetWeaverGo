@@ -1,23 +1,23 @@
 <template>
-  <div class="list-panel">
+  <div class="flex flex-col w-[340px] h-[350px] bg-bg-panel border border-border rounded-lg overflow-hidden">
     <!-- 头部 -->
-    <div class="list-panel-header">
-      <span class="list-panel-title">{{ title }}</span>
-      <span class="list-panel-count">{{ items.length }}</span>
+    <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-card">
+      <span class="text-sm font-medium text-text-primary">{{ title }}</span>
+      <span class="text-xs text-text-muted bg-bg-secondary px-2 py-0.5 rounded-full">{{ items.length }}</span>
     </div>
 
     <!-- 列表 -->
-    <div class="list-panel-body scrollbar-custom">
+    <div class="flex-1 overflow-y-auto scrollbar-custom p-2">
       <div
         v-for="item in items"
         :key="item.key"
         v-memo="[selected.has(item.key)]"
         @click="!item.disabled && $emit('toggle', item.key)"
         :class="[
-          'list-item',
+          'flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-all duration-200 hover:bg-bg-hover',
           {
-            selected: selected.has(item.key),
-            disabled: item.disabled,
+            'bg-accent/5 border-l-2 border-l-accent': selected.has(item.key),
+            'opacity-50 cursor-not-allowed': item.disabled,
           },
         ]"
       >
@@ -100,37 +100,4 @@ defineEmits<{
 }>();
 </script>
 
-<style scoped>
-.list-panel {
-  @apply flex flex-col w-[340px] h-[350px] bg-bg-panel border border-border rounded-lg overflow-hidden;
-}
 
-.list-panel-header {
-  @apply flex items-center justify-between px-4 py-3 border-b border-border bg-bg-card;
-}
-
-.list-panel-title {
-  @apply text-sm font-medium text-text-primary;
-}
-
-.list-panel-count {
-  @apply text-xs text-text-muted bg-bg-secondary px-2 py-0.5 rounded-full;
-}
-
-.list-panel-body {
-  @apply flex-1 overflow-y-auto scrollbar-custom p-2;
-}
-
-.list-item {
-  @apply flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-all duration-200;
-  @apply hover:bg-bg-hover;
-}
-
-.list-item.selected {
-  @apply bg-accent/5 border-l-2 border-l-accent;
-}
-
-.list-item.disabled {
-  @apply opacity-50 cursor-not-allowed;
-}
-</style>

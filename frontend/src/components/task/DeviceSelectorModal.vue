@@ -1,6 +1,7 @@
 <template>
   <DualListSelector
-    v-model:visible="visible"
+    :visible="visible"
+    @update:visible="val => $emit('update:visible', val)"
     :source-data="sourceData"
     :target-data="targetData"
     :group-data="groupData"
