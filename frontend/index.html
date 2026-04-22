@@ -5,6 +5,32 @@
     <link rel="icon" type="image/x-icon" href="/logo.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NetWeaverGo</title>
+    
+    <!-- 早期主题初始化 - 防止页面闪烁 -->
+    <script>
+      (function() {
+        const THEME_KEY = 'netweaver-theme';
+        const savedTheme = localStorage.getItem(THEME_KEY);
+        
+        let theme;
+        if (savedTheme === 'light' || savedTheme === 'dark') {
+          // 已保存的有效主题
+          theme = savedTheme;
+        } else {
+          // 无保存主题时，检测系统偏好（与 useTheme.ts 的 initTheme 逻辑保持一致）
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          theme = prefersDark ? 'dark' : 'light';
+        }
+        
+        // 立即应用到 DOM，在 CSS 渲染前执行
+        var html = document.documentElement;
+        html.setAttribute('data-theme', theme);
+        if (theme === 'dark') {
+          html.classList.add('dark');
+        }
+      })();
+    </script>
+    
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

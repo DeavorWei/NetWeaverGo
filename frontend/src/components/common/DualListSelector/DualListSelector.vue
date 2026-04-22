@@ -137,7 +137,7 @@
               <!-- 右栏 -->
               <TargetPanel
                 :title="mergedConfig.targetTitle"
-                :items="targetData"
+                :items="targetDataRef"
                 :selected="targetSelected"
                 :stats="targetStats"
                 @toggle="toggleTargetSelection"
@@ -149,7 +149,7 @@
               <span class="text-sm text-text-secondary">
                 已选择
                 <span class="font-semibold text-accent">{{
-                  targetData.length
+                  targetDataRef.length
                 }}</span>
                 / {{ sourceData.length }} 项
               </span>

@@ -29,9 +29,15 @@ export function useDualListSelection(
 
   // ==================== Computed ====================
 
+  /** 可选的源数据（过滤掉已选中的） */
+  const availableSourceData = computed(() => {
+    const targetKeys = new Set(targetData.value.map((item) => item.key));
+    return sourceData.value.filter((item) => !targetKeys.has(item.key));
+  });
+
   /** 过滤后的源数据 */
   const filteredSourceData = computed(() => {
-    let result = sourceData.value;
+    let result = availableSourceData.value;
 
     // 应用筛选
     if (currentFilter.value !== "all" && filterValue.value) {
@@ -61,7 +67,7 @@ export function useDualListSelection(
 
   /** 源数据统计 */
   const sourceStats = computed(() => ({
-    total: sourceData.value.length,
+    total: availableSourceData.value.length,
     filtered: filteredSourceData.value.length,
     selected: sourceSelected.value.size,
   }));
