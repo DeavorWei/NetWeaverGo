@@ -1,6 +1,6 @@
 module github.com/NetWeaverGo/core
 
-go 1.25.5
+go 1.26
 
 require (
 	github.com/glebarez/sqlite v1.11.0
