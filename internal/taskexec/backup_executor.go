@@ -2,9 +2,6 @@ package taskexec
 
 import (
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -14,7 +11,8 @@ import (
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/repository"
-	"github.com/pkg/sftp"
+	"github.com/NetWeaverGo/core/internal/sftputil"
+	"github.com/NetWeaverGo/core/internal/sshutil"
 	"gorm.io/gorm"
 )
 
@@ -188,17 +186,33 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeStepFinished, EventLevelInfo, fmt.Sprintf("发现配置文件: %s", remotePath))
 
 	// [step-1] SFTP下载配置文件
+	// 注意：必须使用独立的纯净SSH连接建立SFTP会话，
+	// 因为华为/华三等设备拒绝在已有shell/pty通道的连接上打开sftp子系统。
 	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeStepStarted, EventLevelInfo, "正在通过 SFTP 下载配置...")
 
 	localPath := e.pathManager.GetBackupConfigFilePath(
-		saveRootPath, 
-		dirNamePattern, 
-		fileNamePattern, 
-		device.IP, 
+		saveRootPath,
+		dirNamePattern,
+		fileNamePattern,
+		device.IP,
 		time.Now(),
 	)
 
-	sftpClient, err := sftp.NewClient(exec.Client.Client)
+	// 构建SFTP专用的SSH配置（与DeviceExecutor.Connect()保持一致的策略配置）
+	hostKeyPolicy, knownHostsPath := config.ResolveSSHHostKeyPolicy()
+	sftpSSHConfig := sshutil.Config{
+		IP:             device.IP,
+		Port:           device.Port,
+		Username:       device.Username,
+		Password:       device.Password,
+		Timeout:        unit.Timeout,
+		HostKeyPolicy:  hostKeyPolicy,
+		KnownHostsPath: knownHostsPath,
+		// 注意：PTY 不设置 — SFTP连接不需要伪终端
+		// 注意：Algorithms 不设置 — 为nil时NewRawSSHClient内部使用内置默认兼容配置
+	}
+
+	sftpClient, err := sftputil.NewSFTPClient(ctx.Context(), sftpSSHConfig)
 	if err != nil {
 		errMsg := fmt.Sprintf("建立SFTP会话失败: %v", err)
 		failUnitExecution(handler, ctx, unit.ID, errMsg, "SFTP失败", nil)
@@ -206,7 +220,7 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 	}
 	defer sftpClient.Close()
 
-	if err := e.downloadConfigFile(sftpClient, remotePath, localPath); err != nil {
+	if err := sftpClient.DownloadFile(remotePath, localPath); err != nil {
 		errMsg := fmt.Sprintf("SFTP下载文件失败: %v", err)
 		failUnitExecution(handler, ctx, unit.ID, errMsg, "下载失败", nil)
 		return fmt.Errorf("SFTP下载文件失败: %w", err)
@@ -240,7 +254,10 @@ func (e *BackupExecutor) createArtifact(taskRunID, stageID, unitID, artifactType
 }
 
 func (e *BackupExecutor) extractNextStartupConfigPath(output string) string {
-	re := regexp.MustCompile(`(?i)Next startup saved-configuration file:?\s+([^\r\n\s]+)`)
+	// 华为/华三格式 - 过滤存储介质前缀 (flash:/, cf:/, sdcard:/ 等)
+	// 匹配: "Next startup saved-configuration file: flash:/1.cfg"
+	// 捕获: "1.cfg" (过滤掉存储介质前缀)
+	re := regexp.MustCompile(`(?i)Next startup saved-configuration file:?\s+(?:flash:|cf:|sdcard:)?/?([^\r\n\s]+)`)
 	matches := re.FindStringSubmatch(output)
 	if len(matches) > 1 {
 		path := strings.TrimSpace(matches[1])
@@ -248,36 +265,15 @@ func (e *BackupExecutor) extractNextStartupConfigPath(output string) string {
 			return path
 		}
 	}
-	
-	reCisco := regexp.MustCompile(`(?i)boot system\s+(?:flash:)?([^\r\n\s]+)`)
+
+	// Cisco 格式 - 过滤存储介质前缀 (flash:, bootflash:, slot0: 等)
+	// 匹配: "boot system flash:1.cfg" 或 "boot system 1.cfg"
+	// 捕获: "1.cfg" (过滤掉存储介质前缀)
+	reCisco := regexp.MustCompile(`(?i)boot system\s+(?:flash:|bootflash:|slot0:|usb0:)?/?([^\r\n\s]+)`)
 	matchesCisco := reCisco.FindStringSubmatch(output)
 	if len(matchesCisco) > 1 {
 		return strings.TrimSpace(matchesCisco[1])
 	}
-	
+
 	return ""
-}
-
-func (e *BackupExecutor) downloadConfigFile(sftpClient *sftp.Client, remotePath, localPath string) error {
-	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
-		return fmt.Errorf("创建本地目录失败: %w", err)
-	}
-	
-	srcFile, err := sftpClient.Open(remotePath)
-	if err != nil {
-		return fmt.Errorf("无法打开远端文件 %s: %w", remotePath, err)
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.OpenFile(localPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return fmt.Errorf("无法创建本地文件 %s: %w", localPath, err)
-	}
-	defer dstFile.Close()
-
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		return fmt.Errorf("复制文件数据失败: %w", err)
-	}
-	
-	return nil
 }
