@@ -235,7 +235,7 @@
                 <div class="flex items-center justify-between">
                   <span class="text-sm text-text-muted">对象类型</span>
                   <span class="text-sm font-semibold text-text-primary">{{
-                    isTopologyTaskValue ? "拓扑任务" : "普通任务"
+                    isTopologyTaskValue ? "拓扑任务" : isBackupTaskValue ? "配置备份" : "普通任务"
                   }}</span>
                 </div>
                 <div class="flex items-center justify-between">
@@ -254,7 +254,7 @@
             </div>
 
             <div
-              v-if="task.mode === 'group' && !isTopologyTaskValue"
+              v-if="task.mode === 'group' && !isTopologyTaskValue && !isBackupTaskValue"
               class="mt-6 grid grid-cols-[320px,1fr] gap-4"
             >
               <div
@@ -630,6 +630,77 @@
               </div>
             </div>
 
+            <div v-else-if="isBackupTaskValue" class="mt-6 space-y-4">
+              <div class="grid grid-cols-[320px,1fr] gap-4">
+                <div
+                  class="rounded-xl border border-border bg-bg-panel p-4 space-y-3"
+                >
+                  <div
+                    class="rounded-lg border border-accent/20 bg-accent/5 px-3 py-3 text-sm text-text-secondary"
+                  >
+                    配置备份任务将从所选设备上下载启动配置。<br/>您可以调整下方的保存路径与文件名策略，支持时间占位符如 %Y, %M, %D, %h, %m, %s 等。
+                  </div>
+                  <div class="space-y-3 mt-4">
+                    <label class="block">
+                      <span class="block text-xs font-medium text-text-secondary mb-1.5">配置查询命令</span>
+                      <input
+                        v-model="backupForm.startupCommand"
+                        type="text"
+                        class="w-full px-3 py-2 rounded-lg bg-bg-card border border-border text-sm text-text-primary focus:outline-none focus:border-accent/50"
+                      />
+                    </label>
+                    <label class="block">
+                      <span class="block text-xs font-medium text-text-secondary mb-1.5">根保存路径 (相对于执行器)</span>
+                      <input
+                        v-model="backupForm.saveRootPath"
+                        type="text"
+                        class="w-full px-3 py-2 rounded-lg bg-bg-card border border-border text-sm text-text-primary focus:outline-none focus:border-accent/50"
+                      />
+                    </label>
+                    <label class="block">
+                      <span class="block text-xs font-medium text-text-secondary mb-1.5">目录名模板</span>
+                      <input
+                        v-model="backupForm.dirNamePattern"
+                        type="text"
+                        class="w-full px-3 py-2 rounded-lg bg-bg-card border border-border text-sm text-text-primary focus:outline-none focus:border-accent/50"
+                      />
+                    </label>
+                    <label class="block">
+                      <span class="block text-xs font-medium text-text-secondary mb-1.5">文件名模板</span>
+                      <input
+                        v-model="backupForm.fileNamePattern"
+                        type="text"
+                        class="w-full px-3 py-2 rounded-lg bg-bg-card border border-border text-sm text-text-primary focus:outline-none focus:border-accent/50"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="rounded-xl border border-border bg-bg-panel p-4">
+                  <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-semibold text-text-primary">
+                      选择设备
+                    </h4>
+                    <span class="text-xs text-text-muted"
+                      >已选 {{ groupForm.deviceIDs.length }} 台</span
+                    >
+                  </div>
+                  <button
+                    @click="openDeviceSelector"
+                    class="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white transition-colors"
+                  >
+                    点击选择设备
+                  </button>
+                  <div v-if="groupForm.deviceIDs.length > 0" class="mt-3 text-xs text-text-muted">
+                    已选设备预览:
+                    <span class="font-mono text-text-primary">
+                      {{ selectedDevicesPreview }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div v-else class="mt-6 space-y-4">
               <div class="flex items-center justify-between">
                 <h4 class="text-sm font-semibold text-text-primary">
@@ -824,6 +895,13 @@ const groupForm = reactive({
   deviceIDs: [] as number[],
 });
 
+const backupForm = reactive({
+  startupCommand: "display startup",
+  saveRootPath: "storage/backup",
+  dirNamePattern: "%Y-%M-%D",
+  fileNamePattern: "%H_startup.cfg",
+});
+
 const bindingForm = reactive({
   items: [] as BindingItemForm[],
 });
@@ -871,6 +949,7 @@ const selectedGroupCommands = computed(() => {
 });
 
 const isTopologyTaskValue = computed(() => props.task?.taskType === "topology");
+const isBackupTaskValue = computed(() => props.task?.taskType === "backup");
 
 const topologyVendorOptions = computed(() => {
   const values = new Set<string>(["huawei", "h3c", "cisco"]);
@@ -942,6 +1021,11 @@ function hydrateForm(task: TaskGroup) {
   topologyPreviewDirty.value = false;
   newTag.value = "";
   formError.value = "";
+
+  backupForm.startupCommand = task.backupStartupCommand || "display startup";
+  backupForm.saveRootPath = task.backupSaveRootPath || "storage/backup";
+  backupForm.dirNamePattern = task.backupDirNamePattern || "%Y-%M-%D";
+  backupForm.fileNamePattern = task.backupFileNamePattern || "%H_startup.cfg";
 
   if (task.mode === "group") {
     const normalized = normalizeGroupTask(task.items);
@@ -1222,6 +1306,22 @@ function submit() {
           deviceIDs: [...groupForm.deviceIDs],
         },
       ];
+    } else if (isBackupTaskValue.value) {
+      if (!backupForm.startupCommand.trim()) {
+        formError.value = "配置查询命令不能为空";
+        return;
+      }
+      if (!backupForm.saveRootPath.trim()) {
+        formError.value = "根保存路径不能为空";
+        return;
+      }
+      items = [
+        {
+          commandGroupId: "",
+          commands: [],
+          deviceIDs: [...groupForm.deviceIDs],
+        },
+      ];
     } else {
       if (!groupForm.commandGroupId) {
         formError.value = "请选择命令组";
@@ -1280,6 +1380,10 @@ function submit() {
     items,
     tags,
     enableRawLog: form.enableRawLog,
+    backupSaveRootPath: backupForm.saveRootPath.trim(),
+    backupDirNamePattern: backupForm.dirNamePattern.trim(),
+    backupFileNamePattern: backupForm.fileNamePattern.trim(),
+    backupStartupCommand: backupForm.startupCommand.trim(),
     status: "",
     createdAt: props.task.createdAt,
     updatedAt: props.task.updatedAt,

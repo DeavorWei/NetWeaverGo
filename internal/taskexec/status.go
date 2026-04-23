@@ -110,6 +110,8 @@ const (
 	StageKindParse StageKind = "parse"
 	// StageKindTopologyBuild 拓扑构建阶段
 	StageKindTopologyBuild StageKind = "topology_build"
+	// StageKindBackupCollect 备份采集阶段
+	StageKindBackupCollect StageKind = "backup_collect"
 )
 
 // UnitKind Unit类型
@@ -132,6 +134,8 @@ const (
 	RunKindNormal RunKind = "normal"
 	// RunKindTopology 拓扑任务
 	RunKindTopology RunKind = "topology"
+	// RunKindBackup 备份任务
+	RunKindBackup RunKind = "backup"
 )
 
 // EventType 事件类型
@@ -206,4 +210,6 @@ const (
 	ArtifactTypeTopologyCollectionPlan ArtifactType = "topology_collection_plan"
 	// ArtifactTypeReport 报告
 	ArtifactTypeReport ArtifactType = "report"
+	// ArtifactTypeBackupConfig 备份配置产物
+	ArtifactTypeBackupConfig ArtifactType = "backup_config"
 )

@@ -87,6 +87,17 @@
             >
               拓扑采集任务
             </button>
+            <button
+              @click="selectedTaskType = 'backup'"
+              class="px-3 py-1.5 rounded-lg text-sm border transition-all"
+              :class="
+                selectedTaskType === 'backup'
+                  ? 'bg-accent text-white border-accent/40'
+                  : 'bg-bg-panel border-border text-text-secondary hover:text-text-primary'
+              "
+            >
+              配置备份任务
+            </button>
           </div>
         </div>
 
@@ -172,6 +183,32 @@
               v-model="selectedCommandGroupId"
               @selectionChange="onCommandGroupChange"
             />
+          </div>
+        </div>
+
+        <!-- 步骤2: 备份采集参数 -->
+        <div
+          v-else-if="selectedTaskType === 'backup'"
+          class="bg-bg-card border border-border rounded-xl overflow-hidden mb-4"
+          :style="{ minHeight: commandPanelMinHeight + 'px' }"
+        >
+          <div
+            class="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-bg-panel"
+          >
+            <div
+              class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent"
+            >
+              2
+            </div>
+            <span class="text-sm font-medium text-text-primary"
+              >备份采集说明</span
+            >
+          </div>
+          <div class="p-4">
+            <p class="text-xs text-text-muted leading-relaxed">
+              此任务类型将自动连接目标设备下载启动配置（通常为 startup-config 或 saved-configuration）。<br/><br/>
+              默认参数（如保存目录、生成文件名规则等）将在创建任务时自动生成，您也可以在任务列表中点击编辑进行详情配置。
+            </p>
           </div>
         </div>
 
@@ -683,7 +720,7 @@ const router = useRouter();
 const deviceList = ref<DeviceAsset[]>([]);
 const selectedDevices = ref<DeviceAsset[]>([]);
 const showDeviceSelector = ref(false);
-const selectedTaskType = ref<"normal" | "topology">("normal");
+const selectedTaskType = ref<"normal" | "topology" | "backup">("normal");
 const selectedCommandGroupId = ref<number>(0);
 const selectedCommandGroup = ref<CommandGroup | null>(null);
 const supportedVendors = ref<string[]>([]);
@@ -760,10 +797,12 @@ onUnmounted(() => {
   document.removeEventListener("mouseup", stopResize);
 });
 
-// 是否可以创建任务
 const canCreate = computed(() => {
   if (selectedTaskType.value === "topology") {
     return selectedDevices.value.length > 0 && topologyInvalidCount.value === 0;
+  }
+  if (selectedTaskType.value === "backup") {
+    return selectedDevices.value.length > 0;
   }
   return selectedDevices.value.length > 0 && selectedCommandGroupId.value > 0;
 });
@@ -844,7 +883,7 @@ async function confirmCreate() {
 
   try {
     const taskItems =
-      selectedTaskType.value === "topology"
+      selectedTaskType.value === "topology" || selectedTaskType.value === "backup"
         ? [
             {
               commandGroupId: "",
@@ -881,6 +920,10 @@ async function confirmCreate() {
       items: taskItems,
       tags: createModal.value.tags,
       enableRawLog: createModal.value.enableRawLog,
+      backupSaveRootPath: selectedTaskType.value === 'backup' ? "storage/backup" : "",
+      backupDirNamePattern: selectedTaskType.value === 'backup' ? "%Y-%M-%D" : "",
+      backupFileNamePattern: selectedTaskType.value === 'backup' ? "%H_startup.cfg" : "",
+      backupStartupCommand: selectedTaskType.value === 'backup' ? "display startup" : "",
       status: "",
       createdAt: new Date(),
       updatedAt: new Date(),

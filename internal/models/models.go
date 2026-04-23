@@ -167,7 +167,7 @@ type TaskGroup struct {
 	CommandGroup           string                      `json:"commandGroup"`
 	MaxWorkers             int                         `json:"maxWorkers"`
 	Timeout                int                         `json:"timeout"`
-	TaskType               string                      `json:"taskType"`       // "normal" | "topology"
+	TaskType               string                      `json:"taskType"`       // "normal" | "topology" | "backup"
 	TopologyVendor         string                      `json:"topologyVendor"` // 拓扑采集厂商（可选，空=自动）
 	TopologyFieldOverrides []TopologyTaskFieldOverride `json:"topologyFieldOverrides" gorm:"serializer:json"`
 	AutoBuildTopology      bool                        `json:"autoBuildTopology"`            // 拓扑采集完成后自动构建拓扑
@@ -176,6 +176,10 @@ type TaskGroup struct {
 	Status                 string                      `json:"status"`                       // "pending" | "running" | "completed" | "failed"
 	Tags                   []string                    `json:"tags" gorm:"serializer:json"`
 	EnableRawLog           bool                        `json:"enableRawLog"`
+	BackupSaveRootPath     string                      `json:"backupSaveRootPath"`
+	BackupDirNamePattern   string                      `json:"backupDirNamePattern"`
+	BackupFileNamePattern  string                      `json:"backupFileNamePattern"`
+	BackupStartupCommand   string                      `json:"backupStartupCommand"`
 	CreatedAt              time.Time                   `json:"createdAt"`
 	UpdatedAt              time.Time                   `json:"updatedAt"`
 }

@@ -78,3 +78,18 @@ func DefaultCompileOptions() *CompileOptions {
 		DefaultDiscoveryWorkers: 5,
 	}
 }
+
+// ==================== 备份任务配置模型 ====================
+
+// BackupTaskConfig 备份任务配置
+type BackupTaskConfig struct {
+	DeviceIDs       []uint   `json:"deviceIDs"`
+	DeviceIPs       []string `json:"deviceIPs"`
+	Concurrency     int      `json:"concurrency"`
+	TimeoutSec      int      `json:"timeoutSec"`
+	StartupCommand  string   `json:"startupCommand"`
+	SaveRootPath    string   `json:"saveRootPath"`
+	DirNamePattern  string   `json:"dirNamePattern"`
+	FileNamePattern string   `json:"fileNamePattern"`
+	EnableRawLog    bool     `json:"enableRawLog"`
+}

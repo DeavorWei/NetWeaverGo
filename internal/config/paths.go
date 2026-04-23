@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
 )
@@ -259,6 +260,49 @@ func (pm *PathManager) GetBackupFilePath(subDir, fileName string) string {
 		return filepath.Join(pm.BackupConfigDir, fileName)
 	}
 	return filepath.Join(pm.BackupConfigDir, subDir, fileName)
+}
+
+func resolvePathPattern(pattern, deviceIP string, t time.Time) string {
+	res := pattern
+	
+	cleanIP := strings.ReplaceAll(deviceIP, ":", "-")
+	
+	res = strings.ReplaceAll(res, "%H", cleanIP)
+	res = strings.ReplaceAll(res, "%Y", fmt.Sprintf("%04d", t.Year()))
+	res = strings.ReplaceAll(res, "%M", fmt.Sprintf("%02d", t.Month()))
+	res = strings.ReplaceAll(res, "%D", fmt.Sprintf("%02d", t.Day()))
+	res = strings.ReplaceAll(res, "%h", fmt.Sprintf("%02d", t.Hour()))
+	res = strings.ReplaceAll(res, "%m", fmt.Sprintf("%02d", t.Minute()))
+	res = strings.ReplaceAll(res, "%s", fmt.Sprintf("%02d", t.Second()))
+	
+	return filepath.Clean(res)
+}
+
+func buildBackupLocalPath(saveRoot, dirPattern, filePattern, deviceIP string, timestamp time.Time) string {
+	dirName := resolvePathPattern(dirPattern, deviceIP, timestamp)
+	fileName := resolvePathPattern(filePattern, deviceIP, timestamp)
+	
+	fullPath := filepath.Join(saveRoot, dirName, fileName)
+	
+	cleanRoot := filepath.Clean(saveRoot)
+	cleanFullPath := filepath.Clean(fullPath)
+	
+	prefix := cleanRoot + string(filepath.Separator)
+	if !strings.HasPrefix(cleanFullPath, prefix) && cleanFullPath != cleanRoot {
+		return filepath.Join(cleanRoot, "escape_prevented", fileName)
+	}
+	
+	return cleanFullPath
+}
+
+func (pm *PathManager) GetBackupConfigFilePath(saveRoot, dirPattern, filePattern, deviceIP string, timestamp time.Time) string {
+	root := saveRoot
+	if strings.TrimSpace(root) == "" {
+		pm.mu.RLock()
+		root = pm.BackupConfigDir
+		pm.mu.RUnlock()
+	}
+	return buildBackupLocalPath(root, dirPattern, filePattern, deviceIP, timestamp)
 }
 
 // GetTopologyRawDir 获取拓扑原始输出目录

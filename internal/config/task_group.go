@@ -198,6 +198,20 @@ func normalizeTaskGroup(group *models.TaskGroup) {
 	if group.TaskType == "" {
 		group.TaskType = "normal"
 	}
+	if group.TaskType == "backup" {
+		if group.BackupStartupCommand == "" {
+			group.BackupStartupCommand = "display startup"
+		}
+		if group.BackupSaveRootPath == "" {
+			group.BackupSaveRootPath = "storage/backup"
+		}
+		if group.BackupDirNamePattern == "" {
+			group.BackupDirNamePattern = "%Y-%M-%D"
+		}
+		if group.BackupFileNamePattern == "" {
+			group.BackupFileNamePattern = "%H_startup.cfg"
+		}
+	}
 	if group.Mode == "" {
 		group.Mode = "group"
 	}

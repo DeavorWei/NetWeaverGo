@@ -675,6 +675,13 @@ func extractEnableRawLog(def *TaskDefinition) bool {
 			return false
 		}
 		return cfg.EnableRawLog
+	case string(RunKindBackup):
+		var cfg BackupTaskConfig
+		if err := json.Unmarshal(def.Config, &cfg); err != nil {
+			logger.Warn("TaskExec", "-", "解析备份任务 raw 日志配置失败: %v", err)
+			return false
+		}
+		return cfg.EnableRawLog
 	default:
 		var cfg NormalTaskConfig
 		if err := json.Unmarshal(def.Config, &cfg); err != nil {

@@ -41,6 +41,16 @@ type CanonicalLaunchSpec struct {
 	AutoBuildTopology bool               `json:"autoBuildTopology,omitempty"`
 	Normal            *CanonicalNormal   `json:"normal,omitempty"`
 	Topology          *CanonicalTopology `json:"topology,omitempty"`
+	Backup            *CanonicalBackup   `json:"backup,omitempty"`
+}
+
+type CanonicalBackup struct {
+	DeviceIDs       []uint   `json:"deviceIDs"`
+	DeviceIPs       []string `json:"deviceIPs"`
+	StartupCommand  string   `json:"startupCommand"`
+	SaveRootPath    string   `json:"saveRootPath"`
+	DirNamePattern  string   `json:"dirNamePattern"`
+	FileNamePattern string   `json:"fileNamePattern"`
 }
 
 type CanonicalNormal struct {
@@ -156,6 +166,12 @@ func (n *LaunchNormalizer) NormalizeTaskGroup(taskGroup *models.TaskGroup) (*Can
 			return nil, err
 		}
 		spec.Topology = topology
+	case string(RunKindBackup):
+		backup, err := n.normalizeBackup(taskGroup)
+		if err != nil {
+			return nil, err
+		}
+		spec.Backup = backup
 	default:
 		normal, err := n.normalizeNormal(taskGroup)
 		if err != nil {
@@ -245,6 +261,23 @@ func (n *LaunchNormalizer) normalizeTopology(taskGroup *models.TaskGroup) (*Cano
 	return topology, nil
 }
 
+func (n *LaunchNormalizer) normalizeBackup(taskGroup *models.TaskGroup) (*CanonicalBackup, error) {
+	deviceIDs := make([]uint, 0)
+	for _, item := range taskGroup.Items {
+		deviceIDs = append(deviceIDs, item.DeviceIDs...)
+	}
+	backup := &CanonicalBackup{
+		DeviceIDs:       uniqueSortedUint(deviceIDs),
+		DeviceIPs:       uniqueSortedStrings(n.lookupDeviceIPs(deviceIDs)),
+		StartupCommand:  strings.TrimSpace(taskGroup.BackupStartupCommand),
+		SaveRootPath:    strings.TrimSpace(taskGroup.BackupSaveRootPath),
+		DirNamePattern:  strings.TrimSpace(taskGroup.BackupDirNamePattern),
+		FileNamePattern: strings.TrimSpace(taskGroup.BackupFileNamePattern),
+	}
+	logger.Verbose("TaskLaunchService", "-", "备份任务归一化完成: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d", taskGroup.ID, len(backup.DeviceIDs), len(backup.DeviceIPs))
+	return backup, nil
+}
+
 func (n *LaunchNormalizer) resolveTaskItemCommands(item models.TaskItem) ([]string, string, error) {
 	if commands := normalizeCommands(item.Commands); len(commands) > 0 {
 		return commands, "", nil
@@ -292,6 +325,10 @@ func (v *LaunchValidator) ValidateLaunchSpec(ctx context.Context, spec *Canonica
 	case string(RunKindTopology):
 		if spec.Topology == nil || len(spec.Topology.DeviceIPs) == 0 {
 			return fmt.Errorf("拓扑任务至少需要一台设备")
+		}
+	case string(RunKindBackup):
+		if spec.Backup == nil || len(spec.Backup.DeviceIPs) == 0 {
+			return fmt.Errorf("备份任务至少需要一台设备")
 		}
 	default:
 		if spec.Normal == nil {
@@ -400,6 +437,22 @@ func (s *TaskExecutionService) CreateTaskDefinitionFromLaunchSpec(spec *Canonica
 			EnableRawLog:      spec.EnableRawLog,
 		})
 		logger.Debug("TaskLaunchService", "-", "创建拓扑任务定义: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d, vendor=%s, resolvedVendor=%s, overrides=%d", spec.TaskGroupID, len(spec.Topology.DeviceIDs), len(spec.Topology.DeviceIPs), taskVendor, resolution.ResolvedVendor, len(spec.Topology.FieldOverrides))
+	case string(RunKindBackup):
+		if spec.Backup == nil {
+			return nil, fmt.Errorf("backup launch spec is nil")
+		}
+		configJSON, err = json.Marshal(&BackupTaskConfig{
+			DeviceIDs:       append([]uint(nil), spec.Backup.DeviceIDs...),
+			DeviceIPs:       append([]string(nil), spec.Backup.DeviceIPs...),
+			StartupCommand:  spec.Backup.StartupCommand,
+			SaveRootPath:    spec.Backup.SaveRootPath,
+			DirNamePattern:  spec.Backup.DirNamePattern,
+			FileNamePattern: spec.Backup.FileNamePattern,
+			Concurrency:     spec.Concurrency,
+			TimeoutSec:      spec.TimeoutSec,
+			EnableRawLog:    spec.EnableRawLog,
+		})
+		logger.Debug("TaskLaunchService", "-", "创建备份任务定义: taskGroupID=%d, deviceIPs=%d", spec.TaskGroupID, len(spec.Backup.DeviceIPs))
 	default:
 		if spec.Normal == nil {
 			return nil, fmt.Errorf("normal launch spec is nil")
@@ -457,6 +510,9 @@ func normalizeRunKind(taskType string) string {
 	value := strings.ToLower(strings.TrimSpace(taskType))
 	if value == string(RunKindTopology) {
 		return string(RunKindTopology)
+	}
+	if value == string(RunKindBackup) {
+		return string(RunKindBackup)
 	}
 	return string(RunKindNormal)
 }
@@ -534,6 +590,9 @@ func specTargetIPs(spec *CanonicalLaunchSpec) []string {
 	}
 	if spec.Topology != nil {
 		result = append(result, spec.Topology.DeviceIPs...)
+	}
+	if spec.Backup != nil {
+		result = append(result, spec.Backup.DeviceIPs...)
 	}
 	return uniqueSortedStrings(result)
 }

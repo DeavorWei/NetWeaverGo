@@ -35,12 +35,14 @@ func NewTaskExecutionService(db *gorm.DB, parserProvider parser.ParserProvider) 
 	compilerReg := NewCompilerRegistry()
 	compilerReg.Register(string(RunKindNormal), NewNormalTaskCompiler(nil))
 	compilerReg.Register(string(RunKindTopology), NewTopologyTaskCompiler(nil))
+	compilerReg.Register(string(RunKindBackup), NewBackupTaskCompiler(nil))
 
 	// Register stage executors
 	runtime.RegisterExecutor(NewDeviceCommandExecutor(repository.NewDeviceRepository()))
 	runtime.RegisterExecutor(NewDeviceCollectExecutor(repository.NewDeviceRepository()))
 	runtime.RegisterExecutor(NewParseExecutor(db, parserProvider))
 	runtime.RegisterExecutor(NewTopologyBuildExecutor(db))
+	runtime.RegisterExecutor(NewBackupExecutor(repository.NewDeviceRepository(), db))
 
 	service := &TaskExecutionService{
 		runtime:        runtime,
