@@ -23,6 +23,7 @@ func DefaultSettings() models.GlobalSettings {
 		SSHAlgorithms: models.SSHAlgorithmSettings{
 			PresetMode: "secure", // 默认使用安全模式
 		},
+		Theme: "system", // 默认跟随系统主题
 	}
 }
 
@@ -79,6 +80,9 @@ func LoadSettings() (*models.GlobalSettings, bool, error) {
 	if strings.TrimSpace(st.SSHKnownHostsPath) == "" {
 		st.SSHKnownHostsPath = GetPathManager().GetSSHKnownHostsPath()
 	}
+	if strings.TrimSpace(st.Theme) == "" {
+		st.Theme = "system" // 兼容旧数据库：Theme 字段为空时默认跟随系统
+	}
 
 	// 应用数据库中的调试设置
 	ApplyDebugSettings(st.Debug, st.Verbose)
@@ -103,9 +107,9 @@ func ApplyDebugSettings(debug, verbose bool) {
 // SaveSettings 保存全局设置到数据库
 func SaveSettings(settings models.GlobalSettings) error {
 	logger.Debug("Config", "-", "准备将更新后的全局参数覆盖保存至本地数据库...")
-	logger.Verbose("Config", "-", "保存内容: connect=%s, cmd=%s, error=%s, storageRoot=%s, debug=%v, verbose=%v",
+	logger.Verbose("Config", "-", "保存内容: connect=%s, cmd=%s, error=%s, storageRoot=%s, debug=%v, verbose=%v, theme=%s",
 		settings.ConnectTimeout, settings.CommandTimeout, settings.ErrorMode,
-		settings.StorageRoot, settings.Debug, settings.Verbose)
+		settings.StorageRoot, settings.Debug, settings.Verbose, settings.Theme)
 	logger.Verbose("Config", "-", "SSH主机密钥策略: policy=%s, known_hosts=%s", settings.SSHHostKeyPolicy, settings.SSHKnownHostsPath)
 	logger.Verbose("Config", "-", "SSH算法配置: presetMode=%s, ciphers=%d, keyExchanges=%d, macs=%d, hostKeys=%d",
 		settings.SSHAlgorithms.PresetMode,
@@ -181,4 +185,32 @@ func ResolveSSHHostKeyPolicy() (policy string, knownHostsPath string) {
 		knownHostsPath = path
 	}
 	return policy, knownHostsPath
+}
+
+// ResolveWindowBackgroundColour 根据保存的主题设置返回窗口初始背景色
+// 这确保在 WebView 加载完成前，窗口背景色与主题一致，避免暗色/亮色闪烁
+// 返回值为 R, G, B 三个 uint8 分量
+func ResolveWindowBackgroundColour() (uint8, uint8, uint8) {
+	// 默认暗色背景（与 CSS 变量 --color-bg-primary dark 一致: #0f1117）
+	defaultR, defaultG, defaultB := uint8(15), uint8(17), uint8(23)
+
+	st, _, err := LoadSettings()
+	if err != nil || st == nil {
+		return defaultR, defaultG, defaultB
+	}
+
+	theme := strings.ToLower(strings.TrimSpace(st.Theme))
+	switch theme {
+	case "light":
+		// 与 CSS 变量 --color-bg-primary light 一致: var(--primitive-gray-50) ≈ #f8fafc
+		return 248, 250, 252
+	case "dark":
+		return defaultR, defaultG, defaultB
+	case "system", "":
+		// 系统主题：默认使用暗色（桌面应用常见行为）
+		// 前端初始化后会根据实际系统偏好修正
+		return defaultR, defaultG, defaultB
+	default:
+		return defaultR, defaultG, defaultB
+	}
 }

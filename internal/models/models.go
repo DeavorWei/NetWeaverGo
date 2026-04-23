@@ -127,6 +127,9 @@ type GlobalSettings struct {
 	SSHHostKeyPolicy string `json:"sshHostKeyPolicy"`
 	// known_hosts 文件路径（为空时使用默认路径）
 	SSHKnownHostsPath string `json:"sshKnownHostsPath"`
+
+	// UI 主题设置
+	Theme string `json:"theme"` // 主题设置: "light" | "dark" | "system"
 }
 
 // TableName 指定表名

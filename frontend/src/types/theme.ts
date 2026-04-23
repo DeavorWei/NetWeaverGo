@@ -58,7 +58,7 @@ export const AVAILABLE_THEMES: ThemeConfig[] = [
 ]
 
 // 默认主题
-export const DEFAULT_THEME: ThemeName = 'dark'
+export const DEFAULT_THEME: ThemeName = 'light'
 
 // 本地存储键名
 export const THEME_STORAGE_KEY = 'netweaver-theme'

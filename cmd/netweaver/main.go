@@ -96,6 +96,11 @@ func runGUI() {
 	})
 	logger.Info("System", "-", "--- [自检] 结束 ---")
 
+	// 根据保存的主题设置确定窗口初始背景色
+	// 这确保在 WebView 加载完成前，窗口背景色与主题一致，避免暗色闪烁
+	bgR, bgG, bgB := config.ResolveWindowBackgroundColour()
+	logger.Info("System", "-", "窗口背景色: rgb(%d, %d, %d)", bgR, bgG, bgB)
+
 	app := application.New(application.Options{
 		Name:        "NetWeaverGo",
 		Description: "网络自动化巡检与动作集散引擎",
@@ -123,7 +128,7 @@ func runGUI() {
 	// 后者仅构造对象但不会被 app 管理，导致 Run 时无窗口可显示
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "NetWeaverGo Control Center",
-		BackgroundColour: application.NewRGB(15, 17, 23),
+		BackgroundColour: application.NewRGB(bgR, bgG, bgB),
 		URL:              "/",
 		Width:            1440,
 		Height:           900,
