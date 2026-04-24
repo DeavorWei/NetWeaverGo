@@ -209,7 +209,7 @@ func normalizeTaskGroup(group *models.TaskGroup) {
 			group.BackupDirNamePattern = "%Y-%M-%D"
 		}
 		if group.BackupFileNamePattern == "" {
-			group.BackupFileNamePattern = "%H_startup.cfg"
+			group.BackupFileNamePattern = "%H_startup_%h%m%s.cfg"
 		}
 	}
 	if group.Mode == "" {

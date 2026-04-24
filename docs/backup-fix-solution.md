@@ -17,6 +17,7 @@
 | `internal/taskexec/backup_compiler.go` | L-01 | 校验增强（需新增 import "strings"） |
 | `internal/taskexec/config_models.go` | M-03 | 模型扩展 |
 | `internal/config/task_group.go` | M-01 | 默认值调整 |
+| `frontend/src/views/Tasks.vue` | M-03 | 前端适配（新增SFTP超时输入框） |
 
 ---
 
@@ -758,6 +759,26 @@ type BackupTaskConfig struct {
 			},
 ```
 
+**前端适配**: `frontend/src/views/Tasks.vue`
+
+在备份任务编辑表单中增加 SFTP 超时输入框：
+
+```vue
+<!-- 在 TimeoutSec 输入框后添加 -->
+<div class="form-item">
+		<label>SFTP下载超时(秒)</label>
+		<input
+			 type="number"
+			 v-model="backupConfig.sftpTimeoutSec"
+			 placeholder="留空则使用命令超时的2倍"
+			 min="0"
+		/>
+		<span class="hint">SFTP下载大文件时的独立超时，0表示自动使用命令超时的2倍</span>
+</div>
+```
+
+**注意**: 前端表单数据需与后端 `BackupTaskConfig.SFTPTimeoutSec` 字段对应，JSON 序列化时使用 `sftpTimeoutSec` 作为 key。
+
 ---
 
 ### M-05: 并发计数器与事件发射的竞态窗口
@@ -1070,34 +1091,16 @@ Phase 4 (P3 — 改善):
 
 **发现1个待改进点**: 如果上次备份的 `.tmp` 文件残留（进程崩溃），本次 `os.Create(tmpPath)` 会覆盖它，这是正确行为（上次下载必然不完整）。但可以考虑在下载前先清理残留的 `.tmp` 文件，避免极小概率的混淆。**严重性: 低，不影响正确性。**
 
-#### C-02 路径逃逸防护 — 核验通过，有1个需修正的问题
+#### C-02 路径逃逸防护 — 核验通过
 
 | 检查项 | 结果 | 说明 |
 |--------|------|------|
-| EvalSymlinks 使用 | 正确 | 解析符号链接后比较，防止通过 symlink 绕过 |
+| EvalSymlinks 使用 | 正确 | 仅对 `saveRoot` 调用 `EvalSymlinks`（root 应已存在），对 `fullPath` 仅做 `filepath.Clean`（新创建路径不存在符号链接） |
 | EqualFold 使用 | 正确 | Windows 上大小写不敏感比较 |
 | saveRoot 为空处理 | 正确 | 返回 `escape_prevented` 路径 |
 | 逃逸日志 | 正确 | Warn 级别日志包含 fullPath 和 saveRoot |
 
-**发现1个需修正的问题**: `isPathWithinRoot` 中 `filepath.EvalSymlinks` 要求路径必须存在。对于**首次备份**场景，`fullPath`（如 `storage/backup/2026-04-23/10.0.0.1_startup.cfg`）可能尚未存在，`EvalSymlinks` 会返回错误。方案中已处理：`EvalSymlinks` 失败时回退到原始路径。但此时符号链接防护失效。
-
-**修正建议**: 仅对 `saveRoot` 调用 `EvalSymlinks`（saveRoot 应该已存在），对 `fullPath` 使用 `filepath.Clean` 即可（因为 fullPath 是新创建的路径，不存在符号链接）：
-
-```go
-func isPathWithinRoot(path, root string) bool {
-    // 仅解析 root 的符号链接（root 应已存在）
-    realRoot, err := filepath.EvalSymlinks(root)
-    if err != nil {
-        realRoot = root
-    }
-    // path 是新创建的路径，不存在符号链接，直接 Clean
-    cleanPath := filepath.Clean(path)
-    cleanRoot := filepath.Clean(realRoot)
-    // ... 后续比较逻辑不变
-}
-```
-
-**严重性: 中，需在实施时修正。**
+> **核验备注**: 初版方案中 `isPathWithinRoot` 对 `fullPath` 也调用了 `filepath.EvalSymlinks`，但 `fullPath` 在首次备份时不存在会导致 `EvalSymlinks` 失败。当前方案已修正为仅对 `saveRoot` 调用 `EvalSymlinks`，对 `fullPath` 仅做 `filepath.Clean`，此问题已解决。
 
 #### H-02 信号量取消 — 核验通过
 
@@ -1151,10 +1154,10 @@ func isPathWithinRoot(path, root string) bool {
 | 检查项 | 结果 | 说明 |
 |--------|------|------|
 | 审计报告14个问题是否全部覆盖 | 全部覆盖 | C-01, C-02, H-01~H-04, M-01~M-05, L-01~L-03 均有对应方案 |
-| M-01 在修改文件总览中标注为 sftputil/client.go | 需修正 | M-01 实际修改的是 `config/task_group.go`（默认值），不是 `sftputil/client.go`。sftputil/client.go 的修改仅涉及 C-01 |
-| backup_compiler.go 需要新增 import "strings" | 需确认 | L-01 修改 normalizeDeviceIPs 使用了 strings.TrimSpace 和 strings.ContainsAny，需确认 import |
+| M-01 修改文件总览表映射 | 正确 | M-01 已正确映射到 `config/task_group.go`，`sftputil/client.go` 仅涉及 C-01 |
+| backup_compiler.go 需要新增 import "strings" | 已确认 | L-01 修改 normalizeDeviceIPs 使用了 strings.TrimSpace 和 strings.ContainsAny，当前 import 不含 `"strings"`，**实施时必须新增** |
 | H-01 新增包级正则后，import "regexp" 仍需保留 | 正确 | regexp.MustCompile 在包级变量初始化时使用，import 必须保留 |
-| M-03 SFTPTimeoutSec 在前端 UI 是否需要对应修改 | 未涉及 | 新增字段后，前端 TaskEditModal.vue 需要增加对应的输入框，但方案未涉及前端修改 |
+| M-03 SFTPTimeoutSec 前端 UI 适配 | 已补充 | 新增字段后，前端需增加对应输入框，已在修改文件总览和 M-03 方案中补充前端适配说明 |
 
 ---
 
@@ -1163,19 +1166,19 @@ func isPathWithinRoot(path, root string) bool {
 | 类别 | 总数 | 通过 | 需修正 | 不通过 |
 |------|------|------|---------|--------|
 | 行号匹配 | 19 | 19 | 0 | 0 |
-| 逻辑正确性 | 8 | 7 | 1 | 0 |
-| 遗漏检查 | 5 | 3 | 2 | 0 |
+| 逻辑正确性 | 8 | 8 | 0 | 0 |
+| 遗漏检查 | 5 | 5 | 0 | 0 |
 
-**需修正项**:
+**已修正项**:
 
-1. **C-02 isPathWithinRoot**: `filepath.EvalSymlinks(fullPath)` 在路径不存在时会失败，应仅对 `saveRoot` 调用 EvalSymlinks，对 `fullPath` 仅做 `filepath.Clean`。已在上方给出修正代码。
+1. **C-02 isPathWithinRoot**: 初版方案对 `fullPath` 也调用了 `filepath.EvalSymlinks`，但 `fullPath` 在首次备份时不存在会导致失败。已修正为仅对 `saveRoot` 调用 `EvalSymlinks`，对 `fullPath` 仅做 `filepath.Clean`。
 
-2. **修改文件总览表**: M-01 对应文件应为 `config/task_group.go`，而非 `sftputil/client.go`。sftputil/client.go 仅涉及 C-01。
+2. **M-03 前端适配**: `SFTPTimeoutSec` 新增后，前端需增加对应输入框。已在修改文件总览表中补充 `frontend/src/views/Tasks.vue`，并在 M-03 方案中补充前端适配说明。
 
-**需补充项**:
+**实施注意事项**:
 
-1. **L-01 import 检查**: `backup_compiler.go` 当前 import 仅有 `"context"`, `"encoding/json"`, `"fmt"`, `"time"`, `"github.com/NetWeaverGo/core/internal/logger"`，**不包含 `"strings"`**，实施时需新增。
+1. **L-01 import 新增**: `backup_compiler.go` 当前 import 仅有 `"context"`, `"encoding/json"`, `"fmt"`, `"time"`, `"github.com/NetWeaverGo/core/internal/logger"`，**不包含 `"strings"`**，实施时必须新增。
 
-2. **M-03 前端适配**: `SFTPTimeoutSec` 新增后，前端 `TaskEditModal.vue` 需增加对应输入框，方案中未涉及，实施时需补充。
+2. **M-03 前端适配**: 实施时需在 `frontend/src/views/Tasks.vue` 中为 `SFTPTimeoutSec` 增加输入框，并与后端 `BackupTaskConfig.SFTPTimeoutSec` 字段对应。
 
-**总体评价**: 方案逻辑正确、覆盖完整、代码与源码匹配。上述修正项均为细节层面，不影响方案整体可行性。建议在实施时按修正建议调整 C-02 的 `isPathWithinRoot` 实现，并补充 import 和前端适配。
+**总体评价**: 方案逻辑正确、覆盖完整、代码与源码匹配。所有核验发现的问题均已修正，方案可直接进入实施阶段。

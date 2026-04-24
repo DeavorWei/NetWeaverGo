@@ -51,6 +51,7 @@ type CanonicalBackup struct {
 	SaveRootPath    string   `json:"saveRootPath"`
 	DirNamePattern  string   `json:"dirNamePattern"`
 	FileNamePattern string   `json:"fileNamePattern"`
+	SftpTimeoutSec  int      `json:"sftpTimeoutSec"` // SFTP下载独立超时(秒)，0时使用命令超时的2倍
 }
 
 type CanonicalNormal struct {
@@ -215,7 +216,8 @@ func (n *LaunchNormalizer) normalizeNormal(taskGroup *models.TaskGroup) (*Canoni
 			}
 
 			deviceIDs = append(deviceIDs, item.DeviceIDs...)
-			deviceIPs = append(deviceIPs, n.lookupDeviceIPs(item.DeviceIDs)...)
+			ips, _ := n.lookupDeviceIPs(item.DeviceIDs)
+			deviceIPs = append(deviceIPs, ips...)
 		}
 
 		normal.GroupCommandID = canonicalCommandGroupID
@@ -230,9 +232,10 @@ func (n *LaunchNormalizer) normalizeNormal(taskGroup *models.TaskGroup) (*Canoni
 			if err != nil {
 				return nil, err
 			}
+			ips, _ := n.lookupDeviceIPs(item.DeviceIDs)
 			items = append(items, CanonicalNormalItem{
 				DeviceIDs:      uniqueSortedUint(item.DeviceIDs),
-				DeviceIPs:      uniqueSortedStrings(n.lookupDeviceIPs(item.DeviceIDs)),
+				DeviceIPs:      uniqueSortedStrings(ips),
 				CommandGroupID: commandGroupID,
 				Commands:       uniqueSortedStrings(commands),
 			})
@@ -251,9 +254,10 @@ func (n *LaunchNormalizer) normalizeTopology(taskGroup *models.TaskGroup) (*Cano
 	for _, item := range taskGroup.Items {
 		deviceIDs = append(deviceIDs, item.DeviceIDs...)
 	}
+	ips, _ := n.lookupDeviceIPs(deviceIDs)
 	topology := &CanonicalTopology{
 		DeviceIDs:      uniqueSortedUint(deviceIDs),
-		DeviceIPs:      uniqueSortedStrings(n.lookupDeviceIPs(deviceIDs)),
+		DeviceIPs:      uniqueSortedStrings(ips),
 		Vendor:         strings.TrimSpace(taskGroup.TopologyVendor),
 		FieldOverrides: append([]models.TopologyTaskFieldOverride(nil), taskGroup.TopologyFieldOverrides...),
 	}
@@ -266,15 +270,20 @@ func (n *LaunchNormalizer) normalizeBackup(taskGroup *models.TaskGroup) (*Canoni
 	for _, item := range taskGroup.Items {
 		deviceIDs = append(deviceIDs, item.DeviceIDs...)
 	}
+	resolvedIPs, failedIDs := n.lookupDeviceIPs(deviceIDs)
+	if len(failedIDs) > 0 {
+		logger.Warn("TaskLaunchService", "-", "备份任务存在设备解析失败: taskGroupID=%d, failedDeviceIDs=%v, failedCount=%d", taskGroup.ID, failedIDs, len(failedIDs))
+	}
 	backup := &CanonicalBackup{
 		DeviceIDs:       uniqueSortedUint(deviceIDs),
-		DeviceIPs:       uniqueSortedStrings(n.lookupDeviceIPs(deviceIDs)),
+		DeviceIPs:       uniqueSortedStrings(resolvedIPs),
 		StartupCommand:  strings.TrimSpace(taskGroup.BackupStartupCommand),
 		SaveRootPath:    strings.TrimSpace(taskGroup.BackupSaveRootPath),
 		DirNamePattern:  strings.TrimSpace(taskGroup.BackupDirNamePattern),
 		FileNamePattern: strings.TrimSpace(taskGroup.BackupFileNamePattern),
+		SftpTimeoutSec:  taskGroup.BackupSftpTimeoutSec,
 	}
-	logger.Verbose("TaskLaunchService", "-", "备份任务归一化完成: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d", taskGroup.ID, len(backup.DeviceIDs), len(backup.DeviceIPs))
+	logger.Verbose("TaskLaunchService", "-", "备份任务归一化完成: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d, failedDeviceIDs=%d", taskGroup.ID, len(backup.DeviceIDs), len(backup.DeviceIPs), len(failedIDs))
 	return backup, nil
 }
 
@@ -295,12 +304,16 @@ func (n *LaunchNormalizer) resolveTaskItemCommands(item models.TaskItem) ([]stri
 	return normalizeCommands(group.Commands), commandGroupID, nil
 }
 
-func (n *LaunchNormalizer) lookupDeviceIPs(deviceIDs []uint) []string {
+// lookupDeviceIPs 将设备ID列表解析为IP列表。
+// 返回 (成功解析的IP列表, 查找失败的设备ID列表)。
+func (n *LaunchNormalizer) lookupDeviceIPs(deviceIDs []uint) ([]string, []uint) {
 	result := make([]string, 0, len(deviceIDs))
+	var failedIDs []uint
 	for _, deviceID := range uniqueSortedUint(deviceIDs) {
 		device, err := n.deviceRepo.FindByID(deviceID)
 		if err != nil || device == nil {
 			logger.Warn("TaskLaunchService", "-", "设备解析失败: deviceID=%d, err=%v", deviceID, err)
+			failedIDs = append(failedIDs, deviceID)
 			continue
 		}
 		ip := strings.TrimSpace(device.IP)
@@ -309,8 +322,9 @@ func (n *LaunchNormalizer) lookupDeviceIPs(deviceIDs []uint) []string {
 			continue
 		}
 		logger.Warn("TaskLaunchService", "-", "设备缺少管理IP: deviceID=%d", deviceID)
+		failedIDs = append(failedIDs, deviceID)
 	}
-	return result
+	return result, failedIDs
 }
 
 func (v *LaunchValidator) ValidateLaunchSpec(ctx context.Context, spec *CanonicalLaunchSpec) error {
@@ -329,6 +343,15 @@ func (v *LaunchValidator) ValidateLaunchSpec(ctx context.Context, spec *Canonica
 	case string(RunKindBackup):
 		if spec.Backup == nil || len(spec.Backup.DeviceIPs) == 0 {
 			return fmt.Errorf("备份任务至少需要一台设备")
+		}
+		if strings.TrimSpace(spec.Backup.StartupCommand) == "" {
+			return fmt.Errorf("备份任务缺少启动配置查询命令")
+		}
+		if strings.TrimSpace(spec.Backup.FileNamePattern) == "" {
+			return fmt.Errorf("备份任务缺少文件名模式")
+		}
+		if strings.TrimSpace(spec.Backup.DirNamePattern) == "" {
+			return fmt.Errorf("备份任务缺少目录名模式")
 		}
 	default:
 		if spec.Normal == nil {
@@ -448,6 +471,7 @@ func (s *TaskExecutionService) CreateTaskDefinitionFromLaunchSpec(spec *Canonica
 			SaveRootPath:    spec.Backup.SaveRootPath,
 			DirNamePattern:  spec.Backup.DirNamePattern,
 			FileNamePattern: spec.Backup.FileNamePattern,
+			SFTPTimeoutSec:  spec.Backup.SftpTimeoutSec,
 			Concurrency:     spec.Concurrency,
 			TimeoutSec:      spec.TimeoutSec,
 			EnableRawLog:    spec.EnableRawLog,

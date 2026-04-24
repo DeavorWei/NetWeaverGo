@@ -278,21 +278,57 @@ func resolvePathPattern(pattern, deviceIP string, t time.Time) string {
 	return filepath.Clean(res)
 }
 
+// isPathWithinRoot 判断 path 是否在 root 目录下（含 root 本身）。
+// 仅对 root 调用 EvalSymlinks 解析符号链接（root 应已存在），
+// path 是新创建的路径，不存在符号链接，仅做 filepath.Clean。
+// 在 Windows 上做大小写不敏感比较。
+func isPathWithinRoot(path, root string) bool {
+	// 仅解析 root 的符号链接（root 应已存在）
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		// EvalSymlinks 失败（root 不存在等），回退到原始路径
+		realRoot = root
+	}
+
+	// path 是新创建的路径，不存在符号链接，直接 Clean
+	cleanPath := filepath.Clean(path)
+	cleanRoot := filepath.Clean(realRoot)
+
+	if cleanPath == cleanRoot {
+		return true
+	}
+
+	prefix := cleanRoot + string(filepath.Separator)
+	// Windows 文件系统不区分大小写，使用 EqualFold 做前缀比较
+	if filepath.IsAbs(cleanRoot) && len(cleanPath) >= len(prefix) {
+		candidate := cleanPath[:len(prefix)]
+		if strings.EqualFold(candidate, prefix) {
+			return true
+		}
+	}
+	// 非 Windows 或路径长度不足，回退到精确匹配
+	return strings.HasPrefix(cleanPath, prefix)
+}
+
 func buildBackupLocalPath(saveRoot, dirPattern, filePattern, deviceIP string, timestamp time.Time) string {
 	dirName := resolvePathPattern(dirPattern, deviceIP, timestamp)
 	fileName := resolvePathPattern(filePattern, deviceIP, timestamp)
-	
+
+	// saveRoot 为空时拒绝生成路径，避免写入不可预期的位置
+	if strings.TrimSpace(saveRoot) == "" {
+		logger.Warn("Config", "-", "buildBackupLocalPath: saveRoot 为空，使用 fallback 路径")
+		return filepath.Join("escape_prevented", fileName)
+	}
+
 	fullPath := filepath.Join(saveRoot, dirName, fileName)
-	
-	cleanRoot := filepath.Clean(saveRoot)
-	cleanFullPath := filepath.Clean(fullPath)
-	
-	prefix := cleanRoot + string(filepath.Separator)
-	if !strings.HasPrefix(cleanFullPath, prefix) && cleanFullPath != cleanRoot {
+
+	if !isPathWithinRoot(fullPath, saveRoot) {
+		cleanRoot := filepath.Clean(saveRoot)
+		logger.Warn("Config", "-", "路径逃逸防护触发: fullPath=%s, saveRoot=%s, 重定向到 escape_prevented", fullPath, saveRoot)
 		return filepath.Join(cleanRoot, "escape_prevented", fileName)
 	}
-	
-	return cleanFullPath
+
+	return filepath.Clean(fullPath)
 }
 
 func (pm *PathManager) GetBackupConfigFilePath(saveRoot, dirPattern, filePattern, deviceIP string, timestamp time.Time) string {

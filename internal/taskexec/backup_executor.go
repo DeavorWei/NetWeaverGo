@@ -16,6 +16,18 @@ import (
 	"gorm.io/gorm"
 )
 
+// 备份配置路径提取正则（包级编译一次，避免每次调用重复编译）
+var (
+	// 华为/华三格式: "Next startup saved-configuration file: flash:/1.cfg"
+	reHuaweiStartupConfig = regexp.MustCompile(`(?i)Next startup saved-configuration file:?\s+(?:flash:|cf:|sdcard:)?/?([^\r\n\s]+)`)
+	// Cisco格式: "boot system flash:1.cfg"
+	reCiscoBootSystem = regexp.MustCompile(`(?i)boot system\s+(?:flash:|bootflash:|slot0:|usb0:)?/?([^\r\n\s]+)`)
+	// 锐捷格式: "Next startup configuration file: flash:config.text"
+	reRuijieStartupConfig = regexp.MustCompile(`(?i)Next startup configuration file:?\s+(?:flash:|cf:|sdcard:|usb:)?/?([^\r\n\s]+)`)
+	// 华三Comware V7格式: "Main startup configuration file: flash:/startup.cfg"
+	reH3CV7MainStartup = regexp.MustCompile(`(?i)Main startup configuration file:?\s+(?:flash:|cf:|sdcard:)?/?([^\r\n\s]+)`)
+)
+
 // BackupExecutor 备份采集执行器
 type BackupExecutor struct {
 	repo        repository.DeviceRepository
@@ -43,7 +55,7 @@ func (e *BackupExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 
 	concurrency := stage.Concurrency
 	if concurrency <= 0 {
-		concurrency = 5
+		concurrency = 10 // 与 DefaultCompileOptions.DefaultConcurrency 保持一致
 	}
 
 	handler := NewErrorHandler(ctx.RunID())
@@ -53,13 +65,22 @@ func (e *BackupExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 	var firstErr error
 	var mu sync.Mutex
 
+loop:
 	for _, unit := range stage.Units {
 		if ctx.IsCancelled() {
 			break
 		}
 
 		wg.Add(1)
-		semaphore <- struct{}{}
+		// 使用 select 同时监听信号量和取消通道，避免取消时阻塞在信号量上
+		select {
+		case semaphore <- struct{}{}:
+			// 获取到信号量，继续启动 goroutine
+		case <-ctx.Context().Done():
+			// 上下文已取消，退出调度循环
+			wg.Done() // 撤销刚才的 wg.Add(1)
+			break loop
+		}
 
 		go func(u UnitPlan) {
 			defer wg.Done()
@@ -91,8 +112,8 @@ func (e *BackupExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 			localCompleted := completedCount
 			localFailed := failedCount
 			localCancelled := cancelledCount
-			mu.Unlock()
-
+	
+			// 在锁内发射事件，避免两个 goroutine 交错导致前端收到乱序进度
 			if IsContextCancelled(ctx, err) {
 				emitProjectedUnitEvent(ctx, stage.ID, u.ID, EventTypeUnitFinished, EventLevelWarn, fmt.Sprintf("Backup cancelled for %s", u.Target.Key))
 			} else if err != nil {
@@ -100,8 +121,9 @@ func (e *BackupExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 			} else {
 				emitProjectedUnitEvent(ctx, stage.ID, u.ID, EventTypeUnitFinished, EventLevelInfo, fmt.Sprintf("Backup completed for %s", u.Target.Key))
 			}
-
+	
 			applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled, stageProgressFromCounts(len(stage.Units), localCompleted, localFailed, localCancelled), "更新采集阶段进度")
+			mu.Unlock()
 		}(unit)
 	}
 
@@ -180,7 +202,7 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 	if remotePath == "" {
 		errMsg := fmt.Sprintf("未能从输出中提取配置文件路径:\n%s", cmdOutput)
 		failUnitExecution(handler, ctx, unit.ID, errMsg, "提取失败", nil)
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("未能从输出中提取配置文件路径: %s", truncateForError(cmdOutput, 200))
 	}
 	
 	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeStepFinished, EventLevelInfo, fmt.Sprintf("发现配置文件: %s", remotePath))
@@ -199,13 +221,23 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 	)
 
 	// 构建SFTP专用的SSH配置（与DeviceExecutor.Connect()保持一致的策略配置）
+	// 计算SFTP超时：优先使用专用超时，否则使用命令超时的2倍
+	sftpTimeoutSec := 0
+	if v, ok := unit.Steps[1].Params["sftpTimeoutSec"]; ok {
+		fmt.Sscanf(v, "%d", &sftpTimeoutSec)
+	}
+	sftpTimeout := unit.Timeout * 2
+	if sftpTimeoutSec > 0 {
+		sftpTimeout = time.Duration(sftpTimeoutSec) * time.Second
+	}
+
 	hostKeyPolicy, knownHostsPath := config.ResolveSSHHostKeyPolicy()
 	sftpSSHConfig := sshutil.Config{
 		IP:             device.IP,
 		Port:           device.Port,
 		Username:       device.Username,
 		Password:       device.Password,
-		Timeout:        unit.Timeout,
+		Timeout:        sftpTimeout,
 		HostKeyPolicy:  hostKeyPolicy,
 		KnownHostsPath: knownHostsPath,
 		// 注意：PTY 不设置 — SFTP连接不需要伪终端
@@ -226,7 +258,11 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 		return fmt.Errorf("SFTP下载文件失败: %w", err)
 	}
 
-	e.createArtifact(ctx.RunID(), stageID, unit.ID, string(ArtifactTypeBackupConfig), fmt.Sprintf("%s:config", deviceIP), localPath)
+	if artifactErr := e.createArtifactWithResult(ctx.RunID(), stageID, unit.ID, string(ArtifactTypeBackupConfig), fmt.Sprintf("%s:config", deviceIP), localPath); artifactErr != nil {
+		// 产物记录写入失败，文件已下载但索引丢失，发射告警事件
+		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitProgress, EventLevelWarn,
+			fmt.Sprintf("备份文件已下载但产物记录保存失败，请检查数据库: %v", artifactErr))
+	}
 
 	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeStepFinished, EventLevelInfo, "下载配置完成")
 
@@ -238,7 +274,8 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 	return nil
 }
 
-func (e *BackupExecutor) createArtifact(taskRunID, stageID, unitID, artifactType, artifactKey, filePath string) {
+// createArtifactWithResult 创建产物记录并返回错误，供调用方决定后续处理
+func (e *BackupExecutor) createArtifactWithResult(taskRunID, stageID, unitID, artifactType, artifactKey, filePath string) error {
 	artifact := TaskArtifact{
 		ID:           newArtifactID(),
 		TaskRunID:    taskRunID,
@@ -250,15 +287,14 @@ func (e *BackupExecutor) createArtifact(taskRunID, stageID, unitID, artifactType
 	}
 	if err := e.db.Create(&artifact).Error; err != nil {
 		logger.Warn("TaskExec", taskRunID, "保存产物记录失败: err=%v, artifact=%+v", err, artifact)
+		return err
 	}
+	return nil
 }
 
 func (e *BackupExecutor) extractNextStartupConfigPath(output string) string {
-	// 华为/华三格式 - 过滤存储介质前缀 (flash:/, cf:/, sdcard:/ 等)
-	// 匹配: "Next startup saved-configuration file: flash:/1.cfg"
-	// 捕获: "1.cfg" (过滤掉存储介质前缀)
-	re := regexp.MustCompile(`(?i)Next startup saved-configuration file:?\s+(?:flash:|cf:|sdcard:)?/?([^\r\n\s]+)`)
-	matches := re.FindStringSubmatch(output)
+	// 华为/华三格式
+	matches := reHuaweiStartupConfig.FindStringSubmatch(output)
 	if len(matches) > 1 {
 		path := strings.TrimSpace(matches[1])
 		if path != "NULL" {
@@ -266,14 +302,34 @@ func (e *BackupExecutor) extractNextStartupConfigPath(output string) string {
 		}
 	}
 
-	// Cisco 格式 - 过滤存储介质前缀 (flash:, bootflash:, slot0: 等)
-	// 匹配: "boot system flash:1.cfg" 或 "boot system 1.cfg"
-	// 捕获: "1.cfg" (过滤掉存储介质前缀)
-	reCisco := regexp.MustCompile(`(?i)boot system\s+(?:flash:|bootflash:|slot0:|usb0:)?/?([^\r\n\s]+)`)
-	matchesCisco := reCisco.FindStringSubmatch(output)
-	if len(matchesCisco) > 1 {
-		return strings.TrimSpace(matchesCisco[1])
+	// 锐捷格式
+	matches = reRuijieStartupConfig.FindStringSubmatch(output)
+	if len(matches) > 1 {
+		path := strings.TrimSpace(matches[1])
+		if path != "NULL" {
+			return path
+		}
+	}
+
+	// 华三 Comware V7 格式
+	matches = reH3CV7MainStartup.FindStringSubmatch(output)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+
+	// Cisco 格式
+	matches = reCiscoBootSystem.FindStringSubmatch(output)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
 	}
 
 	return ""
+}
+
+// truncateForError 截断字符串用于错误信息，避免超长输出污染日志
+func truncateForError(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "...(truncated)"
 }

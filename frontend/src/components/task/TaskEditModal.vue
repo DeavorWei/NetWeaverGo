@@ -673,6 +673,17 @@
                         class="w-full px-3 py-2 rounded-lg bg-bg-card border border-border text-sm text-text-primary focus:outline-none focus:border-accent/50"
                       />
                     </label>
+                    <label class="block">
+                      <span class="block text-xs font-medium text-text-secondary mb-1.5">SFTP下载超时(秒)</span>
+                      <input
+                        v-model.number="backupForm.sftpTimeoutSec"
+                        type="number"
+                        min="0"
+                        placeholder="留空则使用命令超时的2倍"
+                        class="w-full px-3 py-2 rounded-lg bg-bg-card border border-border text-sm text-text-primary focus:outline-none focus:border-accent/50"
+                      />
+                      <span class="block text-xs text-text-muted mt-1">SFTP下载大文件时的独立超时，0表示自动使用命令超时的2倍</span>
+                    </label>
                   </div>
                 </div>
 
@@ -899,7 +910,8 @@ const backupForm = reactive({
   startupCommand: "display startup",
   saveRootPath: "storage/backup",
   dirNamePattern: "%Y-%M-%D",
-  fileNamePattern: "%H_startup.cfg",
+  fileNamePattern: "%H_startup_%h%m%s.cfg",
+  sftpTimeoutSec: 0,
 });
 
 const bindingForm = reactive({
@@ -1025,7 +1037,8 @@ function hydrateForm(task: TaskGroup) {
   backupForm.startupCommand = task.backupStartupCommand || "display startup";
   backupForm.saveRootPath = task.backupSaveRootPath || "storage/backup";
   backupForm.dirNamePattern = task.backupDirNamePattern || "%Y-%M-%D";
-  backupForm.fileNamePattern = task.backupFileNamePattern || "%H_startup.cfg";
+  backupForm.fileNamePattern = task.backupFileNamePattern || "%H_startup_%h%m%s.cfg";
+  backupForm.sftpTimeoutSec = task.backupSftpTimeoutSec || 0;
 
   if (task.mode === "group") {
     const normalized = normalizeGroupTask(task.items);
@@ -1384,6 +1397,7 @@ function submit() {
     backupDirNamePattern: backupForm.dirNamePattern.trim(),
     backupFileNamePattern: backupForm.fileNamePattern.trim(),
     backupStartupCommand: backupForm.startupCommand.trim(),
+    backupSftpTimeoutSec: backupForm.sftpTimeoutSec || 0,
     status: "",
     createdAt: props.task.createdAt,
     updatedAt: props.task.updatedAt,

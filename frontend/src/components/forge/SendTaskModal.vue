@@ -105,6 +105,7 @@ const executeSend = async () => {
       backupDirNamePattern: "",
       backupFileNamePattern: "",
       backupStartupCommand: "",
+      backupSftpTimeoutSec: 0,
       status: "",
       createdAt: "",
       updatedAt: "",

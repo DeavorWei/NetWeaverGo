@@ -87,6 +87,7 @@ type BackupTaskConfig struct {
 	DeviceIPs       []string `json:"deviceIPs"`
 	Concurrency     int      `json:"concurrency"`
 	TimeoutSec      int      `json:"timeoutSec"`
+	SFTPTimeoutSec  int      `json:"sftpTimeoutSec"`  // SFTP下载独立超时(秒)，0时使用TimeoutSec的2倍
 	StartupCommand  string   `json:"startupCommand"`
 	SaveRootPath    string   `json:"saveRootPath"`
 	DirNamePattern  string   `json:"dirNamePattern"`

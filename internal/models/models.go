@@ -183,6 +183,7 @@ type TaskGroup struct {
 	BackupDirNamePattern   string                      `json:"backupDirNamePattern"`
 	BackupFileNamePattern  string                      `json:"backupFileNamePattern"`
 	BackupStartupCommand   string                      `json:"backupStartupCommand"`
+	BackupSftpTimeoutSec   int                         `json:"backupSftpTimeoutSec"` // SFTP下载独立超时(秒)，0时使用命令超时的2倍
 	CreatedAt              time.Time                   `json:"createdAt"`
 	UpdatedAt              time.Time                   `json:"updatedAt"`
 }

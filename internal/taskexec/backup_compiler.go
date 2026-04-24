@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -61,6 +62,7 @@ func (c *BackupTaskCompiler) Compile(ctx context.Context, def *TaskDefinition) (
 					"saveRootPath":    config.SaveRootPath,
 					"dirNamePattern":  config.DirNamePattern,
 					"fileNamePattern": config.FileNamePattern,
+					"sftpTimeoutSec":  fmt.Sprintf("%d", config.SFTPTimeoutSec),
 				},
 			},
 		}
@@ -98,9 +100,17 @@ func (c *BackupTaskCompiler) Compile(ctx context.Context, def *TaskDefinition) (
 func (c *BackupTaskCompiler) normalizeDeviceIPs(deviceIPs []string) []string {
 	result := make([]string, 0, len(deviceIPs))
 	for _, ip := range deviceIPs {
-		if ip != "" {
-			result = append(result, ip)
+		trimmed := strings.TrimSpace(ip)
+		if trimmed == "" {
+			continue
 		}
+		// 基本格式校验：排除明显非法的值（纯数字、含空格、过短等）
+		// 注意：不使用 net.ParseIP 严格校验，因为设备IP可能是主机名
+		if len(trimmed) < 2 || strings.ContainsAny(trimmed, " \t\n\r") {
+			logger.Warn("TaskCompiler", "-", "跳过非法设备IP: %q", trimmed)
+			continue
+		}
+		result = append(result, trimmed)
 	}
 	return result
 }
