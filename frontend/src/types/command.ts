@@ -36,4 +36,11 @@ export interface TaskGroup {
   status: "pending" | "running" | "completed" | "failed";
   createdAt: string;
   updatedAt: string;
+  // 备份任务相关字段
+  taskType?: string;
+  backupStartupCommand?: string;
+  backupSaveRootPath?: string;
+  backupDirNamePattern?: string;
+  backupFileNamePattern?: string;
+  backupSftpTimeoutSec?: number;
 }

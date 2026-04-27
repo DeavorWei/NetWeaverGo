@@ -204,11 +204,31 @@
               >备份采集说明</span
             >
           </div>
-          <div class="p-4">
+          <div class="p-4 space-y-4">
             <p class="text-xs text-text-muted leading-relaxed">
               此任务类型将自动连接目标设备下载启动配置（通常为 startup-config 或 saved-configuration）。<br/><br/>
               默认参数（如保存目录、生成文件名规则等）将在创建任务时自动生成，您也可以在任务列表中点击编辑进行详情配置。
             </p>
+            <!-- SFTP超时配置 -->
+            <div class="rounded-lg border border-border bg-bg-panel p-3">
+              <label class="flex items-start justify-between gap-4">
+                <div class="flex-1">
+                  <div class="text-xs font-medium text-text-secondary">
+                    SFTP下载超时(秒)
+                  </div>
+                  <p class="text-xs text-text-muted mt-1">
+                    SFTP下载大文件时的独立超时时间，设置为0时自动使用命令超时的2倍。
+                  </p>
+                </div>
+                <input
+                  v-model.number="backupSftpTimeoutSec"
+                  type="number"
+                  min="0"
+                  class="w-24 px-3 py-1.5 rounded-lg bg-bg-card border border-border text-xs text-text-primary text-center focus:outline-none focus:border-accent/50"
+                  placeholder="自动"
+                />
+              </label>
+            </div>
           </div>
         </div>
 
@@ -726,6 +746,7 @@ const selectedCommandGroup = ref<CommandGroup | null>(null);
 const supportedVendors = ref<string[]>([]);
 const topologyVendor = ref("");
 const autoBuildTopology = ref(true);
+const backupSftpTimeoutSec = ref(0); // SFTP下载独立超时(秒)，0时使用命令超时的2倍
 
 const topologyOverrides = ref<TopologyTaskFieldOverride[]>([]);
 const topologyPreview = ref<TopologyCommandPreviewView | null>(null);
@@ -924,7 +945,7 @@ async function confirmCreate() {
       backupDirNamePattern: selectedTaskType.value === 'backup' ? "%Y-%M-%D" : "",
       backupFileNamePattern: selectedTaskType.value === 'backup' ? "%H_startup_%h%m%s.cfg" : "",
       backupStartupCommand: selectedTaskType.value === 'backup' ? "display startup" : "",
-      backupSftpTimeoutSec: 0,
+      backupSftpTimeoutSec: selectedTaskType.value === 'backup' ? backupSftpTimeoutSec.value : 0,
       status: "",
       createdAt: new Date(),
       updatedAt: new Date(),
