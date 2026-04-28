@@ -138,13 +138,13 @@ function handleLogEvent(ev: any) {
 }
 
 function getLevelClass(level: string): string {
-  const m: Record<string, string> = { info: 'text-blue-400', warn: 'text-yellow-400', error: 'text-red-400', success: 'text-green-400' }
-  return m[level] || 'text-gray-400'
+  const m: Record<string, string> = { info: 'text-info', warn: 'text-warning', error: 'text-error', success: 'text-success' }
+  return m[level] || 'text-text-muted'
 }
 
 function getActionClass(action: string): string {
-  const m: Record<string, string> = { CONNECT: 'text-cyan-400', DISCONNECT: 'text-gray-500', UPLOAD: 'text-green-400', DOWNLOAD: 'text-blue-400', DELETE: 'text-red-400', ERROR: 'text-red-500' }
-  return m[action] || 'text-gray-400'
+  const m: Record<string, string> = { CONNECT: 'text-info', DISCONNECT: 'text-text-muted', UPLOAD: 'text-success', DOWNLOAD: 'text-accent', DELETE: 'text-error', ERROR: 'text-error' }
+  return m[action] || 'text-text-muted'
 }
 
 function formatTime(ts: number): string {
@@ -161,9 +161,9 @@ onUnmounted(() => { Events.Off('fileserver:log') })
 </script>
 
 <template>
-  <div class="flex flex-col h-full gap-4">
+  <div class="animate-slide-in space-y-5 h-full flex flex-col">
     <!-- 控制面板 -->
-    <div class="bg-bg-secondary rounded-lg border border-border p-4">
+    <div class="bg-bg-card rounded-xl border border-border p-5 shadow-card">
       <!-- 协议切换 -->
       <div class="flex gap-2 mb-4">
         <button
@@ -180,28 +180,28 @@ onUnmounted(() => { Events.Off('fileserver:log') })
 
       <!-- 配置表单 -->
       <div v-if="currentConfig" class="grid grid-cols-2 gap-4 mb-4">
-        <div>
-          <label class="block text-sm text-text-muted mb-1">监听端口</label>
+        <div class="space-y-1.5">
+          <label class="text-sm font-medium text-text-primary">监听端口</label>
           <input v-model.number="currentConfig.port" type="number"
-            class="w-full px-3 py-2 rounded-lg bg-bg-primary border border-border text-text-primary focus:border-accent focus:outline-none"
+            class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
             :disabled="isRunning" />
         </div>
-        <div>
-          <label class="block text-sm text-text-muted mb-1">根目录</label>
+        <div class="space-y-1.5">
+          <label class="text-sm font-medium text-text-primary">根目录</label>
           <input v-model="currentConfig.homeDir" type="text"
-            class="w-full px-3 py-2 rounded-lg bg-bg-primary border border-border text-text-primary focus:border-accent focus:outline-none"
+            class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
             :disabled="isRunning" placeholder="文件服务根目录" />
         </div>
-        <div v-if="activeProtocol !== 'tftp'">
-          <label class="block text-sm text-text-muted mb-1">用户名</label>
+        <div v-if="activeProtocol !== 'tftp'" class="space-y-1.5">
+          <label class="text-sm font-medium text-text-primary">用户名</label>
           <input v-model="currentConfig.username" type="text"
-            class="w-full px-3 py-2 rounded-lg bg-bg-primary border border-border text-text-primary focus:border-accent focus:outline-none"
+            class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
             :disabled="isRunning" />
         </div>
-        <div v-if="activeProtocol !== 'tftp'">
-          <label class="block text-sm text-text-muted mb-1">密码</label>
+        <div v-if="activeProtocol !== 'tftp'" class="space-y-1.5">
+          <label class="text-sm font-medium text-text-primary">密码</label>
           <input v-model="currentConfig.password" type="password"
-            class="w-full px-3 py-2 rounded-lg bg-bg-primary border border-border text-text-primary focus:border-accent focus:outline-none"
+            class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
             :disabled="isRunning" />
         </div>
       </div>
@@ -230,51 +230,51 @@ onUnmounted(() => { Events.Off('fileserver:log') })
       <div class="flex gap-3">
         <button @click="toggleServer"
           :class="[
-            'px-6 py-2.5 rounded-lg font-medium transition-all duration-200',
+            'px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
             isRunning
-              ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
-              : 'bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30'
+              ? 'bg-error/10 text-error border border-error/30 hover:bg-error/20'
+              : 'bg-success/10 text-success border border-success/30 hover:bg-success/20'
           ]"
         >{{ isRunning ? '停止服务' : '启动服务' }}</button>
         <button @click="saveConfig" :disabled="isRunning"
-          class="px-4 py-2.5 rounded-lg bg-accent-bg text-accent border border-accent/30 font-medium hover:bg-accent/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white border border-accent/30 hover:bg-accent/90 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >保存配置</button>
         <button @click="disconnectAll" :disabled="!isRunning"
-          class="px-4 py-2.5 rounded-lg bg-bg-hover text-text-secondary border border-border font-medium hover:text-text-primary transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-4 py-2 rounded-lg text-sm font-medium bg-bg-panel text-text-secondary border border-border hover:text-text-primary hover:border-accent/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >断开所有连接</button>
       </div>
 
       <!-- 状态指示 -->
       <div class="flex items-center gap-2 mt-4">
-        <span :class="['w-2 h-2 rounded-full', isRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-500']"></span>
-        <span class="text-sm text-text-muted">
+        <span :class="['w-2 h-2 rounded-full', isRunning ? 'bg-success animate-pulse' : 'bg-text-muted']"></span>
+        <span class="text-sm text-text-secondary">
           {{ isRunning ? '运行中' : '已停止' }} - 端口 {{ currentConfig?.port || 0 }}
         </span>
       </div>
     </div>
 
     <!-- 日志面板 -->
-    <div class="flex-1 bg-bg-secondary rounded-lg border border-border overflow-hidden flex flex-col">
-      <div class="flex items-center justify-between px-4 py-2 border-b border-border">
-        <span class="text-sm font-medium text-text-primary">服务日志</span>
+    <div class="flex-1 bg-bg-card rounded-xl border border-border overflow-hidden flex flex-col shadow-card">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-panel">
+        <span class="text-sm font-semibold text-text-primary">服务日志</span>
         <div class="flex gap-2">
-          <label class="flex items-center gap-2 text-sm text-text-secondary">
+          <label class="flex items-center gap-2 text-xs text-text-secondary">
             <input v-model="autoScroll" type="checkbox" class="w-3 h-3 rounded border-border accent-accent" />
             自动滚动
           </label>
-          <button @click="clearLogs" class="px-3 py-1 rounded text-xs bg-bg-hover text-text-muted hover:text-text-primary transition-colors">清除日志</button>
+          <button @click="clearLogs" class="px-3 py-1 rounded-lg text-xs bg-bg-hover text-text-muted hover:text-text-primary transition-colors">清除日志</button>
         </div>
       </div>
-      <div ref="logsContainer" class="flex-1 overflow-auto p-3 font-mono text-xs bg-bg-primary scrollbar-custom">
+      <div ref="logsContainer" class="flex-1 overflow-auto p-3 font-mono text-xs bg-terminal-bg text-terminal-text scrollbar-custom">
         <div v-if="logs.length === 0" class="text-center text-text-muted py-8">暂无日志记录</div>
-        <div v-for="(log, index) in logs" :key="index" class="flex gap-2 py-1 hover:bg-bg-hover/50 px-1 rounded">
+        <div v-for="(log, index) in logs" :key="index" class="flex gap-2 py-1 hover:bg-bg-hover/30 px-2 rounded transition-colors">
           <span class="text-text-muted">{{ formatTime(log.timestamp) }}</span>
           <span :class="getLevelClass(log.level)">[{{ log.level.toUpperCase() }}]</span>
-          <span class="text-purple-400">[{{ log.protocol.toUpperCase() }}]</span>
-          <span v-if="log.clientIp" class="text-orange-400">{{ log.clientIp }}</span>
+          <span class="text-accent">[{{ log.protocol.toUpperCase() }}]</span>
+          <span v-if="log.clientIp" class="text-warning">{{ log.clientIp }}</span>
           <span :class="getActionClass(log.action)">{{ log.action }}</span>
           <span class="text-text-primary">{{ log.message }}</span>
-          <span v-if="log.file" class="text-cyan-400">{{ log.file }}</span>
+          <span v-if="log.file" class="text-info">{{ log.file }}</span>
         </div>
       </div>
     </div>
