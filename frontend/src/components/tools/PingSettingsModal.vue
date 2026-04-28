@@ -158,8 +158,8 @@ const updateConfig = <K extends keyof PingConfig>(key: K, value: PingConfig[K]) 
               <div v-if="expandStatus !== 'idle'" class="mt-2 text-xs flex items-center gap-1"
                    :class="{
                      'text-text-muted': expandStatus === 'expanding',
-                     'text-green-400': expandStatus === 'done',
-                     'text-red-400': expandStatus === 'error'
+                     'text-success': expandStatus === 'done',
+                     'text-error': expandStatus === 'error'
                    }">
                 <svg v-if="expandStatus === 'expanding'" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -225,7 +225,7 @@ const updateConfig = <K extends keyof PingConfig>(key: K, value: PingConfig[K]) 
                   />
                 </div>
                 <!-- 并发数警告 -->
-                <div v-if="concurrencyWarning" class="mt-1 p-2 rounded-lg text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                <div v-if="concurrencyWarning" class="mt-1 p-2 rounded-lg text-xs bg-warning/20 text-warning border border-warning/30">
                   <div class="flex items-start gap-2">
                     <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -247,7 +247,7 @@ const updateConfig = <K extends keyof PingConfig>(key: K, value: PingConfig[K]) 
                 </div>
                 <!-- 数据包大小警告 -->
                 <div v-if="dataSizeWarning" class="mt-2 p-2 rounded-lg text-xs"
-                     :class="dataSizeWarning.type === 'error' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'">
+                     :class="dataSizeWarning.type === 'error' ? 'bg-error/20 text-error border border-error/30' : 'bg-warning/20 text-warning border border-warning/30'">
                   <div class="flex items-start gap-2">
                     <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -282,7 +282,7 @@ const updateConfig = <K extends keyof PingConfig>(key: K, value: PingConfig[K]) 
                     :class="resolveHostName ? 'bg-accent' : 'bg-bg-tertiary'"
                   >
                     <span
-                      class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform"
+                      class="absolute top-0.5 left-0.5 w-4 h-4 bg-text-inverse rounded-full transition-transform"
                       :class="resolveHostName ? 'translate-x-5' : ''"
                     ></span>
                   </button>
@@ -302,7 +302,7 @@ const updateConfig = <K extends keyof PingConfig>(key: K, value: PingConfig[K]) 
                     :class="enableRealtime ? 'bg-accent' : 'bg-bg-tertiary'"
                   >
                     <span
-                      class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform"
+                      class="absolute top-0.5 left-0.5 w-4 h-4 bg-text-inverse rounded-full transition-transform"
                       :class="enableRealtime ? 'translate-x-5' : ''"
                     ></span>
                   </button>

@@ -409,7 +409,7 @@ const handleCopyAll = async () => {
          bg-success/95 text-white shadow-lg shadow-success/20;
 }
 .success-toast .toast-icon {
-  @apply flex items-center justify-center w-8 h-8 rounded-full bg-white/20;
+  @apply flex items-center justify-center w-8 h-8 rounded-full bg-text-inverse/20;
 }
 .success-toast .toast-content {
   @apply flex flex-col;

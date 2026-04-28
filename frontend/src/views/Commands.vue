@@ -392,7 +392,7 @@
                   <div
                     v-for="(cmd, idx) in previewModal.group?.commands"
                     :key="idx"
-                    class="group/cmd flex items-center gap-2 px-4 py-2 font-mono text-sm border-b border-border/30 last:border-0 hover:bg-white/5 transition-colors"
+                    class="group/cmd flex items-center gap-2 px-4 py-2 font-mono text-sm border-b border-border/30 last:border-0 hover:bg-text-inverse/5 transition-colors"
                   >
                     <span class="text-text-muted/50 w-6 text-right flex-shrink-0 select-none">{{ idx + 1 }}</span>
                     <span class="flex-1 text-terminal-text break-all">{{ cmd }}</span>

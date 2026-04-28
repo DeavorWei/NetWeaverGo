@@ -680,7 +680,7 @@ onUnmounted(() => {
         <button
           v-else
           @click="stopPing"
-          class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-all duration-200 flex items-center gap-2"
+          class="px-4 py-2 bg-error hover:opacity-90 text-text-inverse rounded-lg font-medium transition-all duration-200 flex items-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -718,17 +718,17 @@ onUnmounted(() => {
             <span class="text-sm flex items-center gap-1">
               <span>🟢</span>
               <span class="text-text-secondary">在线:</span>
-              <span class="text-green-400 font-medium">{{ progress.onlineCount }}</span>
+              <span class="text-success font-medium">{{ progress.onlineCount }}</span>
             </span>
             <span class="text-sm flex items-center gap-1">
               <span>🔴</span>
               <span class="text-text-secondary">离线:</span>
-              <span class="text-red-400 font-medium">{{ progress.offlineCount }}</span>
+              <span class="text-error font-medium">{{ progress.offlineCount }}</span>
             </span>
             <span class="text-sm flex items-center gap-1">
               <span>⚠️</span>
               <span class="text-text-secondary">错误:</span>
-              <span class="text-yellow-400 font-medium">{{ progress.errorCount }}</span>
+              <span class="text-warning font-medium">{{ progress.errorCount }}</span>
             </span>
           </div>
           
@@ -741,11 +741,11 @@ onUnmounted(() => {
               </div>
               <div class="bg-bg-tertiary/30 rounded-lg p-2">
                 <div class="text-xs text-text-muted">成功次数</div>
-                <div class="text-lg font-bold text-green-400">{{ realtimeStats.totalSuccess }}</div>
+                <div class="text-lg font-bold text-success">{{ realtimeStats.totalSuccess }}</div>
               </div>
               <div class="bg-bg-tertiary/30 rounded-lg p-2">
                 <div class="text-xs text-text-muted">失败次数</div>
-                <div class="text-lg font-bold text-red-400">{{ realtimeStats.totalFailed }}</div>
+                <div class="text-lg font-bold text-error">{{ realtimeStats.totalFailed }}</div>
               </div>
               <div class="bg-bg-tertiary/30 rounded-lg p-2">
                 <div class="text-xs text-text-muted">检测中</div>
@@ -753,11 +753,11 @@ onUnmounted(() => {
               </div>
               <div class="bg-bg-tertiary/30 rounded-lg p-2">
                 <div class="text-xs text-text-muted">最小延迟</div>
-                <div class="text-lg font-bold text-cyan-400">{{ realtimeStats.globalMinRtt >= 0 ? realtimeStats.globalMinRtt.toFixed(1) + 'ms' : '-' }}</div>
+                <div class="text-lg font-bold text-info">{{ realtimeStats.globalMinRtt >= 0 ? realtimeStats.globalMinRtt.toFixed(1) + 'ms' : '-' }}</div>
               </div>
               <div class="bg-bg-tertiary/30 rounded-lg p-2">
                 <div class="text-xs text-text-muted">最大延迟</div>
-                <div class="text-lg font-bold text-orange-400">{{ realtimeStats.globalMaxRtt >= 0 ? realtimeStats.globalMaxRtt.toFixed(1) + 'ms' : '-' }}</div>
+                <div class="text-lg font-bold text-warning">{{ realtimeStats.globalMaxRtt >= 0 ? realtimeStats.globalMaxRtt.toFixed(1) + 'ms' : '-' }}</div>
               </div>
               <div class="bg-bg-tertiary/30 rounded-lg p-2">
                 <div class="text-xs text-text-muted">平均延迟</div>
@@ -765,7 +765,7 @@ onUnmounted(() => {
               </div>
               <div class="bg-bg-tertiary/30 rounded-lg p-2">
                 <div class="text-xs text-text-muted">总丢包率</div>
-                <div class="text-lg font-bold" :class="realtimeStats.overallLossRate === 0 ? 'text-green-400' : realtimeStats.overallLossRate < 50 ? 'text-yellow-400' : 'text-red-400'">
+                <div class="text-lg font-bold" :class="realtimeStats.overallLossRate === 0 ? 'text-success' : realtimeStats.overallLossRate < 50 ? 'text-warning' : 'text-error'">
                   {{ realtimeStats.overallLossRate.toFixed(1) }}%
                 </div>
               </div>
@@ -846,24 +846,24 @@ onUnmounted(() => {
                       <span v-else>{{ getStatusIcon(result.status) }}</span>
                       <span :class="{
                         'text-accent animate-pulse': result.isPinging,
-                        'text-green-400': !result.isPinging && result.status === 'online',
-                        'text-red-400': !result.isPinging && result.status === 'offline',
-                        'text-yellow-400': !result.isPinging && result.status === 'error',
+                        'text-success': !result.isPinging && result.status === 'online',
+                        'text-error': !result.isPinging && result.status === 'offline',
+                        'text-warning': !result.isPinging && result.status === 'error',
                         'text-text-muted': !result.isPinging && result.status === 'pending'
                       }">{{ result.isPinging ? '检测中' : getStatusText(result.status) }}</span>
                     </span>
                   </td>
                   <td v-if="isColumnVisible('successFailed')" class="py-2 px-3 text-text-primary">
-                    <span class="text-green-400">{{ result.recvCount }}</span>
+                    <span class="text-success">{{ result.recvCount }}</span>
                     <span class="text-text-muted">/</span>
-                    <span class="text-red-400">{{ result.failedCount }}</span>
+                    <span class="text-error">{{ result.failedCount }}</span>
                   </td>
                   <td v-if="isColumnVisible('minLatency')" class="py-2 px-3 font-mono text-xs">
-                    <span v-if="(result.status === 'online' || result.isPinging) && result.minRtt >= 0" class="text-cyan-400">{{ result.minRtt.toFixed(1) }}ms</span>
+                    <span v-if="(result.status === 'online' || result.isPinging) && result.minRtt >= 0" class="text-info">{{ result.minRtt.toFixed(1) }}ms</span>
                     <span v-else class="text-text-muted">-</span>
                   </td>
                   <td v-if="isColumnVisible('maxLatency')" class="py-2 px-3 font-mono text-xs">
-                    <span v-if="(result.status === 'online' || result.isPinging) && result.maxRtt >= 0" class="text-orange-400">{{ result.maxRtt.toFixed(1) }}ms</span>
+                    <span v-if="(result.status === 'online' || result.isPinging) && result.maxRtt >= 0" class="text-warning">{{ result.maxRtt.toFixed(1) }}ms</span>
                     <span v-else class="text-text-muted">-</span>
                   </td>
                   <td v-if="isColumnVisible('avgLatency')" class="py-2 px-3 font-mono text-xs">
@@ -877,9 +877,9 @@ onUnmounted(() => {
                   <td v-if="isColumnVisible('ttl')" class="py-2 px-3 text-text-primary">{{ result.ttl > 0 ? result.ttl : '-' }}</td>
                   <td v-if="isColumnVisible('lossRate')" class="py-2 px-3">
                     <span :class="{
-                      'text-green-400': result.lossRate === 0,
-                      'text-yellow-400': result.lossRate > 0 && result.lossRate < 100,
-                      'text-red-400': result.lossRate === 100
+                      'text-success': result.lossRate === 0,
+                      'text-warning': result.lossRate > 0 && result.lossRate < 100,
+                      'text-error': result.lossRate === 100
                     }">{{ result.lossRate.toFixed(1) }}%</span>
                   </td>
                   <td v-if="isColumnVisible('lastSucceedAt')" class="py-2 px-3 text-text-secondary text-xs">
@@ -931,7 +931,7 @@ onUnmounted(() => {
             <div v-for="col in columns" :key="col.key" class="flex items-center justify-between p-2 bg-bg-tertiary/30 rounded-lg">
               <span class="text-sm text-text-primary">{{ col.label }}</span>
               <button @click="col.visible = !col.visible" class="relative w-10 h-5 rounded-full transition-colors" :class="col.visible ? 'bg-accent' : 'bg-bg-tertiary'">
-                <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform" :class="col.visible ? 'translate-x-5' : ''"></span>
+                <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-text-inverse rounded-full transition-transform" :class="col.visible ? 'translate-x-5' : ''"></span>
               </button>
             </div>
           </div>

@@ -118,7 +118,7 @@ const emit = defineEmits<{
                   class="sr-only peer"
                 />
                 <div
-                  class="w-8 h-4 bg-bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-warning peer-checked:after:bg-white"
+                  class="w-8 h-4 bg-bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-text-inverse after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-warning peer-checked:after:bg-text-inverse"
                 ></div>
               </label>
               <span
