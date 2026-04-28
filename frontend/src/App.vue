@@ -210,6 +210,16 @@ const menuItems = [
       <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
     </svg>`,
   },
+  {
+    key: "FileServers",
+    label: "文件服务器",
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+      <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+      <line x1="6" y1="6" x2="6.01" y2="6"/>
+      <line x1="6" y1="18" x2="6.01" y2="18"/>
+    </svg>`,
+  },
 
   {
     key: "Settings",
@@ -232,6 +242,7 @@ const titleMap: Record<string, string> = {
   ProtocolRef: "端口速查",
   ConfigForge: "配置生成",
   BatchPing: "批量 Ping 检测",
+  FileServers: "文件服务器",
   TopologyCommandConfig: "拓扑命令配置中心",
   Settings: "系统设置",
 };

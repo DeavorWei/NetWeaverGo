@@ -222,3 +222,43 @@ type TaskItem struct {
 	Commands       []string `json:"commands"`       // 直接命令列表（模式B使用）
 	DeviceIDs      []uint   `json:"deviceIDs"`      // 绑定的设备ID列表
 }
+
+// ============================================================================
+// 文件服务器配置模型
+// ============================================================================
+
+// FileServerConfig 文件服务器配置表
+// 支持 SFTP、FTP、TFTP 三种协议的配置持久化
+type FileServerConfig struct {
+	ID        uint      `json:"id" gorm:"primaryKey;autoIncrement"`
+	Protocol  string    `json:"protocol" gorm:"uniqueIndex;not null"` // sftp, ftp, tftp
+	Enabled   bool      `json:"enabled"`                             // 是否开机自启
+	Port      int       `json:"port"`                                // 监听端口
+	HomeDir   string    `json:"homeDir"`                             // 根目录
+	Username  string    `json:"username"`                            // 登录用户名
+	Password  string    `json:"password" gorm:"column:password"`     // 登录密码
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+
+	// FTP 专用权限控制
+	AllowGet    bool `json:"allowGet"`    // 允许下载
+	AllowPut    bool `json:"allowPut"`    // 允许上传
+	AllowDel    bool `json:"allowDel"`    // 允许删除
+	AllowRename bool `json:"allowRename"` // 允许重命名
+}
+
+// TableName 指定表名
+func (FileServerConfig) TableName() string {
+	return "file_server_configs"
+}
+
+// FileServerLog 文件服务器日志条目（用于前端展示）
+type FileServerLog struct {
+	Timestamp int64  `json:"timestamp"` // 毫秒级时间戳
+	Level     string `json:"level"`     // info, warn, error, success
+	Protocol  string `json:"protocol"`  // sftp, ftp, tftp
+	ClientIP  string `json:"clientIp"`  // 客户端IP
+	Action    string `json:"action"`    // CONNECT, DISCONNECT, UPLOAD, DOWNLOAD, DELETE, ERROR
+	Message   string `json:"message"`   // 日志详情
+	File      string `json:"file"`      // 可选，涉及文件操作时附带
+}

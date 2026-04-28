@@ -89,6 +89,8 @@ func autoMigrateAll(db *gorm.DB) error {
 		&models.PlannedLink{},
 		&models.DiffReport{},
 		&models.DiffItem{},
+		// 文件服务器配置表
+		&models.FileServerConfig{},
 	)
 }
 
