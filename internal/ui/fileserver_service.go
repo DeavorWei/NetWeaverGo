@@ -3,6 +3,8 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/NetWeaverGo/core/internal/config"
@@ -267,6 +269,45 @@ func isValidProtocol(protocol string) bool {
 	default:
 		return false
 	}
+}
+
+// GetExecutableDir 获取程序可执行文件所在目录
+// 用于前端确定默认文件服务器根目录位置
+func (s *FileServerService) GetExecutableDir() (string, error) {
+	logger.Debug("FileServerService", "-", "GetExecutableDir 被调用")
+
+	exePath, err := os.Executable()
+	if err != nil {
+		logger.Error("FileServerService", "-", "获取可执行文件路径失败: %v", err)
+		return "", fmt.Errorf("获取程序路径失败: %w", err)
+	}
+
+	exeDir := filepath.Dir(exePath)
+	logger.Verbose("FileServerService", "-", "程序可执行目录: %s", exeDir)
+	return exeDir, nil
+}
+
+// GetDefaultHomeDir 获取文件服务器默认根目录
+// 优先使用程序可执行目录，失败时回退到当前工作目录
+func (s *FileServerService) GetDefaultHomeDir() (string, error) {
+	logger.Debug("FileServerService", "-", "GetDefaultHomeDir 被调用")
+
+	// 尝试获取可执行文件目录
+	exeDir, err := s.GetExecutableDir()
+	if err == nil && exeDir != "" {
+		logger.Verbose("FileServerService", "-", "返回程序目录作为默认根目录: %s", exeDir)
+		return exeDir, nil
+	}
+
+	// 回退到当前工作目录
+	cwd, err := os.Getwd()
+	if err != nil {
+		logger.Error("FileServerService", "-", "获取当前工作目录失败: %v", err)
+		return "", fmt.Errorf("获取默认目录失败: %w", err)
+	}
+
+	logger.Verbose("FileServerService", "-", "返回工作目录作为默认根目录: %s", cwd)
+	return cwd, nil
 }
 
 // StopAll 停止所有服务器（应用退出时调用）

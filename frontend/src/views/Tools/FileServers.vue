@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { Events } from '@wailsio/runtime'
+import { Events, Dialogs } from '@wailsio/runtime'
 import { useToast } from '@/utils/useToast'
 import * as FileServerService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/fileserverservice'
 import { FileServerConfig } from '@/bindings/github.com/NetWeaverGo/core/internal/models/models'
@@ -25,6 +25,9 @@ const maxLogs = 1000
 const autoScroll = ref(true)
 const logsContainer = ref<HTMLElement | null>(null)
 
+// 密码显示状态
+const showPassword = ref(false)
+
 function getDefaultConfig(protocol: string): FileServerConfig {
   const cfg = new FileServerConfig({
     protocol,
@@ -43,9 +46,46 @@ function getDefaultConfig(protocol: string): FileServerConfig {
   return cfg
 }
 
-function initConfigs() {
+// 初始化配置，如果 homeDir 为空则填充默认目录
+async function initConfigs() {
   for (const p of ['sftp', 'ftp', 'tftp']) {
     configs.value[p] = getDefaultConfig(p)
+  }
+  // 为所有协议填充默认根目录
+  await fillDefaultHomeDirForAll()
+}
+
+// 为所有协议填充默认根目录
+async function fillDefaultHomeDirForAll() {
+  try {
+    const defaultDir = await FileServerService.GetDefaultHomeDir()
+    for (const p of ['sftp', 'ftp', 'tftp']) {
+      if (configs.value[p] && !configs.value[p].homeDir) {
+        configs.value[p].homeDir = defaultDir
+      }
+    }
+  } catch (e) {
+    console.warn('获取默认根目录失败:', e)
+  }
+}
+
+// 选择目录
+async function selectHomeDir() {
+  if (isRunning.value) return
+  try {
+    const result = await Dialogs.OpenFile({
+      CanChooseDirectories: true,
+      CanChooseFiles: false,
+      CanCreateDirectories: true,
+      Title: '选择文件服务器根目录',
+      ButtonText: '选择',
+      Directory: currentConfig.value?.homeDir || ''
+    })
+    if (result && typeof result === 'string' && result !== '') {
+      currentConfig.value!.homeDir = result
+    }
+  } catch (e) {
+    console.warn('选择目录失败:', e)
   }
 }
 
@@ -63,7 +103,18 @@ async function loadConfigAndStatus() {
   for (const p of ['sftp', 'ftp', 'tftp']) {
     try {
       const cfg = await FileServerService.GetServerConfig(p)
-      if (cfg) configs.value[p] = cfg
+      if (cfg) {
+        configs.value[p] = cfg
+        // 如果根目录为空，填充默认目录
+        if (!cfg.homeDir || cfg.homeDir === '') {
+          try {
+            const defaultDir = await FileServerService.GetDefaultHomeDir()
+            if (configs.value[p]) {
+              configs.value[p].homeDir = defaultDir
+            }
+          } catch (e) { console.warn(`获取默认目录失败:`, e) }
+        }
+      }
     } catch (e) { console.warn(`加载 ${p} 配置失败:`, e) }
     try {
       runningStatus.value[p] = await FileServerService.GetServerStatus(p)
@@ -179,30 +230,65 @@ onUnmounted(() => { Events.Off('fileserver:log') })
       </div>
 
       <!-- 配置表单 -->
-      <div v-if="currentConfig" class="grid grid-cols-2 gap-4 mb-4">
-        <div class="space-y-1.5">
+      <div v-if="currentConfig" class="flex gap-4 mb-4">
+        <!-- 端口 - 占 1/6 -->
+        <div class="space-y-1.5" :class="activeProtocol !== 'tftp' ? 'w-[16.666%]' : 'w-[25%]'">
           <label class="text-sm font-medium text-text-primary">监听端口</label>
           <input v-model.number="currentConfig.port" type="number"
             class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
             :disabled="isRunning" />
         </div>
-        <div class="space-y-1.5">
-          <label class="text-sm font-medium text-text-primary">根目录</label>
-          <input v-model="currentConfig.homeDir" type="text"
-            class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
-            :disabled="isRunning" placeholder="文件服务根目录" />
-        </div>
-        <div v-if="activeProtocol !== 'tftp'" class="space-y-1.5">
+        <!-- 用户名 - 占 1/6 (TFTP 时不显示) -->
+        <div v-if="activeProtocol !== 'tftp'" class="space-y-1.5 w-[16.666%]">
           <label class="text-sm font-medium text-text-primary">用户名</label>
           <input v-model="currentConfig.username" type="text"
             class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
             :disabled="isRunning" />
         </div>
-        <div v-if="activeProtocol !== 'tftp'" class="space-y-1.5">
+        <!-- 密码 - 占 1/6 (TFTP 时不显示) -->
+        <div v-if="activeProtocol !== 'tftp'" class="space-y-1.5 w-[16.666%]">
           <label class="text-sm font-medium text-text-primary">密码</label>
-          <input v-model="currentConfig.password" type="password"
-            class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
-            :disabled="isRunning" />
+          <div class="relative">
+            <input v-model="currentConfig.password" :type="showPassword ? 'text' : 'password'"
+              class="w-full px-3 py-2 pr-10 rounded-lg bg-bg-panel border border-border text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
+              :disabled="isRunning" />
+            <button
+              type="button"
+              @click="showPassword = !showPassword"
+              :title="showPassword ? '隐藏密码' : '查看密码'"
+              class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
+            >
+              <!-- 睁眼图标 - 密码可见 -->
+              <svg v-if="showPassword" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+              <!-- 闭眼图标 - 密码隐藏 -->
+              <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <!-- 根目录 - 占 1/2 -->
+        <div class="space-y-1.5" :class="activeProtocol !== 'tftp' ? 'w-1/2' : 'w-3/4'">
+          <label class="text-sm font-medium text-text-primary">根目录</label>
+          <div class="relative flex gap-2">
+            <input v-model="currentConfig.homeDir" type="text"
+              class="flex-1 px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
+              :disabled="isRunning" placeholder="文件服务根目录" />
+            <button
+              @click="selectHomeDir"
+              :disabled="isRunning"
+              class="px-3 py-2 rounded-lg bg-bg-hover border border-border text-text-secondary hover:text-text-primary hover:border-accent/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="浏览目录"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -226,30 +312,33 @@ onUnmounted(() => { Events.Off('fileserver:log') })
         </label>
       </div>
 
-      <!-- 操作按钮 -->
-      <div class="flex gap-3">
-        <button @click="toggleServer"
-          :class="[
-            'px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
-            isRunning
-              ? 'bg-error/10 text-error border border-error/30 hover:bg-error/20'
-              : 'bg-success/10 text-success border border-success/30 hover:bg-success/20'
-          ]"
-        >{{ isRunning ? '停止服务' : '启动服务' }}</button>
-        <button @click="saveConfig" :disabled="isRunning"
-          class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white border border-accent/30 hover:bg-accent/90 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-        >保存配置</button>
-        <button @click="disconnectAll" :disabled="!isRunning"
-          class="px-4 py-2 rounded-lg text-sm font-medium bg-bg-panel text-text-secondary border border-border hover:text-text-primary hover:border-accent/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-        >断开所有连接</button>
-      </div>
+      <!-- 操作按钮和状态 -->
+      <div class="flex items-center justify-between">
+        <!-- 操作按钮 -->
+        <div class="flex gap-3">
+          <button @click="toggleServer"
+            :class="[
+              'px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
+              isRunning
+                ? 'bg-error/10 text-error border border-error/30 hover:bg-error/20'
+                : 'bg-success/10 text-success border border-success/30 hover:bg-success/20'
+            ]"
+          >{{ isRunning ? '停止服务' : '启动服务' }}</button>
+          <button @click="saveConfig" :disabled="isRunning"
+            class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white border border-accent/30 hover:bg-accent/90 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >保存配置</button>
+          <button @click="disconnectAll" :disabled="!isRunning"
+            class="px-4 py-2 rounded-lg text-sm font-medium bg-bg-panel text-text-secondary border border-border hover:text-text-primary hover:border-accent/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >断开所有连接</button>
+        </div>
 
-      <!-- 状态指示 -->
-      <div class="flex items-center gap-2 mt-4">
-        <span :class="['w-2 h-2 rounded-full', isRunning ? 'bg-success animate-pulse' : 'bg-text-muted']"></span>
-        <span class="text-sm text-text-secondary">
-          {{ isRunning ? '运行中' : '已停止' }} - 端口 {{ currentConfig?.port || 0 }}
-        </span>
+        <!-- 状态指示 - 右上角 -->
+        <div class="flex items-center gap-2">
+          <span :class="['w-2 h-2 rounded-full', isRunning ? 'bg-success animate-pulse' : 'bg-text-muted']"></span>
+          <span class="text-sm text-text-secondary">
+            {{ isRunning ? '运行中' : '已停止' }} - 端口 {{ currentConfig?.port || 0 }}
+          </span>
+        </div>
       </div>
     </div>
 
