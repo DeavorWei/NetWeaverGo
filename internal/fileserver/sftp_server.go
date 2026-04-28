@@ -61,7 +61,7 @@ func (s *SFTPServer) Start(config *models.FileServerConfig) error {
 	s.config = config
 
 	logger.Verbose("FileServer:SFTP", "-", "正在生成 SSH 主机密钥...")
-	hostKey, err := s.generateHostKey()
+	hostKey, err := s.generateHostKey(config.HomeDir)
 	if err != nil {
 		logger.Error("FileServer:SFTP", "-", "生成主机密钥失败: %v", err)
 		return fmt.Errorf("生成主机密钥失败: %v", err)
@@ -415,11 +415,7 @@ func (s *SFTPServer) passwordCallback(conn ssh.ConnMetadata, password []byte) (*
 }
 
 // generateHostKey 生成 SSH 主机密钥
-func (s *SFTPServer) generateHostKey() (ssh.Signer, error) {
-	s.mu.RLock()
-	homeDir := s.config.HomeDir
-	s.mu.RUnlock()
-
+func (s *SFTPServer) generateHostKey(homeDir string) (ssh.Signer, error) {
 	keyPath := filepath.Join(homeDir, ".sftp_host_key")
 	logger.Verbose("FileServer:SFTP", "-", "检查主机密钥文件: %s", keyPath)
 

@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/fileserver"
@@ -14,17 +15,20 @@ import (
 
 // FileServerService 文件服务器管理服务
 type FileServerService struct {
-	wailsApp *application.App
-	manager  *fileserver.ServerManager
-	db       *gorm.DB
+	wailsApp   *application.App
+	manager    *fileserver.ServerManager
+	db         *gorm.DB
+	startingMu sync.Mutex
+	starting   map[string]bool
 }
 
 // NewFileServerService 创建文件服务器服务实例
 func NewFileServerService() *FileServerService {
 	logger.Debug("FileServerService", "-", "创建文件服务器服务实例")
 	return &FileServerService{
-		manager: fileserver.NewServerManager(),
-		db:      config.GetDB(),
+		manager:  fileserver.NewServerManager(),
+		db:       config.GetDB(),
+		starting: make(map[string]bool),
 	}
 }
 
@@ -102,6 +106,24 @@ func (s *FileServerService) ToggleServer(protocol string, start bool) error {
 	if !isValidProtocol(protocol) {
 		logger.Error("FileServerService", "-", "无效的协议类型: %s", protocol)
 		return fmt.Errorf("无效的协议类型: %s", protocol)
+	}
+
+	// 防重入保护：启动操作时检查是否正在启动中
+	if start {
+		s.startingMu.Lock()
+		if s.starting[protocol] {
+			s.startingMu.Unlock()
+			logger.Warn("FileServerService", "-", "%s 服务器正在启动中，忽略重复请求", protocol)
+			return fmt.Errorf("%s 服务器正在启动中，请稍候", protocol)
+		}
+		s.starting[protocol] = true
+		s.startingMu.Unlock()
+
+		defer func() {
+			s.startingMu.Lock()
+			delete(s.starting, protocol)
+			s.startingMu.Unlock()
+		}()
 	}
 
 	// 获取配置
