@@ -196,7 +196,7 @@ func (s *FileServerService) GetAllServerStatus() (map[string]bool, error) {
 	logger.Debug("FileServerService", "-", "GetAllServerStatus 被调用")
 
 	status := make(map[string]bool)
-	protocols := []string{"sftp", "ftp", "tftp"}
+	protocols := []string{"sftp", "ftp", "tftp", "http"}
 
 	for _, p := range protocols {
 		running := s.manager.IsRunning(fileserver.Protocol(p))
@@ -204,7 +204,7 @@ func (s *FileServerService) GetAllServerStatus() (map[string]bool, error) {
 		logger.Verbose("FileServerService", "-", "%s 服务器状态: %v", p, running)
 	}
 
-	logger.Debug("FileServerService", "-", "所有服务器状态: sftp=%v, ftp=%v, tftp=%v", status["sftp"], status["ftp"], status["tftp"])
+	logger.Debug("FileServerService", "-", "所有服务器状态: sftp=%v, ftp=%v, tftp=%v, http=%v", status["sftp"], status["ftp"], status["tftp"], status["http"])
 	return status, nil
 }
 
@@ -251,6 +251,19 @@ func (s *FileServerService) getDefaultConfig(protocol string) *models.FileServer
 			Port:     6969,
 			HomeDir:  defaultHome,
 		}
+	case "http":
+		logger.Verbose("FileServerService", "-", "返回 HTTP 默认配置: Port=8080")
+		return &models.FileServerConfig{
+			Protocol:    "http",
+			Port:        8080,
+			HomeDir:     defaultHome,
+			Username:    "",
+			Password:    "",
+			AllowGet:    true,
+			AllowPut:    true,
+			AllowDel:    true,
+			AllowRename: false,
+		}
 	default:
 		logger.Warn("FileServerService", "-", "未知协议类型 %s，返回通用默认配置", protocol)
 		return &models.FileServerConfig{
@@ -264,7 +277,7 @@ func (s *FileServerService) getDefaultConfig(protocol string) *models.FileServer
 // isValidProtocol 验证协议类型
 func isValidProtocol(protocol string) bool {
 	switch protocol {
-	case "sftp", "ftp", "tftp":
+	case "sftp", "ftp", "tftp", "http":
 		return true
 	default:
 		return false

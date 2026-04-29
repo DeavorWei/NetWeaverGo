@@ -19,7 +19,7 @@ const toast = useToast()
 
 const activeProtocol = ref<string>('sftp')
 const configs = ref<Record<string, FileServerConfig>>({})
-const runningStatus = ref<Record<string, boolean>>({ sftp: false, ftp: false, tftp: false })
+const runningStatus = ref<Record<string, boolean>>({ sftp: false, ftp: false, tftp: false, http: false })
 const logs = ref<LogEvent[]>([])
 const maxLogs = 1000
 const autoScroll = ref(true)
@@ -43,12 +43,13 @@ function getDefaultConfig(protocol: string): FileServerConfig {
   })
   if (protocol === 'sftp') cfg.port = 2222
   if (protocol === 'tftp') { cfg.port = 6969; cfg.username = ''; cfg.password = '' }
+  if (protocol === 'http') { cfg.port = 8080; cfg.username = ''; cfg.password = ''; cfg.allowRename = false }
   return cfg
 }
 
 // 初始化配置，如果 homeDir 为空则填充默认目录
 async function initConfigs() {
-  for (const p of ['sftp', 'ftp', 'tftp']) {
+  for (const p of ['sftp', 'ftp', 'tftp', 'http']) {
     configs.value[p] = getDefaultConfig(p)
   }
   // 为所有协议填充默认根目录
@@ -59,7 +60,7 @@ async function initConfigs() {
 async function fillDefaultHomeDirForAll() {
   try {
     const defaultDir = await FileServerService.GetDefaultHomeDir()
-    for (const p of ['sftp', 'ftp', 'tftp']) {
+    for (const p of ['sftp', 'ftp', 'tftp', 'http']) {
       if (configs.value[p] && !configs.value[p].homeDir) {
         configs.value[p].homeDir = defaultDir
       }
@@ -92,15 +93,18 @@ async function selectHomeDir() {
 const currentConfig = computed(() => configs.value[activeProtocol.value])
 const isRunning = computed(() => runningStatus.value[activeProtocol.value])
 const isFTP = computed(() => activeProtocol.value === 'ftp')
+const isHTTP = computed(() => activeProtocol.value === 'http')
+const hasAuth = computed(() => isHTTP.value && currentConfig.value && (currentConfig.value.username || currentConfig.value.password))
 
 const protocols = [
   { key: 'sftp', label: 'SFTP' },
   { key: 'ftp', label: 'FTP' },
   { key: 'tftp', label: 'TFTP' },
+  { key: 'http', label: 'HTTP' },
 ]
 
 async function loadConfigAndStatus() {
-  for (const p of ['sftp', 'ftp', 'tftp']) {
+  for (const p of ['sftp', 'ftp', 'tftp', 'http']) {
     try {
       const cfg = await FileServerService.GetServerConfig(p)
       if (cfg) {
@@ -136,8 +140,21 @@ async function toggleServer() {
   if (!currentConfig.value) return
   try {
     const start = !isRunning.value
+    if (start) {
+      // 启动前先保存配置，确保认证信息等已持久化
+      await FileServerService.SaveServerConfig(currentConfig.value)
+    }
     await FileServerService.ToggleServer(activeProtocol.value, start)
     runningStatus.value[activeProtocol.value] = start
+    
+    // 启动成功后重新加载配置，确保认证信息正确显示
+    if (start) {
+      const cfg = await FileServerService.GetServerConfig(activeProtocol.value)
+      if (cfg) {
+        configs.value[activeProtocol.value] = cfg
+      }
+    }
+    
     toast.success(start ? `${activeProtocol.value.toUpperCase()} 服务器已启动` : `${activeProtocol.value.toUpperCase()} 服务器已停止`)
   } catch (error) {
     toast.error(`操作失败: ${error}`)
@@ -152,6 +169,23 @@ async function disconnectAll() {
     toast.error('断开连接失败')
   }
 }
+
+// 是否启用认证（HTTP专用）
+const enableAuth = computed({
+  get: () => isHTTP.value && hasAuth.value,
+  set: (val: boolean) => {
+    if (!isHTTP.value || !currentConfig.value) return
+    if (val) {
+      // 启用认证时设置默认凭据
+      currentConfig.value.username = currentConfig.value.username || 'admin'
+      currentConfig.value.password = currentConfig.value.password || 'admin'
+    } else {
+      // 禁用认证时清空凭据
+      currentConfig.value.username = ''
+      currentConfig.value.password = ''
+    }
+  }
+})
 
 function clearLogs() { logs.value = [] }
 
@@ -194,7 +228,7 @@ function getLevelClass(level: string): string {
 }
 
 function getActionClass(action: string): string {
-  const m: Record<string, string> = { CONNECT: 'text-info', DISCONNECT: 'text-text-muted', UPLOAD: 'text-success', DOWNLOAD: 'text-accent', DELETE: 'text-error', ERROR: 'text-error' }
+  const m: Record<string, string> = { CONNECT: 'text-info', DISCONNECT: 'text-text-muted', UPLOAD: 'text-success', DOWNLOAD: 'text-accent', DELETE: 'text-error', ERROR: 'text-error', BROWSE: 'text-warning' }
   return m[action] || 'text-text-muted'
 }
 
@@ -232,31 +266,42 @@ onUnmounted(() => { Events.Off('fileserver:log') })
       <!-- 配置表单 -->
       <div v-if="currentConfig" class="flex gap-4 mb-4">
         <!-- 端口 - 占 1/6 -->
-        <div class="space-y-1.5" :class="activeProtocol !== 'tftp' ? 'w-[16.666%]' : 'w-[25%]'">
+        <div class="space-y-1.5" :class="activeProtocol === 'tftp' ? 'w-[25%]' : activeProtocol === 'http' ? 'w-[15%]' : 'w-[16.666%]'">
           <label class="text-sm font-medium text-text-primary">监听端口</label>
           <input v-model.number="currentConfig.port" type="number"
             class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
             :disabled="isRunning" />
         </div>
+        <!-- HTTP 认证开关 -->
+        <div v-if="isHTTP" class="space-y-1.5 w-[15%]">
+          <label class="text-sm font-medium text-text-primary">基本认证</label>
+          <select v-model="enableAuth"
+            class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
+            :disabled="isRunning">
+            <option :value="false">无认证</option>
+            <option :value="true">基本认证</option>
+          </select>
+        </div>
         <!-- 用户名 - 占 1/6 (TFTP 时不显示) -->
-        <div v-if="activeProtocol !== 'tftp'" class="space-y-1.5 w-[16.666%]">
+        <div v-if="activeProtocol !== 'tftp' && (!isHTTP || enableAuth)" class="space-y-1.5" :class="isHTTP ? 'w-[15%]' : 'w-[16.666%]'">
           <label class="text-sm font-medium text-text-primary">用户名</label>
           <input v-model="currentConfig.username" type="text"
             class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
-            :disabled="isRunning" />
+            :disabled="isRunning || (isHTTP && !enableAuth)" />
         </div>
         <!-- 密码 - 占 1/6 (TFTP 时不显示) -->
-        <div v-if="activeProtocol !== 'tftp'" class="space-y-1.5 w-[16.666%]">
+        <div v-if="activeProtocol !== 'tftp' && (!isHTTP || enableAuth)" class="space-y-1.5" :class="isHTTP ? 'w-[15%]' : 'w-[16.666%]'">
           <label class="text-sm font-medium text-text-primary">密码</label>
           <div class="relative">
             <input v-model="currentConfig.password" :type="showPassword ? 'text' : 'password'"
               class="w-full px-3 py-2 pr-10 rounded-lg bg-bg-panel border border-border text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-all"
-              :disabled="isRunning" />
+              :disabled="isRunning || (isHTTP && !enableAuth)" />
             <button
               type="button"
               @click="showPassword = !showPassword"
               :title="showPassword ? '隐藏密码' : '查看密码'"
               class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
+              :disabled="isHTTP && !enableAuth"
             >
               <!-- 睁眼图标 - 密码可见 -->
               <svg v-if="showPassword" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -272,7 +317,7 @@ onUnmounted(() => { Events.Off('fileserver:log') })
           </div>
         </div>
         <!-- 根目录 - 占 1/2 -->
-        <div class="space-y-1.5" :class="activeProtocol !== 'tftp' ? 'w-1/2' : 'w-3/4'">
+        <div class="space-y-1.5" :class="activeProtocol === 'tftp' ? 'w-3/4' : isHTTP ? 'flex-1' : 'w-1/2'">
           <label class="text-sm font-medium text-text-primary">根目录</label>
           <div class="relative flex gap-2">
             <input v-model="currentConfig.homeDir" type="text"
@@ -309,6 +354,22 @@ onUnmounted(() => { Events.Off('fileserver:log') })
         <label class="flex items-center gap-2 text-sm text-text-secondary">
           <input v-model="currentConfig.allowRename" type="checkbox" class="w-4 h-4 rounded border-border accent-accent" :disabled="isRunning" />
           允许重命名 (RENAME)
+        </label>
+      </div>
+
+      <!-- HTTP 权限控制 -->
+      <div v-if="isHTTP && currentConfig" class="flex gap-4 mb-4">
+        <label class="flex items-center gap-2 text-sm text-text-secondary">
+          <input v-model="currentConfig.allowGet" type="checkbox" class="w-4 h-4 rounded border-border accent-accent" :disabled="isRunning" />
+          允许 GET（下载/浏览）
+        </label>
+        <label class="flex items-center gap-2 text-sm text-text-secondary">
+          <input v-model="currentConfig.allowPut" type="checkbox" class="w-4 h-4 rounded border-border accent-accent" :disabled="isRunning" />
+          允许 PUT/POST（上传）
+        </label>
+        <label class="flex items-center gap-2 text-sm text-text-secondary">
+          <input v-model="currentConfig.allowDel" type="checkbox" class="w-4 h-4 rounded border-border accent-accent" :disabled="isRunning" />
+          允许 DELETE（删除）
         </label>
       </div>
 

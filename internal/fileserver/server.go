@@ -21,6 +21,7 @@ const (
 	ProtocolSFTP Protocol = "sftp"
 	ProtocolFTP  Protocol = "ftp"
 	ProtocolTFTP Protocol = "tftp"
+	ProtocolHTTP Protocol = "http"
 )
 
 // Action 操作类型
@@ -33,6 +34,7 @@ const (
 	ActionDownload   Action = "DOWNLOAD"
 	ActionDelete     Action = "DELETE"
 	ActionError      Action = "ERROR"
+	ActionBrowse     Action = "BROWSE" // HTTP 目录浏览专用
 )
 
 // LogLevel 日志级别
@@ -313,6 +315,8 @@ func (m *ServerManager) createServer(protocol Protocol) (FileServer, error) {
 		return NewFTPServer(m), nil
 	case ProtocolTFTP:
 		return NewTFTPServer(m), nil
+	case ProtocolHTTP:
+		return NewWebServer(m), nil
 	default:
 		logger.Error("FileServer", "-", "不支持的协议类型: %s", protocol)
 		return nil, fmt.Errorf("不支持的协议: %s", protocol)
