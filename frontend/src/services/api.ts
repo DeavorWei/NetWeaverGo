@@ -363,11 +363,11 @@ export type {
 // ==================== 规划比对 API ====================
 /**
  * 规划比对 API
- * @description 提供 Excel 导入、拓扑比对、差异报告导出能力
+ * @description 提供 CSV 导入、拓扑比对、差异报告导出能力
  */
 export const PlanCompareAPI = {
-  /** 导入规划 Excel */
-  importPlanExcel: PlanCompareServiceBinding.ImportPlanExcel,
+  /** 导入规划 CSV */
+  importPlanCSV: PlanCompareServiceBinding.ImportPlanCSV,
   /** 列出规划文件 */
   listPlanFiles: PlanCompareServiceBinding.ListPlanFiles,
   /** 执行规划比对 */

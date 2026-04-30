@@ -3,7 +3,7 @@
     <div>
       <h2 class="text-lg font-semibold text-text-primary">规划比对</h2>
       <p class="text-xs text-text-muted mt-1">
-        导入固定模板 Excel，执行实际拓扑与规划链路的无向比对。
+        导入固定模板 CSV，执行实际拓扑与规划链路的无向比对。
       </p>
     </div>
 
@@ -12,7 +12,7 @@
       <div class="flex items-center gap-2">
         <input
           v-model="importPath"
-          placeholder="输入 Excel 文件绝对路径"
+          placeholder="输入 CSV 文件绝对路径"
           class="flex-1 px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
         />
         <button
@@ -78,13 +78,6 @@
           class="px-4 py-2 rounded-lg text-sm border border-border text-text-secondary hover:text-text-primary"
         >
           导出 CSV
-        </button>
-        <button
-          @click="exportReport('excel')"
-          :disabled="!compareResult.reportId"
-          class="px-4 py-2 rounded-lg text-sm border border-border text-text-secondary hover:text-text-primary"
-        >
-          导出 Excel
         </button>
         <button
           @click="exportReport('html')"
@@ -228,7 +221,7 @@ async function importPlan() {
   if (!importPath.value || importing.value) return;
   importing.value = true;
   try {
-    const result = await PlanCompareAPI.importPlanExcel(importPath.value);
+    const result = await PlanCompareAPI.importPlanCSV(importPath.value);
     if (result?.planFileId) {
       selectedPlanID.value = result.planFileId;
     }
@@ -251,7 +244,7 @@ async function compareNow() {
   }
 }
 
-async function exportReport(format: "json" | "csv" | "excel" | "html") {
+async function exportReport(format: "json" | "csv" | "html") {
   if (!compareResult.value.reportId) return;
   lastExportPath.value = await PlanCompareAPI.exportDiffReport(compareResult.value.reportId, format);
 }

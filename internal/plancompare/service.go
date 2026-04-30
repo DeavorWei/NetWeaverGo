@@ -19,7 +19,6 @@ import (
 	"github.com/NetWeaverGo/core/internal/normalize"
 	"github.com/NetWeaverGo/core/internal/taskexec"
 	"github.com/google/uuid"
-	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
 
@@ -61,8 +60,8 @@ func (s *Service) ListPlanFiles(limit int) ([]models.PlanUploadView, error) {
 	return result, nil
 }
 
-// ImportPlanExcel 导入固定模板 Excel 规划链路。
-func (s *Service) ImportPlanExcel(filePath string) (*models.PlanImportResult, error) {
+// ImportPlanCSV 导入固定模板 CSV 规划链路。
+func (s *Service) ImportPlanCSV(filePath string) (*models.PlanImportResult, error) {
 	filePath = strings.TrimSpace(filePath)
 	if filePath == "" {
 		return nil, fmt.Errorf("filePath 不能为空")
@@ -80,19 +79,18 @@ func (s *Service) ImportPlanExcel(filePath string) (*models.PlanImportResult, er
 		return nil, err
 	}
 
-	workbook, err := excelize.OpenFile(copiedPath)
+	f, err := os.Open(copiedPath)
 	if err != nil {
-		return nil, fmt.Errorf("打开Excel失败: %w", err)
+		return nil, fmt.Errorf("打开CSV失败: %w", err)
 	}
-	defer func() { _ = workbook.Close() }()
+	defer func() { _ = f.Close() }()
 
-	sheetName := workbook.GetSheetName(0)
-	if strings.TrimSpace(sheetName) == "" {
-		return nil, fmt.Errorf("Excel 不包含可用工作表")
-	}
-	rows, err := workbook.GetRows(sheetName)
+	reader := csv.NewReader(f)
+	reader.LazyQuotes = true
+	reader.TrimLeadingSpace = true
+	rows, err := reader.ReadAll()
 	if err != nil {
-		return nil, fmt.Errorf("读取Excel行失败: %w", err)
+		return nil, fmt.Errorf("读取CSV行失败: %w", err)
 	}
 
 	links, warnings, err := parsePlanRows(rows)
@@ -456,8 +454,6 @@ func (s *Service) ExportDiffReport(reportID string, format string) (string, erro
 			return "", err
 		}
 		return outputPath, nil
-	case "excel", "xlsx":
-		return s.exportDiffReportExcel(reportID, result)
 	case "html", "htm":
 		return s.exportDiffReportHTML(reportID, result)
 	default:
@@ -488,63 +484,6 @@ func collectDiffItems(result *models.CompareResult) []models.DiffItem {
 	items = append(items, result.UnexpectedLinks...)
 	items = append(items, result.InconsistentItems...)
 	return items
-}
-
-func (s *Service) exportDiffReportExcel(reportID string, result *models.CompareResult) (string, error) {
-	outputPath := filepath.Join(s.pm.GetTopologyExportDir(), fmt.Sprintf("diff_%s.xlsx", reportID))
-	workbook := excelize.NewFile()
-	defer func() { _ = workbook.Close() }()
-
-	summarySheet := "Summary"
-	workbook.SetSheetName("Sheet1", summarySheet)
-	workbook.SetCellValue(summarySheet, "A1", "Report ID")
-	workbook.SetCellValue(summarySheet, "B1", result.ReportID)
-	workbook.SetCellValue(summarySheet, "A2", "Total Planned")
-	workbook.SetCellValue(summarySheet, "B2", result.TotalPlanned)
-	workbook.SetCellValue(summarySheet, "A3", "Total Actual")
-	workbook.SetCellValue(summarySheet, "B3", result.TotalActual)
-	workbook.SetCellValue(summarySheet, "A4", "Matched")
-	workbook.SetCellValue(summarySheet, "B4", result.Matched)
-	workbook.SetCellValue(summarySheet, "A5", "Missing")
-	workbook.SetCellValue(summarySheet, "B5", len(result.MissingLinks))
-	workbook.SetCellValue(summarySheet, "A6", "Unexpected")
-	workbook.SetCellValue(summarySheet, "B6", len(result.UnexpectedLinks))
-	workbook.SetCellValue(summarySheet, "A7", "Inconsistent")
-	workbook.SetCellValue(summarySheet, "B7", len(result.InconsistentItems))
-
-	detailSheet := "DiffItems"
-	_, _ = workbook.NewSheet(detailSheet)
-	headers := []string{"Type", "A Device", "A Mgmt IP", "A IF", "B Device", "B Mgmt IP", "B IF", "Expected IF", "Actual IF", "Reason"}
-	for idx, header := range headers {
-		cell, _ := excelize.CoordinatesToCellName(idx+1, 1)
-		workbook.SetCellValue(detailSheet, cell, header)
-	}
-
-	items := collectDiffItems(result)
-	for rowIdx, item := range items {
-		row := rowIdx + 2
-		values := []string{
-			item.DiffType,
-			item.ADeviceName,
-			item.AMgmtIP,
-			item.AIf,
-			item.BDeviceName,
-			item.BMgmtIP,
-			item.BIf,
-			item.ExpectedIf,
-			item.ActualIf,
-			item.Reason,
-		}
-		for colIdx, value := range values {
-			cell, _ := excelize.CoordinatesToCellName(colIdx+1, row)
-			workbook.SetCellValue(detailSheet, cell, value)
-		}
-	}
-
-	if err := workbook.SaveAs(outputPath); err != nil {
-		return "", err
-	}
-	return outputPath, nil
 }
 
 func (s *Service) exportDiffReportHTML(reportID string, result *models.CompareResult) (string, error) {
@@ -636,7 +575,7 @@ type planColumnIndex struct {
 
 func parsePlanRows(rows [][]string) ([]models.PlannedLink, []string, error) {
 	if len(rows) == 0 {
-		return nil, nil, fmt.Errorf("Excel 为空")
+		return nil, nil, fmt.Errorf("CSV 为空")
 	}
 
 	indices, hasHeader := detectPlanHeader(rows[0])

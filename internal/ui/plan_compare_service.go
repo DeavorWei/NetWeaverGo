@@ -20,9 +20,9 @@ func NewPlanCompareService() *PlanCompareService {
 	}
 }
 
-// ImportPlanExcel 导入规划Excel。
-func (s *PlanCompareService) ImportPlanExcel(ctx context.Context, filePath string) (*models.PlanImportResult, error) {
-	return s.service.ImportPlanExcel(filePath)
+// ImportPlanCSV 导入规划CSV。
+func (s *PlanCompareService) ImportPlanCSV(ctx context.Context, filePath string) (*models.PlanImportResult, error) {
+	return s.service.ImportPlanCSV(filePath)
 }
 
 // ListPlanFiles 列出已导入规划文件。

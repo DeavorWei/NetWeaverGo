@@ -49,7 +49,7 @@ func TestCompareMatchedLink(t *testing.T) {
 		t.Fatalf("migrate failed: %v", err)
 	}
 
-	plan := models.PlanFile{FileName: "test.xlsx", FilePath: "test.xlsx", TotalLinks: 1}
+	plan := models.PlanFile{FileName: "test.csv", FilePath: "test.csv", TotalLinks: 1}
 	if err := db.Create(&plan).Error; err != nil {
 		t.Fatalf("create plan failed: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestCompareMatchedLink(t *testing.T) {
 	}
 }
 
-func TestExportDiffReportExcelAndHTML(t *testing.T) {
+func TestExportDiffReportHTML(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open db failed: %v", err)
@@ -154,17 +154,6 @@ func TestExportDiffReportExcelAndHTML(t *testing.T) {
 	}
 
 	svc := NewService(db)
-	excelPath, err := svc.ExportDiffReport(report.ID, "excel")
-	if err != nil {
-		t.Fatalf("export excel failed: %v", err)
-	}
-	if !strings.HasSuffix(strings.ToLower(excelPath), ".xlsx") {
-		t.Fatalf("expected .xlsx output, got %s", excelPath)
-	}
-	if _, err := os.Stat(excelPath); err != nil {
-		t.Fatalf("expected excel file exists: %v", err)
-	}
-
 	htmlPath, err := svc.ExportDiffReport(report.ID, "html")
 	if err != nil {
 		t.Fatalf("export html failed: %v", err)
@@ -196,7 +185,7 @@ func TestCompare_MultipleLinks_SameDevicePair(t *testing.T) {
 	}
 
 	// 创建规划：1条链路
-	plan := models.PlanFile{FileName: "test.xlsx", FilePath: "test.xlsx", TotalLinks: 1}
+	plan := models.PlanFile{FileName: "test.csv", FilePath: "test.csv", TotalLinks: 1}
 	if err := db.Create(&plan).Error; err != nil {
 		t.Fatalf("create plan failed: %v", err)
 	}

@@ -65,7 +65,7 @@
 | **智能终端** | 自动翻页检测、提示符智能识别、ANSI 转义序列处理、多厂商适配 |
 | **拓扑发现** | 基于 LLDP 自动发现、接口信息解析、Cytoscape.js 可视化、离线重放 |
 | **配置生成** | ConfigForge 模板引擎、变量展开与语法糖、范围展开、批量配置生成 |
-| **规划比对** | 差异报告生成、HTML/Excel 导出、配置变更追踪、历史记录对比 |
+| **规划比对** | 差异报告生成、HTML/CSV/JSON 导出、配置变更追踪、历史记录对比 |
 | **文件服务器** | 内置 SFTP/FTP/TFTP/HTTP 服务器 |
 | **网络工具** | 批量 Ping 探测、网络计算器、协议参考手册、执行历史追溯 |
 | **异常处理** | 单设备级挂起机制、用户决策（Continue/Abort）、超时自动处理 |
@@ -84,7 +84,6 @@
 | **SQLite** (glebarez/sqlite) | v1.11.0 | 嵌入式数据库 |
 | **golang.org/x/crypto** | v0.50.0 | SSH 客户端实现 |
 | **github.com/pkg/sftp** | v1.13.10 | SFTP 文件传输 |
-| **github.com/xuri/excelize** | v2.9.0 | Excel 文件读写 |
 | **github.com/google/uuid** | v1.6.0 | UUID 生成 |
 
 ### 前端
@@ -481,7 +480,7 @@ CompositeParser (组合解析器)
 
 [`internal/plancompare/service.go`](internal/plancompare/service.go) 提供规划与实际拓扑的差异比对：
 
-- 导入 Excel 规划文件
+- 导入 CSV 规划文件
 - 解析规划链路
 - 与实际拓扑边进行匹配
 - 生成差异报告（missing_link / unexpected_link / interface_mismatch）
