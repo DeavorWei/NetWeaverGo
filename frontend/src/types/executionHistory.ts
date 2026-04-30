@@ -16,7 +16,7 @@ export type FileType = 'detail' | 'raw' | 'summary' | 'journal' | 'report'
 export interface DeviceExecutionView {
   unitId: string
   deviceIp: string
-  status: DeviceExecutionStatus
+  status: string // Changed to string to match Wails generated models
   progress: number // 0-100
   totalSteps: number
   doneSteps: number

@@ -53,10 +53,10 @@ tasks:
   generate-bindings:
     desc: "Generate TS bindings"
     cmds:
-      # -d 指定去哪个目录扫描绑定的服务 (你的 main.go 所在处)
+      # -d 指定输出目录
       # -ts 对应旧的 "outputtype": "typescript"
-      # -o 指定输出目录
-      - wails3 generate bindings -d ./{{.MAIN_DIR}} -ts -o {{.BINDINGS_DIR}}
+      # 最后跟上要扫描的包名/目录
+      - wails3 generate bindings -d {{.BINDINGS_DIR}} -ts ./{{.MAIN_DIR}}
 
   # 运行已构建的应用程序 (跨平台)
   run:

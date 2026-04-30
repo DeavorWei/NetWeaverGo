@@ -19,7 +19,7 @@ export interface ExecutionSnapshot {
   startedAt?: string | null
   finishedAt?: string | null
   events: EventSnapshot[]
-  lastSessionSeqByUnit?: Record<string, number>
+  lastSessionSeqByUnit?: Record<string, number | undefined>
 }
 
 /** Stage 快照 */
