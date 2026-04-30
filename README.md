@@ -1,799 +1,521 @@
-# NetWeaverGo 项目架构说明书
+<div align="center">
 
-## 1. 项目概述
+# 🕸️ NetWeaverGo
 
-**NetWeaverGo** 是一款基于 Go 语言开发的并发网络自动化编排与配置集散工具。专为网络工程师设计，支持批量管理网络设备（交换机、路由器），提供大规模并发命令执行、配置备份、配置生成以及智能异常干预功能。
+**面向网络工程师的桌面级网络自动化编排工具**
 
-### 1.1 核心特性
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
+[![Vue.js](https://img.shields.io/badge/Vue.js-3-4FC08D?style=flat-square&logo=vue.js&logoColor=white)](https://vuejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Wails](https://img.shields.io/badge/Wails-v3-FF6B6B?style=flat-square&logo=wails&logoColor=white)](https://wails.io/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](#许可证)
 
-| 特性           | 描述                                                     |
-| -------------- | -------------------------------------------------------- |
-| **GUI 模式**   | 基于 Wails v3 的现代化桌面应用，支持 Windows/macOS/Linux |
-| **智能自动化** | 全自动终端交互、智能翻页检测、提示符识别                 |
-| **高并发控制** | Worker Pool 模型 + 令牌桶限流，可配置并发数（默认10）    |
-| **异常干预**   | 单设备级挂起、用户决策（Continue/Abort）                 |
-| **配置备份**   | 自动解析 startup 配置、SFTP 安全下载                     |
-| **配置生成**   | ConfigForge 配置模板引擎，支持变量展开与语法糖           |
-| **任务管理**   | 支持命令组与设备组的灵活绑定，两种任务模式               |
-| **执行历史**   | 完整的执行记录与日志追溯                                 |
-| **拓扑发现**   | 基于 LLDP/接口信息的网络拓扑自动构建                     |
-| **离线重放**   | 从历史 Raw 文件重新解析构建拓扑，支持决策轨迹查看        |
-| **文件服务器** | 内置 SFTP/FTP/TFTP/HTTP 文件服务器，支持配置下发和文件传输 |
+[功能特性](#核心特性) • [快速开始](#快速开始) • [架构概览](#架构概览) • [开发指南](#开发指南) • [贡献指南](#贡献指南)
 
-### 1.2 技术栈
-
-| 层级         | 技术                                     |
-| ------------ | ---------------------------------------- |
-| **后端**     | Go 1.25+ / Wails v3                      |
-| **前端**     | Vue 3 + TypeScript + Vite + Tailwind CSS |
-| **状态管理** | Pinia                                    |
-| **数据库**   | SQLite (GORM)                            |
-| **通信协议** | SSH/SFTP (golang.org/x/crypto/ssh)       |
-| **构建工具** | Wails v3 (桌面应用打包)                  |
+</div>
 
 ---
 
-## 2. 系统架构
+## 📖 项目简介
 
-### 2.1 整体架构图
+**NetWeaverGo** 是一款基于 Go 语言开发的高性能网络自动化编排与配置集散工具。专为网络工程师设计，支持批量管理网络设备（交换机、路由器），提供大规模并发命令执行、配置备份、配置生成、拓扑发现以及智能异常干预功能。
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          NetWeaverGo 应用                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                      前端层 (Frontend - Vue 3)                         │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐     │  │
-│  │  │ Dashboard│ │ Devices  │ │ Commands │ │  Tasks   │ │Execution │     │  │
-│  │  │   .vue   │ │   .vue   │ │   .vue   │ │   .vue   │ │   .vue   │     │  │
-│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘     │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐     │  │
-│  │  │ Settings │ │ NetCalc  │ │Protocol  │ │ConfigForge│ │ Topology│     │  │
-│  │  │   .vue   │ │   .vue   │ │  Ref.vue │ │   .vue   │ │  .vue   │     │  │
-│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘     │  │
-│  │                     ↓ Wails Events (Events/Call) ↓                   │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                    ↕                                         │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                    服务层 (UI Services - Wails)                        │  │
-│  │  ┌────────────────────────────────────────────────────────────────┐   │  │
-│  │  │ DeviceService │ TaskGroupService │ ForgeService │ ...          │   │  │
-│  │  │ (设备管理)     │ (任务组管理)      │ (配置生成)    │              │   │  │
-│  │  └────────────────────────────────────────────────────────────────┘   │  │
-│  │                              ↓                                        │  │
-│  │           TaskExecutionUIService (统一任务执行UI服务)                  │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                    ↕                                         │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                统一任务执行层 (TaskExec - 核心引擎)                      │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────┐      │  │
-│  │  │   Compiler   │  │   Runtime    │  │      EventBus           │      │  │
-│  │  │ (任务编译器)  │  │ (运行管理器)  │  │   (事件总线)             │      │  │
-│  │  └──────────────┘  └──────────────┘  └─────────────────────────┘      │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────┐      │  │
-│  │  │ StageExecutor│  │   Snapshot   │  │   Repository            │      │  │
-│  │  │ (阶段执行器)  │  │   (快照中心)  │  │   (数据持久化)           │      │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                    ↕                                         │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                    设备执行层 (Device Executor)                        │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────┐      │  │
-│  │  │ DeviceExecutor│  │ StreamEngine │  │   SessionAdapter        │      │  │
-│  │  │ (设备执行器)  │  │ (流处理引擎)  │  │   (会话适配器)           │      │  │
-│  │  └──────────────┘  └──────────────┘  └─────────────────────────┘      │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                    ↕                                         │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                    通信层 (Communication)                              │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────┐      │  │
-│  │  │  SSHClient   │  │  SFTPClient  │  │   StreamMatcher         │      │  │
-│  │  │ (SSH连接)    │  │ (文件传输)   │  │   (智能匹配器)           │      │  │
-│  │  └──────────────┘  └──────────────┘  └─────────────────────────┘      │  │
-│  │  ┌──────────────┐  ┌──────────────┐                                    │  │
-│  │  │   Replayer   │  │  ANSIParser  │                                    │  │
-│  │  │ (终端重放)   │  │ (ANSI解析)   │                                    │  │
-│  │  └──────────────┘  └──────────────┘                                    │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                    ↕                                         │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                    基础设施层 (Infrastructure)                          │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────┐      │  │
-│  │  │    Config    │  │    Logger    │  │      Report             │      │  │
-│  │  │ (SQLite/ORM) │  │ (日志系统)   │  │   (报告收集)             │      │  │
-│  │  └──────────────┘  └──────────────┘  └─────────────────────────┘      │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────┐      │  │
-│  │  │   Parser     │  │ RegexParser  │  │   Normalize             │      │  │
-│  │  │ (解析服务)   │  │ (正则解析器)  │  │   (数据规范化)           │      │  │
-│  │  └──────────────┘  └──────────────┘  └─────────────────────────┘      │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+### 🎯 目标用户
 
-### 2.2 数据流向
+- 网络工程师 - 日常设备管理与配置
+- 网络运维团队 - 批量设备维护与巡检
+- 网络架构师 - 网络拓扑发现与规划
 
-```
-用户操作 → Vue组件 → Wails Services → TaskExecutionService → Compiler
-                                                                  ↓
-RuntimeManager → StageExecutor → DeviceExecutor → StreamEngine → SSHClient → 网络设备
-       ↓
-  EventBus
-       ↓
-SnapshotHub → TaskExecutionEventBridge → Wails Events → 前端实时更新
-```
+### 💡 核心价值
 
-### 2.3 模块依赖关系
-
-```mermaid
-graph TD
-    A[Frontend] --> B[UI Services]
-    B --> C[TaskExec Service]
-    C --> D[Compiler Registry]
-    C --> E[Runtime Manager]
-    C --> F[Event Bus]
-    E --> G[Stage Executors]
-    G --> H[Device Executor]
-    H --> I[Stream Engine]
-    I --> J[SSH Client]
-    I --> K[Matcher]
-    J --> L[Network Device]
-    F --> M[Event Bridge]
-    M --> A
-```
+- **高效并发** - Worker Pool 模型 + 令牌桶限流，轻松管理数百台设备
+- **智能交互** - 全自动终端交互、智能翻页检测、提示符识别
+- **可视化拓扑** - 基于 LLDP/接口信息的网络拓扑自动构建与展示
+- **跨平台** - 基于 Wails v3 的现代化桌面应用，支持 Windows/macOS/Linux
 
 ---
 
-## 3. 核心模块详解
+## ✨ 核心特性
 
-### 3.1 入口模块 (`cmd/netweaver/main.go`)
+<table>
+<tr>
+<td width="50%">
 
-**职责**: 应用程序入口，负责初始化所有子系统并启动GUI
+### 🖥️ 设备管理
+- 设备资产 CRUD 操作
+- 设备分组管理
+- 设备画像配置（厂商定制）
+- 批量导入/导出
 
-**初始化流程**:
+</td>
+<td width="50%">
 
-```
-main()
-├── config.GetPathManager()           // 获取路径管理器
-├── pm.EnsureDirectories()            // 确保存储目录存在
-├── logger.InitGlobalLogger()         // 初始化日志系统
-├── config.InitDB()                   // 初始化SQLite数据库
-├── taskexec.AutoMigrate()            // 运行时数据表迁移
-├── config.InitRuntimeManager()       // 初始化运行时配置
-└── runGUI()                          // 启动Wails GUI
-    ├── NewTaskExecutionService()     // 创建统一任务执行服务
-    ├── 创建各服务实例 (9个Service)
-    ├── 配置 Wails Application
-    ├── 挂载前端资源 (嵌入FS)
-    └── 启动窗口
-```
+### ⚡ 并发执行
+- Worker Pool 并发模型
+- 令牌桶限流控制
+- 可配置并发数（默认 10）
+- 连接抖动控制
 
-**注册的服务**:
-| 服务 | 功能 | 文件路径 |
-|------|------|----------|
-| `DeviceService` | 设备资产管理 | `internal/ui/device_service.go` |
-| `CommandGroupService` | 命令组管理 | `internal/ui/command_group_service.go` |
-| `SettingsService` | 全局设置管理 | `internal/ui/settings_service.go` |
-| `TaskGroupService` | 任务组管理 | `internal/ui/task_group_service_v2.go` |
-| `QueryService` | 查询服务 | `internal/ui/query_service.go` |
-| `ForgeService` | 配置模板构建 | `internal/ui/forge_service.go` |
-| `ExecutionHistoryService` | 执行历史记录 | `internal/ui/execution_history_service.go` |
-| `PlanCompareService` | 规划比对服务 | `internal/ui/plan_compare_service.go` |
-| `TaskExecutionUIService` | 统一任务执行UI服务 | `internal/ui/taskexec_ui_service.go` |
+</td>
+</tr>
+<tr>
+<td>
 
----
+### 📝 命令编排
+- 命令组定义与管理
+- 标签分类系统
+- 命令序列配置
+- 任务组灵活绑定
 
-### 3.2 统一任务执行模块 (`internal/taskexec/`)
+</td>
+<td>
 
-#### 3.2.1 核心组件
-
-| 组件                   | 文件             | 职责                                               |
-| ---------------------- | ---------------- | -------------------------------------------------- |
-| `TaskExecutionService` | `service.go`     | 统一任务执行服务入口，整合编译器、运行时、快照中心 |
-| `CompilerRegistry`     | `compiler.go`    | 任务编译器注册表，支持多种任务类型                 |
-| `RuntimeManager`       | `runtime.go`     | 运行时管理器，管理任务生命周期和执行               |
-| `EventBus`             | `eventbus.go`    | 事件总线，支持订阅/发布模式                        |
-| `SnapshotHub`          | `snapshot.go`    | 快照中心，聚合运行状态供前端展示                   |
-| `Repository`           | `persistence.go` | 数据持久化层，使用 GORM 操作 SQLite                |
-
-#### 3.2.2 执行流程
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  TaskDefinition │────▶│     Compiler    │────▶│ ExecutionPlan   │
-│  (任务定义)      │     │   (编译器)       │     │  (执行计划)      │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                                                        │
-                                                        ▼
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   TaskEvent     │◀────│    Runtime      │◀────│   StageExecutor │
-│   (事件流)       │     │   (运行时)       │     │  (阶段执行器)    │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-        │
-        ▼
-┌─────────────────┐     ┌─────────────────┐
-│  SnapshotHub    │────▶│   Frontend      │
-│  (快照中心)      │     │   (前端展示)     │
-└─────────────────┘     └─────────────────┘
-```
-
-#### 3.2.3 任务类型支持
-
-| 任务类型   | 编译器                 | 执行阶段                         | 用途         |
-| ---------- | ---------------------- | -------------------------------- | ------------ |
-| `normal`   | `NormalTaskCompiler`   | device_command                   | 普通命令执行 |
-| `topology` | `TopologyTaskCompiler` | collect → parse → topology_build | 拓扑发现     |
-
-#### 3.2.4 Stage 执行器类型
-
-| 执行器                  | 类型标识         | 职责                        |
-| ----------------------- | ---------------- | --------------------------- |
-| `DeviceCommandExecutor` | `device_command` | 在设备上执行命令序列        |
-| `DeviceCollectExecutor` | `device_collect` | 采集设备信息（LLDP/接口等） |
-| `ParseExecutor`         | `parse`          | 解析原始输出为结构化数据    |
-| `TopologyBuildExecutor` | `topology_build` | 构建网络拓扑图              |
-
----
-
-### 3.3 设备执行模块 (`internal/executor/`)
-
-#### 3.3.1 核心组件
-
-| 组件              | 文件                  | 职责                            |
-| ----------------- | --------------------- | ------------------------------- |
-| `DeviceExecutor`  | `executor.go`         | 单设备SSH会话生命周期管理       |
-| `StreamEngine`    | `stream_engine.go`    | 统一流处理引擎，处理SSH输入输出 |
-| `SessionAdapter`  | `session_adapter.go`  | 会话适配器，管理会话状态        |
-| `SessionDetector` | `session_detector.go` | 会话状态检测器                  |
-| `SessionReducer`  | `session_reducer.go`  | 状态归约器，驱动状态流转        |
-| `ExecutionPlan`   | `execution_plan.go`   | 执行计划定义                    |
-
-#### 3.3.2 会话状态机
-
-```mermaid
-stateDiagram-v2
-    [*] --> Init: 开始连接
-    Init --> Authenticating: 发送用户名/密码
-    Authenticating --> Prompt: 认证成功
-    Authenticating --> Error: 认证失败
-    Prompt --> CommandSent: 发送命令
-    CommandSent --> ReadingOutput: 等待输出
-    ReadingOutput --> Pagination: 检测到分页符
-    Pagination --> ReadingOutput: 发送空格继续
-    ReadingOutput --> Prompt: 检测到提示符
-    Prompt --> CommandSent: 发送下一条命令
-    Prompt --> Complete: 所有命令执行完成
-    Complete --> [*]
-    Error --> [*]
-```
-
----
-
-### 3.4 通信模块 (`internal/sshutil/`)
-
-#### 3.4.1 SSHClient
-
-**文件**: `internal/sshutil/client.go`
-
-**核心功能**:
-
-- SSH 连接建立与认证
-- PTY 终端配置
-- 双向数据流管理 (Stdin/Stdout/Stderr)
-- 主机密钥验证策略 (strict/accept_new/insecure)
-
-**SSH 算法配置**:
-
-- Ciphers (加密算法)
-- KeyExchanges (密钥交换)
-- MACs (消息认证码)
-- HostKeyAlgorithms (主机密钥算法)
-
-#### 3.4.2 流匹配器 (`internal/matcher/`)
-
-**文件**: `internal/matcher/matcher.go`
-
-**功能**:
-
-- 提示符检测 (`>`、`#`、`)`)
-- 分页符检测 (`--More--`、`---- More ----`)
-- 错误规则匹配 (Invalid command、Unknown command 等)
+### 🔌 智能终端
+- 自动翻页检测
+- 提示符智能识别
 - ANSI 转义序列处理
+- 多厂商适配
+
+</td>
+</tr>
+<tr>
+<td>
+
+### 🗺️ 拓扑发现
+- 基于 LLDP 自动发现
+- 接口信息解析
+- 拓扑图可视化（Cytoscape.js）
+- 离线重放模式
+
+</td>
+<td>
+
+### 📋 配置生成
+- ConfigForge 模板引擎
+- 变量展开与语法糖
+- 范围展开（1-10 → 1,2,3,...,10）
+- 批量配置生成
+
+</td>
+</tr>
+<tr>
+<td>
+
+### 📊 规划比对
+- 差异报告生成
+- HTML/Excel 导出
+- 配置变更追踪
+- 历史记录对比
+
+</td>
+<td>
+
+### 📁 文件服务器
+- 内置 SFTP 服务器
+- 内置 FTP 服务器
+- 内置 TFTP 服务器
+- 内置 HTTP 服务器
+
+</td>
+</tr>
+<tr>
+<td>
+
+### 🔧 网络工具
+- 批量 Ping 探测
+- 网络计算器
+- 协议参考手册
+- 执行历史追溯
+
+</td>
+<td>
+
+### 🛡️ 异常处理
+- 单设备级挂起机制
+- 用户决策（Continue/Abort）
+- 超时自动处理
+- 完整错误日志
+
+</td>
+</tr>
+</table>
 
 ---
 
-### 3.5 解析模块 (`internal/parser/`)
+## 🚀 快速开始
 
-#### 3.5.1 正则解析器架构
+### 环境要求
 
-**核心组件**:
+| 依赖 | 版本要求 | 说明 |
+|------|----------|------|
+| **Go** | >= 1.26 | 后端运行环境 |
+| **Node.js** | >= 18 | 前端构建环境 |
+| **npm** | >= 9 | 前端包管理 |
+| **Wails CLI** | >= v3 | 桌面应用框架 |
 
-| 组件              | 文件                  | 职责                                        |
-| ----------------- | --------------------- | ------------------------------------------- |
-| `RegexParser`     | `regex_parser.go`     | 纯正则解析引擎，支持单行/多行模式           |
-| `AggregateEngine` | `aggregate_engine.go` | 多行聚合引擎，支持 recordStart/captureRules |
-| `CompositeParser` | `composite_parser.go` | 厂商级组合解析器，实现 `CliParser` 接口     |
-| `ParserManager`   | `manager.go`          | 模板管理器，支持热加载和原子替换            |
-| `Mapper`          | `mapper.go`           | 解析结果到领域模型的映射                    |
+### 安装步骤
 
-**支持的厂商模板**:
+1. **克隆仓库**
 
-| 厂商   | 支持的命令                                                                                                            |
-| ------ | --------------------------------------------------------------------------------------------------------------------- |
-| Huawei | version、sysname、esn、device_info、interface_brief、interface_detail、lldp_neighbor、mac_address、eth_trunk、arp_all |
-| H3C    | version、interface_brief、lldp_neighbor、mac_address、eth_trunk、arp_all                                              |
-| Cisco  | version、interface_brief、interface_detail、lldp_neighbor、mac_address、eth_trunk、arp_all                            |
-
-#### 3.5.2 模板位置
-
-```
-internal/parser/templates/
-└── builtin/
-    ├── huawei.json    # 华为设备模板
-    ├── h3c.json       # H3C设备模板
-    └── cisco.json     # Cisco设备模板
+```bash
+git clone https://github.com/your-username/NetWeaverGo.git
+cd NetWeaverGo
 ```
 
-#### 3.5.3 模板 DSL 结构
+2. **安装 Wails CLI**（如未安装）
 
-```json
-{
-  "vendor": "huawei",
-  "commandKey": "lldp_neighbor",
-  "engine": "aggregate",
-  "aggregation": {
-    "recordStart": "^Device ID: (.+)",
-    "captureRules": [
-      { "pattern": "^  Local Interface: (.+)", "field": "local_intf" },
-      { "pattern": "^  Neighbor Interface: (.+)", "field": "neighbor_intf" }
-    ]
-  }
-}
+```bash
+go install github.com/wailsapp/wails/v3/cmd/wails@latest
 ```
 
-**引擎类型**:
+3. **安装前端依赖**
 
-- `regex`: 纯正则引擎，适用于简单单行/多行匹配
-- `aggregate`: 聚合引擎，适用于多行记录聚合（如 LLDP、接口信息）
-
----
-
-### 3.6 终端处理模块 (`internal/terminal/`)
-
-#### 3.6.1 组件
-
-| 组件         | 文件             | 职责                                    |
-| ------------ | ---------------- | --------------------------------------- |
-| `Replayer`   | `replayer.go`    | 终端重放器，将SSH字节流转换为规范化文本 |
-| `ANSIParser` | `ansi.go`        | ANSI 转义序列解析器                     |
-| `LineBuffer` | `line_buffer.go` | 行缓冲区管理                            |
-
-#### 3.6.2 处理流程
-
-```
-SSH 字节流
-    ↓
-ANSIParser 解析为 Token 流
-    ↓
-Replayer 处理控制字符
-    ↓
-产生 LineEvent (行提交/行更新)
-    ↓
-提取逻辑行用于匹配和展示
+```bash
+cd frontend
+npm install
+cd ..
 ```
 
----
+4. **构建项目**
 
-### 3.7 配置生成模块 (`internal/forge/`)
+```bash
+# Windows
+build.bat
 
-#### 3.7.1 ConfigBuilder
+# 或手动构建
+cd frontend && npm run build && cd ..
+wails build
+```
 
-**文件**: `internal/forge/config_builder.go`
+### 运行方法
 
-**功能**:
+```bash
+# 开发模式（热重载）
+wails dev
 
-- 模板变量替换
-- 语法糖展开 (1-10 → 1,2,3,...,10)
-- 等差数列推断补全
-
-#### 3.7.2 语法糖支持
-
-| 语法     | 示例          | 展开结果           |
-| -------- | ------------- | ------------------ |
-| 范围展开 | `1-5`         | `1,2,3,4,5`        |
-| 逗号分隔 | `1,3,5`       | `1,3,5`            |
-| 混合使用 | `1-3,7,10-12` | `1,2,3,7,10,11,12` |
-
----
-
-### 3.8 数据层 (`internal/config/`, `internal/models/`)
-
-#### 3.8.1 数据库模型
-
-| 模型             | 表名               | 说明                |
-| ---------------- | ------------------ | ------------------- |
-| `DeviceAsset`    | `device_assets`    | 设备资产信息        |
-| `CommandGroup`   | `command_groups`   | 命令组              |
-| `TaskGroup`      | `task_groups`      | 任务组              |
-| `GlobalSettings` | `global_settings`  | 全局设置            |
-| `RuntimeSetting` | `runtime_settings` | 运行时配置          |
-| `TaskDefinition` | `task_definitions` | 任务定义 (taskexec) |
-| `TaskRun`        | `task_runs`        | 任务运行实例        |
-| `TaskRunStage`   | `task_run_stages`  | 阶段运行状态        |
-| `TaskRunUnit`    | `task_run_units`   | 调度单元状态        |
-| `TaskRunEvent`   | `task_run_events`  | 事件流水            |
-| `TaskArtifact`   | `task_artifacts`   | 产物索引            |
-
-#### 3.8.2 SQLite 配置
-
-```go
-DSN: "db.sqlite?_journal=WAL&_busy_timeout=5000&_cache_size=10000&_foreign_keys=1&_synchronous=NORMAL"
+# 生产模式
+./build/bin/netWeaverGo.exe
 ```
 
 ---
 
-### 3.9 前端架构 (`frontend/`)
+## 📸 项目截图
 
-#### 3.9.1 目录结构
+> 🚧 截图即将添加...
 
-```
-frontend/src/
-├── components/           # 组件
-│   ├── common/          # 通用组件
-│   ├── topology/        # 拓扑图组件
-│   └── ...
-├── views/               # 页面视图
-│   ├── Dashboard.vue
-│   ├── Devices.vue
-│   ├── Tasks.vue
-│   ├── TaskExecution.vue
-│   ├── Topology.vue
-│   └── ...
-├── composables/         # 组合式函数
-│   ├── useTaskExecution.ts
-│   ├── useDeviceForm.ts
-│   └── ...
-├── stores/              # Pinia 状态管理
-│   └── taskexecStore.ts
-├── utils/               # 工具函数
-└── types/               # TypeScript 类型定义
-```
+<div align="center">
 
-#### 3.9.2 前端事件处理
+| 仪表盘 | 设备管理 |
+|:------:|:--------:|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Devices](docs/screenshots/devices.png) |
 
-**文件**: `frontend/src/composables/useTaskExecution.ts`
+| 任务执行 | 拓扑发现 |
+|:--------:|:--------:|
+| ![TaskExecution](docs/screenshots/task-execution.png) | ![Topology](docs/screenshots/topology.png) |
 
-监听的事件:
-
-- `execution:snapshot` - 执行快照更新
-- `engine:finished` - 执行完成
-- `task:event` - 任务事件流
-- `task:started` / `task:finished` - 任务开始/结束
-- `task:stage_updated` - 阶段更新
-- `task:unit_updated` - 单元更新
+</div>
 
 ---
 
-## 4. 关键流程详解
+## 🏗️ 架构概览
 
-### 4.1 任务执行完整流程
+### 整体架构
+
+```mermaid
+graph TB
+    subgraph Frontend["前端层 (Vue 3 + TypeScript)"]
+        UI[UI Components]
+        Store[Pinia Store]
+        Router[Vue Router]
+    end
+
+    subgraph Services["UI 服务层 (Wails)"]
+        DS[DeviceService]
+        TGS[TaskGroupService]
+        FS[ForgeService]
+        TES[TaskExecutionUIService]
+    end
+
+    subgraph Core["核心引擎层"]
+        Compiler[Compiler Registry]
+        Runtime[Runtime Manager]
+        EventBus[Event Bus]
+        Snapshot[Snapshot Hub]
+    end
+
+    subgraph Executor["设备执行层"]
+        DE[Device Executor]
+        SE[Stream Engine]
+        SA[Session Adapter]
+    end
+
+    subgraph Infra["基础设施层"]
+        SSH[SSH Client]
+        SFTP[SFTP Client]
+        DB[(SQLite)]
+        Logger[Logger]
+    end
+
+    UI --> Services
+    Services --> Core
+    Core --> Executor
+    Executor --> Infra
+    EventBus --> UI
+```
+
+### 数据流向
 
 ```mermaid
 sequenceDiagram
     participant User as 用户
-    participant UI as 前端UI
-    participant UISvc as UI Service
-    participant TESvc as TaskExecutionService
-    participant Compiler as Compiler
-    participant Runtime as RuntimeManager
-    participant Executor as StageExecutor
-    participant Device as DeviceExecutor
-    participant SSH as SSHClient
+    participant UI as 前端
+    participant Svc as UI Service
+    participant Exec as 执行引擎
+    participant Device as 网络设备
 
-    User->>UI: 创建并启动任务
-    UI->>UISvc: 调用 StartTask()
-    UISvc->>TESvc: StartTask(ctx, def)
-    TESvc->>Compiler: Compile(ctx, def)
-    Compiler-->>TESvc: ExecutionPlan
-    TESvc->>Runtime: Execute(ctx, plan)
-    Runtime->>Runtime: CreateRun() - 创建运行实例
-    Runtime->>Executor: Run(ctx, stage) - 串行/并发执行阶段
-    loop 每个Stage
-        Executor->>Device: executeUnit() - 执行单元
-        Device->>SSH: Connect() / Execute()
-        SSH-->>Device: 命令输出
-        Device-->>Executor: 执行结果
-        Executor->>Runtime: UpdateStage() - 更新状态
-        Runtime->>EventBus: Emit() - 发送事件
-    end
-    Runtime-->>TESvc: TaskRun
-    TESvc-->>UISvc: runID
-    UISvc-->>UI: 返回结果
+    User->>UI: 创建任务
+    UI->>Svc: 调用服务
+    Svc->>Exec: 编译 & 执行
+    Exec->>Device: SSH 连接 & 命令执行
+    Device-->>Exec: 返回结果
+    Exec-->>UI: 事件推送
+    UI-->>User: 实时更新
 ```
 
-### 4.2 拓扑发现流程
+### 模块说明
 
-```
-1. 用户创建拓扑任务
-   ├── 选择设备/设备组
-   └── 设置厂商类型 (huawei/h3c/cisco)
-
-2. 任务编译 (TopologyTaskCompiler)
-   ├── Stage 1: 设备信息采集 (device_collect)
-   │   ├── 执行 LLDP 邻居采集命令
-   │   ├── 执行接口信息采集命令
-   │   └── 保存原始输出
-   ├── Stage 2: 信息解析 (parse)
-   │   ├── 使用正则解析器解析 LLDP 输出
-   │   ├── 解析接口信息
-   │   └── 生成结构化数据
-   └── Stage 3: 拓扑构建 (topology_build)
-       ├── 合并所有设备的解析结果
-       ├── 分析连接关系
-       └── 生成拓扑图数据
-
-3. 前端展示拓扑图
-  └── 使用 D3.js / ECharts 渲染
-```
-
-### 4.2.1 离线重放模式
-
-离线重放模式允许从历史 Raw 文件重新解析构建拓扑，无需连接设备：
-
-```
-1. 适用场景
-  ├── 解析器升级后重新验证历史数据
-  ├── 拓扑构建算法优化后对比效果
-  ├── 问题排查：分析历史采集数据
-  └── 开发测试：无需真实设备验证解析逻辑
-
-2. 重放流程
-  ├── 选择可重放的历史运行记录
-  ├── 配置重放选项（清除现有结果/指定设备/跳过构建）
-  ├── 执行重放：Parse → TopologyBuild
-  └── 对比分析：查看差异报告
-
-3. 核心组件
-  ├── ReplayExecutor: 重放执行器
-  │   ├── scanRawFiles: 扫描 Raw 文件
-  │   ├── executeParse: 执行解析阶段
-  │   └── executeBuild: 执行构建阶段
-  ├── ReplayDialog.vue: 重放对话框组件
-  └── useTopologyReplay.ts: 重放逻辑 composable
-
-4. 功能特性
-  ├── Raw 文件预览：查看原始命令输出
-  ├── 决策轨迹查看：了解拓扑边构建决策过程
-  ├── 解析结果对比：对比两次运行的解析差异
-  └── 拓扑边对比：对比拓扑图变化
-```
-
-### 4.3 SSH 连接与命令执行流程
-
-```
-DeviceExecutor.Connect()
-    │
-    ├── 获取设备画像配置
-    ├── 创建 SSH 配置 (含算法设置)
-    ├── sshutil.NewSSHClient()
-    │       ├── 建立 TCP 连接
-    │       ├── SSH 握手
-    │       ├── 认证 (密码/密钥)
-    │       └── 创建 Session
-    └── 连接成功
-
-DeviceExecutor.ExecutePlaybook()
-    │
-    ├── 创建 StreamEngine
-    ├── engine.Run(ModePlaybook)
-    │       ├── 初始化 SessionAdapter
-    │       ├── 循环读取输出流
-    │       ├── 检测分页符 → 发送空格
-    │       ├── 检测提示符 → 发送下一条命令
-    │       └── 收集命令结果
-    └── 返回执行报告
-```
+| 模块 | 路径 | 职责 |
+|------|------|------|
+| **入口模块** | `cmd/netweaver/` | 应用程序入口，初始化子系统 |
+| **UI 服务层** | `internal/ui/` | Wails 服务，处理前端请求 |
+| **任务执行** | `internal/taskexec/` | 统一任务编排与执行引擎 |
+| **设备执行** | `internal/executor/` | SSH 会话管理与命令执行 |
+| **通信模块** | `internal/sshutil/` | SSH/SFTP 连接管理 |
+| **流匹配器** | `internal/matcher/` | 提示符/分页符检测 |
+| **终端处理** | `internal/terminal/` | ANSI 解析与终端重放 |
+| **解析服务** | `internal/parser/` | 命令输出解析（正则/聚合） |
+| **配置生成** | `internal/forge/` | ConfigForge 模板引擎 |
+| **数据模型** | `internal/models/` | 领域模型定义 |
+| **数据访问** | `internal/repository/` | 数据库操作层 |
+| **配置管理** | `internal/config/` | 应用配置与数据库 |
+| **前端应用** | `frontend/` | Vue 3 单页应用 |
 
 ---
 
-## 5. 并发控制
+## 🛠️ 技术栈
 
-### 5.1 多级并发控制
+### 后端
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    任务级别并发                          │
-│              (RuntimeManager 管理)                       │
-│                    默认: 不限制                          │
-└─────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────┐
-│                    Stage 级别并发                        │
-│              (StagePlan.Concurrency)                     │
-│              默认: 10 (拓扑采集) / 不限 (解析)            │
-└─────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────┐
-│                    Unit 级别并发                         │
-│              (Go Goroutine + Semaphore)                  │
-│              受 Stage.Concurrency 限制                   │
-└─────────────────────────────────────────────────────────┘
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| [Go](https://go.dev/) | 1.26 | 主要编程语言 |
+| [Wails](https://wails.io/) | v3 | 桌面应用框架 |
+| [GORM](https://gorm.io/) | v1.31 | ORM 框架 |
+| [SQLite](https://www.sqlite.org/) | - | 嵌入式数据库 |
+| [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) | v0.50 | SSH/SFTP 实现 |
+| [excelize](https://xuri.me/excelize/) | v2.9 | Excel 文件生成 |
 
-### 5.2 连接抖动控制
+### 前端
 
-```go
-// 设备间连接添加随机抖动，避免并发冲击
-jitter := time.Duration(rand.Intn(500)) * time.Millisecond
-time.Sleep(jitter)
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| [Vue.js](https://vuejs.org/) | 3.5 | 前端框架 |
+| [TypeScript](https://www.typescriptlang.org/) | 5.9 | 类型安全 |
+| [Vite](https://vitejs.dev/) | 7.3 | 构建工具 |
+| [Tailwind CSS](https://tailwindcss.com/) | 4.2 | 样式框架 |
+| [Pinia](https://pinia.vuejs.org/) | 3.0 | 状态管理 |
+| [Vue Router](https://router.vuejs.org/) | 4.6 | 路由管理 |
+| [Cytoscape.js](https://js.cytoscape.org/) | 3.33 | 拓扑图渲染 |
 
 ---
 
-## 6. 错误处理机制
+## 📡 支持的设备
 
-### 6.1 错误分类
+### 厂商支持
 
-| 类别                  | 说明         | 处理策略          |
-| --------------------- | ------------ | ----------------- |
-| `ConnectionError`     | 连接错误     | 重试/跳过         |
-| `AuthenticationError` | 认证失败     | 记录/跳过         |
-| `CommandError`        | 命令错误     | 根据设置继续/中止 |
-| `TimeoutError`        | 超时错误     | 挂起等待用户决策  |
-| `PaginationError`     | 分页处理错误 | 自动处理          |
+| 厂商 | 品牌 | 支持状态 |
+|------|------|----------|
+| **华为** | Huawei | ✅ 完全支持 |
+| **华三** | H3C | ✅ 完全支持 |
+| **思科** | Cisco | ✅ 完全支持 |
 
-### 6.2 SuspendHandler 机制
+### 支持的命令解析
 
-```go
-// 当执行遇到错误时，挂起并等待用户决策
-type SuspendHandler func(ctx context.Context, ip string, deviceLog string, failedCmd string) ErrorAction
-
-const (
-    ActionContinue     // 忽略错误，继续执行
-    ActionAbort        // 中止该设备的后续命令
-    ActionAbortTimeout // 超时后自动中止
-)
-```
-
----
-
-## 7. 配置管理
-
-### 7.1 设备画像 (`internal/config/device_profile.go`)
-
-支持按厂商自定义:
-
-- 提示符后缀
-- 提示符正则模式
-- 分页符模式
-- PTY 终端配置
-
-### 7.2 SSH 算法预设
-
-| 预设         | 说明           |
-| ------------ | -------------- |
-| `secure`     | 仅使用安全算法 |
-| `compatible` | 兼容旧设备     |
-| `custom`     | 自定义算法列表 |
+| 命令 | Huawei | H3C | Cisco |
+|------|:------:|:---:|:-----:|
+| `display version` | ✅ | ✅ | ✅ |
+| `display interface brief` | ✅ | ✅ | ✅ |
+| `display interface` | ✅ | ❌ | ✅ |
+| `display lldp neighbor` | ✅ | ✅ | ✅ |
+| `display mac-address` | ✅ | ✅ | ✅ |
+| `display eth-trunk` | ✅ | ✅ | ✅ |
+| `display arp` | ✅ | ✅ | ✅ |
+| `display esn` | ✅ | ❌ | ❌ |
+| `display device info` | ✅ | ❌ | ❌ |
 
 ---
 
-## 8. 开发规范
+## 👨‍💻 开发指南
 
-### 8.1 目录结构规范
+### 项目结构
 
 ```
-internal/
-├── taskexec/          # 统一任务执行 (核心业务)
-├── executor/          # 设备执行器
-├── sshutil/           # SSH/SFTP 工具
-├── matcher/           # 流匹配器
-├── terminal/          # 终端处理
-├── parser/            # 解析服务
-├── forge/             # 配置生成
-├── config/            # 配置管理
-├── models/            # 数据模型
-├── repository/        # 数据访问层
-├── ui/                # UI 服务层
-├── report/            # 报告收集
-├── logger/            # 日志系统
-└── utils/             # 通用工具
+NetWeaverGo/
+├── cmd/
+│   └── netweaver/
+│       └── main.go              # 应用入口
+├── internal/
+│   ├── config/                  # 配置管理
+│   ├── executor/                # 设备执行器
+│   ├── fileserver/              # 文件服务器
+│   ├── forge/                   # 配置生成
+│   ├── icmp/                    # ICMP 探测
+│   ├── logger/                  # 日志系统
+│   ├── matcher/                 # 流匹配器
+│   ├── models/                  # 数据模型
+│   ├── normalize/               # 数据规范化
+│   ├── repository/              # 数据访问层
+│   ├── terminal/                # 终端处理
+│   ├── ui/                      # UI 服务层
+│   └── utils/                   # 工具函数
+├── frontend/
+│   ├── src/
+│   │   ├── components/          # Vue 组件
+│   │   ├── composables/         # 组合式函数
+│   │   ├── router/              # 路由配置
+│   │   ├── services/            # API 服务
+│   │   ├── styles/              # 样式文件
+│   │   ├── types/               # TypeScript 类型
+│   │   ├── utils/               # 工具函数
+│   │   └── views/               # 页面视图
+│   ├── package.json
+│   └── vite.config.ts
+├── testdata/                    # 测试数据
+├── build.bat                    # 构建脚本
+├── go.mod
+└── README.md
 ```
 
-### 8.2 命名规范
+### 构建命令
+
+```bash
+# 完整构建（推荐）
+build.bat
+
+# 仅构建前端
+cd frontend && npm run build
+
+# 仅构建后端
+wails build
+
+# 开发模式
+wails dev
+
+# 运行测试
+go test ./...
+```
+
+### 开发规范
+
+#### Go 代码规范
 
 - **包名**: 全小写，简短有意义
 - **接口名**: 动词+名词，如 `StageExecutor`
 - **结构体**: 名词，首字母大写
 - **方法名**: 动词开头，如 `ExecutePlan`
+- **错误处理**: 使用自定义错误类型，包含上下文信息
+
+#### 前端代码规范
+
+- **组件**: PascalCase 命名，如 `TopologyGraph.vue`
+- **Composables**: `use` 前缀，如 `useDeviceForm.ts`
+- **类型定义**: 集中在 `types/` 目录
+- **样式**: 使用 Tailwind CSS，遵循设计系统
+
+#### Git 提交规范
+
+```
+<type>(<scope>): <subject>
+
+# 示例
+feat(device): 添加设备批量导入功能
+fix(executor): 修复 SSH 连接超时问题
+docs(readme): 更新项目文档
+```
 
 ---
 
-## 9. 构建与部署
+## 🤝 贡献指南
 
-### 9.1 构建命令
+欢迎贡献代码、报告问题或提出改进建议！
+
+### 贡献流程
+
+1. **Fork** 本仓库
+2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'feat: 添加某项功能'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 创建 **Pull Request**
+
+### 开发环境设置
 
 ```bash
-# Windows
-cd d:/Document/Code/NetWeaverGo
-build.bat
+# 1. Fork 并克隆仓库
+git clone https://github.com/your-username/NetWeaverGo.git
 
-# 或使用 wails
-cd frontend && npm install && npm run build
-cd .. && wails build
+# 2. 安装依赖
+cd NetWeaverGo/frontend && npm install
+
+# 3. 启动开发服务器
+cd .. && wails dev
+
+# 4. 运行测试
+go test ./...
 ```
 
-### 9.2 输出目录
+### 问题反馈
 
-```
-build/
-└── bin/
-    └── NetWeaverGo.exe    # Windows 可执行文件
-```
+- 使用 [GitHub Issues](https://github.com/your-username/NetWeaverGo/issues) 报告问题
+- 提供详细的复现步骤和环境信息
+- 包含相关的日志和截图
 
 ---
 
-## 10. 版本历史
+## 📄 许可证
 
-| 版本 | 日期    | 主要变更                             |
-| ---- | ------- | ------------------------------------ |
-| v1.0 | 2026-03 | 初始版本，支持基础命令执行、拓扑发现 |
+本项目采用 [MIT License](LICENSE) 许可证。
 
 ---
 
-## 附录
+## 📝 版本历史
 
-### A. 数据库 ER 图
+| 版本 | 日期 | 主要变更 |
+|------|------|----------|
+| **v1.0** | 2026-03 | 🎉 初始版本发布 |
+| | | - 基础命令执行功能 |
+| | | - 拓扑发现与可视化 |
+| | | - 设备管理与分组 |
+| | | - 任务编排与执行 |
+| | | - ConfigForge 配置生成 |
+| | | - 内置文件服务器 |
 
-```
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│  DeviceAsset    │       │   TaskGroup     │       │  CommandGroup   │
-├─────────────────┤       ├─────────────────┤       ├─────────────────┤
-│ ID (PK)         │       │ ID (PK)         │       │ ID (PK)         │
-│ IP (Unique)     │       │ Name (Unique)   │       │ Name (Unique)   │
-│ Username        │       │ DeviceGroup     │       │ Commands (JSON) │
-│ Password        │       │ CommandGroup    │       │ Tags (JSON)     │
-│ Vendor          │       │ TaskType        │       └─────────────────┘
-│ Group           │       │ Mode            │
-└─────────────────┘       │ Items (JSON)    │
-                          └─────────────────┘
+---
 
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│  TaskDefinition │◀─────▶│    TaskRun      │◀─────▶│ TaskRunStage    │
-├─────────────────┤       ├─────────────────┤       ├─────────────────┤
-│ ID (PK)         │       │ ID (PK)         │       │ ID (PK)         │
-│ Name            │       │ TaskDefID (FK)  │       │ TaskRunID (FK)  │
-│ Kind            │       │ RunKind         │       │ StageKind       │
-│ Config (JSON)   │       │ Status          │       │ Status          │
-└─────────────────┘       │ Progress        │       │ Progress        │
-                          └─────────────────┘       └─────────────────┘
-                                                          │
-                                                          ▼
-                                                  ┌─────────────────┐
-                                                  │  TaskRunUnit    │
-                                                  ├─────────────────┤
-                                                  │ ID (PK)         │
-                                                  │ TaskRunID (FK)  │
-                                                  │ StageID (FK)    │
-                                                  │ TargetKey       │
-                                                  │ Status          │
-                                                  └─────────────────┘
-```
+## 🙏 致谢
 
-### B. 事件类型定义
+- [Wails](https://wails.io/) - 优秀的 Go 桌面应用框架
+- [Vue.js](https://vuejs.org/) - 渐进式 JavaScript 框架
+- [Cytoscape.js](https://js.cytoscape.org/) - 强大的图形可视化库
+- [Tailwind CSS](https://tailwindcss.com/) - 实用优先的 CSS 框架
 
-| 事件类型         | 说明         |
-| ---------------- | ------------ |
-| `run_started`    | 运行开始     |
-| `run_finished`   | 运行结束     |
-| `stage_started`  | 阶段开始     |
-| `stage_finished` | 阶段结束     |
-| `stage_progress` | 阶段进度更新 |
-| `unit_started`   | 单元开始     |
-| `unit_finished`  | 单元结束     |
-| `step_finished`  | 步骤完成     |
-| `error`          | 错误事件     |
+---
 
-### C. 状态枚举
+<div align="center">
 
-**Run Status**: `pending` → `running` → `completed`/`partial`/`failed`/`cancelled`
+**[⬆ 回到顶部](#-netweavergo)**
 
-**Stage/Unit Status**: `pending` → `running` → `completed`/`partial`/`failed`/`cancelled`
+Made with ❤️ by NetWeaverGo Team
+
+</div>
