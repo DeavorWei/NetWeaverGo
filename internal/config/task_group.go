@@ -202,9 +202,6 @@ func normalizeTaskGroup(group *models.TaskGroup) {
 		if group.BackupStartupCommand == "" {
 			group.BackupStartupCommand = "display startup"
 		}
-		if group.BackupSaveRootPath == "" {
-			group.BackupSaveRootPath = "netWeaverGoData/backup"
-		}
 		if group.BackupDirNamePattern == "" {
 			group.BackupDirNamePattern = "%Y-%M-%D"
 		}
