@@ -908,7 +908,7 @@ const groupForm = reactive({
 
 const backupForm = reactive({
   startupCommand: "display startup",
-  saveRootPath: "storage/backup",
+  saveRootPath: "netWeaverGoData/backup",
   dirNamePattern: "%Y-%M-%D",
   fileNamePattern: "%H_startup_%h%m%s.cfg",
   sftpTimeoutSec: 0,
@@ -1035,7 +1035,7 @@ function hydrateForm(task: TaskGroup) {
   formError.value = "";
 
   backupForm.startupCommand = task.backupStartupCommand || "display startup";
-  backupForm.saveRootPath = task.backupSaveRootPath || "storage/backup";
+  backupForm.saveRootPath = task.backupSaveRootPath || "netWeaverGoData/backup";
   backupForm.dirNamePattern = task.backupDirNamePattern || "%Y-%M-%D";
   backupForm.fileNamePattern = task.backupFileNamePattern || "%H_startup_%h%m%s.cfg";
   backupForm.sftpTimeoutSec = task.backupSftpTimeoutSec || 0;

@@ -941,7 +941,7 @@ async function confirmCreate() {
       items: taskItems,
       tags: createModal.value.tags,
       enableRawLog: createModal.value.enableRawLog,
-      backupSaveRootPath: selectedTaskType.value === 'backup' ? "storage/backup" : "",
+      backupSaveRootPath: selectedTaskType.value === 'backup' ? "netWeaverGoData/backup" : "",
       backupDirNamePattern: selectedTaskType.value === 'backup' ? "%Y-%M-%D" : "",
       backupFileNamePattern: selectedTaskType.value === 'backup' ? "%H_startup_%h%m%s.cfg" : "",
       backupStartupCommand: selectedTaskType.value === 'backup' ? "display startup" : "",
