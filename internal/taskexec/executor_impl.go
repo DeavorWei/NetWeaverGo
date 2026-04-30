@@ -1202,7 +1202,7 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 				break
 			}
 			mergeIdentityResult(identity, id, vendor)
-		case "sysname", "esn", "device_info":
+		case "sysname":
 			mergeIdentityFields(identity, flattenParseRows(rows), vendor)
 		case "interface_brief", "interface_detail":
 			items, mapErr := mapper.ToInterfaces(rows)
@@ -1225,19 +1225,6 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 				items[i].RawRefID = rawRef
 			}
 			lldps = append(lldps, items...)
-		case "mac_address":
-			items, mapErr := mapper.ToFDB(rows)
-			if mapErr != nil {
-				parseStatus = "parse_failed"
-				parseError = mapErr.Error()
-				break
-			}
-			rawRef := fmt.Sprintf("%d", output.ID)
-			for i := range items {
-				items[i].CommandKey = output.CommandKey
-				items[i].RawRefID = rawRef
-			}
-			fdbs = append(fdbs, items...)
 		case "arp_all":
 			items, mapErr := mapper.ToARP(rows)
 			if mapErr != nil {
@@ -1702,7 +1689,7 @@ func (e *TopologyBuildExecutor) buildRunTopology(runID string) (*models.Topology
 			Type:       "fdb_arp",
 			Source:     "fdb",
 			DeviceID:   candidate.LocalDevice,
-			Command:    chooseValue(candidate.CommandKey, "mac_address"),
+			Command:    chooseValue(candidate.CommandKey, "arp_all"),
 			RawRefID:   candidate.RawRefID,
 			LocalIf:    candidate.LocalIf,
 			RemoteName: candidate.RemoteDevice,

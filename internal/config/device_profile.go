@@ -147,15 +147,12 @@ func registerVendorProfiles() {
 		Commands: []CommandSpec{
 			{Command: "display version", CommandKey: "version", TimeoutSec: 30},
 			{Command: "display current-configuration | include sysname", CommandKey: "sysname", TimeoutSec: 20},
-			{Command: "display device esn", CommandKey: "esn", TimeoutSec: 20},
 			// 统一使用 verbose 版本，确保与 LLDP 解析模板字段（system name / port id / chassis id / management address）一致。
 			{Command: "display lldp neighbor", CommandKey: "lldp_neighbor", TimeoutSec: 60},
 			{Command: "display interface brief", CommandKey: "interface_brief", TimeoutSec: 30},
 			{Command: "display interface", CommandKey: "interface_detail", TimeoutSec: 60},
-			{Command: "display mac-address", CommandKey: "mac_address", TimeoutSec: 60},
 			{Command: "display eth-trunk", CommandKey: "eth_trunk", TimeoutSec: 30},
 			{Command: "display arp", CommandKey: "arp_all", TimeoutSec: 60},
-			{Command: "display device", CommandKey: "device_info", TimeoutSec: 30},
 		},
 	}
 
@@ -192,7 +189,6 @@ func registerVendorProfiles() {
 			{Command: "display version", CommandKey: "version", TimeoutSec: 30},
 			{Command: "display lldp neighbor-information verbose", CommandKey: "lldp_neighbor", TimeoutSec: 60},
 			{Command: "display interface brief", CommandKey: "interface_brief", TimeoutSec: 30},
-			{Command: "display mac-address", CommandKey: "mac_address", TimeoutSec: 60},
 			{Command: "display link-aggregation verbose", CommandKey: "eth_trunk", TimeoutSec: 30},
 			{Command: "display arp all", CommandKey: "arp_all", TimeoutSec: 60},
 		},
@@ -230,7 +226,6 @@ func registerVendorProfiles() {
 			{Command: "show version", CommandKey: "version", TimeoutSec: 30},
 			{Command: "show lldp neighbors detail", CommandKey: "lldp_neighbor", TimeoutSec: 60},
 			{Command: "show interface status", CommandKey: "interface_brief", TimeoutSec: 30},
-			{Command: "show mac address-table", CommandKey: "mac_address", TimeoutSec: 60},
 			{Command: "show etherchannel summary", CommandKey: "eth_trunk", TimeoutSec: 30},
 			{Command: "show ip arp", CommandKey: "arp_all", TimeoutSec: 60},
 		},

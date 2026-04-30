@@ -730,7 +730,7 @@ func (b *TopologyBuilder) buildFDBARPCandidates(n *NormalizedFacts) []*TopologyE
 				Type:       "fdb_arp",
 				Source:     "fdb",
 				DeviceID:   deviceIP,
-				Command:    chooseValue(g.commandKey, "mac_address"),
+				Command:    chooseValue(g.commandKey, "arp_all"),
 				RawRefID:   strings.Join(g.rawRefIDs, ","),
 				LocalIf:    localIf,
 				RemoteName: remoteDevice,

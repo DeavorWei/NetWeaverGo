@@ -393,7 +393,7 @@ func (e *ReplayExecutor) executeParse(ctx context.Context, replayRunID string, r
 
 			// 映射解析结果
 			switch file.CommandKey {
-			case "version", "device_info":
+			case "version":
 				id, mapErr := mapper.ToDeviceInfo(rows)
 				if mapErr != nil {
 					logger.Warn("Replay", replayRunID, "映射设备信息失败: %v", mapErr)
@@ -421,7 +421,7 @@ func (e *ReplayExecutor) executeParse(ctx context.Context, replayRunID string, r
 					}
 				}
 	
-				case "sysname", "esn":
+				case "sysname":
 					// 合并身份字段（hostname、mgmt_ip、chassis_id等）
 					for _, row := range rows {
 						if v, ok := row["hostname"]; ok {
@@ -470,14 +470,6 @@ func (e *ReplayExecutor) executeParse(ctx context.Context, replayRunID string, r
 					logger.Warn("Replay", replayRunID, "映射LLDP失败: %v", mapErr)
 				} else {
 					lldps = append(lldps, items...)
-				}
-
-			case "mac_address", "fdb":
-				items, mapErr := mapper.ToFDB(rows)
-				if mapErr != nil {
-					logger.Warn("Replay", replayRunID, "映射FDB失败: %v", mapErr)
-				} else {
-					fdbs = append(fdbs, items...)
 				}
 
 			case "arp_all", "arp":
