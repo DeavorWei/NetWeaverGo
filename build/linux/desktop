@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=My Product
+Comment=A temp_wails_app application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/temp_wails_app.exe %u
+Terminal=false
+Type=Application
+Icon=temp_wails_app.exe
+Categories=Utility;
+StartupWMClass=temp_wails_app.exe
+
+ 

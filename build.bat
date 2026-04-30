@@ -150,7 +150,9 @@ echo [INFO] Cleaning Go build cache for icon refresh...
 
 :: Build backend, output to dist directory
 echo [INFO] Building backend program...
-go build  -o "dist\netWeaverGo.exe" ./cmd/netweaver
+:: go build -ldflags="-s -w" -o "dist\netWeaverGo.exe" ./cmd/netweaver
+:: go build  -o "dist\netWeaverGo.exe" ./cmd/netweaver
+wails3 dev
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Backend build failed
     pause

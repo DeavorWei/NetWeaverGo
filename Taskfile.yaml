@@ -1,0 +1,51 @@
+version: "3"
+
+vars:
+  # 对应旧的 "name"
+  APP_NAME: "NetWeaverGo"
+
+  # 对应旧的 "build": {"dir": "cmd/netweaver"}
+  MAIN_DIR: "cmd/netweaver"
+
+  # 对应旧的 "frontend": {"dir": "frontend"}
+  FRONTEND_DIR: "frontend"
+
+  # 对应旧的 "outputdir": "frontend/src/bindings"
+  BINDINGS_DIR: "frontend/src/bindings"
+
+tasks:
+  # 执行 wails3 build 时会调用这个任务
+  build:
+    desc: "Build the application"
+    cmds:
+      - task: build-frontend
+      - task: generate-bindings
+      - wails3 generate build-assets
+      # 注意：在最后加上 ./{{.MAIN_DIR}} 来告诉 Go 编译哪个目录
+      - go build -tags netgo -ldflags "-s -w" -o bin/{{.APP_NAME}} ./{{.MAIN_DIR}}
+
+  # 执行 wails3 dev 时会调用这个任务
+  dev:
+    desc: "Run the application in development mode"
+    cmds:
+      - task: generate-bindings
+      # -d 指定了 main.go 所在的目录，以便 wails 监听和运行
+      - wails3 dev -d ./{{.MAIN_DIR}}
+
+  # 前端编译逻辑
+  build-frontend:
+    desc: "Build the frontend"
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm install
+      # 对应旧的 "build": "npm run build"
+      - npm run build
+
+  # 生成 TypeScript 绑定文件
+  generate-bindings:
+    desc: "Generate TS bindings"
+    cmds:
+      # -d 指定去哪个目录扫描绑定的服务 (你的 main.go 所在处)
+      # -ts 对应旧的 "outputtype": "typescript"
+      # -o 指定输出目录
+      - wails3 generate bindings -d ./{{.MAIN_DIR}} -ts -o {{.BINDINGS_DIR}}

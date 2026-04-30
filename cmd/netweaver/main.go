@@ -73,7 +73,7 @@ func runGUI() {
 	taskGroupService.SetTaskExecutionService(taskExecutionService) // 设置共享运行时（阶段1）
 	topologyCommandService := ui.NewTopologyCommandService()
 	planCompareService := ui.NewPlanCompareService()
-	pingService := ui.NewPingService() // 批量 Ping 服务
+	pingService := ui.NewPingService()             // 批量 Ping 服务
 	fileServerService := ui.NewFileServerService() // 文件服务器服务
 	// 创建统一任务执行UI服务（Wails暴露层）
 	taskExecutionUIService := ui.NewTaskExecutionUIService(taskExecutionService)
