@@ -115,7 +115,7 @@ tasks:
     deps:
       - task: install:frontend:deps
     cmds:
-      - npm run dev -- --port {{.VITE_PORT}} --strictPort
+      - npm run dev -- --port {{.VITE_PORT | default "9245"}} --strictPort
 
   update:build-assets:
     summary: Updates the build assets
@@ -135,7 +135,7 @@ tasks:
           BUILD_FLAGS:
             ref: .BUILD_FLAGS
     cmds:
-      - go build -tags server {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}}
+      - go build -tags server {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}} ./{{.MAIN_DIR}}
     vars:
       BUILD_FLAGS: "{{.BUILD_FLAGS}}"
 

@@ -6,3 +6,6 @@
 /.kilo/
 /.codeartsdoer/
 /internal/taskexec/netWeaverGoData
+/.task/
+/bin
+/netWeaverGoData

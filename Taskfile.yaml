@@ -1,5 +1,9 @@
 version: "3"
 
+includes:
+  common: build/Taskfile.yml
+  windows: build/windows/Taskfile.yml
+
 vars:
   # 对应旧的 "name"
   APP_NAME: "NetWeaverGo"
@@ -13,6 +17,9 @@ vars:
   # 对应旧的 "outputdir": "frontend/src/bindings"
   BINDINGS_DIR: "frontend/src/bindings"
 
+  # 输出目录
+  BIN_DIR: "dist"
+
 tasks:
   # 执行 wails3 build 时会调用这个任务
   build:
@@ -22,7 +29,7 @@ tasks:
       - task: generate-bindings
       - wails3 generate build-assets
       # 注意：在最后加上 ./{{.MAIN_DIR}} 来告诉 Go 编译哪个目录
-      - go build -tags netgo -ldflags "-s -w" -o bin/{{.APP_NAME}} ./{{.MAIN_DIR}}
+      - go build -tags netgo -ldflags "-s -w" -o {{.BIN_DIR}}/{{.APP_NAME}} ./{{.MAIN_DIR}}
 
   # 执行 wails3 dev 时会调用这个任务
   dev:
@@ -30,7 +37,8 @@ tasks:
     cmds:
       - task: generate-bindings
       # -d 指定了 main.go 所在的目录，以便 wails 监听和运行
-      - wails3 dev -d ./{{.MAIN_DIR}}
+      # -port 指定前端开发服务器端口
+      - wails3 dev -d ./{{.MAIN_DIR}} -port 5173
 
   # 前端编译逻辑
   build-frontend:
@@ -49,3 +57,9 @@ tasks:
       # -ts 对应旧的 "outputtype": "typescript"
       # -o 指定输出目录
       - wails3 generate bindings -d ./{{.MAIN_DIR}} -ts -o {{.BINDINGS_DIR}}
+
+  # 运行已构建的应用程序 (跨平台)
+  run:
+    desc: "Run the built application"
+    cmds:
+      - task: "{{OS}}:run"
