@@ -1,9 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 
-// 首屏页面 - 保持静态导入以确保首页快速加载
-import Dashboard from '../views/Dashboard.vue'
-
-// 其他页面 - 懒加载，降低首屏资源体积
+// 页面 - 懒加载，降低首屏资源体积
 const Devices = () => import('../views/Devices.vue')
 const Commands = () => import('../views/Commands.vue')
 const Tasks = () => import('../views/Tasks.vue')
@@ -21,8 +18,7 @@ const TopologyCommandConfig = () => import('../views/TopologyCommandConfig.vue')
 const routes = [
   {
     path: '/',
-    name: 'Dashboard',
-    component: Dashboard
+    redirect: '/devices'
   },
   {
     path: '/devices',

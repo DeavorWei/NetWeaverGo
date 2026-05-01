@@ -114,17 +114,9 @@ const taskexecStore = useTaskexecStore();
 useTheme();
 
 const collapsed = ref(false);
-const activeKey = ref("Dashboard");
+const activeKey = ref("Devices");
 
 const menuItems = [
-  {
-    key: "Dashboard",
-    label: "仪表盘",
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-      <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-    </svg>`,
-  },
   {
     key: "Devices",
     label: "设备资产",
@@ -231,7 +223,6 @@ const menuItems = [
 ];
 
 const titleMap: Record<string, string> = {
-  Dashboard: "仪表盘",
   Devices: "设备资产清单",
   Commands: "命令组管理",
   Tasks: "任务创建",
