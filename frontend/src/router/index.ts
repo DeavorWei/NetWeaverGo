@@ -9,6 +9,7 @@ const NetworkCalc = () => import('../views/Tools/NetworkCalc.vue')
 const ProtocolRef = () => import('../views/Tools/ProtocolRef.vue')
 const ConfigForge = () => import('../views/Tools/ConfigForge.vue')
 const BatchPing = () => import('../views/Tools/BatchPing.vue')
+const Tracert = () => import('../views/Tools/Tracert.vue')
 const FileServers = () => import('../views/Tools/FileServers.vue')
 const Settings = () => import('../views/Settings.vue')
 const Topology = () => import('../views/Topology.vue')
@@ -59,6 +60,11 @@ const routes = [
     path: '/tools/ping',
     name: 'BatchPing',
     component: BatchPing
+  },
+  {
+    path: '/tools/tracert',
+    name: 'Tracert',
+    component: Tracert
   },
   {
     path: '/tools/fileservers',

@@ -254,3 +254,170 @@ type RunOptions struct {
 	OnSinglePing func(SinglePingResult)   // Called after each individual ping attempt
 	OnHostUpdate func(HostPingUpdate)     // Called when host intermediate state changes (new)
 }
+
+// ==================== Tracert 路径探测类型定义 ====================
+
+// TracertConfig tracert 探测配置
+type TracertConfig struct {
+	MaxHops     int    `json:"maxHops"`     // 最大跳数 (1-255, 默认 30)
+	Timeout     uint32 `json:"timeout"`     // 每跳超时(ms) (默认 3000)
+	DataSize    uint16 `json:"dataSize"`    // 数据包大小 (默认 32)
+	Count       int    `json:"count"`       // 探测轮次 (1-1000000, 默认 1)，每轮每个 TTL 发送 1 个包
+	Interval    uint32 `json:"interval"`    // 探测轮次间隔(ms) (1ms-60000ms, 默认 1000)
+	Concurrency int    `json:"concurrency"` // TTL 并发数 (默认 0=全量并发)
+}
+
+// DefaultTracertConfig 返回默认 tracert 配置
+func DefaultTracertConfig() TracertConfig {
+	return TracertConfig{
+		MaxHops:     30,
+		Timeout:     3000,
+		DataSize:    32,
+		Count:       1, // 默认 1 轮，每轮每个 TTL 发送 1 个包
+		Interval:    1000,
+		Concurrency: 0, // 0 = 全量并发
+	}
+}
+
+// TracertHopResult 单跳探测结果
+type TracertHopResult struct {
+	TTL      int     `json:"ttl"`          // 第几跳
+	IP       string  `json:"ip"`           // 响应 IP
+	HostName string  `json:"hostName"`     // 主机名 (反向DNS)
+	Status   string  `json:"status"`       // "success" / "timeout" / "error" / "pending" / "cancelled"
+	SentCount int    `json:"sentCount"`    // 发送报文数量
+	RecvCount int    `json:"recvCount"`    // 接收报文数量
+	LossRate  float64 `json:"lossRate"`    // 丢包率 (0-100)
+	MinRtt    float64 `json:"minRtt"`      // 最低延迟(ms), -1 表示无效
+	MaxRtt    float64 `json:"maxRtt"`      // 最高延迟(ms)
+	AvgRtt    float64 `json:"avgRtt"`      // 平均延迟(ms)
+	LastRtt   float64 `json:"lastRtt"`     // 上次探测延迟(ms)
+	Reached   bool    `json:"reached"`     // 是否到达目标
+	ErrorMsg  string  `json:"errorMsg"`    // 错误信息
+}
+
+// TracertProgress tracert 探测进度
+type TracertProgress struct {
+	Target        string             `json:"target"`        // 目标地址（用户输入）
+	ResolvedIP    string             `json:"resolvedIP"`    // 解析后的 IP
+	Round         int                `json:"round"`         // 当前第几轮探测
+	TotalHops     int                `json:"totalHops"`     // 总跳数（配置的最大跳数）
+	CompletedHops int                `json:"completedHops"` // 已完成跳数
+	IsRunning     bool               `json:"isRunning"`     // 是否运行中
+	IsContinuous  bool               `json:"isContinuous"`  // 是否持续模式
+	StartTime     time.Time          `json:"startTime"`     // 开始时间
+	ElapsedMs     int64              `json:"elapsedMs"`     // 已用时间(ms)
+	Hops          []TracertHopResult `json:"hops"`          // 各跳结果
+	ReachedDest   bool               `json:"reachedDest"`   // 是否到达目的地
+	MinReachedTTL int32              `json:"minReachedTtl"` // 所有轮次中到达目标的最小 TTL（0 表示未到达）
+}
+
+// NewTracertProgress 创建新的 TracertProgress 实例
+func NewTracertProgress(target string, maxHops int) *TracertProgress {
+	hops := make([]TracertHopResult, maxHops)
+	for i := range hops {
+		hops[i] = TracertHopResult{
+			TTL:    i + 1,
+			Status: "pending",
+			MinRtt: -1,
+		}
+	}
+	return &TracertProgress{
+		Target:     target,
+		TotalHops:  maxHops,
+		IsRunning:  true,
+		StartTime:  time.Now(),
+		Hops:       hops,
+	}
+}
+
+// UpdateProgress 更新进度统计
+func (p *TracertProgress) UpdateProgress() {
+	completed := 0
+	for _, hop := range p.Hops {
+		if hop.Status != "pending" {
+			completed++
+		}
+	}
+	p.CompletedHops = completed
+	p.ElapsedMs = time.Since(p.StartTime).Milliseconds()
+}
+
+// Clone 深拷贝 TracertProgress
+func (p *TracertProgress) Clone() *TracertProgress {
+	if p == nil {
+		return nil
+	}
+	clone := &TracertProgress{
+		Target:        p.Target,
+		ResolvedIP:    p.ResolvedIP,
+		Round:         p.Round,
+		TotalHops:     p.TotalHops,
+		CompletedHops: p.CompletedHops,
+		IsRunning:     p.IsRunning,
+		IsContinuous:  p.IsContinuous,
+		StartTime:     p.StartTime,
+		ElapsedMs:     p.ElapsedMs,
+		ReachedDest:   p.ReachedDest,
+		MinReachedTTL: p.MinReachedTTL,
+		Hops:          make([]TracertHopResult, len(p.Hops)),
+	}
+	copy(clone.Hops, p.Hops)
+	return clone
+}
+
+// CloneForDisplay 创建一个用于前端显示的过滤副本
+// 只包含 TTL <= reachedTTL 的跳数结果
+func (p *TracertProgress) CloneForDisplay(reachedTTL int32) *TracertProgress {
+	if p == nil {
+		return nil
+	}
+
+	clone := &TracertProgress{
+		Target:        p.Target,
+		ResolvedIP:    p.ResolvedIP,
+		Round:         p.Round,
+		TotalHops:     p.TotalHops,
+		CompletedHops: p.CompletedHops,
+		IsRunning:     p.IsRunning,
+		IsContinuous:  p.IsContinuous,
+		StartTime:     p.StartTime,
+		ElapsedMs:     p.ElapsedMs,
+		ReachedDest:   p.ReachedDest,
+		MinReachedTTL: p.MinReachedTTL,
+	}
+
+	// 如果未到达目标或 reachedTTL 无效，返回全部数据
+	if reachedTTL <= 0 || len(p.Hops) == 0 {
+		clone.Hops = make([]TracertHopResult, len(p.Hops))
+		copy(clone.Hops, p.Hops)
+		return clone
+	}
+
+	// 只包含 TTL <= reachedTTL 的跳数
+	maxTTL := int(reachedTTL)
+	if maxTTL > len(p.Hops) {
+		maxTTL = len(p.Hops)
+	}
+	clone.Hops = make([]TracertHopResult, maxTTL)
+	copy(clone.Hops, p.Hops[:maxTTL])
+
+	return clone
+}
+
+// TracertHopUpdate 单跳中间状态更新（实时推送用）
+type TracertHopUpdate struct {
+	TTL        int     `json:"ttl"`        // 第几跳
+	IP         string  `json:"ip"`         // 响应 IP
+	CurrentSeq int     `json:"currentSeq"` // 当前探测序号 (1-based)
+	Success    bool    `json:"success"`    // 本次是否成功
+	RTT        float64 `json:"rtt"`        // 本次 RTT (ms)
+	IsComplete bool    `json:"isComplete"` // 该跳是否全部完成
+	Timestamp  int64   `json:"timestamp"`  // 更新时间戳 (Unix ms)
+}
+
+// TracertRunOptions tracert 探测回调选项
+type TracertRunOptions struct {
+	OnUpdate    func(*TracertProgress) // 整体进度回调
+	OnHopUpdate func(TracertHopUpdate) // 单跳中间状态回调
+}

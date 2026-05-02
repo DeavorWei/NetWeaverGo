@@ -203,6 +203,13 @@ const menuItems = [
     </svg>`,
   },
   {
+    key: "Tracert",
+    label: "路径探测",
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+    </svg>`,
+  },
+  {
     key: "FileServers",
     label: "文件服务器",
     icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -233,6 +240,7 @@ const titleMap: Record<string, string> = {
   ProtocolRef: "端口速查",
   ConfigForge: "配置生成",
   BatchPing: "批量 Ping 检测",
+  Tracert: "Tracert 路径探测",
   FileServers: "文件服务器",
   TopologyCommandConfig: "拓扑命令配置中心",
   Settings: "系统设置",

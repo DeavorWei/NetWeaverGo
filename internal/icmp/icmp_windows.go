@@ -310,6 +310,7 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 		result.Success = false
 		result.Status = "Error"
 		result.Error = err.Error()
+		result.IP = "*" // 超时/错误时设置为未知
 		logger.Info("ICMP", ipStr, "Ping 失败 (API错误): status=%s, error=%s", result.Status, result.Error)
 		return result, nil
 	}
@@ -319,6 +320,7 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 		result.Success = false
 		result.Status = "No Reply"
 		result.Error = "No reply received"
+		result.IP = "*" // 超时/错误时设置为未知
 		logger.Info("ICMP", ipStr, "Ping 失败 (无响应): status=%s, error=%s", result.Status, result.Error)
 		return result, nil
 	}
@@ -403,6 +405,7 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 		result.Success = false
 		result.Status = "Error"
 		result.Error = err.Error()
+		result.IP = "*" // 超时/错误时设置为未知
 		logger.Info("ICMP", ipStr, "Ping 失败 (API错误): status=%s, error=%s", result.Status, result.Error)
 		return result, nil
 	}
@@ -412,6 +415,7 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 		result.Success = false
 		result.Status = "No Reply"
 		result.Error = "No reply received"
+		result.IP = "*" // 超时/错误时设置为未知
 		logger.Info("ICMP", ipStr, "Ping 失败 (无响应): status=%s, error=%s", result.Status, result.Error)
 		return result, nil
 	}
@@ -437,11 +441,23 @@ func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*Pin
 		result.Success = true
 		result.Status = "Success"
 		logger.Info("ICMP", ipStr, "Ping 成功: rtt=%.2fms, ttl=%d", result.RoundTripTime, result.TTL)
+	} else if reply.Status == IP_TTL_EXPIRED_TRANSIT || reply.Status == IP_TTL_EXPIRED_REASSEM {
+		// TTL 过期是 Tracert 的正常行为，表示到达中间路由器
+		// 提取响应 IP（中间路由器 IP）而非目标 IP
+		replyIP := make(net.IP, 4)
+		binary.LittleEndian.PutUint32(replyIP, reply.Address)
+		result.Success = false // 技术上未到达目标
+		result.Status = "TTLExpired"
+		result.IP = replyIP.String() // 使用响应 IP（中间路由器）
+		// 保留 RTT 数据，不设置 Error 字段（这不是错误）
+		logger.Info("ICMP", ipStr, "TTL 过期: 中间路由器=%s, rtt=%.2fms, ttl=%d", result.IP, result.RoundTripTime, result.TTL)
 	} else {
 		result.Success = false
 		result.Status = icmpStatusToString(reply.Status)
 		// Critical fix: Always set Error field with status description
 		result.Error = result.Status
+		// 超时或其他错误时，IP 设置为 * 表示未获取到响应地址
+		result.IP = "*"
 		logger.Info("ICMP", ipStr, "Ping 失败 (状态码错误): status=%s, code=%d", result.Status, reply.Status)
 	}
 
