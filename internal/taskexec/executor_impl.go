@@ -58,13 +58,22 @@ func (e *DeviceCommandExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 		unitProgress[unit.ID] = 0
 	}
 
+loop:
 	for _, unit := range stage.Units {
 		if ctx.IsCancelled() {
 			break
 		}
 
 		wg.Add(1)
-		semaphore <- struct{}{}
+		// 使用 select 同时监听信号量和取消通道，避免取消时阻塞在信号量上
+		select {
+		case semaphore <- struct{}{}:
+			// 获取到信号量，继续启动 goroutine
+		case <-ctx.Context().Done():
+			// 上下文已取消，退出调度循环
+			wg.Done() // 撤销刚才的 wg.Add(1)
+			break loop
+		}
 
 		go func(u UnitPlan) {
 			defer wg.Done()
@@ -189,6 +198,7 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 	opts := executor.ExecutorOptions{
 		Vendor:     device.Vendor,
 		LogSession: logSession,
+		Protocol:   device.Protocol,
 	}
 
 	// Create device executor
@@ -242,7 +252,12 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Connection failed: %v", err))
 		return err
 	}
-	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnected, "SSH 连接成功", len(commands), 0)
+	protocol := strings.ToUpper(device.Protocol)
+	if protocol == "" {
+		protocol = "SSH"
+	}
+	connMsg := fmt.Sprintf("%s 连接成功", protocol)
+	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnected, connMsg, len(commands), 0)
 
 	if ctx.IsCancelled() {
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionCancelled, "执行前收到取消信号", len(commands), 0)
@@ -530,6 +545,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 		Vendor:        profile.Vendor,
 		DeviceProfile: profile,
 		LogSession:    logSession,
+		Protocol:      device.Protocol,
 	}
 
 	// Create device executor

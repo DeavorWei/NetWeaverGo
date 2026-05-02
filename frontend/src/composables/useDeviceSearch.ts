@@ -6,7 +6,7 @@
 
 import { ref, computed } from 'vue'
 
-export type SearchType = 'group' | 'tag' | 'ip'
+export type SearchType = 'group' | 'tag' | 'ip' | 'protocol'
 
 export interface SearchOption {
   label: string
@@ -27,7 +27,8 @@ export function useDeviceSearch() {
   const searchOptions: SearchOption[] = [
     { label: '分组', value: 'group' },
     { label: '标签', value: 'tag' },
-    { label: 'IP', value: 'ip' }
+    { label: 'IP', value: 'ip' },
+    { label: '协议', value: 'protocol' }
   ]
   
   // 当前搜索类型的标签

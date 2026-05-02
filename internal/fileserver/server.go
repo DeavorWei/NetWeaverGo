@@ -115,15 +115,15 @@ func (m *ServerManager) emitLog(event LogEvent) {
 	// 同步写入日志文件（确保所有事件都落盘）
 	switch event.Level {
 	case LogLevelError:
-		logger.Error(module, event.ClientIP, event.Message)
+		logger.Error(module, event.ClientIP, "%s", event.Message)
 	case LogLevelWarn:
-		logger.Warn(module, event.ClientIP, event.Message)
+		logger.Warn(module, event.ClientIP, "%s", event.Message)
 	case LogLevelSuccess:
-		logger.Info(module, event.ClientIP, event.Message)
+		logger.Info(module, event.ClientIP, "%s", event.Message)
 	case LogLevelInfo:
-		logger.Info(module, event.ClientIP, event.Message)
+		logger.Info(module, event.ClientIP, "%s", event.Message)
 	default:
-		logger.Info(module, event.ClientIP, event.Message)
+		logger.Info(module, event.ClientIP, "%s", event.Message)
 	}
 
 	// 发送事件到前端

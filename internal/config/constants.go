@@ -80,6 +80,12 @@ const (
 	SSHKeepAliveInterval = 30 * time.Second
 )
 
+// ==================== Telnet配置 ====================
+const (
+	// DefaultTelnetPort 默认Telnet端口
+	DefaultTelnetPort = 23
+)
+
 // ==================== 分页检测配置 ====================
 const (
 	// PaginationLineThreshold 分页检测行数阈值

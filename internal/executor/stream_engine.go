@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/connutil"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/matcher"
 	"github.com/NetWeaverGo/core/internal/report"
-	"github.com/NetWeaverGo/core/internal/sshutil"
 	"github.com/NetWeaverGo/core/internal/terminal"
 )
 
@@ -35,8 +35,8 @@ type StreamEngine struct {
 	// matcher 流匹配器
 	matcher *matcher.StreamMatcher
 
-	// client SSH 客户端
-	client *sshutil.SSHClient
+	// conn 统一设备连接接口（SSH/Telnet）
+	conn connutil.DeviceConnection
 
 	// executor 所属执行器（用于回调）
 	executor *DeviceExecutor
@@ -53,7 +53,7 @@ type StreamEngine struct {
 }
 
 // NewStreamEngine 创建新的流处理引擎
-func NewStreamEngine(executor *DeviceExecutor, client *sshutil.SSHClient, commands []string, width int) *StreamEngine {
+func NewStreamEngine(executor *DeviceExecutor, conn connutil.DeviceConnection, commands []string, width int) *StreamEngine {
 	m := matcher.NewStreamMatcher()
 	adapter := NewSessionAdapter(width, commands, m)
 	logger.Debug("StreamEngine", "-", "使用新会话架构 (Detector+Reducer+Driver)")
@@ -61,7 +61,7 @@ func NewStreamEngine(executor *DeviceExecutor, client *sshutil.SSHClient, comman
 	return &StreamEngine{
 		adapter:        adapter,
 		matcher:        m,
-		client:         client,
+		conn:           conn,
 		executor:       executor,
 		width:          width,
 		suspendHandler: nil,
@@ -89,9 +89,9 @@ func (e *StreamEngine) SetErrorMatcher(m *matcher.StreamMatcher) {
 // mode=playbook 时消费整队列
 // mode=single 时只消费一条命令并返回单结果
 func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout time.Duration) ([]*CommandResult, error) {
-	if e.client != nil {
+	if e.conn != nil {
 		// 初始化阶段可能设置过底层 TCP read deadline，这里统一清零，避免影响正式执行流。
-		_ = e.client.SetReadDeadline(time.Time{})
+		_ = e.conn.SetReadDeadline(time.Time{})
 	}
 
 	bufferSize := config.DefaultBufferSize
@@ -106,18 +106,23 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 	}
 
 	buf := make([]byte, bufferSize)
-	outReader := e.client.Stdout
-	errReader := e.client.Stderr
+	outReader := e.conn // DeviceConnection 实现了 io.Reader
 
-	// 丢弃并记录 stderr
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				logger.Warn("StreamEngine", "-", "stderr 协程 panic 已恢复: %v", r)
-			}
+	// 丢弃并记录 stderr（SSH 有独立 stderr，Telnet 没有）
+	// 通过类型断言检查是否支持 stderr
+	type stderrProvider interface {
+		Stderr() io.Reader
+	}
+	if sp, ok := e.conn.(stderrProvider); ok {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Warn("StreamEngine", "-", "stderr 协程 panic 已恢复: %v", r)
+				}
+			}()
+			_, _ = io.Copy(io.Discard, sp.Stderr())
 		}()
-		_, _ = io.Copy(io.Discard, errReader)
-	}()
+	}
 
 	// 当前超时设置
 	currentTimeout := defaultTimeout
@@ -280,8 +285,8 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 					if e.adapter.NewState() == NewStateCompleted {
 						return e.adapter.Results(), nil
 					}
-					e.adapter.MarkFailed("SSH 会话被远端断开")
-					return e.adapter.Results(), fmt.Errorf("SSH 会话被远端断开")
+					e.adapter.MarkFailed("设备连接被远端断开")
+					return e.adapter.Results(), fmt.Errorf("设备连接被远端断开")
 				}
 				e.adapter.MarkFailed(err.Error())
 				return e.adapter.Results(), fmt.Errorf("读取错误: %w", err)
@@ -335,7 +340,7 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 		logger.Info("StreamEngine", "-", ">>> [发送命令]: %s", act.Command)
 
 		// 发送命令
-		if err := e.client.SendCommand(act.Command); err != nil {
+		if _, err := e.conn.SendCommand(act.Command); err != nil {
 			return fmt.Errorf("发送命令失败: %w", err)
 		}
 
@@ -387,7 +392,7 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 	case ActSendPagerContinue:
 		// 发送空格（分页）
 		logger.Debug("StreamEngine", "-", "[自动翻页] 发送空格继续...")
-		if err := e.client.SendRawBytes([]byte(" ")); err != nil {
+		if err := e.conn.SendRawBytes([]byte(" ")); err != nil {
 			return fmt.Errorf("发送空格失败: %w", err)
 		}
 
@@ -399,7 +404,7 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 	case ActSendWarmup:
 		// 发送预热空行
 		logger.Debug("StreamEngine", "-", "发送预热空行...")
-		if err := e.client.SendCommand(""); err != nil {
+		if _, err := e.conn.SendCommand(""); err != nil {
 			return fmt.Errorf("发送预热空行失败: %w", err)
 		}
 

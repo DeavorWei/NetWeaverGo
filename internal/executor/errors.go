@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/NetWeaverGo/core/internal/connutil"
 )
 
 // ErrorType 错误类型枚举
@@ -161,6 +163,30 @@ func (b *ErrorBuilder) Build() *ExecutionError {
 func ClassifyError(err error) ErrorType {
 	if err == nil {
 		return ErrorTypeNone
+	}
+
+	// 检查 connutil.ConnectionError（Telnet/SSH 连接错误）
+	var connErr *connutil.ConnectionError
+	if errors.As(err, &connErr) {
+		switch connErr.Stage {
+		case "negotiate":
+			return ErrorTypeCritical // 协商失败不可重试
+		case "authenticate":
+			return ErrorTypeCritical // 认证失败不可重试
+		case "connect":
+			return ErrorTypeWarning // 连接失败可重试
+		default:
+			return ErrorTypeWarning
+		}
+	}
+
+	// 检查 Telnet 哨兵错误
+	if errors.Is(err, connutil.ErrTelnetNegotiationFailed) ||
+		errors.Is(err, connutil.ErrTelnetLoginFailed) {
+		return ErrorTypeCritical
+	}
+	if errors.Is(err, connutil.ErrTelnetAuthPromptTimeout) {
+		return ErrorTypeWarning
 	}
 
 	errStr := strings.ToLower(err.Error())

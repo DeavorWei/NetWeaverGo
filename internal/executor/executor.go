@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/connutil"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/matcher"
 	"github.com/NetWeaverGo/core/internal/models"
@@ -31,23 +32,32 @@ type SuspendHandler func(ctx context.Context, ip string, deviceLog string, faile
 
 // ExecutorOptions 描述执行器统一构造入口的可选配置。
 type ExecutorOptions struct {
-	EventBus       chan report.ExecutorEvent
-	SuspendHandler SuspendHandler
-	LogSession     *report.DeviceLogSession
-	Algorithms     *models.SSHAlgorithmSettings
-	Vendor         string
-	DeviceProfile  *config.DeviceProfile
+	EventBus          chan report.ExecutorEvent
+	SuspendHandler    SuspendHandler
+	LogSession        *report.DeviceLogSession
+	Algorithms        *models.SSHAlgorithmSettings
+	Vendor            string
+	DeviceProfile     *config.DeviceProfile
+	Protocol          string                    // 连接协议: "ssh"（默认）或 "telnet"
+	ConnectionFactory connutil.ConnectionFactory // 可选的连接工厂，nil 则使用默认工厂
 }
 
-// DeviceExecutor 封装特定设备的 SSH 数据流及命令步进下发生命周期
+// DeviceExecutor 封装特定设备的连接数据流及命令步进下发生命周期
 type DeviceExecutor struct {
 	IP       string
 	Port     int
 	Username string
 	Password string
+	Protocol string // 连接协议: "ssh"（默认）或 "telnet"
 
 	Matcher *matcher.StreamMatcher
-	Client  *sshutil.SSHClient
+	Client  *sshutil.SSHClient // SSH 客户端（仅 SSH 协议时非 nil）
+
+	// conn 统一的设备连接接口（通过连接工厂创建）
+	conn connutil.DeviceConnection
+
+	// connectionFactory 连接工厂，用于创建设备连接
+	connectionFactory connutil.ConnectionFactory
 
 	EventBus  chan report.ExecutorEvent
 	OnSuspend SuspendHandler
@@ -69,53 +79,76 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 	if profile == nil && strings.TrimSpace(opts.Vendor) != "" {
 		profile = config.GetDeviceProfile(opts.Vendor)
 	}
+
+	// 确定连接工厂
+	factory := opts.ConnectionFactory
+	if factory == nil {
+		factory = connutil.NewDefaultConnectionFactory()
+	}
+
 	return &DeviceExecutor{
-		IP:            ip,
-		Port:          port,
-		Username:      user,
-		Password:      pass,
-		Matcher:       matcher.NewStreamMatcher(),
-		EventBus:      opts.EventBus,
-		OnSuspend:     opts.SuspendHandler,
-		algorithms:    opts.Algorithms,
-		logSession:    opts.LogSession,
-		deviceProfile: profile,
-		replayer:      terminal.NewReplayer(80), // 实验性：使用标准终端宽度 80
+		IP:                ip,
+		Port:              port,
+		Username:          user,
+		Password:          pass,
+		Protocol:          opts.Protocol,
+		Matcher:           matcher.NewStreamMatcher(),
+		connectionFactory: factory,
+		EventBus:          opts.EventBus,
+		OnSuspend:         opts.SuspendHandler,
+		algorithms:        opts.Algorithms,
+		logSession:        opts.LogSession,
+		deviceProfile:     profile,
+		replayer:          terminal.NewReplayer(80), // 实验性：使用标准终端宽度 80
 	}
 }
 
-// Connect 创建SSH长连接并初始化日志审计
+// Connect 创建设备连接并初始化日志审计。
+// 根据协议类型（SSH/Telnet）通过连接工厂创建对应的连接。
 func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) error {
-	logger.Debug("Executor", e.IP, "准备建立SSH连接 (Timeout: %v)", timeout)
+	protocol := strings.ToLower(strings.TrimSpace(e.Protocol))
+	if protocol == "" {
+		protocol = connutil.ProtocolSSH
+	}
+	logger.Debug("Executor", e.IP, "准备建立连接 (Protocol: %s, Timeout: %v)", protocol, timeout)
 
-	// 获取 PTY 配置
-	var ptyConfig *sshutil.PTYConfig
-	if e.deviceProfile != nil {
-		ptyConfig = &sshutil.PTYConfig{
-			TermType: e.deviceProfile.PTY.TermType,
-			Width:    e.deviceProfile.PTY.Width,
-			Height:   e.deviceProfile.PTY.Height,
-			EchoMode: e.deviceProfile.PTY.EchoMode,
-			ISpeed:   e.deviceProfile.PTY.ISpeed,
-			OSpeed:   e.deviceProfile.PTY.OSpeed,
+	// 构建连接配置
+	cfg := connutil.ConnectionConfig{
+		IP:       e.IP,
+		Port:     e.Port,
+		Username: e.Username,
+		Password: e.Password,
+		Protocol: protocol,
+		Timeout:  timeout,
+	}
+
+	// SSH 协议需要额外配置
+	if protocol == connutil.ProtocolSSH {
+		// 获取 PTY 配置
+		var ptyConfig *sshutil.PTYConfig
+		if e.deviceProfile != nil {
+			ptyConfig = &sshutil.PTYConfig{
+				TermType: e.deviceProfile.PTY.TermType,
+				Width:    e.deviceProfile.PTY.Width,
+				Height:   e.deviceProfile.PTY.Height,
+				EchoMode: e.deviceProfile.PTY.EchoMode,
+				ISpeed:   e.deviceProfile.PTY.ISpeed,
+				OSpeed:   e.deviceProfile.PTY.OSpeed,
+			}
+		}
+
+		hostKeyPolicy, knownHostsPath := config.ResolveSSHHostKeyPolicy()
+		cfg.SSH = &connutil.SSHOptions{
+			Algorithms:     e.algorithms,
+			HostKeyPolicy:  hostKeyPolicy,
+			KnownHostsPath: knownHostsPath,
+			RawSink:        e.rawSink(),
+			PTY:            ptyConfig,
 		}
 	}
 
-	hostKeyPolicy, knownHostsPath := config.ResolveSSHHostKeyPolicy()
-	cfg := sshutil.Config{
-		IP:             e.IP,
-		Port:           e.Port,
-		Username:       e.Username,
-		Password:       e.Password,
-		Timeout:        timeout,
-		Algorithms:     e.algorithms,
-		HostKeyPolicy:  hostKeyPolicy,
-		KnownHostsPath: knownHostsPath,
-		RawSink:        e.rawSink(),
-		PTY:            ptyConfig,
-	}
-
-	client, err := sshutil.NewSSHClient(ctx, cfg)
+	// 使用连接工厂创建连接
+	conn, err := e.connectionFactory.Connect(ctx, cfg)
 	if err != nil {
 		// 使用统一错误处理
 		execErr := NewError(e.IP).
@@ -127,9 +160,15 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 		handler.Handle(ctx, execErr)
 		return execErr
 	}
-	e.Client = client
-	logger.Debug("Executor", e.IP, "连接初始化成功")
 
+	e.conn = conn
+
+	// 向后兼容：如果是 SSH 连接，提取底层 SSHClient 供 StreamEngine 使用
+	if sshAdapter, ok := conn.(*connutil.SSHConnectionAdapter); ok {
+		e.Client = sshAdapter.Unwrap()
+	}
+
+	logger.Debug("Executor", e.IP, "连接初始化成功 (Protocol: %s)", protocol)
 	return nil
 }
 
@@ -149,7 +188,7 @@ func (e *DeviceExecutor) ExecutePlaybookWithEvents(
 	eventCallback func(event ExecutionEvent),
 ) error {
 	logger.Debug("Executor", e.IP, "开始执行 Playbook (%d 条)", len(commands))
-	if e.Client == nil {
+	if e.conn == nil && e.Client == nil {
 		return fmt.Errorf("执行器未安全建连")
 	}
 
@@ -195,7 +234,7 @@ func (e *DeviceExecutor) ExecutePlaybookWithReport(
 	eventCallback func(event ExecutionEvent),
 ) (*ExecutionReport, error) {
 	logger.Debug("Executor", e.IP, "开始执行 Playbook (%d 条)", len(commands))
-	if e.Client == nil {
+	if e.conn == nil && e.Client == nil {
 		return nil, fmt.Errorf("执行器未安全建连")
 	}
 
@@ -238,7 +277,7 @@ func (e *DeviceExecutor) ExecutePlanWithEvents(
 ) (*ExecutionReport, error) {
 	logger.Debug("Executor", e.IP, "开始执行 Plan: %s (%d 条命令)", plan.Name, len(plan.Commands))
 
-	if e.Client == nil {
+	if e.conn == nil && e.Client == nil {
 		return nil, fmt.Errorf("执行器未安全建连")
 	}
 
@@ -282,7 +321,7 @@ func (e *DeviceExecutor) executeInternal(
 	}
 
 	// 创建 StreamEngine
-	engine := NewStreamEngine(e, e.Client, commandStrings, 80)
+	engine := NewStreamEngine(e, e.conn, commandStrings, 80)
 	engine.SetExecutionEventCallback(eventCallback)
 
 	// 设置命令标识
@@ -595,6 +634,8 @@ func classifyRunError(err error) ErrorClass {
 		"connection reset", "connection refused", "broken pipe",
 		"network is unreachable", "no such host", "dial tcp",
 		"eof", "ssh: handshake failed", "会话被远端断开",
+		"telnet negotiation failed", "telnet auth failed",
+		"connection error", "设备连接被远端断开",
 	}
 	for _, kw := range transportKeywords {
 		if strings.Contains(errStrLower, kw) {
@@ -681,6 +722,12 @@ func isTimeoutError(err error) bool {
 
 // Close 断开所有的流和连接
 func (e *DeviceExecutor) Close() {
+	// 优先通过统一连接接口关闭
+	if e.conn != nil {
+		e.conn.Close()
+		return
+	}
+	// 向后兼容：直接关闭 SSH 客户端
 	if e.Client != nil {
 		e.Client.Close()
 	}

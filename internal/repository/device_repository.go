@@ -131,6 +131,8 @@ func (r *deviceRepository) Query(opts DeviceQueryOptions) (*DeviceQueryResult, e
 			query = query.Where("LOWER(ip) LIKE ?", searchPattern)
 		case "tag":
 			query = query.Where("LOWER(tags) LIKE ?", searchPattern)
+		case "protocol":
+			query = query.Where("LOWER(protocol) LIKE ?", searchPattern)
 		default:
 			// 默认搜索所有字段
 			query = query.Where(

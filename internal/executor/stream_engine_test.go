@@ -6,10 +6,9 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/NetWeaverGo/core/internal/sshutil"
 )
 
+// scriptReader 按顺序返回预设的字符串块，模拟设备输出流。
 type scriptReader struct {
 	chunks []string
 	index  int
@@ -25,11 +24,37 @@ func (r *scriptReader) Read(p []byte) (int, error) {
 	return len(chunk), nil
 }
 
+// writeBuffer 收集所有写入的数据，用于验证发送的命令。
 type writeBuffer struct {
 	strings.Builder
 }
 
 func (w *writeBuffer) Close() error { return nil }
+
+// mockDeviceConnection 实现 connutil.DeviceConnection 接口，
+// 用于测试 StreamEngine 的流处理逻辑。
+type mockDeviceConnection struct {
+	reader io.Reader
+	writer io.Writer
+}
+
+func (m *mockDeviceConnection) Read(p []byte) (int, error)  { return m.reader.Read(p) }
+func (m *mockDeviceConnection) Write(p []byte) (int, error) { return m.writer.Write(p) }
+func (m *mockDeviceConnection) Close() error                { return nil }
+
+func (m *mockDeviceConnection) SendCommand(cmd string) (string, error) {
+	return "", nil
+}
+
+func (m *mockDeviceConnection) SendRawBytes(data []byte) error {
+	_, err := m.writer.Write(data)
+	return err
+}
+
+func (m *mockDeviceConnection) SetReadDeadline(deadline time.Time) error { return nil }
+func (m *mockDeviceConnection) CancelRead()                              {}
+func (m *mockDeviceConnection) IsClosed() bool                           { return false }
+func (m *mockDeviceConnection) RemoteAddr() string                       { return "192.168.58.200:22" }
 
 func TestStreamEngineRunPlaybook_UnifiedPathSendsWarmupAndCommand(t *testing.T) {
 	reader := &scriptReader{
@@ -41,14 +66,12 @@ func TestStreamEngineRunPlaybook_UnifiedPathSendsWarmupAndCommand(t *testing.T) 
 	}
 	writer := &writeBuffer{}
 
-	client := &sshutil.SSHClient{
-		IP:     "192.168.58.200",
-		Stdin:  writer,
-		Stdout: reader,
-		Stderr: strings.NewReader(""),
+	conn := &mockDeviceConnection{
+		reader: reader,
+		writer: writer,
 	}
 
-	engine := NewStreamEngine(nil, client, []string{"disp int b"}, 80)
+	engine := NewStreamEngine(nil, conn, []string{"disp int b"}, 80)
 
 	results, err := engine.RunPlaybook(context.Background(), 2*time.Second)
 	if err != nil {
@@ -86,14 +109,12 @@ func TestStreamEngineRunPlaybook_ContinueOnCmdErrorWaitsForPrompt(t *testing.T) 
 	}
 	writer := &writeBuffer{}
 
-	client := &sshutil.SSHClient{
-		IP:     "192.168.58.200",
-		Stdin:  writer,
-		Stdout: reader,
-		Stderr: strings.NewReader(""),
+	conn := &mockDeviceConnection{
+		reader: reader,
+		writer: writer,
 	}
 
-	engine := NewStreamEngine(nil, client, []string{"display arp all", "display device"}, 80)
+	engine := NewStreamEngine(nil, conn, []string{"display arp all", "display device"}, 80)
 	engine.adapter.SetContinueOnCmdError(true)
 
 	results, err := engine.RunPlaybook(context.Background(), 2*time.Second)
@@ -133,14 +154,12 @@ func TestStreamEngineRunPlaybook_EmitsCommandCompletionBeforeNextDispatch(t *tes
 	}
 	writer := &writeBuffer{}
 
-	client := &sshutil.SSHClient{
-		IP:     "192.168.58.200",
-		Stdin:  writer,
-		Stdout: reader,
-		Stderr: strings.NewReader(""),
+	conn := &mockDeviceConnection{
+		reader: reader,
+		writer: writer,
 	}
 
-	engine := NewStreamEngine(nil, client, []string{"display version", "display interface brief"}, 80)
+	engine := NewStreamEngine(nil, conn, []string{"display version", "display interface brief"}, 80)
 
 	var events []ExecutionEvent
 	engine.SetExecutionEventCallback(func(event ExecutionEvent) {

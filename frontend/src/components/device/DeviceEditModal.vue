@@ -265,7 +265,7 @@
         <!-- 操作按钮 -->
         <div class="flex items-center justify-between gap-3 pt-2">
           <button
-            v-if="isEditing"
+            v-if="isEditing && localForm.protocol === 'SSH'"
             type="button"
             @click="emit('reset-ssh-host-key')"
             :disabled="isSaving"

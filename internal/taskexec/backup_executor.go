@@ -164,6 +164,18 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 		return fmt.Errorf("device not found: %w", err)
 	}
 
+	// 检查设备协议是否支持备份（备份功能依赖 SFTP 文件传输，仅支持 SSH 协议）
+	protocol := device.Protocol
+	if protocol == "" {
+		protocol = "ssh"
+	}
+	if strings.ToLower(protocol) == "telnet" {
+		errMsg := fmt.Sprintf("设备 %s 使用 Telnet 协议，不支持配置备份（备份功能依赖 SFTP 文件传输，仅支持 SSH 协议）。请将设备协议更改为 SSH，或手动备份配置", deviceIP)
+		failUnitExecution(handler, ctx, unit.ID, errMsg, "Telnet 协议不支持备份", nil)
+		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordDeviceMissing, errMsg, 0, 0)
+		return fmt.Errorf("%s", errMsg)
+	}
+
 	startupCommand := unit.Steps[0].Params["startupCommand"]
 	saveRootPath := unit.Steps[1].Params["saveRootPath"]
 	dirNamePattern := unit.Steps[1].Params["dirNamePattern"]
@@ -173,7 +185,8 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeStepStarted, EventLevelInfo, "获取配置路径...")
 	
 	opts := executor.ExecutorOptions{
-		Vendor: device.Vendor,
+		Vendor:   device.Vendor,
+		Protocol: device.Protocol,
 	}
 	exec := executor.NewDeviceExecutor(
 		device.IP,
@@ -185,10 +198,10 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 	defer exec.Close()
 
 	if err := exec.Connect(ctx.Context(), unit.Timeout); err != nil {
-		errMsg := fmt.Sprintf("SSH连接失败: %v", err)
+		errMsg := fmt.Sprintf("连接失败: %v", err)
 		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入连接失败状态", nil)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnectFailed, errMsg, 0, 0)
-		return fmt.Errorf("SSH连接失败: %w", err)
+		return fmt.Errorf("连接失败: %w", err)
 	}
 
 	cmdOutput, err := exec.ExecuteCommandSync(ctx.Context(), startupCommand, unit.Timeout)
