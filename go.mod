@@ -56,7 +56,7 @@ require (
 	github.com/wailsapp/go-webview2 v1.0.23 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect
-	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/net v0.53.0
 	golang.org/x/text v0.36.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	modernc.org/libc v1.67.6 // indirect

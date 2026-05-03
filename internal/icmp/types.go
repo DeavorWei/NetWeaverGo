@@ -271,11 +271,11 @@ type TracertConfig struct {
 func DefaultTracertConfig() TracertConfig {
 	return TracertConfig{
 		MaxHops:     30,
-		Timeout:     3000,
+		Timeout:     1500,
 		DataSize:    32,
-		Count:       1, // 默认 1 轮，每轮每个 TTL 发送 1 个包
+		Count:       1,
 		Interval:    1000,
-		Concurrency: 0, // 0 = 全量并发
+		Concurrency: 0,
 	}
 }
 

@@ -1,5 +1,3 @@
-//go:build windows
-
 package icmp
 
 import (
@@ -293,43 +291,62 @@ func (e *TracertEngine) runRound(ctx context.Context, targetIP string, progress 
 	// 注意：不再丢弃 TTL > reachedTTL 的结果，保持全量探测结果
 	// 后处理清理会根据 reachedTTL 标记超出部分的状态，供前端过滤显示
 	// 【实时逐跳显示】每收到一个 TTL 结果立即发送更新到前端
-	for hopResult := range resultChan {
-		// 1. 立即更新 progress 中的对应跳
-		if hopResult.TTL-1 < len(progress.Hops) {
-			existing := &progress.Hops[hopResult.TTL-1]
-			e.mergeHopResult(existing, hopResult)
+	// 【心跳更新】在超时等待期间定期推送 elapsedMs，保持前端活跃
+	heartbeatTicker := time.NewTicker(500 * time.Millisecond)
+	defer heartbeatTicker.Stop()
 
-			// 2. 更新进度统计
-			progress.CompletedHops++
-			progress.ElapsedMs = time.Since(progress.StartTime).Milliseconds()
+collectLoop:
+	for {
+		select {
+		case hopResult, ok := <-resultChan:
+			if !ok {
+				break collectLoop
+			}
+			// 1. 立即更新 progress 中的对应跳
+			if hopResult.TTL-1 < len(progress.Hops) {
+				existing := &progress.Hops[hopResult.TTL-1]
+				e.mergeHopResult(existing, hopResult)
 
-			// 3. 如果到达目标，更新 MinReachedTTL
-			if hopResult.Reached {
-				currentMin := atomic.LoadInt32(&progress.MinReachedTTL)
-				if currentMin == 0 || int32(hopResult.TTL) < currentMin {
-					atomic.StoreInt32(&progress.MinReachedTTL, int32(hopResult.TTL))
-					atomic.StoreInt32(&reachedTTL, int32(hopResult.TTL))
+				// 2. 更新进度统计
+				progress.CompletedHops++
+				progress.ElapsedMs = time.Since(progress.StartTime).Milliseconds()
+
+				// 3. 如果到达目标，更新 MinReachedTTL
+				if hopResult.Reached {
+					currentMin := atomic.LoadInt32(&progress.MinReachedTTL)
+					if currentMin == 0 || int32(hopResult.TTL) < currentMin {
+						atomic.StoreInt32(&progress.MinReachedTTL, int32(hopResult.TTL))
+						atomic.StoreInt32(&reachedTTL, int32(hopResult.TTL))
+					}
+				}
+
+				// 4. 立即发送实时更新到前端（关键修改！）
+				if opts.OnUpdate != nil {
+					currentReachedTTL := atomic.LoadInt32(&progress.MinReachedTTL)
+					opts.OnUpdate(progress.CloneForDisplay(currentReachedTTL))
+				}
+
+				// 5. 发送单跳更新事件（仅当 TTL <= MinReachedTTL 时发送，防止泄漏超范围数据到前端）
+				hopReachedTTL := atomic.LoadInt32(&progress.MinReachedTTL)
+				if opts.OnHopUpdate != nil && (hopReachedTTL <= 0 || hopResult.TTL <= int(hopReachedTTL)) {
+					safeHopUpdateCallback(opts.OnHopUpdate, TracertHopUpdate{
+						TTL:        hopResult.TTL,
+						IP:         existing.IP,
+						CurrentSeq: hopResult.SentCount,
+						Success:    hopResult.Status == "success",
+						RTT:        existing.LastRtt,
+						IsComplete: true,
+						Timestamp:  time.Now().UnixMilli(),
+					})
 				}
 			}
 
-			// 4. 立即发送实时更新到前端（关键修改！）
+		case <-heartbeatTicker.C:
+			// 心跳更新：在超时等待期间定期推送 elapsedMs，让前端知道探测仍在活跃运行
+			progress.ElapsedMs = time.Since(progress.StartTime).Milliseconds()
 			if opts.OnUpdate != nil {
 				currentReachedTTL := atomic.LoadInt32(&progress.MinReachedTTL)
 				opts.OnUpdate(progress.CloneForDisplay(currentReachedTTL))
-			}
-
-			// 5. 发送单跳更新事件（仅当 TTL <= MinReachedTTL 时发送，防止泄漏超范围数据到前端）
-			hopReachedTTL := atomic.LoadInt32(&progress.MinReachedTTL)
-			if opts.OnHopUpdate != nil && (hopReachedTTL <= 0 || hopResult.TTL <= int(hopReachedTTL)) {
-				safeHopUpdateCallback(opts.OnHopUpdate, TracertHopUpdate{
-					TTL:        hopResult.TTL,
-					IP:         existing.IP,
-					CurrentSeq: hopResult.SentCount,
-					Success:    hopResult.Status == "success",
-					RTT:        existing.LastRtt,
-					IsComplete: true,
-					Timestamp:  time.Now().UnixMilli(),
-				})
 			}
 		}
 	}

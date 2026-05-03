@@ -1,4 +1,4 @@
-//go:build windows
+//go:build windows && !rawicmp
 
 package icmp
 
@@ -12,6 +12,28 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/logger"
 )
+
+type windowsBackend struct{}
+
+func (b *windowsBackend) pingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
+	return pingOneWindows(ip, timeout, dataSize)
+}
+
+func (b *windowsBackend) pingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*PingResult, error) {
+	return pingOneWithTTLWindows(ip, timeout, dataSize, ttl)
+}
+
+func (b *windowsBackend) close() error {
+	return nil
+}
+
+func (b *windowsBackend) name() string {
+	return "WindowsAPI(iphlpapi)"
+}
+
+func initWindowsBackend() icmpBackend {
+	return &windowsBackend{}
+}
 
 // Windows ICMP API constants
 const (
@@ -261,8 +283,7 @@ func prepareSendData(dataSize uint16) []byte {
 	return sendData
 }
 
-// PingOne performs a single ICMP echo request to the specified IP address.
-func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
+func pingOneWindows(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 	// 防止 dataSize=0 导致 prepareSendData 返回空切片，进而引发 IcmpSendEcho panic
 	if dataSize == 0 {
 		dataSize = 32
@@ -357,8 +378,7 @@ func PingOne(ip net.IP, timeout uint32, dataSize uint16) (*PingResult, error) {
 	return result, nil
 }
 
-// PingOneWithTTL performs a single ICMP echo request with specified TTL.
-func PingOneWithTTL(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*PingResult, error) {
+func pingOneWithTTLWindows(ip net.IP, timeout uint32, dataSize uint16, ttl uint8) (*PingResult, error) {
 	// 防止 dataSize=0 导致 prepareSendData 返回空切片，进而引发 IcmpSendEcho panic
 	if dataSize == 0 {
 		dataSize = 32
