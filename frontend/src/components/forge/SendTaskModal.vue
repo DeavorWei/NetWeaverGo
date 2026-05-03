@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { TaskGroupAPI, DeviceAPI } from "../../services/api";
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 const props = defineProps<{
   show: boolean;
@@ -119,7 +122,7 @@ const executeSend = async () => {
     );
     emit("close");
   } catch (err: any) {
-    console.error("发送到任务执行失败:", err);
+    logger.error("发送到任务执行失败", 'SendTaskModal', err);
     emit("toast", "发送失败: " + (err.message || err));
   } finally {
     saving.value = false;

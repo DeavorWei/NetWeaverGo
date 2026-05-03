@@ -469,6 +469,9 @@
 import { ref, computed, onMounted } from 'vue'
 import type { CommandGroup } from '../services/api'
 import { CommandGroupAPI } from '../services/api'
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 const loading = ref(true)
 const groups = ref<CommandGroup[]>([])
@@ -609,7 +612,7 @@ async function loadGroups() {
     const result = await CommandGroupAPI.listCommandGroups()
     groups.value = result || []
   } catch (err) {
-    console.error('加载命令组失败:', err)
+    logger.error('加载命令组失败', 'Commands', err)
     groups.value = []
   } finally {
     loading.value = false
@@ -709,7 +712,7 @@ async function saveGroup() {
     closeEditModal()
     await loadGroups()
   } catch (err: any) {
-    console.error('保存命令组失败:', err)
+    logger.error('保存命令组失败', 'Commands', err)
     alert('保存失败: ' + (err.message || err))
   } finally {
     editModal.value.saving = false
@@ -722,7 +725,7 @@ async function duplicateGroup(id: number) {
     await CommandGroupAPI.duplicateCommandGroup(id)
     await loadGroups()
   } catch (err: any) {
-    console.error('复制命令组失败:', err)
+    logger.error('复制命令组失败', 'Commands', err)
     alert('复制失败: ' + (err.message || err))
   }
 }
@@ -753,7 +756,7 @@ async function deleteGroup() {
     closeDeleteModal()
     await loadGroups()
   } catch (err: any) {
-    console.error('删除命令组失败:', err)
+    logger.error('删除命令组失败', 'Commands', err)
     alert('删除失败: ' + (err.message || err))
   } finally {
     deleteModal.value.deleting = false
@@ -790,7 +793,7 @@ async function copyCommand(command: string) {
     await navigator.clipboard.writeText(command)
     showCopyToast('命令已复制到剪贴板')
   } catch (err) {
-    console.error('复制失败:', err)
+    logger.error('复制失败', 'Commands', err)
     alert('复制失败')
   }
 }
@@ -803,7 +806,7 @@ async function copyAllCommands() {
     await navigator.clipboard.writeText(commands)
     showCopyToast('已复制全部命令')
   } catch (err) {
-    console.error('复制失败:', err)
+    logger.error('复制失败', 'Commands', err)
     alert('复制失败')
   }
 }

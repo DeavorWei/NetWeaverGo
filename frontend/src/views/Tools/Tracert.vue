@@ -5,7 +5,10 @@ import * as TracertService from '@/bindings/github.com/NetWeaverGo/core/internal
 import type { TracertConfig, TracertProgress, TracertHopUpdate, TracertHopResult } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
 import type { TracertRequest } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 import { useToast } from '@/utils/useToast'
+import { getLogger } from '@/utils/logger'
 import TracertSettingsModal from '@/components/tools/TracertSettingsModal.vue'
+
+const logger = getLogger()
 
 const toast = useToast()
 
@@ -214,7 +217,7 @@ const handleProgressEvent = (ev: { name: string; data: TracertProgress }) => {
   const newMinReachedTTL = incoming.minReachedTtl
 
   if (newMinReachedTTL > oldMinReachedTTL && oldMinReachedTTL > 0) {
-    console.log('[TRACERT FE] 路径变长:', oldMinReachedTTL, '→', newMinReachedTTL, '跳')
+    logger.info(`路径变长: ${oldMinReachedTTL} → ${newMinReachedTTL} 跳`, 'Tracert')
   }
 
   // Update top-level fields
@@ -297,7 +300,7 @@ const startPolling = () => {
         }
       }
     } catch (err) {
-      console.error('Polling progress failed:', err)
+      logger.error('Polling progress failed', 'Tracert', err)
     }
   }, POLLING_INTERVAL)
 }
@@ -330,7 +333,7 @@ const startTracert = async () => {
     startPolling()
     toast.success('路径探测已启动')
   } catch (err: any) {
-    console.error('Failed to start tracert:', err)
+    logger.error('Failed to start tracert', 'Tracert', err)
     const errorMsg = err?.message || err?.toString() || '启动失败'
     toast.error(`启动失败: ${errorMsg}`)
   }
@@ -342,7 +345,7 @@ const stopTracert = async () => {
     stopPolling()
     toast.info('正在停止...')
   } catch (err: any) {
-    console.error('Failed to stop tracert:', err)
+    logger.error('Failed to stop tracert', 'Tracert', err)
     toast.error(`停止失败: ${err?.message || '未知错误'}`)
   }
 }
@@ -357,7 +360,7 @@ const exportCSV = async () => {
     downloadFile(result.content, result.fileName || 'tracert_result.csv')
     toast.success('CSV 导出成功')
   } catch (err: any) {
-    console.error('Failed to export CSV:', err)
+    logger.error('Failed to export CSV', 'Tracert', err)
     toast.error(`导出失败: ${err?.message || '未知错误'}`)
   }
 }
@@ -372,7 +375,7 @@ const exportTXT = async () => {
     downloadFile(result.content, result.fileName || 'tracert_result.txt')
     toast.success('TXT 导出成功')
   } catch (err: any) {
-    console.error('Failed to export TXT:', err)
+    logger.error('Failed to export TXT', 'Tracert', err)
     toast.error(`导出失败: ${err?.message || '未知错误'}`)
   }
 }
@@ -439,7 +442,7 @@ onMounted(async () => {
       config.value = defaultConfig
     }
   } catch (err) {
-    console.error('Failed to get default config:', err)
+    logger.error('Failed to get default config', 'Tracert', err)
   }
 
   if (!target.value.trim()) {

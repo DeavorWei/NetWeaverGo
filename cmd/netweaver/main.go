@@ -26,6 +26,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// 初始化前端日志写入器
+	if err := logger.InitFrontendLogWriter(pm.GetFrontendLogPath(), logger.DefaultFrontendLogWriterConfig); err != nil {
+		logger.Error("System", "-", "前端日志系统初始化失败: %v", err)
+		// 非致命错误，继续运行
+	}
+
 	// 启动数据库并进行数据迁移校验
 	if err := config.InitDB(); err != nil {
 		logger.Error("System", "-", "数据库初始化失败: %v", err)
@@ -76,6 +82,7 @@ func runGUI() {
 	pingService := ui.NewPingService()             // 批量 Ping 服务
 	tracertService := ui.NewTracertService()       // Tracert 路径探测服务
 	fileServerService := ui.NewFileServerService() // 文件服务器服务
+	frontendLogService := ui.NewFrontendLogService() // 前端日志服务
 	// 创建统一任务执行UI服务（Wails暴露层）
 	taskExecutionUIService := ui.NewTaskExecutionUIService(taskExecutionService)
 
@@ -120,6 +127,7 @@ func runGUI() {
 			application.NewService(pingService),            // 批量 Ping 服务
 			application.NewService(tracertService),         // Tracert 路径探测服务
 			application.NewService(fileServerService),      // 文件服务器服务
+			application.NewService(frontendLogService),     // 前端日志服务
 			application.NewService(taskExecutionUIService), // 统一任务执行UI服务（阶段1）
 		},
 		Assets: application.AssetOptions{
@@ -146,4 +154,7 @@ func runGUI() {
 	if err := app.Run(); err != nil {
 		logger.Error("System", "-", "GUI 应用程序崩溃或异常退出: %v", err)
 	}
+
+	// 关闭前端日志写入器
+	logger.CloseFrontendLogWriter()
 }

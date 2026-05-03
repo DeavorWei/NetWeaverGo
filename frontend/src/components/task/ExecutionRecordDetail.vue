@@ -204,6 +204,9 @@ import type {
 import { useToast } from "../../utils/useToast";
 import DeviceExecutionProgressList from "./DeviceExecutionProgressList.vue";
 import FileOperationButtons from "./FileOperationButtons.vue";
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 const props = defineProps<{
   modelValue: boolean;
@@ -240,7 +243,7 @@ const loadDeviceDetails = async () => {
     });
     deviceDetails.value = response?.devices || [];
   } catch (error) {
-    console.error("加载设备详情失败:", error);
+    logger.error("加载设备详情失败", 'ExecutionRecordDetail', error);
     deviceDetails.value = [];
   } finally {
     loadingDevices.value = false;
@@ -258,7 +261,7 @@ const loadReportPath = async () => {
     reportPath.value = response?.reportPath || "";
     reportExists.value = response?.exists || false;
   } catch (error) {
-    console.error("加载报告路径失败:", error);
+    logger.error("加载报告路径失败", 'ExecutionRecordDetail', error);
     reportPath.value = "";
     reportExists.value = false;
   }

@@ -7,6 +7,10 @@ import { useColumnResize } from "@/composables/useColumnResize";
 import { useConfigBuilder } from "@/composables/useConfigBuilder";
 import { useIPBinding } from "@/composables/useIPBinding";
 
+// Logger
+import { getLogger } from "@/utils/logger";
+const logger = getLogger();
+
 // Components
 import TemplateEditor from "@/components/forge/TemplateEditor.vue";
 import VariablesPanel from "@/components/forge/VariablesPanel.vue";
@@ -171,7 +175,7 @@ const downloadAll = async () => {
     }
   } catch (err: any) {
     if (err.name !== "AbortError") {
-      console.error("Failed to save file:", err);
+      logger.error("Failed to save file", "ConfigForge", err);
       triggerToast("保存文件失败，请检查浏览器授权。");
     }
   }
@@ -217,7 +221,7 @@ const downloadSplit = async () => {
     }
   } catch (err: any) {
     if (err.name !== "AbortError") {
-      console.error("Failed to save files:", err);
+      logger.error("Failed to save files", "ConfigForge", err);
       triggerToast("批量保存文件失败，请检查浏览器授权。");
     }
   }

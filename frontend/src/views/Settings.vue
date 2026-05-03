@@ -376,6 +376,9 @@ import { SettingsAPI } from '../services/api'
 import type { GlobalSettings as BackendSettings } from '../services/api'
 import RuntimeConfigPanel from '../components/settings/RuntimeConfigPanel.vue'
 import HelpTip from '../components/common/HelpTip.vue'
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 type AlgorithmField = 'ciphers' | 'keyExchanges' | 'macs' | 'hostKeyAlgorithms'
 type AlgorithmSecurity = 'secure' | 'insecure' | 'legacy'
@@ -546,7 +549,7 @@ async function loadSSHAlgorithmOptions() {
     const result = await SettingsAPI.getSSHAlgorithmOptions()
     sshAlgorithmOptions.value = normalizeAlgorithmOptions(result)
   } catch (err) {
-    console.error('Failed to load SSH algorithm options:', err)
+    logger.error('加载 SSH 算法候选失败', 'Settings', err)
     showToast('加载 SSH 算法候选失败，将保留已有配置', 'error')
   }
 }
@@ -653,7 +656,7 @@ async function loadSettings() {
       }
     }
   } catch (err) {
-    console.error('Failed to load settings:', err)
+    logger.error('加载设置失败', 'Settings', err)
     showToast('加载设置失败', 'error')
   } finally {
     loading.value = false
@@ -688,7 +691,7 @@ async function saveSettings() {
     await SettingsAPI.saveSettings(backendSettings)
     showToast('设置已保存')
   } catch (err) {
-    console.error('Failed to save settings:', err)
+    logger.error('保存设置失败', 'Settings', err)
     const errorMessage = err instanceof Error ? err.message : '未知错误'
     showToast(`保存设置失败: ${errorMessage}`, 'error')
   } finally {

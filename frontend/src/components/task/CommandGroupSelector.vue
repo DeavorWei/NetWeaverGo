@@ -101,6 +101,9 @@
 import { ref, computed, watch, onMounted } from "vue";
 import type { CommandGroup } from "../../types/command";
 import { CommandGroupAPI } from "../../services/api";
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 const props = defineProps<{
   modelValue?: number; // 选中的命令组ID
@@ -142,7 +145,7 @@ async function loadGroups() {
       }
     }
   } catch (err) {
-    console.error("加载命令组失败:", err);
+    logger.error("加载命令组失败", 'CommandGroupSelector', err);
     groups.value = [];
   } finally {
     loading.value = false;

@@ -443,6 +443,9 @@ import TopologyGraph, { type GraphNode } from "../components/topology/TopologyGr
 import ReplayDialog from "../components/topology/ReplayDialog.vue";
 import TopologyDeviceDetailModal from "../components/topology/TopologyDeviceDetailModal.vue";
 import TopologyEdgeDetailModal from "../components/topology/TopologyEdgeDetailModal.vue";
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 // 阶段4: 统一执行框架 - 使用runId替代taskId
 const taskexecStore = useTaskexecStore();
@@ -712,29 +715,23 @@ async function refreshGraph() {
   edgeDetail.value = null;
   deviceDetail.value = null;
   const startedAt = new Date();
-  console.debug("[Topology] 开始刷新拓扑图", {
-    runId: selectedRunId.value,
-    status: selectedRun.value?.status,
-    taskName: selectedRun.value?.taskName,
-  });
+  logger.debug(
+    `开始刷新拓扑图，runId=${selectedRunId.value}, status=${selectedRun.value?.status}`,
+    'Topology',
+  );
   const g = await TaskExecutionAPI.getTopologyGraph(selectedRunId.value);
   graph.value = g || { taskId: selectedRunId.value, nodes: [], edges: [] };
   lastGraphLoadAt.value = startedAt.toLocaleString();
   applySummaryFromGraph();
-  console.debug("[Topology] 拓扑图刷新完成", {
-    runId: selectedRunId.value,
-    nodeCount: graph.value.nodes?.length || 0,
-    edgeCount: graph.value.edges?.length || 0,
-    loadedAt: lastGraphLoadAt.value,
-  });
+  logger.debug(
+    `拓扑图刷新完成，nodes=${graph.value.nodes?.length || 0}, edges=${graph.value.edges?.length || 0}`,
+    'Topology',
+  );
   if ((graph.value.edges?.length || 0) === 0) {
-    console.warn("[Topology] 当前运行未返回任何拓扑边", {
-      runId: selectedRunId.value,
-      nodeCount: graph.value.nodes?.length || 0,
-      edgeCount: graph.value.edges?.length || 0,
-      status: selectedRun.value?.status,
-      reasons: emptyGraphReasons.value,
-    });
+    logger.warn(
+      `当前运行未返回任何拓扑边，runId=${selectedRunId.value}, reasons=${emptyGraphReasons.value.join(', ')}`,
+      'Topology',
+    );
   }
 }
 
@@ -783,11 +780,10 @@ async function openDeviceDetail(deviceID: string) {
 }
 
 watch(selectedRunId, (value) => {
-  console.debug("[Topology] 切换拓扑运行", {
-    runId: value,
-    taskName: selectedRun.value?.taskName,
-    status: selectedRun.value?.status,
-  });
+  logger.debug(
+    `切换拓扑运行，runId=${value}, taskName=${selectedRun.value?.taskName}`,
+    'Topology',
+  );
   edgeDetail.value = null;
   deviceDetail.value = null;
   if (value) {

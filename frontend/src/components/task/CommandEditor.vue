@@ -157,6 +157,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { CommandGroupAPI } from '../../services/api'
 import type { CommandGroup } from '../../services/api'
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 const isOpen = ref(false)
 const isEditing = ref(false)
@@ -173,7 +176,7 @@ async function loadCommands() {
     const defaultGroup = (groups || []).find((group: CommandGroup) => group.name === '默认命令组')
     localCommands.value = defaultGroup?.commands || []
   } catch (err) {
-    console.error('加载命令失败:', err)
+    logger.error('加载命令失败', 'CommandEditor', err)
     localCommands.value = []
   }
 }
@@ -242,7 +245,7 @@ async function saveCommands() {
     // 触发事件通知父组件
     emit('saved', lines)
   } catch (err: any) {
-    console.error('保存命令失败:', err)
+    logger.error('保存命令失败', 'CommandEditor', err)
     alert('保存失败: ' + (err.message || err))
   } finally {
     isSaving.value = false

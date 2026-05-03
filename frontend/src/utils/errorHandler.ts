@@ -3,6 +3,8 @@
  * @description 提供类型安全的 API 调用包装和错误处理
  */
 
+import { getLogger } from './logger'
+
 /** 错误处理选项 */
 export interface ErrorHandlerOptions {
   /** 是否显示 Toast 提示 */
@@ -83,9 +85,13 @@ export async function safeCall<T>(
       data: result,
     }
   } catch (err: unknown) {
-    const errorMessage = customMessage 
+    const errorMessage = customMessage
       ? `${customMessage}: ${parseErrorMessage(err)}`
       : parseErrorMessage(err)
+    
+    // 记录错误日志到后端
+    const errorObj = err instanceof Error ? err : new Error(String(err))
+    getLogger().error(errorMessage, 'API', errorObj)
     
     if (showToast) {
       // 动态导入 Toast 服务避免循环依赖
@@ -95,10 +101,8 @@ export async function safeCall<T>(
     }
     
     if (onError) {
-      onError(err instanceof Error ? err : new Error(String(err)), errorMessage)
+      onError(errorObj, errorMessage)
     }
-    
-    console.error('[API Error]', errorMessage, err)
     
     return {
       success: false,

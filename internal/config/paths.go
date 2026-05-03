@@ -34,6 +34,8 @@ type PathManager struct {
 	DBPath              string
 	AppLogDir           string
 	AppLogPath          string
+	FrontendLogDir      string
+	FrontendLogPath     string
 	ExecutionReportDir  string
 	ExecutionLiveLogDir string
 	BackupConfigDir     string
@@ -129,6 +131,8 @@ func (pm *PathManager) rebuildDerivedPathsLocked() {
 	pm.DBPath = filepath.Join(pm.DBDir, sqliteFileName)
 	pm.AppLogDir = filepath.Join(pm.StorageRoot, "logs", "app")
 	pm.AppLogPath = filepath.Join(pm.AppLogDir, "app.log")
+	pm.FrontendLogDir = filepath.Join(pm.StorageRoot, "logs", "frontend")
+	pm.FrontendLogPath = filepath.Join(pm.FrontendLogDir, "frontend.log")
 	pm.ExecutionReportDir = filepath.Join(pm.StorageRoot, "execution", "reports")
 	pm.ExecutionLiveLogDir = filepath.Join(pm.StorageRoot, "execution", "live-logs")
 	pm.BackupConfigDir = filepath.Join(pm.StorageRoot, "backup", "config")
@@ -145,6 +149,7 @@ func (pm *PathManager) ensureDirectoriesLocked() error {
 	dirs := []string{
 		pm.DBDir,
 		pm.AppLogDir,
+		pm.FrontendLogDir,
 		pm.ExecutionReportDir,
 		pm.ExecutionLiveLogDir,
 		pm.BackupConfigDir,
@@ -227,6 +232,12 @@ func (pm *PathManager) GetAppLogPath() string {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 	return pm.AppLogPath
+}
+
+func (pm *PathManager) GetFrontendLogPath() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.FrontendLogPath
 }
 
 func (pm *PathManager) GetExecutionReportDir() string {

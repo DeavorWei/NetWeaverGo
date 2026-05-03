@@ -23,6 +23,9 @@ import {
   THEME_STORAGE_KEY,
 } from '@/types/theme'
 import { SettingsAPI } from '@/services/api'
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 // 全局状态（单例模式）
 const currentTheme = ref<ThemeName>(DEFAULT_THEME)
@@ -100,7 +103,7 @@ export function useTheme() {
         return resolveThemeValue(settings.theme)
       }
     } catch (error) {
-      console.warn('[useTheme] Failed to load theme from backend:', error)
+      logger.warn('Failed to load theme from backend', 'useTheme')
     } finally {
       isLoadingFromBackend.value = false
     }
@@ -127,7 +130,7 @@ export function useTheme() {
         await SettingsAPI.saveSettings(settings)
       }
     } catch (error) {
-      console.warn('[useTheme] Failed to save theme to backend:', error)
+      logger.warn('Failed to save theme to backend', 'useTheme')
     }
   }
 
@@ -165,7 +168,7 @@ export function useTheme() {
    */
   const setTheme = (theme: ThemeName): void => {
     if (!isValidTheme(theme)) {
-      console.warn(`[useTheme] Invalid theme: ${theme}`)
+      logger.warn(`Invalid theme: ${theme}`, 'useTheme')
       return
     }
 

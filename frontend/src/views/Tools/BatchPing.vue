@@ -7,9 +7,12 @@ import type { PingConfig, BatchPingProgress, HostPingUpdate } from '@/bindings/g
 import type { PingRequest } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 import type { DeviceAssetListItem } from '@/bindings/github.com/NetWeaverGo/core/internal/models/models'
 import { useToast } from '@/utils/useToast'
+import { getLogger } from '@/utils/logger'
 import PingSettingsModal from '@/components/tools/PingSettingsModal.vue'
 import { DualListSelector } from '@/components/common/DualListSelector'
 import type { ListItem, GroupData, SelectorConfig } from '@/components/common/DualListSelector'
+
+const logger = getLogger()
 
 // Duration 常量 (纳秒)
 const MILLISECOND = 1000000  // 1ms = 1,000,000 ns
@@ -300,7 +303,7 @@ const loadDevices = async () => {
     devices.value = result || []
   } catch (err) {
     toast.error('加载设备列表失败')
-    console.error('Failed to load devices:', err)
+    logger.error('Failed to load devices', 'BatchPing', err)
   } finally {
     loadingDevices.value = false
   }
@@ -334,7 +337,7 @@ const handleDeviceConfirm = async (items: ListItem[]) => {
     }
   } catch (err) {
     toast.error('导入设备 IP 失败')
-    console.error('Failed to import devices:', err)
+    logger.error('Failed to import devices', 'BatchPing', err)
   }
 }
 
@@ -360,7 +363,7 @@ const startPolling = () => {
         }
       }
     } catch (err) {
-      console.error('Polling progress failed:', err)
+      logger.error('Polling progress failed', 'BatchPing', err)
     }
   }, POLLING_INTERVAL)
 }
@@ -418,7 +421,7 @@ const startPing = async () => {
 
     toast.success('批量 Ping 已启动')
   } catch (err: any) {
-    console.error('Failed to start ping:', err)
+    logger.error('Failed to start ping', 'BatchPing', err)
     const errorMsg = err?.message || err?.toString() || '启动失败'
     toast.error(`启动失败: ${errorMsg}`)
   }
@@ -430,7 +433,7 @@ const stopPing = async () => {
     stopPolling()
     toast.info('正在停止...')
   } catch (err: any) {
-    console.error('Failed to stop ping:', err)
+    logger.error('Failed to stop ping', 'BatchPing', err)
     toast.error(`停止失败: ${err?.message || '未知错误'}`)
   }
 }
@@ -455,7 +458,7 @@ const exportCSV = async () => {
     URL.revokeObjectURL(url)
     toast.success('导出成功')
   } catch (err: any) {
-    console.error('Failed to export CSV:', err)
+    logger.error('Failed to export CSV', 'BatchPing', err)
     toast.error(`导出失败: ${err?.message || '未知错误'}`)
   }
 }
@@ -615,7 +618,7 @@ onMounted(async () => {
       config.value = defaultConfig
     }
   } catch (err) {
-    console.error('Failed to get default config:', err)
+    logger.error('Failed to get default config', 'BatchPing', err)
   }
 
   // 首次打开且目标输入为空时，自动弹出设置弹窗

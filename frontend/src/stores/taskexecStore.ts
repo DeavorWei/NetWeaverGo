@@ -10,6 +10,9 @@ import { ref, computed, markRaw } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { TaskExecutionAPI } from '../services/api'
 import type { ExecutionSnapshot, SnapshotDelta, SnapshotDeltaOp } from '../types/taskexec'
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 // 前端事件格式
 export interface TaskEvent {
@@ -249,19 +252,15 @@ export const useTaskexecStore = defineStore('taskexec', () => {
 
     if (!current) {
       // 没有当前快照，主动拉取全量
-      console.warn(
-        `[TaskExec] No current snapshot for runId=${delta.runId}, refreshing...`
-      )
-      refreshSnapshot(delta.runId).catch(console.error)
+      logger.warn(`No current snapshot for runId=${delta.runId}, refreshing...`, 'TaskExecStore')
+      refreshSnapshot(delta.runId).catch(err => logger.error('刷新快照失败', 'TaskExecStore', err))
       return false
     }
 
     // 检测到 gap 时，主动刷新全量快照
     if ((delta.baseSeq ?? 0) !== currentSeq) {
-      console.warn(
-        `[TaskExec] Delta gap detected: current=${currentSeq}, base=${delta.baseSeq}, seq=${delta.seq}, refreshing...`
-      )
-      refreshSnapshot(delta.runId).catch(console.error)
+      logger.warn(`Delta gap detected: current=${currentSeq}, base=${delta.baseSeq}, seq=${delta.seq}, refreshing...`, 'TaskExecStore')
+      refreshSnapshot(delta.runId).catch(err => logger.error('刷新快照失败', 'TaskExecStore', err))
       return false
     }
 
@@ -306,7 +305,7 @@ export const useTaskexecStore = defineStore('taskexec', () => {
         const applied = applySnapshotDelta(data)
         if (!applied) {
           refreshSnapshot(data.runId).catch(err => {
-            console.error('Failed to refresh snapshot after delta gap:', err)
+            logger.error('Failed to refresh snapshot after delta gap', 'TaskExecStore', err)
           })
         }
       }
@@ -342,7 +341,7 @@ export const useTaskexecStore = defineStore('taskexec', () => {
       const data = unwrapEventData<TaskEvent>(ev)
       if (data) {
         addEventLog(data)
-        console.log('[TaskexecStore] Event:', data)
+        logger.info(`Event: ${JSON.stringify(data)}`, 'TaskExecStore')
       }
     })
     if (typeof unlistenTaskEvent === 'function') {
@@ -356,7 +355,7 @@ export const useTaskexecStore = defineStore('taskexec', () => {
       try {
         fn()
       } catch (e) {
-        console.warn('清理事件监听器时发生警告:', e)
+        logger.warn('清理事件监听器时发生警告', 'TaskExecStore')
       }
     })
     cleanupFns = []
@@ -372,7 +371,7 @@ export const useTaskexecStore = defineStore('taskexec', () => {
       }
       return snapshot
     } catch (err) {
-      console.error('Failed to refresh snapshot:', err)
+      logger.error('Failed to refresh snapshot', 'TaskExecStore', err)
       return null
     }
   }
@@ -383,7 +382,7 @@ export const useTaskexecStore = defineStore('taskexec', () => {
       setRunHistory(runs)
       return runs
     } catch (err) {
-      console.error('Failed to load run history:', err)
+      logger.error('Failed to load run history', 'TaskExecStore', err)
       return []
     }
   }
@@ -393,7 +392,7 @@ export const useTaskexecStore = defineStore('taskexec', () => {
       await TaskExecutionAPI.cancelTask(runId)
       return true
     } catch (err) {
-      console.error('Failed to cancel task:', err)
+      logger.error('Failed to cancel task', 'TaskExecStore', err)
       return false
     }
   }

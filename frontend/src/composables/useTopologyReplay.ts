@@ -8,6 +8,9 @@ import type {
 
 // 从 bindings 导入类型
 import type { TopologyReplayRecord, ReplayableRunInfo } from '@/bindings/github.com/NetWeaverGo/core/internal/taskexec/models'
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 export function useTopologyReplay() {
   // 状态
@@ -89,7 +92,7 @@ export function useTopologyReplay() {
       const runs = await TaskExecutionAPI.listReplayableRuns(limit)
       replayableRuns.value = (runs || []).filter((r: ReplayableRunInfo) => r.hasRawFiles)
     } catch (err) {
-      console.error('获取可重放运行列表失败:', err)
+      logger.error('获取可重放运行列表失败', 'useTopologyReplay', err)
       replayableRuns.value = []
     }
   }
@@ -102,7 +105,7 @@ export function useTopologyReplay() {
       const history = await TaskExecutionAPI.getReplayHistory(originalRunId)
       replayHistory.value = history || []
     } catch (err) {
-      console.error('获取重放历史失败:', err)
+      logger.error('获取重放历史失败', 'useTopologyReplay', err)
       replayHistory.value = []
     }
   }

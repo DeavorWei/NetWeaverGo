@@ -1,6 +1,9 @@
 import { ref, watch, computed, type Ref } from 'vue'
 import { ForgeAPI, DeviceAPI } from '../services/api'
 import type { VarInput } from '../services/api'
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 /**
  * IP 绑定相关逻辑
@@ -81,7 +84,7 @@ export function useIPBinding(
         )
         bindingPreview.value = result
       } catch (err) {
-        console.error('生成绑定预览失败:', err)
+        logger.error('生成绑定预览失败', 'useIPBinding', err)
         bindingPreview.value = []
       }
     },

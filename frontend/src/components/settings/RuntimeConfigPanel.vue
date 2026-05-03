@@ -572,6 +572,9 @@
 import { ref, onMounted, computed } from "vue";
 import { SettingsAPI, RuntimeConfigData } from "../../services/api";
 import HelpTip from "../common/HelpTip.vue";
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 // 配置数据
 const config = ref({
@@ -673,7 +676,7 @@ async function loadConfig() {
     };
     originalConfig.value = JSON.stringify(config.value);
   } catch (err) {
-    console.error("加载配置失败:", err);
+    logger.error("加载配置失败", 'RuntimeConfigPanel', err);
     showMessage("加载配置失败", "error");
   }
 }
@@ -722,7 +725,7 @@ async function saveConfig() {
     originalConfig.value = JSON.stringify(config.value);
     showMessage("配置保存成功，已立即生效");
   } catch (err) {
-    console.error("保存配置失败:", err);
+    logger.error("保存配置失败", 'RuntimeConfigPanel', err);
     showMessage("保存配置失败", "error");
   } finally {
     saving.value = false;
@@ -740,7 +743,7 @@ async function resetToDefault() {
     await loadConfig();
     showMessage("已重置为默认值");
   } catch (err) {
-    console.error("重置配置失败:", err);
+    logger.error("重置配置失败", 'RuntimeConfigPanel', err);
     showMessage("重置配置失败", "error");
   } finally {
     saving.value = false;

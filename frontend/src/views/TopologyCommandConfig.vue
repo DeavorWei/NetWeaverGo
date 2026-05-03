@@ -181,7 +181,9 @@ import {
   type TopologyVendorCommandSaveRequest,
 } from "@/services/api";
 import { useToast } from "@/utils/useToast";
+import { getLogger } from '@/utils/logger'
 
+const logger = getLogger()
 const toast = useToast();
 
 const vendors = ref<string[]>([]);
@@ -253,7 +255,7 @@ async function loadVendors() {
       selectedVendor.value = vendors.value[0] || "";
     }
   } catch (err: any) {
-    console.error("加载厂商列表失败", err);
+    logger.error('加载厂商列表失败', 'TopologyCommandConfig', err);
     toast.error(`加载厂商列表失败: ${err?.message || err}`);
   } finally {
     loadingVendors.value = false;
@@ -268,7 +270,7 @@ async function loadVendorConfig(vendor: string) {
     commands.value = normalized;
     baselineCommands.value = cloneCommands(normalized);
   } catch (err: any) {
-    console.error("加载厂商配置失败", err);
+    logger.error('加载厂商配置失败', 'TopologyCommandConfig', err);
     commands.value = [];
     baselineCommands.value = [];
     toast.error(`加载 ${vendor} 配置失败: ${err?.message || err}`);
@@ -304,7 +306,7 @@ async function saveVendor() {
     baselineCommands.value = cloneCommands(normalized);
     toast.success(`厂商 ${selectedVendor.value} 配置保存成功`);
   } catch (err: any) {
-    console.error("保存厂商配置失败", err);
+    logger.error('保存厂商配置失败', 'TopologyCommandConfig', err);
     toast.error(`保存失败: ${err?.message || err}`);
   } finally {
     saving.value = false;
@@ -321,7 +323,7 @@ async function resetVendor() {
     baselineCommands.value = cloneCommands(normalized);
     toast.success(`已重置 ${selectedVendor.value} 为系统默认配置`);
   } catch (err: any) {
-    console.error("重置厂商配置失败", err);
+    logger.error('重置厂商配置失败', 'TopologyCommandConfig', err);
     toast.error(`重置失败: ${err?.message || err}`);
   } finally {
     resetting.value = false;

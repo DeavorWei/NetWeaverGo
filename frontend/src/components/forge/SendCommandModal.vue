@@ -2,6 +2,9 @@
 import { ref, computed } from "vue";
 import { CommandGroupAPI } from "../../services/api";
 import type { CommandGroup } from "../../services/api";
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 const props = defineProps<{
   show: boolean;
@@ -163,7 +166,7 @@ const executeSend = async () => {
 
     emit("close");
   } catch (err: any) {
-    console.error("创建命令组失败:", err);
+    logger.error("创建命令组失败", 'SendCommandModal', err);
     emit("toast", "创建失败: " + (err.message || err));
   } finally {
     saving.value = false;

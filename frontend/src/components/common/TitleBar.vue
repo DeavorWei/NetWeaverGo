@@ -54,6 +54,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
 import { Window } from "@wailsio/runtime";
+import logger from "@/utils/logger";
 
 const isMaximized = ref(false);
 
@@ -76,7 +77,7 @@ onMounted(async () => {
       await saveWindowState();
     }
   } catch (e) {
-    console.warn("Failed to check window maximize state:", e);
+    logger.warn(`Failed to check window maximize state: ${e}`, "TitleBar");
   }
 });
 
@@ -92,7 +93,7 @@ async function saveWindowState() {
       y: position.y,
     };
   } catch (e) {
-    console.warn("Failed to save window state:", e);
+    logger.warn(`Failed to save window state: ${e}`, "TitleBar");
   }
 }
 
@@ -101,7 +102,7 @@ async function minimize() {
   try {
     await Window.Minimise();
   } catch (e) {
-    console.warn("Failed to minimize window:", e);
+    logger.warn(`Failed to minimize window: ${e}`, "TitleBar");
   }
 }
 
@@ -118,7 +119,7 @@ async function toggleMaximize() {
       isMaximized.value = true;
     }
   } catch (e) {
-    console.warn("Failed to toggle maximize:", e);
+    logger.warn(`Failed to toggle maximize: ${e}`, "TitleBar");
   }
 }
 
@@ -127,7 +128,7 @@ async function close() {
   try {
     await Window.Close();
   } catch (e) {
-    console.warn("Failed to close window:", e);
+    logger.warn(`Failed to close window: ${e}`, "TitleBar");
   }
 }
 
@@ -184,7 +185,7 @@ async function handleDragStart(event: MouseEvent) {
     }
     // 如果不是最大化状态，CSS --wails-draggable: drag 会自动处理拖拽
   } catch (e) {
-    console.warn("Failed to handle drag start:", e);
+    logger.warn(`Failed to handle drag start: ${e}`, "TitleBar");
   }
 }
 

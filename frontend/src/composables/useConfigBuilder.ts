@@ -1,6 +1,9 @@
 import { ref, watch, computed } from 'vue'
 import { ForgeAPI } from '../services/api'
 import type { VarInput, BuildResult } from '../services/api'
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 /**
  * 配置构建核心逻辑
@@ -43,7 +46,7 @@ export function useConfigBuilder() {
       buildResult.value = result
       isCopied.value = false
     } catch (err) {
-      console.error('构建配置失败:', err)
+      logger.error('构建配置失败', 'useConfigBuilder', err)
       buildResult.value = null
     } finally {
       isBuilding.value = false
@@ -112,7 +115,7 @@ export function useConfigBuilder() {
         v.valueString = result.values.join(', ')
       }
     } catch (err) {
-      console.error('展开语法糖失败:', err)
+      logger.error('展开语法糖失败', 'useConfigBuilder', err)
     }
   }
 
@@ -127,7 +130,7 @@ export function useConfigBuilder() {
         isCopied.value = false
       }, 2000)
     } catch (err) {
-      console.error('Failed to copy text: ', err)
+      logger.error('Failed to copy text', 'useConfigBuilder', err)
     }
   }
 

@@ -167,6 +167,9 @@ import { useToast } from "../../utils/useToast";
 import type { ExecutionHistoryRecord } from "../../types/executionHistory";
 import ExecutionRecordDetail from "./ExecutionRecordDetail.vue";
 import ConfirmModal from "../common/ConfirmModal.vue";
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 const props = defineProps<{
   modelValue: boolean;
@@ -247,7 +250,7 @@ const loadRecords = async () => {
     total.value = result?.total || 0;
     calculateTotalPages();
   } catch (error) {
-    console.error("加载历史记录失败:", error);
+    logger.error("加载历史记录失败", 'ExecutionHistoryDrawer', error);
   } finally {
     loading.value = false;
   }
@@ -345,7 +348,7 @@ const executeDelete = async () => {
       }
     }
   } catch (error) {
-    console.error("删除记录失败:", error);
+    logger.error("删除记录失败", 'ExecutionHistoryDrawer', error);
     toast.error("删除失败");
   } finally {
     deleteConfirmModal.value.deleting = false;

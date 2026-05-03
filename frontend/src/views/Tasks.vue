@@ -733,6 +733,9 @@ import type {
 } from "../services/api";
 import DeviceSelectorModal from "../components/task/DeviceSelectorModal.vue";
 import CommandGroupSelector from "../components/task/CommandGroupSelector.vue";
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 const router = useRouter();
 
@@ -952,7 +955,7 @@ async function confirmCreate() {
     };
 
     const createdTask = await TaskGroupAPI.createTaskGroup(taskGroup);
-    console.debug("[Tasks] 任务创建成功", createdTask);
+    logger.debug(`任务创建成功，id=${createdTask?.id}`, 'Tasks');
     createModal.value.show = false;
     triggerToast("任务创建成功，正在跳转任务执行页", "success");
     router.push({
@@ -960,7 +963,7 @@ async function confirmCreate() {
       query: { refresh: String(Date.now()) },
     });
   } catch (err: any) {
-    console.error("创建任务失败:", err);
+    logger.error('创建任务失败', 'Tasks', err);
     triggerToast(`创建失败: ${err?.message || err}`, "error");
   }
 }
@@ -970,7 +973,7 @@ async function loadTopologyVendors() {
     supportedVendors.value =
       (await TopologyCommandAPI.getTaskTopologyVendors()) || [];
   } catch (err) {
-    console.error("加载拓扑厂商列表失败:", err);
+    logger.error('加载拓扑厂商列表失败', 'Tasks', err);
     supportedVendors.value =
       (await TopologyCommandConfigAPI.getSupportedTopologyVendors()) || [];
   }
@@ -1113,7 +1116,7 @@ async function loadTopologyPreview() {
     );
     topologyPreviewDirty.value = false;
   } catch (err: any) {
-    console.error("加载拓扑命令预览失败", err);
+    logger.error('加载拓扑命令预览失败', 'Tasks', err);
     topologyPreviewError.value = `命令预览加载失败: ${err?.message || err}`;
   } finally {
     topologyPreviewLoading.value = false;
@@ -1150,7 +1153,7 @@ async function loadDevices() {
     // 后端已统一使用小写字段名，前端组件也已适配
     deviceList.value = result || [];
   } catch (err) {
-    console.error("加载设备列表失败:", err);
+    logger.error('加载设备列表失败', 'Tasks', err);
     deviceList.value = [];
   }
 }

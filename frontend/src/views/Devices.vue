@@ -94,6 +94,7 @@
 import { ref, onMounted, watch } from "vue";
 import { QueryAPI, DeviceAPI } from "@/services/api";
 import type { DeviceAsset } from "@/services/api";
+import { getLogger } from "@/utils/logger";
 
 // 组件导入
 import DeviceSearchBar from "@/components/device/DeviceSearchBar.vue";
@@ -106,6 +107,8 @@ import DeviceDeleteConfirm from "@/components/device/DeviceDeleteConfirm.vue";
 import { useDeviceSearch } from "@/composables/useDeviceSearch";
 import { useDeviceSelection } from "@/composables/useDeviceSelection";
 import type { DeviceFormData } from "@/composables/useDeviceForm";
+
+const logger = getLogger()
 
 // 类型定义
 type Device = DeviceAsset;
@@ -218,7 +221,7 @@ async function loadDevices() {
     total.value = result?.total || 0;
     totalPages.value = result?.totalPages || 1;
   } catch (err) {
-    console.error("加载设备列表失败:", err);
+    logger.error("加载设备列表失败", 'Devices', err);
     data.value = [];
     total.value = 0;
     totalPages.value = 1;
@@ -242,7 +245,7 @@ async function loadProtocolConfig() {
     }
     if (protocols) validProtocols.value = protocols;
   } catch (e) {
-    console.error("Failed to load protocol config", e);
+    logger.error("Failed to load protocol config", 'Devices', e);
   }
 }
 
@@ -339,7 +342,7 @@ async function openEditModal(device: Device) {
       description: fullDevice.description || "",
     };
   } catch (err) {
-    console.error("获取设备详情失败:", err);
+    logger.error("获取设备详情失败", 'Devices', err);
     editModalRef.value?.setError("获取设备详情失败，请重试");
     showModal.value = false;
   }
@@ -408,7 +411,7 @@ async function saveDevice(deviceData: DeviceFormData) {
     closeModal();
     loadDevices();
   } catch (err: unknown) {
-    console.error("保存设备失败:", err);
+    logger.error("保存设备失败", 'Devices', err);
     const message =
       (err as { message?: string })?.message || "保存失败，请重试";
     editModalRef.value?.setError(message);
@@ -436,7 +439,7 @@ async function resetSSHHostKey() {
     await DeviceAPI.resetDeviceSSHHostKey(editingDeviceId.value);
     showPageNotice(`设备 ${formData.value.ip} 的 SSH 主机密钥已重置`);
   } catch (err: unknown) {
-    console.error("重置 SSH 主机密钥失败:", err);
+    logger.error("重置 SSH 主机密钥失败", 'Devices', err);
     const message =
       (err as { message?: string })?.message || "重置 SSH 主机密钥失败，请重试";
     editModalRef.value?.setError(message);
@@ -464,7 +467,7 @@ async function deleteDevice() {
     deviceToDelete.value = null;
     loadDevices();
   } catch (err: unknown) {
-    console.error("删除设备失败:", err);
+    logger.error("删除设备失败", 'Devices', err);
     const message =
       (err as { message?: string })?.message || "删除失败，请重试";
     showPageNotice(message);
@@ -523,7 +526,7 @@ async function saveBatchEdit(field: BatchField, value: string | number) {
     clearSelection();
     loadDevices();
   } catch (err: unknown) {
-    console.error("批量修改失败:", err);
+    logger.error("批量修改失败", 'Devices', err);
     const message =
       (err as { message?: string })?.message || "批量修改失败，请重试";
     batchEditModalRef.value?.setError(message);
@@ -549,7 +552,7 @@ async function batchDeleteDevices() {
     clearSelection();
     loadDevices();
   } catch (err: unknown) {
-    console.error("批量删除失败:", err);
+    logger.error("批量删除失败", 'Devices', err);
     const message =
       (err as { message?: string })?.message || "批量删除失败，请重试";
     showPageNotice(message);

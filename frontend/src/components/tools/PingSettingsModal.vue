@@ -2,6 +2,9 @@
 import { ref, computed } from 'vue'
 import type { PingConfig } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
 import * as PingService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/pingservice'
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 // 数据包大小限制常量
 const RECOMMENDED_MAX_SIZE = 8000
@@ -86,7 +89,7 @@ const handleTargetBlur = async () => {
   } catch (err) {
     expandStatus.value = 'error'
     expandMessage.value = '展开失败'
-    console.error('ExpandPingTargets failed:', err)
+    logger.error('ExpandPingTargets failed', 'PingSettingsModal', err)
   }
 }
 

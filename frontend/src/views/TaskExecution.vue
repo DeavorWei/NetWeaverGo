@@ -863,6 +863,9 @@ import TaskDetailModal from "../components/task/TaskDetailModal.vue";
 import TaskEditModal from "../components/task/TaskEditModal.vue";
 import StageProgress from "../components/task/StageProgress.vue";
 import type { StageSnapshot, UnitSnapshot } from "../types/taskexec";
+import { getLogger } from '@/utils/logger'
+
+const logger = getLogger()
 
 const router = useRouter();
 const route = useRoute();
@@ -1242,9 +1245,9 @@ watch(
     if (!refreshToken || refreshToken === previousToken) {
       return;
     }
-    console.debug(
-      "[TaskExecution] 检测到路由刷新信号，重新加载任务列表",
-      refreshToken,
+    logger.debug(
+      `检测到路由刷新信号，重新加载任务列表，token=${refreshToken}`,
+      'TaskExecution',
     );
     void loadTasks("route-refresh");
   },
@@ -1349,12 +1352,10 @@ function refreshTaskList() {
 }
 
 function resetExecutionViewState(reason: string) {
-  console.debug(`[TaskExecution] 重置执行视图状态，reason=${reason}`, {
-    active: executionView.value.active,
-    runId: executionView.value.runId,
-    currentRunId: taskexecStore.currentRunId,
-    awaitingSnapshot: awaitingSnapshot.value,
-  });
+  logger.debug(
+    `重置执行视图状态，reason=${reason}, active=${executionView.value.active}, runId=${executionView.value.runId}`,
+    'TaskExecution',
+  );
   executionView.value.active = false;
   executionView.value.runId = "";
   executionView.value.taskName = "";
@@ -1374,7 +1375,7 @@ async function loadTasks(reason: string = "manual") {
   loading.value = true;
   loadError.value = "";
   try {
-    console.debug(`[TaskExecution] 开始加载任务列表，reason=${reason}`);
+    logger.debug(`开始加载任务列表，reason=${reason}`, 'TaskExecution');
     const result = await TaskGroupAPI.listTaskGroups();
     if (!Array.isArray(result)) {
       throw new Error("任务列表接口返回非数组数据");
@@ -1382,12 +1383,13 @@ async function loadTasks(reason: string = "manual") {
     tasks.value = result
       .filter(Boolean)
       .map((item) => normalizeTaskListEntry(item));
-    console.debug(
-      `[TaskExecution] 任务列表加载完成，count=${tasks.value.length}, reason=${reason}`,
+    logger.debug(
+      `任务列表加载完成，count=${tasks.value.length}, reason=${reason}`,
+      'TaskExecution',
     );
   } catch (err: any) {
     const message = err?.message || String(err);
-    console.error("[TaskExecution] 加载任务列表失败:", err);
+    logger.error('加载任务列表失败', 'TaskExecution', err);
     loadError.value = message;
     tasks.value = [];
   } finally {
@@ -1398,7 +1400,7 @@ async function loadTasks(reason: string = "manual") {
 async function syncExecutionView() {
   try {
     const running = await TaskExecutionAPI.listRunningTasks();
-    console.debug(`[TaskExecution] 同步执行视图: running=${running.length}`);
+    logger.debug(`同步执行视图: running=${running.length}`, 'TaskExecution');
 
     if (!running.length) {
       // 没有运行中的任务，检查当前任务是否已完成
@@ -1420,8 +1422,9 @@ async function syncExecutionView() {
           if (terminalStatuses.includes(snapshot.status)) {
             // 任务已完成（终态），重置执行视图返回任务列表
             // 用户离开页面后返回，应该看到任务列表而非已完成的执行详情
-            console.debug(
-              `[TaskExecution] 任务已完成，重置执行视图，status=${snapshot.status}`,
+            logger.debug(
+              `任务已完成，重置执行视图，status=${snapshot.status}`,
+              'TaskExecution',
             );
             resetExecutionViewState("task-completed-on-mount");
             return;
@@ -1452,13 +1455,12 @@ async function syncExecutionView() {
     executionView.value.taskName = snapshot.taskName || "任务执行";
     executionView.value.taskType =
       snapshot.runKind === "topology" ? "topology" : "normal";
-    console.debug("[TaskExecution] 已切换到执行视图", {
-      runId: snapshot.runId,
-      taskName: snapshot.taskName,
-      runKind: snapshot.runKind,
-    });
+    logger.debug(
+      `已切换到执行视图，runId=${snapshot.runId}, taskName=${snapshot.taskName}, runKind=${snapshot.runKind}`,
+      'TaskExecution',
+    );
   } catch (err) {
-    console.error("[TaskExecution] 同步执行视图失败:", err);
+    logger.error('同步执行视图失败', 'TaskExecution', err);
     resetExecutionViewState("sync-error");
   }
 }
@@ -1506,7 +1508,7 @@ async function handleSnapshotTimeout() {
     return;
   }
 
-  console.warn("[TaskExecution] 快照超时，重置UI状态");
+  logger.warn('快照超时，重置UI状态', 'TaskExecution');
   awaitingSnapshot.value = false;
   triggerToast("任务执行超时，请检查设备连接配置", "error");
   executionView.value.active = false;
@@ -1559,7 +1561,7 @@ async function executeTask(task: TaskGroupListView) {
     await taskexecStore.loadRunHistory(50);
     await loadTasks("task-started");
   } catch (err: any) {
-    console.error("执行任务失败:", err);
+    logger.error('执行任务失败', 'TaskExecution', err);
     triggerToast(`执行失败: ${err?.message || err}`, "error");
     executionView.value.active = false;
     clearSnapshotTimeout();
@@ -1663,7 +1665,7 @@ async function doDelete() {
 // 关闭执行视图：仅解绑当前 run，不删除快照缓存
 function closeExecutionView() {
   if (isRunning.value || awaitingSnapshot.value) return;
-  console.debug("[TaskExecution] 用户关闭执行视图");
+  logger.debug('用户关闭执行视图', 'TaskExecution');
   resetExecutionViewState("close-execution-view");
   void loadTasks("close-execution-view");
 }
@@ -1869,7 +1871,7 @@ async function saveTaskEdit(payload: TaskGroup) {
           payload.id,
         );
       } catch (detailErr) {
-        console.error("刷新任务详情失败:", detailErr);
+        logger.error('刷新任务详情失败', 'TaskExecution', detailErr);
       }
     }
   } finally {

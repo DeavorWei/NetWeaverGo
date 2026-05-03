@@ -2,8 +2,11 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { Events, Dialogs } from '@wailsio/runtime'
 import { useToast } from '@/utils/useToast'
+import { getLogger } from '@/utils/logger'
 import * as FileServerService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/fileserverservice'
 import { FileServerConfig } from '@/bindings/github.com/NetWeaverGo/core/internal/models/models'
+
+const logger = getLogger()
 
 interface LogEvent {
   timestamp: number
@@ -66,7 +69,7 @@ async function fillDefaultHomeDirForAll() {
       }
     }
   } catch (e) {
-    console.warn('获取默认根目录失败:', e)
+    logger.warn('获取默认根目录失败', 'FileServers')
   }
 }
 
@@ -86,7 +89,7 @@ async function selectHomeDir() {
       currentConfig.value!.homeDir = result
     }
   } catch (e) {
-    console.warn('选择目录失败:', e)
+    logger.warn('选择目录失败', 'FileServers')
   }
 }
 
@@ -116,13 +119,13 @@ async function loadConfigAndStatus() {
             if (configs.value[p]) {
               configs.value[p].homeDir = defaultDir
             }
-          } catch (e) { console.warn(`获取默认目录失败:`, e) }
+          } catch (e) { logger.warn(`获取默认目录失败`, 'FileServers') }
         }
       }
-    } catch (e) { console.warn(`加载 ${p} 配置失败:`, e) }
+    } catch (e) { logger.warn(`加载 ${p} 配置失败`, 'FileServers') }
     try {
       runningStatus.value[p] = await FileServerService.GetServerStatus(p)
-    } catch (e) { console.warn(`获取 ${p} 状态失败:`, e) }
+    } catch (e) { logger.warn(`获取 ${p} 状态失败`, 'FileServers') }
   }
 }
 
