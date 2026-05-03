@@ -89,11 +89,13 @@ const isRunning = computed(() => progress.value?.isRunning ?? false)
 const hopOverlay = ref<Map<number, { lastUpdateTimestamp: number; status: 'probing' | 'completed' }>>(new Map())
 
 // Display results with overlay
-// 只过滤 pending 状态，不再过滤 cancelled（后端已通过 CloneForDisplay 过滤）
+// 过滤 pending 状态，并过滤 TTL > MinReachedTTL 的结果作为最终防线
 const displayResults = computed(() => {
   if (!progress.value?.hops) return []
+  const minTTL = progress.value.minReachedTtl
   return progress.value.hops
     .filter((hop) => hop.status !== 'pending')
+    .filter((hop) => !minTTL || minTTL <= 0 || hop.ttl <= minTTL)
     .map((hop) => {
       const overlay = hopOverlay.value.get(hop.ttl)
       const isProbing = overlay && overlay.status === 'probing'
@@ -148,6 +150,10 @@ const scheduleFlush = () => {
 
 const applyHopUpdate = (update: TracertHopUpdate) => {
   if (!progress.value?.hops) return
+
+  // 守卫：当已探测到目标时，忽略 TTL > MinReachedTTL 的更新，防止超范围数据泄漏到前端
+  const minTTL = progress.value.minReachedTtl
+  if (minTTL > 0 && update.ttl > minTTL) return
 
   // 动态扩展 hops 数组
   while (progress.value.hops.length < update.ttl) {

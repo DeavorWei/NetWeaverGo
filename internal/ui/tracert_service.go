@@ -583,14 +583,15 @@ func (s *TracertService) StopTracert() error {
 	}
 }
 
-// GetTracertProgress returns a deep copy of the current progress.
+// GetTracertProgress returns a filtered copy of the current progress for frontend display.
 func (s *TracertService) GetTracertProgress() *icmp.TracertProgress {
 	s.progressMu.RLock()
 	defer s.progressMu.RUnlock()
 	if s.progress == nil {
 		return nil
 	}
-	return s.progress.Clone()
+	minReachedTTL := atomic.LoadInt32(&s.progress.MinReachedTTL)
+	return s.progress.CloneForDisplay(minReachedTTL)
 }
 
 // isRunningLocked checks if the engine is running (must hold engineMu).

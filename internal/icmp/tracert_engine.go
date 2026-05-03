@@ -318,8 +318,9 @@ func (e *TracertEngine) runRound(ctx context.Context, targetIP string, progress 
 				opts.OnUpdate(progress.CloneForDisplay(currentReachedTTL))
 			}
 
-			// 5. 发送单跳更新事件
-			if opts.OnHopUpdate != nil {
+			// 5. 发送单跳更新事件（仅当 TTL <= MinReachedTTL 时发送，防止泄漏超范围数据到前端）
+			hopReachedTTL := atomic.LoadInt32(&progress.MinReachedTTL)
+			if opts.OnHopUpdate != nil && (hopReachedTTL <= 0 || hopResult.TTL <= int(hopReachedTTL)) {
 				safeHopUpdateCallback(opts.OnHopUpdate, TracertHopUpdate{
 					TTL:        hopResult.TTL,
 					IP:         existing.IP,
