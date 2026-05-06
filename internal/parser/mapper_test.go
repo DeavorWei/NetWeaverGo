@@ -2,40 +2,7 @@ package parser
 
 import "testing"
 
-func TestHuaweiMapper_ToInterfaces_WithMAC(t *testing.T) {
-	mapper := NewHuaweiMapper()
 
-	rows := []map[string]string{
-		{
-			"interface":   "GigabitEthernet1/0/1",
-			"phy":         "up",
-			"protocol":    "up",
-			"description": "Uplink to Core",
-			"mac":         "00e0-fc12-3456",
-			"ip":          "192.168.1.1/24",
-		},
-	}
-
-	interfaces, err := mapper.ToInterfaces(rows)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(interfaces) != 1 {
-		t.Fatalf("expected 1 interface, got %d", len(interfaces))
-	}
-
-	iface := interfaces[0]
-	if iface.Name != "GE1/0/1" {
-		t.Errorf("expected interface name 'GE1/0/1', got '%s'", iface.Name)
-	}
-	if iface.MACAddress != "00e0-fc12-3456" {
-		t.Errorf("expected MAC '00e0-fc12-3456', got '%s'", iface.MACAddress)
-	}
-	if iface.IPAddress != "192.168.1.1/24" {
-		t.Errorf("expected IP '192.168.1.1/24', got '%s'", iface.IPAddress)
-	}
-}
 
 func TestHuaweiMapperToLLDP(t *testing.T) {
 	mapper := NewHuaweiMapper()

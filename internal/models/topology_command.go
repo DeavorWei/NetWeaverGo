@@ -17,7 +17,6 @@ var defaultTopologyFieldCatalog = []TopologyFieldSpec{
 	{FieldKey: "version", Name: "系统版本", Phase: "collect", Required: true, ParserBinding: "version", DefaultEnabled: true, Description: "采集设备版本与系统镜像信息。"},
 	{FieldKey: "sysname", Name: "设备名称", Phase: "collect", Required: true, ParserBinding: "sysname", DefaultEnabled: true, Description: "采集设备 sysname 或 hostname。"},
 	{FieldKey: "interface_brief", Name: "接口概要", Phase: "collect", Required: true, ParserBinding: "interface_brief", DefaultEnabled: true, Description: "采集接口 up/down 与基础摘要。"},
-	{FieldKey: "interface_detail", Name: "接口详情", Phase: "collect", Required: false, ParserBinding: "interface_detail", DefaultEnabled: true, Description: "采集接口详细属性。"},
 	{FieldKey: "lldp_neighbor", Name: "LLDP 邻居", Phase: "collect", Required: true, ParserBinding: "lldp_neighbor", DefaultEnabled: true, Description: "采集 LLDP 邻居发现结果。"},
 	{FieldKey: "arp_all", Name: "ARP 表", Phase: "collect", Required: true, ParserBinding: "arp_all", DefaultEnabled: true, Description: "采集 ARP 地址表。"},
 	{FieldKey: "eth_trunk", Name: "聚合链路", Phase: "collect", Required: false, ParserBinding: "eth_trunk", DefaultEnabled: true, Description: "采集 Eth-Trunk/Port-Channel 聚合信息。"},

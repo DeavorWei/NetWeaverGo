@@ -209,11 +209,11 @@ func TestScanRawFiles_EmptyDir(t *testing.T) {
 	executor := NewReplayExecutor(db, newMockParserProvider())
 
 	// 扫描不存在的运行ID
-	files, err := executor.scanRawFiles("non-existent-run")
+	_, err := executor.scanRawFiles("non-existent-run")
 
-	// 应该返回空切片，不报错
-	assert.NoError(t, err)
-	assert.Empty(t, files)
+	// 应该返回错误
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "不存在")
 }
 
 // TestScanRawFiles_FilterByDevice 测试按设备过滤

@@ -1220,7 +1220,7 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 			mergeIdentityResult(identity, id, vendor)
 		case "sysname":
 			mergeIdentityFields(identity, flattenParseRows(rows), vendor)
-		case "interface_brief", "interface_detail":
+		case "interface_brief":
 			items, mapErr := mapper.ToInterfaces(rows)
 			if mapErr != nil {
 				parseStatus = "parse_failed"
@@ -1298,8 +1298,6 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 			Updates(map[string]interface{}{
 				"vendor":          identity.Vendor,
 				"model":           identity.Model,
-				"serial_number":   identity.SerialNumber,
-				"version":         identity.Version,
 				"hostname":        identity.Hostname,
 				"normalized_name": identity.Hostname,
 				"mgmt_ip":         identity.MgmtIP,
@@ -1336,11 +1334,6 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 				DeviceIP:      deviceIP,
 				InterfaceName: iface.Name,
 				Status:        iface.Status,
-				Speed:         iface.Speed,
-				Duplex:        iface.Duplex,
-				Description:   iface.Description,
-				MACAddress:    iface.MACAddress,
-				IPAddress:     iface.IPAddress,
 				IsAggregate:   iface.IsAggregate,
 				AggregateID:   iface.AggregateID,
 			}).Error; err != nil {
@@ -2126,8 +2119,6 @@ func mergeIdentityResult(identity *parser.DeviceIdentity, incoming *parser.Devic
 	mergeIdentityFields(identity, map[string]string{
 		"vendor":        incoming.Vendor,
 		"model":         incoming.Model,
-		"serial_number": incoming.SerialNumber,
-		"version":       incoming.Version,
 		"hostname":      incoming.Hostname,
 		"mgmt_ip":       incoming.MgmtIP,
 		"chassis_id":    incoming.ChassisID,
@@ -2159,12 +2150,6 @@ func mergeIdentityFields(identity *parser.DeviceIdentity, fields map[string]stri
 	}
 	if v := strings.TrimSpace(fields["model"]); v != "" {
 		identity.Model = v
-	}
-	if v := strings.TrimSpace(fields["serial_number"]); v != "" {
-		identity.SerialNumber = v
-	}
-	if v := strings.TrimSpace(fields["version"]); v != "" {
-		identity.Version = v
 	}
 	if v := chooseValue(fields["hostname"], fields["sysname"]); strings.TrimSpace(v) != "" {
 		identity.Hostname = strings.TrimSpace(v)

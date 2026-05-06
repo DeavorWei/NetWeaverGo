@@ -420,8 +420,6 @@ func TestEnrichCandidatesWithInterfaceFacts(t *testing.T) {
 		DeviceIP:      "192.168.1.1",
 		InterfaceName: "Gi0/0/1",
 		Status:        "up",
-		Speed:         "1000",
-		Duplex:        "full",
 	}
 
 	candidates := []*TopologyEdgeCandidate{

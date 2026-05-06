@@ -62,7 +62,6 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 			node.Model = d.Model
 			node.Role = d.Role
 			node.Site = d.Site
-			node.SerialNumber = d.SerialNumber
 			node.NodeType = models.NodeTypeManaged
 		} else if strings.HasPrefix(id, "server:") {
 			ip := strings.TrimPrefix(id, "server:")
@@ -312,8 +311,6 @@ func (s *TaskExecutionService) GetTopologyDeviceDetail(runID, deviceIP string) (
 		result.Identity = &parser.DeviceIdentity{
 			Vendor:       dev.Vendor,
 			Model:        dev.Model,
-			SerialNumber: dev.SerialNumber,
-			Version:      dev.Version,
 			Hostname:     dev.Hostname,
 			MgmtIP:       dev.MgmtIP,
 			ChassisID:    dev.ChassisID,
@@ -326,11 +323,6 @@ func (s *TaskExecutionService) GetTopologyDeviceDetail(runID, deviceIP string) (
 		result.Interfaces = append(result.Interfaces, parser.InterfaceFact{
 			Name:        iface.InterfaceName,
 			Status:      iface.Status,
-			Speed:       iface.Speed,
-			Duplex:      iface.Duplex,
-			Description: iface.Description,
-			MACAddress:  iface.MACAddress,
-			IPAddress:   iface.IPAddress,
 			IsAggregate: iface.IsAggregate,
 			AggregateID: iface.AggregateID,
 		})
@@ -480,7 +472,6 @@ func (s *TaskExecutionService) getGraphNode(runID, deviceID string, macAddress .
 		Model:        dev.Model,
 		Role:         dev.Role,
 		Site:         dev.Site,
-		SerialNumber: dev.SerialNumber,
 		NodeType:     models.NodeTypeManaged,
 	}
 }

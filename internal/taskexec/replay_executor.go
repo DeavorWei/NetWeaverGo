@@ -285,8 +285,6 @@ func (e *ReplayExecutor) ensureVirtualRun(replayRunID, originalRunID string) err
 			Site:           dev.Site,
 			Hostname:       dev.Hostname,
 			Model:          dev.Model,
-			SerialNumber:   dev.SerialNumber,
-			Version:        dev.Version,
 			MgmtIP:         dev.MgmtIP,
 			NormalizedName: dev.NormalizedName,
 			ChassisID:      dev.ChassisID,
@@ -407,12 +405,6 @@ func (e *ReplayExecutor) executeParse(ctx context.Context, replayRunID string, r
 					if id.Model != "" {
 						identity.Model = id.Model
 					}
-					if id.SerialNumber != "" {
-						identity.SerialNumber = id.SerialNumber
-					}
-					if id.Version != "" {
-						identity.Version = id.Version
-					}
 					if id.ChassisID != "" {
 						identity.ChassisID = id.ChassisID
 					}
@@ -449,14 +441,9 @@ func (e *ReplayExecutor) executeParse(ctx context.Context, replayRunID string, r
 								identity.ChassisID = s
 							}
 						}
-						if v, ok := row["serial_number"]; ok {
-							if s := strings.TrimSpace(v); s != "" {
-								identity.SerialNumber = s
-							}
-						}
 					}
 	
-				case "interface_brief", "interface_detail":
+				case "interface_brief":
 				items, mapErr := mapper.ToInterfaces(rows)
 				if mapErr != nil {
 					logger.Warn("Replay", replayRunID, "映射接口失败: %v", mapErr)
@@ -536,8 +523,6 @@ func (e *ReplayExecutor) saveParsedResults(runID, deviceIP string, identity *par
 			Updates(map[string]interface{}{
 				"vendor":          identity.Vendor,
 				"model":           identity.Model,
-				"serial_number":   identity.SerialNumber,
-				"version":         identity.Version,
 				"hostname":        identity.Hostname,
 				"normalized_name": identity.Hostname,
 				"mgmt_ip":         identity.MgmtIP,
@@ -574,11 +559,6 @@ func (e *ReplayExecutor) saveParsedResults(runID, deviceIP string, identity *par
 				DeviceIP:      deviceIP,
 				InterfaceName: iface.Name,
 				Status:        iface.Status,
-				Speed:         iface.Speed,
-				Duplex:        iface.Duplex,
-				Description:   iface.Description,
-				MACAddress:    iface.MACAddress,
-				IPAddress:     iface.IPAddress,
 				IsAggregate:   iface.IsAggregate,
 				AggregateID:   iface.AggregateID,
 				CreatedAt:     time.Now(),
@@ -1148,8 +1128,8 @@ func (e *ReplayExecutor) compareInterface(entries1, entries2 []TaskParsedInterfa
 
 	for key, e1 := range map1 {
 		if e2, exists := map2[key]; exists {
-			// 检查是否修改（比较Description, Status, Speed等）
-			if e1.Description != e2.Description || e1.Status != e2.Status || e1.Speed != e2.Speed {
+			// 检查是否修改（比较Status等）
+			if e1.Status != e2.Status || e1.IsAggregate != e2.IsAggregate {
 				diff.Modified++
 			} else {
 				diff.Unchanged++

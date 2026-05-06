@@ -173,11 +173,6 @@ type InterfaceInfo struct {
 	DeviceIP      string
 	InterfaceName string
 	Status        string
-	Speed         string
-	Duplex        string
-	Description   string
-	MACAddress    string
-	IPAddress     string
 	IsAggregate   bool
 	AggregateID   string
 }
@@ -408,11 +403,6 @@ func (b *TopologyBuilder) normalizeFacts(input *TopologyBuildInput) *NormalizedF
 			DeviceIP:      i.DeviceIP,
 			InterfaceName: ifName,
 			Status:        i.Status,
-			Speed:         i.Speed,
-			Duplex:        i.Duplex,
-			Description:   i.Description,
-			MACAddress:    i.MACAddress,
-			IPAddress:     i.IPAddress,
 			IsAggregate:   i.IsAggregate,
 			AggregateID:   i.AggregateID,
 		}

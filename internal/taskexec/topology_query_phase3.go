@@ -34,7 +34,6 @@ func BuildGraphNodeWithPhase3(id string, device TaskRunDevice, isManaged bool) m
 		Model:        device.Model,
 		Role:         device.Role,
 		Site:         device.Site,
-		SerialNumber: device.SerialNumber,
 		ChassisID:    device.ChassisID,
 	}
 

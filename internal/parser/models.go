@@ -10,8 +10,6 @@ import (
 type DeviceIdentity struct {
 	Vendor       string `json:"vendor"`       // 厂商：huawei / h3c / cisco
 	Model        string `json:"model"`        // 型号
-	SerialNumber string `json:"serialNumber"` // 序列号
-	Version      string `json:"version"`      // 版本
 	Hostname     string `json:"hostname"`     // 主机名
 	MgmtIP       string `json:"mgmtIp"`       // 管理IP
 	ChassisID    string `json:"chassisId"`    // 机箱ID（LLDP）
@@ -23,11 +21,6 @@ type InterfaceFact struct {
 	Name        string `json:"name"`              // 接口名
 	Status      string `json:"status"`            // 状态：up / down
 	Protocol    string `json:"protocol"`          // 协议状态
-	Speed       string `json:"speed"`             // 速率
-	Duplex      string `json:"duplex"`            // 双工模式
-	Description string `json:"description"`       // 描述
-	MACAddress  string `json:"macAddress"`        // MAC地址
-	IPAddress   string `json:"ipAddress"`         // IP地址
 	IsAggregate bool   `json:"isAggregate"`       // 是否聚合口
 	AggregateID string `json:"aggregateId"`       // 所属聚合组ID
 	VLAN        string `json:"vlan,omitempty"`    // Cisco特有：VLAN或trunk

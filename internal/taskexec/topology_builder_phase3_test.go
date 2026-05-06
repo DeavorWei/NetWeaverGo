@@ -221,12 +221,10 @@ func TestNormalizedFactsWithAllDeviceIPs(t *testing.T) {
 			{
 				DeviceIP:      "192.168.1.1",
 				InterfaceName: "Loopback0",
-				IPAddress:     "1.1.1.1",
 			},
 			{
 				DeviceIP:      "192.168.1.1",
 				InterfaceName: "Vlan10",
-				IPAddress:     "10.10.10.1",
 			},
 		},
 	}
@@ -243,66 +241,11 @@ func TestNormalizedFactsWithAllDeviceIPs(t *testing.T) {
 	// MgmtIP 应该在映射中
 	assert.Equal(t, "192.168.1.1", n.AllDeviceIPs["10.0.0.1"])
 
-	// 接口IP应该在映射中
-	assert.Equal(t, "192.168.1.1", n.AllDeviceIPs["1.1.1.1"])
-	assert.Equal(t, "192.168.1.1", n.AllDeviceIPs["10.10.10.1"])
-
 	// 验证设备信息
 	dev := n.Devices["192.168.1.1"]
 	assert.NotNil(t, dev)
 	assert.NotEmpty(t, dev.NodeUUID) // 应该生成了UUID
 	assert.Equal(t, NodeTypeManaged, dev.NodeType)
-
-	// 验证AllIPs包含接口IP
-	assert.Contains(t, dev.AllIPs, "1.1.1.1")
-	assert.Contains(t, dev.AllIPs, "10.10.10.1")
 }
 
-// TestResolveLLDPPeerWithAllDeviceIPs 测试使用全量IP映射解析LLDP对端
-func TestResolveLLDPPeerWithAllDeviceIPs(t *testing.T) {
-	builder := &TopologyBuilder{config: DefaultTopologyBuildConfig()}
 
-	n := &NormalizedFacts{
-		Devices: map[string]*DeviceInfo{
-			"192.168.1.1": {
-				NodeUUID: "node_test_001",
-				DeviceIP: "192.168.1.1",
-				AllIPs:   []string{"192.168.1.1", "10.0.0.1", "1.1.1.1"},
-			},
-		},
-		DeviceByMgmtIP:    map[string]string{"192.168.1.1": "192.168.1.1"},
-		DeviceByChassisID: map[string]string{},
-		DeviceByName:      map[string]string{},
-		AllDeviceIPs: map[string]string{
-			"192.168.1.1": "192.168.1.1",
-			"10.0.0.1":    "192.168.1.1",
-			"1.1.1.1":     "192.168.1.1",
-		},
-	}
-
-	t.Run("MatchViaAllDeviceIPs", func(t *testing.T) {
-		lldp := NormalizedLLDPNeighbor{
-			DeviceIP:     "192.168.1.2",
-			LocalIf:      "Gi0/0/1",
-			NeighborIP:   "1.1.1.1", // 不在DeviceByMgmtIP中，但在AllDeviceIPs中
-			NeighborName: "Switch-1",
-		}
-
-		deviceIP, source := builder.resolveLLDPPeer(lldp, n)
-		assert.Equal(t, "192.168.1.1", deviceIP)
-		assert.Equal(t, "neighbor_ip_extended", source)
-	})
-
-	t.Run("MatchViaDeviceByMgmtIP", func(t *testing.T) {
-		lldp := NormalizedLLDPNeighbor{
-			DeviceIP:     "192.168.1.2",
-			LocalIf:      "Gi0/0/1",
-			NeighborIP:   "192.168.1.1", // 在DeviceByMgmtIP中
-			NeighborName: "Switch-1",
-		}
-
-		deviceIP, source := builder.resolveLLDPPeer(lldp, n)
-		assert.Equal(t, "192.168.1.1", deviceIP)
-		assert.Equal(t, "neighbor_ip", source)
-	})
-}

@@ -1072,18 +1072,13 @@ func TestMergeIdentityFieldsAggregatesVersionSysnameEsnAndDeviceInfo(t *testing.
 	mergeIdentityResult(identity, &parser.DeviceIdentity{
 		Vendor:       "huawei",
 		Model:        "S5735-S24T4X",
-		Version:      "V200R021C00SPC600",
-		SerialNumber: "OLD-SN",
 		Hostname:     "legacy-name",
 	}, "huawei")
 	mergeIdentityFields(identity, map[string]string{"sysname": "Core-SW-01"}, "huawei")
-	mergeIdentityFields(identity, map[string]string{"serial_number": "ESN1234567890"}, "huawei")
 	mergeIdentityFields(identity, map[string]string{"model": "S5735-S24T4X-A", "management_ip": "10.0.0.254"}, "huawei")
 
 	assert.Equal(t, "huawei", identity.Vendor)
 	assert.Equal(t, "S5735-S24T4X-A", identity.Model)
-	assert.Equal(t, "V200R021C00SPC600", identity.Version)
-	assert.Equal(t, "ESN1234567890", identity.SerialNumber)
 	assert.Equal(t, "Core-SW-01", identity.Hostname)
 	assert.Equal(t, "10.0.0.254", identity.MgmtIP)
 }

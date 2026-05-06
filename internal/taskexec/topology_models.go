@@ -30,8 +30,6 @@ type TaskRunDevice struct {
 	Site           string     `json:"site"`
 	Hostname       string     `json:"hostname"`
 	Model          string     `json:"model"`
-	SerialNumber   string     `json:"serialNumber"`
-	Version        string     `json:"version"`
 	MgmtIP         string     `json:"mgmtIp"`
 	NormalizedName string     `json:"normalizedName"`
 	ChassisID      string     `json:"chassisId"`
@@ -110,11 +108,6 @@ type TaskParsedInterface struct {
 	DeviceIP      string    `gorm:"index;not null" json:"deviceIp"`
 	InterfaceName string    `gorm:"index" json:"interfaceName"`
 	Status        string    `json:"status"`
-	Speed         string    `json:"speed"`
-	Duplex        string    `json:"duplex"`
-	Description   string    `json:"description"`
-	MACAddress    string    `json:"macAddress"`
-	IPAddress     string    `json:"ipAddress"`
 	IsAggregate   bool      `json:"isAggregate"`
 	AggregateID   string    `json:"aggregateId"`
 	CreatedAt     time.Time `json:"createdAt"`

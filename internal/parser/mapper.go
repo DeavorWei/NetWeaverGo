@@ -34,8 +34,6 @@ func (m *HuaweiMapper) ToDeviceInfo(rows []map[string]string) (*DeviceIdentity, 
 	identity := &DeviceIdentity{
 		Vendor:       "huawei",
 		Model:        data["model"],
-		SerialNumber: data["serial_number"],
-		Version:      data["version"],
 		Hostname:     data["hostname"],
 	}
 
@@ -56,23 +54,6 @@ func (m *HuaweiMapper) ToInterfaces(rows []map[string]string) ([]InterfaceFact, 
 			Name:        ifName,
 			Status:      normalizeStatus(row["phy"]),
 			Protocol:    normalizeProtocol(row["protocol"]),
-			Description: row["description"],
-		}
-
-		// 解析速率和双工
-		if row["speed"] != "" {
-			iface.Speed = row["speed"]
-		}
-		if row["duplex"] != "" {
-			iface.Duplex = row["duplex"]
-		}
-
-		// 解析MAC地址和IP地址（来自interface_detail模板）
-		if mac := normalize.NormalizeMAC(row["mac"]); mac != "" {
-			iface.MACAddress = mac
-		}
-		if ip := row["ip"]; ip != "" {
-			iface.IPAddress = ip
 		}
 
 		interfaces = append(interfaces, iface)
@@ -307,8 +288,6 @@ func (m *CiscoMapper) ToDeviceInfo(rows []map[string]string) (*DeviceIdentity, e
 	return &DeviceIdentity{
 		Vendor:       "cisco",
 		Model:        data["model"],
-		SerialNumber: data["serial_number"],
-		Version:      data["version"],
 	}, nil
 }
 
@@ -325,17 +304,8 @@ func (m *CiscoMapper) ToInterfaces(rows []map[string]string) ([]InterfaceFact, e
 		iface := InterfaceFact{
 			Name:    ifName,
 			Status:  normalizeCiscoStatus(row["status"]),
-			Duplex:  row["duplex"],
 			VLAN:    row["vlan"],
 			IsTrunk: strings.Contains(row["vlan"], "trunk"),
-		}
-
-		// 解析MAC地址和IP地址（来自interface_detail模板）
-		if mac := normalize.NormalizeMAC(row["mac"]); mac != "" {
-			iface.MACAddress = mac
-		}
-		if ip := row["ip"]; ip != "" {
-			iface.IPAddress = ip
 		}
 
 		interfaces = append(interfaces, iface)

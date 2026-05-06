@@ -4,7 +4,7 @@
     "version": {
       "commandKey": "version",
       "engine": "regex",
-      "pattern": "^.*Version\\s+(?P<version>\\S+)|^.*cisco\\s+(?P<model>\\S+)|^.*Processor\\s+board\\s+ID\\s+(?P<serial_number>\\S+)|^(?P<hostname>\\S+)#",
+      "pattern": "^.*cisco\\s+(?P<model>\\S+)|^(?P<hostname>\\S+)#",
       "multiline": true,
       "description": "设备版本信息"
     },
@@ -15,49 +15,7 @@
       "multiline": true,
       "description": "接口简要信息"
     },
-    "interface_detail": {
-      "commandKey": "interface_detail",
-      "engine": "aggregate",
-      "aggregation": {
-        "recordStart": ["^(?P<interface>\\S+)\\s+is\\s+"],
-        "captureRules": [
-          {
-            "pattern": "^\\s*Description:\\s*(?P<description>.*)",
-            "mode": "set"
-          },
-          {
-            "pattern": "^\\s*Hardware\\s+is\\s+(?P<hardware>\\S+)",
-            "mode": "set"
-          },
-          {
-            "pattern": "^\\s*address\\s+is\\s+(?P<mac>[0-9A-Fa-f\\.]+)",
-            "mode": "set"
-          },
-          {
-            "pattern": "^\\s*Internet\\s+address\\s+is\\s+(?P<ip>\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+)",
-            "mode": "set"
-          },
-          {
-            "pattern": "^\\s*(?P<interface>\\S+)\\s+is\\s+(?P<status>\\S+)",
-            "mode": "set"
-          },
-          {
-            "pattern": "^\\s*line\\s+protocol\\s+is\\s+(?P<protocol>\\S+)",
-            "mode": "set"
-          },
-          {
-            "pattern": "^\\s*BW\\s+(?P<bandwidth>\\S+)",
-            "mode": "set"
-          },
-          {
-            "pattern": "^\\s*duplex\\s*,\\s*(?P<duplex>\\S+)",
-            "mode": "set"
-          }
-        ],
-        "emitWhen": ["interface"]
-      },
-      "description": "接口详情多行聚合"
-    },
+
     "lldp_neighbor": {
       "commandKey": "lldp_neighbor",
       "engine": "regex",
