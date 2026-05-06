@@ -61,7 +61,7 @@ func TestDefaultTopologyBuildConfig(t *testing.T) {
 func TestScoringWeightConstants(t *testing.T) {
 	// LLDP 权重
 	assert.Equal(t, 75.0, wLLDPBaseSingleSide)
-	assert.Equal(t, 100.0, wLLDPBaseBidirectional)
+	assert.Equal(t, 25.0, wLLDPBidirectionalBonus)
 	assert.Equal(t, 5.0, wLLDPChassisMatch)
 	assert.Equal(t, 3.0, wLLDPNameMatch)
 	assert.Equal(t, 5.0, wLLDPIPMatch)
@@ -71,8 +71,8 @@ func TestScoringWeightConstants(t *testing.T) {
 	assert.Equal(t, 20.0, wFDBBaseScore)
 	assert.Equal(t, 2.0, wFDBMACCountFactor)
 	assert.Equal(t, 30.0, wFDBDeviceBonus)
-	assert.Equal(t, 15.0, wFDBServerBonus)
-	assert.Equal(t, 5.0, wFDBTerminalBonus)
+	assert.Equal(t, 10.0, wFDBEndpointBonus)
+	assert.Equal(t, 3.0, wFDBUnknownBonus)
 
 	// 置信度阈值
 	assert.Equal(t, 0.95, confidenceConfirmed)
@@ -182,17 +182,17 @@ func TestFDBARPScoreCalculation(t *testing.T) {
 			expectedMinScore: 50.0,
 		},
 		{
-			name:             "服务器类型中等分",
-			remoteKind:       "server",
+			name:             "端点类型中等分",
+			remoteKind:       "endpoint",
 			macCount:         1,
 			hasLogicalIf:     false,
 			hasRemoteIP:      true,
 			vlans:            map[int]bool{1: true},
-			expectedMinScore: 35.0,
+			expectedMinScore: 30.0,
 		},
 		{
-			name:             "终端类型低分",
-			remoteKind:       "terminal",
+			name:             "未知类型低分",
+			remoteKind:       "unknown",
 			macCount:         1,
 			hasLogicalIf:     false,
 			hasRemoteIP:      false,

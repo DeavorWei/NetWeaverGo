@@ -174,43 +174,46 @@ type InterfaceInfo struct {
 }
 
 // collectBuildInputs 收集构建输入
+// 使用 Session 保证在同一连接上读取所有数据，确保读一致性
 func (b *TopologyBuilder) collectBuildInputs(runID string) (*TopologyBuildInput, error) {
 	input := &TopologyBuildInput{
 		RunID: runID,
 	}
 
+	db := b.db.Session(&gorm.Session{})
+
 	// 收集设备
-	if err := b.db.Where("task_run_id = ?", runID).Find(&input.Devices).Error; err != nil {
+	if err := db.Where("task_run_id = ?", runID).Find(&input.Devices).Error; err != nil {
 		return nil, fmt.Errorf("查询设备失败: %w", err)
 	}
 
 	// 收集 LLDP 邻居
-	if err := b.db.Where("task_run_id = ?", runID).Find(&input.LLDPNeighbors).Error; err != nil {
+	if err := db.Where("task_run_id = ?", runID).Find(&input.LLDPNeighbors).Error; err != nil {
 		return nil, fmt.Errorf("查询 LLDP 邻居失败: %w", err)
 	}
 
 	// 收集 FDB 条目
-	if err := b.db.Where("task_run_id = ?", runID).Find(&input.FDBEntries).Error; err != nil {
+	if err := db.Where("task_run_id = ?", runID).Find(&input.FDBEntries).Error; err != nil {
 		return nil, fmt.Errorf("查询 FDB 条目失败: %w", err)
 	}
 
 	// 收集 ARP 条目
-	if err := b.db.Where("task_run_id = ?", runID).Find(&input.ARPEntries).Error; err != nil {
+	if err := db.Where("task_run_id = ?", runID).Find(&input.ARPEntries).Error; err != nil {
 		return nil, fmt.Errorf("查询 ARP 条目失败: %w", err)
 	}
 
 	// 收集聚合成员
-	if err := b.db.Where("task_run_id = ?", runID).Find(&input.AggMembers).Error; err != nil {
+	if err := db.Where("task_run_id = ?", runID).Find(&input.AggMembers).Error; err != nil {
 		return nil, fmt.Errorf("查询聚合成员失败: %w", err)
 	}
 
 	// 收集聚合组
-	if err := b.db.Where("task_run_id = ?", runID).Find(&input.AggGroups).Error; err != nil {
+	if err := db.Where("task_run_id = ?", runID).Find(&input.AggGroups).Error; err != nil {
 		return nil, fmt.Errorf("查询聚合组失败: %w", err)
 	}
 
 	// 收集接口
-	if err := b.db.Where("task_run_id = ?", runID).Find(&input.Interfaces).Error; err != nil {
+	if err := db.Where("task_run_id = ?", runID).Find(&input.Interfaces).Error; err != nil {
 		return nil, fmt.Errorf("查询接口失败: %w", err)
 	}
 
@@ -230,15 +233,50 @@ func (b *TopologyBuilder) createFactSnapshot(input *TopologyBuildInput) Topology
 		IfCount:     len(input.Interfaces),
 	}
 
-	// 计算事实哈希
+	// 计算事实哈希（排序后计算，保证稳定性；覆盖所有数据源）
 	hash := sha256.New()
+
+	// 设备排序后哈希
+	deviceIPs := make([]string, 0, len(input.Devices))
 	for _, d := range input.Devices {
-		hash.Write([]byte(d.DeviceIP))
+		deviceIPs = append(deviceIPs, d.DeviceIP)
 	}
+	sort.Strings(deviceIPs)
+	for _, ip := range deviceIPs {
+		hash.Write([]byte("D:" + ip))
+	}
+
+	// LLDP排序后哈希
+	lldpKeys := make([]string, 0, len(input.LLDPNeighbors))
 	for _, l := range input.LLDPNeighbors {
-		hash.Write([]byte(l.DeviceIP + l.LocalInterface + l.NeighborName))
+		lldpKeys = append(lldpKeys, l.DeviceIP+"|"+l.LocalInterface+"|"+l.NeighborName)
 	}
-	snapshot.FactHash = hex.EncodeToString(hash.Sum(nil))[:16]
+	sort.Strings(lldpKeys)
+	for _, k := range lldpKeys {
+		hash.Write([]byte("L:" + k))
+	}
+
+	// FDB排序后哈希
+	fdbKeys := make([]string, 0, len(input.FDBEntries))
+	for _, f := range input.FDBEntries {
+		fdbKeys = append(fdbKeys, f.DeviceIP+"|"+f.Interface+"|"+f.MACAddress)
+	}
+	sort.Strings(fdbKeys)
+	for _, k := range fdbKeys {
+		hash.Write([]byte("F:" + k))
+	}
+
+	// ARP排序后哈希
+	arpKeys := make([]string, 0, len(input.ARPEntries))
+	for _, a := range input.ARPEntries {
+		arpKeys = append(arpKeys, a.DeviceIP+"|"+a.IPAddress+"|"+a.MACAddress)
+	}
+	sort.Strings(arpKeys)
+	for _, k := range arpKeys {
+		hash.Write([]byte("A:" + k))
+	}
+
+	snapshot.FactHash = hex.EncodeToString(hash.Sum(nil))
 
 	// 序列化构建配置
 	if cfgBytes, err := json.Marshal(input.BuildConfig); err == nil {
@@ -384,13 +422,24 @@ func (b *TopologyBuilder) normalizeFacts(input *TopologyBuildInput) *NormalizedF
 		}
 	}
 
-	// 建立 ARP MAC -> Device 映射
+	// 建立 ARP MAC -> Device 映射（使用预计算索引，O(N) 复杂度）
+	// 预计算: ChassisID 标准化 MAC -> DeviceIP 索引
+	chassisMACIndex := make(map[string]string, len(n.Devices))
+	for deviceIP, dev := range n.Devices {
+		if mac := normalizeMACAddress(dev.ChassisID); mac != "" {
+			chassisMACIndex[mac] = deviceIP
+		}
+	}
+
 	for _, a := range n.ARPEntries {
-		// 检查 MAC 是否属于已知设备
-		for deviceIP, dev := range n.Devices {
-			if normalizeMACAddress(dev.ChassisID) == a.MACAddress {
+		// 方式一: 通过 ChassisID MAC 匹配已知设备
+		if deviceIP, ok := chassisMACIndex[a.MACAddress]; ok {
+			n.ARPMACToDevice[a.MACAddress] = deviceIP
+		}
+		// 方式二: 通过 ARP IP 交叉匹配已知设备（补充 ChassisID 无法覆盖的场景）
+		if _, alreadyMapped := n.ARPMACToDevice[a.MACAddress]; !alreadyMapped {
+			if deviceIP, ok := n.DeviceByMgmtIP[a.IPAddress]; ok {
 				n.ARPMACToDevice[a.MACAddress] = deviceIP
-				break
 			}
 		}
 		n.ARPMACToIP[a.MACAddress] = a.IPAddress
@@ -488,9 +537,9 @@ func (b *TopologyBuilder) recalculateLLDPScore(score ScoreBreakdown) float64 {
 		score.LLDPScore.RemoteIfPresent +
 		score.AggregateScore.AggregateModeScore
 
-	// 双向加分
+	// 双向加分：使用常量计算双向确认加分值
 	if score.LLDPScore.Bidirectional {
-		total += 25.0 // 双向确认额外加分
+		total += wLLDPBidirectionalBonus
 	}
 
 	return total
@@ -676,7 +725,7 @@ func (b *TopologyBuilder) buildFDBARPCandidates(n *NormalizedFacts) []*TopologyE
 			}
 
 			remoteIf := "unknown"
-			if strings.HasPrefix(remoteDevice, "server:") || strings.HasPrefix(remoteDevice, "terminal:") {
+			if strings.HasPrefix(remoteDevice, "endpoint:") || strings.HasPrefix(remoteDevice, "server:") || strings.HasPrefix(remoteDevice, "terminal:") {
 				remoteIf = "access"
 			}
 
@@ -761,15 +810,10 @@ func (b *TopologyBuilder) resolveFDBRemoteEndpoint(deviceIP, mac string, n *Norm
 		return deviceIP, "device", "", mac
 	}
 
-	// 检查 MAC 是否有 ARP 记录
+	// 检查 MAC 是否有 ARP 记录（有IP的端点统一标记为 endpoint）
 	if ip, ok := n.ARPMACToIP[mac]; ok {
-		// 根据特征判断类型
-		kind := "terminal"
-		if strings.HasPrefix(ip, "192.168.") || strings.HasPrefix(ip, "10.") {
-			kind = "server"
-		}
-		// 使用IP作为标识，同时返回MAC用于追溯
-		return kind + ":" + ip, kind, ip, mac
+		// 使用IP作为标识，统一归类为 endpoint（不再根据IP前缀猜测类型）
+		return "endpoint:" + ip, "endpoint", ip, mac
 	}
 
 	// 未知 MAC - 仍使用MAC作为标识（因为没有IP）
@@ -781,11 +825,12 @@ func (b *TopologyBuilder) classifyEndpoint(remoteDevice string, n *NormalizedFac
 	if _, ok := n.Devices[remoteDevice]; ok {
 		return "device"
 	}
-	if strings.HasPrefix(remoteDevice, "server:") {
-		return "server"
+	if strings.HasPrefix(remoteDevice, "endpoint:") {
+		return "endpoint"
 	}
-	if strings.HasPrefix(remoteDevice, "terminal:") {
-		return "terminal"
+	// 兼容旧格式 server:/terminal: 前缀
+	if strings.HasPrefix(remoteDevice, "server:") || strings.HasPrefix(remoteDevice, "terminal:") {
+		return "endpoint"
 	}
 	return "unknown"
 }
@@ -806,10 +851,10 @@ func (b *TopologyBuilder) scoreFDBARPCandidate(remoteKind string, macCount int, 
 	switch remoteKind {
 	case "device":
 		score.FDBARPScore.EndpointScore = wFDBDeviceBonus
-	case "server":
-		score.FDBARPScore.EndpointScore = wFDBServerBonus
-	case "terminal":
-		score.FDBARPScore.EndpointScore = wFDBTerminalBonus
+	case "endpoint":
+		score.FDBARPScore.EndpointScore = wFDBEndpointBonus
+	default: // unknown
+		score.FDBARPScore.EndpointScore = wFDBUnknownBonus
 	}
 
 	// VLAN 一致性
@@ -897,8 +942,8 @@ func (b *TopologyBuilder) resolveCandidatesGlobal(candidates []*TopologyEdgeCand
 		}
 		groups[localA].candidates = append(groups[localA].candidates, c)
 
-		// 远端端点
-		if c.BDeviceID != "" && !strings.HasPrefix(c.BDeviceID, "unknown:") && !strings.HasPrefix(c.BDeviceID, "server:") && !strings.HasPrefix(c.BDeviceID, "terminal:") {
+		// 远端端点（排除推断节点，它们的接口信息不可靠）
+		if c.BDeviceID != "" && !strings.HasPrefix(c.BDeviceID, "unknown:") && !strings.HasPrefix(c.BDeviceID, "endpoint:") && !strings.HasPrefix(c.BDeviceID, "server:") && !strings.HasPrefix(c.BDeviceID, "terminal:") {
 			localB := c.BDeviceID + "|" + chooseValue(c.LogicalBIf, c.BIf, "unknown")
 			if _, ok := groups[localB]; !ok {
 				groups[localB] = &endpointGroup{candidates: make([]*TopologyEdgeCandidate, 0)}

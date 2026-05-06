@@ -51,79 +51,98 @@ func (p *TopologyFactsPersister) SaveParsedFacts(runID, deviceIP string,
 			return err
 		}
 
-		// 保存接口
-		for _, iface := range interfaces {
-			if err := tx.Create(&TaskParsedInterface{
-				TaskRunID:     runID,
-				DeviceIP:      deviceIP,
-				InterfaceName: iface.Name,
-				Status:        iface.Status,
-				IsAggregate:   iface.IsAggregate,
-				AggregateID:   iface.AggregateID,
-				CreatedAt:     time.Now(),
-				UpdatedAt:     time.Now(),
-			}).Error; err != nil {
+		now := time.Now()
+		const batchSize = 100
+
+		// 批量保存接口
+		if len(interfaces) > 0 {
+			records := make([]TaskParsedInterface, 0, len(interfaces))
+			for _, iface := range interfaces {
+				records = append(records, TaskParsedInterface{
+					TaskRunID:     runID,
+					DeviceIP:      deviceIP,
+					InterfaceName: iface.Name,
+					Status:        iface.Status,
+					IsAggregate:   iface.IsAggregate,
+					AggregateID:   iface.AggregateID,
+					CreatedAt:     now,
+					UpdatedAt:     now,
+				})
+			}
+			if err := tx.CreateInBatches(&records, batchSize).Error; err != nil {
 				return err
 			}
 		}
 
-		// 保存LLDP
-		for _, n := range lldps {
-			if err := tx.Create(&TaskParsedLLDPNeighbor{
-				TaskRunID:       runID,
-				DeviceIP:        deviceIP,
-				LocalInterface:  n.LocalInterface,
-				NeighborName:    n.NeighborName,
-				NeighborChassis: n.NeighborChassis,
-				NeighborPort:    n.NeighborPort,
-				NeighborIP:      n.NeighborIP,
-				NeighborDesc:    n.NeighborDesc,
-				CommandKey:      n.CommandKey,
-				RawRefID:        n.RawRefID,
-				CreatedAt:       time.Now(),
-				UpdatedAt:       time.Now(),
-			}).Error; err != nil {
+		// 批量保存LLDP
+		if len(lldps) > 0 {
+			records := make([]TaskParsedLLDPNeighbor, 0, len(lldps))
+			for _, n := range lldps {
+				records = append(records, TaskParsedLLDPNeighbor{
+					TaskRunID:       runID,
+					DeviceIP:        deviceIP,
+					LocalInterface:  n.LocalInterface,
+					NeighborName:    n.NeighborName,
+					NeighborChassis: n.NeighborChassis,
+					NeighborPort:    n.NeighborPort,
+					NeighborIP:      n.NeighborIP,
+					NeighborDesc:    n.NeighborDesc,
+					CommandKey:      n.CommandKey,
+					RawRefID:        n.RawRefID,
+					CreatedAt:       now,
+					UpdatedAt:       now,
+				})
+			}
+			if err := tx.CreateInBatches(&records, batchSize).Error; err != nil {
 				return err
 			}
 		}
 
-		// 保存FDB
-		for _, f := range fdbs {
-			if err := tx.Create(&TaskParsedFDBEntry{
-				TaskRunID:  runID,
-				DeviceIP:   deviceIP,
-				MACAddress: f.MACAddress,
-				VLAN:       f.VLAN,
-				Interface:  f.Interface,
-				Type:       f.Type,
-				CommandKey: f.CommandKey,
-				RawRefID:   f.RawRefID,
-				CreatedAt:  time.Now(),
-				UpdatedAt:  time.Now(),
-			}).Error; err != nil {
+		// 批量保存FDB
+		if len(fdbs) > 0 {
+			records := make([]TaskParsedFDBEntry, 0, len(fdbs))
+			for _, f := range fdbs {
+				records = append(records, TaskParsedFDBEntry{
+					TaskRunID:  runID,
+					DeviceIP:   deviceIP,
+					MACAddress: f.MACAddress,
+					VLAN:       f.VLAN,
+					Interface:  f.Interface,
+					Type:       f.Type,
+					CommandKey: f.CommandKey,
+					RawRefID:   f.RawRefID,
+					CreatedAt:  now,
+					UpdatedAt:  now,
+				})
+			}
+			if err := tx.CreateInBatches(&records, batchSize).Error; err != nil {
 				return err
 			}
 		}
 
-		// 保存ARP
-		for _, a := range arps {
-			if err := tx.Create(&TaskParsedARPEntry{
-				TaskRunID:  runID,
-				DeviceIP:   deviceIP,
-				IPAddress:  a.IPAddress,
-				MACAddress: a.MACAddress,
-				Interface:  a.Interface,
-				Type:       a.Type,
-				CommandKey: a.CommandKey,
-				RawRefID:   a.RawRefID,
-				CreatedAt:  time.Now(),
-				UpdatedAt:  time.Now(),
-			}).Error; err != nil {
+		// 批量保存ARP
+		if len(arps) > 0 {
+			records := make([]TaskParsedARPEntry, 0, len(arps))
+			for _, a := range arps {
+				records = append(records, TaskParsedARPEntry{
+					TaskRunID:  runID,
+					DeviceIP:   deviceIP,
+					IPAddress:  a.IPAddress,
+					MACAddress: a.MACAddress,
+					Interface:  a.Interface,
+					Type:       a.Type,
+					CommandKey: a.CommandKey,
+					RawRefID:   a.RawRefID,
+					CreatedAt:  now,
+					UpdatedAt:  now,
+				})
+			}
+			if err := tx.CreateInBatches(&records, batchSize).Error; err != nil {
 				return err
 			}
 		}
 
-		// 保存聚合
+		// 批量保存聚合
 		for _, g := range aggs {
 			if err := tx.Create(&TaskParsedAggregateGroup{
 				TaskRunID:     runID,
@@ -132,22 +151,26 @@ func (p *TopologyFactsPersister) SaveParsedFacts(runID, deviceIP string,
 				Mode:          g.Mode,
 				CommandKey:    g.CommandKey,
 				RawRefID:      g.RawRefID,
-				CreatedAt:     time.Now(),
-				UpdatedAt:     time.Now(),
+				CreatedAt:     now,
+				UpdatedAt:     now,
 			}).Error; err != nil {
 				return err
 			}
-			for _, member := range g.MemberPorts {
-				if err := tx.Create(&TaskParsedAggregateMember{
-					TaskRunID:     runID,
-					DeviceIP:      deviceIP,
-					AggregateName: g.AggregateName,
-					MemberPort:    member,
-					CommandKey:    g.CommandKey,
-					RawRefID:      g.RawRefID,
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}).Error; err != nil {
+			if len(g.MemberPorts) > 0 {
+				members := make([]TaskParsedAggregateMember, 0, len(g.MemberPorts))
+				for _, member := range g.MemberPorts {
+					members = append(members, TaskParsedAggregateMember{
+						TaskRunID:     runID,
+						DeviceIP:      deviceIP,
+						AggregateName: g.AggregateName,
+						MemberPort:    member,
+						CommandKey:    g.CommandKey,
+						RawRefID:      g.RawRefID,
+						CreatedAt:     now,
+						UpdatedAt:     now,
+					})
+				}
+				if err := tx.CreateInBatches(&members, batchSize).Error; err != nil {
 					return err
 				}
 			}

@@ -63,20 +63,30 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 			node.Role = d.Role
 			node.Site = d.Site
 			node.NodeType = models.NodeTypeManaged
+		} else if strings.HasPrefix(id, "endpoint:") {
+			ip := strings.TrimPrefix(id, "endpoint:")
+			node.Label = ip
+			node.IP = ip
+			node.Role = "endpoint-inferred"
+			node.Vendor = "endpoint"
+			node.NodeType = models.NodeTypeInferred
+			mac, macs := extractMACFromEdges(edges, id)
+			node.MACAddress = mac
+			node.MACAddresses = macs
 		} else if strings.HasPrefix(id, "server:") {
+			// 兼容旧数据格式
 			ip := strings.TrimPrefix(id, "server:")
 			node.Label = ip
 			node.IP = ip
-			node.Role = "server-inferred"
+			node.Role = "endpoint-inferred"
 			node.Vendor = "endpoint"
 			node.NodeType = models.NodeTypeInferred
-			// 从边信息中提取MAC地址（优先从BDeviceMAC字段）
 			mac, macs := extractMACFromEdges(edges, id)
 			node.MACAddress = mac
 			node.MACAddresses = macs
 		} else if strings.HasPrefix(id, "terminal:") {
+			// 兼容旧数据格式
 			ipOrMAC := strings.TrimPrefix(id, "terminal:")
-			// 判断是IP还是MAC（检查是否为有效IP）
 			if isValidIP(ipOrMAC) {
 				node.Label = ipOrMAC
 				node.IP = ipOrMAC
@@ -84,17 +94,15 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 				node.Label = ipOrMAC
 				node.MACAddress = ipOrMAC
 			}
-			node.Role = "terminal-inferred"
+			node.Role = "endpoint-inferred"
 			node.Vendor = "endpoint"
 			node.NodeType = models.NodeTypeInferred
-			// 从边信息中提取MAC地址
 			mac, macs := extractMACFromEdges(edges, id)
 			if node.MACAddress == "" {
 				node.MACAddress = mac
 			}
 			node.MACAddresses = macs
 		} else if strings.HasPrefix(id, "unknown:") {
-			// 处理未知MAC节点
 			mac := strings.TrimPrefix(id, "unknown:")
 			node.Label = mac
 			node.MACAddress = mac
@@ -421,13 +429,29 @@ func (s *TaskExecutionService) getGraphNode(runID, deviceID string, macAddress .
 	if strings.TrimSpace(deviceID) == "" {
 		return models.GraphNode{ID: "unknown", Label: "unknown"}
 	}
+	if strings.HasPrefix(deviceID, "endpoint:") {
+		ip := strings.TrimPrefix(deviceID, "endpoint:")
+		node := models.GraphNode{
+			ID:        deviceID,
+			Label:     ip,
+			IP:        ip,
+			Role:      "endpoint-inferred",
+			Vendor:    "endpoint",
+			NodeType:  models.NodeTypeInferred,
+		}
+		if len(macAddress) > 0 && macAddress[0] != "" {
+			node.MACAddress = macAddress[0]
+		}
+		return node
+	}
+	// 兼容旧格式 server:/terminal: 前缀
 	if strings.HasPrefix(deviceID, "server:") {
 		ip := strings.TrimPrefix(deviceID, "server:")
 		node := models.GraphNode{
 			ID:        deviceID,
 			Label:     ip,
 			IP:        ip,
-			Role:      "server-inferred",
+			Role:      "endpoint-inferred",
 			Vendor:    "endpoint",
 			NodeType:  models.NodeTypeInferred,
 		}
@@ -442,7 +466,7 @@ func (s *TaskExecutionService) getGraphNode(runID, deviceID string, macAddress .
 			ID:        deviceID,
 			Label:     ip,
 			IP:        ip,
-			Role:      "terminal-inferred",
+			Role:      "endpoint-inferred",
 			Vendor:    "endpoint",
 			NodeType:  models.NodeTypeInferred,
 		}

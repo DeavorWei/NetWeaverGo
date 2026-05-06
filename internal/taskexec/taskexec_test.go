@@ -1056,13 +1056,13 @@ func TestGetTopologyGraphClassifiesServerAndTerminalNodes(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "10.0.0.20", serverNode.Label)
 	assert.Equal(t, "10.0.0.20", serverNode.IP)
-	assert.Equal(t, "server-inferred", serverNode.Role)
+	assert.Equal(t, "endpoint-inferred", serverNode.Role)
 	assert.Equal(t, "endpoint", serverNode.Vendor)
 
 	terminalNode, ok := nodes["terminal:001122334455"]
 	require.True(t, ok)
 	assert.Equal(t, "001122334455", terminalNode.Label)
-	assert.Equal(t, "terminal-inferred", terminalNode.Role)
+	assert.Equal(t, "endpoint-inferred", terminalNode.Role)
 	assert.Equal(t, "endpoint", terminalNode.Vendor)
 }
 

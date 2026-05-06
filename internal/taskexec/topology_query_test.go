@@ -192,7 +192,7 @@ func TestGetGraphNodeWithMAC(t *testing.T) {
 			expectedLabel: "192.168.1.100",
 			expectedIP:    "192.168.1.100",
 			expectedMAC:   "00:50:56:c0:00:01",
-			expectedRole:  "server-inferred",
+			expectedRole:  "endpoint-inferred",
 			expectedType:  models.NodeTypeInferred,
 		},
 		{
@@ -202,7 +202,7 @@ func TestGetGraphNodeWithMAC(t *testing.T) {
 			expectedLabel: "192.168.1.101",
 			expectedIP:    "192.168.1.101",
 			expectedMAC:   "00:50:56:c0:00:02",
-			expectedRole:  "terminal-inferred",
+			expectedRole:  "endpoint-inferred",
 			expectedType:  models.NodeTypeInferred,
 		},
 		{
@@ -211,7 +211,7 @@ func TestGetGraphNodeWithMAC(t *testing.T) {
 			expectedLabel: "192.168.1.102",
 			expectedIP:    "192.168.1.102",
 			expectedMAC:   "",
-			expectedRole:  "server-inferred",
+			expectedRole:  "endpoint-inferred",
 			expectedType:  models.NodeTypeInferred,
 		},
 	}

@@ -196,19 +196,19 @@ type DecisionCandidate struct {
 
 const (
 	// LLDP 评分权重
-	wLLDPBaseSingleSide    = 75.0  // 单边基础分
-	wLLDPBaseBidirectional = 100.0 // 双向基础分
-	wLLDPChassisMatch      = 5.0   // chassis 匹配加分
-	wLLDPNameMatch         = 3.0   // 名称匹配加分
-	wLLDPIPMatch           = 5.0   // IP 匹配加分
-	wLLDPRemoteIfPresent   = 2.0   // 远端接口存在加分
+	wLLDPBaseSingleSide      = 75.0 // 单边基础分
+	wLLDPBidirectionalBonus  = 25.0 // 双向确认额外加分（双向总分 = 单边 + 此值）
+	wLLDPChassisMatch        = 5.0  // chassis 匹配加分
+	wLLDPNameMatch           = 3.0  // 名称匹配加分
+	wLLDPIPMatch             = 5.0  // IP 匹配加分
+	wLLDPRemoteIfPresent     = 2.0  // 远端接口存在加分
 
 	// FDB/ARP 评分权重
 	wFDBBaseScore      = 20.0 // 基础分
 	wFDBMACCountFactor = 2.0  // MAC 数量因子
 	wFDBDeviceBonus    = 30.0 // 设备类型加分
-	wFDBServerBonus    = 15.0 // 服务器类型加分
-	wFDBTerminalBonus  = 5.0  // 终端类型加分
+	wFDBEndpointBonus  = 10.0 // 端点类型加分（有ARP IP记录的非设备端点）
+	wFDBUnknownBonus   = 3.0  // 未知类型加分（无ARP记录的MAC）
 	wFDBVLANBonus      = 3.0  // VLAN 一致性加分
 	wFDBLogicalIfBonus = 5.0  // 聚合接口加分
 	wFDBRemoteIPBonus  = 5.0  // 远端 IP 加分

@@ -329,6 +329,17 @@ func (r *GormRepository) GetArtifactsByUnit(ctx context.Context, unitID string) 
 // DeleteRun 删除运行记录（含级联删除所有关联数据）
 func (r *GormRepository) DeleteRun(ctx context.Context, runID string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 0. 删除拓扑构建产物（候选/决策轨迹/事实快照）
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TopologyEdgeCandidate{}).Error; err != nil {
+			return fmt.Errorf("删除拓扑候选失败: %w", err)
+		}
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TopologyDecisionTrace{}).Error; err != nil {
+			return fmt.Errorf("删除决策轨迹失败: %w", err)
+		}
+		if err := tx.Where("task_run_id = ?", runID).Delete(&TopologyFactSnapshot{}).Error; err != nil {
+			return fmt.Errorf("删除事实快照失败: %w", err)
+		}
+
 		// 1. 删除解析数据表（拓扑采集特有）
 		// 1.1 删除拓扑边
 		if err := tx.Where("task_run_id = ?", runID).Delete(&TaskTopologyEdge{}).Error; err != nil {
@@ -425,6 +436,9 @@ func (r *GormRepository) DeleteAllRunsBatch(ctx context.Context) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 批量删除所有关联表（按依赖顺序）
 		tables := []interface{}{
+			&TopologyEdgeCandidate{},
+			&TopologyDecisionTrace{},
+			&TopologyFactSnapshot{},
 			&TaskTopologyEdge{},
 			&TaskParsedAggregateMember{},
 			&TaskParsedAggregateGroup{},
