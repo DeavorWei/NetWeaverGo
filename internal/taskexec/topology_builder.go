@@ -924,121 +924,105 @@ func (b *TopologyBuilder) enrichCandidatesWithInterfaceFacts(candidates []*Topol
 	}
 }
 
+type endpointOccupancy struct {
+	occupiedBy string
+	score      float64
+}
+
 // resolveCandidatesGlobal 全局冲突消解
 func (b *TopologyBuilder) resolveCandidatesGlobal(candidates []*TopologyEdgeCandidate) ([]*TopologyEdgeCandidate, []TopologyDecisionTrace) {
 	traces := make([]TopologyDecisionTrace, 0)
 
-	// 按端点分组
-	type endpointGroup struct {
-		candidates []*TopologyEdgeCandidate
+	if len(candidates) == 0 {
+		return candidates, traces
 	}
-	groups := make(map[string]*endpointGroup)
+
+	// ====== 第一遍：构建端点冲突图 ======
+	// endpointKey → 共享该端点的候选列表
+	endpointCandidates := make(map[string][]*TopologyEdgeCandidate)
 
 	for _, c := range candidates {
-		// 本端端点
 		localA := c.ADeviceID + "|" + chooseValue(c.LogicalAIf, c.AIf, "unknown")
-		if _, ok := groups[localA]; !ok {
-			groups[localA] = &endpointGroup{candidates: make([]*TopologyEdgeCandidate, 0)}
-		}
-		groups[localA].candidates = append(groups[localA].candidates, c)
+		endpointCandidates[localA] = append(endpointCandidates[localA], c)
 
-		// 远端端点（排除推断节点，它们的接口信息不可靠）
-		if c.BDeviceID != "" && !strings.HasPrefix(c.BDeviceID, "unknown:") && !strings.HasPrefix(c.BDeviceID, "endpoint:") && !strings.HasPrefix(c.BDeviceID, "server:") && !strings.HasPrefix(c.BDeviceID, "terminal:") {
+		if c.BDeviceID != "" &&
+			!strings.HasPrefix(c.BDeviceID, "unknown:") &&
+			!strings.HasPrefix(c.BDeviceID, "endpoint:") &&
+			!strings.HasPrefix(c.BDeviceID, "server:") &&
+			!strings.HasPrefix(c.BDeviceID, "terminal:") {
 			localB := c.BDeviceID + "|" + chooseValue(c.LogicalBIf, c.BIf, "unknown")
-			if _, ok := groups[localB]; !ok {
-				groups[localB] = &endpointGroup{candidates: make([]*TopologyEdgeCandidate, 0)}
-			}
-			groups[localB].candidates = append(groups[localB].candidates, c)
+			endpointCandidates[localB] = append(endpointCandidates[localB], c)
 		}
 	}
 
-	// 对每个端点组进行冲突消解
-	resolved := make(map[string]bool)
-	for endpoint, g := range groups {
-		if len(g.candidates) <= 1 {
+	// ====== 第二遍：全局评分排序 + 逐候选决策 ======
+	sorted := make([]*TopologyEdgeCandidate, len(candidates))
+	copy(sorted, candidates)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].TotalScore == sorted[j].TotalScore {
+			return sorted[i].CandidateID < sorted[j].CandidateID
+		}
+		return sorted[i].TotalScore > sorted[j].TotalScore
+	})
+
+	endpointMap := make(map[string]endpointOccupancy)
+	decided := make(map[string]bool)
+
+	for _, c := range sorted {
+		if decided[c.CandidateID] {
 			continue
 		}
 
-		// 按评分排序
-		sort.Slice(g.candidates, func(i, j int) bool {
-			return g.candidates[i].TotalScore > g.candidates[j].TotalScore
-		})
+		localA := c.ADeviceID + "|" + chooseValue(c.LogicalAIf, c.AIf, "unknown")
+		localB := ""
+		if c.BDeviceID != "" &&
+			!strings.HasPrefix(c.BDeviceID, "unknown:") &&
+			!strings.HasPrefix(c.BDeviceID, "endpoint:") &&
+			!strings.HasPrefix(c.BDeviceID, "server:") &&
+			!strings.HasPrefix(c.BDeviceID, "terminal:") {
+			localB = c.BDeviceID + "|" + chooseValue(c.LogicalBIf, c.BIf, "unknown")
+		}
 
-		// 检查是否有竞争
-		topScore := g.candidates[0].TotalScore
-		hasCloseCompetitor := false
-		for i := 1; i < len(g.candidates); i++ {
-			if g.candidates[i].TotalScore >= topScore-b.config.ConflictWindow {
-				hasCloseCompetitor = true
-				break
+		// 检查端点是否可用
+		aOcc, aOccupied := endpointMap[localA]
+		bOcc, bOccupied := endpointMap[localB]
+
+		if !aOccupied && !bOccupied {
+			// 两个端点均空闲 → retained
+			c.Status = "retained"
+			c.DecisionReason = "highest score candidate (global)"
+			endpointMap[localA] = endpointOccupancy{occupiedBy: c.CandidateID, score: c.TotalScore}
+			if localB != "" {
+				endpointMap[localB] = endpointOccupancy{occupiedBy: c.CandidateID, score: c.TotalScore}
 			}
-		}
+			decided[c.CandidateID] = true
 
-		// 创建决策轨迹
-		trace := TopologyDecisionTrace{
-			TraceID:       makeTaskEdgeID(),
-			DecisionType:  "conflict_resolution",
-			DecisionGroup: endpoint,
-		}
+			// 检查冲突窗口：找出与该候选共享端点且分数接近的候选标记为 conflict
+			b.traceConflictWindow(c, localA, localB, endpointCandidates, endpointMap, decided, &traces)
+		} else {
+			// 至少一个端点已被占据 → rejected
+			c.Status = "rejected"
+			var reasons []string
+			if aOccupied {
+				reasons = append(reasons, fmt.Sprintf("%s occupied by %s (%.1f)", localA, aOcc.occupiedBy, aOcc.score))
+			}
+			if bOccupied && localB != "" {
+				reasons = append(reasons, fmt.Sprintf("%s occupied by %s (%.1f)", localB, bOcc.occupiedBy, bOcc.score))
+			}
+			c.DecisionReason = "endpoint occupied: " + strings.Join(reasons, ", ")
+			decided[c.CandidateID] = true
 
-		decisionCandidates := make([]DecisionCandidate, 0, len(g.candidates))
-		for _, c := range g.candidates {
-			decisionCandidates = append(decisionCandidates, DecisionCandidate{
-				CandidateID: c.CandidateID,
-				ADeviceID:   c.ADeviceID,
-				AIf:         c.AIf,
-				BDeviceID:   c.BDeviceID,
-				BIf:         c.BIf,
-				TotalScore:  c.TotalScore,
-				Confidence:  c.TotalScore / 100.0,
-				Source:      c.Source,
-				Features:    c.Features,
+			// 记录淘汰决策轨迹
+			traces = append(traces, TopologyDecisionTrace{
+				TraceID:        makeTaskEdgeID(),
+				DecisionType:   "conflict_resolution",
+				DecisionGroup:  localA,
+				DecisionResult: "rejected",
+				DecisionReason: c.DecisionReason,
+				DecisionBasis:  fmt.Sprintf("score=%.2f, occupied_endpoints=%d", c.TotalScore, len(reasons)),
+				RejectedCandidateIDs: []string{c.CandidateID},
 			})
 		}
-		if bytes, err := json.Marshal(decisionCandidates); err == nil {
-			trace.Candidates = string(bytes)
-		}
-
-		if hasCloseCompetitor {
-			// 标记所有竞争者为冲突
-			trace.DecisionResult = "conflict"
-			trace.DecisionReason = "multiple close candidates within conflict window"
-			trace.DecisionBasis = fmt.Sprintf("top_score=%.2f, window=%.2f, candidate_count=%d", topScore, b.config.ConflictWindow, len(g.candidates))
-
-			for _, c := range g.candidates {
-				if !resolved[c.CandidateID] {
-					c.Status = "conflict"
-					c.DecisionReason = "conflict: multiple close candidates"
-					resolved[c.CandidateID] = true
-				}
-				trace.RejectedCandidateIDs = append(trace.RejectedCandidateIDs, c.CandidateID)
-			}
-		} else {
-			// 保留最高分，淘汰其他
-			trace.DecisionResult = "retained"
-			trace.DecisionReason = "top candidate retained"
-			trace.DecisionBasis = fmt.Sprintf("top_score=%.2f, second_score=%.2f, gap=%.2f", topScore, g.candidates[1].TotalScore, topScore-g.candidates[1].TotalScore)
-
-			// 保留第一个
-			if !resolved[g.candidates[0].CandidateID] {
-				g.candidates[0].Status = "retained"
-				g.candidates[0].DecisionReason = "highest score candidate"
-				trace.RetainedCandidateIDs = append(trace.RetainedCandidateIDs, g.candidates[0].CandidateID)
-				resolved[g.candidates[0].CandidateID] = true
-			}
-
-			// 淘汰其他
-			for i := 1; i < len(g.candidates); i++ {
-				if !resolved[g.candidates[i].CandidateID] {
-					g.candidates[i].Status = "rejected"
-					g.candidates[i].DecisionReason = fmt.Sprintf("lower score: %.2f vs %.2f", g.candidates[i].TotalScore, topScore)
-					trace.RejectedCandidateIDs = append(trace.RejectedCandidateIDs, g.candidates[i].CandidateID)
-					resolved[g.candidates[i].CandidateID] = true
-				}
-			}
-		}
-
-		traces = append(traces, trace)
 	}
 
 	// 标记未处理的候选为保留
@@ -1054,6 +1038,65 @@ func (b *TopologyBuilder) resolveCandidatesGlobal(candidates []*TopologyEdgeCand
 	}
 
 	return retained, traces
+}
+
+// traceConflictWindow 处理冲突窗口内的竞争候选
+func (b *TopologyBuilder) traceConflictWindow(retainedCand *TopologyEdgeCandidate, localA, localB string, endpointCandidates map[string][]*TopologyEdgeCandidate, endpointMap map[string]endpointOccupancy, decided map[string]bool, traces *[]TopologyDecisionTrace) {
+	conflictCandidates := make([]*TopologyEdgeCandidate, 0)
+
+	for _, endpoint := range []string{localA, localB} {
+		if endpoint == "" {
+			continue
+		}
+		for _, c := range endpointCandidates[endpoint] {
+			if c.CandidateID == retainedCand.CandidateID || decided[c.CandidateID] {
+				continue
+			}
+			if c.TotalScore >= retainedCand.TotalScore-b.config.ConflictWindow {
+				conflictCandidates = append(conflictCandidates, c)
+			}
+		}
+	}
+
+	if len(conflictCandidates) == 0 {
+		return
+	}
+
+	trace := TopologyDecisionTrace{
+		TraceID:             makeTaskEdgeID(),
+		DecisionType:        "conflict_resolution",
+		DecisionGroup:       localA,
+		DecisionResult:      "retained",
+		DecisionReason:      "top candidate retained, close competitors marked",
+		DecisionBasis:       fmt.Sprintf("top_score=%.2f, window=%.2f, conflict_count=%d", retainedCand.TotalScore, b.config.ConflictWindow, len(conflictCandidates)),
+		RetainedCandidateIDs: []string{retainedCand.CandidateID},
+	}
+
+	for _, c := range conflictCandidates {
+		c.Status = "conflict"
+		c.DecisionReason = fmt.Sprintf("conflict: within window of %s (%.1f)", retainedCand.CandidateID, retainedCand.TotalScore)
+		decided[c.CandidateID] = true
+
+		// 锁定 conflict 候选的端点，防止后续候选误占
+		confLocalA := c.ADeviceID + "|" + chooseValue(c.LogicalAIf, c.AIf, "unknown")
+		if _, ok := endpointMap[confLocalA]; !ok {
+			endpointMap[confLocalA] = endpointOccupancy{occupiedBy: c.CandidateID, score: c.TotalScore}
+		}
+		if c.BDeviceID != "" &&
+			!strings.HasPrefix(c.BDeviceID, "unknown:") &&
+			!strings.HasPrefix(c.BDeviceID, "endpoint:") &&
+			!strings.HasPrefix(c.BDeviceID, "server:") &&
+			!strings.HasPrefix(c.BDeviceID, "terminal:") {
+			confLocalB := c.BDeviceID + "|" + chooseValue(c.LogicalBIf, c.BIf, "unknown")
+			if _, ok := endpointMap[confLocalB]; !ok {
+				endpointMap[confLocalB] = endpointOccupancy{occupiedBy: c.CandidateID, score: c.TotalScore}
+			}
+		}
+
+		trace.RejectedCandidateIDs = append(trace.RejectedCandidateIDs, c.CandidateID)
+	}
+
+	*traces = append(*traces, trace)
 }
 
 // materializeEdges 生成最终边
@@ -1280,7 +1323,7 @@ func BuildTopologyWithNewLogic(db *gorm.DB, runID string) (*TopologyBuildOutput,
 	cfg := DefaultTopologyBuildConfig()
 
 	// 从运行时配置加载参数
-	maxCandidates, conflictWindow, _, saveCandidates, saveTraces := config.ResolveTopologyConfig()
+	maxCandidates, conflictWindow, saveCandidates, saveTraces := config.ResolveTopologyConfig()
 	if maxCandidates > 0 {
 		cfg.MaxInferenceCandidates = maxCandidates
 	}

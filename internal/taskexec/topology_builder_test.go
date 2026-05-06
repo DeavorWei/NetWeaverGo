@@ -2,6 +2,8 @@ package taskexec
 
 import (
 	"encoding/json"
+	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -685,4 +687,114 @@ func TestTopologyDuplicationFix_Integration(t *testing.T) {
 				"解析结果 %s 应该是 5 台设备之一，不应产生重复节点", deviceIP)
 		}
 	}
+}
+
+// =============================================================================
+// P4: 冲突消解两遍处理算法测试
+// =============================================================================
+
+func TestResolveCandidatesGlobal_ThreeWayConflict(t *testing.T) {
+	candidates := []*TopologyEdgeCandidate{
+		{CandidateID: "C1", ADeviceID: "SW1", AIf: "GE0/0/1", BDeviceID: "SW2", BIf: "GE0/0/1", TotalScore: 85.0, Source: "lldp", Status: "pending"},
+		{CandidateID: "C2", ADeviceID: "SW1", AIf: "GE0/0/1", BDeviceID: "SW3", BIf: "GE0/0/1", TotalScore: 45.0, Source: "fdb_arp", Status: "pending"},
+		{CandidateID: "C3", ADeviceID: "SW1", AIf: "GE0/0/1", BDeviceID: "SW4", BIf: "GE0/0/1", TotalScore: 30.0, Source: "fdb_arp", Status: "pending"},
+	}
+
+	builder := NewTopologyBuilder(nil, DefaultTopologyBuildConfig())
+	retained, _ := builder.resolveCandidatesGlobal(candidates)
+
+	assert.Equal(t, "retained", candidates[0].Status)
+	assert.Equal(t, "rejected", candidates[1].Status)
+	assert.Equal(t, "rejected", candidates[2].Status)
+	assert.Len(t, retained, 1)
+	assert.Equal(t, "C1", retained[0].CandidateID)
+}
+
+func TestResolveCandidatesGlobal_CascadeConflict(t *testing.T) {
+	candidates := []*TopologyEdgeCandidate{
+		{CandidateID: "C1", ADeviceID: "SW1", AIf: "GE0/0/1", BDeviceID: "SW2", BIf: "GE0/0/1", TotalScore: 85.0, Source: "lldp", Status: "pending"},
+		{CandidateID: "C2", ADeviceID: "SW2", AIf: "GE0/0/1", BDeviceID: "SW3", BIf: "GE0/0/1", TotalScore: 80.0, Source: "lldp", Status: "pending"},
+	}
+
+	builder := NewTopologyBuilder(nil, DefaultTopologyBuildConfig())
+	retained, _ := builder.resolveCandidatesGlobal(candidates)
+
+	assert.Equal(t, "retained", candidates[0].Status)
+	assert.Equal(t, "conflict", candidates[1].Status)
+	assert.Len(t, retained, 2)
+}
+
+func TestResolveCandidatesGlobal_DeterministicOrder(t *testing.T) {
+	candidates := make([]*TopologyEdgeCandidate, 20)
+	for i := 0; i < 20; i++ {
+		candidates[i] = &TopologyEdgeCandidate{
+			CandidateID: fmt.Sprintf("C%d", i),
+			ADeviceID:   fmt.Sprintf("SW%d", i%5),
+			AIf:         fmt.Sprintf("GE0/0/%d", i%3),
+			BDeviceID:   fmt.Sprintf("SW%d", (i+1)%5),
+			BIf:         fmt.Sprintf("GE0/0/%d", (i+2)%3),
+			TotalScore:  float64(50 + i*3),
+			Source:      "lldp",
+			Status:      "pending",
+		}
+	}
+
+	builder := NewTopologyBuilder(nil, DefaultTopologyBuildConfig())
+
+	var firstResult []string
+	for run := 0; run < 100; run++ {
+		copy := deepCopyCandidates(candidates)
+		retained, _ := builder.resolveCandidatesGlobal(copy)
+
+		result := make([]string, len(retained))
+		for i, c := range retained {
+			result[i] = c.CandidateID
+		}
+		sort.Strings(result)
+
+		if firstResult == nil {
+			firstResult = result
+		} else {
+			assert.Equal(t, firstResult, result, "run %d produced different result", run)
+		}
+	}
+}
+
+func TestResolveCandidatesGlobal_ConflictWindow(t *testing.T) {
+	cfg := DefaultTopologyBuildConfig()
+	cfg.ConflictWindow = 10.0
+
+	candidates := []*TopologyEdgeCandidate{
+		{CandidateID: "C1", ADeviceID: "SW1", AIf: "GE0/0/1", BDeviceID: "SW2", BIf: "GE0/0/1", TotalScore: 85.0, Source: "lldp", Status: "pending"},
+		{CandidateID: "C2", ADeviceID: "SW1", AIf: "GE0/0/1", BDeviceID: "SW3", BIf: "GE0/0/1", TotalScore: 80.0, Source: "lldp", Status: "pending"},
+	}
+
+	builder := NewTopologyBuilder(nil, cfg)
+	retained, traces := builder.resolveCandidatesGlobal(candidates)
+
+	assert.Equal(t, "retained", candidates[0].Status)
+	assert.Equal(t, "conflict", candidates[1].Status)
+	assert.Len(t, retained, 2)
+	assert.True(t, len(traces) > 0)
+}
+
+func TestResolveCandidatesGlobal_NoConflict(t *testing.T) {
+	candidates := []*TopologyEdgeCandidate{
+		{CandidateID: "C1", ADeviceID: "SW1", AIf: "GE0/0/1", BDeviceID: "SW2", BIf: "GE0/0/1", TotalScore: 95.0, Source: "lldp", Status: "pending"},
+	}
+
+	builder := NewTopologyBuilder(nil, DefaultTopologyBuildConfig())
+	retained, _ := builder.resolveCandidatesGlobal(candidates)
+
+	assert.Equal(t, "retained", candidates[0].Status)
+	assert.Len(t, retained, 1)
+}
+
+func deepCopyCandidates(src []*TopologyEdgeCandidate) []*TopologyEdgeCandidate {
+	dst := make([]*TopologyEdgeCandidate, len(src))
+	for i, c := range src {
+		cp := *c
+		dst[i] = &cp
+	}
+	return dst
 }

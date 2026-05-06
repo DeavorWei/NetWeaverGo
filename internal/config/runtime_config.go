@@ -55,7 +55,6 @@ type RuntimeConfig struct {
 	Topology struct {
 		MaxInferenceCandidates int     `json:"maxInferenceCandidates"` // FDB 推断候选阈值
 		ConflictWindow         float64 `json:"conflictWindow"`         // 冲突窗口
-		UseNewBuilder          bool    `json:"useNewBuilder"`          // 使用新构建逻辑
 		SaveCandidates         bool    `json:"saveCandidates"`         // 保存候选轨迹
 		SaveDecisionTraces     bool    `json:"saveDecisionTraces"`     // 保存决策轨迹
 	} `json:"topology"`
@@ -103,7 +102,6 @@ func DefaultRuntimeConfig() RuntimeConfig {
 	// 拓扑推理配置
 	cfg.Topology.MaxInferenceCandidates = DefaultTopologyMaxInferenceCandidates
 	cfg.Topology.ConflictWindow = 10.0
-	cfg.Topology.UseNewBuilder = false // 默认使用旧逻辑
 	cfg.Topology.SaveCandidates = true
 	cfg.Topology.SaveDecisionTraces = true
 
@@ -136,6 +134,8 @@ func InitRuntimeSettings(db *gorm.DB) error {
 		logger.Info("Config", "-", "运行时配置表为空，初始化默认值")
 		return ResetRuntimeSettingsToDefault(db)
 	}
+
+	db.Where("category = ? AND key = ?", "topology", "useNewBuilder").Delete(&RuntimeSetting{})
 
 	return nil
 }
@@ -174,7 +174,6 @@ func ResetRuntimeSettingsToDefault(db *gorm.DB) error {
 		// 拓扑推理配置
 		{Category: "topology", Key: "maxInferenceCandidates", Value: strconv.Itoa(defaults.Topology.MaxInferenceCandidates)},
 		{Category: "topology", Key: "conflictWindow", Value: fmt.Sprintf("%.1f", defaults.Topology.ConflictWindow)},
-		{Category: "topology", Key: "useNewBuilder", Value: fmt.Sprintf("%v", defaults.Topology.UseNewBuilder)},
 		{Category: "topology", Key: "saveCandidates", Value: fmt.Sprintf("%v", defaults.Topology.SaveCandidates)},
 		{Category: "topology", Key: "saveDecisionTraces", Value: fmt.Sprintf("%v", defaults.Topology.SaveDecisionTraces)},
 
@@ -295,12 +294,6 @@ func applyRuntimeSetting(cfg *RuntimeConfig, setting RuntimeSetting) error {
 				return fmt.Errorf("无效的配置值: %s", setting.Value)
 			}
 			cfg.Topology.ConflictWindow = val
-		case "useNewBuilder":
-			val, err := strconv.ParseBool(setting.Value)
-			if err != nil {
-				return fmt.Errorf("无效的配置值: %s", setting.Value)
-			}
-			cfg.Topology.UseNewBuilder = val
 		case "saveCandidates":
 			val, err := strconv.ParseBool(setting.Value)
 			if err != nil {
@@ -614,13 +607,6 @@ func (m *RuntimeConfigManager) GetTopologyConflictWindow() float64 {
 	return m.config.Topology.ConflictWindow
 }
 
-// GetTopologyUseNewBuilder 获取是否使用新构建逻辑
-func (m *RuntimeConfigManager) GetTopologyUseNewBuilder() bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.config.Topology.UseNewBuilder
-}
-
 // GetTopologySaveCandidates 获取是否保存候选
 func (m *RuntimeConfigManager) GetTopologySaveCandidates() bool {
 	m.mu.RLock()
@@ -635,25 +621,16 @@ func (m *RuntimeConfigManager) GetTopologySaveDecisionTraces() bool {
 	return m.config.Topology.SaveDecisionTraces
 }
 
-// ResolveTopologyUseNewBuilder 解析是否使用新构建逻辑
-func ResolveTopologyUseNewBuilder() bool {
-	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
-		return manager.GetTopologyUseNewBuilder()
-	}
-	return false
-}
-
 // ResolveTopologyConfig 解析拓扑构建配置
-func ResolveTopologyConfig() (maxCandidates int, conflictWindow float64, useNewBuilder, saveCandidates, saveTraces bool) {
+func ResolveTopologyConfig() (maxCandidates int, conflictWindow float64, saveCandidates, saveTraces bool) {
 	if manager := GetRuntimeManagerIfInitialized(); manager != nil {
 		maxCandidates = manager.GetTopologyMaxInferenceCandidates()
 		conflictWindow = manager.GetTopologyConflictWindow()
-		useNewBuilder = manager.GetTopologyUseNewBuilder()
 		saveCandidates = manager.GetTopologySaveCandidates()
 		saveTraces = manager.GetTopologySaveDecisionTraces()
 		return
 	}
-	return DefaultTopologyMaxInferenceCandidates, 10.0, false, true, true
+	return DefaultTopologyMaxInferenceCandidates, 10.0, true, true
 }
 
 // GetEventBufferSize 获取事件缓冲区大小
