@@ -63,8 +63,10 @@ func (b *TopologyBuilder) Build(ctx context.Context, runID string) (*TopologyBui
 	// Step 5: 生成 FDB/ARP 推断候选
 	fdbCandidates := b.buildFDBARPCandidates(normalized)
 
-	// Step 6: 合并候选并评分
-	allCandidates := b.mergeAndScoreCandidates(lldpCandidates, fdbCandidates, normalized)
+	// Step 6: 合并候选
+	allCandidates := make([]*TopologyEdgeCandidate, 0, len(lldpCandidates)+len(fdbCandidates))
+	allCandidates = append(allCandidates, lldpCandidates...)
+	allCandidates = append(allCandidates, fdbCandidates...)
 
 	// Step 7: 用接口事实丰富候选
 	b.enrichCandidatesWithInterfaceFacts(allCandidates, normalized)
@@ -93,7 +95,6 @@ func (b *TopologyBuilder) Build(ctx context.Context, runID string) (*TopologyBui
 }
 
 // NormalizedFacts 标准化的事实数据
-// 阶段3架构演进：支持全量IP映射和多IP设备
 type NormalizedFacts struct {
 	Devices           map[string]*DeviceInfo // key: DeviceIP
 	LLDPNeighbors     []NormalizedLLDPNeighbor
@@ -105,24 +106,19 @@ type NormalizedFacts struct {
 	DeviceByName      map[string]string              // key: NormalizedName -> DeviceIP
 	DeviceByMgmtIP    map[string]string              // key: MgmtIP -> DeviceIP
 	DeviceByChassisID map[string]string              // key: ChassisID -> DeviceIP
-	AllDeviceIPs      map[string]string              // 阶段3新增：key: 任意IP -> DeviceIP（支持多IP设备）
 	ARPMACToDevice    map[string]string              // key: MAC -> DeviceIP
 	ARPMACToIP        map[string]string              // key: MAC -> IP
 }
 
 // DeviceInfo 设备信息
-// 阶段3架构演进：支持NodeUUID和多IP
 type DeviceInfo struct {
-	NodeUUID       string // 阶段3新增：全局唯一节点标识
 	DeviceIP       string
-	AllIPs         []string // 阶段3新增：设备所有IP地址（包括Loopback、SVI等）
 	NormalizedName string
 	ChassisID      string
 	MgmtIP         string
 	Hostname       string
 	Vendor         string
 	Model          string
-	NodeType       NodeType // 阶段3新增：节点类型
 }
 
 // NormalizedLLDPNeighbor 标准化的 LLDP 邻居
@@ -253,10 +249,6 @@ func (b *TopologyBuilder) createFactSnapshot(input *TopologyBuildInput) Topology
 }
 
 // normalizeFacts 标准化事实
-// 阶段3架构演进：
-// 1. 为每个设备生成 NodeUUID
-// 2. 建立全量IP映射表支持多IP设备
-// 3. 设置节点类型为 Managed
 func (b *TopologyBuilder) normalizeFacts(input *TopologyBuildInput) *NormalizedFacts {
 	n := &NormalizedFacts{
 		Devices:           make(map[string]*DeviceInfo),
@@ -269,34 +261,20 @@ func (b *TopologyBuilder) normalizeFacts(input *TopologyBuildInput) *NormalizedF
 		DeviceByName:      make(map[string]string),
 		DeviceByMgmtIP:    make(map[string]string),
 		DeviceByChassisID: make(map[string]string),
-		AllDeviceIPs:      make(map[string]string), // 阶段3新增：全量IP映射表
 		ARPMACToDevice:    make(map[string]string),
 		ARPMACToIP:        make(map[string]string),
 	}
 
-	// 阶段3新增：DeviceIP -> NodeUUID 映射（用于边生成时查找）
-	deviceUUIDMap := make(map[string]string)
-
 	// 标准化设备
 	for _, d := range input.Devices {
-		// 阶段3：为每个设备生成唯一的 NodeUUID
-		nodeUUID := d.NodeUUID
-		if nodeUUID == "" {
-			nodeUUID = newNodeUUID()
-		}
-		deviceUUIDMap[d.DeviceIP] = nodeUUID
-
 		info := &DeviceInfo{
-			NodeUUID:       nodeUUID,
 			DeviceIP:       d.DeviceIP,
-			AllIPs:         []string{}, // 初始化为空，后续从接口信息补充
 			NormalizedName: strings.ToLower(strings.TrimSpace(d.NormalizedName)),
 			ChassisID:      strings.TrimSpace(d.ChassisID),
 			MgmtIP:         strings.TrimSpace(d.MgmtIP),
 			Hostname:       d.Hostname,
 			Vendor:         d.Vendor,
 			Model:          d.Model,
-			NodeType:       NodeTypeManaged, // 阶段3：采集列表中的设备标记为 Managed
 		}
 		n.Devices[d.DeviceIP] = info
 
@@ -304,14 +282,12 @@ func (b *TopologyBuilder) normalizeFacts(input *TopologyBuildInput) *NormalizedF
 		if info.NormalizedName != "" {
 			n.DeviceByName[info.NormalizedName] = d.DeviceIP
 		}
-		// 阶段3：建立全量IP映射（DeviceIP + MgmtIP）
+		// 建立 IP 映射（DeviceIP + MgmtIP）
 		if d.DeviceIP != "" {
 			n.DeviceByMgmtIP[d.DeviceIP] = d.DeviceIP
-			n.AllDeviceIPs[d.DeviceIP] = d.DeviceIP // 加入全量映射
 		}
 		if info.MgmtIP != "" && info.MgmtIP != d.DeviceIP {
 			n.DeviceByMgmtIP[info.MgmtIP] = d.DeviceIP
-			n.AllDeviceIPs[info.MgmtIP] = d.DeviceIP // MgmtIP 也加入全量映射
 		}
 		// 建立 ChassisID 索引
 		if info.ChassisID != "" {
@@ -468,13 +444,9 @@ func (b *TopologyBuilder) buildLLDPCandidates(n *NormalizedFacts) []*TopologyEdg
 			// 更新特征
 			existing.Features = appendUniqueStrings(existing.Features, "lldp_bidirectional")
 			// 更新评分 - 标记为双向
-			var existingScore ScoreBreakdown
-			if err := json.Unmarshal([]byte(existing.ScoreBreakdown), &existingScore); err == nil {
-				existingScore.LLDPScore.Bidirectional = true
-				existingScore.TotalScore = b.recalculateLLDPScore(existingScore)
-				existing.ScoreBreakdown = b.serializeScoreBreakdown(existingScore)
-				existing.TotalScore = existingScore.TotalScore
-			}
+			existing.score.LLDPScore.Bidirectional = true
+			existing.score.TotalScore = b.recalculateLLDPScore(existing.score)
+			existing.TotalScore = existing.score.TotalScore
 		} else {
 			// 创建新候选
 			features := []string{"lldp_single_side"}
@@ -483,21 +455,21 @@ func (b *TopologyBuilder) buildLLDPCandidates(n *NormalizedFacts) []*TopologyEdg
 			}
 
 			candidate := &TopologyEdgeCandidate{
-				TaskRunID:      n.Devices[lldp.DeviceIP].DeviceIP + "_" + lldp.LocalIf + "_" + remoteDevice, // 临时 ID
-				CandidateID:    makeTaskEdgeID(),
-				ADeviceID:      lldp.DeviceIP,
-				AIf:            lldp.LocalIf,
-				LogicalAIf:     localLogicalIf,
-				BDeviceID:      remoteDevice,
-				BIf:            remoteIf,
-				LogicalBIf:     remoteLogicalIf,
-				EdgeType:       "physical",
-				Source:         "lldp",
-				Status:         "pending",
-				ScoreBreakdown: b.serializeScoreBreakdown(score),
-				TotalScore:     score.TotalScore,
-				Features:       features,
-				EvidenceRefs:   []EdgeEvidence{evidence},
+				TaskRunID:    n.Devices[lldp.DeviceIP].DeviceIP + "_" + lldp.LocalIf + "_" + remoteDevice, // 临时 ID
+				CandidateID:  makeTaskEdgeID(),
+				ADeviceID:    lldp.DeviceIP,
+				AIf:          lldp.LocalIf,
+				LogicalAIf:   localLogicalIf,
+				BDeviceID:    remoteDevice,
+				BIf:          remoteIf,
+				LogicalBIf:   remoteLogicalIf,
+				EdgeType:     "physical",
+				Source:       "lldp",
+				Status:       "pending",
+				TotalScore:   score.TotalScore,
+				Features:     features,
+				EvidenceRefs: []EdgeEvidence{evidence},
+				score:        score,
 			}
 			candidates = append(candidates, candidate)
 			candidateMap[candidateKey] = candidate
@@ -580,39 +552,39 @@ func (b *TopologyBuilder) scoreLLDPCandidate(lldp NormalizedLLDPNeighbor, remote
 
 	// 基础分
 	if resolutionSource == "neighbor_ip" || resolutionSource == "neighbor_name" || resolutionSource == "chassis_id" {
-		score.LLDPScore.BaseScore = b.config.LLDPWeights.BaseSingleSide
+		score.LLDPScore.BaseScore = wLLDPBaseSingleSide
 	} else {
-		score.LLDPScore.BaseScore = b.config.LLDPWeights.BaseSingleSide * 0.8 // 未知对端降权
+		score.LLDPScore.BaseScore = wLLDPBaseSingleSide * 0.8 // 未知对端降权
 	}
 
 	score.LLDPScore.ResolutionSource = resolutionSource
 
 	// IP 匹配加分
 	if lldp.NeighborIP != "" && resolutionSource == "neighbor_ip" {
-		score.LLDPScore.IPMatch = b.config.LLDPWeights.IPMatch
+		score.LLDPScore.IPMatch = wLLDPIPMatch
 	}
 
 	// 名称匹配加分
 	if lldp.NeighborName != "" && resolutionSource == "neighbor_name" {
-		score.LLDPScore.NameMatch = b.config.LLDPWeights.NameMatch
+		score.LLDPScore.NameMatch = wLLDPNameMatch
 	}
 
 	// Chassis 匹配加分
 	if lldp.NeighborChassis != "" {
 		if _, ok := n.DeviceByChassisID[lldp.NeighborChassis]; ok {
-			score.LLDPScore.ChassisMatch = b.config.LLDPWeights.ChassisMatch
+			score.LLDPScore.ChassisMatch = wLLDPChassisMatch
 		}
 	}
 
 	// 远端接口存在加分
 	if lldp.NeighborPort != "" {
-		score.LLDPScore.RemoteIfPresent = b.config.LLDPWeights.RemoteIfPresent
+		score.LLDPScore.RemoteIfPresent = wLLDPRemoteIfPresent
 	}
 
 	// 聚合接口加分
 	if localLogicalIf != "" || remoteLogicalIf != "" {
 		score.AggregateScore.IsAggregateLink = true
-		score.AggregateScore.AggregateModeScore = b.config.AggregateWeights.LACPModeBonus
+		score.AggregateScore.AggregateModeScore = wAggLACPModeBonus
 	}
 
 	// 计算总分
@@ -734,14 +706,10 @@ func (b *TopologyBuilder) buildFDBARPCandidates(n *NormalizedFacts) []*TopologyE
 			if existing, ok := candidateMap[candidateKey]; ok {
 				existing.EvidenceRefs = append(existing.EvidenceRefs, evidence)
 				// 更新评分
-				var existingScore ScoreBreakdown
-				if err := json.Unmarshal([]byte(existing.ScoreBreakdown), &existingScore); err == nil {
-					existingScore.FDBARPScore.MACCount += macCount
-					existingScore.FDBARPScore.MACCountScore = float64(existingScore.FDBARPScore.MACCount) * b.config.FDBARPWeights.MACCountFactor
-					existingScore.TotalScore = b.recalculateFDBARPScore(existingScore)
-					existing.ScoreBreakdown = b.serializeScoreBreakdown(existingScore)
-					existing.TotalScore = existingScore.TotalScore
-				}
+				existing.score.FDBARPScore.MACCount += macCount
+				existing.score.FDBARPScore.MACCountScore = float64(existing.score.FDBARPScore.MACCount) * wFDBMACCountFactor
+				existing.score.TotalScore = b.recalculateFDBARPScore(existing.score)
+				existing.TotalScore = existing.score.TotalScore
 			} else {
 				features := []string{"fdb_arp_inference"}
 				if localLogicalIf != "" {
@@ -749,21 +717,21 @@ func (b *TopologyBuilder) buildFDBARPCandidates(n *NormalizedFacts) []*TopologyE
 				}
 
 				candidate := &TopologyEdgeCandidate{
-					CandidateID:    makeTaskEdgeID(),
-					ADeviceID:      deviceIP,
-					AIf:            localIf,
-					LogicalAIf:     localLogicalIf,
-					BDeviceID:      remoteDevice,
-					BIf:            remoteIf,
-					LogicalBIf:     "",
-					EdgeType:       "physical",
-					Source:         "fdb_arp",
-					Status:         "pending",
-					ScoreBreakdown: b.serializeScoreBreakdown(score),
-					TotalScore:     score.TotalScore,
-					Features:       features,
-					EvidenceRefs:   []EdgeEvidence{evidence},
-					BDeviceMACs:    macList, // 保留所有MAC地址
+					CandidateID:  makeTaskEdgeID(),
+					ADeviceID:    deviceIP,
+					AIf:          localIf,
+					LogicalAIf:   localLogicalIf,
+					BDeviceID:    remoteDevice,
+					BIf:          remoteIf,
+					LogicalBIf:   "",
+					EdgeType:     "physical",
+					Source:       "fdb_arp",
+					Status:       "pending",
+					TotalScore:   score.TotalScore,
+					Features:     features,
+					EvidenceRefs: []EdgeEvidence{evidence},
+					BDeviceMACs:  macList,
+					score:        score,
 				}
 				candidates = append(candidates, candidate)
 				candidateMap[candidateKey] = candidate
@@ -827,39 +795,39 @@ func (b *TopologyBuilder) scoreFDBARPCandidate(remoteKind string, macCount int, 
 	score := ScoreBreakdown{Version: "1.0"}
 
 	// 基础分
-	score.FDBARPScore.BaseScore = b.config.FDBARPWeights.BaseScore
+	score.FDBARPScore.BaseScore = wFDBBaseScore
 
 	// MAC 数量评分
 	score.FDBARPScore.MACCount = macCount
-	score.FDBARPScore.MACCountScore = float64(macCount) * b.config.FDBARPWeights.MACCountFactor
+	score.FDBARPScore.MACCountScore = float64(macCount) * wFDBMACCountFactor
 
 	// 端点类型评分
 	score.FDBARPScore.EndpointKind = remoteKind
 	switch remoteKind {
 	case "device":
-		score.FDBARPScore.EndpointScore = b.config.FDBARPWeights.DeviceBonus
+		score.FDBARPScore.EndpointScore = wFDBDeviceBonus
 	case "server":
-		score.FDBARPScore.EndpointScore = b.config.FDBARPWeights.ServerBonus
+		score.FDBARPScore.EndpointScore = wFDBServerBonus
 	case "terminal":
-		score.FDBARPScore.EndpointScore = b.config.FDBARPWeights.TerminalBonus
+		score.FDBARPScore.EndpointScore = wFDBTerminalBonus
 	}
 
 	// VLAN 一致性
 	if len(vlans) == 1 {
 		score.FDBARPScore.VLANConsistent = true
-		score.FDBARPScore.VLANScore = b.config.FDBARPWeights.VLANBonus
+		score.FDBARPScore.VLANScore = wFDBVLANBonus
 	}
 
 	// 聚合接口加分
 	if hasLogicalIf {
 		score.FDBARPScore.HasLogicalIf = true
-		score.FDBARPScore.LogicalIfScore = b.config.FDBARPWeights.LogicalIfBonus
+		score.FDBARPScore.LogicalIfScore = wFDBLogicalIfBonus
 	}
 
 	// 远端 IP 加分
 	if hasRemoteIP {
 		score.FDBARPScore.HasRemoteIP = true
-		score.FDBARPScore.RemoteIPScore = b.config.FDBARPWeights.RemoteIPBonus
+		score.FDBARPScore.RemoteIPScore = wFDBRemoteIPBonus
 	}
 
 	// 计算总分
@@ -882,28 +850,15 @@ func (b *TopologyBuilder) scoreFDBARPCandidate(remoteKind string, macCount int, 
 	return score
 }
 
-// mergeAndScoreCandidates 合并并评分候选
-func (b *TopologyBuilder) mergeAndScoreCandidates(lldpCandidates, fdbCandidates []*TopologyEdgeCandidate, n *NormalizedFacts) []*TopologyEdgeCandidate {
-	all := make([]*TopologyEdgeCandidate, 0, len(lldpCandidates)+len(fdbCandidates))
-	all = append(all, lldpCandidates...)
-	all = append(all, fdbCandidates...)
-	return all
-}
-
 // enrichCandidatesWithInterfaceFacts 用接口事实丰富候选
 func (b *TopologyBuilder) enrichCandidatesWithInterfaceFacts(candidates []*TopologyEdgeCandidate, n *NormalizedFacts) {
 	for _, c := range candidates {
-		var score ScoreBreakdown
-		if err := json.Unmarshal([]byte(c.ScoreBreakdown), &score); err != nil {
-			continue
-		}
-
 		// 检查本端接口状态
 		localIfKey := c.ADeviceID + "|" + c.AIf
 		if localIf, ok := n.Interfaces[localIfKey]; ok {
 			if localIf.Status == "up" {
-				score.InterfaceScore.LocalIfUp = true
-				score.InterfaceScore.LocalIfUpScore = b.config.InterfaceWeights.IfUpBonus
+				c.score.InterfaceScore.LocalIfUp = true
+				c.score.InterfaceScore.LocalIfUpScore = wIfUpBonus
 			}
 		}
 
@@ -912,16 +867,15 @@ func (b *TopologyBuilder) enrichCandidatesWithInterfaceFacts(candidates []*Topol
 			remoteIfKey := c.BDeviceID + "|" + c.BIf
 			if remoteIf, ok := n.Interfaces[remoteIfKey]; ok {
 				if remoteIf.Status == "up" {
-					score.InterfaceScore.RemoteIfUp = true
-					score.InterfaceScore.RemoteIfUpScore = b.config.InterfaceWeights.IfUpBonus
+					c.score.InterfaceScore.RemoteIfUp = true
+					c.score.InterfaceScore.RemoteIfUpScore = wIfUpBonus
 				}
 			}
 		}
 
 		// 更新总分
-		score.TotalScore += score.InterfaceScore.LocalIfUpScore + score.InterfaceScore.RemoteIfUpScore
-		c.ScoreBreakdown = b.serializeScoreBreakdown(score)
-		c.TotalScore = score.TotalScore
+		c.score.TotalScore += c.score.InterfaceScore.LocalIfUpScore + c.score.InterfaceScore.RemoteIfUpScore
+		c.TotalScore = c.score.TotalScore
 	}
 }
 
@@ -1069,9 +1023,9 @@ func (b *TopologyBuilder) materializeEdges(candidates []*TopologyEdgeCandidate, 
 		// 确定边状态
 		status := "inferred"
 		confidence := c.TotalScore / 100.0
-		if confidence > b.config.ConfidenceThresholds.Confirmed {
+		if confidence > confidenceConfirmed {
 			status = "confirmed"
-		} else if confidence > b.config.ConfidenceThresholds.SemiConfirmed {
+		} else if confidence > confidenceSemiConfirmed {
 			status = "semi_confirmed"
 		}
 
@@ -1115,7 +1069,7 @@ func (b *TopologyBuilder) materializeEdges(candidates []*TopologyEdgeCandidate, 
 			Confidence:          confidence,
 			DiscoveryMethods:    c.Features,
 			Evidence:            c.EvidenceRefs,
-			ConfidenceBreakdown: c.ScoreBreakdown,
+			ConfidenceBreakdown: b.serializeScoreBreakdown(c.score),
 			DecisionReason:      c.DecisionReason,
 			CandidateID:         c.CandidateID,
 		}
@@ -1147,6 +1101,8 @@ func (b *TopologyBuilder) persistResults(runID string, edges []TaskTopologyEdge,
 		}
 		for i := range candidates {
 			candidates[i].TaskRunID = runID
+			// 将运行时 score 字段序列化为持久化字段
+			candidates[i].ScoreBreakdown = b.serializeScoreBreakdown(candidates[i].score)
 		}
 		if len(candidates) > 0 {
 			if err := b.db.Create(&candidates).Error; err != nil {
@@ -1277,7 +1233,6 @@ func EnsureDBTables(db *gorm.DB) error {
 // BuildTopologyWithNewLogic 使用新逻辑构建拓扑（入口函数）
 func BuildTopologyWithNewLogic(db *gorm.DB, runID string) (*TopologyBuildOutput, error) {
 	cfg := DefaultTopologyBuildConfig()
-	cfg.UseNewBuilder = true
 
 	// 从运行时配置加载参数
 	maxCandidates, conflictWindow, _, saveCandidates, saveTraces := config.ResolveTopologyConfig()

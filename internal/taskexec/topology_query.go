@@ -166,7 +166,7 @@ func (s *TaskExecutionService) GetTopologyEdgeDetail(runID, edgeID string) (*mod
 		Status:              edge.Status,
 		Confidence:          edge.Confidence,
 		DiscoveryMethods:    append([]string(nil), edge.DiscoveryMethods...),
-		Evidence:            convertToModelEvidence(edge.Evidence),
+		Evidence:            edge.Evidence,
 		ConfidenceBreakdown: edge.ConfidenceBreakdown,
 		DecisionReason:      edge.DecisionReason,
 		CandidateID:         edge.CandidateID,
@@ -186,31 +186,32 @@ func (s *TaskExecutionService) GetTopologyEdgeExplain(runID, edgeID string) (*mo
 		Edge: *edgeDetail,
 	}
 
-	// 获取关联的候选列表
+	// 获取关联的候选列表（与当前边共享端点的候选）
 	candidates := make([]models.TopologyCandidateView, 0)
 	if edgeDetail.CandidateID != "" {
-		// 查询同一端点组的所有候选
-		var allCandidates []TopologyEdgeCandidate
-		if err := s.db.Where("task_run_id = ?", runID).Find(&allCandidates).Error; err == nil {
-			for _, c := range allCandidates {
-				// 筛选与当前边相关的候选（同一端点组）
-				if s.isRelatedCandidate(c, edgeDetail) {
-					candidates = append(candidates, models.TopologyCandidateView{
-						CandidateID:    c.CandidateID,
-						ADeviceID:      c.ADeviceID,
-						AIf:            c.AIf,
-						LogicalAIf:     c.LogicalAIf,
-						BDeviceID:      c.BDeviceID,
-						BIf:            c.BIf,
-						LogicalBIf:     c.LogicalBIf,
-						Source:         c.Source,
-						Status:         c.Status,
-						TotalScore:     c.TotalScore,
-						ScoreBreakdown: c.ScoreBreakdown,
-						Features:       c.Features,
-						DecisionReason: c.DecisionReason,
-					})
-				}
+		var relatedCandidates []TopologyEdgeCandidate
+		if err := s.db.Where(
+			"task_run_id = ? AND ((a_device_id = ? AND a_if = ?) OR (b_device_id = ? AND b_if = ?))",
+			runID,
+			edgeDetail.ADevice.ID, edgeDetail.AIf,
+			edgeDetail.BDevice.ID, edgeDetail.BIf,
+		).Find(&relatedCandidates).Error; err == nil {
+			for _, c := range relatedCandidates {
+				candidates = append(candidates, models.TopologyCandidateView{
+					CandidateID:    c.CandidateID,
+					ADeviceID:      c.ADeviceID,
+					AIf:            c.AIf,
+					LogicalAIf:     c.LogicalAIf,
+					BDeviceID:      c.BDeviceID,
+					BIf:            c.BIf,
+					LogicalBIf:     c.LogicalBIf,
+					Source:         c.Source,
+					Status:         c.Status,
+					TotalScore:     c.TotalScore,
+					ScoreBreakdown: c.ScoreBreakdown,
+					Features:       c.Features,
+					DecisionReason: c.DecisionReason,
+				})
 			}
 		}
 	}
@@ -235,16 +236,6 @@ func (s *TaskExecutionService) GetTopologyEdgeExplain(runID, edgeID string) (*mo
 	}
 
 	return view, nil
-}
-
-// isRelatedCandidate 判断候选是否与指定边相关
-func (s *TaskExecutionService) isRelatedCandidate(c TopologyEdgeCandidate, edge *models.TopologyEdgeDetailView) bool {
-	// 检查候选是否与边共享同一端点
-	aMatch := c.ADeviceID == edge.ADevice.ID &&
-		(c.AIf == edge.AIf || c.LogicalAIf == edge.LogicalAIf)
-	bMatch := c.BDeviceID == edge.BDevice.ID &&
-		(c.BIf == edge.BIf || c.LogicalBIf == edge.LogicalBIf)
-	return aMatch || bMatch
 }
 
 // GetTopologyCandidatesByRun 获取运行的所有候选边
@@ -485,29 +476,13 @@ func chooseValue(values ...string) string {
 	return ""
 }
 
-func convertToModelEvidence(items []EdgeEvidence) []models.EdgeEvidence {
-	result := make([]models.EdgeEvidence, 0, len(items))
-	for _, e := range items {
-		result = append(result, models.EdgeEvidence{
-			Type:       e.Type,
-			DeviceID:   e.DeviceID,
-			Command:    e.Command,
-			RawRefID:   e.RawRefID,
-			Summary:    e.Summary,
-			Source:     e.Source,
-			LocalIf:    e.LocalIf,
-			RemoteName: e.RemoteName,
-			RemoteIf:   e.RemoteIf,
-			RemoteMAC:  e.RemoteMAC,
-			RemoteIP:   e.RemoteIP,
-			Timestamp:  e.Timestamp,
-		})
-	}
-	return result
-}
-
 func makeTaskEdgeID() string {
 	return newEdgeID()
+}
+
+// isValidIP 简单IP地址验证
+func isValidIP(ip string) bool {
+	return strings.Count(ip, ".") == 3 && strings.ContainsAny(ip, "0123456789")
 }
 
 // extractMACFromEdges 从边信息中提取推断节点的MAC地址

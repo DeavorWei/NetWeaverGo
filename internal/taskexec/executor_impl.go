@@ -1209,64 +1209,17 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 
 		parseStatus := "success"
 		parseError := ""
-		switch output.CommandKey {
-		case "version":
-			id, mapErr := mapper.ToDeviceInfo(rows)
-			if mapErr != nil {
-				parseStatus = "parse_failed"
-				parseError = mapErr.Error()
-				break
-			}
-			mergeIdentityResult(identity, id, vendor)
-		case "sysname":
-			mergeIdentityFields(identity, flattenParseRows(rows), vendor)
-		case "interface_brief":
-			items, mapErr := mapper.ToInterfaces(rows)
-			if mapErr != nil {
-				parseStatus = "parse_failed"
-				parseError = mapErr.Error()
-				break
-			}
-			interfaces = append(interfaces, items...)
-		case "lldp_neighbor":
-			items, mapErr := mapper.ToLLDP(rows)
-			if mapErr != nil {
-				parseStatus = "parse_failed"
-				parseError = mapErr.Error()
-				break
-			}
-			rawRef := fmt.Sprintf("%d", output.ID)
-			for i := range items {
-				items[i].CommandKey = output.CommandKey
-				items[i].RawRefID = rawRef
-			}
-			lldps = append(lldps, items...)
-		case "arp_all":
-			items, mapErr := mapper.ToARP(rows)
-			if mapErr != nil {
-				parseStatus = "parse_failed"
-				parseError = mapErr.Error()
-				break
-			}
-			rawRef := fmt.Sprintf("%d", output.ID)
-			for i := range items {
-				items[i].CommandKey = output.CommandKey
-				items[i].RawRefID = rawRef
-			}
-			arps = append(arps, items...)
-		case "eth_trunk", "eth_trunk_verbose":
-			items, mapErr := mapper.ToAggregate(rows)
-			if mapErr != nil {
-				parseStatus = "parse_failed"
-				parseError = mapErr.Error()
-				break
-			}
-			rawRef := fmt.Sprintf("%d", output.ID)
-			for i := range items {
-				items[i].CommandKey = output.CommandKey
-				items[i].RawRefID = rawRef
-			}
-			aggs = append(aggs, items...)
+		rawRefID := fmt.Sprintf("%d", output.ID)
+		batch, mapErr := MapCommandOutput(mapper, output.CommandKey, rows, identity, rawRefID)
+		if mapErr != nil {
+			parseStatus = "parse_failed"
+			parseError = mapErr.Error()
+		} else if batch != nil {
+			interfaces = append(interfaces, batch.Interfaces...)
+			lldps = append(lldps, batch.LLDPs...)
+			fdbs = append(fdbs, batch.FDBs...)
+			arps = append(arps, batch.ARPs...)
+			aggs = append(aggs, batch.Aggregates...)
 		}
 		handler.LogDBErrorWithContext("更新 parse_status", e.db.Model(&TaskRawOutput{}).Where("id = ?", output.ID).
 			Updates(map[string]interface{}{"parse_status": parseStatus, "parse_error": parseError}).Error,
@@ -1281,153 +1234,25 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 		return ctx.Context().Err()
 	}
 
-	identity.Vendor = normalize.NormalizeVendor(identity.Vendor)
-	identity.Hostname = normalize.NormalizeDeviceName(identity.Hostname)
+	NormalizeIdentity(identity)
 
 	logger.Verbose("TaskExec", runID, "解析汇总: device=%s, vendor=%s, hostname=%s, mgmtIP=%s, interfaces=%d, lldps=%d, fdbs=%d, arps=%d, aggs=%d", deviceIP, identity.Vendor, identity.Hostname, identity.MgmtIP, len(interfaces), len(lldps), len(fdbs), len(arps), len(aggs))
 	if len(lldps) == 0 {
 		logger.Warn("TaskExec", runID, "设备未解析出任何 LLDP 邻居: device=%s, vendor=%s, outputs=%d", deviceIP, identity.Vendor, len(outputs))
 	}
 
-	txErr := e.db.Transaction(func(tx *gorm.DB) error {
-		if ctx.IsCancelled() {
-			return ctx.Context().Err()
-		}
-		if err := tx.Model(&TaskRunDevice{}).
-			Where("task_run_id = ? AND device_ip = ?", runID, deviceIP).
-			Updates(map[string]interface{}{
-				"vendor":          identity.Vendor,
-				"model":           identity.Model,
-				"hostname":        identity.Hostname,
-				"normalized_name": identity.Hostname,
-				"mgmt_ip":         identity.MgmtIP,
-				"chassis_id":      identity.ChassisID,
-			}).Error; err != nil {
-			return err
-		}
+	if ctx.IsCancelled() {
+		return ctx.Context().Err()
+	}
 
-		if err := tx.Where("task_run_id = ? AND device_ip = ?", runID, deviceIP).Delete(&TaskParsedInterface{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("task_run_id = ? AND device_ip = ?", runID, deviceIP).Delete(&TaskParsedLLDPNeighbor{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("task_run_id = ? AND device_ip = ?", runID, deviceIP).Delete(&TaskParsedFDBEntry{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("task_run_id = ? AND device_ip = ?", runID, deviceIP).Delete(&TaskParsedARPEntry{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("task_run_id = ? AND device_ip = ?", runID, deviceIP).Delete(&TaskParsedAggregateMember{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("task_run_id = ? AND device_ip = ?", runID, deviceIP).Delete(&TaskParsedAggregateGroup{}).Error; err != nil {
-			return err
-		}
-
-		for _, iface := range interfaces {
-			if ctx.IsCancelled() {
-				return ctx.Context().Err()
-			}
-			if err := tx.Create(&TaskParsedInterface{
-				TaskRunID:     runID,
-				DeviceIP:      deviceIP,
-				InterfaceName: iface.Name,
-				Status:        iface.Status,
-				IsAggregate:   iface.IsAggregate,
-				AggregateID:   iface.AggregateID,
-			}).Error; err != nil {
-				return err
-			}
-		}
-		for _, n := range lldps {
-			if ctx.IsCancelled() {
-				return ctx.Context().Err()
-			}
-			if err := tx.Create(&TaskParsedLLDPNeighbor{
-				TaskRunID:       runID,
-				DeviceIP:        deviceIP,
-				LocalInterface:  n.LocalInterface,
-				NeighborName:    n.NeighborName,
-				NeighborChassis: n.NeighborChassis,
-				NeighborPort:    n.NeighborPort,
-				NeighborIP:      n.NeighborIP,
-				NeighborDesc:    n.NeighborDesc,
-				CommandKey:      n.CommandKey,
-				RawRefID:        n.RawRefID,
-			}).Error; err != nil {
-				return err
-			}
-		}
-		for _, f := range fdbs {
-			if ctx.IsCancelled() {
-				return ctx.Context().Err()
-			}
-			if err := tx.Create(&TaskParsedFDBEntry{
-				TaskRunID:  runID,
-				DeviceIP:   deviceIP,
-				MACAddress: f.MACAddress,
-				VLAN:       f.VLAN,
-				Interface:  f.Interface,
-				Type:       f.Type,
-				CommandKey: f.CommandKey,
-				RawRefID:   f.RawRefID,
-			}).Error; err != nil {
-				return err
-			}
-		}
-		for _, a := range arps {
-			if ctx.IsCancelled() {
-				return ctx.Context().Err()
-			}
-			if err := tx.Create(&TaskParsedARPEntry{
-				TaskRunID:  runID,
-				DeviceIP:   deviceIP,
-				IPAddress:  a.IPAddress,
-				MACAddress: a.MACAddress,
-				Interface:  a.Interface,
-				Type:       a.Type,
-				CommandKey: a.CommandKey,
-				RawRefID:   a.RawRefID,
-			}).Error; err != nil {
-				return err
-			}
-		}
-		for _, g := range aggs {
-			if ctx.IsCancelled() {
-				return ctx.Context().Err()
-			}
-			if err := tx.Create(&TaskParsedAggregateGroup{
-				TaskRunID:     runID,
-				DeviceIP:      deviceIP,
-				AggregateName: g.AggregateName,
-				Mode:          g.Mode,
-				CommandKey:    g.CommandKey,
-				RawRefID:      g.RawRefID,
-			}).Error; err != nil {
-				return err
-			}
-			for _, member := range g.MemberPorts {
-				if ctx.IsCancelled() {
-					return ctx.Context().Err()
-				}
-				if err := tx.Create(&TaskParsedAggregateMember{
-					TaskRunID:     runID,
-					DeviceIP:      deviceIP,
-					AggregateName: g.AggregateName,
-					MemberPort:    member,
-					CommandKey:    g.CommandKey,
-					RawRefID:      g.RawRefID,
-				}).Error; err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	})
-	if txErr != nil {
-		logger.Warn("TaskExec", runID, "持久化解析结果失败: device=%s, err=%v", deviceIP, txErr)
-		return txErr
+	persister := NewTopologyFactsPersister(e.db)
+	if err := persister.SaveDeviceIdentity(runID, deviceIP, identity); err != nil {
+		logger.Warn("TaskExec", runID, "保存设备身份失败: device=%s, err=%v", deviceIP, err)
+		return err
+	}
+	if err := persister.SaveParsedFacts(runID, deviceIP, interfaces, lldps, fdbs, arps, aggs); err != nil {
+		logger.Warn("TaskExec", runID, "持久化解析结果失败: device=%s, err=%v", deviceIP, err)
+		return err
 	}
 	logger.Verbose("TaskExec", runID, "解析结果已持久化: device=%s, interfaces=%d, lldps=%d, fdbs=%d, arps=%d, aggs=%d", deviceIP, len(interfaces), len(lldps), len(fdbs), len(arps), len(aggs))
 	return nil

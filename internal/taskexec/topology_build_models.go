@@ -63,6 +63,9 @@ type TopologyEdgeCandidate struct {
 	BDeviceMACs []string `gorm:"serializer:json" json:"bDeviceMacs"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+
+	// 运行时字段（构建期间使用，不持久化）
+	score ScoreBreakdown `gorm:"-" json:"-"`
 }
 
 func (TopologyEdgeCandidate) TableName() string {
@@ -186,53 +189,48 @@ type DecisionCandidate struct {
 	Features    []string `json:"features"`
 }
 
+// =============================================================================
+// 评分权重常量
+// 拓扑构建算法的内部评分参数，不对外暴露配置
+// =============================================================================
+
+const (
+	// LLDP 评分权重
+	wLLDPBaseSingleSide    = 75.0  // 单边基础分
+	wLLDPBaseBidirectional = 100.0 // 双向基础分
+	wLLDPChassisMatch      = 5.0   // chassis 匹配加分
+	wLLDPNameMatch         = 3.0   // 名称匹配加分
+	wLLDPIPMatch           = 5.0   // IP 匹配加分
+	wLLDPRemoteIfPresent   = 2.0   // 远端接口存在加分
+
+	// FDB/ARP 评分权重
+	wFDBBaseScore      = 20.0 // 基础分
+	wFDBMACCountFactor = 2.0  // MAC 数量因子
+	wFDBDeviceBonus    = 30.0 // 设备类型加分
+	wFDBServerBonus    = 15.0 // 服务器类型加分
+	wFDBTerminalBonus  = 5.0  // 终端类型加分
+	wFDBVLANBonus      = 3.0  // VLAN 一致性加分
+	wFDBLogicalIfBonus = 5.0  // 聚合接口加分
+	wFDBRemoteIPBonus  = 5.0  // 远端 IP 加分
+
+	// 接口评分权重
+	wIfUpBonus = 3.0 // 接口 up 加分
+
+	// 聚合评分权重
+	wAggLACPModeBonus = 5.0 // LACP 模式加分
+
+	// 置信度阈值
+	confidenceConfirmed     = 0.95 // 确认阈值
+	confidenceSemiConfirmed = 0.75 // 半确认阈值
+)
+
 // TopologyBuildConfig 拓扑构建配置
-// 运行时可调整的参数
+// 仅包含用户可调整的运行时参数
 type TopologyBuildConfig struct {
 	// 最大推断候选数
 	MaxInferenceCandidates int `json:"maxInferenceCandidates"`
 	// 冲突窗口（分差小于此值视为竞争）
 	ConflictWindow float64 `json:"conflictWindow"`
-	// LLDP 评分权重
-	LLDPWeights struct {
-		BaseSingleSide    float64 `json:"baseSingleSide"`    // 单边基础分
-		BaseBidirectional float64 `json:"baseBidirectional"` // 双向基础分
-		ChassisMatch      float64 `json:"chassisMatch"`      // chassis 匹配加分
-		NameMatch         float64 `json:"nameMatch"`         // 名称匹配加分
-		IPMatch           float64 `json:"ipMatch"`           // IP 匹配加分
-		RemoteIfPresent   float64 `json:"remoteIfPresent"`   // 远端接口存在加分
-	} `json:"lldpWeights"`
-	// FDB/ARP 评分权重
-	FDBARPWeights struct {
-		BaseScore      float64 `json:"baseScore"`      // 基础分
-		MACCountFactor float64 `json:"macCountFactor"` // MAC 数量因子
-		DeviceBonus    float64 `json:"deviceBonus"`    // 设备类型加分
-		ServerBonus    float64 `json:"serverBonus"`    // 服务器类型加分
-		TerminalBonus  float64 `json:"terminalBonus"`  // 终端类型加分
-		VLANBonus      float64 `json:"vlanBonus"`      // VLAN 一致性加分
-		LogicalIfBonus float64 `json:"logicalIfBonus"` // 聚合接口加分
-		RemoteIPBonus  float64 `json:"remoteIPBonus"`  // 远端 IP 加分
-	} `json:"fdbArpWeights"`
-	// 接口评分权重
-	InterfaceWeights struct {
-		IfUpBonus   float64 `json:"ifUpBonus"`   // 接口 up 加分
-		SpeedMatch  float64 `json:"speedMatch"`  // 速率匹配加分
-		DuplexMatch float64 `json:"duplexMatch"` // 双工匹配加分
-	} `json:"interfaceWeights"`
-	// 聚合评分权重
-	AggregateWeights struct {
-		LACPModeBonus   float64 `json:"lacpModeBonus"`   // LACP 模式加分
-		StaticModeBonus float64 `json:"staticModeBonus"` // 静态模式加分
-		MemberBonus     float64 `json:"memberBonus"`     // 成员加分
-	} `json:"aggregateWeights"`
-	// 置信度阈值
-	ConfidenceThresholds struct {
-		Confirmed     float64 `json:"confirmed"`     // 确认阈值
-		SemiConfirmed float64 `json:"semiConfirmed"` // 半确认阈值
-		Inferred      float64 `json:"inferred"`      // 推断阈值
-	} `json:"confidenceThresholds"`
-	// 是否启用新构建逻辑
-	UseNewBuilder bool `json:"useNewBuilder"`
 	// 是否保存候选轨迹
 	SaveCandidates bool `json:"saveCandidates"`
 	// 是否保存决策轨迹
@@ -241,48 +239,12 @@ type TopologyBuildConfig struct {
 
 // DefaultTopologyBuildConfig 返回默认拓扑构建配置
 func DefaultTopologyBuildConfig() TopologyBuildConfig {
-	cfg := TopologyBuildConfig{
+	return TopologyBuildConfig{
 		MaxInferenceCandidates: 5,
 		ConflictWindow:         10.0,
-		UseNewBuilder:          false, // 默认使用旧逻辑，通过配置切换
 		SaveCandidates:         true,
 		SaveDecisionTraces:     true,
 	}
-
-	// LLDP 权重
-	cfg.LLDPWeights.BaseSingleSide = 75.0
-	cfg.LLDPWeights.BaseBidirectional = 100.0
-	cfg.LLDPWeights.ChassisMatch = 5.0
-	cfg.LLDPWeights.NameMatch = 3.0
-	cfg.LLDPWeights.IPMatch = 5.0
-	cfg.LLDPWeights.RemoteIfPresent = 2.0
-
-	// FDB/ARP 权重
-	cfg.FDBARPWeights.BaseScore = 20.0
-	cfg.FDBARPWeights.MACCountFactor = 2.0
-	cfg.FDBARPWeights.DeviceBonus = 30.0
-	cfg.FDBARPWeights.ServerBonus = 15.0
-	cfg.FDBARPWeights.TerminalBonus = 5.0
-	cfg.FDBARPWeights.VLANBonus = 3.0
-	cfg.FDBARPWeights.LogicalIfBonus = 5.0
-	cfg.FDBARPWeights.RemoteIPBonus = 5.0
-
-	// 接口权重
-	cfg.InterfaceWeights.IfUpBonus = 3.0
-	cfg.InterfaceWeights.SpeedMatch = 2.0
-	cfg.InterfaceWeights.DuplexMatch = 1.0
-
-	// 聚合权重
-	cfg.AggregateWeights.LACPModeBonus = 5.0
-	cfg.AggregateWeights.StaticModeBonus = 3.0
-	cfg.AggregateWeights.MemberBonus = 1.0
-
-	// 置信度阈值
-	cfg.ConfidenceThresholds.Confirmed = 0.95
-	cfg.ConfidenceThresholds.SemiConfirmed = 0.75
-	cfg.ConfidenceThresholds.Inferred = 0.35
-
-	return cfg
 }
 
 // TopologyBuildInput 拓扑构建输入

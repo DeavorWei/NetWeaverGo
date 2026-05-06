@@ -50,31 +50,33 @@ func TestScoreBreakdownSerialization(t *testing.T) {
 func TestDefaultTopologyBuildConfig(t *testing.T) {
 	cfg := DefaultTopologyBuildConfig()
 
+	// 验证用户可调参数
 	assert.Equal(t, 5, cfg.MaxInferenceCandidates)
 	assert.Equal(t, 10.0, cfg.ConflictWindow)
-	assert.False(t, cfg.UseNewBuilder)
 	assert.True(t, cfg.SaveCandidates)
 	assert.True(t, cfg.SaveDecisionTraces)
+}
 
+// TestScoringWeightConstants 测试评分权重常量值
+func TestScoringWeightConstants(t *testing.T) {
 	// LLDP 权重
-	assert.Equal(t, 75.0, cfg.LLDPWeights.BaseSingleSide)
-	assert.Equal(t, 100.0, cfg.LLDPWeights.BaseBidirectional)
-	assert.Equal(t, 5.0, cfg.LLDPWeights.ChassisMatch)
-	assert.Equal(t, 3.0, cfg.LLDPWeights.NameMatch)
-	assert.Equal(t, 5.0, cfg.LLDPWeights.IPMatch)
-	assert.Equal(t, 2.0, cfg.LLDPWeights.RemoteIfPresent)
+	assert.Equal(t, 75.0, wLLDPBaseSingleSide)
+	assert.Equal(t, 100.0, wLLDPBaseBidirectional)
+	assert.Equal(t, 5.0, wLLDPChassisMatch)
+	assert.Equal(t, 3.0, wLLDPNameMatch)
+	assert.Equal(t, 5.0, wLLDPIPMatch)
+	assert.Equal(t, 2.0, wLLDPRemoteIfPresent)
 
 	// FDB/ARP 权重
-	assert.Equal(t, 20.0, cfg.FDBARPWeights.BaseScore)
-	assert.Equal(t, 2.0, cfg.FDBARPWeights.MACCountFactor)
-	assert.Equal(t, 30.0, cfg.FDBARPWeights.DeviceBonus)
-	assert.Equal(t, 15.0, cfg.FDBARPWeights.ServerBonus)
-	assert.Equal(t, 5.0, cfg.FDBARPWeights.TerminalBonus)
+	assert.Equal(t, 20.0, wFDBBaseScore)
+	assert.Equal(t, 2.0, wFDBMACCountFactor)
+	assert.Equal(t, 30.0, wFDBDeviceBonus)
+	assert.Equal(t, 15.0, wFDBServerBonus)
+	assert.Equal(t, 5.0, wFDBTerminalBonus)
 
 	// 置信度阈值
-	assert.Equal(t, 0.95, cfg.ConfidenceThresholds.Confirmed)
-	assert.Equal(t, 0.75, cfg.ConfidenceThresholds.SemiConfirmed)
-	assert.Equal(t, 0.35, cfg.ConfidenceThresholds.Inferred)
+	assert.Equal(t, 0.95, confidenceConfirmed)
+	assert.Equal(t, 0.75, confidenceSemiConfirmed)
 }
 
 // TestBuildCandidateKey 测试候选键生成
@@ -430,18 +432,15 @@ func TestEnrichCandidatesWithInterfaceFacts(t *testing.T) {
 			TotalScore:     75.0,
 			ScoreBreakdown: `{"version":"1.0","totalScore":75.0}`,
 			Status:         "pending",
+			score:          ScoreBreakdown{Version: "1.0", TotalScore: 75.0},
 		},
 	}
 
 	builder.enrichCandidatesWithInterfaceFacts(candidates, n)
 
-	// 验证评分增加
-	var score ScoreBreakdown
-	err := json.Unmarshal([]byte(candidates[0].ScoreBreakdown), &score)
-	require.NoError(t, err)
-
-	assert.True(t, score.InterfaceScore.LocalIfUp, "接口 up 状态应被识别")
-	// 验证总分增加了接口加分（IfUpBonus = 3.0）
+	// 验证接口状态被识别
+	assert.True(t, candidates[0].score.InterfaceScore.LocalIfUp, "接口 up 状态应被识别")
+	// 验证总分增加了接口加分（wIfUpBonus = 3.0）
 	// 初始 75.0 + IfUpBonus 3.0 = 78.0
 	assert.Equal(t, 78.0, candidates[0].TotalScore, "总分应增加 IfUpBonus")
 }

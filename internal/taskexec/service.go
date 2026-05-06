@@ -243,18 +243,6 @@ func (s *TaskExecutionService) GetReplayHistory(originalRunID string) ([]Topolog
 	return executor.GetReplayHistory(originalRunID)
 }
 
-// CompareReplayResults 对比两次运行的解析结果
-func (s *TaskExecutionService) CompareReplayResults(runID1, runID2 string) (*ParseResultDiff, error) {
-	executor := NewReplayExecutor(s.db, s.parserProvider)
-	return executor.CompareReplayResults(runID1, runID2)
-}
-
-// CompareTopologyEdges 对比两次运行的拓扑边
-func (s *TaskExecutionService) CompareTopologyEdges(runID1, runID2 string) (*TopologyEdgeDiff, error) {
-	executor := NewReplayExecutor(s.db, s.parserProvider)
-	return executor.CompareTopologyEdges(runID1, runID2)
-}
-
 // GetRawFilePreview 获取Raw文件预览
 func (s *TaskExecutionService) GetRawFilePreview(runID, deviceIP, commandKey string) (*RawFilePreview, error) {
 	executor := NewReplayExecutor(s.db, s.parserProvider)

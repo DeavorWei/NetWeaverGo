@@ -391,10 +391,8 @@ func TestClearExistingResults(t *testing.T) {
 	db.Model(&TaskParsedLLDPNeighbor{}).Where("task_run_id = ?", runID).Count(&count)
 	assert.Equal(t, int64(1), count)
 
-	executor := NewReplayExecutor(db, newMockParserProvider())
-
 	// 执行清除
-	err := executor.clearExistingResults(runID)
+	err := NewTopologyFactsPersister(db).ClearAllFacts(runID)
 	require.NoError(t, err)
 
 	// 验证数据已清除

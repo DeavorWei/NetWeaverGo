@@ -38,8 +38,3 @@ func newDefinitionID() string {
 	return newPrefixedID("definition_")
 }
 
-// newNodeUUID 生成全局唯一的节点UUID
-// 阶段3架构演进：用于替代DeviceIP作为拓扑节点的主键
-func newNodeUUID() string {
-	return newPrefixedID("node_")
-}
