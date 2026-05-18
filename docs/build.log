@@ -1,0 +1,750 @@
+PS D:\Document\GO\NetWeaverGo> task build
+task: [windows:common:go:mod:tidy] go mod tidy
+task: Task "windows:common:generate:icons" is up to date
+task: [windows:common:install:frontend:deps] npm install
+task: [windows:common:go:mod:tidy] go mod tidy
+\task: [generate:bindings (BUILD_FLAGS=-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui")] wails3 generate bindings -ts -d frontend/src/bindings -f '-tags production' -clean=true ./
+\ Wails (v3.0.0-alpha.91)  Generate Bindings
+ INFO  Processed: 53 Packages, 0 Services, 0 Methods, 0 Enums, 0 Models, 0 Events in 1.2337804s.
+ INFO  Output directory: D:\Document\GO\NetWeaverGo\frontend\src\bindings
+
+up to date, audited 88 packages in 5s
+
+15 packages are looking for funding
+  run `npm fund` for details
+
+4 vulnerabilities (1 moderate, 3 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+task: [build:frontend (DEV=)] npm run build -q
+
+> frontend@0.0.0 build
+> vue-tsc -b && vite build
+
+src/components/task/CommandGroupSelector.vue:124:29 - error TS7006: Parameter 'g' implicitly has an 'any' type.
+
+124   return groups.value.find((g) => g.id === selectedGroupId.value) || null;
+                                ~
+
+src/components/task/CommandGroupSelector.vue:137:26 - error TS7006: Parameter 'g' implicitly has an 'any' type.
+
+137       groups.value.some((g) => g.id === props.modelValue)
+                             ~
+
+src/components/task/DeviceSelectorModal.vue:106:21 - error TS7006: Parameter 'tag' implicitly has an 'any' type.
+
+106     d.tags?.forEach(tag => {
+                        ~~~
+
+src/components/task/ExecutionHistoryDrawer.vue:69:30 - error TS2339: Property 'id' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+69                 :key="record.id"
+                                ~~
+
+src/components/task/ExecutionHistoryDrawer.vue:71:47 - error TS2339: Property 'status' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+71                 :class="`record-item-${record.status}`"
+                                                 ~~~~~~
+
+src/components/task/ExecutionHistoryDrawer.vue:77:67 - error TS2339: Property 'status' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+77                     :class="`status-badge-${getStatusClass(record.status)}`"
+                                                                     ~~~~~~
+
+src/components/task/ExecutionHistoryDrawer.vue:79:45 - error TS2339: Property 'status' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+79                     {{ getStatusText(record.status) }}
+                                               ~~~~~~
+
+src/components/task/ExecutionHistoryDrawer.vue:81:66 - error TS2339: Property 'startedAt' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+81                   <span class="record-time">{{ formatTime(record.startedAt) }}</span>
+                                                                    ~~~~~~~~~
+
+src/components/task/ExecutionHistoryDrawer.vue:85:54 - error TS2339: Property 'taskName' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+85                   <div class="record-task">{{ record.taskName }}</div>
+                                                        ~~~~~~~~
+
+src/components/task/ExecutionHistoryDrawer.vue:87:41 - error TS2339: Property 'totalDevices' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+87                     <span>设备: {{ record.totalDevices }}</span>
+                                           ~~~~~~~~~~~~
+
+src/components/task/ExecutionHistoryDrawer.vue:88:62 - error TS2339: Property 'successCount' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+88                     <span class="text-success">成功: {{ record.successCount }}</span>
+                                                                ~~~~~~~~~~~~
+
+src/components/task/ExecutionHistoryDrawer.vue:89:40 - error TS2339: Property 'errorCount' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+89                     <span v-if="record.errorCount > 0" class="text-error">失败: {{ record.errorCount }}</span>
+                                          ~~~~~~~~~~
+
+src/components/task/ExecutionHistoryDrawer.vue:89:89 - error TS2339: Property 'errorCount' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+89                     <span v-if="record.errorCount > 0" class="text-error">失败: {{ record.errorCount }}</span>
+                                                                                           ~~~~~~~~~~
+
+src/components/task/ExecutionHistoryDrawer.vue:90:69 - error TS2339: Property 'durationMs' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+90                     <span class="duration">{{ formatDuration(record.durationMs) }}</span>
+                                                                       ~~~~~~~~~~
+
+src/components/task/ExecutionHistoryDrawer.vue:154:44 - error TS2339: Property 'taskName' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+154           deleteConfirmModal.targetRecord?.taskName
+                                               ~~~~~~~~
+
+src/components/task/ExecutionHistoryDrawer.vue:227:9 - error TS2353: Object literal may only specify known properties, and 'id' does not exist in type 'ExecutionHistoryRecord'.
+
+227         id: item.id,
+            ~~
+
+src/components/task/ExecutionHistoryDrawer.vue:333:25 - error TS2339: Property 'id' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+333           runId: record.id,
+                            ~~
+
+src/components/task/ExecutionHistoryDrawer.vue:338:58 - error TS2339: Property 'id' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+338           const index = records.value.findIndex((r) => r.id === record.id);
+                                                             ~~
+
+src/components/task/ExecutionHistoryDrawer.vue:338:72 - error TS2339: Property 'id' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+338           const index = records.value.findIndex((r) => r.id === record.id);
+                                                                           ~~
+
+src/components/task/ExecutionHistoryDrawer.vue:343:53 - error TS2339: Property 'id' does not exist on type '{ runnerId?: string | undefined; devices?: { ip: string; status: string; errorMsg?: string | undefined; execCmd?: number | undefined; totalCmd?: number | undefined; logCount?: number | undefined; logTail?: string[] | undefined; detailLogPath?: string | undefined; logFilePath?: string | undefined; rawLogPath?: string...'.
+
+343           taskexecStore.removeRunFromHistory(record.id);
+                                                        ~~
+
+src/components/task/ExecutionRecordDetail.vue:27:52 - error TS2339: Property 'taskName' does not exist on type 'ExecutionHistoryRecord'.
+
+27                 <span class="info-value">{{ record.taskName }}</span>
+                                                      ~~~~~~~~
+
+src/components/task/ExecutionRecordDetail.vue:31:64 - error TS2339: Property 'mode' does not exist on type 'ExecutionHistoryRecord'.
+
+31                 <span class="info-value">{{ getModeText(record.mode) }}</span>
+                                                                  ~~~~
+
+src/components/task/ExecutionRecordDetail.vue:37:65 - error TS2339: Property 'status' does not exist on type 'ExecutionHistoryRecord'.
+
+37                   :class="`status-badge-${getStatusClass(record.status)}`"
+                                                                   ~~~~~~
+
+src/components/task/ExecutionRecordDetail.vue:39:43 - error TS2339: Property 'status' does not exist on type 'ExecutionHistoryRecord'.
+
+39                   {{ getStatusText(record.status) }}
+                                             ~~~~~~
+
+src/components/task/ExecutionRecordDetail.vue:44:63 - error TS2339: Property 'startedAt' does not exist on type 'ExecutionHistoryRecord'.
+
+44                 <span class="info-value">{{ formatTime(record.startedAt) }}</span>
+                                                                 ~~~~~~~~~
+
+src/components/task/ExecutionRecordDetail.vue:48:63 - error TS2339: Property 'finishedAt' does not exist on type 'ExecutionHistoryRecord'.
+
+48                 <span class="info-value">{{ formatTime(record.finishedAt) }}</span>
+                                                                 ~~~~~~~~~~
+
+src/components/task/ExecutionRecordDetail.vue:52:67 - error TS2339: Property 'durationMs' does not exist on type 'ExecutionHistoryRecord'.
+
+52                 <span class="info-value">{{ formatDuration(record.durationMs) }}</span>
+                                                                     ~~~~~~~~~~
+
+src/components/task/ExecutionRecordDetail.vue:80:54 - error TS2339: Property 'totalDevices' does not exist on type 'ExecutionHistoryRecord'.
+
+80                   <span class="stat-value">{{ record.totalDevices }}</span>
+                                                        ~~~~~~~~~~~~
+
+src/components/task/ExecutionRecordDetail.vue:84:54 - error TS2339: Property 'successCount' does not exist on type 'ExecutionHistoryRecord'.
+
+84                   <span class="stat-value">{{ record.successCount }}</span>
+                                                        ~~~~~~~~~~~~
+
+src/components/task/ExecutionRecordDetail.vue:87:69 - error TS2339: Property 'errorCount' does not exist on type 'ExecutionHistoryRecord'.
+
+87                 <div class="stat-card stat-card-error" v-if="record.errorCount > 0">
+                                                                       ~~~~~~~~~~
+
+src/components/task/ExecutionRecordDetail.vue:88:54 - error TS2339: Property 'errorCount' does not exist on type 'ExecutionHistoryRecord'.
+
+88                   <span class="stat-value">{{ record.errorCount }}</span>
+                                                        ~~~~~~~~~~
+
+src/components/task/ExecutionRecordDetail.vue:109:33 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+109                 :run-id="record.id"
+                                    ~~
+
+src/components/task/ExecutionRecordDetail.vue:126:37 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+126                     :run-id="record.id"
+                                        ~~
+
+src/components/task/ExecutionRecordDetail.vue:139:37 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+139                     :run-id="record.id"
+                                        ~~
+
+src/components/task/ExecutionRecordDetail.vue:152:37 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+152                     :run-id="record.id"
+                                        ~~
+
+src/components/task/ExecutionRecordDetail.vue:165:37 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+165                     :run-id="record.id"
+                                        ~~
+
+src/components/task/ExecutionRecordDetail.vue:181:35 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+181                   :run-id="record.id"
+                                      ~~
+
+src/components/task/ExecutionRecordDetail.vue:237:22 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+237   if (!props.record?.id) return;
+                         ~~
+
+src/components/task/ExecutionRecordDetail.vue:242:27 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+242       runId: props.record.id,
+                              ~~
+
+src/components/task/ExecutionRecordDetail.vue:255:22 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+255   if (!props.record?.id) return;
+                         ~~
+
+src/components/task/ExecutionRecordDetail.vue:259:27 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+259       runId: props.record.id,
+                              ~~
+
+src/components/task/ExecutionRecordDetail.vue:277:23 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+277   () => props.record?.id,
+                          ~~
+
+src/components/task/ExecutionRecordDetail.vue:290:22 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+290   if (!props.record?.id) return;
+                         ~~
+
+src/components/task/ExecutionRecordDetail.vue:294:27 - error TS2339: Property 'id' does not exist on type 'ExecutionHistoryRecord'.
+
+294       runId: props.record.id,
+                              ~~
+
+src/components/task/TaskEditModal.vue:1053:39 - error TS7006: Parameter 'item' implicitly has an 'any' type.
+
+1053   bindingForm.items = task.items.map((item) => ({
+                                           ~~~~
+
+src/components/task/TaskEditModal.vue:1071:29 - error TS7006: Parameter 'id' implicitly has an 'any' type.
+
+1071     item.deviceIDs.forEach((id) => deviceSet.add(id));
+                                 ~~
+
+src/components/tools/PingSettingsModal.vue:3:33 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models' or its corresponding type declarations.
+
+3 import type { PingConfig } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
+                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/components/tools/PingSettingsModal.vue:4:30 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/ui/pingservice' or its corresponding type declarations.
+
+4 import * as PingService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/pingservice'
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/components/tools/TracertSettingsModal.vue:2:36 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models' or its corresponding type declarations.
+
+2 import type { TracertConfig } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
+                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/components/topology/DecisionTracePanel.vue:189:48 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/models/models' or its corresponding type declarations.
+
+189 import type { TopologyDecisionTraceView } from "@/bindings/github.com/NetWeaverGo/core/internal/models/models";
+                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/components/topology/RawFilePreview.vue:147:8 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/taskexec/models' or its corresponding type declarations.
+
+147 } from "@/bindings/github.com/NetWeaverGo/core/internal/taskexec/models";
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/composables/useIPBinding.ts:33:29 - error TS7006: Parameter 'ip' implicitly has an 'any' type.
+
+33     return ipValues.filter((ip) => {
+                               ~~
+
+src/composables/useTopologyReplay.ts:10:62 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/taskexec/models' or its corresponding type declarations.
+
+10 import type { TopologyReplayRecord, ReplayableRunInfo } from '@/bindings/github.com/NetWeaverGo/core/internal/taskexec/models'
+                                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:23:39 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/deviceservice' or its corresponding type declarations.
+
+23 import * as DeviceServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/deviceservice'
+                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:24:45 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/commandgroupservice' or its corresponding type declarations.
+
+24 import * as CommandGroupServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/commandgroupservice'
+                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:25:41 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/settingsservice' or its corresponding type declarations.
+
+25 import * as SettingsServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/settingsservice'
+                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:26:42 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/taskgroupservice' or its corresponding type declarations.
+
+26 import * as TaskGroupServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/taskgroupservice'
+                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:27:38 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice' or its corresponding type declarations.
+
+27 import * as ForgeServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/forgeservice'
+                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:28:38 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/queryservice' or its corresponding type declarations.
+
+28 import * as QueryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/queryservice'
+                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:29:49 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/executionhistoryservice' or its corresponding type declarations.
+
+29 import * as ExecutionHistoryServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/executionhistoryservice'
+                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:30:44 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/plancompareservice' or its corresponding type declarations.
+
+30 import * as PlanCompareServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/plancompareservice'
+                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:31:48 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/taskexecutionuiservice' or its corresponding type declarations.
+
+31 import * as TaskExecutionUIServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/taskexecutionuiservice'
+                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:32:48 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/topologycommandservice' or its corresponding type declarations.
+
+32 import * as TopologyCommandServiceBinding from '../bindings/github.com/NetWeaverGo/core/internal/ui/topologycommandservice'
+                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:119:35 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js' or its corresponding type declarations.
+
+119 export { RuntimeConfigData } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
+                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:259:8 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/forge/models.js' or its corresponding type declarations.
+
+259 } from '../bindings/github.com/NetWeaverGo/core/internal/forge/models.js'
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:271:8 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js' or its corresponding type declarations.
+
+271 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:289:8 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/models/models' or its corresponding type declarations.
+
+289 } from '../bindings/github.com/NetWeaverGo/core/internal/models/models'
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:326:8 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js' or its corresponding type declarations.
+
+326 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:361:8 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js' or its corresponding type declarations.
+
+361 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:399:8 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/models/models.js' or its corresponding type declarations.
+
+399 } from '../bindings/github.com/NetWeaverGo/core/internal/models/models.js'
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:409:8 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js' or its corresponding type declarations.
+
+409 } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models.js'
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:415:8 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/taskexec/models.js' or its corresponding type declarations.
+
+415 } from '../bindings/github.com/NetWeaverGo/core/internal/taskexec/models.js'
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/services/api.ts:417:35 - error TS2307: Cannot find module '../bindings/github.com/NetWeaverGo/core/internal/parser/models.js' or its corresponding type declarations.
+
+417 export type { ParsedResult } from '../bindings/github.com/NetWeaverGo/core/internal/parser/models.js'
+                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/utils/logger.ts:6:61 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/logger/models' or its corresponding type declarations.
+
+6 import { FrontendLogEntry as BindingFrontendLogEntry } from '@/bindings/github.com/NetWeaverGo/core/internal/logger/models'
+                                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/utils/logger.ts:247:9 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/ui/frontendlogservice' or its corresponding type declarations.
+
+247         '@/bindings/github.com/NetWeaverGo/core/internal/ui/frontendlogservice'
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/utils/logger.ts:267:9 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/ui/frontendlogservice' or its corresponding type declarations.
+
+267         '@/bindings/github.com/NetWeaverGo/core/internal/ui/frontendlogservice'
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/utils/logger.ts:294:11 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/ui/frontendlogservice' or its corresponding type declarations.
+
+294           '@/bindings/github.com/NetWeaverGo/core/internal/ui/frontendlogservice'
+              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/views/Commands.vue:566:24 - error TS7006: Parameter 'g' implicitly has an 'any' type.
+
+566   groups.value.forEach(g => {
+                           ~
+
+src/views/Commands.vue:567:21 - error TS7006: Parameter 't' implicitly has an 'any' type.
+
+567     g.tags?.forEach(t => tagSet.add(t))
+                        ~
+
+src/views/Commands.vue:578:28 - error TS7006: Parameter 'g' implicitly has an 'any' type.
+
+578     result = result.filter(g =>
+                               ~
+
+src/views/Commands.vue:585:28 - error TS7006: Parameter 'g' implicitly has an 'any' type.
+
+585     result = result.filter(g => g.tags?.includes(selectedTag.value))
+                               ~
+
+src/views/Devices.vue:35:59 - error TS7006: Parameter 'd' implicitly has an 'any' type.
+
+35       @toggle-select-all="handleToggleSelectAll(data.map((d) => d.id))"
+                                                             ~
+
+src/views/TaskExecution.vue:1179:6 - error TS7006: Parameter 'sum' implicitly has an 'any' type.
+
+1179     (sum, plan) => sum + enabledCommandCount(plan),
+          ~~~
+
+src/views/TaskExecution.vue:1179:11 - error TS7006: Parameter 'plan' implicitly has an 'any' type.
+
+1179     (sum, plan) => sum + enabledCommandCount(plan),
+               ~~~~
+
+src/views/TaskExecution.vue:1186:6 - error TS7006: Parameter 'sum' implicitly has an 'any' type.
+
+1186     (sum, plan) => sum + disabledCommandCount(plan),
+          ~~~
+
+src/views/TaskExecution.vue:1186:11 - error TS7006: Parameter 'plan' implicitly has an 'any' type.
+
+1186     (sum, plan) => sum + disabledCommandCount(plan),
+               ~~~~
+
+src/views/TaskExecution.vue:1333:36 - error TS7006: Parameter 'task' implicitly has an 'any' type.
+
+1333   let result = tasks.value.filter((task) => task && task.id > 0);
+                                        ~~~~
+
+src/views/TaskExecution.vue:1335:29 - error TS7006: Parameter 'task' implicitly has an 'any' type.
+
+1335     result = result.filter((task) => matchesTaskQuery(task, searchQuery.value));
+                                 ~~~~
+
+src/views/TaskExecution.vue:1339:8 - error TS7006: Parameter 'task' implicitly has an 'any' type.
+
+1339       (task) => normalizeString(task.status, "pending") === filterStatus.value,
+            ~~~~
+
+src/views/TaskExecution.vue:1344:8 - error TS7006: Parameter 'task' implicitly has an 'any' type.
+
+1344       (task) => normalizeString(task.mode, "group") === filterMode.value,
+            ~~~~
+
+src/views/Tasks.vue:142:40 - error TS7006: Parameter 'd' implicitly has an 'any' type.
+
+142                 {{ selectedDevices.map(d => d.ip).slice(0, 5).join(', ') }}{{ selectedDevices.length > 5 ? '...' : '' }}
+                                           ~
+
+src/views/Tasks.vue:712:43 - error TS7006: Parameter 'd' implicitly has an 'any' type.
+
+712       :selected-i-ps="selectedDevices.map(d => d.ip)"
+                                              ~
+
+src/views/Tasks.vue:1110:34 - error TS7006: Parameter 'item' implicitly has an 'any' type.
+
+1110       selectedDevices.value.map((item) => item.id),
+                                      ~~~~
+
+src/views/Tools/BatchPing.vue:4:30 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/ui/pingservice' or its corresponding type declarations.
+
+4 import * as PingService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/pingservice'
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/views/Tools/BatchPing.vue:5:32 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/ui/deviceservice' or its corresponding type declarations.
+
+5 import * as DeviceService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/deviceservice'
+                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/views/Tools/BatchPing.vue:6:68 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models' or its corresponding type declarations.
+
+6 import type { PingConfig, BatchPingProgress, HostPingUpdate } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
+                                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/views/Tools/BatchPing.vue:7:34 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/ui/models' or its corresponding type declarations.
+
+7 import type { PingRequest } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
+                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/views/Tools/BatchPing.vue:8:42 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/models/models' or its corresponding type declarations.
+
+8 import type { DeviceAssetListItem } from '@/bindings/github.com/NetWeaverGo/core/internal/models/models'
+                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/views/Tools/BatchPing.vue:114:38 - error TS7006: Parameter 'result' implicitly has an 'any' type.
+
+114   return progress.value.results.map((result) => {
+                                         ~~~~~~
+
+src/views/Tools/BatchPing.vue:130:38 - error TS7006: Parameter 'sum' implicitly has an 'any' type.
+
+130   const totalPings = results.reduce((sum, r) => sum + (r.sentCount || 0), 0)
+                                         ~~~
+
+src/views/Tools/BatchPing.vue:130:43 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+
+130   const totalPings = results.reduce((sum, r) => sum + (r.sentCount || 0), 0)
+                                              ~
+
+src/views/Tools/BatchPing.vue:131:40 - error TS7006: Parameter 'sum' implicitly has an 'any' type.
+
+131   const totalSuccess = results.reduce((sum, r) => sum + (r.recvCount || 0), 0)
+                                           ~~~
+
+src/views/Tools/BatchPing.vue:131:45 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+
+131   const totalSuccess = results.reduce((sum, r) => sum + (r.recvCount || 0), 0)
+                                                ~
+
+src/views/Tools/BatchPing.vue:132:39 - error TS7006: Parameter 'sum' implicitly has an 'any' type.
+
+132   const totalFailed = results.reduce((sum, r) => sum + (r.failedCount || 0), 0)
+                                          ~~~
+
+src/views/Tools/BatchPing.vue:132:44 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+
+132   const totalFailed = results.reduce((sum, r) => sum + (r.failedCount || 0), 0)
+                                               ~
+
+src/views/Tools/BatchPing.vue:133:39 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+
+133   const pingingCount = results.filter(r => r.isPinging).length
+                                          ~
+
+src/views/Tools/BatchPing.vue:137:38 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+
+137   const hostsWitRtt = results.filter(r => (r.status === 'online' || r.isPinging) && r.avgRtt >= 0)
+                                         ~
+
+src/views/Tools/BatchPing.vue:139:27 - error TS7006: Parameter 'sum' implicitly has an 'any' type.
+
+139     ? hostsWitRtt.reduce((sum, r) => sum + r.avgRtt, 0) / hostsWitRtt.length
+                              ~~~
+
+src/views/Tools/BatchPing.vue:139:32 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+
+139     ? hostsWitRtt.reduce((sum, r) => sum + r.avgRtt, 0) / hostsWitRtt.length
+                                   ~
+
+src/views/Tools/BatchPing.vue:144:35 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+
+144     ? Math.min(...hostsWitRtt.map(r => r.minRtt).filter((v: number) => v >= 0))
+                                      ~
+
+src/views/Tools/BatchPing.vue:149:35 - error TS7006: Parameter 'r' implicitly has an 'any' type.
+
+149     ? Math.max(...hostsWitRtt.map(r => r.maxRtt).filter((v: number) => v >= 0))
+                                      ~
+
+src/views/Tools/BatchPing.vue:254:21 - error TS7006: Parameter 'd' implicitly has an 'any' type.
+
+254   devices.value.map(d => ({
+                        ~
+
+src/views/Tools/BatchPing.vue:270:25 - error TS7006: Parameter 'd' implicitly has an 'any' type.
+
+270   devices.value.forEach(d => {
+                            ~
+
+src/views/Tools/ConfigForge.vue:207:35 - error TS7006: Parameter 'block' implicitly has an 'any' type.
+
+207       outputBlocks.value.forEach((block, idx) => {
+                                      ~~~~~
+
+src/views/Tools/ConfigForge.vue:207:42 - error TS7006: Parameter 'idx' implicitly has an 'any' type.
+
+207       outputBlocks.value.forEach((block, idx) => {
+                                             ~~~
+
+src/views/Tools/FileServers.vue:6:36 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/ui/fileserverservice' or its corresponding type declarations.
+
+6 import * as FileServerService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/fileserverservice'
+                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/views/Tools/FileServers.vue:7:34 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/models/models' or its corresponding type declarations.
+
+7 import { FileServerConfig } from '@/bindings/github.com/NetWeaverGo/core/internal/models/models'
+                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/views/Tools/Tracert.vue:4:33 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/ui/tracertservice' or its corresponding type declarations.
+
+4 import * as TracertService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/tracertservice'
+                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/views/Tools/Tracert.vue:5:89 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models' or its corresponding type declarations.
+
+5 import type { TracertConfig, TracertProgress, TracertHopUpdate, TracertHopResult } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
+                                                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/views/Tools/Tracert.vue:6:37 - error TS2307: Cannot find module '@/bindings/github.com/NetWeaverGo/core/internal/ui/models' or its corresponding type declarations.
+
+6 import type { TracertRequest } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
+                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/views/Tools/Tracert.vue:103:14 - error TS7006: Parameter 'hop' implicitly has an 'any' type.
+
+103     .filter((hop) => hop.status !== 'pending')
+                 ~~~
+
+src/views/Tools/Tracert.vue:104:14 - error TS7006: Parameter 'hop' implicitly has an 'any' type.
+
+104     .filter((hop) => !minTTL || minTTL <= 0 || hop.ttl <= minTTL)
+                 ~~~
+
+src/views/Tools/Tracert.vue:105:11 - error TS7006: Parameter 'hop' implicitly has an 'any' type.
+
+105     .map((hop) => {
+              ~~~
+
+src/views/Tools/Tracert.vue:115:43 - error TS7006: Parameter 'h' implicitly has an 'any' type.
+
+115   const hops = progress.value.hops.filter(h => h.status !== 'pending')
+                                              ~
+
+src/views/Tools/Tracert.vue:116:34 - error TS7006: Parameter 'sum' implicitly has an 'any' type.
+
+116   const totalSent = hops.reduce((sum, h) => sum + (h.sentCount || 0), 0)
+                                     ~~~
+
+src/views/Tools/Tracert.vue:116:39 - error TS7006: Parameter 'h' implicitly has an 'any' type.
+
+116   const totalSent = hops.reduce((sum, h) => sum + (h.sentCount || 0), 0)
+                                          ~
+
+src/views/Tools/Tracert.vue:117:34 - error TS7006: Parameter 'sum' implicitly has an 'any' type.
+
+117   const totalRecv = hops.reduce((sum, h) => sum + (h.recvCount || 0), 0)
+                                     ~~~
+
+src/views/Tools/Tracert.vue:117:39 - error TS7006: Parameter 'h' implicitly has an 'any' type.
+
+117   const totalRecv = hops.reduce((sum, h) => sum + (h.recvCount || 0), 0)
+                                          ~
+
+src/views/Tools/Tracert.vue:118:35 - error TS7006: Parameter 'h' implicitly has an 'any' type.
+
+118   const hopsWithRtt = hops.filter(h => h.avgRtt > 0)
+                                      ~
+
+src/views/Tools/Tracert.vue:120:27 - error TS7006: Parameter 'sum' implicitly has an 'any' type.
+
+120     ? hopsWithRtt.reduce((sum, h) => sum + h.avgRtt, 0) / hopsWithRtt.length
+                              ~~~
+
+src/views/Tools/Tracert.vue:120:32 - error TS7006: Parameter 'h' implicitly has an 'any' type.
+
+120     ? hopsWithRtt.reduce((sum, h) => sum + h.avgRtt, 0) / hopsWithRtt.length
+                                   ~
+
+src/views/Topology.vue:532:34 - error TS7006: Parameter 'n' implicitly has an 'any' type.
+
+532   (graph.value.nodes || []).map((n) => ({
+                                     ~
+
+src/views/Topology.vue:546:34 - error TS7006: Parameter 'e' implicitly has an 'any' type.
+
+546   (graph.value.edges || []).map((e) => ({
+                                     ~
+
+src/views/Topology.vue:559:44 - error TS7006: Parameter 'edge' implicitly has an 'any' type.
+
+559   return (graph.value.edges || []).filter((edge) => {
+                                               ~~~~
+
+src/views/Topology.vue:676:38 - error TS7006: Parameter 'edge' implicitly has an 'any' type.
+
+676   return filteredEdges.value.filter((edge) => edge.status === status).length;
+                                         ~~~~
+
+src/views/Topology.vue:694:35 - error TS7006: Parameter 'e' implicitly has an 'any' type.
+
+694     confirmedEdges: edges.filter((e) => e.status === "confirmed").length,
+                                      ~
+
+src/views/Topology.vue:695:39 - error TS7006: Parameter 'e' implicitly has an 'any' type.
+
+695     semiConfirmedEdges: edges.filter((e) => e.status === "semi_confirmed")
+                                          ~
+
+src/views/Topology.vue:697:34 - error TS7006: Parameter 'e' implicitly has an 'any' type.
+
+697     inferredEdges: edges.filter((e) => e.status === "inferred").length,
+                                     ~
+
+src/views/Topology.vue:698:34 - error TS7006: Parameter 'e' implicitly has an 'any' type.
+
+698     conflictEdges: edges.filter((e) => e.status === "conflict").length,
+                                     ~
+
+src/views/TopologyCommandConfig.vue:199:60 - error TS7006: Parameter 'item' implicitly has an 'any' type.
+
+199 const enabledCount = computed(() => commands.value.filter((item) => item.enabled).length);
+                                                               ~~~~
+
+src/views/TopologyCommandConfig.vue:204:8 - error TS7006: Parameter 'item' implicitly has an 'any' type.
+
+204       (item) =>
+           ~~~~
+
+src/views/TopologyCommandConfig.vue:295:37 - error TS7006: Parameter 'item' implicitly has an 'any' type.
+
+295       commands: commands.value.map((item) => ({
+                                        ~~~~
+
+src/views/TopologyCommandConfig.vue:334:50 - error TS7006: Parameter 'item' implicitly has an 'any' type.
+
+334   const currentIndex = commands.value.findIndex((item) => item.fieldKey === fieldKey);
+                                                     ~~~~
+
+src/views/TopologyCommandConfig.vue:335:49 - error TS7006: Parameter 'item' implicitly has an 'any' type.
+
+335   const baseline = baselineCommands.value.find((item) => item.fieldKey === fieldKey);
+                                                    ~~~~
+
+
+Found 144 errors.
+
+task: Failed to run task "build": task: Failed to run task "windows:build": task: Failed to run task "windows:build:native": task: Failed to run task "build:frontend (DEV=)": exit status 2
