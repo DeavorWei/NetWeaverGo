@@ -7,6 +7,7 @@ includes:
 vars:
   APP_NAME: "netweavergo"
   BIN_DIR: "build/bin"
+  MAIN_DIR: "cmd/netweaver"
   VITE_PORT: "{{.WAILS_VITE_PORT | default 9245}}"
 
 tasks:
