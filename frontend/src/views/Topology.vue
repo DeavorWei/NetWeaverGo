@@ -385,7 +385,7 @@
                 型号: {{ deviceDetail.identity?.model || "-" }}
               </div>
               <div class="text-text-muted">
-                版本: {{ deviceDetail.identity?.version || "-" }}
+                主机名: {{ deviceDetail.identity?.hostname || "-" }}
               </div>
               <div class="pt-2 border-t border-border text-text-muted">
                 接口 {{ deviceDetail.interfaces?.length || 0 }} | LLDP

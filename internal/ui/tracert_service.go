@@ -219,6 +219,68 @@ func (s *TracertService) resolveHopHostNames(ctx context.Context, hops []icmp.Tr
 	logger.Debug("TracertService", "-", "反向 DNS 解析完成")
 }
 
+// resolveHopHostNamesAsync 异步解析跳数主机名
+// 调用方应先持锁深拷贝hops快照，将快照传入此函数
+func (s *TracertService) resolveHopHostNamesAsync(ctx context.Context, hops []icmp.TracertHopResult, timeout time.Duration) <-chan []icmp.TracertHopResult {
+	resultCh := make(chan []icmp.TracertHopResult, 1)
+	go func() {
+		defer close(resultCh)
+		// 在goroutine内部使用传入的hops快照（已深拷贝），无数据竞争
+		s.resolveHopHostNames(ctx, hops, timeout)
+		select {
+		case <-ctx.Done():
+			// context已取消，不发送结果
+		default:
+			resultCh <- hops
+		}
+	}()
+	return resultCh
+}
+
+// applyDNSResult 基于IP地址映射将DNS解析结果合并到progress中
+// 使用IP匹配而非索引匹配，避免路径变化时的数据错乱
+func (s *TracertService) applyDNSResult(resolvedHops []icmp.TracertHopResult) {
+	ipToHostName := make(map[string]string)
+	for _, hop := range resolvedHops {
+		if hop.IP != "" && hop.HostName != "" {
+			ipToHostName[hop.IP] = hop.HostName
+		}
+	}
+	if len(ipToHostName) == 0 {
+		return
+	}
+	s.progressMu.Lock()
+	defer s.progressMu.Unlock()
+	if s.progress == nil {
+		return
+	}
+	changed := false
+	for i := range s.progress.Hops {
+		if s.progress.Hops[i].HostName == "" {
+			if name, ok := ipToHostName[s.progress.Hops[i].IP]; ok {
+				s.progress.Hops[i].HostName = name
+				changed = true
+			}
+		}
+	}
+	if changed {
+		reachedTTL := atomic.LoadInt32(&s.progress.MinReachedTTL)
+		s.emitProgress(s.progress.CloneForDisplay(reachedTTL))
+	}
+}
+
+// emitHeartbeat 发送心跳事件到前端
+func (s *TracertService) emitHeartbeat(round int64, elapsedMs int64, isResolvingDNS bool) {
+	if s.wailsApp != nil && s.wailsApp.Event != nil {
+		s.wailsApp.Event.Emit("tracert:heartbeat", icmp.TracertHeartbeat{
+			Round:          round,
+			ElapsedMs:      elapsedMs,
+			IsResolvingDNS: isResolvingDNS,
+			Timestamp:      time.Now().UnixMilli(),
+		})
+	}
+}
+
 // StartTracert starts a tracert operation.
 func (s *TracertService) StartTracert(req TracertRequest) (*icmp.TracertProgress, error) {
 	// Validate target
@@ -302,23 +364,88 @@ func (s *TracertService) runSingle(ctx context.Context, target string, config ic
 	})
 	log.Printf("[TRACERT SVC] runSingle() engine.Run returned: MinReachedTTL=%d, hopsCount=%d", progress.MinReachedTTL, len(progress.Hops))
 
-	// 反向 DNS 解析（异步，不阻塞主流程）
-	dnsCtx, dnsCancel := context.WithTimeout(ctx, 10*time.Second)
-	defer dnsCancel()
-	s.resolveHopHostNames(dnsCtx, progress.Hops, 2*time.Second)
-
-	// DNS 解析后发送过滤后的进度
+	// 立即推送进度（不等待DNS解析）
 	reachedTTL := progress.MinReachedTTL
 	filteredProgress := progress.CloneForDisplay(reachedTTL)
 	log.Printf("[TRACERT SVC] runSingle() sending filtered: reachedTTL=%d, filteredHops=%d", reachedTTL, len(filteredProgress.Hops))
 	s.setProgress(filteredProgress)
 	s.emitProgress(filteredProgress)
-	logger.Info("TracertService", target, "单轮探测完成")
+	logger.Info("TracertService", target, "单轮探测完成，DNS异步解析中")
+
+	// 持锁深拷贝hops快照
+	s.progressMu.RLock()
+	hopsSnapshot := make([]icmp.TracertHopResult, len(progress.Hops))
+	copy(hopsSnapshot, progress.Hops)
+	s.progressMu.RUnlock()
+
+	// 设置DNS解析状态
+	s.progressMu.Lock()
+	if s.progress != nil {
+		s.progress.IsResolvingDNS = true
+	}
+	s.progressMu.Unlock()
+
+	// 异步DNS解析（在goroutine中执行）
+	go func() {
+		dnsCtx, dnsCancel := context.WithTimeout(ctx, 10*time.Second)
+		defer dnsCancel()
+
+		s.resolveHopHostNames(dnsCtx, hopsSnapshot, 2*time.Second)
+
+		// 清除DNS解析状态
+		s.progressMu.Lock()
+		if s.progress != nil {
+			s.progress.IsResolvingDNS = false
+		}
+		s.progressMu.Unlock()
+
+		// 使用IP地址匹配合并DNS结果
+		s.applyDNSResult(hopsSnapshot)
+		logger.Info("TracertService", target, "异步DNS解析完成")
+	}()
+
+	// 在等待DNS期间发送心跳
+	heartbeatTicker := time.NewTicker(500 * time.Millisecond)
+	defer heartbeatTicker.Stop()
+
+	// 等待DNS完成或context取消（最多等待5秒发送心跳）
+	dnsWaitTimeout := time.NewTimer(5 * time.Second)
+	defer dnsWaitTimeout.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-dnsWaitTimeout.C:
+			// DNS等待超时，停止发送心跳
+			return
+		case <-heartbeatTicker.C:
+			// 发送心跳事件
+			s.progressMu.RLock()
+			round := int64(0)
+			elapsedMs := int64(0)
+			isResolvingDNS := false
+			if s.progress != nil {
+				round = int64(s.progress.Round)
+				elapsedMs = s.progress.ElapsedMs
+				isResolvingDNS = s.progress.IsResolvingDNS
+			}
+			s.progressMu.RUnlock()
+			s.emitHeartbeat(round, elapsedMs, isResolvingDNS)
+		}
+	}
 }
 
 // runContinuous runs continuous tracert rounds.
 func (s *TracertService) runContinuous(ctx context.Context, target string, config icmp.TracertConfig, interval time.Duration) {
 	logger.Info("TracertService", target, "启动持续探测模式: interval=%v", interval)
+
+	var prevDNSCancel context.CancelFunc
+	defer func() {
+		if prevDNSCancel != nil {
+			prevDNSCancel()
+		}
+	}()
 
 	round := 0
 	for {
@@ -336,6 +463,7 @@ func (s *TracertService) runContinuous(ctx context.Context, target string, confi
 		s.progressMu.Lock()
 		if s.progress != nil {
 			s.progress.Round = round
+			s.progress.IsResolvingDNS = false
 		}
 		s.progressMu.Unlock()
 
@@ -378,39 +506,120 @@ func (s *TracertService) runContinuous(ctx context.Context, target string, confi
 			log.Printf("[TRACERT SVC] 路径变长: %d → %d 跳", oldMinReachedTTL, newMinReachedTTL)
 		}
 
-		// 反向 DNS 解析（异步，不阻塞主流程）
-		dnsCtx, dnsCancel := context.WithTimeout(ctx, 10*time.Second)
-		s.resolveHopHostNames(dnsCtx, s.progress.Hops, 2*time.Second)
-		dnsCancel()
-
-		// 检查是否在 DNS 解析期间被取消
-		select {
-		case <-ctx.Done():
-			logger.Info("TracertService", target, "持续探测被停止")
-			return
-		default:
-		}
-
-		// Update running state for the wait period
+		// Update running state
 		s.progressMu.Lock()
 		if s.progress != nil {
-			s.progress.IsRunning = true // Still running in continuous mode
+			s.progress.IsRunning = true
 		}
 		s.progressMu.Unlock()
 
-		// 发送过滤后的进度
-		reachedTTL := s.progress.MinReachedTTL
-		log.Printf("[TRACERT SVC] runContinuous() round done: MinReachedTTL=%d, hopsCount=%d", s.progress.MinReachedTTL, len(s.progress.Hops))
+		// 立即推送进度（不等待DNS解析）
+		reachedTTL := atomic.LoadInt32(&s.progress.MinReachedTTL)
 		s.emitProgress(s.progress.CloneForDisplay(reachedTTL))
-		logger.Debug("TracertService", target, "第 %d 轮探测完成，等待 %v", round, interval)
+		logger.Debug("TracertService", target, "第 %d 轮探测完成，立即推送进度，DNS异步解析中", round)
 
-		// Wait for interval
-		select {
-		case <-ctx.Done():
-			logger.Info("TracertService", target, "持续探测被停止")
-			return
-		case <-time.After(interval):
+		// 取消上一轮DNS解析
+		if prevDNSCancel != nil {
+			prevDNSCancel()
+			prevDNSCancel = nil
 		}
+
+		// 持锁深拷贝hops快照
+		s.progressMu.RLock()
+		hopsSnapshot := make([]icmp.TracertHopResult, len(s.progress.Hops))
+		copy(hopsSnapshot, s.progress.Hops)
+		s.progressMu.RUnlock()
+
+		// 启动异步DNS解析
+		dnsCtx, dnsCancel := context.WithTimeout(ctx, 10*time.Second)
+		pendingDNS := s.resolveHopHostNamesAsync(dnsCtx, hopsSnapshot, 2*time.Second)
+
+		// 设置DNS解析状态
+		s.progressMu.Lock()
+		if s.progress != nil {
+			s.progress.IsResolvingDNS = true
+		}
+		s.progressMu.Unlock()
+
+		// 设置定时器
+		heartbeatTicker := time.NewTicker(500 * time.Millisecond)
+		defer heartbeatTicker.Stop()
+		intervalTimer := time.NewTimer(interval)
+		dnsResolved := false
+
+	waitLoop:
+		for {
+			select {
+			case <-ctx.Done():
+				dnsCancel()
+				// 保存prevDNSCancel以便defer清理
+				prevDNSCancel = dnsCancel
+				heartbeatTicker.Stop()
+				intervalTimer.Stop()
+				// 清除DNS解析状态
+				s.progressMu.Lock()
+				if s.progress != nil {
+					s.progress.IsResolvingDNS = false
+				}
+				s.progressMu.Unlock()
+				logger.Info("TracertService", target, "持续探测被停止")
+				return
+
+			case resolvedHops, ok := <-pendingDNS:
+				heartbeatTicker.Stop()
+				if ok && resolvedHops != nil {
+					s.applyDNSResult(resolvedHops)
+				}
+				// 清除DNS解析状态
+				s.progressMu.Lock()
+				if s.progress != nil {
+					s.progress.IsResolvingDNS = false
+				}
+				s.progressMu.Unlock()
+				dnsCancel()
+				prevDNSCancel = nil
+				dnsResolved = true
+				break waitLoop
+
+			case <-heartbeatTicker.C:
+				// DNS解析期间发送心跳
+				s.progressMu.RLock()
+				roundNum := int64(0)
+				elapsedMs := int64(0)
+				isResolvingDNS := false
+				if s.progress != nil {
+					roundNum = int64(s.progress.Round)
+					elapsedMs = s.progress.ElapsedMs
+					isResolvingDNS = s.progress.IsResolvingDNS
+				}
+				s.progressMu.RUnlock()
+				s.emitHeartbeat(roundNum, elapsedMs, isResolvingDNS)
+
+			case <-intervalTimer.C:
+				// interval到期，如果DNS还没完成就继续等DNS
+				// 但不再等待interval
+				if !dnsResolved {
+					intervalTimer.Stop()
+				}
+			}
+		}
+
+		heartbeatTicker.Stop()
+		intervalTimer.Stop()
+
+		// 如果DNS已解析但interval还没到，等待剩余时间
+		if dnsResolved && !intervalTimer.Stop() {
+			// interval已过期，直接进入下一轮
+		} else if dnsResolved {
+			// interval还没到期，等待剩余时间
+			select {
+			case <-ctx.Done():
+				return
+			case <-intervalTimer.C:
+			}
+		}
+
+		logger.Debug("TracertService", target, "第 %d 轮探测完成，等待 %v", round, interval)
 	}
 }
 
@@ -866,8 +1075,8 @@ func (s *TracertService) emitHopUpdate(update icmp.TracertHopUpdate) {
 }
 
 // GetTracertEventTypes returns empty instances of event types for frontend type generation.
-func (s *TracertService) GetTracertEventTypes() (icmp.TracertHopUpdate, icmp.TracertHopResult) {
-	return icmp.TracertHopUpdate{}, icmp.TracertHopResult{}
+func (s *TracertService) GetTracertEventTypes() (icmp.TracertHopUpdate, icmp.TracertHopResult, icmp.TracertHeartbeat) {
+	return icmp.TracertHopUpdate{}, icmp.TracertHopResult{}, icmp.TracertHeartbeat{}
 }
 
 // Helper functions

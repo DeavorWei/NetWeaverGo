@@ -298,18 +298,19 @@ type TracertHopResult struct {
 
 // TracertProgress tracert 探测进度
 type TracertProgress struct {
-	Target        string             `json:"target"`        // 目标地址（用户输入）
-	ResolvedIP    string             `json:"resolvedIP"`    // 解析后的 IP
-	Round         int                `json:"round"`         // 当前第几轮探测
-	TotalHops     int                `json:"totalHops"`     // 总跳数（配置的最大跳数）
-	CompletedHops int                `json:"completedHops"` // 已完成跳数
-	IsRunning     bool               `json:"isRunning"`     // 是否运行中
-	IsContinuous  bool               `json:"isContinuous"`  // 是否持续模式
-	StartTime     time.Time          `json:"startTime"`     // 开始时间
-	ElapsedMs     int64              `json:"elapsedMs"`     // 已用时间(ms)
-	Hops          []TracertHopResult `json:"hops"`          // 各跳结果
-	ReachedDest   bool               `json:"reachedDest"`   // 是否到达目的地
-	MinReachedTTL int32              `json:"minReachedTtl"` // 所有轮次中到达目标的最小 TTL（0 表示未到达）
+	Target          string             `json:"target"`          // 目标地址（用户输入）
+	ResolvedIP      string             `json:"resolvedIP"`      // 解析后的 IP
+	Round           int                `json:"round"`           // 当前第几轮探测
+	TotalHops       int                `json:"totalHops"`       // 总跳数（配置的最大跳数）
+	CompletedHops   int                `json:"completedHops"`   // 已完成跳数
+	IsRunning       bool               `json:"isRunning"`       // 是否运行中
+	IsContinuous    bool               `json:"isContinuous"`    // 是否持续模式
+	IsResolvingDNS  bool               `json:"isResolvingDNS"`  // 是否正在解析DNS
+	StartTime       time.Time          `json:"startTime"`       // 开始时间
+	ElapsedMs       int64              `json:"elapsedMs"`       // 已用时间(ms)
+	Hops            []TracertHopResult `json:"hops"`            // 各跳结果
+	ReachedDest     bool               `json:"reachedDest"`     // 是否到达目的地
+	MinReachedTTL   int32              `json:"minReachedTtl"`   // 所有轮次中到达目标的最小 TTL（0 表示未到��）
 }
 
 // NewTracertProgress 创建新的 TracertProgress 实例
@@ -349,18 +350,19 @@ func (p *TracertProgress) Clone() *TracertProgress {
 		return nil
 	}
 	clone := &TracertProgress{
-		Target:        p.Target,
-		ResolvedIP:    p.ResolvedIP,
-		Round:         p.Round,
-		TotalHops:     p.TotalHops,
-		CompletedHops: p.CompletedHops,
-		IsRunning:     p.IsRunning,
-		IsContinuous:  p.IsContinuous,
-		StartTime:     p.StartTime,
-		ElapsedMs:     p.ElapsedMs,
-		ReachedDest:   p.ReachedDest,
-		MinReachedTTL: p.MinReachedTTL,
-		Hops:          make([]TracertHopResult, len(p.Hops)),
+		Target:         p.Target,
+		ResolvedIP:     p.ResolvedIP,
+		Round:          p.Round,
+		TotalHops:      p.TotalHops,
+		CompletedHops:  p.CompletedHops,
+		IsRunning:      p.IsRunning,
+		IsContinuous:   p.IsContinuous,
+		IsResolvingDNS: p.IsResolvingDNS,
+		StartTime:      p.StartTime,
+		ElapsedMs:      p.ElapsedMs,
+		ReachedDest:    p.ReachedDest,
+		MinReachedTTL:  p.MinReachedTTL,
+		Hops:           make([]TracertHopResult, len(p.Hops)),
 	}
 	copy(clone.Hops, p.Hops)
 	return clone
@@ -374,17 +376,18 @@ func (p *TracertProgress) CloneForDisplay(reachedTTL int32) *TracertProgress {
 	}
 
 	clone := &TracertProgress{
-		Target:        p.Target,
-		ResolvedIP:    p.ResolvedIP,
-		Round:         p.Round,
-		TotalHops:     p.TotalHops,
-		CompletedHops: p.CompletedHops,
-		IsRunning:     p.IsRunning,
-		IsContinuous:  p.IsContinuous,
-		StartTime:     p.StartTime,
-		ElapsedMs:     p.ElapsedMs,
-		ReachedDest:   p.ReachedDest,
-		MinReachedTTL: p.MinReachedTTL,
+		Target:         p.Target,
+		ResolvedIP:     p.ResolvedIP,
+		Round:          p.Round,
+		TotalHops:      p.TotalHops,
+		CompletedHops:  p.CompletedHops,
+		IsRunning:      p.IsRunning,
+		IsContinuous:   p.IsContinuous,
+		IsResolvingDNS: p.IsResolvingDNS,
+		StartTime:      p.StartTime,
+		ElapsedMs:      p.ElapsedMs,
+		ReachedDest:    p.ReachedDest,
+		MinReachedTTL:  p.MinReachedTTL,
 	}
 
 	// 如果未到达目标或 reachedTTL 无效，返回全部数据
@@ -414,6 +417,14 @@ type TracertHopUpdate struct {
 	RTT        float64 `json:"rtt"`        // 本次 RTT (ms)
 	IsComplete bool    `json:"isComplete"` // 该跳是否全部完成
 	Timestamp  int64   `json:"timestamp"`  // 更新时间戳 (Unix ms)
+}
+
+// TracertHeartbeat 心跳事件数据
+type TracertHeartbeat struct {
+	Round          int64 `json:"round"`          // 当前轮次
+	ElapsedMs      int64 `json:"elapsedMs"`      // 已用时间(毫秒)
+	IsResolvingDNS bool  `json:"isResolvingDNS"` // 是否正在解析DNS
+	Timestamp      int64 `json:"timestamp"`      // 时间戳(Unix毫秒)
 }
 
 // TracertRunOptions tracert 探测回调选项

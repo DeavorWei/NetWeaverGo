@@ -85,6 +85,12 @@ const isColumnVisible = (key: string): boolean => {
 const progress = shallowRef<TracertProgress | null>(null)
 const isRunning = computed(() => progress.value?.isRunning ?? false)
 
+// H-3修复：心跳状态独立ref，避免心跳触发完整表格重渲染
+const heartbeatState = ref({
+  elapsedMs: 0,
+  isResolvingDNS: false
+})
+
 // Hop update overlay for real-time tracking
 const hopOverlay = ref<Map<number, { lastUpdateTimestamp: number; status: 'probing' | 'completed' }>>(new Map())
 
@@ -124,11 +130,12 @@ const realtimeStats = computed(() => {
 })
 
 // Event handling
-const POLLING_INTERVAL = 2000
+const POLLING_INTERVAL = 500  // H-3修复：从2000ms降至500ms，提高轮询降级响应速度
 let pollingTimer: ReturnType<typeof setInterval> | null = null
 let lastProgressTime = 0
 let unlistenProgress: (() => void) | null = null
 let unlistenHopUpdate: (() => void) | null = null
+let unlistenHeartbeat: (() => void) | null = null  // H-3修复：心跳事件监听器
 
 // Hop update batch processing
 const pendingHopUpdates = new Map<number, TracertHopUpdate>()
@@ -238,6 +245,11 @@ const handleProgressEvent = (ev: { name: string; data: TracertProgress }) => {
   current.reachedDest = incoming.reachedDest
   current.minReachedTtl = incoming.minReachedTtl
 
+  // 同步更新heartbeatState中的isResolvingDNS状态
+  if (incoming.isResolvingDNS !== undefined) {
+    heartbeatState.value.isResolvingDNS = incoming.isResolvingDNS
+  }
+
   // 如果后端发送的 hops 数组比当前短，截断当前数组
   // 这确保 TTL > MinReachedTTL 的结果被删除
   if (incoming.hops && current.hops.length > incoming.hops.length) {
@@ -289,6 +301,18 @@ const handleHopUpdateEvent = (ev: { name: string; data: TracertHopUpdate }) => {
   scheduleFlush()
 }
 
+// H-3修复：心跳事件处理函数，更新独立ref避免触发完整表格重渲染
+const handleHeartbeatEvent = (data: any) => {
+  const heartbeat = data as { round: number; elapsedMs: number; isResolvingDNS: boolean; timestamp: number }
+  lastProgressTime = Date.now()
+
+  // H-3修复：更新独立的心跳ref，不触发progress的响应式更新
+  heartbeatState.value = {
+    elapsedMs: heartbeat.elapsedMs,
+    isResolvingDNS: heartbeat.isResolvingDNS
+  }
+}
+
 // Polling fallback
 const startPolling = () => {
   if (pollingTimer) return
@@ -301,7 +325,7 @@ const startPolling = () => {
       const currentProgress = await TracertService.GetTracertProgress()
       if (currentProgress) {
         const now = Date.now()
-        if (now - lastProgressTime > 3000) {
+        if (now - lastProgressTime > 1000) {
           progress.value = currentProgress
         }
       }
@@ -402,6 +426,11 @@ const downloadFile = (content: string, fileName: string) => {
 const clearResults = () => {
   progress.value = null
   hopOverlay.value.clear()
+  // 重置心跳状态
+  heartbeatState.value = {
+    elapsedMs: 0,
+    isResolvingDNS: false
+  }
 }
 
 const formatElapsed = (ms: number): string => {
@@ -457,6 +486,7 @@ onMounted(async () => {
 
   unlistenProgress = Events.On('tracert:progress', handleProgressEvent)
   unlistenHopUpdate = Events.On('tracert:hop-update', handleHopUpdateEvent)
+  unlistenHeartbeat = Events.On('tracert:heartbeat', handleHeartbeatEvent)
 })
 
 onUnmounted(() => {
@@ -467,6 +497,10 @@ onUnmounted(() => {
   if (unlistenHopUpdate) {
     unlistenHopUpdate()
     unlistenHopUpdate = null
+  }
+  if (unlistenHeartbeat) {
+    unlistenHeartbeat()
+    unlistenHeartbeat = null
   }
   stopPolling()
   hopOverlay.value.clear()
@@ -536,6 +570,9 @@ onUnmounted(() => {
             </span>
           </div>
           <div class="flex items-center gap-3">
+            <span v-if="heartbeatState.isResolvingDNS" class="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-500 rounded-full animate-pulse">
+              DNS解析中...
+            </span>
             <span v-if="progress.isContinuous && progress.isRunning" class="text-xs px-2 py-0.5 bg-accent/20 text-accent rounded-full animate-pulse">
               持续探测中
             </span>

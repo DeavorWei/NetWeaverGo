@@ -2,6 +2,7 @@ package icmp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -84,7 +85,7 @@ func (e *TracertEngine) Run(ctx context.Context, target string, opts TracertRunO
 	e.runningMu.Unlock()
 
 	// DNS 解析
-	resolvedIP, err := e.resolveTarget(target)
+	resolvedIP, err := e.resolveTarget(runCtx, target)
 	if err != nil {
 		logger.Error("Tracert", target, "DNS 解析失败: %v", err)
 		e.runningMu.Lock()
@@ -602,8 +603,9 @@ func (e *TracertEngine) probeHop(ctx context.Context, destIP net.IP, ttl int, op
 	return hop
 }
 
-// resolveTarget 解析目标（域名→IP）
-func (e *TracertEngine) resolveTarget(target string) (string, error) {
+// resolveTarget 解析目标（域名→IP），带超时控制和Context级联取消
+// P1-优化修复：增加ctx参数，继承父context实现级联取消
+func (e *TracertEngine) resolveTarget(ctx context.Context, target string) (string, error) {
 	// 先尝试直接解析为 IP
 	ip := net.ParseIP(target)
 	if ip != nil {
@@ -614,15 +616,27 @@ func (e *TracertEngine) resolveTarget(target string) (string, error) {
 		return "", fmt.Errorf("仅支持 IPv4 地址: %s", target)
 	}
 
-	// DNS 解析
+	// DNS 解析（带3秒超时 + 继承父context）
 	logger.Debug("Tracert", target, "开始 DNS 解析")
-	ips, err := net.LookupIP(target)
+	// P1-优化修复：使用传入的ctx而非Background()，实现级联取消
+	resolveCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	resolver := &net.Resolver{}
+	ips, err := resolver.LookupIPAddr(resolveCtx, target)
 	if err != nil {
+		// 区分超时错误、取消错误和其他DNS错误
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", fmt.Errorf("DNS 解析超时 '%s'（3秒）", target)
+		}
+		if errors.Is(err, context.Canceled) {
+			return "", fmt.Errorf("DNS 解析被取消 '%s'", target)
+		}
 		return "", fmt.Errorf("DNS 解析失败 '%s': %w", target, err)
 	}
 
-	for _, ip := range ips {
-		if ip4 := ip.To4(); ip4 != nil {
+	for _, ipAddr := range ips {
+		if ip4 := ipAddr.IP.To4(); ip4 != nil {
 			logger.Info("Tracert", target, "DNS 解析成功: %s -> %s", target, ip4.String())
 			return ip4.String(), nil
 		}

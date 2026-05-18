@@ -95,10 +95,10 @@
                 <div class="text-text-primary">{{ deviceDetail.identity.vendor || '-' }}</div>
                 <div class="text-text-muted">型号:</div>
                 <div class="text-text-primary">{{ deviceDetail.identity.model || '-' }}</div>
-                <div class="text-text-muted">版本:</div>
-                <div class="text-text-primary font-mono">{{ deviceDetail.identity.version || '-' }}</div>
-                <div class="text-text-muted">ESN:</div>
-                <div class="text-text-primary font-mono">{{ deviceDetail.identity.serialNumber || '-' }}</div>
+                <div class="text-text-muted">主机名:</div>
+                <div class="text-text-primary">{{ deviceDetail.identity.hostname || '-' }}</div>
+                <div class="text-text-muted">管理IP:</div>
+                <div class="text-text-primary">{{ deviceDetail.identity.mgmtIp || '-' }}</div>
               </div>
             </div>
 

@@ -1,0 +1,2085 @@
+[2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] TTL 过期 (raw): 中间路由器=219.128.214.81, rtt=11ms
+runtime: g 459 gp=0x17e1b2a6ad20: unknown pc 0x106258b969
+stack: frame={sp:0x17e1b2833520, fp:[2026/05/18 17:04:32] [Verbose] [Tracert] [8.8.8.8] TTL=8 结果: success=false, rtt=11.00ms, status=TTLExpired
+0x0} stack=[0x17e1b2830000,0x17e1b2834000)
+2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=8, IP=219.128.214.81, Success=true, RTT=11.00ms
+                   7 6 5 4  3 2 1 0   f e d c  b a 9 8  0123456789abcdef
+000017e1b2833420: 00000000 0056e10a  000017e1 b2833468  ..V.....h4......
+000017e1b2833430: 00007ff7 62579d37  000017e1 b2833468  7.Wb....h4......
+[2026/05/18 17:04:32] [Debug] [Tracert] [8.8.8.8] TTL=8 探测完成: ip=219.128.214.81, rtt=11.00ms, reached=false
+                  ^ [2026/05/18 17:04:32] [Verbose] [TracertService] [-] 发送进度事件: round=1, completed=7/30, running=true
+<runtime.systemstack+2026/05/18 17:04:32 [TRACERT SVC] emitProgress: round=1, reachedTTL=0, hopsCount=30, isRunning=true
+[2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] TTL 过期 (raw): 中间路由器=202.97.116.6, rtt=15ms
+0x372026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=8, IP=219.128.214.81, Success=true, RTT=11.00ms
+>
+000017e1b2833440: 00007ff7 62554b36  000017e1 b2833450  6KUb....P4......
+                  ^ <runtime.readyWithTime+0x76>
+000017e1b2833450: 00007ff7 62554b80  000017e1 b2be1860  .KUb....`.......
+[2026/05/18 17:04:32] [Verbose] [Tracert] [8.8.8.8] TTL=11 结果: success=false, rtt=15.00ms, status=TTLExpired
+                  2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=11, IP=202.97.116.6, Success=true, RTT=15.00ms
+^ <runtime.readyWithTime.goready.func1+0x0>
+000017e1b2833460: 00000000 00000007  000017e1 b28334c0  .........4......
+000017e1b2833470: 00007ff7 62555090  00007ff7 63c20a20  .PUb.... ..c....
+[2026/05/18 17:04:32] [Debug] [Tracert] [8.8.8.8] TTL=11 探测完成: ip=202.97.116.6, rtt=15.00ms, reached=false
+                  ^ <runtime.semrelease1[2026/05/18 17:04:32] [Verbose] [TracertService] [-] 发送进度事件: round=1, completed=8/30, running=true
++0x190>
+2026/05/18 17:04:32 [TRACERT SVC] emitProgress: round=1, reachedTTL=0, hopsCount=30, isRunning=true
+000017e1b2833480: 000017e1 b28334d8  00000000 00000000  .4..............
+000017e1b2833490: 00000000 00000000  00007ff7 63c20a20  ........ ..c....
+000017e1b28334a0: 000017e1 b2b2afc0  00007ff7 63c20a20  ........ ..c....
+000017e1b28334b0: 00007ff7 63c20a30  00007ff7 63c61604  0..c.......c....
+000017e1b28334c0: 000017e1 b28334e8  00007ff7 62575933  .4......3YWb....
+                                     ^ 2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=11, IP=202.97.116.6, Success=true, RTT=15.00ms
+<internal/sync.runtime_Semrelease+0x13>
+000017e1b28334d0: 000017e1 b2bbdb08  000017e1 b2833500  .........5......
+000017e1b28334e0: 00000000 00000002  000017e1 b2833510  .........5......
+000017e1b28334f0: 00007ff7 6258a93b  000017e1 b2c29530  ;.Xb....0.......
+                  ^ <internal/sync.(*Mutex).unlockSlow+0x9b>
+000017e1b2833500: 00007ff7 6250a754  000017e1 b2833530  T.Pb....05......
+                  ^ <runtime.GOMAXPROCS+0xb4>
+000017e1b2833510: 000017e1 b2833530  00000010 6258b969  05......i.Xb....
+000017e1b2833520: 00007ff7 6304b220  000017e1 b2bbdb08   ..c............
+                  ^ SP
+000017e1b2833530: 000017e1 b28335c8  00007ff7 6258b8a8  .5........Xb....
+                                     ^ <sync.(*Pool).pinSlow+0x1e8>
+000017e1b2833540: 00000000 00000000  00007ff7 6251ba36  ........6.Qb....
+                                     ^ <runtime.gcTrigger.test+0xb6>
+000017e1b2833550: 00007ff7 63c63ea0  000017e1 b2c295b0  .>.c............
+000017e1b2833560: 00007ff7 62511f7e  0000022a faf009e0  ~.Qb........*...
+                  ^ <runtime.mallocgcSmallNoscan+0x27e>
+000017e1b2833570: 000117e1 b2ac2809  00000000 00000038  .(......8.......
+000017e1b2833580: 00010100 00000038  00000000 00000001  8...............
+000017e1b2833590: 00000000 00000010  00000000 00000001  ................
+000017e1b28335a0: 000017e1 b2bbdb88  000017e1 b2bbdb08  ................
+000017e1b28335b0: 00007ff7 6258b940  00007ff7 63c61600  @.Xb.......c....
+                  ^ <sync.(*Pool).pinSlow.deferwrap1+0x0>
+000017e1b28335c0: 000017e1 b28335b0  000017e1 b28335e8  .5.......5......
+000017e1b28335d0: 00007ff7 6258b686  00007ff7 63bf3f20  ..Xb.... ?.c....
+                  ^ <sync.(*Pool).pin+0x46>
+000017e1b28335e0: 000017e1 b2c29608  000017e1 b2833610  .........6......
+000017e1b28335f0: 00007ff7 6258b354  00007ff7 63bf3f20  T.Xb.... ?.c....
+                  ^ <sync.(*Pool).Put+0x34>
+000017e1b2833600: 000017e1 b2c29601  000017e1 b2c29638  ........8.......
+000017e1b2833610: 000017e1 b2833638  00007ff7 626052df  86.......R`b....
+                                     ^ <internal/poll.(*FD).ReadFrom.deferwrap2+0x1f>
+runtime: g 459 gp=0x17e1b2a6ad20: unknown pc 0x106258b969
+stack: frame={sp:0x17e1b2833520, fp:0x0} stack=[0x17e1b2830000,0x17e1b2834000)
+                   7 6 5 4  3 2 1 0   f e d c  b a 9 8  0123456789abcdef
+000017e1b2833420: 00000000 0056e10a  000017e1 b2833468  ..V.....h4......
+000017e1b2833430: 00007ff7 62579d37  000017e1 b2833468  7.Wb....h4......
+                  ^ <runtime.systemstack+0x37>
+000017e1b2833440: 00007ff7 62554b36  000017e1 b2833450  6KUb....P4......
+                  ^ <runtime.readyWithTime+0x76>
+000017e1b2833450: 00007ff7 62554b80  000017e1 b2be1860  .KUb....`.......
+                  ^ <runtime.readyWithTime.goready.func1+0x0>
+000017e1b2833460: 00000000 00000007  000017e1 b28334c0  .........4......
+000017e1b2833470: 00007ff7 62555090  00007ff7 63c20a20  .PUb.... ..c....
+                  ^ <runtime.semrelease1+0x190>
+000017e1b2833480: 000017e1 b28334d8  00000000 00000000  .4..............
+000017e1b2833490: 00000000 00000000  00007ff7 63c20a20  ........ ..c....
+000017e1b28334a0: 000017e1 b2b2afc0  00007ff7 63c20a20  ........ ..c....
+000017e1b28334b0: 00007ff7 63c20a30  00007ff7 63c61604  0..c.......c....
+000017e1b28334c0: 000017e1 b28334e8  00007ff7 62575933  .4......3YWb....
+                                     ^ <internal/sync.runtime_Semrelease+0x13>
+000017e1b28334d0: 000017e1 b2bbdb08  000017e1 b2833500  .........5......
+000017e1b28334e0: 00000000 00000002  000017e1 b2833510  .........5......
+000017e1b28334f0: 00007ff7 6258a93b  000017e1 b2c29530  ;.Xb....0.......
+                  ^ <internal/sync.(*Mutex).unlockSlow+0x9b>
+000017e1b2833500: 00007ff7 6250a754  000017e1 b2833530  T.Pb....05......
+                  ^ <runtime.GOMAXPROCS+0xb4>
+000017e1b2833510: 000017e1 b2833530  00000010 6258b969  05......i.Xb....
+000017e1b2833520: 00007ff7 6304b220  000017e1 b2bbdb08   ..c............
+                  ^ SP
+000017e1b2833530: 000017e1 b28335c8  00007ff7 6258b8a8  .5........Xb....
+                                     ^ <sync.(*Pool).pinSlow+0x1e8>
+000017e1b2833540: 00000000 00000000  00007ff7 6251ba36  ........6.Qb....
+                                     ^ <runtime.gcTrigger.test+0xb6>
+000017e1b2833550: 00007ff7 63c63ea0  000017e1 b2c295b0  .>.c............
+000017e1b2833560: 00007ff7 62511f7e  0000022a faf009e0  ~.Qb........*...
+                  ^ <runtime.mallocgcSmallNoscan+0x27e>
+000017e1b2833570: 000117e1 b2ac2809  00000000 00000038  .(......8.......
+000017e1b2833580: 00010100 00000038  00000000 00000001  8...............
+000017e1b2833590: 00000000 00000010  00000000 00000001  ................
+000017e1b28335a0: 000017e1 b2bbdb88  000017e1 b2bbdb08  ................
+000017e1b28335b0: 00007ff7 6258b940  00007ff7 63c61600  @.Xb.......c....
+                  ^ <sync.(*Pool).pinSlow.deferwrap1[2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] TTL 过期 (raw): 中间路由器=203.22.178.189, rtt=27ms
++0x0>
+[2026/05/18 17:04:32] [Verbose] [Tracert] [8.8.8.8] TTL=12 结果: success=false, rtt=27.00ms, status=TTLExpired
+000017e1b28335c0: 000017e1 b28335b0  000017e1 b28335e8  .5.......5......
+000017e1b28335d0: 00007ff7 6258b686  00007ff7 63bf3f20  ..Xb.... ?.c....
+                  ^ <sync.(*Pool).pin+0x46>
+2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=12, IP=203.22.178.189, Success=true, RTT=27.00ms
+000017e1b28335e0: 000017e1 b2c29608  000017e1 b2833610  .........6......
+000017e1b28335f0: 00007ff7 6258b354  00007ff7 63bf3f20  T.Xb.... ?.c....
+                  ^ <sync.(*Pool).Put+0x34[2026/05/18 17:04:32] [Debug] [Tracert] [8.8.8.8] TTL=12 探测完成: ip=203.22.178.189, rtt=27.00ms, reached=false
+>
+000017e1b2833600: 000017e1 b2c29601  000017e1 b2c29638  ........8.......
+000017e1b2833610: 000017e1 b2833638  00007ff7 626052df  86.......R`b....
+                                     ^ <[2026/05/18 17:04:32] [Verbose] [TracertService] [-] 发送进度事件: round=1, completed=9/30, running=true
+internal/poll.(*FD).ReadFrom.deferwrap2+0x1f>
+created by 2026/05/18 17:04:32 [TRACERT SVC] emitProgress: round=1, reachedTTL=0, hopsCount=30, isRunning=true
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=12, IP=203.22.178.189, Success=true, RTT=27.00ms
+ in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 1 gp=0x17e1b287c000 m=0 mp=0x7ff763c1c060 [syscall, locked to thread]:
+runtime.cgocall(0x7ff762505be0, 0x7ff763c1c3b0)
+        C:/Program Files/Go/src/runtime/cgocall.go:167 +0x3e fp=0x17e1b2dd1048 sp=0x17e1b2dd0fe0 pc=0x7ff76257135e
+syscall.syscalln(0x17e1b287c009?, 0x10000?, {0x17e1b2d582a0?, 0x22aff999120?, 0x22afaf172c0?})
+        C:/Program Files/Go/src/runtime/syscall_windows.go:431 +0x4e fp=0x17e1b2dd1068 sp=0x17e1b2dd1048 pc=0x7ff762577f0e
+syscall.SyscallN(0x17e1b2d582a0?, {0x17e1b2d582a0?, 0x0?, 0x8?})
+        C:/Program Files/Go/src/syscall/dll_windows.go:99 +0x1e fp=0x17e1b2dd10a0 sp=0x17e1b2dd1068 pc=0x7ff7625c7dfe
+syscall.(*Proc).Call(0x7ff762512c65?, {0x17e1b2d582a0?, 0x7ff762fac400?, 0x1?})
+        C:/Program Files/Go/src/syscall/dll_windows.go:256 +0x1c fp=0x17e1b2dd10e0 sp=0x17e1b2dd10a0 pc=0x7ff7625c831c
+syscall.(*LazyProc).Call(0x7ff763bf7a60, {0x17e1b2d582a0, 0x4, 0x4})
+        C:/Program Files/Go/src/syscall/dll_windows.go:376 +0x4a fp=0x17e1b2dd1110 sp=0x17e1b2dd10e0 pc=0x7ff7625c870a
+github.com/wailsapp/wails/v3/pkg/w32.GetMessage(...)
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/w32/user32.go:489
+github.com/wailsapp/wails/v3/pkg/application.(*windowsApp).runMainLoop(0x17e1b2d5a000)
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/mainthread_windows.go:62 +0x16e fp=0x17e1b2dd1190 sp=0x17e1b2dd1110 pc=0x7ff762dcaf4e
+github.com/wailsapp/wails/v3/pkg/application.(*windowsApp).run(0x17e1b2d5a000)
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application_windows.go:190 +0x3a5 fp=0x17e1b2dd1298 sp=0x17e1b2dd1190 pc=0x7ff762dbc605
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run(0x17e1b299d408)
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:650 +0x81a fp=0x17e1b2dd13d8 sp=0x17e1b2dd1298 pc=0x7ff762db889a
+main.runGUI()
+        D:/Document/GO/NetWeaverGo/cmd/netweaver/main.go:154 +0x1a45 fp=0x17e1b2dd1e78 sp=0x17e1b2dd13d8 pc=0x7ff762ea4e05
+main.main()
+        D:/Document/GO/NetWeaverGo/cmd/netweaver/main.go:51 +0x345 fp=0x17e1b2dd1f48 sp=0x17e1b2dd1e78 pc=0x7ff762ea33a5
+runtime.main()
+        C:/Program Files/Go/src/runtime/proc.go:290 +0x2c7 fp=0x17e1b2dd1fe0 sp=0x17e1b2dd1f48 pc=0x7ff762541a47
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2dd1fe8 sp=0x17e1b2dd1fe0 pc=0x7ff76257b981
+
+goroutine 2 gp=0x17e1b287c780 m=nil [force gc (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2881fa8 sp=0x17e1b2881f88 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.forcegchelper()
+        C:/Program Files/Go/src/runtime/proc.go:375 +0xb8 fp=0x17e1b2881fe0 sp=0x17e1b2881fa8 pc=0x7ff762541d38
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2881fe8 sp=0x17e1b2881fe0 pc=0x7ff76257b981
+created by runtime.init.7 in goroutine 1
+        C:/Program Files/Go/src/runtime/proc.go:363 +0x1a
+
+goroutine 3 gp=0x17e1b287cb40 m=nil [GC sweep wait]:
+runtime.gopark(0x1?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2883f88 sp=0x17e1b2883f68 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.bgsweep(0x17e1b288c000)
+        C:/Program Files/Go/src/runtime/mgcsweep.go:324 +0x151 fp=0x17e1b2883fc8 sp=0x17e1b2883f88 pc=0x7ff76252a351
+runtime.gcenable.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:214 +0x17 fp=0x17e1b2883fe0 sp=0x17e1b2883fc8 pc=0x7ff76251b697
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2883fe8 sp=0x17e1b2883fe0 pc=0x7ff76257b981
+created by runtime.gcenable in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:214 +0x66
+
+goroutine 4 gp=0x17e1b287cd20 m=nil [GC scavenge wait]:
+runtime.gopark(0x10000?, 0x5f040920?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2893f78 sp=0x17e1b2893f58 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.(*scavengerState).park(0x7ff763c19b80)
+        C:/Program Files/Go/src/runtime/mgcscavenge.go:425 +0x49 fp=0x17e1b2893fa8 sp=0x17e1b2893f78 pc=0x7ff762527dc9
+runtime.bgscavenge(0x17e1b288c000)
+        C:/Program Files/Go/src/runtime/mgcscavenge.go:658 +0x59 fp=0x17e1b2893fc8 sp=0x17e1b2893fa8 pc=0x7ff762528359
+runtime.gcenable.gowrap2()
+        C:/Program Files/Go/src/runtime/mgc.go:215 +0x17 fp=0x17e1b2893fe0 sp=0x17e1b2893fc8 pc=0x7ff76251b657
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2893fe8 sp=0x17e1b2893fe0 pc=0x7ff76257b981
+created by runtime.gcenable in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:215 +0xa5
+
+goroutine 5 gp=0x17e1b287d0e0 m=nil [GOMAXPROCS updater (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2895f88 sp=0x17e1b2895f68 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.updateMaxProcsGoroutine()
+        C:/Program Files/Go/src/runtime/proc.go:7095 +0xe7 fp=0x17e1b2895fe0 sp=0x17e1b2895f88 pc=0x7ff76254fca7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2895fe8 sp=0x17e1b2895fe0 pc=0x7ff76257b981
+created by runtime.defaultGOMAXPROCSUpdateEnable in goroutine 1
+        C:/Program Files/Go/src/runtime/proc.go:7083 +0x37
+
+goroutine 6 gp=0x17e1b287d2c0 m=nil [finalizer wait]:
+runtime.gopark(0x0?, 0x7ff763315ef8?, 0x0?, 0x40?, 0x1000000010?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b288fe20 sp=0x17e1b288fe00 pc=0x7ff76257436e
+runtime.runFinalizers()
+        C:/Program Files/Go/src/runtime/mfinal.go:210 +0x107 fp=0x17e1b288ffe0 sp=0x17e1b288fe20 pc=0x7ff76251a5a7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b288ffe8 sp=0x17e1b288ffe0 pc=0x7ff76257b981
+created by runtime.createfing in goroutine 1
+        C:/Program Files/Go/src/runtime/mfinal.go:172 +0x3d
+
+goroutine 7 gp=0x17e1b287d4a0 m=nil [cleanup wait]:
+runtime.gopark(0x101000000000000?, 0xd6?, 0x3?, 0x0?, 0x7ff763aff5e0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2885f68 sp=0x17e1b2885f48 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.(*cleanupQueue).dequeue(0x7ff763c1a100)
+        C:/Program Files/Go/src/runtime/mcleanup.go:522 +0xd4 fp=0x17e1b2885fa0 sp=0x17e1b2885f68 pc=0x7ff762517594
+runtime.runCleanups()
+        C:/Program Files/Go/src/runtime/mcleanup.go:718 +0x45 fp=0x17e1b2885fe0 sp=0x17e1b2885fa0 pc=0x7ff762517c05
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2885fe8 sp=0x17e1b2885fe0 pc=0x7ff76257b981
+created by runtime.(*cleanupQueue).createGs in goroutine 1
+        C:/Program Files/Go/src/runtime/mcleanup.go:672 +0xa5
+
+goroutine 34 gp=0x17e1b29081e0 m=nil [GC worker (idle)]:
+runtime.gopark(0x1?, 0x0?, 0xd0?, 0x5f?, 0x7ff7626c6ed9?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2955f40 sp=0x17e1b2955f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2955fc8 sp=0x17e1b2955f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2955fe0 sp=0x17e1b2955fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2955fe8 sp=0x17e1b2955fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 19 gp=0x17e1b29083c0 m=nil [select]:
+runtime.gopark(0x17e1b2957f28?, 0x4?, 0xc0?, 0x62?, 0x17e1b2957ec0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2957d40 sp=0x17e1b2957d20 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2957f28, 0x17e1b2957eb8, 0x0?, 0x0, 0x0?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2957e70 sp=0x17e1b2957d40 pc=0x7ff762553f45
+github.com/NetWeaverGo/core/internal/logger.(*FrontendLogWriter).flushLoop(0x17e1b2b2aee0)
+        D:/Document/GO/NetWeaverGo/internal/logger/frontend_writer.go:236 +0x15d fp=0x17e1b2957fc8 sp=0x17e1b2957e70 pc=0x7ff7626819dd
+github.com/NetWeaverGo/core/internal/logger.InitFrontendLogWriter.gowrap2()
+        D:/Document/GO/NetWeaverGo/internal/logger/frontend_writer.go:120 +0x17 fp=0x17e1b2957fe0 sp=0x17e1b2957fc8 pc=0x7ff762681197
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2957fe8 sp=0x17e1b2957fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/logger.InitFrontendLogWriter in goroutine 1
+        D:/Document/GO/NetWeaverGo/internal/logger/frontend_writer.go:120 +0x4fb
+
+goroutine 20 gp=0x17e1b29085a0 m=nil [select]:
+runtime.gopark(0x17e1b2951f88?, 0x2?, 0xb0?, 0xda?, 0x17e1b2951f84?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2951e20 sp=0x17e1b2951e00 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2951f88, 0x17e1b2951f80, 0x0?, 0x0, 0x0?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2951f50 sp=0x17e1b2951e20 pc=0x7ff762553f45
+database/sql.(*DB).connectionOpener(0x17e1b2b24410, {0x7ff76332ace0, 0x17e1b292aaa0})
+        C:/Program Files/Go/src/database/sql/sql.go:1261 +0x89 fp=0x17e1b2951fb8 sp=0x17e1b2951f50 pc=0x7ff762707b29
+database/sql.OpenDB.gowrap1()
+        C:/Program Files/Go/src/database/sql/sql.go:841 +0x1f fp=0x17e1b2951fe0 sp=0x17e1b2951fb8 pc=0x7ff762705e7f
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2951fe8 sp=0x17e1b2951fe0 pc=0x7ff76257b981
+created by database/sql.OpenDB in goroutine 1
+        C:/Program Files/Go/src/database/sql/sql.go:841 +0x130
+
+goroutine 21 gp=0x17e1b2908780 m=nil [select]:
+runtime.gopark(0x17e1b2953f78?, 0x2?, 0x70?, 0x0?, 0x17e1b2953f64?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2953df8 sp=0x17e1b2953dd8 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2953f78, 0x17e1b2953f60, 0x0?, 0x0, 0x0?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2953f28 sp=0x17e1b2953df8 pc=0x7ff762553f45
+gorm.io/gorm/internal/lru.NewLRU[...].func1()
+        C:/Users/deavorwei/go/pkg/mod/gorm.io/gorm@v1.31.1/internal/lru/lru.go:83 +0xf7 fp=0x17e1b2953fc8 sp=0x17e1b2953f28 pc=0x7ff7627995b7
+gorm.io/gorm/internal/lru.NewLRU[...].gowrap1()
+        C:/Users/deavorwei/go/pkg/mod/gorm.io/gorm@v1.31.1/internal/lru/lru.go:90 +0x1b fp=0x17e1b2953fe0 sp=0x17e1b2953fc8 pc=0x7ff76279949b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2953fe8 sp=0x17e1b2953fe0 pc=0x7ff76257b981
+created by gorm.io/gorm/internal/lru.NewLRU[...] in goroutine 1
+        C:/Users/deavorwei/go/pkg/mod/gorm.io/gorm@v1.31.1/internal/lru/lru.go:79 +0x345
+
+goroutine 22 gp=0x17e1b2908b40 m=nil [select]:
+runtime.gopark(0x17e1b2b41f90?, 0x2?, 0xb6?, 0x7f?, 0x17e1b2b41f5c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2b41df8 sp=0x17e1b2b41dd8 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2b41f90, 0x17e1b2b41f58, 0x0?, 0x0, 0x0?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2b41f28 sp=0x17e1b2b41df8 pc=0x7ff762553f45
+database/sql.(*DB).connectionCleaner(0x17e1b2b24410, 0x0?)
+        C:/Program Files/Go/src/database/sql/sql.go:1104 +0x9e fp=0x17e1b2b41fc0 sp=0x17e1b2b41f28 pc=0x7ff76270707e
+database/sql.(*DB).startCleanerLocked.gowrap1()
+        C:/Program Files/Go/src/database/sql/sql.go:1091 +0x1b fp=0x17e1b2b41fe0 sp=0x17e1b2b41fc0 pc=0x7ff762706fbb
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2b41fe8 sp=0x17e1b2b41fe0 pc=0x7ff76257b981
+created by database/sql.(*DB).startCleanerLocked in goroutine 1
+        C:/Program Files/Go/src/database/sql/sql.go:1091 +0x105
+
+goroutine 35 gp=0x17e1b2c383c0 m=nil [GC worker (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2b3df40 sp=0x17e1b2b3df20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2b3dfc8 sp=0x17e1b2b3df40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2b3dfe0 sp=0x17e1b2b3dfc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2b3dfe8 sp=0x17e1b2b3dfe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 9 gp=0x17e1b287d860 m=nil [GC worker (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2891f40 sp=0x17e1b2891f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2891fc8 sp=0x17e1b2891f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2891fe0 sp=0x17e1b2891fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2891fe8 sp=0x17e1b2891fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 10 gp=0x17e1b287da40 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2a67f40 sp=0x17e1b2a67f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2a67fc8 sp=0x17e1b2a67f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2a67fe0 sp=0x17e1b2a67fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2a67fe8 sp=0x17e1b2a67fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 11 gp=0x17e1b287dc20 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2a69f40 sp=0x17e1b2a69f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2a69fc8 sp=0x17e1b2a69f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2a69fe0 sp=0x17e1b2a69fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2a69fe8 sp=0x17e1b2a69fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 12 gp=0x17e1b2a6a000 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06eb0764?, 0x3?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2a63f40 sp=0x17e1b2a63f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2a63fc8 sp=0x17e1b2a63f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2a63fe0 sp=0x17e1b2a63fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2a63fe8 sp=0x17e1b2a63fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 23 gp=0x17e1b2bc2960 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2b43f40 sp=0x17e1b2b43f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2b43fc8 sp=0x17e1b2b43f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2b43fe0 sp=0x17e1b2b43fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2b43fe8 sp=0x17e1b2b43fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 24 gp=0x17e1b2bc2b40 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bcdf40 sp=0x17e1b2bcdf20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bcdfc8 sp=0x17e1b2bcdf40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bcdfe0 sp=0x17e1b2bcdfc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bcdfe8 sp=0x17e1b2bcdfe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 25 gp=0x17e1b2bc2d20 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06eb0764?, 0x1?, 0xdc?, 0x7?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bcff40 sp=0x17e1b2bcff20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bcffc8 sp=0x17e1b2bcff40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bcffe0 sp=0x17e1b2bcffc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bcffe8 sp=0x17e1b2bcffe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 26 gp=0x17e1b2bc2f00 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x3?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bc9f40 sp=0x17e1b2bc9f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bc9fc8 sp=0x17e1b2bc9f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bc9fe0 sp=0x17e1b2bc9fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bc9fe8 sp=0x17e1b2bc9fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 27 gp=0x17e1b2bc30e0 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x1?, 0x7c?, 0x8e?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bcbf40 sp=0x17e1b2bcbf20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bcbfc8 sp=0x17e1b2bcbf40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bcbfe0 sp=0x17e1b2bcbfc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bcbfe8 sp=0x17e1b2bcbfe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 28 gp=0x17e1b2bc32c0 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06eb0764?, 0x1?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bd5f40 sp=0x17e1b2bd5f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bd5fc8 sp=0x17e1b2bd5f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bd5fe0 sp=0x17e1b2bd5fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bd5fe8 sp=0x17e1b2bd5fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 29 gp=0x17e1b2bc34a0 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x3?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bd7f40 sp=0x17e1b2bd7f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bd7fc8 sp=0x17e1b2bd7f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bd7fe0 sp=0x17e1b2bd7fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bd7fe8 sp=0x17e1b2bd7fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 30 gp=0x17e1b2bc3680 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06eb0764?, 0x1?, 0x8?, 0x88?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bd1f40 sp=0x17e1b2bd1f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bd1fc8 sp=0x17e1b2bd1f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bd1fe0 sp=0x17e1b2bd1fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bd1fe8 sp=0x17e1b2bd1fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 31 gp=0x17e1b2bc3860 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06eb0764?, 0x1?, 0x7c?, 0x8e?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bd3f40 sp=0x17e1b2bd3f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bd3fc8 sp=0x17e1b2bd3f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bd3fe0 sp=0x17e1b2bd3fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bd3fe8 sp=0x17e1b2bd3fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 32 gp=0x17e1b2bc3a40 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x1?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bddf40 sp=0x17e1b2bddf20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bddfc8 sp=0x17e1b2bddf40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bddfe0 sp=0x17e1b2bddfc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bddfe8 sp=0x17e1b2bddfe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 50 gp=0x17e1b2de9c20 m=nil [select]:
+runtime.gopark(0x17e1b2a65f80?, 0x2?, 0xa0?, 0x55?, 0x17e1b2a65f4c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2a65de0 sp=0x17e1b2a65dc0 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2a65f80, 0x17e1b2a65f48, 0x0?, 0x0, 0x0?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2a65f10 sp=0x17e1b2a65de0 pc=0x7ff762553f45
+github.com/NetWeaverGo/core/internal/taskexec.(*EventBus).dispatchLoop(0x17e1b291f0e0)
+        D:/Document/GO/NetWeaverGo/internal/taskexec/eventbus.go:223 +0xd3 fp=0x17e1b2a65fc8 sp=0x17e1b2a65f10 pc=0x7ff762afc333
+github.com/NetWeaverGo/core/internal/taskexec.(*EventBus).Start.gowrap2()
+        D:/Document/GO/NetWeaverGo/internal/taskexec/eventbus.go:188 +0x17 fp=0x17e1b2a65fe0 sp=0x17e1b2a65fc8 pc=0x7ff762afbf97
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2a65fe8 sp=0x17e1b2a65fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/taskexec.(*EventBus).Start in goroutine 1
+        D:/Document/GO/NetWeaverGo/internal/taskexec/eventbus.go:188 +0xc9
+
+goroutine 474 gp=0x17e1b2be01e0 m=nil [sync.WaitGroup.Wait]:
+runtime.gopark(0x0?, 0x0?, 0xe0?, 0x87?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2b8bef8 sp=0x17e1b2b8bed8 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.semacquire1(0x17e1b2a0b3e8, 0x0, 0x1, 0x0, 0x19)
+        C:/Program Files/Go/src/runtime/sema.go:192 +0x245 fp=0x17e1b2b8bf60 sp=0x17e1b2b8bef8 pc=0x7ff762554e05
+sync.runtime_SemacquireWaitGroup(0x7ff76312f35d?, 0x19?)
+        C:/Program Files/Go/src/runtime/sema.go:114 +0x2e fp=0x17e1b2b8bf98 sp=0x17e1b2b8bf60 pc=0x7ff7625758ae
+sync.(*WaitGroup).Wait(0x17e1b2a0b3e0)
+        C:/Program Files/Go/src/sync/waitgroup.go:206 +0x85 fp=0x17e1b2b8bfc0 sp=0x17e1b2b8bf98 pc=0x7ff76258c725
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func2()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:287 +0x25 fp=0x17e1b2b8bfe0 sp=0x17e1b2b8bfc0 pc=0x7ff762e63fe5
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2b8bfe8 sp=0x17e1b2b8bfe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:286 +0x538
+
+goroutine 473 gp=0x17e1b2be03c0 m=nil [IO wait]:
+runtime.gopark(0x7ff763bf3a20?, 0x0?, 0x10?, 0x22?, 0x17e1b2c9151c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2c91480 sp=0x17e1b2c91460 pc=0x7ff76257436e
+runtime.netpollblock(0x17e1b2c91528?, 0xb2c91538?, 0xe1?)
+        C:/Program Files/Go/src/runtime/netpoll.go:575 +0xf7 fp=0x17e1b2c914b8 sp=0x17e1b2c91480 pc=0x7ff762538e37
+internal/poll.runtime_pollWait(0x22ac2228e00, 0x72)
+        C:/Program Files/Go/src/runtime/netpoll.go:351 +0x85 fp=0x17e1b2c914d8 sp=0x17e1b2c914b8 pc=0x7ff7625734a5
+internal/poll.(*pollDesc).wait(0x17e1b2c92210?, 0x7ff762507cc6?, 0x0)
+        C:/Program Files/Go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x17e1b2c91500 sp=0x17e1b2c914d8 pc=0x7ff762601a67
+internal/poll.(*FD).waitIO(0x7ff763bf3f60?, 0x7ff762571de5?)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:214 +0x4c fp=0x17e1b2c91548 sp=0x17e1b2c91500 pc=0x7ff762602dac
+internal/poll.(*FD).execIO(0x17e1b2c9e0e0, 0x72, 0x17e1b2c916e0)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:297 +0x365 fp=0x17e1b2c91648 sp=0x17e1b2c91548 pc=0x7ff762603405
+internal/poll.(*FD).ReadFrom(0x17e1b2c9e0e0, {0x17e1b2df8c00, 0x17e1b2c91768?, 0x5dc})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:742 +0x1eb fp=0x17e1b2c91730 sp=0x17e1b2c91648 pc=0x7ff76260504b
+net.(*netFD).readFrom(0x17e1b2c9e0e0, {0x17e1b2df8c00?, 0x7ffe58293760?, 0x0?})
+        C:/Program Files/Go/src/net/fd_posix.go:74 +0x25 fp=0x17e1b2c91788 sp=0x17e1b2c91730 pc=0x7ff7626b7fe5
+net.(*IPConn).readFrom(0x17e1b2c91828?, {0x17e1b2df8c00, 0x5dc, 0x5dc})
+        C:/Program Files/Go/src/net/iprawsock_posix.go:49 +0x2c fp=0x17e1b2c917f0 sp=0x17e1b2c91788 pc=0x7ff7626c1d0c
+net.(*IPConn).ReadFrom(0x17e1b2a42000, {0x17e1b2df8c00?, 0x17e1b2d009c0?, 0x7ff763bf28e0?})
+        C:/Program Files/Go/src/net/iprawsock.go:140 +0x30 fp=0x17e1b2c91840 sp=0x17e1b2c917f0 pc=0x7ff7626c1030
+golang.org/x/net/icmp.(*PacketConn).ReadFrom(0x1?, {0x17e1b2df8c00?, 0x24?, 0x5dc?})
+        C:/Users/deavorwei/go/pkg/mod/golang.org/x/net@v0.53.0/icmp/endpoint.go:58 +0x2f fp=0x17e1b2c91870 sp=0x17e1b2c91840 pc=0x7ff762e56c4f
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b3213af0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x1e)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:125 +0x765 fp=0x17e1b2c91ac8 sp=0x17e1b2c91870 pc=0x7ff762e604a5
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2b8dc38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b2c91b00 sp=0x17e1b2c91ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x1e, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b2c91d30 sp=0x17e1b2c91b00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x1e)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b2c91fc8 sp=0x17e1b2c91d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2c91fe0 sp=0x17e1b2c91fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2c91fe8 sp=0x17e1b2c91fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 472 gp=0x17e1b2be05a0 m=nil [IO wait]:
+runtime.gopark(0x7ff763bf3a20?, 0x0?, 0x90?, 0x40?, 0x17e1b2c2b51c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2c2b480 sp=0x17e1b2c2b460 pc=0x7ff76257436e
+runtime.netpollblock(0x17e1b2c2b528?, 0xb2c2b538?, 0xe1?)
+        C:/Program Files/Go/src/runtime/netpoll.go:575 +0xf7 fp=0x17e1b2c2b4b8 sp=0x17e1b2c2b480 pc=0x7ff762538e37
+internal/poll.runtime_pollWait(0x22ac2228200, 0x72)
+        C:/Program Files/Go/src/runtime/netpoll.go:351 +0x85 fp=0x17e1b2c2b4d8 sp=0x17e1b2c2b4b8 pc=0x7ff7625734a5
+internal/poll.(*pollDesc).wait(0x17e1b2f04090?, 0x7ff762507cc6?, 0x0)
+        C:/Program Files/Go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x17e1b2c2b500 sp=0x17e1b2c2b4d8 pc=0x7ff762601a67
+internal/poll.(*FD).waitIO(0x7ff763bf3f60?, 0x400f76260366f?)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:214 +0x4c fp=0x17e1b2c2b548 sp=0x17e1b2c2b500 pc=0x7ff762602dac
+internal/poll.(*FD).execIO(0x17e1b2de61c0, 0x72, 0x17e1b2c2b6e0)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:297 +0x365 fp=0x17e1b2c2b648 sp=0x17e1b2c2b548 pc=0x7ff762603405
+internal/poll.(*FD).ReadFrom(0x17e1b2de61c0, {0x17e1b2e33200, 0x17e1b2c2b768?, 0x5dc})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:742 +0x1eb fp=0x17e1b2c2b730 sp=0x17e1b2c2b648 pc=0x7ff76260504b
+net.(*netFD).readFrom(0x17e1b2de61c0, {0x17e1b2e33200?, 0x7ffe58293760?, 0x0?})
+        C:/Program Files/Go/src/net/fd_posix.go:74 +0x25 fp=0x17e1b2c2b788 sp=0x17e1b2c2b730 pc=0x7ff7626b7fe5
+net.(*IPConn).readFrom(0x17e1b2c2b828?, {0x17e1b2e33200, 0x5dc, 0x5dc})
+        C:/Program Files/Go/src/net/iprawsock_posix.go:49 +0x2c fp=0x17e1b2c2b7f0 sp=0x17e1b2c2b788 pc=0x7ff7626c1d0c
+net.(*IPConn).ReadFrom(0x17e1b3194020, {0x17e1b2e33200?, 0x17e1b2c16a50?, 0x7ff763bf28e0?})
+        C:/Program Files/Go/src/net/iprawsock.go:140 +0x30 fp=0x17e1b2c2b840 sp=0x17e1b2c2b7f0 pc=0x7ff7626c1030
+golang.org/x/net/icmp.(*PacketConn).ReadFrom(0x1?, {0x17e1b2e33200?, 0x24?, 0x5dc?})
+        C:/Users/deavorwei/go/pkg/mod/golang.org/x/net@v0.53.0/icmp/endpoint.go:58 +0x2f fp=0x17e1b2c2b870 sp=0x17e1b2c2b840 pc=0x7ff762e56c4f
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b320baf0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x1d)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:125 +0x765 fp=0x17e1b2c2bac8 sp=0x17e1b2c2b870 pc=0x7ff762e604a5
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2b87c38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b2c2bb00 sp=0x17e1b2c2bac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x1d, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b2c2bd30 sp=0x17e1b2c2bb00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x1d)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b2c2bfc8 sp=0x17e1b2c2bd30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2c2bfe0 sp=0x17e1b2c2bfc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2c2bfe8 sp=0x17e1b2c2bfe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 471 gp=0x17e1b2be0780 m=nil [IO wait]:
+runtime.gopark(0x7ff763bf3a20?, 0x0?, 0x60?, 0x40?, 0x17e1b2c5351c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2c53480 sp=0x17e1b2c53460 pc=0x7ff76257436e
+runtime.netpollblock(0x17e1b2c53528?, 0xb2c53538?, 0xe1?)
+        C:/Program Files/Go/src/runtime/netpoll.go:575 +0xf7 fp=0x17e1b2c534b8 sp=0x17e1b2c53480 pc=0x7ff762538e37
+internal/poll.runtime_pollWait(0x22ac3e42000, 0x72)
+        C:/Program Files/Go/src/runtime/netpoll.go:351 +0x85 fp=0x17e1b2c534d8 sp=0x17e1b2c534b8 pc=0x7ff7625734a5
+internal/poll.(*pollDesc).wait(0x17e1b2f04060?, 0x7ff762507cc6?, 0x0)
+        C:/Program Files/Go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x17e1b2c53500 sp=0x17e1b2c534d8 pc=0x7ff762601a67
+internal/poll.(*FD).waitIO(0x7ff763bf3f60?, 0x7ff762571de5?)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:214 +0x4c fp=0x17e1b2c53548 sp=0x17e1b2c53500 pc=0x7ff762602dac
+internal/poll.(*FD).execIO(0x17e1b29f61c0, 0x72, 0x17e1b2c536e0)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:297 +0x365 fp=0x17e1b2c53648 sp=0x17e1b2c53548 pc=0x7ff762603405
+internal/poll.(*FD).ReadFrom(0x17e1b29f61c0, {0x17e1b2a5a600, 0x17e1b2c53768?, 0x5dc})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:742 +0x1eb fp=0x17e1b2c53730 sp=0x17e1b2c53648 pc=0x7ff76260504b
+net.(*netFD).readFrom(0x17e1b29f61c0, {0x17e1b2a5a600?, 0x7ffe58293760?, 0x0?})
+        C:/Program Files/Go/src/net/fd_posix.go:74 +0x25 fp=0x17e1b2c53788 sp=0x17e1b2c53730 pc=0x7ff7626b7fe5
+net.(*IPConn).readFrom(0x17e1b2c53828?, {0x17e1b2a5a600, 0x5dc, 0x5dc})
+        C:/Program Files/Go/src/net/iprawsock_posix.go:49 +0x2c fp=0x17e1b2c537f0 sp=0x17e1b2c53788 pc=0x7ff7626c1d0c
+net.(*IPConn).ReadFrom(0x17e1b2d26030, {0x17e1b2a5a600?, 0x17e1b2c242d0?, 0x7ff763bf28e0?})
+        C:/Program Files/Go/src/net/iprawsock.go:140 +0x30 fp=0x17e1b2c53840 sp=0x17e1b2c537f0 pc=0x7ff7626c1030
+golang.org/x/net/icmp.(*PacketConn).ReadFrom(0x1?, {0x17e1b2a5a600?, 0x24?, 0x5dc?})
+        C:/Users/deavorwei/go/pkg/mod/golang.org/x/net@v0.53.0/icmp/endpoint.go:58 +0x2f fp=0x17e1b2c53870 sp=0x17e1b2c53840 pc=0x7ff762e56c4f
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b321faf0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x1c)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:125 +0x765 fp=0x17e1b2c53ac8 sp=0x17e1b2c53870 pc=0x7ff762e604a5
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2b89c38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b2c53b00 sp=0x17e1b2c53ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x1c, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b2c53d30 sp=0x17e1b2c53b00 pc=0x7ff762e64b5d[2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] TTL 过期 (raw): 中间路由器=142.250.60.155, rtt=193ms
+
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x1c)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260[2026/05/18 17:04:32] [Verbose] [Tracert] [8.8.8.8] TTL=14 结果: success=false, rtt=193.00ms, status=TTLExpired
+ +0x16b fp=0x17e1b2c53fc82026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=14, IP=142.250.60.155, Success=true, RTT=193.00ms
+ sp=0x17e1b2c53d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1[2026/05/18 17:04:32] [Debug] [Tracert] [8.8.8.8] TTL=14 探测完成: ip=142.250.60.155, rtt=193.00ms, reached=false
+()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2c53fe0 sp=0x17e1b2c53fc8 pc=0x7ff762e6401b
+runtime.goexit({}[2026/05/18 17:04:32] [Verbose] [TracertService] [-] 发送进度事件: round=1, completed=10/30, running=true
+)
+2026/05/18 17:04:32 [TRACERT SVC] emitProgress: round=1, reachedTTL=0, hopsCount=30, isRunning=true
+        2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=14, IP=142.250.60.155, Success=true, RTT=193.00ms
+C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2c53fe8 sp=0x17e1b2c53fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 470 gp=0x17e1b2be0960 m=nil [IO wait]:
+runtime.gopark(0x7ff763bf3a20?, 0x0?, 0x50?, 0x1?, 0x17e1b318951c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b3189480 sp=0x17e1b3189460 pc=0x7ff76257436e
+runtime.netpollblock(0x17e1b3189528?, 0xb3189538?, 0xe1?)
+        C:/Program Files/Go/src/runtime/netpoll.go:575 +0xf7 fp=0x17e1b31894b8 sp=0x17e1b3189480 pc=0x7ff762538e37
+internal/poll.runtime_pollWait(0x22ac3e41a00, 0x72)
+        C:/Program Files/Go/src/runtime/netpoll.go:351 +0x85 fp=0x17e1b31894d8 sp=0x17e1b31894b8 pc=0x7ff7625734a5
+internal/poll.(*pollDesc).wait(0x17e1b2d40150?, 0x7ff762507cc6?, 0x0)
+        C:/Program Files/Go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x17e1b3189500 sp=0x17e1b31894d8 pc=0x7ff762601a67
+internal/poll.(*FD).waitIO(0x7ff763bf3f60?, 0x7ff762571de5?)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:214 +0x4c fp=0x17e1b3189548 sp=0x17e1b3189500 pc=0x7ff762602dac
+internal/poll.(*FD).execIO(0x17e1b30980e0, 0x72, 0x17e1b31896e0)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:297 +0x365 fp=0x17e1b3189648 sp=0x17e1b3189548 pc=0x7ff762603405
+internal/poll.(*FD).ReadFrom(0x17e1b30980e0, {0x17e1b2b12000, 0x17e1b3189768?, 0x5dc})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:742 +0x1eb fp=0x17e1b3189730 sp=0x17e1b3189648 pc=0x7ff76260504b
+net.(*netFD).readFrom(0x17e1b30980e0, {0x17e1b2b12000?, 0x7ffe58293760?, 0x0?})
+        C:/Program Files/Go/src/net/fd_posix.go:74 +0x25 fp=0x17e1b3189788 sp=0x17e1b3189730 pc=0x7ff7626b7fe5
+net.(*IPConn).readFrom(0x17e1b3189828?, {0x17e1b2b12000, 0x5dc, 0x5dc})
+        C:/Program Files/Go/src/net/iprawsock_posix.go:49 +0x2c fp=0x17e1b31897f0 sp=0x17e1b3189788 pc=0x7ff7626c1d0c
+net.(*IPConn).ReadFrom(0x17e1b2df2018, {0x17e1b2b12000?, 0x17e1b2b22ae0?, 0x7ff763bf28e0?})
+        C:/Program Files/Go/src/net/iprawsock.go:140 +0x30 fp=0x17e1b3189840 sp=0x17e1b31897f0 pc=0x7ff7626c1030
+golang.org/x/net/icmp.(*PacketConn).ReadFrom(0x1?, {0x17e1b2b12000?, 0x44?, 0x5dc?})
+        C:/Users/deavorwei/go/pkg/mod/golang.org/x/net@v0.53.0/icmp/endpoint.go:58 +0x2f fp=0x17e1b3189870 sp=0x17e1b3189840 pc=0x7ff762e56c4f
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b2cfbaf0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x1b)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:125 +0x765 fp=0x17e1b3189ac8 sp=0x17e1b3189870 pc=0x7ff762e604a5
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2b93c38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b3189b00 sp=0x17e1b3189ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x1b, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b3189d30 sp=0x17e1b3189b00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x1b)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b3189fc8 sp=0x17e1b3189d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b3189fe0 sp=0x17e1b3189fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b3189fe8 sp=0x17e1b3189fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 468 gp=0x17e1b2be0d20 m=nil [IO wait]:
+runtime.gopark(0x7ff763bf3a20?, 0x0?, 0xd0?, 0x22?, 0x17e1b2d3b51c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2d3b480 sp=0x17e1b2d3b460 pc=0x7ff76257436e
+runtime.netpollblock(0x17e1b2d3b528?, 0xb2d3b538?, 0xe1?)
+        C:/Program Files/Go/src/runtime/netpoll.go:575 +0xf7 fp=0x17e1b2d3b4b8 sp=0x17e1b2d3b480 pc=0x7ff762538e37
+internal/poll.runtime_pollWait(0x22ac2228c00, 0x72)
+        C:/Program Files/Go/src/runtime/netpoll.go:351 +0x85 fp=0x17e1b2d3b4d8 sp=0x17e1b2d3b4b8 pc=0x7ff7625734a5
+internal/poll.(*pollDesc).wait(0x17e1b2c922d0?, 0x7ff762507cc6?, 0x0)
+        C:/Program Files/Go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x17e1b2d3b500 sp=0x17e1b2d3b4d8 pc=0x7ff762601a67
+internal/poll.(*FD).waitIO(0x7ff763bf3f60?, 0x400f76260366f?)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:214 +0x4c fp=0x17e1b2d3b548 sp=0x17e1b2d3b500 pc=0x7ff762602dac
+internal/poll.(*FD).execIO(0x17e1b29f60e0, 0x72, 0x17e1b2d3b6e0)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:297 +0x365 fp=0x17e1b2d3b648 sp=0x17e1b2d3b548 pc=0x7ff762603405
+internal/poll.(*FD).ReadFrom(0x17e1b29f60e0, {0x17e1b2a5a000, 0x17e1b2d3b768?, 0x5dc})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:742 +0x1eb fp=0x17e1b2d3b730 sp=0x17e1b2d3b648 pc=0x7ff76260504b
+net.(*netFD).readFrom(0x17e1b29f60e0, {0x17e1b2a5a000?, 0x7ffe58293760?, 0x0?})
+        C:/Program Files/Go/src/net/fd_posix.go:74 +0x25 fp=0x17e1b2d3b788 sp=0x17e1b2d3b730 pc=0x7ff7626b7fe5
+net.(*IPConn).readFrom(0x17e1b2d3b828?, {0x17e1b2a5a000, 0x5dc, 0x5dc})
+        C:/Program Files/Go/src/net/iprawsock_posix.go:49 +0x2c fp=0x17e1b2d3b7f0 sp=0x17e1b2d3b788 pc=0x7ff7626c1d0c
+net.(*IPConn).ReadFrom(0x17e1b2d26020, {0x17e1b2a5a000?, 0x17e1b2a8c360?, 0x7ff763bf28e0?})
+        C:/Program Files/Go/src/net/iprawsock.go:140 +0x30 fp=0x17e1b2d3b840 sp=0x17e1b2d3b7f0 pc=0x7ff7626c1030
+golang.org/x/net/icmp.(*PacketConn).ReadFrom(0x1?, {0x17e1b2a5a000?, 0x44?, 0x5dc?})
+        C:/Users/deavorwei/go/pkg/mod/golang.org/x/net@v0.53.0/icmp/endpoint.go:58 +0x2f fp=0x17e1b2d3b870 sp=0x17e1b2d3b840 pc=0x7ff762e56c4f
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b3383af0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x19)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:125 +0x765 fp=0x17e1b2d3bac8 sp=0x17e1b2d3b870 pc=0x7ff762e604a5
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2b8fc38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b2d3bb00 sp=0x17e1b2d3bac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x19, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b2d3bd30 sp=0x17e1b2d3bb00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x19)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b2d3bfc8 sp=0x17e1b2d3bd30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2d3bfe0 sp=0x17e1b2d3bfc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2d3bfe8 sp=0x17e1b2d3bfe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 467 gp=0x17e1b2be0f00 m=nil [IO wait]:
+runtime.gopark(0x7ff763bf3a20?, 0x0?, 0xc0?, 0x20?, 0x17e1b2d3751c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2d37480 sp=0x17e1b2d37460 pc=0x7ff76257436e
+runtime.netpollblock(0x17e1b2d37528?, 0xb2d37538?, 0xe1?)
+        C:/Program Files/Go/src/runtime/netpoll.go:575 +0xf7 fp=0x17e1b2d374b8 sp=0x17e1b2d37480 pc=0x7ff762538e37
+internal/poll.runtime_pollWait(0x22ac3c64800, 0x72)
+        C:/Program Files/Go/src/runtime/netpoll.go:351 +0x85 fp=0x17e1b2d374d8 sp=0x17e1b2d374b8 pc=0x7ff7625734a5
+internal/poll.(*pollDesc).wait(0x17e1b29120c0?, 0x7ff762507cc6?, 0x0)
+        C:/Program Files/Go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x17e1b2d37500 sp=0x17e1b2d374d8 pc=0x7ff762601a67
+internal/poll.(*FD).waitIO(0x7ff763bf3f60?, 0x400f76260366f?)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:214 +0x4c fp=0x17e1b2d37548 sp=0x17e1b2d37500 pc=0x7ff762602dac
+internal/poll.(*FD).execIO(0x17e1b2e1e2a0, 0x72, 0x17e1b2d376e0)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:297 +0x365 fp=0x17e1b2d37648 sp=0x17e1b2d37548 pc=0x7ff762603405
+internal/poll.(*FD).ReadFrom(0x17e1b2e1e2a0, {0x17e1b2beac00, 0x17e1b2d37768?, 0x5dc})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:742 +0x1eb fp=0x17e1b2d37730 sp=0x17e1b2d37648 pc=0x7ff76260504b
+net.(*netFD).readFrom(0x17e1b2e1e2a0, {0x17e1b2beac00?, 0x7ffe58293760?, 0x0?})
+        C:/Program Files/Go/src/net/fd_posix.go:74 +0x25 fp=0x17e1b2d37788 sp=0x17e1b2d37730[2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] TTL 过期 (raw): 中间路由器=108.170.233.21, rtt=238ms
+ pc=0x7ff7626b7fe5
+net.(*IPConn).readFrom(0x17e1b2d37828?, {0x17e1b2beac00, 0x5dc, 0x5dc})
+        C:/Program Files/Go/src/net/iprawsock_posix.go[2026/05/18 17:04:32] [Verbose] [Tracert] [8.8.8.8] TTL=15 结果: success=false, rtt=238.00ms, status=TTLExpired
+:49 +0x2c fp=0x17e1b2d377f0 sp=0x17e1b2d37788 pc=0x7ff7626c1d0c
+2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=15, IP=108.170.233.21, Success=true, RTT=238.00ms
+net.(*IPConn).ReadFrom(0x17e1b27ee0d8, [2026/05/18 17:04:32] [Debug] [Tracert] [8.8.8.8] TTL=15 探测完成: ip=108.170.233.21, rtt=238.00ms, reached=false
+{0x17e1b2beac00?[2026/05/18 17:04:32] [Verbose] [TracertService] [-] 发送进度事件: round=1, completed=11/30, running=true
+, 0x17e1b2ba08d0?, 2026/05/18 17:04:32 [TRACERT SVC] emitProgress: round=1, reachedTTL=0, hopsCount=30, isRunning=true
+0x7ff763bf28e02026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=15, IP=108.170.233.21, Success=true, RTT=238.00ms
+?})
+        C:/Program Files/Go/src/net/iprawsock.go:140 +0x30 fp=0x17e1b2d37840 sp=0x17e1b2d377f0 pc=0x7ff7626c1030
+[2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] Ping 成功 (raw): rtt=240ms, ttl=20, replyIP=8.8.8.8
+golang.org/x/net/icmp.(*PacketConn).ReadFrom(0x1?, {0x17e1b2beac00?, 0x28?, 0x5dc?})
+        C:/Users/deavorwei/go/pkg/mod/golang.org/x/net@v0.53.0/icmp/endpoint.go:58 +0x2f fp=[2026/05/18 17:04:32] [Verbose] [Tracert] [8.8.8.8] TTL=20 结果: success=true, rtt=240.00ms, status=Success
+0x17e1b2d37870 sp=0x17e1b2d37840 pc=0x7ff762e56c4f
+2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=20, IP=8.8.8.8, Success=true, RTT=240.00ms
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw([2026/05/18 17:04:32] [Debug] [Tracert] [8.8.8.8] TTL=20 探测完成: ip=8.8.8.8, rtt=240.00ms, reached=true
+0x17e1b321baf0?, {[2026/05/18 17:04:32] [Debug] [Tracert] [8.8.8.8] TTL=20 到达目标（记录最小 TTL，之前=31）
+0x17e1b2a0b2c0, 0x10, 0x10}[2026/05/18 17:04:32] [Verbose] [TracertService] [-] 发送进度事件: round=1, completed=12/30, running=true
+, 0x5dc, 0x20, 0x18)
+        2026/05/18 17:04:32 [TRACERT SVC] emitProgress: round=1, reachedTTL=20, hopsCount=20, isRunning=true
+[2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] Ping 成功 (raw): rtt=240ms, ttl=19, replyIP=8.8.8.8
+D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=20, IP=8.8.8.8, Success=true, RTT=240.00ms
+:125 +0x765 fp=0x17e1b2d37ac8 sp=[2026/05/18 17:04:32] [Verbose] [Tracert] [8.8.8.8] TTL=19 结果: success=true, rtt=240.00ms, status=Success
+0x17e1b2d37870 pc=0x7ff762e604a5
+2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=19, IP=8.8.8.8, Success=true, RTT=240.00ms
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL([2026/05/18 17:04:32] [Debug] [Tracert] [8.8.8.8] TTL=19 探测完成: ip=8.8.8.8, rtt=240.00ms, reached=true
+0x17e1b2b91c38?, {0x17e1b2a0b2c0?, [2026/05/18 17:04:32] [Debug] [Tracert] [8.8.8.8] TTL=19 到达目标（记录最小 TTL，之前=20）
+0x1?, 0x7ff7631158e8[2026/05/18 17:04:32] [Verbose] [TracertService] [-] 发送进度事件: round=1, completed=13/30, running=true
+?2026/05/18 17:04:32 [TRACERT SVC] emitProgress: round=1, reachedTTL=19, hopsCount=19, isRunning=true
+2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=19, IP=8.8.8.8, Success=true, RTT=240.00ms
+}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b2d37b00 sp=0x17e1b2d37ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x18, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b2d37d30 sp=0x17e1b2d37b00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x18)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b2d37fc8 sp=0x17e1b2d37d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2d37fe0 sp=0x17e1b2d37fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2d37fe8 sp=0x17e1b2d37fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 469 gp=0x17e1b2be10e0 m=nil [IO wait]:
+runtime.gopark(0x7ff763bf3a20?, 0x0?, 0x70?, 0x85?, 0x17e1b2c2751c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2c27480 sp=0x17e1b2c27460 pc=0x7ff76257436e
+runtime.netpollblock(0x17e1b2c27528?, 0xb2c27538?, 0xe1?)
+        C:/Program Files/Go/src/runtime/netpoll.go:575 +0xf7 fp=0x17e1b2c274b8 sp=0x17e1b2c27480 pc=0x7ff762538e37
+internal/poll.runtime_pollWait(0x22ac3e41800, 0x72)
+        C:/Program Files/Go/src/runtime/netpoll.go:351 +0x85 fp=0x17e1b2c274d8 sp=0x17e1b2c274b8 pc=0x7ff7625734a5[2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] Ping 成功 (raw): rtt=247ms, ttl=23, replyIP=8.8.8.8
+
+[2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] Ping 成功 (raw): rtt=247ms, ttl=21, replyIP=8.8.8.8
+internal/poll.(*pollDesc).wait([2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] Ping 成功 (raw): rtt=245ms, ttl=25, replyIP=8.8.8.8
+0x17e1b2818570[2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] Ping 成功 (raw): rtt=247ms, ttl=24, replyIP=8.8.8.8
+?, 0x7ff762507cc6?, 0x0)
+        C:/Program Files/Go/src/internal/poll/fd_poll_runtime.go:[2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] Ping 成功 (raw): rtt=245ms, ttl=22, replyIP=8.8.8.8
+84 +0x27 fp=0x17e1b2c27500 sp=0x17e1b2c274d8 pc=0x7ff762601a67
+[2026/05/18 17:04:32] [Info] [ICMP] [8.8.8.8] Ping 成功 (raw): rtt=247ms, ttl=30, replyIP=8.8.8.8
+internal/poll.(*FD).waitIO(0x17e1b2c27568?[2026/05/18 17:04:32] [Verbose] [Tracert] [8.8.8.8] TTL=23 结果: success=true, rtt=247.00ms, status=Success
+, [2026/05/18 17:04:32] [Verbose] [Tracert] [8.8.8.8] TTL=30 结果: success=true, rtt=247.00ms, status=Success
+2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=23, IP=8.8.8.8, Success=true, RTT=247.00ms
+0x7ff76257436e?)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:214 +0x4c fp=0x17e1b2c27548 sp=0x17e1b2c27500 pc=0x7ff762602dac
+[2026/05/18 17:04:32] [Verbose] [Tracert] [8.8.8.8] TTL=25 结果: success=true, rtt=245.00ms, status=Success
+fatal error: unexpected signal during runtime execution
+2026/05/18 17:04:32 [TRACERT SVC] emitHopUpdate: TTL=30, IP=8.8.8.8, Success=true, RTT=247.00ms
+[2026/05/18 17:04:32] [Verbose] [Tracert] [8.8.8.8] TTL=24 结果: success=true, rtt=247.00ms, status=Success
+[signal 0xc0000005 code=0x0 addr=0xe8 pc=0x7ff762562cc5]
+
+runtime stack:
+runtime.throw({0x7ff763149c4b?, 0x82a1fff67a?})
+        C:/Program Files/Go/src/runtime/panic.go:1229 +0x4d fp=0x82a1fff600 sp=0x82a1fff5d0 pc=0x7ff76257424d
+runtime.sigpanic()
+        C:/Program Files/Go/src/runtime/signal_windows.go:379 +0x265 fp=0x82a1fff648 sp=0x82a1fff600 pc=0x7ff7625568a5
+runtime.(*unwinder).next(0x82a1fffa10)
+        C:/Program Files/Go/src/runtime/traceback.go:459 +0x105 fp=0x82a1fff6c0 sp=0x82a1fff648 pc=0x7ff762562cc5
+runtime.traceback2(0x82a1fffa10, 0x0, 0x0, 0x2d)
+        C:/Program Files/Go/src/runtime/traceback.go:968 +0x10b fp=0x82a1fff920 sp=0x82a1fff6c0 pc=0x7ff76256450b
+runtime.traceback1.func1(0x0)
+        C:/Program Files/Go/src/runtime/traceback.go:904 +0x65 fp=0x82a1fff9e8 sp=0x82a1fff920 pc=0x7ff7625642a5
+runtime.traceback1(0x17e1b2be10e0?, 0x7ff763319600?, 0x7ff700000001?, 0x17e1b2be10e0, 0x65?)
+        C:/Program Files/Go/src/runtime/traceback.go:927 +0x211 fp=0x82a1fffbf0 sp=0x82a1fff9e8 pc=0x7ff762564111
+runtime.traceback(...)
+        C:/Program Files/Go/src/runtime/traceback.go:804
+runtime.tracebacksomeothers.func1(0x17e1b2be10e0)
+        C:/Program Files/Go/src/runtime/traceback.go:1344 +0x10a fp=0x82a1fffc30 sp=0x82a1fffbf0 pc=0x7ff762565eca
+runtime.forEachGRace(0x82a1fffc98)
+        C:/Program Files/Go/src/runtime/proc.go:747 +0x45 fp=0x82a1fffc60 sp=0x82a1fffc30 pc=0x7ff762542785
+runtime.tracebacksomeothers(0x7ff7631126e8?, 0x17e1b283c008?)
+        C:/Program Files/Go/src/runtime/traceback.go:1312 +0xe5 fp=0x82a1fffcd0 sp=0x82a1fffc60 pc=0x7ff762565d85
+runtime.tracebackothers(...)
+        C:/Program Files/Go/src/runtime/traceback.go:1291
+runtime.winthrow(0x17e1b28332f0, 0x17e1b2832e00, 0x17e1b2a6ad20)
+        C:/Program Files/Go/src/runtime/signal_windows.go:365 +0x237 fp=0x82a1fffd38 sp=0x82a1fffcd0 pc=0x7ff7625565f7
+runtime.lastcontinuehandler(0x7ff762554ba5?, 0x17e1b2be1860?, 0x7?)
+        C:/Program Files/Go/src/runtime/signal_windows.go:326 +0x27 fp=0x82a1fffd60 sp=0x82a1fffd38 pc=0x7ff7625563a7
+runtime.sigtrampgo.func1()
+        C:/Program Files/Go/src/runtime/signal_windows.go:165 +0x33 fp=0x82a1fffd90 sp=0x82a1fffd60 pc=0x7ff762555f53
+runtime.systemstack(0x17e1b287c960)
+        C:/Program Files/Go/src/runtime/asm_amd64.s:562 +0x49 fp=0x82a1fffda0 sp=0x82a1fffd90 pc=0x7ff762579d49
+
+goroutine 459 gp=0x17e1b2a6ad20 m=3 mp=0x17e1b287f008 [running]:
+runtime.systemstack_switch()
+        C:/Program Files/Go/src/runtime/asm_amd64.s:516 +0x8 fp=0x17e1b28329b8 sp=0x17e1b28329a8 pc=0x7ff762579ce8
+runtime.sigtrampgo(0x17e1b2832b60, 0x17e1b2a53620?)
+        C:/Program Files/Go/src/runtime/signal_windows.go:164 +0x91 fp=0x17e1b2832a18 sp=0x17e1b28329b8 pc=0x7ff762555e51
+sigtramp()
+        C:/Program Files/Go/src/runtime/sys_windows_amd64.s:48 +0xaa fp=0x17e1b2832b20 sp=0x17e1b2832a18 pc=0x7ff76257ce0a
+runtime: g 459: unexpected return pc for sigtramp called from 0x7ffe58ec2bc6
+stack: frame={sp:0x17e1b2832a18, fp:0x17e1b2832b20} stack=[0x17e1b2830000,0x17e1b2834000)
+                   7 6 5 4  3 2 1 0   f e d c  b a 9 8  0123456789abcdef
+000017e1b2832910:                    000017e1 b2b2ae70          p.......
+000017e1b2832920: 000017e1 b2832950  00007ff7 6250a51a  P)........Pb....
+                                     ^ <runtime.selectnbsend+0x1a>
+000017e1b2832930: 000017e1 b2b2ae70  000017e1 b28329e0  p........)......
+000017e1b2832940: 00007ff7 62f9ba00  000017e1 b2d1aaf0  ...b............
+000017e1b2832950: 000017e1 b2832a00  00007ff7 626813d2  .*........hb....
+                                     ^ <github.com/NetWeaverGo/core/internal/logger.(*FrontendLogWriter).Write+0x1d2>
+000017e1b2832960: 000017e1 b2b74c7c  00000000 00000004  |L..............
+000017e1b2832970: 000017e1 b2a53620  00000000 00000024   6......$.......
+000017e1b2832980: 000017e1 b2c05398  00000000 00000018  .S..............
+000017e1b2832990: 000017e1 b2b74c80  00000000 00000003  .L..............
+000017e1b28329a0: 00007ff7 62579d37  000017e1 b2832a08  7.Wb.....*......
+                  ^ <runtime.systemstack+0x37>
+000017e1b28329b0: 00007ff7 62555e51  000017e1 b28329e0  Q^Ub.....)......
+                  ^ <runtime.sigtrampgo+0x91>
+000017e1b28329c0: 00000000 0000004d  000017e1 b2e240f0  M........@......
+000017e1b28329d0: 00000000 00000000  000017e1 b2a6ad20  ........ .......
+000017e1b28329e0: 00007ff7 62555f20  000017e1 b28329d4   _Ub.....)......
+                  ^ <runtime.sigtrampgo.func1+0x0>
+000017e1b28329f0: 00007ff7 633162b0  000017e1 b2832b60  .b1c....`+......
+000017e1b2832a00: 000017e1 b2a6ad20  000017e1 b2832b10   ........+......
+000017e1b2832a10: 00007ff7 6257ce0a  000017e1 b2832b60  ..Wb....`+......
+                  ^ <sigtramp+0xaa>
+                                     ^ SP
+000017e1b2832a20: 000017e1 b2a53620  00007ffe 59089590   6.........Y....
+000017e1b2832a30: 00000082 a1779000  000017e1 b2832b10  ..w......+......
+000017e1b2832a40: 000017e1 b2833200  000017e1 b2832e00  .2..............
+000017e1b2832a50: 000017e1 b28332f0  00007ffe 59089598  .2.........Y....
+000017e1b2832a60: 0000022a fac7bc80  00007ff7 62e64420  ....*... D.b....
+                                     ^ <github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1.deferwrap1+0x0>
+000017e1b2832a70: 000017e1 b2a0b3e0  000017e1 b2a0b06c  ........l.......
+000017e1b2832a80: 000017e1 b2a0b068  000017e1 b2c29f90  h...............
+000017e1b2832a90: 000017e1 b2c29fd0  00007ff7 62e6401b  .........@.b....
+                                     ^ <github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1+0x1b>
+000017e1b2832aa0: 00000000 00000010  00000000 00000000  ................
+000017e1b2832ab0: 00007ff7 6257b981  00000000 00000000  ..Wb............
+                  ^ <runtime.goexit+0x1>
+000017e1b2832ac0: 00000000 00000000  00000000 00000000  ................
+000017e1b2832ad0: 05000000 00000000  40260000 00000000  ..............&@
+000017e1b2832ae0: 40260000 00000000  ffffffff ffffffff  ......&@........
+000017e1b2832af0: 00000000 00000000  00000000 00000000  ................
+000017e1b2832b00: 00000000 00000000  00000000 00000246  ........F.......
+000017e1b2832b10: 00000000 00000003  00007ffe 58ec2bc6  .........+.X....
+000017e1b2832b20: 000017e1 b2d013e0  000017e1 00000000  ................
+                  ^ FP
+000017e1b2832b30: 00000000 00000003  00000000 00000000  ................
+000017e1b2832b40: 0000022a fac7bc80  00000000 00000000  ....*...........
+000017e1b2832b50: 00000000 00000000  0000022a fac7bc90  ............*...
+000017e1b2832b60: 000017e1 b28332f0  000017e1 b2832e00  .2..............
+000017e1b2832b70: 000017e1 b2832e00  00000000 00000000  ................
+000017e1b2832b80: 00000000 00000000  000017e1 b2bbdb01  ................
+000017e1b2832b90: 00000000 00000000  00000000 00000002  ................
+000017e1b2832ba0: 000017e1 b2832c10  00007ffe 58ec1fae  .,.........X....
+000017e1b2832bb0: 000017e1 b28332f0  00000000 00000000  .2..............
+000017e1b2832bc0: 00000000 00000000  00007ff7 6257cf20  ........ .Wb....
+                                     ^ <runtime.lastcontinuetramp+0x0>
+000017e1b2832bd0: 00000000 00000000  00000000 00000000  ................
+000017e1b2832be0: 00000000 00000000  00000000 00000000  ................
+000017e1b2832bf0: 00000000 00000000  00000000 00000000  ................
+000017e1b2832c00: 00000000 00000020  000017e1 b290a700   ...............
+000017e1b2832c10: 00000000 00000000  00000000 00000000  ................
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 1 gp=0x17e1b287c000 m=0 mp=0x7ff763c1c060 [syscall, locked to thread]:
+runtime.cgocall(0x7ff762505be0, 0x7ff763c1c3b0)
+        C:/Program Files/Go/src/runtime/cgocall.go:167 +0x3e fp=0x17e1b2dd1048 sp=0x17e1b2dd0fe0 pc=0x7ff76257135e
+syscall.syscalln(0x22afaf13d09?, 0x10005?, {0x17e1b2914a60?, 0x22aff982308?, 0x22afaf13db0?})
+        C:/Program Files/Go/src/runtime/syscall_windows.go:431 +0x4e fp=0x17e1b2dd1068 sp=0x17e1b2dd1048 pc=0x7ff762577f0e
+syscall.SyscallN(0x17e1b2914a60?, {0x17e1b2914a60?, 0x0?, 0x8?})
+        C:/Program Files/Go/src/syscall/dll_windows.go:99 +0x1e fp=0x17e1b2dd10a0 sp=0x17e1b2dd1068 pc=0x7ff7625c7dfe
+syscall.(*Proc).Call(0x7ff762512c65?, {0x17e1b2914a60?, 0x7ff762fac400?, 0x1?})
+        C:/Program Files/Go/src/syscall/dll_windows.go:256 +0x1c fp=0x17e1b2dd10e0 sp=0x17e1b2dd10a0 pc=0x7ff7625c831c
+syscall.(*LazyProc).Call(0x7ff763bf7a60, {0x17e1b2914a60, 0x4, 0x4})
+        C:/Program Files/Go/src/syscall/dll_windows.go:376 +0x4a fp=0x17e1b2dd1110 sp=0x17e1b2dd10e0 pc=0x7ff7625c870a
+github.com/wailsapp/wails/v3/pkg/w32.GetMessage(...)
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/w32/user32.go:489
+github.com/wailsapp/wails/v3/pkg/application.(*windowsApp).runMainLoop(0x17e1b2d5a000)
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/mainthread_windows.go:62 +0x16e fp=0x17e1b2dd1190 sp=0x17e1b2dd1110 pc=0x7ff762dcaf4e
+github.com/wailsapp/wails/v3/pkg/application.(*windowsApp).run(0x17e1b2d5a000)
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application_windows.go:190 +0x3a5 fp=0x17e1b2dd1298 sp=0x17e1b2dd1190 pc=0x7ff762dbc605
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run(0x17e1b299d408)
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:650 +0x81a fp=0x17e1b2dd13d8 sp=0x17e1b2dd1298 pc=0x7ff762db889a
+main.runGUI()
+        D:/Document/GO/NetWeaverGo/cmd/netweaver/main.go:154 +0x1a45 fp=0x17e1b2dd1e78 sp=0x17e1b2dd13d8 pc=0x7ff762ea4e05
+main.main()
+        D:/Document/GO/NetWeaverGo/cmd/netweaver/main.go:51 +0x345 fp=0x17e1b2dd1f48 sp=0x17e1b2dd1e78 pc=0x7ff762ea33a5
+runtime.main()
+        C:/Program Files/Go/src/runtime/proc.go:290 +0x2c7 fp=0x17e1b2dd1fe0 sp=0x17e1b2dd1f48 pc=0x7ff762541a47
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2dd1fe8 sp=0x17e1b2dd1fe0 pc=0x7ff76257b981
+
+goroutine 2 gp=0x17e1b287c780 m=nil [force gc (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2881fa8 sp=0x17e1b2881f88 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.forcegchelper()
+        C:/Program Files/Go/src/runtime/proc.go:375 +0xb8 fp=0x17e1b2881fe0 sp=0x17e1b2881fa8 pc=0x7ff762541d38
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2881fe8 sp=0x17e1b2881fe0 pc=0x7ff76257b981
+created by runtime.init.7 in goroutine 1
+        C:/Program Files/Go/src/runtime/proc.go:363 +0x1a
+
+goroutine 3 gp=0x17e1b287cb40 m=nil [GC sweep wait]:
+runtime.gopark(0x1?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2883f88 sp=0x17e1b2883f68 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.bgsweep(0x17e1b288c000)
+        C:/Program Files/Go/src/runtime/mgcsweep.go:324 +0x151 fp=0x17e1b2883fc8 sp=0x17e1b2883f88 pc=0x7ff76252a351
+runtime.gcenable.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:214 +0x17 fp=0x17e1b2883fe0 sp=0x17e1b2883fc8 pc=0x7ff76251b697
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2883fe8 sp=0x17e1b2883fe0 pc=0x7ff76257b981
+created by runtime.gcenable in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:214 +0x66
+
+goroutine 4 gp=0x17e1b287cd20 m=nil [GC scavenge wait]:
+runtime.gopark(0x10000?, 0x5f040920?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2893f78 sp=0x17e1b2893f58 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.(*scavengerState).park(0x7ff763c19b80)
+        C:/Program Files/Go/src/runtime/mgcscavenge.go:425 +0x49 fp=0x17e1b2893fa8 sp=0x17e1b2893f78 pc=0x7ff762527dc9
+runtime.bgscavenge(0x17e1b288c000)
+        C:/Program Files/Go/src/runtime/mgcscavenge.go:658 +0x59 fp=0x17e1b2893fc8 sp=0x17e1b2893fa8 pc=0x7ff762528359
+runtime.gcenable.gowrap2()
+        C:/Program Files/Go/src/runtime/mgc.go:215 +0x17 fp=0x17e1b2893fe0 sp=0x17e1b2893fc8 pc=0x7ff76251b657
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2893fe8 sp=0x17e1b2893fe0 pc=0x7ff76257b981
+created by runtime.gcenable in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:215 +0xa5
+
+goroutine 5 gp=0x17e1b287d0e0 m=nil [GOMAXPROCS updater (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2895f88 sp=0x17e1b2895f68 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.updateMaxProcsGoroutine()
+        C:/Program Files/Go/src/runtime/proc.go:7095 +0xe7 fp=0x17e1b2895fe0 sp=0x17e1b2895f88 pc=0x7ff76254fca7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2895fe8 sp=0x17e1b2895fe0 pc=0x7ff76257b981
+created by runtime.defaultGOMAXPROCSUpdateEnable in goroutine 1
+        C:/Program Files/Go/src/runtime/proc.go:7083 +0x37
+
+goroutine 6 gp=0x17e1b287d2c0 m=nil [finalizer wait]:
+runtime.gopark(0x0?, 0x7ff763315ef8?, 0x0?, 0x40?, 0x1000000010?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b288fe20 sp=0x17e1b288fe00 pc=0x7ff76257436e
+runtime.runFinalizers()
+        C:/Program Files/Go/src/runtime/mfinal.go:210 +0x107 fp=0x17e1b288ffe0 sp=0x17e1b288fe20 pc=0x7ff76251a5a7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b288ffe8 sp=0x17e1b288ffe0 pc=0x7ff76257b981
+created by runtime.createfing in goroutine 1
+        C:/Program Files/Go/src/runtime/mfinal.go:172 +0x3d
+
+goroutine 7 gp=0x17e1b287d4a0 m=nil [cleanup wait]:
+runtime.gopark(0x101000000000000?, 0xd6?, 0x3?, 0x0?, 0x7ff763aff5e0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2885f68 sp=0x17e1b2885f48 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.(*cleanupQueue).dequeue(0x7ff763c1a100)
+        C:/Program Files/Go/src/runtime/mcleanup.go:522 +0xd4 fp=0x17e1b2885fa0 sp=0x17e1b2885f68 pc=0x7ff762517594
+runtime.runCleanups()
+        C:/Program Files/Go/src/runtime/mcleanup.go:718 +0x45 fp=0x17e1b2885fe0 sp=0x17e1b2885fa0 pc=0x7ff762517c05
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2885fe8 sp=0x17e1b2885fe0 pc=0x7ff76257b981
+created by runtime.(*cleanupQueue).createGs in goroutine 1
+        C:/Program Files/Go/src/runtime/mcleanup.go:672 +0xa5
+
+goroutine 34 gp=0x17e1b29081e0 m=nil [GC worker (idle)]:
+runtime.gopark(0x1?, 0x0?, 0xd0?, 0x5f?, 0x7ff7626c6ed9?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2955f40 sp=0x17e1b2955f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2955fc8 sp=0x17e1b2955f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2955fe0 sp=0x17e1b2955fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2955fe8 sp=0x17e1b2955fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 19 gp=0x17e1b29083c0 m=nil [select]:
+runtime.gopark(0x17e1b2957f28?, 0x4?, 0xc0?, 0x62?, 0x17e1b2957ec0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2957d40 sp=0x17e1b2957d20 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2957f28, 0x17e1b2957eb8, 0x0?, 0x0, 0x0?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2957e70 sp=0x17e1b2957d40 pc=0x7ff762553f45
+github.com/NetWeaverGo/core/internal/logger.(*FrontendLogWriter).flushLoop(0x17e1b2b2aee0)
+        D:/Document/GO/NetWeaverGo/internal/logger/frontend_writer.go:236 +0x15d fp=0x17e1b2957fc8 sp=0x17e1b2957e70 pc=0x7ff7626819dd
+github.com/NetWeaverGo/core/internal/logger.InitFrontendLogWriter.gowrap2()
+        D:/Document/GO/NetWeaverGo/internal/logger/frontend_writer.go:120 +0x17 fp=0x17e1b2957fe0 sp=0x17e1b2957fc8 pc=0x7ff762681197
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2957fe8 sp=0x17e1b2957fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/logger.InitFrontendLogWriter in goroutine 1
+        D:/Document/GO/NetWeaverGo/internal/logger/frontend_writer.go:120 +0x4fb
+
+goroutine 20 gp=0x17e1b29085a0 m=nil [select]:
+runtime.gopark(0x17e1b2951f88?, 0x2?, 0xb0?, 0xda?, 0x17e1b2951f84?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2951e20 sp=0x17e1b2951e00 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2951f88, 0x17e1b2951f80, 0x0?, 0x0, 0x0?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2951f50 sp=0x17e1b2951e20 pc=0x7ff762553f45
+database/sql.(*DB).connectionOpener(0x17e1b2b24410, {0x7ff76332ace0, 0x17e1b292aaa0})
+        C:/Program Files/Go/src/database/sql/sql.go:1261 +0x89 fp=0x17e1b2951fb8 sp=0x17e1b2951f50 pc=0x7ff762707b29
+database/sql.OpenDB.gowrap1()
+        C:/Program Files/Go/src/database/sql/sql.go:841 +0x1f fp=0x17e1b2951fe0 sp=0x17e1b2951fb8 pc=0x7ff762705e7f
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2951fe8 sp=0x17e1b2951fe0 pc=0x7ff76257b981
+created by database/sql.OpenDB in goroutine 1
+        C:/Program Files/Go/src/database/sql/sql.go:841 +0x130
+
+goroutine 21 gp=0x17e1b2908780 m=nil [select]:
+runtime.gopark(0x17e1b2953f78?, 0x2?, 0x70?, 0x0?, 0x17e1b2953f64?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2953df8 sp=0x17e1b2953dd8 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2953f78, 0x17e1b2953f60, 0x0?, 0x0, 0x0?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2953f28 sp=0x17e1b2953df8 pc=0x7ff762553f45
+gorm.io/gorm/internal/lru.NewLRU[...].func1()
+        C:/Users/deavorwei/go/pkg/mod/gorm.io/gorm@v1.31.1/internal/lru/lru.go:83 +0xf7 fp=0x17e1b2953fc8 sp=0x17e1b2953f28 pc=0x7ff7627995b7
+gorm.io/gorm/internal/lru.NewLRU[...].gowrap1()
+        C:/Users/deavorwei/go/pkg/mod/gorm.io/gorm@v1.31.1/internal/lru/lru.go:90 +0x1b fp=0x17e1b2953fe0 sp=0x17e1b2953fc8 pc=0x7ff76279949b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2953fe8 sp=0x17e1b2953fe0 pc=0x7ff76257b981
+created by gorm.io/gorm/internal/lru.NewLRU[...] in goroutine 1
+        C:/Users/deavorwei/go/pkg/mod/gorm.io/gorm@v1.31.1/internal/lru/lru.go:79 +0x345
+
+goroutine 22 gp=0x17e1b2908b40 m=nil [select]:
+runtime.gopark(0x17e1b2b41f90?, 0x2?, 0xb6?, 0x7f?, 0x17e1b2b41f5c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2b41df8 sp=0x17e1b2b41dd8 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2b41f90, 0x17e1b2b41f58, 0x0?, 0x0, 0x0?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2b41f28 sp=0x17e1b2b41df8 pc=0x7ff762553f45
+database/sql.(*DB).connectionCleaner(0x17e1b2b24410, 0x0?)
+        C:/Program Files/Go/src/database/sql/sql.go:1104 +0x9e fp=0x17e1b2b41fc0 sp=0x17e1b2b41f28 pc=0x7ff76270707e
+database/sql.(*DB).startCleanerLocked.gowrap1()
+        C:/Program Files/Go/src/database/sql/sql.go:1091 +0x1b fp=0x17e1b2b41fe0 sp=0x17e1b2b41fc0 pc=0x7ff762706fbb
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2b41fe8 sp=0x17e1b2b41fe0 pc=0x7ff76257b981
+created by database/sql.(*DB).startCleanerLocked in goroutine 1
+        C:/Program Files/Go/src/database/sql/sql.go:1091 +0x105
+
+goroutine 35 gp=0x17e1b2c383c0 m=nil [GC worker (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2b3df40 sp=0x17e1b2b3df20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2b3dfc8 sp=0x17e1b2b3df40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2b3dfe0 sp=0x17e1b2b3dfc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2b3dfe8 sp=0x17e1b2b3dfe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 9 gp=0x17e1b287d860 m=nil [GC worker (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2891f40 sp=0x17e1b2891f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2891fc8 sp=0x17e1b2891f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2891fe0 sp=0x17e1b2891fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2891fe8 sp=0x17e1b2891fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 10 gp=0x17e1b287da40 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2a67f40 sp=0x17e1b2a67f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2a67fc8 sp=0x17e1b2a67f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2a67fe0 sp=0x17e1b2a67fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2a67fe8 sp=0x17e1b2a67fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 11 gp=0x17e1b287dc20 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2a69f40 sp=0x17e1b2a69f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2a69fc8 sp=0x17e1b2a69f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2a69fe0 sp=0x17e1b2a69fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2a69fe8 sp=0x17e1b2a69fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 12 gp=0x17e1b2a6a000 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06eb0764?, 0x3?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2a63f40 sp=0x17e1b2a63f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2a63fc8 sp=0x17e1b2a63f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2a63fe0 sp=0x17e1b2a63fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2a63fe8 sp=0x17e1b2a63fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 23 gp=0x17e1b2bc2960 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2b43f40 sp=0x17e1b2b43f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2b43fc8 sp=0x17e1b2b43f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2b43fe0 sp=0x17e1b2b43fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2b43fe8 sp=0x17e1b2b43fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 24 gp=0x17e1b2bc2b40 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bcdf40 sp=0x17e1b2bcdf20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bcdfc8 sp=0x17e1b2bcdf40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bcdfe0 sp=0x17e1b2bcdfc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bcdfe8 sp=0x17e1b2bcdfe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 25 gp=0x17e1b2bc2d20 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06eb0764?, 0x1?, 0xdc?, 0x7?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bcff40 sp=0x17e1b2bcff20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bcffc8 sp=0x17e1b2bcff40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bcffe0 sp=0x17e1b2bcffc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bcffe8 sp=0x17e1b2bcffe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 26 gp=0x17e1b2bc2f00 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x3?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bc9f40 sp=0x17e1b2bc9f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bc9fc8 sp=0x17e1b2bc9f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bc9fe0 sp=0x17e1b2bc9fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bc9fe8 sp=0x17e1b2bc9fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 27 gp=0x17e1b2bc30e0 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x1?, 0x7c?, 0x8e?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bcbf40 sp=0x17e1b2bcbf20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bcbfc8 sp=0x17e1b2bcbf40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bcbfe0 sp=0x17e1b2bcbfc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bcbfe8 sp=0x17e1b2bcbfe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 28 gp=0x17e1b2bc32c0 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06eb0764?, 0x1?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bd5f40 sp=0x17e1b2bd5f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bd5fc8 sp=0x17e1b2bd5f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bd5fe0 sp=0x17e1b2bd5fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bd5fe8 sp=0x17e1b2bd5fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 29 gp=0x17e1b2bc34a0 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x3?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bd7f40 sp=0x17e1b2bd7f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bd7fc8 sp=0x17e1b2bd7f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bd7fe0 sp=0x17e1b2bd7fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bd7fe8 sp=0x17e1b2bd7fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 30 gp=0x17e1b2bc3680 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06eb0764?, 0x1?, 0x8?, 0x88?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bd1f40 sp=0x17e1b2bd1f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bd1fc8 sp=0x17e1b2bd1f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bd1fe0 sp=0x17e1b2bd1fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bd1fe8 sp=0x17e1b2bd1fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 31 gp=0x17e1b2bc3860 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06eb0764?, 0x1?, 0x7c?, 0x8e?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bd3f40 sp=0x17e1b2bd3f20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bd3fc8 sp=0x17e1b2bd3f40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bd3fe0 sp=0x17e1b2bd3fc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bd3fe8 sp=0x17e1b2bd3fe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 32 gp=0x17e1b2bc3a40 m=nil [GC worker (idle)]:
+runtime.gopark(0x23dae06e41288?, 0x1?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2bddf40 sp=0x17e1b2bddf20 pc=0x7ff76257436e
+runtime.gcBgMarkWorker(0x17e1b2aaa3f0)
+        C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x17e1b2bddfc8 sp=0x17e1b2bddf40 pc=0x7ff76251e1cb
+runtime.gcBgMarkStartWorkers.gowrap1()
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x17e1b2bddfe0 sp=0x17e1b2bddfc8 pc=0x7ff76251e0b7
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2bddfe8 sp=0x17e1b2bddfe0 pc=0x7ff76257b981
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+        C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 50 gp=0x17e1b2de9c20 m=nil [select]:
+runtime.gopark(0x17e1b2a65f80?, 0x2?, 0xa0?, 0x55?, 0x17e1b2a65f4c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2a65de0 sp=0x17e1b2a65dc0 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2a65f80, 0x17e1b2a65f48, 0x0?, 0x0, 0x0?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2a65f10 sp=0x17e1b2a65de0 pc=0x7ff762553f45
+github.com/NetWeaverGo/core/internal/taskexec.(*EventBus).dispatchLoop(0x17e1b291f0e0)
+        D:/Document/GO/NetWeaverGo/internal/taskexec/eventbus.go:223 +0xd3 fp=0x17e1b2a65fc8 sp=0x17e1b2a65f10 pc=0x7ff762afc333
+github.com/NetWeaverGo/core/internal/taskexec.(*EventBus).Start.gowrap2()
+        D:/Document/GO/NetWeaverGo/internal/taskexec/eventbus.go:188 +0x17 fp=0x17e1b2a65fe0 sp=0x17e1b2a65fc8 pc=0x7ff762afbf97
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2a65fe8 sp=0x17e1b2a65fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/taskexec.(*EventBus).Start in goroutine 1
+        D:/Document/GO/NetWeaverGo/internal/taskexec/eventbus.go:188 +0xc9
+
+goroutine 474 gp=0x17e1b2be01e0 m=nil [sync.WaitGroup.Wait]:
+runtime.gopark(0x0?, 0x0?, 0xe0?, 0x87?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2b8bef8 sp=0x17e1b2b8bed8 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.semacquire1(0x17e1b2a0b3e8, 0x0, 0x1, 0x0, 0x19)
+        C:/Program Files/Go/src/runtime/sema.go:192 +0x245 fp=0x17e1b2b8bf60 sp=0x17e1b2b8bef8 pc=0x7ff762554e05
+sync.runtime_SemacquireWaitGroup(0x7ff76312f35d?, 0x19?)
+        C:/Program Files/Go/src/runtime/sema.go:114 +0x2e fp=0x17e1b2b8bf98 sp=0x17e1b2b8bf60 pc=0x7ff7625758ae
+sync.(*WaitGroup).Wait(0x17e1b2a0b3e0)
+        C:/Program Files/Go/src/sync/waitgroup.go:206 +0x85 fp=0x17e1b2b8bfc0 sp=0x17e1b2b8bf98 pc=0x7ff76258c725
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func2()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:287 +0x25 fp=0x17e1b2b8bfe0 sp=0x17e1b2b8bfc0 pc=0x7ff762e63fe5
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2b8bfe8 sp=0x17e1b2b8bfe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:286 +0x538
+
+goroutine 473 gp=0x17e1b2be03c0 m=9 mp=0x17e1b2901008 [syscall]:
+runtime.cgocall(0x7ff762505be0, 0x17e1b2901358)
+        C:/Program Files/Go/src/runtime/cgocall.go:167 +0x3e fp=0x17e1b324d120 sp=0x17e1b324d0b8 pc=0x7ff76257135e
+syscall.syscalln(0x0?, 0x0?, {0x17e1b324d198?, 0x7ff762571e0c?, 0x0?})
+        C:/Program Files/Go/src/runtime/syscall_windows.go:431 +0x4e fp=0x17e1b324d140 sp=0x17e1b324d120 pc=0x7ff762577f0e
+syscall.SyscallN(0x60?, {0x17e1b324d198?, 0x7ff7625761a9?, 0xc0?})
+        C:/Program Files/Go/src/syscall/dll_windows.go:99 +0x1e fp=0x17e1b324d178 sp=0x17e1b324d140 pc=0x7ff7625c7dfe
+syscall.WriteConsole(0x70, 0x3a00000034?, 0x60, 0x22ac21c3d40?, 0x17e1b324d288?)
+        C:/Program Files/Go/src/syscall/zsyscall_windows.go:1168 +0xac fp=0x17e1b324d1f0 sp=0x17e1b324d178 pc=0x7ff7625d4eec
+internal/poll.(*FD).writeConsole(0x17e1b28b4180, {0x17e1b32aa000?, 0x60, 0x17e1b32aa000?})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:905 +0x55e fp=0x17e1b324d6e0 sp=0x17e1b324d1f0 pc=0x7ff76260685e
+internal/poll.(*FD).Write(0x17e1b28b4180, {0x17e1b32aa000, 0x60, 0x60})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:846 +0x245 fp=0x17e1b324d790 sp=0x17e1b324d6e0 pc=0x7ff762605f05
+os.(*File).write(...)
+        C:/Program Files/Go/src/os/file_posix.go:46
+os.(*File).Write(0x17e1b27ee078, {0x17e1b32aa000?, 0x60, 0x7ff763bf3f60?})
+        C:/Program Files/Go/src/os/file.go:215 +0x4e fp=0x17e1b324d7d0 sp=0x17e1b324d790 pc=0x7ff762610fce
+log.(*Logger).output(0x17e1b28284b0, 0x0, 0x2, 0x17e1b324da00)
+        C:/Program Files/Go/src/log/log.go:244 +0x47a fp=0x17e1b324d990 sp=0x17e1b324d7d0 pc=0x7ff76273ccda
+log.Printf(...)
+        C:/Program Files/Go/src/log/log.go:408
+github.com/NetWeaverGo/core/internal/ui.(*TracertService).emitHopUpdate(0x17e1b2c88000, {0x1e, {0x17e1b2a0a010, 0x7}, 0x1, 0x1, 0x406ee00000000000, 0x1, 0x19e3a547054})
+        D:/Document/GO/NetWeaverGo/internal/ui/tracert_service.go:1070 +0x168 fp=0x17e1b324da48 sp=0x17e1b324d990 pc=0x7ff762ea05c8
+github.com/NetWeaverGo/core/internal/ui.(*TracertService).runContinuous.func3({0x1e, {0x17e1b2a0a010, 0x7}, 0x1, 0x1, 0x406ee00000000000, 0x1, 0x19e3a547054})
+        D:/Document/GO/NetWeaverGo/internal/ui/tracert_service.go:485 +0x69 fp=0x17e1b324daa0 sp=0x17e1b324da48 pc=0x7ff762e9c829
+github.com/NetWeaverGo/core/internal/icmp.safeHopUpdateCallback(0x17e1b324dc90?, {0x1e, {0x17e1b2a0a010, 0x7}, 0x1, 0x1, 0x406ee00000000000, 0x1, 0x19e3a547054})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:698 +0xb1 fp=0x17e1b324db00 sp=0x17e1b324daa0 pc=0x7ff762e665d1
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x1e, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:544 +0x64e fp=0x17e1b324dd30 sp=0x17e1b324db00 pc=0x7ff762e64e4e
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x1e)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b324dfc8 sp=0x17e1b324dd30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b324dfe0 sp=0x17e1b324dfc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b324dfe8 sp=0x17e1b324dfe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 472 gp=0x17e1b2be05a0 m=nil [semacquire]:
+runtime.gopark(0x412?, 0x17e1b320e500?, 0x0?, 0x60?, 0x17e1b320c180?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b328d578 sp=0x17e1b328d558 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.semacquire1(0x17e1b28b40cc, 0x0, 0x1, 0x0, 0xd)
+        C:/Program Files/Go/src/runtime/sema.go:192 +0x245 fp=0x17e1b328d5e0 sp=0x17e1b328d578 pc=0x7ff762554e05
+internal/poll.runtime_Semacquire(0xc27ad36832bda4d4?)
+        C:/Program Files/Go/src/runtime/sema.go:76 +0x25 fp=0x17e1b328d618 sp=0x17e1b328d5e0 pc=0x7ff762575705
+internal/poll.(*fdMutex).rwlock(0x17e1b28b40c0, 0xc0?)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:154 +0xc5 fp=0x17e1b328d658 sp=0x17e1b328d618 pc=0x7ff762601425
+internal/poll.(*FD).writeLock(...)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:239
+internal/poll.(*FD).Write(0x17e1b28b40c0, {0x17e1b320c180, 0x64, 0xc0})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:826 +0x6d fp=0x17e1b328d708 sp=0x17e1b328d658 pc=0x7ff762605d2d
+os.(*File).write(...)
+        C:/Program Files/Go/src/os/file_posix.go:46
+os.(*File).Write(0x17e1b27ee070, {0x17e1b320c180?, 0x64, 0x17e1b328d788?})
+        C:/Program Files/Go/src/os/file.go:215 +0x4e fp=0x17e1b328d748 sp=0x17e1b328d708 pc=0x7ff762610fce
+fmt.Fprint({0x7ff763321c40, 0x17e1b27ee070}, {0x17e1b328d7f8, 0x1, 0x1})
+        C:/Program Files/Go/src/fmt/print.go:263 +0x6f fp=0x17e1b328d798 sp=0x17e1b328d748 pc=0x7ff76261ea4f
+fmt.Print(...)
+        C:/Program Files/Go/src/fmt/print.go:272
+github.com/NetWeaverGo/core/internal/logger.writeGlobalLog({0x7ff763112a0f, 0x4}, {0x7ff763112d3f, 0x4}, {0x17e1b3304050, 0x7}, {0x7ff76314f032?, 0x0?}, {0x17e1b2c2ba30, 0x3, ...})
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:91 +0x236 fp=0x17e1b328d870 sp=0x17e1b328d798 pc=0x7ff762682b76
+github.com/NetWeaverGo/core/internal/logger.Info(...)
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:104
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b320baf0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x1d)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:155 +0xb46 fp=0x17e1b328dac8 sp=0x17e1b328d870 pc=0x7ff762e60886
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2b87c38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b328db00 sp=0x17e1b328dac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x1d, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b328dd30 sp=0x17e1b328db00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x1d)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b328dfc8 sp=0x17e1b328dd30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b328dfe0 sp=0x17e1b328dfc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b328dfe8 sp=0x17e1b328dfe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 471 gp=0x17e1b2be0780 m=nil [semacquire]:
+runtime.gopark(0x412?, 0x17e1b2a59840?, 0x20?, 0x95?, 0x17e1b325c000?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b3295578 sp=0x17e1b3295558 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.semacquire1(0x17e1b28b40cc, 0x0, 0x1, 0x0, 0xd)
+        C:/Program Files/Go/src/runtime/sema.go:192 +0x245 fp=0x17e1b32955e0 sp=0x17e1b3295578 pc=0x7ff762554e05
+internal/poll.runtime_Semacquire(0xc27ad36832bda4d4?)
+        C:/Program Files/Go/src/runtime/sema.go:76 +0x25 fp=0x17e1b3295618 sp=0x17e1b32955e0 pc=0x7ff762575705
+internal/poll.(*fdMutex).rwlock(0x17e1b28b40c0, 0xc0?)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:154 +0xc5 fp=0x17e1b3295658 sp=0x17e1b3295618 pc=0x7ff762601425
+internal/poll.(*FD).writeLock(...)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:239
+internal/poll.(*FD).Write(0x17e1b28b40c0, {0x17e1b325c000, 0x64, 0xc0})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:826 +0x6d fp=0x17e1b3295708 sp=0x17e1b3295658 pc=0x7ff762605d2d
+os.(*File).write(...)
+        C:/Program Files/Go/src/os/file_posix.go:46
+os.(*File).Write(0x17e1b27ee070, {0x17e1b325c000?, 0x64, 0x17e1b3295788?})
+        C:/Program Files/Go/src/os/file.go:215 +0x4e fp=0x17e1b3295748 sp=0x17e1b3295708 pc=0x7ff762610fce
+fmt.Fprint({0x7ff763321c40, 0x17e1b27ee070}, {0x17e1b32957f8, 0x1, 0x1})
+        C:/Program Files/Go/src/fmt/print.go:263 +0x6f fp=0x17e1b3295798 sp=0x17e1b3295748 pc=0x7ff76261ea4f
+fmt.Print(...)
+        C:/Program Files/Go/src/fmt/print.go:272
+github.com/NetWeaverGo/core/internal/logger.writeGlobalLog({0x7ff763112a0f, 0x4}, {0x7ff763112d3f, 0x4}, {0x17e1b28fc030, 0x7}, {0x7ff76314f032?, 0x0?}, {0x17e1b2c53a30, 0x3, ...})
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:91 +0x236 fp=0x17e1b3295870 sp=0x17e1b3295798 pc=0x7ff762682b76
+github.com/NetWeaverGo/core/internal/logger.Info(...)
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:104
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b321faf0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x1c)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:155 +0xb46 fp=0x17e1b3295ac8 sp=0x17e1b3295870 pc=0x7ff762e60886
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2b89c38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b3295b00 sp=0x17e1b3295ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x1c, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b3295d30 sp=0x17e1b3295b00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x1c)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b3295fc8 sp=0x17e1b3295d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b3295fe0 sp=0x17e1b3295fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b3295fe8 sp=0x17e1b3295fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 470 gp=0x17e1b2be0960 m=nil [semacquire]:
+runtime.gopark(0x412?, 0x17e1b320edc0?, 0x40?, 0x63?, 0x17e1b320c240?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b3189578 sp=0x17e1b3189558 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.semacquire1(0x17e1b28b40cc, 0x0, 0x1, 0x0, 0xd)
+        C:/Program Files/Go/src/runtime/sema.go:192 +0x245 fp=0x17e1b31895e0 sp=0x17e1b3189578 pc=0x7ff762554e05
+internal/poll.runtime_Semacquire(0xc27ad36832bda4d4?)
+        C:/Program Files/Go/src/runtime/sema.go:76 +0x25 fp=0x17e1b3189618 sp=0x17e1b31895e0 pc=0x7ff762575705
+internal/poll.(*fdMutex).rwlock(0x17e1b28b40c0, 0xc0?)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:154 +0xc5 fp=0x17e1b3189658 sp=0x17e1b3189618 pc=0x7ff762601425
+internal/poll.(*FD).writeLock(...)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:239
+internal/poll.(*FD).Write(0x17e1b28b40c0, {0x17e1b320c240, 0x64, 0xc0})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:826 +0x6d fp=0x17e1b3189708 sp=0x17e1b3189658 pc=0x7ff762605d2d
+os.(*File).write(...)
+        C:/Program Files/Go/src/os/file_posix.go:46
+os.(*File).Write(0x17e1b27ee070, {0x17e1b320c240?, 0x64, 0x17e1b3189788?})
+        C:/Program Files/Go/src/os/file.go:215 +0x4e fp=0x17e1b3189748 sp=0x17e1b3189708 pc=0x7ff762610fce
+fmt.Fprint({0x7ff763321c40, 0x17e1b27ee070}, {0x17e1b31897f8, 0x1, 0x1})
+        C:/Program Files/Go/src/fmt/print.go:263 +0x6f fp=0x17e1b3189798 sp=0x17e1b3189748 pc=0x7ff76261ea4f
+fmt.Print(...)
+        C:/Program Files/Go/src/fmt/print.go:272
+github.com/NetWeaverGo/core/internal/logger.writeGlobalLog({0x7ff763112a0f, 0x4}, {0x7ff763112d3f, 0x4}, {0x17e1b2a5c060, 0x7}, {0x7ff76314f032?, 0x0?}, {0x17e1b3189a30, 0x3, ...})
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:91 +0x236 fp=0x17e1b3189870 sp=0x17e1b3189798 pc=0x7ff762682b76
+github.com/NetWeaverGo/core/internal/logger.Info(...)
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:104
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b2cfbaf0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x1b)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:155 +0xb46 fp=0x17e1b3189ac8 sp=0x17e1b3189870 pc=0x7ff762e60886
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2b93c38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b3189b00 sp=0x17e1b3189ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x1b, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b3189d30 sp=0x17e1b3189b00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x1b)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b3189fc8 sp=0x17e1b3189d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b3189fe0 sp=0x17e1b3189fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b3189fe8 sp=0x17e1b3189fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 468 gp=0x17e1b2be0d20 m=nil [sync.Mutex.Lock]:
+runtime.gopark(0x17e1b2a94a90?, 0x17e1b3291710?, 0x70?, 0xc0?, 0x7ff763befea0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b32916e0 sp=0x17e1b32916c0 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.semacquire1(0x17e1b28284b4, 0x0, 0x3, 0x2, 0x16)
+        C:/Program Files/Go/src/runtime/sema.go:192 +0x245 fp=0x17e1b3291748 sp=0x17e1b32916e0 pc=0x7ff762554e05
+internal/sync.runtime_SemacquireMutex(0x17e1b2f8c150?, 0x14?, 0x70?)
+        C:/Program Files/Go/src/runtime/sema.go:95 +0x25 fp=0x17e1b3291780 sp=0x17e1b3291748 pc=0x7ff762575785
+internal/sync.(*Mutex).lockSlow(0x17e1b28284b0)
+        C:/Program Files/Go/src/internal/sync/mutex.go:149 +0x15d fp=0x17e1b32917d0 sp=0x17e1b3291780 pc=0x7ff76258a71d
+internal/sync.(*Mutex).Lock(...)
+        C:/Program Files/Go/src/internal/sync/mutex.go:70
+sync.(*Mutex).Lock(...)
+        C:/Program Files/Go/src/sync/mutex.go:46
+log.(*Logger).output(0x17e1b28284b0, 0x0, 0x2, 0x17e1b3291a00)
+        C:/Program Files/Go/src/log/log.go:242 +0x425 fp=0x17e1b3291990 sp=0x17e1b32917d0 pc=0x7ff76273cc85
+log.Printf(...)
+        C:/Program Files/Go/src/log/log.go:408
+github.com/NetWeaverGo/core/internal/ui.(*TracertService).emitHopUpdate(0x17e1b2c88000, {0x19, {0x17e1b3289300, 0x7}, 0x1, 0x1, 0x406ea00000000000, 0x1, 0x19e3a547055})
+        D:/Document/GO/NetWeaverGo/internal/ui/tracert_service.go:1070 +0x168 fp=0x17e1b3291a48 sp=0x17e1b3291990 pc=0x7ff762ea05c8
+github.com/NetWeaverGo/core/internal/ui.(*TracertService).runContinuous.func3({0x19, {0x17e1b3289300, 0x7}, 0x1, 0x1, 0x406ea00000000000, 0x1, 0x19e3a547055})
+        D:/Document/GO/NetWeaverGo/internal/ui/tracert_service.go:485 +0x69 fp=0x17e1b3291aa0 sp=0x17e1b3291a48 pc=0x7ff762e9c829
+github.com/NetWeaverGo/core/internal/icmp.safeHopUpdateCallback(0x17e1b3291c90?, {0x19, {0x17e1b3289300, 0x7}, 0x1, 0x1, 0x406ea00000000000, 0x1, 0x19e3a547055})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:698 +0xb1 fp=0x17e1b3291b00 sp=0x17e1b3291aa0 pc=0x7ff762e665d1
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x19, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:544 +0x64e fp=0x17e1b3291d30 sp=0x17e1b3291b00 pc=0x7ff762e64e4e
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x19)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b3291fc8 sp=0x17e1b3291d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b3291fe0 sp=0x17e1b3291fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b3291fe8 sp=0x17e1b3291fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 467 gp=0x17e1b2be0f00 m=17 mp=0x17e1b3314008 [syscall]:
+runtime.cgocall(0x7ff762505be0, 0x17e1b3314358)
+        C:/Program Files/Go/src/runtime/cgocall.go:167 +0x3e fp=0x17e1b3251328 sp=0x17e1b32512c0 pc=0x7ff76257135e
+syscall.syscalln(0x0?, 0x0?, {0x17e1b32513a0?, 0x7ff762571e0c?, 0x0?})
+        C:/Program Files/Go/src/runtime/syscall_windows.go:431 +0x4e fp=0x17e1b3251348 sp=0x17e1b3251328 pc=0x7ff762577f0e
+syscall.SyscallN(0x17e1b32513f0?, {0x17e1b32513a0?, 0x7ff7625761a9?, 0xd4?})
+        C:/Program Files/Go/src/syscall/dll_windows.go:99 +0x1e fp=0x17e1b3251380 sp=0x17e1b3251348 pc=0x7ff7625c7dfe
+syscall.WriteConsole(0x6c, 0x7ff76257135e?, 0x6a, 0x7ff76257b5df?, 0x17e1b3251480?)
+        C:/Program Files/Go/src/syscall/zsyscall_windows.go:1168 +0xac fp=0x17e1b32513f8 sp=0x17e1b3251380 pc=0x7ff7625d4eec
+internal/poll.(*FD).writeConsole(0x17e1b28b40c0, {0x17e1b3139000?, 0x6e, 0x17e1b3139000?})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:905 +0x55e fp=0x17e1b32518e8 sp=0x17e1b32513f8 pc=0x7ff76260685e
+internal/poll.(*FD).Write(0x17e1b28b40c0, {0x17e1b3139000, 0x6e, 0x1800})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:846 +0x245 fp=0x17e1b3251998 sp=0x17e1b32518e8 pc=0x7ff762605f05
+os.(*File).write(...)
+        C:/Program Files/Go/src/os/file_posix.go:46
+os.(*File).Write(0x17e1b27ee070, {0x17e1b3139000?, 0x6e, 0x17e1b3251a18?})
+        C:/Program Files/Go/src/os/file.go:215 +0x4e fp=0x17e1b32519d8 sp=0x17e1b3251998 pc=0x7ff762610fce
+fmt.Fprint({0x7ff763321c40, 0x17e1b27ee070}, {0x17e1b3251a88, 0x1, 0x1})
+        C:/Program Files/Go/src/fmt/print.go:263 +0x6f fp=0x17e1b3251a28 sp=0x17e1b32519d8 pc=0x7ff76261ea4f
+fmt.Print(...)
+        C:/Program Files/Go/src/fmt/print.go:272
+github.com/NetWeaverGo/core/internal/logger.writeGlobalLog({0x7ff7631158e8, 0x7}, {0x7ff763115dd4, 0x7}, {0x17e1b29ff9a0, 0x7}, {0x7ff76314fe4c?, 0x17e1b29487e0?}, {0x17e1b3251c90, 0x4, ...})
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:91 +0x236 fp=0x17e1b3251b00 sp=0x17e1b3251a28 pc=0x7ff762682b76
+github.com/NetWeaverGo/core/internal/logger.Verbose(...)
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:136
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x18, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:523 +0x489 fp=0x17e1b3251d30 sp=0x17e1b3251b00 pc=0x7ff762e64c89
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x18)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b3251fc8 sp=0x17e1b3251d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b3251fe0 sp=0x17e1b3251fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b3251fe8 sp=0x17e1b3251fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 469 gp=0x17e1b2be10e0 m=nil [semacquire]:
+runtime.gopark(0x412?, 0x17e1b3103dc0?, 0xb0?, 0x25?, 0x17e1b2b9e600?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2c27578 sp=0x17e1b2c27558 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.semacquire1(0x17e1b28b40cc, 0x0, 0x1, 0x0, 0xd)
+        C:/Program Files/Go/src/runtime/sema.go:192 +0x245 fp=0x17e1b2c275e0 sp=0x17e1b2c27578 pc=0x7ff762554e05
+internal/poll.runtime_Semacquire(0xc27ad36832bda4d4?)
+        C:/Program Files/Go/src/runtime/sema.go:76 +0x25 fp=0x17e1b2c27618 sp=0x17e1b2c275e0 pc=0x7ff762575705
+internal/poll.(*fdMutex).rwlock(0x17e1b28b40c0, 0xc0?)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:154 +0xc5 fp=0x17e1b2c27658 sp=0x17e1b2c27618 pc=0x7ff762601425
+internal/poll.(*FD).writeLock(...)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:239
+internal/poll.(*FD).Write(0x17e1b28b40c0, {0x17e1b2b9e600, 0x64, 0xc0})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:826 +0x6d fp=0x17e1b2c27708 sp=0x17e1b2c27658 pc=0x7ff762605d2d
+os.(*File).write(...)
+        C:/Program Files/Go/src/os/file_posix.go:46
+os.(*File).Write(0x17e1b27ee070, {0x17e1b2b9e600?, 0x64, 0x17e1b2c27788?})
+        C:/Program Files/Go/src/os/file.go:215 +0x4e fp=0x17e1b2c27748 sp=0x17e1b2c27708 pc=0x7ff762610fce
+fmt.Fprint({0x7ff763321c40, 0x17e1b27ee070}, {0x17e1b2c277f8, 0x1, 0x1})
+        C:/Program Files/Go/src/fmt/print.go:263 +0x6f fp=0x17e1b2c27798 sp=0x17e1b2c27748 pc=0x7ff76261ea4f
+fmt.Print(...)
+        C:/Program Files/Go/src/fmt/print.go:272
+github.com/NetWeaverGo/core/internal/logger.writeGlobalLog({0x7ff763112a0f, 0x4}, {0x7ff763112d3f, 0x4}, {0x17e1b3192050, 0x7}, {0x7ff76314f032?, 0x0?}, {0x17e1b2c27a30, 0x3, ...})
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:91 +0x236 fp=0x17e1b2c27870 sp=0x17e1b2c27798 pc=0x7ff762682b76
+github.com/NetWeaverGo/core/internal/logger.Info(...)
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:104
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b31adaf0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x1a)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:155 +0xb46 fp=0x17e1b2c27ac8 sp=0x17e1b2c27870 pc=0x7ff762e60886
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2be7c38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b2c27b00 sp=0x17e1b2c27ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x1a, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b2c27d30 sp=0x17e1b2c27b00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x1a)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b2c27fc8 sp=0x17e1b2c27d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2c27fe0 sp=0x17e1b2c27fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2c27fe8 sp=0x17e1b2c27fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 465 gp=0x17e1b2be12c0 m=nil [semacquire]:
+runtime.gopark(0x412?, 0x17e1b31deb40?, 0xe0?, 0x24?, 0x17e1b2b9e540?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2cfb808 sp=0x17e1b2cfb7e8 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.semacquire1(0x17e1b28b40cc, 0x0, 0x1, 0x0, 0xd)
+        C:/Program Files/Go/src/runtime/sema.go:192 +0x245 fp=0x17e1b2cfb870 sp=0x17e1b2cfb808 pc=0x7ff762554e05
+internal/poll.runtime_Semacquire(0xc27ad36832bda4d4?)
+        C:/Program Files/Go/src/runtime/sema.go:76 +0x25 fp=0x17e1b2cfb8a8 sp=0x17e1b2cfb870 pc=0x7ff762575705
+internal/poll.(*fdMutex).rwlock(0x17e1b28b40c0, 0xc0?)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:154 +0xc5 fp=0x17e1b2cfb8e8 sp=0x17e1b2cfb8a8 pc=0x7ff762601425
+internal/poll.(*FD).writeLock(...)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:239
+internal/poll.(*FD).Write(0x17e1b28b40c0, {0x17e1b2b9e540, 0x6e, 0xc0})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:826 +0x6d fp=0x17e1b2cfb998 sp=0x17e1b2cfb8e8 pc=0x7ff762605d2d
+os.(*File).write(...)
+        C:/Program Files/Go/src/os/file_posix.go:46
+os.(*File).Write(0x17e1b27ee070, {0x17e1b2b9e540?, 0x6e, 0x17e1b2cfba18?})
+        C:/Program Files/Go/src/os/file.go:215 +0x4e fp=0x17e1b2cfb9d8 sp=0x17e1b2cfb998 pc=0x7ff762610fce
+fmt.Fprint({0x7ff763321c40, 0x17e1b27ee070}, {0x17e1b2cfba88, 0x1, 0x1})
+        C:/Program Files/Go/src/fmt/print.go:263 +0x6f fp=0x17e1b2cfba28 sp=0x17e1b2cfb9d8 pc=0x7ff76261ea4f
+fmt.Print(...)
+        C:/Program Files/Go/src/fmt/print.go:272
+github.com/NetWeaverGo/core/internal/logger.writeGlobalLog({0x7ff7631158e8, 0x7}, {0x7ff763115dd4, 0x7}, {0x17e1b29b9260, 0x7}, {0x7ff76314fe4c?, 0x0?}, {0x17e1b2cfbc90, 0x4, ...})
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:91 +0x236 fp=0x17e1b2cfbb00 sp=0x17e1b2cfba28 pc=0x7ff762682b76
+github.com/NetWeaverGo/core/internal/logger.Verbose(...)
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:136
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x16, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:523 +0x489 fp=0x17e1b2cfbd30 sp=0x17e1b2cfbb00 pc=0x7ff762e64c89
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x16)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b2cfbfc8 sp=0x17e1b2cfbd30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2cfbfe0 sp=0x17e1b2cfbfc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2cfbfe8 sp=0x17e1b2cfbfe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 466 gp=0x17e1b2be14a0 m=nil [semacquire]:
+runtime.gopark(0x412?, 0x17e1b31df400?, 0xa0?, 0x61?, 0x17e1b28262d0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b31c5808 sp=0x17e1b31c57e8 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.semacquire1(0x17e1b28b40cc, 0x0, 0x1, 0x0, 0xd)
+        C:/Program Files/Go/src/runtime/sema.go:192 +0x245 fp=0x17e1b31c5870 sp=0x17e1b31c5808 pc=0x7ff762554e05
+internal/poll.runtime_Semacquire(0xc27ad36832d4c5ec?)
+        C:/Program Files/Go/src/runtime/sema.go:76 +0x25 fp=0x17e1b31c58a8 sp=0x17e1b31c5870 pc=0x7ff762575705
+internal/poll.(*fdMutex).rwlock(0x17e1b28b40c0, 0xc0?)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:154 +0xc5 fp=0x17e1b31c58e8 sp=0x17e1b31c58a8 pc=0x7ff762601425
+internal/poll.(*FD).writeLock(...)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:239
+internal/poll.(*FD).Write(0x17e1b28b40c0, {0x17e1b28262d0, 0x6e, 0xf0})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:826 +0x6d fp=0x17e1b31c5998 sp=0x17e1b31c58e8 pc=0x7ff762605d2d
+os.(*File).write(...)
+        C:/Program Files/Go/src/os/file_posix.go:46
+os.(*File).Write(0x17e1b27ee070, {0x17e1b28262d0?, 0x6e, 0x17e1b31c5a18?})
+        C:/Program Files/Go/src/os/file.go:215 +0x4e fp=0x17e1b31c59d8 sp=0x17e1b31c5998 pc=0x7ff762610fce
+fmt.Fprint({0x7ff763321c40, 0x17e1b27ee070}, {0x17e1b31c5a88, 0x1, 0x1})
+        C:/Program Files/Go/src/fmt/print.go:263 +0x6f fp=0x17e1b31c5a28 sp=0x17e1b31c59d8 pc=0x7ff76261ea4f
+fmt.Print(...)
+        C:/Program Files/Go/src/fmt/print.go:272
+github.com/NetWeaverGo/core/internal/logger.writeGlobalLog({0x7ff763113574, 0x5}, {0x7ff763115dd4, 0x7}, {0x17e1b29ff0e0, 0x7}, {0x7ff7631516e4?, 0x7ff763321d00?}, {0x17e1b31c5c50, 0x4, ...})
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:91 +0x236 fp=0x17e1b31c5b00 sp=0x17e1b31c5a28 pc=0x7ff762682b76
+github.com/NetWeaverGo/core/internal/logger.Debug(...)
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:127
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x17, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:600 +0xada fp=0x17e1b31c5d30 sp=0x17e1b31c5b00 pc=0x7ff762e652da
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x17)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b31c5fc8 sp=0x17e1b31c5d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b31c5fe0 sp=0x17e1b31c5fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b31c5fe8 sp=0x17e1b31c5fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 464 gp=0x17e1b2be1680 m=nil [semacquire]:
+runtime.gopark(0x17e1b29d2700?, 0x17e1b2f9d300?, 0x0?, 0x20?, 0x17e1b3093000?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2cff808 sp=0x17e1b2cff7e8 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.semacquire1(0x17e1b28b40cc, 0x0, 0x1, 0x0, 0xd)
+        C:/Program Files/Go/src/runtime/sema.go:192 +0x245 fp=0x17e1b2cff870 sp=0x17e1b2cff808 pc=0x7ff762554e05
+internal/poll.runtime_Semacquire(0xc27ad36832bda4d4?)
+        C:/Program Files/Go/src/runtime/sema.go:76 +0x25 fp=0x17e1b2cff8a8 sp=0x17e1b2cff870 pc=0x7ff762575705
+internal/poll.(*fdMutex).rwlock(0x17e1b28b40c0, 0xc0?)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:154 +0xc5 fp=0x17e1b2cff8e8 sp=0x17e1b2cff8a8 pc=0x7ff762601425
+internal/poll.(*FD).writeLock(...)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:239
+internal/poll.(*FD).Write(0x17e1b28b40c0, {0x17e1b3093000, 0x6e, 0x1800})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:826 +0x6d fp=0x17e1b2cff998 sp=0x17e1b2cff8e8 pc=0x7ff762605d2d
+os.(*File).write(...)
+        C:/Program Files/Go/src/os/file_posix.go:46
+os.(*File).Write(0x17e1b27ee070, {0x17e1b3093000?, 0x6e, 0x17e1b2cffa18?})
+        C:/Program Files/Go/src/os/file.go:215 +0x4e fp=0x17e1b2cff9d8 sp=0x17e1b2cff998 pc=0x7ff762610fce
+fmt.Fprint({0x7ff763321c40, 0x17e1b27ee070}, {0x17e1b2cffa88, 0x1, 0x1})
+        C:/Program Files/Go/src/fmt/print.go:263 +0x6f fp=0x17e1b2cffa28 sp=0x17e1b2cff9d8 pc=0x7ff76261ea4f
+fmt.Print(...)
+        C:/Program Files/Go/src/fmt/print.go:272
+github.com/NetWeaverGo/core/internal/logger.writeGlobalLog({0x7ff7631158e8, 0x7}, {0x7ff763115dd4, 0x7}, {0x17e1b2d463a7, 0x7}, {0x7ff76314fe4c?, 0x7ff76332ab90?}, {0x17e1b2cffc90, 0x4, ...})
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:91 +0x236 fp=0x17e1b2cffb00 sp=0x17e1b2cffa28 pc=0x7ff762682b76
+github.com/NetWeaverGo/core/internal/logger.Verbose(...)
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:136
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x15, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:523 +0x489 fp=0x17e1b2cffd30 sp=0x17e1b2cffb00 pc=0x7ff762e64c89
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x15)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b2cfffc8 sp=0x17e1b2cffd30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2cfffe0 sp=0x17e1b2cfffc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2cfffe8 sp=0x17e1b2cfffe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 460 gp=0x17e1b2a6ab40 m=nil [semacquire]:
+runtime.gopark(0x412?, 0x17e1b30a1580?, 0xb0?, 0x45?, 0x17e1b2fa6240?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b3299578 sp=0x17e1b3299558 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.semacquire1(0x17e1b28b40cc, 0x0, 0x1, 0x0, 0xd)
+        C:/Program Files/Go/src/runtime/sema.go:192 +0x245 fp=0x17e1b32995e0 sp=0x17e1b3299578 pc=0x7ff762554e05
+internal/poll.runtime_Semacquire(0xc27ad36832bda4d4?)
+        C:/Program Files/Go/src/runtime/sema.go:76 +0x25 fp=0x17e1b3299618 sp=0x17e1b32995e0 pc=0x7ff762575705
+internal/poll.(*fdMutex).rwlock(0x17e1b28b40c0, 0xc0?)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:154 +0xc5 fp=0x17e1b3299658 sp=0x17e1b3299618 pc=0x7ff762601425
+internal/poll.(*FD).writeLock(...)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:239
+internal/poll.(*FD).Write(0x17e1b28b40c0, {0x17e1b2fa6240, 0x64, 0xc0})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:826 +0x6d fp=0x17e1b3299708 sp=0x17e1b3299658 pc=0x7ff762605d2d
+os.(*File).write(...)
+        C:/Program Files/Go/src/os/file_posix.go:46
+os.(*File).Write(0x17e1b27ee070, {0x17e1b2fa6240?, 0x64, 0x17e1b3299788?})
+        C:/Program Files/Go/src/os/file.go:215 +0x4e fp=0x17e1b3299748 sp=0x17e1b3299708 pc=0x7ff762610fce
+fmt.Fprint({0x7ff763321c40, 0x17e1b27ee070}, {0x17e1b32997f8, 0x1, 0x1})
+        C:/Program Files/Go/src/fmt/print.go:263 +0x6f fp=0x17e1b3299798 sp=0x17e1b3299748 pc=0x7ff76261ea4f
+fmt.Print(...)
+        C:/Program Files/Go/src/fmt/print.go:272
+github.com/NetWeaverGo/core/internal/logger.writeGlobalLog({0x7ff763112a0f, 0x4}, {0x7ff763112d3f, 0x4}, {0x17e1b2ba4070, 0x7}, {0x7ff76314f032?, 0x0?}, {0x17e1b2b8da30, 0x3, ...})
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:91 +0x236 fp=0x17e1b3299870 sp=0x17e1b3299798 pc=0x7ff762682b76
+github.com/NetWeaverGo/core/internal/logger.Info(...)
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:104
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b2833af0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x11)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:155 +0xb46 fp=0x17e1b3299ac8 sp=0x17e1b3299870 pc=0x7ff762e60886
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2c2bc38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b3299b00 sp=0x17e1b3299ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x11, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b3299d30 sp=0x17e1b3299b00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x11)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b3299fc8 sp=0x17e1b3299d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b3299fe0 sp=0x17e1b3299fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b3299fe8 sp=0x17e1b3299fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 461 gp=0x17e1b2a6b2c0 m=nil [semacquire]:
+runtime.gopark(0x412?, 0x17e1b2db56c0?, 0x30?, 0xac?, 0x17e1b31ba800?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2c47578 sp=0x17e1b2c47558 pc=0x7ff76257436e
+runtime.goparkunlock(...)
+        C:/Program Files/Go/src/runtime/proc.go:468
+runtime.semacquire1(0x17e1b28b40cc, 0x0, 0x1, 0x0, 0xd)
+        C:/Program Files/Go/src/runtime/sema.go:192 +0x245 fp=0x17e1b2c475e0 sp=0x17e1b2c47578 pc=0x7ff762554e05
+internal/poll.runtime_Semacquire(0xc27ad36832bda4d4?)
+        C:/Program Files/Go/src/runtime/sema.go:76 +0x25 fp=0x17e1b2c47618 sp=0x17e1b2c475e0 pc=0x7ff762575705
+internal/poll.(*fdMutex).rwlock(0x17e1b28b40c0, 0xc0?)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:154 +0xc5 fp=0x17e1b2c47658 sp=0x17e1b2c47618 pc=0x7ff762601425
+internal/poll.(*FD).writeLock(...)
+        C:/Program Files/Go/src/internal/poll/fd_mutex.go:239
+internal/poll.(*FD).Write(0x17e1b28b40c0, {0x17e1b31ba800, 0x64, 0x1800})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:826 +0x6d fp=0x17e1b2c47708 sp=0x17e1b2c47658 pc=0x7ff762605d2d
+os.(*File).write(...)
+        C:/Program Files/Go/src/os/file_posix.go:46
+os.(*File).Write(0x17e1b27ee070, {0x17e1b31ba800?, 0x64, 0x17e1b2c47788?})
+        C:/Program Files/Go/src/os/file.go:215 +0x4e fp=0x17e1b2c47748 sp=0x17e1b2c47708 pc=0x7ff762610fce
+fmt.Fprint({0x7ff763321c40, 0x17e1b27ee070}, {0x17e1b2c477f8, 0x1, 0x1})
+        C:/Program Files/Go/src/fmt/print.go:263 +0x6f fp=0x17e1b2c47798 sp=0x17e1b2c47748 pc=0x7ff76261ea4f
+fmt.Print(...)
+        C:/Program Files/Go/src/fmt/print.go:272
+github.com/NetWeaverGo/core/internal/logger.writeGlobalLog({0x7ff763112a0f, 0x4}, {0x7ff763112d3f, 0x4}, {0x17e1b2dee0d8, 0x7}, {0x7ff76314f032?, 0x0?}, {0x17e1b2c47a30, 0x3, ...})
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:91 +0x236 fp=0x17e1b2c47870 sp=0x17e1b2c47798 pc=0x7ff762682b76
+github.com/NetWeaverGo/core/internal/logger.Info(...)
+        D:/Document/GO/NetWeaverGo/internal/logger/logger.go:104
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b3217af0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x12)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:155 +0xb46 fp=0x17e1b2c47ac8 sp=0x17e1b2c47870 pc=0x7ff762e60886
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2c3fc38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b2c47b00 sp=0x17e1b2c47ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x12, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b2c47d30 sp=0x17e1b2c47b00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x12)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b2c47fc8 sp=0x17e1b2c47d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2c47fe0 sp=0x17e1b2c47fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2c47fe8 sp=0x17e1b2c47fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 456 gp=0x17e1b2a6b860 m=nil [IO wait]:
+runtime.gopark(0x7ff763bf3a20?, 0x0?, 0x50?, 0x21?, 0x17e1b2c4951c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2c49480 sp=0x17e1b2c49460 pc=0x7ff76257436e
+runtime.netpollblock(0x17e1b2c49528?, 0xb2c49538?, 0xe1?)
+        C:/Program Files/Go/src/runtime/netpoll.go:575 +0xf7 fp=0x17e1b2c494b8 sp=0x17e1b2c49480 pc=0x7ff762538e37
+internal/poll.runtime_pollWait(0x22ac3c65000, 0x72)
+        C:/Program Files/Go/src/runtime/netpoll.go:351 +0x85 fp=0x17e1b2c494d8 sp=0x17e1b2c494b8 pc=0x7ff7625734a5
+internal/poll.(*pollDesc).wait(0x17e1b2a72150?, 0x7ff762507cc6?, 0x0)
+        C:/Program Files/Go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x17e1b2c49500 sp=0x17e1b2c494d8 pc=0x7ff762601a67
+internal/poll.(*FD).waitIO(0x7ff763bf3f60?, 0x7ff763c63ea0?)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:214 +0x4c fp=0x17e1b2c49548 sp=0x17e1b2c49500 pc=0x7ff762602dac
+internal/poll.(*FD).execIO(0x17e1b3098000, 0x72, 0x17e1b2c496e0)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:297 +0x365 fp=0x17e1b2c49648 sp=0x17e1b2c49548 pc=0x7ff762603405
+internal/poll.(*FD).ReadFrom(0x17e1b3098000, {0x17e1b2df8600, 0x17e1b2c49768?, 0x5dc})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:742 +0x1eb fp=0x17e1b2c49730 sp=0x17e1b2c49648 pc=0x7ff76260504b
+net.(*netFD).readFrom(0x17e1b3098000, {0x17e1b2df8600?, 0x7ffe58293760?, 0x0?})
+        C:/Program Files/Go/src/net/fd_posix.go:74 +0x25 fp=0x17e1b2c49788 sp=0x17e1b2c49730 pc=0x7ff7626b7fe5
+net.(*IPConn).readFrom(0x17e1b2c49828?, {0x17e1b2df8600, 0x5dc, 0x5dc})
+        C:/Program Files/Go/src/net/iprawsock_posix.go:49 +0x2c fp=0x17e1b2c497f0 sp=0x17e1b2c49788 pc=0x7ff7626c1d0c
+net.(*IPConn).ReadFrom(0x17e1b3194000, {0x17e1b2df8600?, 0x17e1b2d173e0?, 0x7ff763bf28e0?})
+        C:/Program Files/Go/src/net/iprawsock.go:140 +0x30 fp=0x17e1b2c49840 sp=0x17e1b2c497f0 pc=0x7ff7626c1030
+golang.org/x/net/icmp.(*PacketConn).ReadFrom(0x1?, {0x17e1b2df8600?, 0x28?, 0x5dc?})
+        C:/Users/deavorwei/go/pkg/mod/golang.org/x/net@v0.53.0/icmp/endpoint.go:58 +0x2f fp=0x17e1b2c49870 sp=0x17e1b2c49840 pc=0x7ff762e56c4f
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b3087af0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0xd)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:125 +0x765 fp=0x17e1b2c49ac8 sp=0x17e1b2c49870 pc=0x7ff762e604a5
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2c3dc38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b2c49b00 sp=0x17e1b2c49ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0xd, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b2c49d30 sp=0x17e1b2c49b00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0xd)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b2c49fc8 sp=0x17e1b2c49d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2c49fe0 sp=0x17e1b2c49fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2c49fe8 sp=0x17e1b2c49fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 452 gp=0x17e1b2a6bc20 m=nil [IO wait]:
+runtime.gopark(0x7ff763bf3a20?, 0x0?, 0xf0?, 0xe0?, 0x17e1b2cb551c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2cb5480 sp=0x17e1b2cb5460 pc=0x7ff76257436e
+runtime.netpollblock(0x17e1b2cb5528?, 0xb2cb5538?, 0xe1?)
+        C:/Program Files/Go/src/runtime/netpoll.go:575 +0xf7 fp=0x17e1b2cb54b8 sp=0x17e1b2cb5480 pc=0x7ff762538e37
+internal/poll.runtime_pollWait(0x22ac2228400, 0x72)
+        C:/Program Files/Go/src/runtime/netpoll.go:351 +0x85 fp=0x17e1b2cb54d8 sp=0x17e1b2cb54b8 pc=0x7ff7625734a5
+internal/poll.(*pollDesc).wait(0x17e1b2e8e0f0?, 0x7ff762507cc6?, 0x0)
+        C:/Program Files/Go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x17e1b2cb5500 sp=0x17e1b2cb54d8 pc=0x7ff762601a67
+internal/poll.(*FD).waitIO(0x7ff763bf3f60?, 0x400f76260366f?)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:214 +0x4c fp=0x17e1b2cb5548 sp=0x17e1b2cb5500 pc=0x7ff762602dac
+internal/poll.(*FD).execIO(0x17e1b2fac0e0, 0x72, 0x17e1b2cb56e0)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:297 +0x365 fp=0x17e1b2cb5648 sp=0x17e1b2cb5548 pc=0x7ff762603405
+internal/poll.(*FD).ReadFrom(0x17e1b2fac0e0, {0x17e1b2fb2600, 0x17e1b2cb5768?, 0x5dc})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:742 +0x1eb fp=0x17e1b2cb5730 sp=0x17e1b2cb5648 pc=0x7ff76260504b
+net.(*netFD).readFrom(0x17e1b2fac0e0, {0x17e1b2fb2600?, 0x7ffe58293760?, 0x0?})
+        C:/Program Files/Go/src/net/fd_posix.go:74 +0x25 fp=0x17e1b2cb5788 sp=0x17e1b2cb5730 pc=0x7ff7626b7fe5
+net.(*IPConn).readFrom(0x17e1b2cb5828?, {0x17e1b2fb2600, 0x5dc, 0x5dc})
+        C:/Program Files/Go/src/net/iprawsock_posix.go:49 +0x2c fp=0x17e1b2cb57f0 sp=0x17e1b2cb5788 pc=0x7ff7626c1d0c
+net.(*IPConn).ReadFrom(0x17e1b2a8e018, {0x17e1b2fb2600?, 0x17e1b2d17e60?, 0x7ff763bf28e0?})
+        C:/Program Files/Go/src/net/iprawsock.go:140 +0x30 fp=0x17e1b2cb5840 sp=0x17e1b2cb57f0 pc=0x7ff7626c1030
+golang.org/x/net/icmp.(*PacketConn).ReadFrom(0x1?, {0x17e1b2fb2600?, 0x28?, 0x5dc?})
+        C:/Users/deavorwei/go/pkg/mod/golang.org/x/net@v0.53.0/icmp/endpoint.go:58 +0x2f fp=0x17e1b2cb5870 sp=0x17e1b2cb5840 pc=0x7ff762e56c4f
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b320faf0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x9)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:125 +0x765 fp=0x17e1b2cb5ac8 sp=0x17e1b2cb5870 pc=0x7ff762e604a5
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2c49c38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b2cb5b00 sp=0x17e1b2cb5ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x9, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b2cb5d30 sp=0x17e1b2cb5b00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x9)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b2cb5fc8 sp=0x17e1b2cb5d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2cb5fe0 sp=0x17e1b2cb5fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2cb5fe8 sp=0x17e1b2cb5fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 156 gp=0x17e1b2c381e0 m=nil [select]:
+runtime.gopark(0x17e1b2c45f98?, 0x2?, 0x70?, 0x0?, 0x17e1b2c45f84?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2c45e18 sp=0x17e1b2c45df8 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2c45f98, 0x17e1b2c45f80, 0x0?, 0x0, 0x0?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2c45f48 sp=0x17e1b2c45e18 pc=0x7ff762553f45
+github.com/NetWeaverGo/core/internal/ui.(*PingService).startDNSCacheCleanup.func1()
+        D:/Document/GO/NetWeaverGo/internal/ui/ping_service.go:103 +0xc5 fp=0x17e1b2c45fe0 sp=0x17e1b2c45f48 pc=0x7ff762e845e5
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2c45fe8 sp=0x17e1b2c45fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/ui.(*PingService).startDNSCacheCleanup in goroutine 1
+        D:/Document/GO/NetWeaverGo/internal/ui/ping_service.go:99 +0x9f
+
+goroutine 167 gp=0x17e1b2c39860 m=nil [select]:
+runtime.gopark(0x17e1b2c81f98?, 0x2?, 0x70?, 0x0?, 0x17e1b2c81f84?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2c81e18 sp=0x17e1b2c81df8 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2c81f98, 0x17e1b2c81f80, 0x2492762492713b6c?, 0x0, 0xc9249db924926184?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2c81f48 sp=0x17e1b2c81e18 pc=0x7ff762553f45
+github.com/NetWeaverGo/core/internal/ui.(*TracertService).startDNSCacheCleanup.func1()
+        D:/Document/GO/NetWeaverGo/internal/ui/tracert_service.go:94 +0xc5 fp=0x17e1b2c81fe0 sp=0x17e1b2c81f48 pc=0x7ff762e98e45
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2c81fe8 sp=0x17e1b2c81fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/ui.(*TracertService).startDNSCacheCleanup in goroutine 1
+        D:/Document/GO/NetWeaverGo/internal/ui/tracert_service.go:90 +0x96
+
+goroutine 450 gp=0x17e1b2c39a40 m=nil [IO wait]:
+runtime.gopark(0x7ff763bf3a20?, 0x0?, 0x90?, 0xa0?, 0x17e1b2b8951c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2b89480 sp=0x17e1b2b89460 pc=0x7ff76257436e
+runtime.netpollblock(0x17e1b2b89528?, 0xb2b89538?, 0xe1?)
+        C:/Program Files/Go/src/runtime/netpoll.go:575 +0xf7 fp=0x17e1b2b894b8 sp=0x17e1b2b89480 pc=0x7ff762538e37
+internal/poll.runtime_pollWait(0x22ac3c64e00, 0x72)
+        C:/Program Files/Go/src/runtime/netpoll.go:351 +0x85 fp=0x17e1b2b894d8 sp=0x17e1b2b894b8 pc=0x7ff7625734a5
+internal/poll.(*pollDesc).wait(0x17e1b2f9a090?, 0x7ff762507cc6?, 0x0)
+        C:/Program Files/Go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x17e1b2b89500 sp=0x17e1b2b894d8 pc=0x7ff762601a67
+internal/poll.(*FD).waitIO(0x7ff763bf3f60?, 0x9?)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:214 +0x4c fp=0x17e1b2b89548 sp=0x17e1b2b89500 pc=0x7ff762602dac
+internal/poll.(*FD).execIO(0x17e1b2d200e0, 0x72, 0x17e1b2b896e0)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:297 +0x365 fp=0x17e1b2b89648 sp=0x17e1b2b89548 pc=0x7ff762603405
+internal/poll.(*FD).ReadFrom(0x17e1b2d200e0, {0x17e1b31a0000, 0x17e1b2b89768?, 0x5dc})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:742 +0x1eb fp=0x17e1b2b89730 sp=0x17e1b2b89648 pc=0x7ff76260504b
+net.(*netFD).readFrom(0x17e1b2d200e0, {0x17e1b31a0000?, 0x7ffe58293760?, 0x0?})
+        C:/Program Files/Go/src/net/fd_posix.go:74 +0x25 fp=0x17e1b2b89788 sp=0x17e1b2b89730 pc=0x7ff7626b7fe5
+net.(*IPConn).readFrom(0x17e1b2b89828?, {0x17e1b31a0000, 0x5dc, 0x5dc})
+        C:/Program Files/Go/src/net/iprawsock_posix.go:49 +0x2c fp=0x17e1b2b897f0 sp=0x17e1b2b89788 pc=0x7ff7626c1d0c
+net.(*IPConn).ReadFrom(0x17e1b2d26010, {0x17e1b31a0000?, 0x17e1b2d17740?, 0x7ff763bf28e0?})
+        C:/Program Files/Go/src/net/iprawsock.go:140 +0x30 fp=0x17e1b2b89840 sp=0x17e1b2b897f0 pc=0x7ff7626c1030
+golang.org/x/net/icmp.(*PacketConn).ReadFrom(0x1?, {0x17e1b31a0000?, 0x28?, 0x5dc?})
+        C:/Users/deavorwei/go/pkg/mod/golang.org/x/net@v0.53.0/icmp/endpoint.go:58 +0x2f fp=0x17e1b2b89870 sp=0x17e1b2b89840 pc=0x7ff762e56c4f
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b2cffaf0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x7)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:125 +0x765 fp=0x17e1b2b89ac8 sp=0x17e1b2b89870 pc=0x7ff762e604a5
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2c83c38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b2b89b00 sp=0x17e1b2b89ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x7, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b2b89d30 sp=0x17e1b2b89b00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x7)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b2b89fc8 sp=0x17e1b2b89d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2b89fe0 sp=0x17e1b2b89fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2b89fe8 sp=0x17e1b2b89fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 433 gp=0x17e1b2908d20 m=nil [IO wait]:
+runtime.gopark(0x7ff763bf3a20?, 0x0?, 0x30?, 0xc0?, 0x17e1b2be351c?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2be3480 sp=0x17e1b2be3460 pc=0x7ff76257436e
+runtime.netpollblock(0x17e1b2be3528?, 0xb2be3538?, 0xe1?)
+        C:/Program Files/Go/src/runtime/netpoll.go:575 +0xf7 fp=0x17e1b2be34b8 sp=0x17e1b2be3480 pc=0x7ff762538e37
+internal/poll.runtime_pollWait(0x22ac2228800, 0x72)
+        C:/Program Files/Go/src/runtime/netpoll.go:351 +0x85 fp=0x17e1b2be34d8 sp=0x17e1b2be34b8 pc=0x7ff7625734a5
+internal/poll.(*pollDesc).wait(0x17e1b300c030?, 0x7ff762507cc6?, 0x0)
+        C:/Program Files/Go/src/internal/poll/fd_poll_runtime.go:84 +0x27 fp=0x17e1b2be3500 sp=0x17e1b2be34d8 pc=0x7ff762601a67
+internal/poll.(*FD).waitIO(0x7ff763bf3f60?, 0x7ff763c63ea0?)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:214 +0x4c fp=0x17e1b2be3548 sp=0x17e1b2be3500 pc=0x7ff762602dac
+internal/poll.(*FD).execIO(0x17e1b2c5e1c0, 0x72, 0x17e1b2be36e0)
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:297 +0x365 fp=0x17e1b2be3648 sp=0x17e1b2be3548 pc=0x7ff762603405
+internal/poll.(*FD).ReadFrom(0x17e1b2c5e1c0, {0x17e1b2d2a600, 0x17e1b2be3768?, 0x5dc})
+        C:/Program Files/Go/src/internal/poll/fd_windows.go:742 +0x1eb fp=0x17e1b2be3730 sp=0x17e1b2be3648 pc=0x7ff76260504b
+net.(*netFD).readFrom(0x17e1b2c5e1c0, {0x17e1b2d2a600?, 0x7ffe58293760?, 0x0?})
+        C:/Program Files/Go/src/net/fd_posix.go:74 +0x25 fp=0x17e1b2be3788 sp=0x17e1b2be3730 pc=0x7ff7626b7fe5
+net.(*IPConn).readFrom(0x17e1b2be3828?, {0x17e1b2d2a600, 0x5dc, 0x5dc})
+        C:/Program Files/Go/src/net/iprawsock_posix.go:49 +0x2c fp=0x17e1b2be37f0 sp=0x17e1b2be3788 pc=0x7ff7626c1d0c
+net.(*IPConn).ReadFrom(0x17e1b2f3a010, {0x17e1b2d2a600?, 0x17e1b2d17aa0?, 0x7ff763bf28e0?})
+        C:/Program Files/Go/src/net/iprawsock.go:140 +0x30 fp=0x17e1b2be3840 sp=0x17e1b2be37f0 pc=0x7ff7626c1030
+golang.org/x/net/icmp.(*PacketConn).ReadFrom(0x1?, {0x17e1b2d2a600?, 0x28?, 0x5dc?})
+        C:/Users/deavorwei/go/pkg/mod/golang.org/x/net@v0.53.0/icmp/endpoint.go:58 +0x2f fp=0x17e1b2be3870 sp=0x17e1b2be3840 pc=0x7ff762e56c4f
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneRaw(0x17e1b2c27af0?, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x5dc, 0x20, 0x6)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:125 +0x765 fp=0x17e1b2be3ac8 sp=0x17e1b2be3870 pc=0x7ff762e604a5
+github.com/NetWeaverGo/core/internal/icmp.(*rawSocketBackend).pingOneWithTTL(0x17e1b2c91c38?, {0x17e1b2a0b2c0?, 0x1?, 0x7ff7631158e8?}, 0x7?, 0x0?, 0x0?)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_raw.go:50 +0x18 fp=0x17e1b2be3b00 sp=0x17e1b2be3ac8 pc=0x7ff762e5fb58
+github.com/NetWeaverGo/core/internal/icmp.PingOneWithTTL(...)
+        D:/Document/GO/NetWeaverGo/internal/icmp/icmp_backend.go:30
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).probeHop(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b2c0, 0x10, 0x10}, 0x6, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:478 +0x35d fp=0x17e1b2be3d30 sp=0x17e1b2be3b00 pc=0x7ff762e64b5d
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.func1(0x6)
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:260 +0x16b fp=0x17e1b2be3fc8 sp=0x17e1b2be3d30 pc=0x7ff762e641ab
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound.gowrap1()
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:282 +0x1b fp=0x17e1b2be3fe0 sp=0x17e1b2be3fc8 pc=0x7ff762e6401b
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2be3fe8 sp=0x17e1b2be3fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound in goroutine 427
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:244 +0x272
+
+goroutine 210 gp=0x17e1b2ac94a0 m=nil [chan receive]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2cddf00 sp=0x17e1b2cddee0 pc=0x7ff76257436e
+runtime.chanrecv(0x17e1b29432c0, 0x17e1b2cddfb8, 0x1)
+        C:/Program Files/Go/src/runtime/chan.go:667 +0x4ae fp=0x17e1b2cddf78 sp=0x17e1b2cddf00 pc=0x7ff762509f8e
+runtime.chanrecv1(0x19?, 0x17e1b2cddfd0?)
+        C:/Program Files/Go/src/runtime/chan.go:509 +0x12 fp=0x17e1b2cddfa0 sp=0x17e1b2cddf78 pc=0x7ff762509ab2
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func7()
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:622 +0x49 fp=0x17e1b2cddfe0 sp=0x17e1b2cddfa0 pc=0x7ff762db89e9
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2cddfe8 sp=0x17e1b2cddfe0 pc=0x7ff76257b981
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run in goroutine 1
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:620 +0x69f
+
+goroutine 209 gp=0x17e1b2ac9680 m=nil [chan receive]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2cdff08 sp=0x17e1b2cdfee8 pc=0x7ff76257436e
+runtime.chanrecv(0x17e1b2b0afc0, 0x17e1b2cdffc8, 0x1)
+        C:/Program Files/Go/src/runtime/chan.go:667 +0x4ae fp=0x17e1b2cdff80 sp=0x17e1b2cdff08 pc=0x7ff762509f8e
+runtime.chanrecv1(0x17e1b2cdffd0?, 0x7ff76254a090?)
+        C:/Program Files/Go/src/runtime/chan.go:509 +0x12 fp=0x17e1b2cdffa8 sp=0x17e1b2cdff80 pc=0x7ff762509ab2
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func6()
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:615 +0x45 fp=0x17e1b2cdffe0 sp=0x17e1b2cdffa8 pc=0x7ff762db8ae5
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2cdffe8 sp=0x17e1b2cdffe0 pc=0x7ff76257b981
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run in goroutine 1
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:613 +0x65d
+
+goroutine 208 gp=0x17e1b2ac9860 m=nil [chan receive]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2cd9f08 sp=0x17e1b2cd9ee8 pc=0x7ff76257436e
+runtime.chanrecv(0x17e1b2b0b030, 0x17e1b2cd9fc8, 0x1)
+        C:/Program Files/Go/src/runtime/chan.go:667 +0x4ae fp=0x17e1b2cd9f80 sp=0x17e1b2cd9f08 pc=0x7ff762509f8e
+runtime.chanrecv1(0x17e1b2cd9fd0?, 0x7ff76254a090?)
+        C:/Program Files/Go/src/runtime/chan.go:509 +0x12 fp=0x17e1b2cd9fa8 sp=0x17e1b2cd9f80 pc=0x7ff762509ab2
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func5()
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:609 +0x45 fp=0x17e1b2cd9fe0 sp=0x17e1b2cd9fa8 pc=0x7ff762db8bc5
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2cd9fe8 sp=0x17e1b2cd9fe0 pc=0x7ff76257b981
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run in goroutine 1
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:607 +0x61b
+
+goroutine 207 gp=0x17e1b2ac9a40 m=nil [chan receive]:
+runtime.gopark(0x17e1b29e0380?, 0x3000000000000?, 0x8?, 0x19?, 0x22afaf16110?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2cdbf08 sp=0x17e1b2cdbee8 pc=0x7ff76257436e
+runtime.chanrecv(0x17e1b2b0af50, 0x17e1b2cdbfc8, 0x1)
+        C:/Program Files/Go/src/runtime/chan.go:667 +0x4ae fp=0x17e1b2cdbf80 sp=0x17e1b2cdbf08 pc=0x7ff762509f8e
+runtime.chanrecv1(0x17e1b2cdbfd0?, 0x7ff76254a090?)
+        C:/Program Files/Go/src/runtime/chan.go:509 +0x12 fp=0x17e1b2cdbfa8 sp=0x17e1b2cdbf80 pc=0x7ff762509ab2
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func4()
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:603 +0x45 fp=0x17e1b2cdbfe0 sp=0x17e1b2cdbfa8 pc=0x7ff762db8ca5
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2cdbfe8 sp=0x17e1b2cdbfe0 pc=0x7ff76257b981
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run in goroutine 1
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:601 +0x5d9
+
+goroutine 205 gp=0x17e1b2bc25a0 m=nil [chan receive]:
+runtime.gopark(0x17e1b2b2ac40?, 0x3000000000000?, 0x88?, 0x20?, 0x22afaf16110?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2cedf08 sp=0x17e1b2cedee8 pc=0x7ff76257436e
+runtime.chanrecv(0x17e1b2b0b180, 0x17e1b2cedfc8, 0x1)
+        C:/Program Files/Go/src/runtime/chan.go:667 +0x4ae fp=0x17e1b2cedf80 sp=0x17e1b2cedf08 pc=0x7ff762509f8e
+runtime.chanrecv1(0x17e1b2cedfd0?, 0x7ff76254a090?)
+        C:/Program Files/Go/src/runtime/chan.go:509 +0x12 fp=0x17e1b2cedfa8 sp=0x17e1b2cedf80 pc=0x7ff762509ab2
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func2()
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:591 +0x45 fp=0x17e1b2cedfe0 sp=0x17e1b2cedfa8 pc=0x7ff762db8e65
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2cedfe8 sp=0x17e1b2cedfe0 pc=0x7ff76257b981
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run in goroutine 1
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:589 +0x550
+
+goroutine 206 gp=0x17e1b2bc2780 m=nil [chan receive]:
+runtime.gopark(0x17e1b2b2a000?, 0x3000000000000?, 0x8?, 0x14?, 0x22afaf172c0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2ceff08 sp=0x17e1b2cefee8 pc=0x7ff76257436e
+runtime.chanrecv(0x17e1b2b0b0a0, 0x17e1b2ceffc8, 0x1)
+        C:/Program Files/Go/src/runtime/chan.go:667 +0x4ae fp=0x17e1b2ceff80 sp=0x17e1b2ceff08 pc=0x7ff762509f8e
+runtime.chanrecv1(0x17e1b2ceffd0?, 0x7ff76254a090?)
+        C:/Program Files/Go/src/runtime/chan.go:509 +0x12 fp=0x17e1b2ceffa8 sp=0x17e1b2ceff80 pc=0x7ff762509ab2
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func3()
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:597 +0x45 fp=0x17e1b2ceffe0 sp=0x17e1b2ceffa8 pc=0x7ff762db8d85
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2ceffe8 sp=0x17e1b2ceffe0 pc=0x7ff76257b981
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run in goroutine 1
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:595 +0x592
+
+goroutine 204 gp=0x17e1b2de8000 m=nil [chan receive]:
+runtime.gopark(0x17e1b29e0310?, 0x3000000000000?, 0x30?, 0xbf?, 0x22afaf009e0?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2ce9f00 sp=0x17e1b2ce9ee0 pc=0x7ff76257436e
+runtime.chanrecv(0x17e1b2b0b110, 0x17e1b2ce9fc8, 0x1)
+        C:/Program Files/Go/src/runtime/chan.go:667 +0x4ae fp=0x17e1b2ce9f78 sp=0x17e1b2ce9f00 pc=0x7ff762509f8e
+runtime.chanrecv1(0x19?, 0x17e1b2ce9fd0?)
+        C:/Program Files/Go/src/runtime/chan.go:509 +0x12 fp=0x17e1b2ce9fa0 sp=0x17e1b2ce9f78 pc=0x7ff762509ab2
+github.com/wailsapp/wails/v3/pkg/application.(*App).Run.func1()
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:585 +0x45 fp=0x17e1b2ce9fe0 sp=0x17e1b2ce9fa0 pc=0x7ff762db8f45
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2ce9fe8 sp=0x17e1b2ce9fe0 pc=0x7ff76257b981
+created by github.com/wailsapp/wails/v3/pkg/application.(*App).Run in goroutine 1
+        C:/Users/deavorwei/go/pkg/mod/github.com/wailsapp/wails/v3@v3.0.0-alpha.85/pkg/application/application.go:583 +0x50e
+
+goroutine 427 gp=0x17e1b2de83c0 m=nil [select]:
+runtime.gopark(0x17e1b2dd5870?, 0x2?, 0xc0?, 0xbe?, 0x17e1b2dd5790?)
+        C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x17e1b2dd55b0 sp=0x17e1b2dd5590 pc=0x7ff76257436e
+runtime.selectgo(0x17e1b2dd5870, 0x17e1b2dd578c, 0x17e1b3192010?, 0x0, 0x1?, 0x1)
+        C:/Program Files/Go/src/runtime/select.go:351 +0xaa5 fp=0x17e1b2dd56e0 sp=0x17e1b2dd55b0 pc=0x7ff762553f45
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).runRound(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a460}, {0x17e1b2a0b060, 0x7}, 0x17e1b2a3a380, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:301 +0x612 fp=0x17e1b2dd5a60 sp=0x17e1b2dd56e0 pc=0x7ff762e63672
+github.com/NetWeaverGo/core/internal/icmp.(*TracertEngine).Run(0x17e1b292a3c0, {0x7ff76332ace0, 0x17e1b292a410}, {0x17e1b2a0a5a0, 0x7}, {0x17e1b282f110?, 0x17e1b282f150?})
+        D:/Document/GO/NetWeaverGo/internal/icmp/tracert_engine.go:145 +0x8f9 fp=0x17e1b2dd5d08 sp=0x17e1b2dd5a60 pc=0x7ff762e62459
+github.com/NetWeaverGo/core/internal/ui.(*TracertService).runContinuous(0x17e1b2c88000, {0x7ff76332ace0, 0x17e1b292a410}, {0x17e1b2a0a5a0, 0x7}, {0x1e, 0x5dc, 0x20, 0x1, 0x3e8, ...}, ...)
+        D:/Document/GO/NetWeaverGo/internal/ui/tracert_service.go:471 +0x312 fp=0x17e1b2dd5f68 sp=0x17e1b2dd5d08 pc=0x7ff762e9bd12
+github.com/NetWeaverGo/core/internal/ui.(*TracertService).StartTracert.func1()
+        D:/Document/GO/NetWeaverGo/internal/ui/tracert_service.go:343 +0x7f fp=0x17e1b2dd5fe0 sp=0x17e1b2dd5f68 pc=0x7ff762e9adff
+runtime.goexit({})
+        C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x17e1b2dd5fe8 sp=0x17e1b2dd5fe0 pc=0x7ff76257b981
+created by github.com/NetWeaverGo/core/internal/ui.(*TracertService).StartTracert in goroutine 425
+        D:/Document/GO/NetWeaverGo/internal/ui/tracert_service.go:339 +0x668
