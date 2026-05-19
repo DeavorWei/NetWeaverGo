@@ -315,8 +315,20 @@ func (s *TracertService) StartTracert(req TracertRequest) (*icmp.TracertProgress
 		return nil, fmt.Errorf("路径探测正在运行中，请先停止当前任务")
 	}
 
+	// Defensive cleanup: ensure any previous engine is properly closed
+	if s.engine != nil {
+		s.engine.Close()
+		s.engine = nil
+	}
+
 	// Create new engine
 	s.engine = icmp.NewTracertEngine(config)
+
+	if err := s.engine.InitSockets(); err != nil {
+		s.engine = nil
+		s.engineMu.Unlock()
+		return nil, fmt.Errorf("Socket 初始化失败: %v", err)
+	}
 
 	// Initialize progress
 	initialProgress := icmp.NewTracertProgress(target, config.MaxHops)
@@ -353,7 +365,19 @@ func (s *TracertService) StartTracert(req TracertRequest) (*icmp.TracertProgress
 func (s *TracertService) runSingle(ctx context.Context, target string, config icmp.TracertConfig) {
 	logger.Debug("TracertService", target, "执行单轮探测")
 
-	progress := s.engine.Run(ctx, target, icmp.TracertRunOptions{
+	resolvedIP, err := s.engine.ResolveTarget(ctx, target)
+	if err != nil {
+		logger.Error("TracertService", target, "DNS 解析失败: %v", err)
+		progress := icmp.NewTracertProgress(target, config.MaxHops)
+		progress.IsRunning = false
+		s.setProgress(progress)
+		s.emitProgress(progress)
+		return
+	}
+
+	s.engine.DrainAllSockets()
+
+	progress := s.engine.RunRound(ctx, target, resolvedIP, icmp.TracertRunOptions{
 		OnUpdate: func(p *icmp.TracertProgress) {
 			s.setProgress(p)
 			s.emitProgress(p)
@@ -440,6 +464,16 @@ func (s *TracertService) runSingle(ctx context.Context, target string, config ic
 func (s *TracertService) runContinuous(ctx context.Context, target string, config icmp.TracertConfig, interval time.Duration) {
 	logger.Info("TracertService", target, "启动持续探测模式: interval=%v", interval)
 
+	resolvedIP, err := s.engine.ResolveTarget(ctx, target)
+	if err != nil {
+		logger.Error("TracertService", target, "DNS 解析失败: %v", err)
+		progress := icmp.NewTracertProgress(target, config.MaxHops)
+		progress.IsRunning = false
+		s.setProgress(progress)
+		s.emitProgress(progress)
+		return
+	}
+
 	var prevDNSCancel context.CancelFunc
 	defer func() {
 		if prevDNSCancel != nil {
@@ -467,8 +501,10 @@ func (s *TracertService) runContinuous(ctx context.Context, target string, confi
 		}
 		s.progressMu.Unlock()
 
+		s.engine.DrainAllSockets()
+
 		// Run single round
-		roundProgress := s.engine.Run(ctx, target, icmp.TracertRunOptions{
+		roundProgress := s.engine.RunRound(ctx, target, resolvedIP, icmp.TracertRunOptions{
 			OnUpdate: func(p *icmp.TracertProgress) {
 				// Merge round number
 				s.progressMu.Lock()
@@ -754,6 +790,7 @@ func (s *TracertService) StopTracert() error {
 
 	logger.Debug("TracertService", "-", "调用引擎停止方法")
 	engine.Stop()
+	engine.Close()
 
 	// Wait for engine to stop
 	timeout := time.After(5 * time.Second)

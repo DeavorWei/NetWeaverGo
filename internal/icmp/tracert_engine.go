@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
+	"golang.org/x/net/icmp"
+	"golang.org/x/net/ipv4"
 )
 
 // TracertEngine tracert 路径探测引擎
@@ -19,6 +22,9 @@ type TracertEngine struct {
 	cancel    context.CancelFunc
 	running   bool
 	runningMu sync.RWMutex
+
+	sockets   []*icmp.PacketConn
+	socketsMu sync.RWMutex
 }
 
 // NewTracertEngine 创建新的 TracertEngine
@@ -61,143 +67,6 @@ func NewTracertEngine(config TracertConfig) *TracertEngine {
 	return &TracertEngine{
 		config: config,
 	}
-}
-
-// Run 执行 tracert 路径探测
-// Count 参数控制探测轮次：每轮对所有 TTL 各发送 1 个包，结果累积到 progress 中
-func (e *TracertEngine) Run(ctx context.Context, target string, opts TracertRunOptions) *TracertProgress {
-	logger.Info("Tracert", target, "路径探测开始: maxHops=%d, count=%d, timeout=%dms, interval=%dms, concurrency=%d",
-		e.config.MaxHops, e.config.Count, e.config.Timeout, e.config.Interval, e.config.Concurrency)
-	log.Printf("[TRACERT] Run() start: target=%s, maxHops=%d, count=%d", target, e.config.MaxHops, e.config.Count)
-
-	// 创建可取消的 context
-	runCtx, cancel := context.WithCancel(ctx)
-
-	e.runningMu.Lock()
-	if e.running {
-		logger.Warn("Tracert", target, "引擎已在运行中，拒绝启动新任务")
-		e.runningMu.Unlock()
-		cancel()
-		return NewTracertProgress(target, e.config.MaxHops)
-	}
-	e.running = true
-	e.cancel = cancel
-	e.runningMu.Unlock()
-
-	// DNS 解析
-	resolvedIP, err := e.resolveTarget(runCtx, target)
-	if err != nil {
-		logger.Error("Tracert", target, "DNS 解析失败: %v", err)
-		e.runningMu.Lock()
-		e.running = false
-		e.cancel = nil
-		e.runningMu.Unlock()
-		cancel()
-
-		progress := NewTracertProgress(target, e.config.MaxHops)
-		progress.IsRunning = false
-		progress.ElapsedMs = time.Since(progress.StartTime).Milliseconds()
-		return progress
-	}
-
-	logger.Info("Tracert", target, "DNS 解析完成: resolvedIP=%s", resolvedIP)
-
-	progress := NewTracertProgress(target, e.config.MaxHops)
-	progress.ResolvedIP = resolvedIP
-
-	// 统一清理逻辑
-	defer func() {
-		logger.Debug("Tracert", target, "清理资源，标记完成状态")
-		e.runningMu.Lock()
-		e.running = false
-		e.cancel = nil
-		e.runningMu.Unlock()
-
-		progress.IsRunning = false
-		progress.UpdateProgress()
-		logger.Info("Tracert", target, "路径探测完成: round=%d, hops=%d, reached=%v, elapsed=%dms",
-			progress.Round, progress.CompletedHops, progress.ReachedDest, progress.ElapsedMs)
-		log.Printf("[TRACERT] Run() end: MinReachedTTL=%d, hopsCount=%d", atomic.LoadInt32(&progress.MinReachedTTL), len(progress.Hops))
-		// 发送最终过滤后的进度
-		if opts.OnUpdate != nil {
-			finalReachedTTL := atomic.LoadInt32(&progress.MinReachedTTL)
-			filteredProgress := progress.CloneForDisplay(finalReachedTTL)
-			log.Printf("[TRACERT] Run() sending final update: reachedTTL=%d, filteredHops=%d", finalReachedTTL, len(filteredProgress.Hops))
-			opts.OnUpdate(filteredProgress)
-		}
-	}()
-
-	// 执行多轮探测（Count 控制轮次）
-	for round := 1; round <= e.config.Count; round++ {
-		// 检查取消
-		select {
-		case <-runCtx.Done():
-			logger.Debug("Tracert", target, "探测被取消，已完成 %d 轮", round-1)
-			return progress
-		default:
-		}
-
-		logger.Debug("Tracert", target, "开始第 %d/%d 轮探测", round, e.config.Count)
-		log.Printf("[TRACERT] runRound() start: round=%d", round)
-		progress.Round = round
-
-		// 执行单轮探测
-		e.runRound(runCtx, resolvedIP, progress, opts)
-		log.Printf("[TRACERT] runRound() end: round=%d, reachedTTL=%d, hopsCount=%d", round, atomic.LoadInt32(&progress.MinReachedTTL), len(progress.Hops))
-
-		// 注意：不再提前结束探测，保持全量探测以应对网络路径变化
-		// 前端根据 reachedTTL 过滤显示结果
-
-		// 轮次间隔（最后一轮不需要等待）
-		if round < e.config.Count && e.config.Interval > 0 {
-			select {
-			case <-runCtx.Done():
-				logger.Debug("Tracert", target, "探测被取消")
-				return progress
-			case <-time.After(time.Duration(e.config.Interval) * time.Millisecond):
-			}
-		}
-	}
-
-	// 后处理：标记 TTL > MinReachedTTL 的结果状态，供前端过滤显示
-	// 在所有轮次完成后统一执行，避免多轮探测时 cancelled 状态被后续轮次覆盖
-	minReachedTTL := atomic.LoadInt32(&progress.MinReachedTTL)
-	if minReachedTTL > 0 && minReachedTTL <= int32(e.config.MaxHops) {
-		logger.Debug("Tracert", target, "后处理清理: MinReachedTTL=%d，标记 TTL > %d 的结果为 cancelled", minReachedTTL, minReachedTTL)
-		for i := int(minReachedTTL); i < len(progress.Hops); i++ {
-			hop := &progress.Hops[i]
-			// 保留到达目标的那一跳（如果有多个 TTL 都到达目标）
-			if hop.Reached {
-				continue
-			}
-			// 将 TTL > MinReachedTTL 的结果标记为 cancelled
-			hop.Status = "cancelled"
-			hop.IP = "*"
-			hop.ErrorMsg = ""
-			hop.MinRtt = -1
-			hop.AvgRtt = 0
-			hop.MaxRtt = 0
-			hop.LastRtt = 0
-			hop.SentCount = 0
-			hop.RecvCount = 0
-			hop.LossRate = 0
-		}
-	}
-
-	// 处理剩余 pending 状态
-	// 只在已到达目标时才将 pending 标记为 cancelled
-	// 如果未到达目标，pending 状态应改为 timeout（表示探测完成但无响应）
-	for i := range progress.Hops {
-		if progress.Hops[i].Status == "pending" {
-			if progress.ReachedDest {
-				progress.Hops[i].Status = "cancelled"
-			} else {
-				progress.Hops[i].Status = "timeout"
-			}
-		}
-	}
-
-	return progress
 }
 
 // runRound 执行单轮 tracert 探测（并发探测模式）
@@ -462,7 +331,6 @@ func (e *TracertEngine) probeHop(ctx context.Context, destIP net.IP, ttl int, op
 		MinRtt: -1,
 	}
 
-	// 检查取消
 	select {
 	case <-ctx.Done():
 		logger.Debug("Tracert", ipStr, "TTL=%d 探测被取消", ttl)
@@ -474,19 +342,48 @@ func (e *TracertEngine) probeHop(ctx context.Context, destIP net.IP, ttl int, op
 	default:
 	}
 
-	// 发送单个 ICMP Echo with TTL
-	result, err := PingOneWithTTL(destIP, e.config.Timeout, e.config.DataSize, uint8(ttl))
+	e.socketsMu.RLock()
+	if e.sockets == nil || ttl < 1 || ttl > len(e.sockets) {
+		e.socketsMu.RUnlock()
+		hop.Status = "error"
+		hop.ErrorMsg = "Socket未初始化"
+		return hop
+	}
+	conn := e.sockets[ttl-1]
+	e.socketsMu.RUnlock()
 
+	seq := nextSeq()
+	id := icmpID()
+
+	msg := icmp.Message{
+		Type: ipv4.ICMPTypeEcho,
+		Code: 0,
+		Body: &icmp.Echo{
+			ID:   id,
+			Seq:  seq,
+			Data: prepareSendDataRaw(e.config.DataSize),
+		},
+	}
+	wb, err := msg.Marshal(nil)
 	if err != nil {
-		logger.Verbose("Tracert", ipStr, "TTL=%d API错误: %v", ttl, err)
+		hop.Status = "error"
+		hop.ErrorMsg = err.Error()
+		return hop
+	}
+
+	dst := &net.IPAddr{IP: destIP}
+	sendTime := time.Now()
+
+	if _, err := conn.WriteTo(wb, dst); err != nil {
+		if e.isSocketInvalidError(err) {
+			logger.Warn("Tracert", ipStr, "TTL=%d Socket 可能失效，尝试重建", ttl)
+			e.rebuildSocket(ttl)
+		}
 		hop.SentCount = 1
-		hop.RecvCount = 0
 		hop.LossRate = 100
 		hop.Status = "error"
 		hop.ErrorMsg = err.Error()
 		hop.IP = "*"
-
-		// 发送单跳更新
 		safeHopUpdateCallback(opts.OnHopUpdate, TracertHopUpdate{
 			TTL:        ttl,
 			IP:         "*",
@@ -499,108 +396,130 @@ func (e *TracertEngine) probeHop(ctx context.Context, destIP net.IP, ttl int, op
 		return hop
 	}
 
-	if result == nil {
-		logger.Verbose("Tracert", ipStr, "TTL=%d 返回 nil 结果", ttl)
-		hop.SentCount = 1
-		hop.RecvCount = 0
-		hop.LossRate = 100
-		hop.Status = "timeout"
-		hop.ErrorMsg = "No reply"
-		hop.IP = "*"
+	deadline := sendTime.Add(time.Duration(e.config.Timeout) * time.Millisecond)
+	conn.SetReadDeadline(deadline)
 
-		safeHopUpdateCallback(opts.OnHopUpdate, TracertHopUpdate{
-			TTL:        ttl,
-			IP:         "*",
-			CurrentSeq: 1,
-			Success:    false,
-			RTT:        0,
-			IsComplete: true,
-			Timestamp:  time.Now().UnixMilli(),
-		})
-		return hop
-	}
-
-	logger.Verbose("Tracert", ipStr, "TTL=%d 结果: success=%v, rtt=%.2fms, status=%s",
-		ttl, result.Success, result.RoundTripTime, result.Status)
-
-	hop.SentCount = 1
-
-	if result.Success {
-		// 成功到达目标
-		hop.RecvCount = 1
-		hop.LossRate = 0
-		hop.LastRtt = result.RoundTripTime
-		hop.AvgRtt = result.RoundTripTime
-		hop.MinRtt = result.RoundTripTime
-		hop.MaxRtt = result.RoundTripTime
-		hop.IP = result.IP
-		hop.Status = "success"
-
-		// 检查是否到达目标
-		if result.IP == ipStr {
-			hop.Reached = true
-		}
-
-		safeHopUpdateCallback(opts.OnHopUpdate, TracertHopUpdate{
-			TTL:        ttl,
-			IP:         result.IP,
-			CurrentSeq: 1,
-			Success:    true,
-			RTT:        result.RoundTripTime,
-			IsComplete: true,
-			Timestamp:  time.Now().UnixMilli(),
-		})
-	} else if result.Status == "TTLExpired" {
-		// TTL Expired 是 Tracert 的正常行为，表示成功获取到中间路由器信息
-		hop.RecvCount = 1
-		hop.LossRate = 0
-		hop.LastRtt = result.RoundTripTime
-		hop.AvgRtt = result.RoundTripTime
-		hop.MinRtt = result.RoundTripTime
-		hop.MaxRtt = result.RoundTripTime
-		hop.IP = result.IP // 使用响应 IP（中间路由器）
-		hop.Status = "success"
-
-		safeHopUpdateCallback(opts.OnHopUpdate, TracertHopUpdate{
-			TTL:        ttl,
-			IP:         result.IP,
-			CurrentSeq: 1,
-			Success:    true, // 标记为成功获取中间路由
-			RTT:        result.RoundTripTime,
-			IsComplete: true,
-			Timestamp:  time.Now().UnixMilli(),
-		})
-	} else {
-		// 真正的错误（超时、不可达等）
-		hop.RecvCount = 0
-		hop.LossRate = 100
-		hop.Status = "timeout"
-		if result.Error != "" {
-			hop.ErrorMsg = result.Error
-		} else if result.Status != "" {
-			hop.ErrorMsg = result.Status
-		}
-		if result.IP != "" && result.IP != "*" {
-			hop.IP = result.IP
-		} else {
+	rb := make([]byte, maxMessageSize)
+	for {
+		n, peer, err := conn.ReadFrom(rb)
+		if err != nil {
+			hop.SentCount = 1
+			hop.RecvCount = 0
+			hop.LossRate = 100
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				hop.Status = "timeout"
+				hop.ErrorMsg = "Request Timed Out"
+			} else {
+				hop.Status = "error"
+				hop.ErrorMsg = err.Error()
+			}
 			hop.IP = "*"
+			safeHopUpdateCallback(opts.OnHopUpdate, TracertHopUpdate{
+				TTL:        ttl,
+				IP:         "*",
+				CurrentSeq: 1,
+				Success:    false,
+				RTT:        0,
+				IsComplete: true,
+				Timestamp:  time.Now().UnixMilli(),
+			})
+			return hop
 		}
 
-		safeHopUpdateCallback(opts.OnHopUpdate, TracertHopUpdate{
-			TTL:        ttl,
-			IP:         hop.IP,
-			CurrentSeq: 1,
-			Success:    false,
-			RTT:        0,
-			IsComplete: true,
-			Timestamp:  time.Now().UnixMilli(),
-		})
+		rm, err := icmp.ParseMessage(protocolICMP, rb[:n])
+		if err != nil {
+			continue
+		}
+
+		switch rm.Type {
+		case ipv4.ICMPTypeEchoReply:
+			reply, ok := rm.Body.(*icmp.Echo)
+			if !ok || reply.ID != id || reply.Seq != seq {
+				continue
+			}
+			rtt := time.Since(sendTime).Milliseconds()
+			replyIP := extractIP(peer)
+
+			hop.SentCount = 1
+			hop.RecvCount = 1
+			hop.LossRate = 0
+			hop.LastRtt = float64(rtt)
+			hop.AvgRtt = float64(rtt)
+			hop.MinRtt = float64(rtt)
+			hop.MaxRtt = float64(rtt)
+			hop.IP = replyIP
+			hop.Status = "success"
+			if replyIP == ipStr {
+				hop.Reached = true
+			}
+
+			safeHopUpdateCallback(opts.OnHopUpdate, TracertHopUpdate{
+				TTL:        ttl,
+				IP:         replyIP,
+				CurrentSeq: 1,
+				Success:    true,
+				RTT:        float64(rtt),
+				IsComplete: true,
+				Timestamp:  time.Now().UnixMilli(),
+			})
+			return hop
+
+		case ipv4.ICMPTypeTimeExceeded:
+			if !matchTimeExceeded(rm, id, seq) {
+				continue
+			}
+			rtt := time.Since(sendTime).Milliseconds()
+			replyIP := extractIP(peer)
+
+			hop.SentCount = 1
+			hop.RecvCount = 1
+			hop.LossRate = 0
+			hop.LastRtt = float64(rtt)
+			hop.AvgRtt = float64(rtt)
+			hop.MinRtt = float64(rtt)
+			hop.MaxRtt = float64(rtt)
+			hop.IP = replyIP
+			hop.Status = "success"
+
+			safeHopUpdateCallback(opts.OnHopUpdate, TracertHopUpdate{
+				TTL:        ttl,
+				IP:         replyIP,
+				CurrentSeq: 1,
+				Success:    true, // 标记为成功获取中间路由
+				RTT:        float64(rtt),
+				IsComplete: true,
+				Timestamp:  time.Now().UnixMilli(),
+			})
+			return hop
+
+		case ipv4.ICMPTypeDestinationUnreachable:
+			if !matchDestUnreachable(rm, id, seq) {
+				continue
+			}
+			hop.SentCount = 1
+			hop.RecvCount = 0
+			hop.LossRate = 100
+			hop.Status = "error"
+			hop.ErrorMsg = "Destination Host Unreachable"
+			hop.IP = "*"
+
+			safeHopUpdateCallback(opts.OnHopUpdate, TracertHopUpdate{
+				TTL:        ttl,
+				IP:         "*",
+				CurrentSeq: 1,
+				Success:    false,
+				RTT:        0,
+				IsComplete: true,
+				Timestamp:  time.Now().UnixMilli(),
+			})
+			return hop
+		}
 	}
+}
 
-	logger.Debug("Tracert", ipStr, "TTL=%d 探测完成: ip=%s, rtt=%.2fms, reached=%v",
-		ttl, hop.IP, hop.AvgRtt, hop.Reached)
-
-	return hop
+// ResolveTarget 解析目标（域名→IP）
+func (e *TracertEngine) ResolveTarget(ctx context.Context, target string) (string, error) {
+	return e.resolveTarget(ctx, target)
 }
 
 // resolveTarget 解析目标（域名→IP），带超时控制和Context级联取消
@@ -696,4 +615,187 @@ func safeHopUpdateCallback(fn func(TracertHopUpdate), update TracertHopUpdate) {
 		}
 	}()
 	fn(update)
+}
+
+// InitSockets 初始化专属 Socket 组
+func (e *TracertEngine) InitSockets() error {
+	e.socketsMu.Lock()
+	defer e.socketsMu.Unlock()
+
+	if e.sockets != nil {
+		return nil
+	}
+
+	maxHops := e.config.MaxHops
+	e.sockets = make([]*icmp.PacketConn, maxHops)
+
+	for ttl := 1; ttl <= maxHops; ttl++ {
+		conn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+		if err != nil {
+			for i := 0; i < ttl-1; i++ {
+				if e.sockets[i] != nil {
+					e.sockets[i].Close()
+				}
+			}
+			e.sockets = nil
+			return fmt.Errorf("创建 TTL=%d 的 Socket 失败: %w", ttl, err)
+		}
+
+		pconn := conn.IPv4PacketConn()
+		if err := pconn.SetTTL(ttl); err != nil {
+			conn.Close()
+			for i := 0; i < ttl-1; i++ {
+				if e.sockets[i] != nil {
+					e.sockets[i].Close()
+				}
+			}
+			e.sockets = nil
+			return fmt.Errorf("设置 TTL=%d 失败: %w", ttl, err)
+		}
+
+		e.sockets[ttl-1] = conn
+	}
+
+	logger.Info("Tracert", "-", "专属 Socket 组初始化完成: %d 个 Socket", maxHops)
+	return nil
+}
+
+// Close 销毁专属 Socket 组并清理资源
+func (e *TracertEngine) Close() {
+	e.socketsMu.Lock()
+	defer e.socketsMu.Unlock()
+
+	if e.sockets == nil {
+		return
+	}
+
+	closedCount := 0
+	for i, conn := range e.sockets {
+		if conn != nil {
+			conn.Close()
+			e.sockets[i] = nil
+			closedCount++
+		}
+	}
+	e.sockets = nil
+
+	logger.Info("Tracert", "-", "专属 Socket 组已关闭: %d 个 Socket", closedCount)
+}
+
+// RunRound 执行单轮 tracert 探测
+func (e *TracertEngine) RunRound(ctx context.Context, target string, resolvedIP string, opts TracertRunOptions) *TracertProgress {
+	if !e.socketsInitialized() {
+		progress := NewTracertProgress(target, e.config.MaxHops)
+		progress.IsRunning = false
+		return progress
+	}
+
+	progress := NewTracertProgress(target, e.config.MaxHops)
+	progress.ResolvedIP = resolvedIP
+
+	e.runRound(ctx, resolvedIP, progress, opts)
+
+	minReachedTTL := atomic.LoadInt32(&progress.MinReachedTTL)
+	if minReachedTTL > 0 && minReachedTTL <= int32(e.config.MaxHops) {
+		for i := int(minReachedTTL); i < len(progress.Hops); i++ {
+			hop := &progress.Hops[i]
+			if hop.Reached {
+				continue
+			}
+			hop.Status = "cancelled"
+			hop.IP = "*"
+			hop.ErrorMsg = ""
+			hop.MinRtt = -1
+			hop.AvgRtt = 0
+			hop.MaxRtt = 0
+			hop.LastRtt = 0
+			hop.SentCount = 0
+			hop.RecvCount = 0
+			hop.LossRate = 0
+		}
+	}
+
+	for i := range progress.Hops {
+		if progress.Hops[i].Status == "pending" {
+			if progress.ReachedDest {
+				progress.Hops[i].Status = "cancelled"
+			} else {
+				progress.Hops[i].Status = "timeout"
+			}
+		}
+	}
+
+	return progress
+}
+
+func (e *TracertEngine) socketsInitialized() bool {
+	e.socketsMu.RLock()
+	defer e.socketsMu.RUnlock()
+	return e.sockets != nil
+}
+
+func (e *TracertEngine) drainSocket(conn *icmp.PacketConn) {
+	conn.SetReadDeadline(time.Now().Add(1 * time.Millisecond))
+	buf := make([]byte, maxMessageSize)
+	for {
+		_, _, err := conn.ReadFrom(buf)
+		if err != nil {
+			break
+		}
+	}
+	conn.SetReadDeadline(time.Time{})
+}
+
+func (e *TracertEngine) DrainAllSockets() {
+	e.socketsMu.RLock()
+	defer e.socketsMu.RUnlock()
+
+	if e.sockets == nil {
+		return
+	}
+	for _, conn := range e.sockets {
+		if conn != nil {
+			e.drainSocket(conn)
+		}
+	}
+}
+
+func (e *TracertEngine) isSocketInvalidError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "use of closed") ||
+		strings.Contains(errStr, "bad file descriptor") ||
+		strings.Contains(errStr, "not a socket") ||
+		strings.Contains(errStr, "WSAENOTSOCK") ||
+		strings.Contains(errStr, "WSAECANCELLED")
+}
+
+func (e *TracertEngine) rebuildSocket(ttl int) error {
+	e.socketsMu.Lock()
+	defer e.socketsMu.Unlock()
+
+	if e.sockets == nil || ttl < 1 || ttl > len(e.sockets) {
+		return fmt.Errorf("无法重建 Socket: Socket 组未初始化或 TTL 越界")
+	}
+
+	if e.sockets[ttl-1] != nil {
+		e.sockets[ttl-1].Close()
+	}
+
+	conn, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+	if err != nil {
+		return fmt.Errorf("重建 TTL=%d Socket 失败: %w", ttl, err)
+	}
+
+	pconn := conn.IPv4PacketConn()
+	if err := pconn.SetTTL(ttl); err != nil {
+		conn.Close()
+		return fmt.Errorf("重建 TTL=%d 设置失败: %w", ttl, err)
+	}
+
+	e.sockets[ttl-1] = conn
+	logger.Info("Tracert", "-", "Socket 重建成功: TTL=%d", ttl)
+	return nil
 }
