@@ -10,6 +10,19 @@ import TracertSettingsModal from '@/components/tools/TracertSettingsModal.vue'
 
 const logger = getLogger()
 
+// DNS解析结果类型定义
+interface DNSResolveResult {
+  ip: string
+  hostname?: string
+  error?: string
+  resolvedAt: string
+}
+
+interface TracertDNSResolvedEvent {
+  sessionId: string
+  results: DNSResolveResult[]
+}
+
 const toast = useToast()
 
 // State
@@ -136,6 +149,7 @@ let lastProgressTime = 0
 let unlistenProgress: (() => void) | null = null
 let unlistenHopUpdate: (() => void) | null = null
 let unlistenHeartbeat: (() => void) | null = null  // H-3修复：心跳事件监听器
+let unlistenDNSResolved: (() => void) | null = null  // DNS解析完成事件监听器
 
 // Hop update batch processing
 const pendingHopUpdates = new Map<number, TracertHopUpdate>()
@@ -313,6 +327,40 @@ const handleHeartbeatEvent = (data: any) => {
   }
 }
 
+// DNS解析完成事件处理函数
+const handleDNSResolvedEvent = (ev: { name: string; data: TracertDNSResolvedEvent }) => {
+  const event = ev.data
+  if (!progress.value?.hops || !event.results?.length) return
+
+  logger.info(`收到DNS解析结果: ${event.results.length} 条`, 'Tracert')
+
+  // 构建IP到hostname的映射
+  const ipToHostname = new Map<string, string>()
+  for (const result of event.results) {
+    if (result.hostname && !result.error) {
+      ipToHostname.set(result.ip, result.hostname)
+    }
+  }
+
+  // 更新匹配的hop的hostname
+  let updatedCount = 0
+  for (const hop of progress.value.hops) {
+    if (hop.ip && hop.ip !== '*' && hop.ip !== '-') {
+      const hostname = ipToHostname.get(hop.ip)
+      if (hostname && hostname !== hop.hostName) {
+        hop.hostName = hostname
+        updatedCount++
+      }
+    }
+  }
+
+  if (updatedCount > 0) {
+    logger.info(`更新了 ${updatedCount} 个hop的hostname`, 'Tracert')
+    // 触发响应式更新
+    triggerRef(progress)
+  }
+}
+
 // Polling fallback
 const startPolling = () => {
   if (pollingTimer) return
@@ -487,6 +535,7 @@ onMounted(async () => {
   unlistenProgress = Events.On('tracert:progress', handleProgressEvent)
   unlistenHopUpdate = Events.On('tracert:hop-update', handleHopUpdateEvent)
   unlistenHeartbeat = Events.On('tracert:heartbeat', handleHeartbeatEvent)
+  unlistenDNSResolved = Events.On('tracert:dns-resolved', handleDNSResolvedEvent)
 })
 
 onUnmounted(() => {
@@ -501,6 +550,10 @@ onUnmounted(() => {
   if (unlistenHeartbeat) {
     unlistenHeartbeat()
     unlistenHeartbeat = null
+  }
+  if (unlistenDNSResolved) {
+    unlistenDNSResolved()
+    unlistenDNSResolved = null
   }
   stopPolling()
   hopOverlay.value.clear()

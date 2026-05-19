@@ -56,6 +56,9 @@ type TracertService struct {
 	dnsCache   map[string]dnsCacheEntry
 	dnsCacheMu sync.RWMutex
 
+	// DNS resolver for async resolution
+	dnsResolver *TracertDNSResolver
+
 	// Cleanup control
 	cleanupStopCh chan struct{}
 }
@@ -334,6 +337,11 @@ func (s *TracertService) StartTracert(req TracertRequest) (*icmp.TracertProgress
 	initialProgress := icmp.NewTracertProgress(target, config.MaxHops)
 	initialProgress.IsContinuous = req.Continuous
 	s.setProgress(initialProgress)
+
+	// Initialize DNS resolver for this session
+	sessionID := fmt.Sprintf("%s-%d", target, time.Now().UnixMilli())
+	s.dnsResolver = NewTracertDNSResolver(sessionID, s.emitEvent)
+
 	s.engineMu.Unlock()
 
 	logger.Info("TracertService", target, "路径探测已启动")
@@ -395,6 +403,13 @@ func (s *TracertService) runSingle(ctx context.Context, target string, config ic
 	s.setProgress(filteredProgress)
 	s.emitProgress(filteredProgress)
 	logger.Info("TracertService", target, "单轮探测完成，DNS异步解析中")
+
+	// 收集本轮发现的新IP并触发异步DNS解析
+	newIPs := s.collectNewIPsFromHops(progress.Hops)
+	if len(newIPs) > 0 && s.dnsResolver != nil {
+		logger.Debug("TracertService", target, "触发异步DNS解析: %d 个新IP", len(newIPs))
+		s.dnsResolver.ResolveAsync(newIPs)
+	}
 
 	// 持锁深拷贝hops快照
 	s.progressMu.RLock()
@@ -553,6 +568,13 @@ func (s *TracertService) runContinuous(ctx context.Context, target string, confi
 		reachedTTL := atomic.LoadInt32(&s.progress.MinReachedTTL)
 		s.emitProgress(s.progress.CloneForDisplay(reachedTTL))
 		logger.Debug("TracertService", target, "第 %d 轮探测完成，立即推送进度，DNS异步解析中", round)
+
+		// 收集本轮发现的新IP并触发异步DNS解析
+		newIPs := s.collectNewIPsFromHops(roundProgress.Hops)
+		if len(newIPs) > 0 && s.dnsResolver != nil {
+			logger.Debug("TracertService", target, "触发异步DNS解析: %d 个新IP", len(newIPs))
+			s.dnsResolver.ResolveAsync(newIPs)
+		}
 
 		// 取消上一轮DNS解析
 		if prevDNSCancel != nil {
@@ -777,6 +799,12 @@ func (s *TracertService) StopTracert() error {
 	}
 	s.continuousMu.Unlock()
 
+	// Clear DNS resolver
+	if s.dnsResolver != nil {
+		s.dnsResolver.Clear()
+		s.dnsResolver = nil
+	}
+
 	// Stop engine
 	s.engineMu.Lock()
 	if s.engine == nil {
@@ -838,6 +866,14 @@ func (s *TracertService) GetTracertProgress() *icmp.TracertProgress {
 	}
 	minReachedTTL := atomic.LoadInt32(&s.progress.MinReachedTTL)
 	return s.progress.CloneForDisplay(minReachedTTL)
+}
+
+// GetDNSResolver returns the DNS resolver for the current session.
+// Returns nil if no tracert session is active.
+func (s *TracertService) GetDNSResolver(sessionID string) *TracertDNSResolver {
+	s.engineMu.RLock()
+	defer s.engineMu.RUnlock()
+	return s.dnsResolver
 }
 
 // isRunningLocked checks if the engine is running (must hold engineMu).
@@ -1109,6 +1145,48 @@ func (s *TracertService) emitHopUpdate(update icmp.TracertHopUpdate) {
 	if s.wailsApp != nil && s.wailsApp.Event != nil {
 		s.wailsApp.Event.Emit("tracert:hop-update", update)
 	}
+}
+
+// emitEvent is a generic event emission method used by DNS resolver.
+func (s *TracertService) emitEvent(eventType string, data interface{}) {
+	if s.wailsApp != nil && s.wailsApp.Event != nil {
+		s.wailsApp.Event.Emit(eventType, data)
+	}
+}
+
+// collectNewIPsFromHops extracts valid IP addresses from hop results for DNS resolution.
+// It filters out invalid IPs (empty, "*") and deduplicates using the resolver's cache.
+//
+// Parameters:
+//   - hops: List of tracert hop results
+//
+// Returns:
+//   - List of unique, valid IP addresses that are not yet cached
+func (s *TracertService) collectNewIPsFromHops(hops []icmp.TracertHopResult) []string {
+	seen := make(map[string]bool)
+	var ips []string
+
+	for _, hop := range hops {
+		// Skip invalid or pending hops
+		if hop.IP == "" || hop.IP == "*" || hop.Status == "pending" || hop.Status == "cancelled" {
+			continue
+		}
+
+		// Deduplicate within this batch
+		if seen[hop.IP] {
+			continue
+		}
+		seen[hop.IP] = true
+
+		// Check if already cached in DNS resolver
+		if s.dnsResolver != nil && s.dnsResolver.IsCached(hop.IP) {
+			continue
+		}
+
+		ips = append(ips, hop.IP)
+	}
+
+	return ips
 }
 
 // GetTracertEventTypes returns empty instances of event types for frontend type generation.
