@@ -166,6 +166,13 @@ func (r *TracertGeoResolver) GetSessionID() string {
 //   - ips: 需要查询的IP地址列表
 func (r *TracertGeoResolver) ResolveAsync(ctx context.Context, ips []string) {
 	newIPs := r.collectNewIPs(ctx, ips)
+
+	// Debug 日志：记录输入和过滤后的 IP 数量
+	logger.Debug("TracertGeoResolver", "-", "收到异步解析请求, 输入IP数: %d, 过滤后需要查询的IP数: %d", len(ips), len(newIPs))
+
+	// Verbose 日志：输出待查询 IP 列表（超过 10 个时截断）
+	logger.Verbose("TracertGeoResolver", "-", "待查询IP列表: %s", formatIPListForLog(newIPs))
+
 	if len(newIPs) == 0 {
 		return
 	}
@@ -236,6 +243,9 @@ func (r *TracertGeoResolver) CancelAll() {
 // 4. 从pending集合移除
 // 5. 推送事件
 func (r *TracertGeoResolver) resolveSingleIP(ctx context.Context, ip string) {
+	// Verbose 日志：开始等待限流器许可
+	logger.Verbose("TracertGeoResolver", ip, "开始等待限流器许可")
+
 	// 等待限流器许可
 	if err := r.limiter.Wait(ctx); err != nil {
 		// context取消，不写入缓存，直接返回
@@ -244,6 +254,9 @@ func (r *TracertGeoResolver) resolveSingleIP(ctx context.Context, ip string) {
 		r.mu.Unlock()
 		return
 	}
+
+	// Verbose 日志：成功获取限流器许可
+	logger.Verbose("TracertGeoResolver", ip, "成功获取限流器许可, 开始执行查询")
 
 	// 执行查询
 	geoInfo, failType := r.queryGeoInfo(ctx, ip)
@@ -276,6 +289,9 @@ func (r *TracertGeoResolver) resolveSingleIP(ctx context.Context, ip string) {
 	delete(r.pending, ip)
 	sessionID := r.sessionID
 	r.mu.Unlock()
+
+	// Verbose 日志：准备推送事件
+	logger.Verbose("TracertGeoResolver", ip, "查询完成, 准备推送事件")
 
 	// 推送事件
 	if r.eventBridge != nil {
@@ -364,9 +380,14 @@ func (r *TracertGeoResolver) doQueryAttempt(ctx context.Context, url string) (*i
 		return nil, "", fmt.Errorf("读取响应体失败: %w", err)
 	}
 
+	// Verbose 日志：响应体读取成功
+	logger.Verbose("TracertGeoResolver", "-", "读取响应体成功, 长度: %d 字节", len(body))
+
 	// 解析JSON
 	var geoInfo icmp.GeoInfo
 	if err := json.Unmarshal(body, &geoInfo); err != nil {
+		// Verbose 日志：JSON 解析失败，打印原始响应体
+		logger.Verbose("TracertGeoResolver", "-", "解析JSON失败: %v, 原始响应体(前500字符): %s", err, truncateBody(body, 500))
 		return nil, "api_fail", fmt.Errorf("解析JSON失败: %w", err)
 	}
 
@@ -402,14 +423,22 @@ func (r *TracertGeoResolver) doSingleRequest(ctx context.Context, url string) (*
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
 
+	// Verbose 日志：发起 HTTP 请求
+	logger.Verbose("TracertGeoResolver", "-", "发起HTTP请求: %s", url)
+
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
+		// Debug 日志：HTTP 请求失败
+		logger.Debug("TracertGeoResolver", "-", "HTTP请求失败: %v, URL: %s", err, url)
 		return nil, fmt.Errorf("HTTP请求失败: %w", err)
 	}
 
 	if resp.StatusCode == http.StatusOK {
 		return resp, nil
 	}
+
+	// Debug 日志：非 200 状态码
+	logger.Debug("TracertGeoResolver", "-", "HTTP状态码非200: %d, URL: %s", resp.StatusCode, url)
 
 	// 非200状态码，立即关闭响应体
 	resp.Body.Close()
@@ -435,6 +464,7 @@ func (r *TracertGeoResolver) collectNewIPs(_ context.Context, ips []string) []st
 	for _, ip := range ips {
 		// 跳过空IP和"*"
 		if ip == "" || ip == "*" {
+			logger.Verbose("TracertGeoResolver", ip, "IP过滤跳过: 空或*")
 			continue
 		}
 
@@ -442,10 +472,12 @@ func (r *TracertGeoResolver) collectNewIPs(_ context.Context, ips []string) []st
 		if cached, exists := r.cache[ip]; exists {
 			// 成功缓存 → 跳过
 			if cached.FailType == "" {
+				logger.Verbose("TracertGeoResolver", ip, "IP过滤跳过: 已有成功缓存")
 				continue
 			}
 			// 失败缓存未过期 → 跳过
 			if !cached.isFailCacheExpired() {
+				logger.Verbose("TracertGeoResolver", ip, "IP过滤跳过: 失败缓存未过期, 类型=%s", cached.FailType)
 				continue
 			}
 			// 失败缓存已过期 → 需要重新查询
@@ -453,6 +485,7 @@ func (r *TracertGeoResolver) collectNewIPs(_ context.Context, ips []string) []st
 
 		// 跳过正在pending中的IP
 		if _, isPending := r.pending[ip]; isPending {
+			logger.Verbose("TracertGeoResolver", ip, "IP过滤跳过: 正在pending中")
 			continue
 		}
 
@@ -536,4 +569,24 @@ func (r *TracertGeoResolver) cleanupExpiredCache() {
 			}
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// 日志辅助函数
+// ---------------------------------------------------------------------------
+
+// formatIPListForLog 格式化 IP 列表用于日志输出，超过 10 个时截断
+func formatIPListForLog(ips []string) string {
+	if len(ips) <= 10 {
+		return fmt.Sprintf("%v", ips)
+	}
+	return fmt.Sprintf("%v ... (共 %d 个，已截断)", ips[:10], len(ips))
+}
+
+// truncateBody 截断响应体用于日志输出
+func truncateBody(body []byte, maxLen int) string {
+	if len(body) <= maxLen {
+		return string(body)
+	}
+	return string(body[:maxLen]) + "..."
 }
