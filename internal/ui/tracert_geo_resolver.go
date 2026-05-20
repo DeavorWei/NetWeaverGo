@@ -160,11 +160,15 @@ func (r *TracertGeoResolver) GetSessionID() string {
 // ResolveAsync 异步查询IP地理位置。
 // 仅对未缓存且未在查询中的新IP发起查询，每个IP启动独立goroutine。
 // 查询完成后通过 eventBridge 推送 tracert:geo-resolved 事件。
+// 对于已缓存的IP，立即推送缓存结果，确保前端能正确显示地区信息。
 //
 // Parameters:
 //   - ctx: 上下文，用于取消查询
 //   - ips: 需要查询的IP地址列表
 func (r *TracertGeoResolver) ResolveAsync(ctx context.Context, ips []string) {
+	// 先为已缓存的IP推送事件（缓存回填）
+	r.emitCachedResults(ips)
+
 	newIPs := r.collectNewIPs(ctx, ips)
 
 	// Debug 日志：记录输入和过滤后的 IP 数量
@@ -229,6 +233,48 @@ func (r *TracertGeoResolver) HasPendingIPs() bool {
 func (r *TracertGeoResolver) CancelAll() {
 	if r.cancelFunc != nil {
 		r.cancelFunc()
+	}
+}
+
+// emitCachedResults 为已缓存的IP推送事件，确保前端能正确显示地区信息。
+// 这是解决"查询中..."卡住问题的关键：当IP已有缓存时，立即通知前端。
+//
+// Parameters:
+//   - ips: 需要检查的IP地址列表
+func (r *TracertGeoResolver) emitCachedResults(ips []string) {
+	r.mu.RLock()
+	sessionID := r.sessionID
+	cachedResults := make([]struct {
+		ip     string
+		geo    *icmp.GeoInfo
+		exists bool
+	}, 0, len(ips))
+
+	for _, ip := range ips {
+		// 跳过空IP和"*"
+		if ip == "" || ip == "*" {
+			continue
+		}
+		if result, exists := r.cache[ip]; exists {
+			cachedResults = append(cachedResults, struct {
+				ip     string
+				geo    *icmp.GeoInfo
+				exists bool
+			}{ip: ip, geo: result.GeoInfo, exists: true})
+		}
+	}
+	r.mu.RUnlock()
+
+	// 推送缓存结果事件
+	if r.eventBridge != nil {
+		for _, cr := range cachedResults {
+			logger.Verbose("TracertGeoResolver", cr.ip, "推送缓存结果事件")
+			r.eventBridge("tracert:geo-resolved", TracertGeoResolvedEvent{
+				SessionID: sessionID,
+				IP:        cr.ip,
+				Geo:       cr.geo,
+			})
+		}
 	}
 }
 

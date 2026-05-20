@@ -368,16 +368,20 @@ const handleGeoResolvedEvent = (ev: { name: string; data: TracertGeoResolvedEven
     return
   }
 
-  if (event.geo) {
-    // 更新对应hop的geo信息
-    for (const hop of progress.value.hops) {
-      if (hop.ip === event.ip) {
+  // 更新对应hop的geo信息
+  // 注意：event.geo 可能为 null（私有IP或查询失败），此时设置失败状态
+  for (const hop of progress.value.hops) {
+    if (hop.ip === event.ip) {
+      if (event.geo) {
         hop.geo = event.geo
-        break
+      } else {
+        // geo 为 null 表示查询失败或私有IP，设置失败状态让前端显示 "-"
+        hop.geo = { status: 'fail' } as any
       }
+      break
     }
-    triggerRef(progress)
   }
+  triggerRef(progress)
 }
 
 // Polling fallback
@@ -777,6 +781,7 @@ onUnmounted(() => {
                     <div class="geo-network">{{ formatGeoNetwork(hop.geo) }}</div>
                   </div>
                   <span v-else-if="hop.geo && hop.geo.status === 'fail'">-</span>
+                  <span v-else-if="!hop.ip || hop.ip === '*'">-</span>
                   <span v-else class="geo-pending">查询中...</span>
                 </td>
                 <td v-if="isColumnVisible('ip')" class="py-2 px-3 text-text-primary font-mono text-xs">{{ hop.ip || '-' }}</td>
