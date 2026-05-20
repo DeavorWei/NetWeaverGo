@@ -20,9 +20,9 @@ import (
 
 // TracertRequest represents the request for tracert operation.
 type TracertRequest struct {
-	Target         string             `json:"target"`         // IP or domain name
-	Config         icmp.TracertConfig `json:"config"`         // Tracert configuration
-	Continuous     bool               `json:"continuous"`     // Whether to run continuously
+	Target         string             `json:"target"`                   // IP or domain name
+	Config         icmp.TracertConfig `json:"config"`                   // Tracert configuration
+	Continuous     bool               `json:"continuous"`               // Whether to run continuously
 	RepeatInterval *int               `json:"repeatInterval,omitempty"` // Repeat interval in ms (default 1000, min 1, max 60000)
 }
 
@@ -33,6 +33,7 @@ type TracertExportResult struct {
 }
 
 // TracertResolveResult represents the DNS resolve result.
+// 注意：此类型用于域名→IP正向解析（ResolveTarget方法），与DNS反向解析无关，不应删除
 type TracertResolveResult struct {
 	Target     string `json:"target"`
 	ResolvedIP string `json:"resolvedIP"`
@@ -52,236 +53,46 @@ type TracertService struct {
 	continuousCancel context.CancelFunc
 	continuousMu     sync.Mutex
 
-	// DNS cache
-	dnsCache   map[string]dnsCacheEntry
-	dnsCacheMu sync.RWMutex
-
-	// DNS resolver for async resolution
-	dnsResolver *TracertDNSResolver
-
-	// Cleanup control
-	cleanupStopCh chan struct{}
+	// Geo resolver (进程级单例引用，通过 GetGlobalGeoResolver 获取)
+	geoResolver *TracertGeoResolver
 }
 
 // NewTracertService creates a new TracertService instance.
 func NewTracertService() *TracertService {
-	return &TracertService{
-		dnsCache:      make(map[string]dnsCacheEntry),
-		cleanupStopCh: make(chan struct{}),
-	}
+	return &TracertService{}
 }
 
 // ServiceStartup Wails service startup lifecycle hook.
 func (s *TracertService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	s.wailsApp = application.Get()
-	s.startDNSCacheCleanup()
 	return nil
 }
 
 // ServiceShutdown Wails service shutdown lifecycle hook.
 func (s *TracertService) ServiceShutdown() error {
 	s.StopTracert()
-	s.stopDNSCacheCleanup()
+	// 停止全局 Geo 解析器的缓存清理 goroutine
+	if globalGeoResolver != nil {
+		globalGeoResolver.stopCacheCleanup()
+	}
 	return nil
 }
 
-// startDNSCacheCleanup starts periodic DNS cache cleanup.
-func (s *TracertService) startDNSCacheCleanup() {
-	if s.cleanupStopCh == nil {
-		s.cleanupStopCh = make(chan struct{})
-	}
-	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				s.cleanupDNSCache()
-			case <-s.cleanupStopCh:
-				return
-			}
-		}
-	}()
-}
-
-// stopDNSCacheCleanup stops periodic DNS cache cleanup.
-func (s *TracertService) stopDNSCacheCleanup() {
-	if s.cleanupStopCh != nil {
-		close(s.cleanupStopCh)
-		s.cleanupStopCh = nil
-	}
-}
-
-// cleanupDNSCache removes expired cache entries.
-func (s *TracertService) cleanupDNSCache() {
-	s.dnsCacheMu.Lock()
-	defer s.dnsCacheMu.Unlock()
-	now := time.Now()
-	for ip, entry := range s.dnsCache {
-		if now.Sub(entry.timestamp) > 5*time.Minute {
-			delete(s.dnsCache, ip)
-		}
-	}
-}
-
-// resolveHopHostNames 并行解析跳数主机名（带缓存）
-func (s *TracertService) resolveHopHostNames(ctx context.Context, hops []icmp.TracertHopResult, timeout time.Duration) {
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-
-	// 收集需要解析的 IP（去重）
-	seen := make(map[string]bool)
-	var needResolve []struct {
-		ttl int
-		ip  string
-	}
-
-	for _, hop := range hops {
-		if hop.IP == "" || hop.IP == "*" || hop.Status == "pending" || hop.Status == "cancelled" {
-			continue
-		}
-		if seen[hop.IP] {
-			continue
-		}
-		seen[hop.IP] = true
-
-		// 先从缓存获取
-		s.dnsCacheMu.RLock()
-		entry, ok := s.dnsCache[hop.IP]
-		s.dnsCacheMu.RUnlock()
-
-		if ok && time.Since(entry.timestamp) < 5*time.Minute {
-			// 缓存命中，直接写回
-			for i := range hops {
-				if hops[i].IP == hop.IP && hops[i].HostName == "" {
-					hops[i].HostName = entry.hostName
-				}
-			}
-			continue
-		}
-
-		needResolve = append(needResolve, struct {
-			ttl int
-			ip  string
-		}{ttl: hop.TTL, ip: hop.IP})
-	}
-
-	if len(needResolve) == 0 {
-		return
-	}
-
-	logger.Debug("TracertService", "-", "开始反向 DNS 解析: %d 个 IP", len(needResolve))
-
-	// 并行解析未缓存的 IP
-	for _, item := range needResolve {
-		select {
-		case <-ctx.Done():
-			break
-		default:
-		}
-
-		wg.Add(1)
-		go func(ip string) {
-			defer wg.Done()
-
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-
-			resolveCtx, cancel := context.WithTimeout(ctx, timeout)
-			defer cancel()
-
-			resolver := &net.Resolver{}
-			names, err := resolver.LookupAddr(resolveCtx, ip)
-			if err == nil && len(names) > 0 {
-				hostName := strings.TrimSuffix(names[0], ".")
-
-				// 更新缓存
-				s.dnsCacheMu.Lock()
-				s.dnsCache[ip] = dnsCacheEntry{
-					hostName:  hostName,
-					timestamp: time.Now(),
-				}
-				s.dnsCacheMu.Unlock()
-
-				// 写回 hops
-				mu.Lock()
-				for i := range hops {
-					if hops[i].IP == ip && hops[i].HostName == "" {
-						hops[i].HostName = hostName
-					}
-				}
-				mu.Unlock()
-			}
-		}(item.ip)
-	}
-
-	wg.Wait()
-	logger.Debug("TracertService", "-", "反向 DNS 解析完成")
-}
-
-// resolveHopHostNamesAsync 异步解析跳数主机名
-// 调用方应先持锁深拷贝hops快照，将快照传入此函数
-func (s *TracertService) resolveHopHostNamesAsync(ctx context.Context, hops []icmp.TracertHopResult, timeout time.Duration) <-chan []icmp.TracertHopResult {
-	resultCh := make(chan []icmp.TracertHopResult, 1)
-	go func() {
-		defer close(resultCh)
-		// 在goroutine内部使用传入的hops快照（已深拷贝），无数据竞争
-		s.resolveHopHostNames(ctx, hops, timeout)
-		select {
-		case <-ctx.Done():
-			// context已取消，不发送结果
-		default:
-			resultCh <- hops
-		}
-	}()
-	return resultCh
-}
-
-// applyDNSResult 基于IP地址映射将DNS解析结果合并到progress中
-// 使用IP匹配而非索引匹配，避免路径变化时的数据错乱
-func (s *TracertService) applyDNSResult(resolvedHops []icmp.TracertHopResult) {
-	ipToHostName := make(map[string]string)
-	for _, hop := range resolvedHops {
-		if hop.IP != "" && hop.HostName != "" {
-			ipToHostName[hop.IP] = hop.HostName
-		}
-	}
-	if len(ipToHostName) == 0 {
-		return
-	}
-	s.progressMu.Lock()
-	defer s.progressMu.Unlock()
-	if s.progress == nil {
-		return
-	}
-	changed := false
-	for i := range s.progress.Hops {
-		if s.progress.Hops[i].HostName == "" {
-			if name, ok := ipToHostName[s.progress.Hops[i].IP]; ok {
-				s.progress.Hops[i].HostName = name
-				changed = true
-			}
-		}
-	}
-	if changed {
-		reachedTTL := atomic.LoadInt32(&s.progress.MinReachedTTL)
-		s.emitProgress(s.progress.CloneForDisplay(reachedTTL))
-	}
-}
-
 // emitHeartbeat 发送心跳事件到前端
-func (s *TracertService) emitHeartbeat(round int64, elapsedMs int64, isResolvingDNS bool) {
+func (s *TracertService) emitHeartbeat(round int64, elapsedMs int64, isResolvingGeo bool) {
 	if s.wailsApp != nil && s.wailsApp.Event != nil {
 		s.wailsApp.Event.Emit("tracert:heartbeat", icmp.TracertHeartbeat{
 			Round:          round,
 			ElapsedMs:      elapsedMs,
-			IsResolvingDNS: isResolvingDNS,
+			IsResolvingGeo: isResolvingGeo,
 			Timestamp:      time.Now().UnixMilli(),
 		})
 	}
+}
+
+// getIsResolving 检查Geo解析器是否还有待查询的IP
+func (s *TracertService) getIsResolving() bool {
+	return s.geoResolver != nil && s.geoResolver.HasPendingIPs()
 }
 
 // StartTracert starts a tracert operation.
@@ -333,14 +144,18 @@ func (s *TracertService) StartTracert(req TracertRequest) (*icmp.TracertProgress
 		return nil, fmt.Errorf("Socket 初始化失败: %v", err)
 	}
 
-	// Initialize progress
+	// 生成唯一 sessionId
+	sessionID := fmt.Sprintf("%s-%d", target, time.Now().UnixMilli())
+
+	// Initialize progress with sessionId
 	initialProgress := icmp.NewTracertProgress(target, config.MaxHops)
 	initialProgress.IsContinuous = req.Continuous
+	initialProgress.SessionID = sessionID
 	s.setProgress(initialProgress)
 
-	// Initialize DNS resolver for this session
-	sessionID := fmt.Sprintf("%s-%d", target, time.Now().UnixMilli())
-	s.dnsResolver = NewTracertDNSResolver(sessionID, s.emitEvent)
+	// 获取全局 Geo 解析器单例并设置 sessionId
+	s.geoResolver = GetGlobalGeoResolver(s.emitEvent)
+	s.geoResolver.SetSessionID(sessionID)
 
 	s.engineMu.Unlock()
 
@@ -396,81 +211,72 @@ func (s *TracertService) runSingle(ctx context.Context, target string, config ic
 	})
 	log.Printf("[TRACERT SVC] runSingle() engine.Run returned: MinReachedTTL=%d, hopsCount=%d", progress.MinReachedTTL, len(progress.Hops))
 
-	// 立即推送进度（不等待DNS解析）
+	// 立即推送进度（不等待Geo解析）
 	reachedTTL := progress.MinReachedTTL
 	filteredProgress := progress.CloneForDisplay(reachedTTL)
 	log.Printf("[TRACERT SVC] runSingle() sending filtered: reachedTTL=%d, filteredHops=%d", reachedTTL, len(filteredProgress.Hops))
 	s.setProgress(filteredProgress)
 	s.emitProgress(filteredProgress)
-	logger.Info("TracertService", target, "单轮探测完成，DNS异步解析中")
+	logger.Info("TracertService", target, "单轮探测完成，Geo异步查询中")
 
-	// 收集本轮发现的新IP并触发异步DNS解析
+	// 收集本轮发现的新IP并触发异步Geo查询
 	newIPs := s.collectNewIPsFromHops(progress.Hops)
-	if len(newIPs) > 0 && s.dnsResolver != nil {
-		logger.Debug("TracertService", target, "触发异步DNS解析: %d 个新IP", len(newIPs))
-		s.dnsResolver.ResolveAsync(newIPs)
-	}
-
-	// 持锁深拷贝hops快照
-	s.progressMu.RLock()
-	hopsSnapshot := make([]icmp.TracertHopResult, len(progress.Hops))
-	copy(hopsSnapshot, progress.Hops)
-	s.progressMu.RUnlock()
-
-	// 设置DNS解析状态
-	s.progressMu.Lock()
-	if s.progress != nil {
-		s.progress.IsResolvingDNS = true
-	}
-	s.progressMu.Unlock()
-
-	// 异步DNS解析（在goroutine中执行）
-	go func() {
-		dnsCtx, dnsCancel := context.WithTimeout(ctx, 10*time.Second)
-		defer dnsCancel()
-
-		s.resolveHopHostNames(dnsCtx, hopsSnapshot, 2*time.Second)
-
-		// 清除DNS解析状态
+	if len(newIPs) > 0 && s.geoResolver != nil {
+		logger.Debug("TracertService", target, "触发异步Geo查询: %d 个新IP", len(newIPs))
 		s.progressMu.Lock()
 		if s.progress != nil {
-			s.progress.IsResolvingDNS = false
+			s.progress.IsResolvingGeo = true
 		}
 		s.progressMu.Unlock()
+		s.geoResolver.ResolveAsync(ctx, newIPs)
+	}
 
-		// 使用IP地址匹配合并DNS结果
-		s.applyDNSResult(hopsSnapshot)
-		logger.Info("TracertService", target, "异步DNS解析完成")
-	}()
-
-	// 在等待DNS期间发送心跳
+	// 在等待Geo查询期间发送心跳
 	heartbeatTicker := time.NewTicker(500 * time.Millisecond)
 	defer heartbeatTicker.Stop()
 
-	// 等待DNS完成或context取消（最多等待5秒发送心跳）
-	dnsWaitTimeout := time.NewTimer(5 * time.Second)
-	defer dnsWaitTimeout.Stop()
+	// 等待Geo查询完成或context取消（最多等待30秒发送心跳）
+	geoWaitTimeout := time.NewTimer(30 * time.Second)
+	defer geoWaitTimeout.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-dnsWaitTimeout.C:
-			// DNS等待超时，停止发送心跳
+		case <-geoWaitTimeout.C:
+			// Geo等待超时，停止发送心跳
+			s.progressMu.Lock()
+			if s.progress != nil {
+				s.progress.IsResolvingGeo = false
+			}
+			s.progressMu.Unlock()
 			return
 		case <-heartbeatTicker.C:
+			// 检查Geo查询是否全部完成
+			isResolvingGeo := s.getIsResolving()
+			s.progressMu.Lock()
+			if s.progress != nil {
+				s.progress.IsResolvingGeo = isResolvingGeo
+			}
+			s.progressMu.Unlock()
+
 			// 发送心跳事件
 			s.progressMu.RLock()
 			round := int64(0)
 			elapsedMs := int64(0)
-			isResolvingDNS := false
+			resolvingGeo := false
 			if s.progress != nil {
 				round = int64(s.progress.Round)
 				elapsedMs = s.progress.ElapsedMs
-				isResolvingDNS = s.progress.IsResolvingDNS
+				resolvingGeo = s.progress.IsResolvingGeo
 			}
 			s.progressMu.RUnlock()
-			s.emitHeartbeat(round, elapsedMs, isResolvingDNS)
+			s.emitHeartbeat(round, elapsedMs, resolvingGeo)
+
+			// 如果Geo查询已全部完成，停止心跳
+			if !isResolvingGeo {
+				return
+			}
 		}
 	}
 }
@@ -489,13 +295,6 @@ func (s *TracertService) runContinuous(ctx context.Context, target string, confi
 		return
 	}
 
-	var prevDNSCancel context.CancelFunc
-	defer func() {
-		if prevDNSCancel != nil {
-			prevDNSCancel()
-		}
-	}()
-
 	round := 0
 	for {
 		select {
@@ -512,7 +311,7 @@ func (s *TracertService) runContinuous(ctx context.Context, target string, confi
 		s.progressMu.Lock()
 		if s.progress != nil {
 			s.progress.Round = round
-			s.progress.IsResolvingDNS = false
+			s.progress.IsResolvingGeo = false
 		}
 		s.progressMu.Unlock()
 
@@ -564,118 +363,62 @@ func (s *TracertService) runContinuous(ctx context.Context, target string, confi
 		}
 		s.progressMu.Unlock()
 
-		// 立即推送进度（不等待DNS解析）
+		// 立即推送进度（不等待Geo解析）
 		reachedTTL := atomic.LoadInt32(&s.progress.MinReachedTTL)
 		s.emitProgress(s.progress.CloneForDisplay(reachedTTL))
-		logger.Debug("TracertService", target, "第 %d 轮探测完成，立即推送进度，DNS异步解析中", round)
+		logger.Debug("TracertService", target, "第 %d 轮探测完成，立即推送进度，Geo异步查询中", round)
 
-		// 收集本轮发现的新IP并触发异步DNS解析
+		// 收集本轮发现的新IP并触发异步Geo查询
 		newIPs := s.collectNewIPsFromHops(roundProgress.Hops)
-		if len(newIPs) > 0 && s.dnsResolver != nil {
-			logger.Debug("TracertService", target, "触发异步DNS解析: %d 个新IP", len(newIPs))
-			s.dnsResolver.ResolveAsync(newIPs)
+		if len(newIPs) > 0 && s.geoResolver != nil {
+			logger.Debug("TracertService", target, "触发异步Geo查询: %d 个新IP", len(newIPs))
+			s.progressMu.Lock()
+			if s.progress != nil {
+				s.progress.IsResolvingGeo = true
+			}
+			s.progressMu.Unlock()
+			s.geoResolver.ResolveAsync(ctx, newIPs)
 		}
 
-		// 取消上一轮DNS解析
-		if prevDNSCancel != nil {
-			prevDNSCancel()
-			prevDNSCancel = nil
-		}
-
-		// 持锁深拷贝hops快照
-		s.progressMu.RLock()
-		hopsSnapshot := make([]icmp.TracertHopResult, len(s.progress.Hops))
-		copy(hopsSnapshot, s.progress.Hops)
-		s.progressMu.RUnlock()
-
-		// 启动异步DNS解析
-		dnsCtx, dnsCancel := context.WithTimeout(ctx, 10*time.Second)
-		pendingDNS := s.resolveHopHostNamesAsync(dnsCtx, hopsSnapshot, 2*time.Second)
-
-		// 设置DNS解析状态
-		s.progressMu.Lock()
-		if s.progress != nil {
-			s.progress.IsResolvingDNS = true
-		}
-		s.progressMu.Unlock()
-
-		// 设置定时器
-		heartbeatTicker := time.NewTicker(500 * time.Millisecond)
-		defer heartbeatTicker.Stop()
+		// 设置定时器等待interval后进入下一轮
 		intervalTimer := time.NewTimer(interval)
-		dnsResolved := false
+		heartbeatTicker := time.NewTicker(500 * time.Millisecond)
 
 	waitLoop:
 		for {
 			select {
 			case <-ctx.Done():
-				dnsCancel()
-				// 保存prevDNSCancel以便defer清理
-				prevDNSCancel = dnsCancel
-				heartbeatTicker.Stop()
 				intervalTimer.Stop()
-				// 清除DNS解析状态
-				s.progressMu.Lock()
-				if s.progress != nil {
-					s.progress.IsResolvingDNS = false
-				}
-				s.progressMu.Unlock()
+				heartbeatTicker.Stop()
 				logger.Info("TracertService", target, "持续探测被停止")
 				return
 
-			case resolvedHops, ok := <-pendingDNS:
-				heartbeatTicker.Stop()
-				if ok && resolvedHops != nil {
-					s.applyDNSResult(resolvedHops)
-				}
-				// 清除DNS解析状态
+			case <-heartbeatTicker.C:
+				// 检查Geo查询状态并发送心跳事件
+				isResolvingGeo := s.getIsResolving()
 				s.progressMu.Lock()
 				if s.progress != nil {
-					s.progress.IsResolvingDNS = false
+					s.progress.IsResolvingGeo = isResolvingGeo
 				}
 				s.progressMu.Unlock()
-				dnsCancel()
-				prevDNSCancel = nil
-				dnsResolved = true
-				break waitLoop
 
-			case <-heartbeatTicker.C:
-				// DNS解析期间发送心跳
 				s.progressMu.RLock()
 				roundNum := int64(0)
 				elapsedMs := int64(0)
-				isResolvingDNS := false
 				if s.progress != nil {
 					roundNum = int64(s.progress.Round)
 					elapsedMs = s.progress.ElapsedMs
-					isResolvingDNS = s.progress.IsResolvingDNS
 				}
 				s.progressMu.RUnlock()
-				s.emitHeartbeat(roundNum, elapsedMs, isResolvingDNS)
+				s.emitHeartbeat(roundNum, elapsedMs, isResolvingGeo)
 
 			case <-intervalTimer.C:
-				// interval到期，如果DNS还没完成就继续等DNS
-				// 但不再等待interval
-				if !dnsResolved {
-					intervalTimer.Stop()
-				}
+				break waitLoop
 			}
 		}
 
 		heartbeatTicker.Stop()
 		intervalTimer.Stop()
-
-		// 如果DNS已解析但interval还没到，等待剩余时间
-		if dnsResolved && !intervalTimer.Stop() {
-			// interval已过期，直接进入下一轮
-		} else if dnsResolved {
-			// interval还没到期，等待剩余时间
-			select {
-			case <-ctx.Done():
-				return
-			case <-intervalTimer.C:
-			}
-		}
 
 		logger.Debug("TracertService", target, "第 %d 轮探测完成，等待 %v", round, interval)
 	}
@@ -694,7 +437,10 @@ func (s *TracertService) mergeRoundResult(roundResult *icmp.TracertProgress) {
 	minReachedTTL := atomic.LoadInt32(&s.progress.MinReachedTTL)
 
 	s.progress.ResolvedIP = roundResult.ResolvedIP
-	s.progress.ReachedDest = roundResult.ReachedDest
+	// 一旦为 true，不再回退（粘性赋值，防止前端闪烁）
+	if roundResult.ReachedDest {
+		s.progress.ReachedDest = true
+	}
 
 	for i, newHop := range roundResult.Hops {
 		// 跳过 TTL > MinReachedTTL 的结果（这些应该保持 cancelled 状态）
@@ -711,7 +457,14 @@ func (s *TracertService) mergeRoundResult(roundResult *icmp.TracertProgress) {
 
 		// First round or if existing is still pending, just copy
 		if existing.Status == "pending" {
-			*existing = newHop
+			// 保留已有的 Geo 信息（引擎返回的 hop 不含 Geo，但防御性保留）
+			if existing.Geo != nil && newHop.Geo == nil {
+				savedGeo := existing.Geo
+				*existing = newHop
+				existing.Geo = savedGeo
+			} else {
+				*existing = newHop
+			}
 			continue
 		}
 
@@ -726,7 +479,12 @@ func (s *TracertService) mergeRoundResult(roundResult *icmp.TracertProgress) {
 		if existing.Status == "cancelled" {
 			// If existing was cancelled but new hop has real data, replace
 			if newHop.Status != "cancelled" && newHop.Status != "pending" {
+				// 保留已有的 Geo 信息
+				savedGeo := existing.Geo
 				*existing = newHop
+				if savedGeo != nil && existing.Geo == nil {
+					existing.Geo = savedGeo
+				}
 			}
 			continue
 		}
@@ -758,12 +516,13 @@ func (s *TracertService) mergeRoundResult(roundResult *icmp.TracertProgress) {
 			existing.LastRtt = newHop.LastRtt
 		}
 
-		// Update IP and hostname (take latest non-empty)
+		// Update IP (take latest non-empty)
 		if newHop.IP != "" && newHop.IP != "*" {
 			existing.IP = newHop.IP
 		}
-		if newHop.HostName != "" {
-			existing.HostName = newHop.HostName
+		// Update Geo (only if new data has Geo info, preserve existing)
+		if newHop.Geo != nil {
+			existing.Geo = newHop.Geo
 		}
 		if newHop.Reached {
 			existing.Reached = true
@@ -799,10 +558,11 @@ func (s *TracertService) StopTracert() error {
 	}
 	s.continuousMu.Unlock()
 
-	// Clear DNS resolver
-	if s.dnsResolver != nil {
-		s.dnsResolver.Clear()
-		s.dnsResolver = nil
+	// Clear Geo resolver pending state (保留缓存跨会话复用)
+	if s.geoResolver != nil {
+		s.geoResolver.ClearPending()
+		s.geoResolver.SetSessionID("")
+		s.geoResolver = nil
 	}
 
 	// Stop engine
@@ -866,14 +626,6 @@ func (s *TracertService) GetTracertProgress() *icmp.TracertProgress {
 	}
 	minReachedTTL := atomic.LoadInt32(&s.progress.MinReachedTTL)
 	return s.progress.CloneForDisplay(minReachedTTL)
-}
-
-// GetDNSResolver returns the DNS resolver for the current session.
-// Returns nil if no tracert session is active.
-func (s *TracertService) GetDNSResolver(sessionID string) *TracertDNSResolver {
-	s.engineMu.RLock()
-	defer s.engineMu.RUnlock()
-	return s.dnsResolver
 }
 
 // isRunningLocked checks if the engine is running (must hold engineMu).
@@ -946,9 +698,9 @@ func (s *TracertService) ExportTracertResultCSV() (*TracertExportResult, error) 
 
 	writer := csv.NewWriter(&buf)
 
-	// Header
+	// Header - "主机名"列拆分为"地区"和"网络信息"两列
 	header := []string{
-		"跳数", "主机名", "响应IP", "丢包率(%)",
+		"跳数", "地区", "网络信息", "响应IP", "丢包率(%)",
 		"发送报文", "接收报文", "最低延迟(ms)", "平均延迟(ms)",
 		"最高延迟(ms)", "上次延迟(ms)", "状态", "错误信息",
 	}
@@ -978,7 +730,8 @@ func (s *TracertService) ExportTracertResultCSV() (*TracertExportResult, error) 
 
 		row := []string{
 			fmt.Sprintf("%d", hop.TTL),
-			hop.HostName,
+			formatGeoLocation(hop.Geo),
+			formatGeoNetwork(hop.Geo),
 			hop.IP,
 			fmt.Sprintf("%.2f", hop.LossRate),
 			fmt.Sprintf("%d", hop.SentCount),
@@ -1029,11 +782,11 @@ func (s *TracertService) ExportTracertResultTXT() (*TracertExportResult, error) 
 	buf.WriteString(fmt.Sprintf("到达目的地: %v\n", filteredProgress.ReachedDest))
 	buf.WriteString("\n")
 
-	// Table header
-	buf.WriteString(fmt.Sprintf("%-5s %-25s %-18s %8s %6s %6s %10s %10s %10s %10s\n",
-		"跳数", "主机名", "响应IP", "丢包率", "发送", "接收", "最低延迟", "平均延迟", "最高延迟", "上次延迟"))
-	buf.WriteString(fmt.Sprintf("%-5s %-25s %-18s %8s %6s %6s %10s %10s %10s %10s\n",
-		"----", "-------------------------", "------------------", "--------", "------", "------", "----------", "----------", "----------", "----------"))
+	// Table header - "主机名"改为"地区"，增加"网络信息"列
+	buf.WriteString(fmt.Sprintf("%-5s %-25s %-25s %-18s %8s %6s %6s %10s %10s %10s %10s\n",
+		"跳数", "地区", "网络信息", "响应IP", "丢包率", "发送", "接收", "最低延迟", "平均延迟", "最高延迟", "上次延迟"))
+	buf.WriteString(fmt.Sprintf("%-5s %-25s %-25s %-18s %8s %6s %6s %10s %10s %10s %10s\n",
+		"----", "-------------------------", "-------------------------", "------------------", "--------", "------", "------", "----------", "----------", "----------", "----------"))
 
 	for _, hop := range filteredProgress.Hops {
 		if hop.Status == "pending" || hop.Status == "cancelled" {
@@ -1044,14 +797,13 @@ func (s *TracertService) ExportTracertResultTXT() (*TracertExportResult, error) 
 		if ip == "" {
 			ip = "*"
 		}
-		hostName := hop.HostName
-		if hostName == "" {
-			hostName = "-"
-		}
+		geoLocation := formatGeoLocation(hop.Geo)
+		geoNetwork := formatGeoNetwork(hop.Geo)
 
-		buf.WriteString(fmt.Sprintf("%-5d %-25s %-18s %7.1f%% %6d %6d %10s %10s %10s %10s\n",
+		buf.WriteString(fmt.Sprintf("%-5d %-25s %-25s %-18s %7.1f%% %6d %6d %10s %10s %10s %10s\n",
 			hop.TTL,
-			truncateString(hostName, 25),
+			truncateString(geoLocation, 25),
+			truncateString(geoNetwork, 25),
 			ip,
 			hop.LossRate,
 			hop.SentCount,
@@ -1147,21 +899,16 @@ func (s *TracertService) emitHopUpdate(update icmp.TracertHopUpdate) {
 	}
 }
 
-// emitEvent is a generic event emission method used by DNS resolver.
+// emitEvent is a generic event emission method used by Geo resolver.
 func (s *TracertService) emitEvent(eventType string, data interface{}) {
 	if s.wailsApp != nil && s.wailsApp.Event != nil {
 		s.wailsApp.Event.Emit(eventType, data)
 	}
 }
 
-// collectNewIPsFromHops extracts valid IP addresses from hop results for DNS resolution.
-// It filters out invalid IPs (empty, "*") and deduplicates using the resolver's cache.
-//
-// Parameters:
-//   - hops: List of tracert hop results
-//
-// Returns:
-//   - List of unique, valid IP addresses that are not yet cached
+// collectNewIPsFromHops extracts valid IP addresses from hop results for Geo resolution.
+// It filters out invalid IPs (empty, "*"), pending/cancelled hops, and hops that already have Geo info.
+// Deduplicates within the batch. The Geo resolver's internal collectNewIPs will further filter cached/pending IPs.
 func (s *TracertService) collectNewIPsFromHops(hops []icmp.TracertHopResult) []string {
 	seen := make(map[string]bool)
 	var ips []string
@@ -1172,16 +919,16 @@ func (s *TracertService) collectNewIPsFromHops(hops []icmp.TracertHopResult) []s
 			continue
 		}
 
+		// Skip hops that already have Geo info
+		if hop.Geo != nil {
+			continue
+		}
+
 		// Deduplicate within this batch
 		if seen[hop.IP] {
 			continue
 		}
 		seen[hop.IP] = true
-
-		// Check if already cached in DNS resolver
-		if s.dnsResolver != nil && s.dnsResolver.IsCached(hop.IP) {
-			continue
-		}
 
 		ips = append(ips, hop.IP)
 	}
@@ -1207,6 +954,37 @@ func formatTracertRtt(rtt float64) string {
 		return fmt.Sprintf("%.3fms", rtt)
 	}
 	return fmt.Sprintf("%.2fms", rtt)
+}
+
+// formatGeoLocation 格式化地理位置信息（国家 省份 城市）
+func formatGeoLocation(geo *icmp.GeoInfo) string {
+	if geo == nil || geo.Status != "success" {
+		return "-"
+	}
+	parts := []string{}
+	for _, s := range []string{geo.Country, geo.RegionName, geo.City} {
+		if s = strings.TrimSpace(s); s != "" {
+			parts = append(parts, s)
+		}
+	}
+	if len(parts) == 0 {
+		return "-"
+	}
+	return strings.Join(parts, " ")
+}
+
+// formatGeoNetwork 格式化网络信息（AS号 运营商）
+func formatGeoNetwork(geo *icmp.GeoInfo) string {
+	if geo == nil || geo.Status != "success" {
+		return "-"
+	}
+	parts := []string{}
+	for _, s := range []string{geo.AS, geo.ISP} {
+		if s = strings.TrimSpace(s); s != "" {
+			parts = append(parts, s)
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 func sanitizeFilename(name string) string {

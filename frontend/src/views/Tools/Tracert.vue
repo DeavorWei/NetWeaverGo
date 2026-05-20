@@ -10,17 +10,24 @@ import TracertSettingsModal from '@/components/tools/TracertSettingsModal.vue'
 
 const logger = getLogger()
 
-// DNS解析结果类型定义
-interface DNSResolveResult {
-  ip: string
-  hostname?: string
-  error?: string
-  resolvedAt: string
+// Geo地理位置信息类型定义
+interface GeoInfo {
+  status: string       // API查询状态: "success"/"fail"
+  country: string      // 国家
+  countryCode: string  // 国家代码
+  region: string       // 省份代码
+  regionName: string   // 省份/地区
+  city: string         // 城市
+  isp: string          // 运营商
+  as: string           // AS号
+  queryIp: string      // 查询的IP
+  message: string      // API错误信息
 }
 
-interface TracertDNSResolvedEvent {
+interface TracertGeoResolvedEvent {
   sessionId: string
-  results: DNSResolveResult[]
+  ip: string
+  geo: GeoInfo | null
 }
 
 const toast = useToast()
@@ -47,9 +54,8 @@ export interface ColumnConfig {
 
 const defaultColumns: ColumnConfig[] = [
   { key: 'index', label: '#', visible: true, width: 50 },
-  { key: 'hostName', label: '主机名', visible: true, width: 180 },
+  { key: 'geo', label: '地区', visible: true, width: 200 },
   { key: 'ip', label: '响应 IP', visible: true, width: 140 },
-  { key: 'ttl', label: '第几跳', visible: true, width: 60 },
   { key: 'lossRate', label: '丢包率', visible: true, width: 80 },
   { key: 'sentCount', label: '发送报文', visible: true, width: 80 },
   { key: 'recvCount', label: '接收报文', visible: true, width: 80 },
@@ -65,13 +71,26 @@ const columns = ref<ColumnConfig[]>([...defaultColumns])
 const showColumnConfig = ref(false)
 const showSettingsModal = ref(false)
 
+// 列配置迁移：处理旧版本localStorage数据
+const migrateColumnConfig = (savedConfig: ColumnConfig[]): ColumnConfig[] => {
+  return savedConfig
+    .filter(col => col.key !== 'ttl')  // 删除已废弃的ttl列
+    .map(col => {
+      if (col.key === 'hostName') {
+        return { ...col, key: 'geo', label: '地区' }  // hostName改为geo
+      }
+      return col
+    })
+}
+
 const loadColumnConfig = () => {
   const saved = localStorage.getItem('tracertColumns')
   if (saved) {
     try {
       const parsed = JSON.parse(saved)
+      const migrated = migrateColumnConfig(parsed)
       columns.value = defaultColumns.map((col: ColumnConfig) => {
-        const savedCol = parsed.find((c: ColumnConfig) => c.key === col.key)
+        const savedCol = migrated.find((c: ColumnConfig) => c.key === col.key)
         return savedCol ? { ...col, visible: savedCol.visible } : col
       })
     } catch { /* ignored */ }
@@ -101,7 +120,7 @@ const isRunning = computed(() => progress.value?.isRunning ?? false)
 // H-3修复：心跳状态独立ref，避免心跳触发完整表格重渲染
 const heartbeatState = ref({
   elapsedMs: 0,
-  isResolvingDNS: false
+  isResolvingGeo: false
 })
 
 // Hop update overlay for real-time tracking
@@ -149,7 +168,7 @@ let lastProgressTime = 0
 let unlistenProgress: (() => void) | null = null
 let unlistenHopUpdate: (() => void) | null = null
 let unlistenHeartbeat: (() => void) | null = null  // H-3修复：心跳事件监听器
-let unlistenDNSResolved: (() => void) | null = null  // DNS解析完成事件监听器
+let unlistenGeoResolved: (() => void) | null = null  // Geo查询完成事件监听器
 
 // Hop update batch processing
 const pendingHopUpdates = new Map<number, TracertHopUpdate>()
@@ -181,7 +200,7 @@ const applyHopUpdate = (update: TracertHopUpdate) => {
     progress.value.hops.push({
       ttl: progress.value.hops.length + 1,
       ip: '*',
-      hostName: '-',
+      geo: null,
       status: 'pending',
       sentCount: 0,
       recvCount: 0,
@@ -239,6 +258,11 @@ const handleProgressEvent = (ev: { name: string; data: TracertProgress }) => {
 
   const current = progress.value
 
+  // SessionID校验：仅处理当前会话的事件
+  if (incoming.sessionId && current.sessionId && incoming.sessionId !== current.sessionId) {
+    return
+  }
+
   // 检测路径变化
   const oldMinReachedTTL = current.minReachedTtl
   const newMinReachedTTL = incoming.minReachedTtl
@@ -256,12 +280,13 @@ const handleProgressEvent = (ev: { name: string; data: TracertProgress }) => {
   current.isRunning = incoming.isRunning
   current.isContinuous = incoming.isContinuous
   current.elapsedMs = incoming.elapsedMs
-  current.reachedDest = incoming.reachedDest
+  // 一旦为 true，不再回退（粘性保护，防止前端闪烁）
+  current.reachedDest = current.reachedDest || incoming.reachedDest
   current.minReachedTtl = incoming.minReachedTtl
 
-  // 同步更新heartbeatState中的isResolvingDNS状态
-  if (incoming.isResolvingDNS !== undefined) {
-    heartbeatState.value.isResolvingDNS = incoming.isResolvingDNS
+  // 同步更新heartbeatState中的isResolvingGeo状态
+  if (incoming.isResolvingGeo !== undefined) {
+    heartbeatState.value.isResolvingGeo = incoming.isResolvingGeo
   }
 
   // 如果后端发送的 hops 数组比当前短，截断当前数组
@@ -290,13 +315,20 @@ const handleProgressEvent = (ev: { name: string; data: TracertProgress }) => {
         const currentHop = current.hops[i]
         if (currentHop) {
           currentHop.ip = incomingHop.ip || currentHop.ip
-          currentHop.hostName = incomingHop.hostName || currentHop.hostName
           currentHop.reached = incomingHop.reached || currentHop.reached
         }
         continue
       }
 
+      // 保留已有Geo信息：仅当新数据geo非空时才覆盖
+      const preservedGeo = current.hops[i]?.geo
       current.hops[i] = incomingHop
+      if (preservedGeo) {
+        const hop = current.hops[i]
+        if (hop && !hop.geo) {
+          hop.geo = preservedGeo
+        }
+      }
       hopOverlay.value.set(incomingHop.ttl, {
         lastUpdateTimestamp: Date.now(),
         status: 'completed',
@@ -317,46 +349,33 @@ const handleHopUpdateEvent = (ev: { name: string; data: TracertHopUpdate }) => {
 
 // H-3修复：心跳事件处理函数，更新独立ref避免触发完整表格重渲染
 const handleHeartbeatEvent = (data: any) => {
-  const heartbeat = data as { round: number; elapsedMs: number; isResolvingDNS: boolean; timestamp: number }
+  const heartbeat = data as { round: number; elapsedMs: number; isResolvingGeo: boolean; timestamp: number }
   lastProgressTime = Date.now()
 
   // H-3修复：更新独立的心跳ref，不触发progress的响应式更新
   heartbeatState.value = {
     elapsedMs: heartbeat.elapsedMs,
-    isResolvingDNS: heartbeat.isResolvingDNS
+    isResolvingGeo: heartbeat.isResolvingGeo
   }
+  triggerRef(heartbeatState)
 }
 
-// DNS解析完成事件处理函数
-const handleDNSResolvedEvent = (ev: { name: string; data: TracertDNSResolvedEvent }) => {
+// Geo查询完成事件处理函数
+const handleGeoResolvedEvent = (ev: { name: string; data: TracertGeoResolvedEvent }) => {
   const event = ev.data
-  if (!progress.value?.hops || !event.results?.length) return
-
-  logger.info(`收到DNS解析结果: ${event.results.length} 条`, 'Tracert')
-
-  // 构建IP到hostname的映射
-  const ipToHostname = new Map<string, string>()
-  for (const result of event.results) {
-    if (result.hostname && !result.error) {
-      ipToHostname.set(result.ip, result.hostname)
-    }
+  // SessionID校验：仅处理当前会话的事件
+  if (!progress.value || event.sessionId !== progress.value.sessionId) {
+    return
   }
 
-  // 更新匹配的hop的hostname
-  let updatedCount = 0
-  for (const hop of progress.value.hops) {
-    if (hop.ip && hop.ip !== '*' && hop.ip !== '-') {
-      const hostname = ipToHostname.get(hop.ip)
-      if (hostname && hostname !== hop.hostName) {
-        hop.hostName = hostname
-        updatedCount++
+  if (event.geo) {
+    // 更新对应hop的geo信息
+    for (const hop of progress.value.hops) {
+      if (hop.ip === event.ip) {
+        hop.geo = event.geo
+        break
       }
     }
-  }
-
-  if (updatedCount > 0) {
-    logger.info(`更新了 ${updatedCount} 个hop的hostname`, 'Tracert')
-    // 触发响应式更新
     triggerRef(progress)
   }
 }
@@ -477,7 +496,7 @@ const clearResults = () => {
   // 重置心跳状态
   heartbeatState.value = {
     elapsedMs: 0,
-    isResolvingDNS: false
+    isResolvingGeo: false
   }
 }
 
@@ -515,6 +534,19 @@ const getStatusText = (hop: TracertHopResult & { isProbing?: boolean }): string 
   return '等待中'
 }
 
+// Geo格式化函数
+function formatGeoLocation(geo: GeoInfo): string {
+  if (!geo) return '-'
+  const parts = [geo.country, geo.regionName, geo.city].filter(Boolean)
+  return parts.join(' ') || '-'
+}
+
+function formatGeoNetwork(geo: GeoInfo): string {
+  if (!geo) return ''
+  const parts = [geo.as, geo.isp].filter(Boolean)
+  return parts.join(' ') || ''
+}
+
 // Lifecycle
 onMounted(async () => {
   loadColumnConfig()
@@ -535,7 +567,7 @@ onMounted(async () => {
   unlistenProgress = Events.On('tracert:progress', handleProgressEvent)
   unlistenHopUpdate = Events.On('tracert:hop-update', handleHopUpdateEvent)
   unlistenHeartbeat = Events.On('tracert:heartbeat', handleHeartbeatEvent)
-  unlistenDNSResolved = Events.On('tracert:dns-resolved', handleDNSResolvedEvent)
+  unlistenGeoResolved = Events.On('tracert:geo-resolved', handleGeoResolvedEvent)
 })
 
 onUnmounted(() => {
@@ -551,9 +583,9 @@ onUnmounted(() => {
     unlistenHeartbeat()
     unlistenHeartbeat = null
   }
-  if (unlistenDNSResolved) {
-    unlistenDNSResolved()
-    unlistenDNSResolved = null
+  if (unlistenGeoResolved) {
+    unlistenGeoResolved()
+    unlistenGeoResolved = null
   }
   stopPolling()
   hopOverlay.value.clear()
@@ -623,8 +655,8 @@ onUnmounted(() => {
             </span>
           </div>
           <div class="flex items-center gap-3">
-            <span v-if="heartbeatState.isResolvingDNS" class="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-500 rounded-full animate-pulse">
-              DNS解析中...
+            <span v-if="heartbeatState.isResolvingGeo" class="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-500 rounded-full animate-pulse">
+              Geo查询中...
             </span>
             <span v-if="progress.isContinuous && progress.isRunning" class="text-xs px-2 py-0.5 bg-accent/20 text-accent rounded-full animate-pulse">
               持续探测中
@@ -718,9 +750,8 @@ onUnmounted(() => {
             <thead class="sticky top-0 bg-bg-secondary">
               <tr class="text-left text-text-muted border-b border-border">
                 <th v-if="isColumnVisible('index')" class="py-2 px-3 font-medium">#</th>
-                <th v-if="isColumnVisible('hostName')" class="py-2 px-3 font-medium">主机名</th>
+                <th v-if="isColumnVisible('geo')" class="py-2 px-3 font-medium">地区</th>
                 <th v-if="isColumnVisible('ip')" class="py-2 px-3 font-medium">响应 IP</th>
-                <th v-if="isColumnVisible('ttl')" class="py-2 px-3 font-medium">第几跳</th>
                 <th v-if="isColumnVisible('lossRate')" class="py-2 px-3 font-medium">丢包率</th>
                 <th v-if="isColumnVisible('sentCount')" class="py-2 px-3 font-medium">发送报文</th>
                 <th v-if="isColumnVisible('recvCount')" class="py-2 px-3 font-medium">接收报文</th>
@@ -740,9 +771,15 @@ onUnmounted(() => {
                 :class="{ 'bg-accent/5': hop.isProbing }"
               >
                 <td v-if="isColumnVisible('index')" class="py-2 px-3 text-text-muted">{{ index + 1 }}</td>
-                <td v-if="isColumnVisible('hostName')" class="py-2 px-3 text-text-secondary text-xs">{{ hop.hostName || '-' }}</td>
+                <td v-if="isColumnVisible('geo')" class="py-2 px-3">
+                  <div v-if="hop.geo && hop.geo.status === 'success'" class="geo-cell">
+                    <div class="geo-location">{{ formatGeoLocation(hop.geo) }}</div>
+                    <div class="geo-network">{{ formatGeoNetwork(hop.geo) }}</div>
+                  </div>
+                  <span v-else-if="hop.geo && hop.geo.status === 'fail'">-</span>
+                  <span v-else class="geo-pending">查询中...</span>
+                </td>
                 <td v-if="isColumnVisible('ip')" class="py-2 px-3 text-text-primary font-mono text-xs">{{ hop.ip || '-' }}</td>
-                <td v-if="isColumnVisible('ttl')" class="py-2 px-3 text-text-primary font-mono font-medium">{{ hop.ttl }}</td>
                 <td v-if="isColumnVisible('lossRate')" class="py-2 px-3">
                   <span v-if="hop.status !== 'pending'" :class="{
                     'text-success': hop.lossRate === 0,
@@ -834,3 +871,25 @@ onUnmounted(() => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.geo-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.geo-location {
+  font-weight: 500;
+}
+
+.geo-network {
+  font-size: 12px;
+  color: #666;
+}
+
+.geo-pending {
+  color: #999;
+  font-style: italic;
+}
+</style>

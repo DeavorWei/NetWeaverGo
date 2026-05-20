@@ -12,6 +12,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.91
 	golang.org/x/crypto v0.50.0
+	golang.org/x/time v0.15.0
 	gorm.io/gorm v1.31.1
 )
 

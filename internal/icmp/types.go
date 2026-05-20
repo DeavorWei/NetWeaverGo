@@ -279,38 +279,53 @@ func DefaultTracertConfig() TracertConfig {
 	}
 }
 
+// GeoInfo IP地理位置信息
+type GeoInfo struct {
+	Status      string  `json:"status"`      // API查询状态: "success"/"fail"
+	Country     string  `json:"country"`     // 国家
+	CountryCode string  `json:"countryCode"` // 国家代码
+	Region      string  `json:"region"`      // 省份代码
+	RegionName  string  `json:"regionName"`  // 省份/地区
+	City        string  `json:"city"`        // 城市
+	ISP         string  `json:"isp"`         // 运营商
+	AS          string  `json:"as"`          // AS号
+	QueryIP     string  `json:"queryIp"`     // 查询的IP
+	Message     string  `json:"message"`     // API错误信息（status=fail时）
+}
+
 // TracertHopResult 单跳探测结果
 type TracertHopResult struct {
-	TTL      int     `json:"ttl"`          // 第几跳
-	IP       string  `json:"ip"`           // 响应 IP
-	HostName string  `json:"hostName"`     // 主机名 (反向DNS)
-	Status   string  `json:"status"`       // "success" / "timeout" / "error" / "pending" / "cancelled"
-	SentCount int    `json:"sentCount"`    // 发送报文数量
-	RecvCount int    `json:"recvCount"`    // 接收报文数量
-	LossRate  float64 `json:"lossRate"`    // 丢包率 (0-100)
-	MinRtt    float64 `json:"minRtt"`      // 最低延迟(ms), -1 表示无效
-	MaxRtt    float64 `json:"maxRtt"`      // 最高延迟(ms)
-	AvgRtt    float64 `json:"avgRtt"`      // 平均延迟(ms)
-	LastRtt   float64 `json:"lastRtt"`     // 上次探测延迟(ms)
-	Reached   bool    `json:"reached"`     // 是否到达目标
-	ErrorMsg  string  `json:"errorMsg"`    // 错误信息
+	TTL       int       `json:"ttl"`       // 第几跳
+	IP        string    `json:"ip"`        // 响应 IP
+	Geo       *GeoInfo  `json:"geo"`       // IP地理位置信息
+	Status    string    `json:"status"`    // "success" / "timeout" / "error" / "pending" / "cancelled"
+	SentCount int       `json:"sentCount"` // 发送报文数量
+	RecvCount int       `json:"recvCount"` // 接收报文数量
+	LossRate  float64   `json:"lossRate"`  // 丢包率 (0-100)
+	MinRtt    float64   `json:"minRtt"`    // 最低延迟(ms), -1 表示无效
+	MaxRtt    float64   `json:"maxRtt"`    // 最高延迟(ms)
+	AvgRtt    float64   `json:"avgRtt"`    // 平均延迟(ms)
+	LastRtt   float64   `json:"lastRtt"`   // 上次探测延迟(ms)
+	Reached   bool      `json:"reached"`   // 是否到达目标
+	ErrorMsg  string    `json:"errorMsg"`  // 错误信息
 }
 
 // TracertProgress tracert 探测进度
 type TracertProgress struct {
-	Target          string             `json:"target"`          // 目标地址（用户输入）
-	ResolvedIP      string             `json:"resolvedIP"`      // 解析后的 IP
-	Round           int                `json:"round"`           // 当前第几轮探测
-	TotalHops       int                `json:"totalHops"`       // 总跳数（配置的最大跳数）
-	CompletedHops   int                `json:"completedHops"`   // 已完成跳数
-	IsRunning       bool               `json:"isRunning"`       // 是否运行中
-	IsContinuous    bool               `json:"isContinuous"`    // 是否持续模式
-	IsResolvingDNS  bool               `json:"isResolvingDNS"`  // 是否正在解析DNS
-	StartTime       time.Time          `json:"startTime"`       // 开始时间
-	ElapsedMs       int64              `json:"elapsedMs"`       // 已用时间(ms)
-	Hops            []TracertHopResult `json:"hops"`            // 各跳结果
-	ReachedDest     bool               `json:"reachedDest"`     // 是否到达目的地
-	MinReachedTTL   int32              `json:"minReachedTtl"`   // 所有轮次中到达目标的最小 TTL（0 表示未到��）
+	Target         string             `json:"target"`         // 目标地址（用户输入）
+	ResolvedIP     string             `json:"resolvedIP"`      // 解析后的 IP
+	SessionID      string             `json:"sessionId"`      // 会话ID（用于前端区分不同探测会话）
+	Round          int                `json:"round"`          // 当前第几轮探测
+	TotalHops      int                `json:"totalHops"`      // 总跳数（配置的最大跳数）
+	CompletedHops  int                `json:"completedHops"`  // 已完成跳数
+	IsRunning      bool               `json:"isRunning"`      // 是否运行中
+	IsContinuous   bool               `json:"isContinuous"`   // 是否持续模式
+	IsResolvingGeo bool               `json:"isResolvingGeo"` // 是否正在解析地理位置
+	StartTime      time.Time          `json:"startTime"`      // 开始时间
+	ElapsedMs      int64              `json:"elapsedMs"`      // 已用时间(ms)
+	Hops           []TracertHopResult `json:"hops"`           // 各跳结果
+	ReachedDest    bool               `json:"reachedDest"`    // 是否到达目的地
+	MinReachedTTL  int32              `json:"minReachedTtl"`  // 所有轮次中到达目标的最小 TTL（0 表示未到达）
 }
 
 // NewTracertProgress 创建新的 TracertProgress 实例
@@ -352,19 +367,27 @@ func (p *TracertProgress) Clone() *TracertProgress {
 	clone := &TracertProgress{
 		Target:         p.Target,
 		ResolvedIP:     p.ResolvedIP,
+		SessionID:      p.SessionID,
 		Round:          p.Round,
 		TotalHops:      p.TotalHops,
 		CompletedHops:  p.CompletedHops,
 		IsRunning:      p.IsRunning,
 		IsContinuous:   p.IsContinuous,
-		IsResolvingDNS: p.IsResolvingDNS,
+		IsResolvingGeo: p.IsResolvingGeo,
 		StartTime:      p.StartTime,
 		ElapsedMs:      p.ElapsedMs,
 		ReachedDest:    p.ReachedDest,
 		MinReachedTTL:  p.MinReachedTTL,
 		Hops:           make([]TracertHopResult, len(p.Hops)),
 	}
-	copy(clone.Hops, p.Hops)
+	// 深拷贝 Hops 数组，包括 Geo 指针
+	for i := range p.Hops {
+		clone.Hops[i] = p.Hops[i]
+		if p.Hops[i].Geo != nil {
+			geoCopy := *p.Hops[i].Geo
+			clone.Hops[i].Geo = &geoCopy
+		}
+	}
 	return clone
 }
 
@@ -378,12 +401,13 @@ func (p *TracertProgress) CloneForDisplay(reachedTTL int32) *TracertProgress {
 	clone := &TracertProgress{
 		Target:         p.Target,
 		ResolvedIP:     p.ResolvedIP,
+		SessionID:      p.SessionID,
 		Round:          p.Round,
 		TotalHops:      p.TotalHops,
 		CompletedHops:  p.CompletedHops,
 		IsRunning:      p.IsRunning,
 		IsContinuous:   p.IsContinuous,
-		IsResolvingDNS: p.IsResolvingDNS,
+		IsResolvingGeo: p.IsResolvingGeo,
 		StartTime:      p.StartTime,
 		ElapsedMs:      p.ElapsedMs,
 		ReachedDest:    p.ReachedDest,
@@ -393,7 +417,13 @@ func (p *TracertProgress) CloneForDisplay(reachedTTL int32) *TracertProgress {
 	// 如果未到达目标或 reachedTTL 无效，返回全部数据
 	if reachedTTL <= 0 || len(p.Hops) == 0 {
 		clone.Hops = make([]TracertHopResult, len(p.Hops))
-		copy(clone.Hops, p.Hops)
+		for i := range p.Hops {
+			clone.Hops[i] = p.Hops[i]
+			if p.Hops[i].Geo != nil {
+				geoCopy := *p.Hops[i].Geo
+				clone.Hops[i].Geo = &geoCopy
+			}
+		}
 		return clone
 	}
 
@@ -403,7 +433,13 @@ func (p *TracertProgress) CloneForDisplay(reachedTTL int32) *TracertProgress {
 		maxTTL = len(p.Hops)
 	}
 	clone.Hops = make([]TracertHopResult, maxTTL)
-	copy(clone.Hops, p.Hops[:maxTTL])
+	for i := 0; i < maxTTL; i++ {
+		clone.Hops[i] = p.Hops[i]
+		if p.Hops[i].Geo != nil {
+			geoCopy := *p.Hops[i].Geo
+			clone.Hops[i].Geo = &geoCopy
+		}
+	}
 
 	return clone
 }
@@ -423,7 +459,7 @@ type TracertHopUpdate struct {
 type TracertHeartbeat struct {
 	Round          int64 `json:"round"`          // 当前轮次
 	ElapsedMs      int64 `json:"elapsedMs"`      // 已用时间(毫秒)
-	IsResolvingDNS bool  `json:"isResolvingDNS"` // 是否正在解析DNS
+	IsResolvingGeo bool  `json:"isResolvingGeo"` // 是否正在解析地理位置
 	Timestamp      int64 `json:"timestamp"`      // 时间戳(Unix毫秒)
 }
 

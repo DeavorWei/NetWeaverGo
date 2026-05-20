@@ -183,12 +183,14 @@ collectLoop:
 
 				// 3. 如果到达目标，更新 MinReachedTTL
 				if hopResult.Reached {
-					currentMin := atomic.LoadInt32(&progress.MinReachedTTL)
-					if currentMin == 0 || int32(hopResult.TTL) < currentMin {
-						atomic.StoreInt32(&progress.MinReachedTTL, int32(hopResult.TTL))
-						atomic.StoreInt32(&reachedTTL, int32(hopResult.TTL))
+						currentMin := atomic.LoadInt32(&progress.MinReachedTTL)
+						if currentMin == 0 || int32(hopResult.TTL) < currentMin {
+							atomic.StoreInt32(&progress.MinReachedTTL, int32(hopResult.TTL))
+							atomic.StoreInt32(&reachedTTL, int32(hopResult.TTL))
+						}
+						// 探测到目标立即设置，消除单轮内延迟确认
+						progress.ReachedDest = true
 					}
-				}
 
 				// 4. 立即发送实时更新到前端（关键修改！）
 				if opts.OnUpdate != nil {
