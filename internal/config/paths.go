@@ -47,6 +47,10 @@ type PathManager struct {
 	TopologyExportDir string // 导出图谱目录
 	PlanImportDir     string // 规划文件导入目录
 
+	// SNMP 相关路径
+	SNMPDBPath      string // SNMP 独立数据库路径
+	SNMPMIBStoreDir string // MIB 文件存储目录
+
 	bootstrapPath string
 }
 
@@ -143,6 +147,10 @@ func (pm *PathManager) rebuildDerivedPathsLocked() {
 	pm.TopologyRawDir = filepath.Join(pm.StorageRoot, "topology", "raw")
 	pm.TopologyExportDir = filepath.Join(pm.StorageRoot, "topology", "export")
 	pm.PlanImportDir = filepath.Join(pm.StorageRoot, "topology", "plans")
+
+	// SNMP 相关路径
+	pm.SNMPDBPath = filepath.Join(pm.DBDir, "snmp.db")
+	pm.SNMPMIBStoreDir = filepath.Join(pm.StorageRoot, "snmp", "mibs")
 }
 
 func (pm *PathManager) ensureDirectoriesLocked() error {
@@ -159,6 +167,8 @@ func (pm *PathManager) ensureDirectoriesLocked() error {
 		pm.TopologyRawDir,
 		pm.TopologyExportDir,
 		pm.PlanImportDir,
+		// SNMP 相关目录
+		pm.SNMPMIBStoreDir,
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -262,6 +272,20 @@ func (pm *PathManager) GetSSHKnownHostsPath() string {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 	return pm.SSHKnownHostsPath
+}
+
+// GetSNMPDBPath 获取 SNMP 独立数据库路径
+func (pm *PathManager) GetSNMPDBPath() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.SNMPDBPath
+}
+
+// GetSNMPMIBStoreDir 获取 MIB 文件存储目录
+func (pm *PathManager) GetSNMPMIBStoreDir() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.SNMPMIBStoreDir
 }
 
 func (pm *PathManager) GetBackupFilePath(subDir, fileName string) string {

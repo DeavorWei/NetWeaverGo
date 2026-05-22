@@ -66,9 +66,12 @@ require (
 )
 
 require (
+	github.com/alecthomas/participle v0.4.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/sleepinggenius2/gosmi v0.4.4 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/wailsapp/wails/webview2 v1.0.24 // indirect
 	golang.org/x/sys v0.43.0 // indirect

@@ -92,3 +92,33 @@ type TaskGroupRepository interface {
 	UpdateStatus(id uint, status string) error
 	Delete(id uint) error
 }
+
+// ============================================================================
+// MIB 管理相关接口
+// ============================================================================
+
+// MIBRepository MIB 数据访问接口
+// 提供 MIB 模块和节点的 CRUD 操作
+// 查询方法在记录不存在时返回 nil, nil
+type MIBRepository interface {
+	// 模块管理
+	GetAllModules() ([]models.MIBModule, error)
+	GetModuleByID(id uint) (*models.MIBModule, error)
+	GetModuleByName(name string) (*models.MIBModule, error)
+	SaveModule(module *models.MIBModule) error
+	DeleteModule(id uint) error
+
+	// 节点管理
+	GetNodeByID(id uint) (*models.MIBNode, error)
+	GetNodeByOID(oid string) (*models.MIBNode, error)
+	GetNodeByName(name string) (*models.MIBNode, error)
+	GetNodesByModule(moduleID uint) ([]models.MIBNode, error)
+	GetChildNodes(parentOID string) ([]models.MIBNode, error)
+	CountChildNodes(parentOID string) (int64, error)
+	SaveNode(node *models.MIBNode) error
+	SaveNodes(nodes []models.MIBNode) error
+	DeleteNode(id uint) error
+	DeleteNodesByModule(moduleID uint) error
+	SearchNodes(query string) ([]models.MIBNode, error)
+	GetAllNodes() ([]models.MIBNode, error)
+}
