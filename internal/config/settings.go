@@ -155,6 +155,10 @@ func SaveSettings(settings models.GlobalSettings) error {
 			return fmt.Errorf("切换日志目录失败: %w", err)
 		}
 
+		if err := logger.InitFrontendLogWriter(pm.GetFrontendLogPath(), logger.DefaultFrontendLogWriterConfig, false); err != nil {
+			return fmt.Errorf("切换前端日志目录失败: %w", err)
+		}
+
 		newDBPath := pm.GetDBPath()
 		if err := MirrorDatabaseToPath(currentDBPath, newDBPath); err != nil {
 			return fmt.Errorf("迁移数据库到新存储目录失败: %w", err)

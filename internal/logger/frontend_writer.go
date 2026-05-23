@@ -56,7 +56,7 @@ var globalFrontendWriter *FrontendLogWriter
 var frontendWriterMu sync.Mutex
 
 // InitFrontendLogWriter 初始化前端日志写入器
-func InitFrontendLogWriter(logPath string, config FrontendLogWriterConfig) error {
+func InitFrontendLogWriter(logPath string, config FrontendLogWriterConfig, truncate bool) error {
 	if logPath == "" {
 		return fmt.Errorf("日志路径不能为空")
 	}
@@ -81,8 +81,12 @@ func InitFrontendLogWriter(logPath string, config FrontendLogWriterConfig) error
 		return fmt.Errorf("无法创建前端日志目录: %w", err)
 	}
 
-	// 打开文件 (追加模式)
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	// 打开文件
+	flags := os.O_CREATE | os.O_WRONLY | os.O_APPEND
+	if truncate {
+		flags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+	}
+	file, err := os.OpenFile(logPath, flags, 0666)
 	if err != nil {
 		return fmt.Errorf("无法打开前端日志文件: %w", err)
 	}

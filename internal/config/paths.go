@@ -133,9 +133,9 @@ func normalizeStorageRootCandidate(workDir, candidate string) string {
 func (pm *PathManager) rebuildDerivedPathsLocked() {
 	pm.DBDir = filepath.Join(pm.StorageRoot, "db")
 	pm.DBPath = filepath.Join(pm.DBDir, sqliteFileName)
-	pm.AppLogDir = filepath.Join(pm.StorageRoot, "logs", "app")
+	pm.AppLogDir = filepath.Join(pm.StorageRoot, "logs")
 	pm.AppLogPath = filepath.Join(pm.AppLogDir, "app.log")
-	pm.FrontendLogDir = filepath.Join(pm.StorageRoot, "logs", "frontend")
+	pm.FrontendLogDir = filepath.Join(pm.StorageRoot, "logs")
 	pm.FrontendLogPath = filepath.Join(pm.FrontendLogDir, "frontend.log")
 	pm.ExecutionReportDir = filepath.Join(pm.StorageRoot, "execution", "reports")
 	pm.ExecutionLiveLogDir = filepath.Join(pm.StorageRoot, "execution", "live-logs")
