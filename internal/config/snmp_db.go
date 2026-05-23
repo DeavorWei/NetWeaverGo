@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -26,7 +27,10 @@ func InitSNMPDB(dbPath string) error {
 		return fmt.Errorf("SNMP 数据库连接失败: %v", err)
 	}
 
-	sqlDB, _ := db.DB()
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("获取 SNMP 数据库底层连接失败: %v", err)
+	}
 	sqlDB.SetMaxOpenConns(10)
 	sqlDB.SetMaxIdleConns(5)
 
@@ -82,7 +86,10 @@ func createSNMPIndexes(db *gorm.DB) {
 		"CREATE INDEX IF NOT EXISTS idx_mib_node_module ON mib_nodes(module_id)",
 	}
 	for _, sql := range indexes {
-		db.Exec(sql)
+		result := db.Exec(sql)
+		if result.Error != nil {
+			logger.Warn("SNMP-DB", "-", "创建索引失败: %s, 错误: %v", sql, result.Error)
+		}
 	}
 }
 

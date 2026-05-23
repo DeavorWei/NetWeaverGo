@@ -219,6 +219,29 @@ const menuItems = [
       <line x1="6" y1="18" x2="6.01" y2="18"/>
     </svg>`,
   },
+  {
+    key: "SNMPMib",
+    label: "SNMP MIB",
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+    </svg>`,
+  },
+  {
+    key: "SNMPTraps",
+    label: "Trap 告警",
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>`,
+  },
+  {
+    key: "SNMPPolling",
+    label: "设备轮询",
+    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+    </svg>`,
+  },
 
   {
     key: "Settings",
@@ -242,6 +265,9 @@ const titleMap: Record<string, string> = {
   BatchPing: "批量 Ping 检测",
   Tracert: "Tracert 路径探测",
   FileServers: "文件服务器",
+  SNMPMib: "SNMP MIB 管理",
+  SNMPTraps: "Trap 告警中心",
+  SNMPPolling: "SNMP 设备轮询",
   TopologyCommandConfig: "拓扑命令配置中心",
   Settings: "系统设置",
 };

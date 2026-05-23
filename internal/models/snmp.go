@@ -83,19 +83,20 @@ func (SNMPTrapFilterRule) TableName() string { return "snmp_trap_filter_rules" }
 // SNMPCredential SNMP 凭据（v1/v2c 阶段2实现，v3 阶段4实现）
 // 所有敏感字段均使用 AES-256 加密存储
 type SNMPCredential struct {
-	ID            uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name          string    `json:"name" gorm:"uniqueIndex;not null"`
-	Version       string    `json:"version"`               // v1/v2c/v3
-	Community     string    `json:"community"`             // v1/v2c community string（AES-256 加密存储）
-	SecurityLevel string    `json:"securityLevel"`         // noAuthNoPriv/authNoPriv/authPriv
-	Username      string    `json:"username"`
-	AuthProtocol  string    `json:"authProtocol"`          // MD5/SHA/SHA224/SHA256/SHA384/SHA512
-	AuthPassword  string    `json:"authPassword"`          // AES-256 加密存储
-	PrivProtocol  string    `json:"privProtocol"`          // DES/AES/AES192/AES256
-	PrivPassword  string    `json:"privPassword"`          // AES-256 加密存储
-	ContextName   string    `json:"contextName"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	ID              uint      `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name            string    `json:"name" gorm:"uniqueIndex;not null"`
+	Version         string    `json:"version"`               // v1/v2c/v3
+	Community       string    `json:"community"`             // v1/v2c community string（AES-256 加密存储）
+	SecurityLevel   string    `json:"securityLevel"`         // noAuthNoPriv/authNoPriv/authPriv
+	Username        string    `json:"username"`
+	AuthProtocol    string    `json:"authProtocol"`          // MD5/SHA/SHA224/SHA256/SHA384/SHA512
+	AuthPassword    string    `json:"authPassword"`          // AES-256 加密存储
+	PrivProtocol    string    `json:"privProtocol"`          // DES/AES/AES192/AES256/AES192C/AES256C
+	PrivPassword    string    `json:"privPassword"`          // AES-256 加密存储
+	ContextName     string    `json:"contextName"`
+	ContextEngineID string    `json:"contextEngineId"`      // v3 上下文引擎 ID
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
 func (SNMPCredential) TableName() string { return "snmp_credentials" }
@@ -149,14 +150,14 @@ func (SNMPPollingTarget) TableName() string { return "snmp_polling_targets" }
 // SNMPPollingResult SNMP 轮询结果
 type SNMPPollingResult struct {
 	ID        uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	TargetID  uint      `json:"targetId" gorm:"index"`
+	TargetID  uint      `json:"targetId" gorm:"index;index:idx_target_polltime,priority:1"` // P2-19: 复合索引
 	TargetIP  string    `json:"targetIP" gorm:"index"`
 	BatchID   string    `json:"batchId" gorm:"index"`       // 同次轮询的所有结果共享同一 BatchID
 	OID       string    `json:"oid"`
 	OIDName   string    `json:"oidName"`
 	Value     string    `json:"value"`
 	ValueType string    `json:"valueType"`
-	PollTime  time.Time `json:"pollTime" gorm:"index"`
+	PollTime  time.Time `json:"pollTime" gorm:"index;index:idx_target_polltime,priority:2"` // P2-19: 复合索引
 	CreatedAt time.Time `json:"createdAt"`
 }
 

@@ -6,12 +6,16 @@ require (
 	github.com/fclairamb/ftpserverlib v0.30.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/google/uuid v1.6.0
+	github.com/gosnmp/gosnmp v1.43.2
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/pin/tftp/v3 v3.2.0
 	github.com/pkg/sftp v1.13.10
+	github.com/robfig/cron/v3 v3.0.1
+	github.com/sleepinggenius2/gosmi v0.4.4
 	github.com/spf13/afero v1.15.0
 	github.com/stretchr/testify v1.11.1
-	github.com/wailsapp/wails/v3 v3.0.0-alpha.91
-	golang.org/x/crypto v0.50.0
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.95
+	golang.org/x/crypto v0.52.0
 	golang.org/x/time v0.15.0
 	gorm.io/gorm v1.31.1
 )
@@ -31,7 +35,7 @@ require (
 	github.com/glebarez/go-sqlite v1.21.2 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.0 // indirect
-	github.com/go-git/go-git/v5 v5.18.0 // indirect
+	github.com/go-git/go-git/v5 v5.19.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
@@ -56,8 +60,8 @@ require (
 	github.com/skeema/knownhosts v1.3.2 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
-	golang.org/x/net v0.53.0
-	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/net v0.55.0
+	golang.org/x/text v0.37.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
@@ -68,12 +72,11 @@ require (
 require (
 	github.com/alecthomas/participle v0.4.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/sleepinggenius2/gosmi v0.4.4 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/wailsapp/wails/webview2 v1.0.24 // indirect
-	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/tools v0.45.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

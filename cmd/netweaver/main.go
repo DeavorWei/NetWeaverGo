@@ -9,6 +9,8 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/parser"
+	"github.com/NetWeaverGo/core/internal/repository"
+	"github.com/NetWeaverGo/core/internal/snmp"
 	"github.com/NetWeaverGo/core/internal/taskexec"
 	"github.com/NetWeaverGo/core/internal/ui"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -41,6 +43,18 @@ func main() {
 		logger.Error("System", "-", "统一运行时数据库迁移失败: %v", err)
 		os.Exit(1)
 	}
+
+	// 初始化 SNMP 独立数据库
+	snmpDBPath := pm.GetSNMPDBPath()
+	if err := config.InitSNMPDB(snmpDBPath); err != nil {
+		logger.Error("System", "-", "SNMP 数据库初始化失败: %v", err)
+		os.Exit(1)
+	}
+	if err := config.AutoMigrateSNMP(); err != nil {
+		logger.Error("System", "-", "SNMP 数据表迁移失败: %v", err)
+		os.Exit(1)
+	}
+	logger.Info("System", "-", "SNMP 数据库已初始化: %s", snmpDBPath)
 
 	// 初始化运行时配置管理器
 	if err := config.InitRuntimeManager(config.DB); err != nil {
@@ -86,6 +100,39 @@ func runGUI() {
 	// 创建统一任务执行UI服务（Wails暴露层）
 	taskExecutionUIService := ui.NewTaskExecutionUIService(taskExecutionService)
 
+	// 初始化 SNMP 组件
+	mibRepo := repository.NewGormMIBRepository(config.SNMPDB)
+	mibManager := snmp.NewMIBManager(mibRepo, config.GetPathManager().GetSNMPMIBStoreDir())
+	defer mibManager.Close() // 确保资源清理
+	oidResolver := snmp.NewOIDResolver(mibManager, mibRepo)
+	snmpEventNotifier := ui.NewSNMPEventNotifier()
+	mibService := ui.NewSNMPMIBService(mibManager, oidResolver, mibRepo, snmpEventNotifier)
+	logger.Info("System", "-", "SNMP MIB 服务已初始化")
+
+	// 初始化 SNMP Trap 组件
+	trapRepo := repository.NewGormTrapRepository(config.SNMPDB)
+	trapFilterEngine := snmp.NewTrapFilterEngine(nil)
+	trapHandler := snmp.NewTrapHandler(trapRepo, trapFilterEngine, oidResolver, snmpEventNotifier)
+	trapListener := snmp.NewTrapListener(trapHandler, nil, snmpEventNotifier)
+	trapService := ui.NewSNMPTrapService(trapRepo, trapListener, trapHandler, trapFilterEngine, oidResolver, snmpEventNotifier)
+	logger.Info("System", "-", "SNMP Trap 服务已初始化")
+
+	// 初始化 SNMP Polling 组件
+	snmpCrypto := snmp.GetCredentialCrypto()
+	pollingRepo := repository.NewGormPollingRepository(config.SNMPDB)
+	poller := snmp.NewPoller(oidResolver, snmpCrypto, snmpEventNotifier)
+	pollerScheduler := snmp.NewPollerScheduler(poller, pollingRepo, snmpEventNotifier)
+	pollingService := ui.NewSNMPPollingService(poller, pollerScheduler, pollingRepo, snmpEventNotifier, snmpCrypto)
+	logger.Info("System", "-", "SNMP Polling 服务已初始化")
+
+	// 初始化 SNMP 数据清理任务
+	dataCleaner := snmp.NewDataCleaner(trapRepo, pollingRepo, snmp.DefaultCleanupConfig())
+	if err := dataCleaner.Start(); err != nil {
+		logger.Error("System", "-", "启动数据清理任务失败: %v", err)
+	} else {
+		logger.Info("System", "-", "SNMP 数据清理任务已启动")
+	}
+
 	// 修正：修正嵌入文件系统的路径级联问题
 	// core.FrontendAssets 包含了 "frontend/dist" 这一层，我们需要提取其子 FS
 	assetsFS, err := fs.Sub(core.FrontendAssets, "frontend/dist")
@@ -129,6 +176,9 @@ func runGUI() {
 			application.NewService(fileServerService),      // 文件服务器服务
 			application.NewService(frontendLogService),     // 前端日志服务
 			application.NewService(taskExecutionUIService), // 统一任务执行UI服务（阶段1）
+			application.NewService(mibService),             // SNMP MIB 管理服务
+			application.NewService(trapService),            // SNMP Trap 管理服务
+			application.NewService(pollingService),         // SNMP Polling 管理服务
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assetsFS),
@@ -149,6 +199,14 @@ func runGUI() {
 		MinWidth:         1024,
 		MinHeight:        768,
 	})
+
+	// 绑定 SNMP 事件通知器到 Wails 应用
+	snmpEventNotifier.SetWailsApp(app)
+
+	// 应用关闭时停止 Trap 监听器、轮询调度器和数据清理任务
+	defer trapListener.Stop()
+	defer pollerScheduler.Stop()
+	defer dataCleaner.Stop()
 
 	logger.Info("System", "-", "正在启动 Wails 应用主循环...")
 	if err := app.Run(); err != nil {

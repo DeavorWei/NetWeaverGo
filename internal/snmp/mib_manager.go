@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -29,7 +30,8 @@ type MIBManager struct {
 	nodeCache    *lru.Cache[string, *models.MIBNode] // OID → Node LRU 缓存
 	nameCache    *lru.Cache[string, string]           // Name → OID LRU 缓存
 	maxCacheSize int                  // 缓存容量上限
-	mu           sync.RWMutex
+	mu           sync.RWMutex         // 主锁：保护 mibRepo 访问和整体操作
+	cacheMu      sync.Mutex           // 缓存专用锁：保护 LRU cache 写操作
 }
 
 // NewMIBManager 创建 MIB 管理器实例
@@ -335,38 +337,47 @@ func (m *MIBManager) DeleteModule(id uint) error {
 // ResolveOID 解析 OID 为可读名称
 // 如果用户未导入对应 MIB，返回原始 OID 字符串（优雅降级，不报错）
 func (m *MIBManager) ResolveOID(oid string) string {
+	// 先查缓存（使用 RLock 保护读操作）
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	// 先查缓存
 	if cached, ok := m.nodeCache.Get(oid); ok {
+		m.mu.RUnlock()
 		return cached.Name
 	}
+	m.mu.RUnlock()
 
-	// 查数据库
+	// 查数据库（需要 RLock）
+	m.mu.RLock()
 	node, err := m.mibRepo.GetNodeByOID(oid)
+	m.mu.RUnlock()
+
 	if err != nil || node == nil {
 		return oid // 未找到，返回原始 OID
 	}
 
-	// 更新缓存
+	// 更新缓存（使用独立的 cacheMu Lock）
+	m.cacheMu.Lock()
 	m.nodeCache.Add(oid, node)
+	m.cacheMu.Unlock()
+
 	return node.Name
 }
 
 // ResolveName 解析名称为 OID
 // 如果未找到，返回空字符串
 func (m *MIBManager) ResolveName(name string) (string, error) {
+	// 先查缓存（使用 RLock 保护读操作）
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	// 先查缓存
 	if cached, ok := m.nameCache.Get(name); ok {
+		m.mu.RUnlock()
 		return cached, nil
 	}
+	m.mu.RUnlock()
 
-	// 查数据库
+	// 查数据库（需要 RLock）
+	m.mu.RLock()
 	node, err := m.mibRepo.GetNodeByName(name)
+	m.mu.RUnlock()
+
 	if err != nil {
 		return "", err
 	}
@@ -374,9 +385,12 @@ func (m *MIBManager) ResolveName(name string) (string, error) {
 		return "", nil // 未找到
 	}
 
-	// 更新缓存
+	// 更新缓存（使用独立的 cacheMu Lock）
+	m.cacheMu.Lock()
 	m.nameCache.Add(name, node.OID)
 	m.nodeCache.Add(node.OID, node)
+	m.cacheMu.Unlock()
+
 	return node.OID, nil
 }
 
@@ -385,7 +399,17 @@ func (m *MIBManager) SearchNodes(query string) ([]models.MIBNode, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return m.mibRepo.SearchNodes(query)
+	nodes, err := m.mibRepo.SearchNodes(query)
+	if err != nil {
+		return nil, err
+	}
+
+	// P3-4: 按名称排序返回结果，确保顺序一致
+	sort.Slice(nodes, func(i, j int) bool {
+		return nodes[i].Name < nodes[j].Name
+	})
+
+	return nodes, nil
 }
 
 // GetOIDTree 获取指定父 OID 下的子树结构
@@ -433,21 +457,27 @@ func (m *MIBManager) GetModules() ([]models.MIBModule, error) {
 
 // GetNodeByOID 通过 OID 获取节点详情
 func (m *MIBManager) GetNodeByOID(oid string) (*models.MIBNode, error) {
+	// 先查缓存（使用 RLock 保护读操作）
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	// 先查缓存
 	if cached, ok := m.nodeCache.Get(oid); ok {
+		m.mu.RUnlock()
 		return cached, nil
 	}
+	m.mu.RUnlock()
 
-	// 查数据库
+	// 查数据库（需要 RLock）
+	m.mu.RLock()
 	node, err := m.mibRepo.GetNodeByOID(oid)
+	m.mu.RUnlock()
+
 	if err != nil {
 		return nil, err
 	}
 	if node != nil {
+		// 更新缓存（使用独立的 cacheMu Lock）
+		m.cacheMu.Lock()
 		m.nodeCache.Add(oid, node)
+		m.cacheMu.Unlock()
 	}
 	return node, nil
 }

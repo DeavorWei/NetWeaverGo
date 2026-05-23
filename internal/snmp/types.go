@@ -4,6 +4,7 @@ package snmp
 
 import (
 	"context"
+	"sync"
 
 	"github.com/NetWeaverGo/core/internal/models"
 )
@@ -19,16 +20,57 @@ type EventNotifier interface {
 	// Trap 事件
 	NotifyNewTrap(trap *models.SNMPTrapRecord)
 	NotifyTrapStats(stats *TrapStats)
-	NotifyListenerStatus(running bool)
+	NotifyListenerStatus(stats *ListenerStats) // P2-13: 发送完整状态对象
+	NotifyTrapReceived(trap TrapEvent)
 
 	// 轮询事件
 	NotifyPollResult(targetID uint, results []models.SNMPPollingResult)
 	NotifyPollError(targetID uint, err error)
 	NotifySchedulerStatus(running bool)
+	NotifyPollingResult(result PollingResultEvent)
 
 	// MIB 事件
 	NotifyMIBImported(module *models.MIBModule)
 	NotifyMIBDeleted(moduleID uint)
+	NotifyMIBImportProgress(progress MIBImportProgress)
+}
+
+// ============================================================================
+// 事件类型定义（用于 Wails 实时推送）
+// ============================================================================
+
+// MIBImportProgress MIB 导入进度事件
+type MIBImportProgress struct {
+	FileName   string  `json:"fileName"`   // 正在导入的文件名
+	ModuleName string  `json:"moduleName"` // 模块名
+	Phase      string  `json:"phase"`      // 当前阶段：parsing/saving/caching/completed/error
+	Progress   float64 `json:"progress"`   // 进度百分比 0-100
+	NodesDone  int     `json:"nodesDone"`  // 已处理节点数
+	NodesTotal int     `json:"nodesTotal"` // 总节点数（预估）
+	Error      string  `json:"error"`      // 错误信息（仅 error 阶段）
+}
+
+// TrapEvent Trap 接收事件（轻量级，用于实时推送）
+type TrapEvent struct {
+	SourceIP   string `json:"sourceIP"`
+	SourcePort int    `json:"sourcePort"`
+	TrapOID    string `json:"trapOID"`
+	TrapName   string `json:"trapName"`
+	Severity   string `json:"severity"`
+	Community  string `json:"community"`
+	Version    string `json:"version"`
+	ReceivedAt int64  `json:"receivedAt"` // Unix 毫秒时间戳
+}
+
+// PollingResultEvent 轮询结果事件（轻量级，用于实时推送）
+type PollingResultEvent struct {
+	TargetID  uint   `json:"targetId"`
+	TargetIP  string `json:"targetIP"`
+	Status    string `json:"status"`    // success/error/timeout
+	Error     string `json:"error"`     // 错误信息
+	PollTime  int64  `json:"pollTime"`  // Unix 毫秒时间戳
+	OIDCount  int    `json:"oidCount"`  // 采集的 OID 数量
+	BatchID   string `json:"batchId"`   // 批次 ID
 }
 
 // ============================================================================
@@ -180,7 +222,8 @@ type OIDTranslation struct {
 // CredentialCrypto SNMP 凭据加密管理器
 // 使用 AES-256-GCM 对敏感字段加密
 type CredentialCrypto struct {
-	key []byte // 32 bytes AES-256 key
+	key []byte      // 32 bytes AES-256 key
+	mu  sync.RWMutex // 并发保护
 }
 
 // ============================================================================
