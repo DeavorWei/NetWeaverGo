@@ -31,6 +31,7 @@
   - [4.17 日志系统 internal/logger/](#417-日志系统-internallogger)
   - [4.18 报告系统 internal/report/](#418-报告系统-internalreport)
   - [4.19 UI 服务层 internal/ui/](#419-ui-服务层-internalui)
+  - [4.20 SNMP 功能模块 internal/snmp/](#420-snmp-功能模块-internalsnmp)
 - [5. 前端架构（Vue 3 + TypeScript）](#5-前端架构vue-3--typescript)
   - [5.1 技术选型](#51-技术选型)
   - [5.2 目录结构](#52-目录结构)
@@ -565,8 +566,293 @@ CompositeParser (组合解析器)
 | [`taskexec_event_bridge.go`](internal/ui/taskexec_event_bridge.go) | 任务执行事件桥接（Go→前端实时推送） |
 | [`network_calc_service.go`](internal/ui/network_calc_service.go) | 网络计算器服务 |
 | [`parse_template_service.go`](internal/ui/parse_template_service.go) | 解析模板管理服务 |
+| [`snmp_mib_service.go`](internal/ui/snmp_mib_service.go) | SNMP MIB 管理服务 |
+| [`snmp_polling_service.go`](internal/ui/snmp_polling_service.go) | SNMP 轮询管理服务 |
+| [`snmp_trap_service.go`](internal/ui/snmp_trap_service.go) | SNMP Trap 管理服务 |
+| [`snmp_event_notifier.go`](internal/ui/snmp_event_notifier.go) | SNMP 事件通知桥接 |
 | [`view_models.go`](internal/ui/view_models.go) | 视图模型定义 |
 | [`topology_command_view_models.go`](internal/ui/topology_command_view_models.go) | 拓扑命令视图模型 |
+
+### 4.20 SNMP 功能模块 internal/snmp/
+
+SNMP 模块是 NetWeaverGo 项目的网络监控核心功能，基于 **Wails v3** 框架实现前后端分离架构，提供完整的 SNMP MIB 管理、设备轮询和 Trap 监听能力。
+
+#### 4.20.1 架构分层
+
+```
+前端层 (Vue 3 + TypeScript)
+├── SNMPMib.vue          # MIB管理视图
+├── SNMPPolling.vue      # 轮询管理视图
+├── SNMPTraps.vue        # Trap监控视图
+├── useMIBTree.ts        # MIB树状态管理
+├── useSNMPPolling.ts    # 轮询状态管理
+├── useSNMPTrapStream.ts # Trap实时流管理
+└── snmpApi.ts           # API服务层
+
+Wails 绑定层
+├── Wails Static Bindings
+└── Wails Events
+
+UI 服务层 (internal/ui)
+├── SNMPMIBService       # MIB管理服务
+├── SNMPPollingService   # 轮询管理服务
+├── SNMPTrapService      # Trap管理服务
+└── SNMPEventNotifier    # 事件通知器
+
+核心引擎层 (internal/snmp)
+├── MIBManager           # MIB生命周期管理
+├── OIDResolver          # OID解析服务
+├── Poller               # SNMP轮询引擎
+├── PollerScheduler      # Cron调度器
+├── TrapListener         # UDP Trap监听
+├── TrapHandler          # Trap处理器
+├── TrapFilter           # 过滤引擎
+└── CredentialCrypto     # 凭据加密
+
+数据仓库层 (internal/repository)
+├── GormMIBRepository    # MIB数据仓库
+└── GormTrapRepository   # SNMP数据仓库
+
+数据模型层 (internal/models)
+└── snmp.go              # SNMP数据模型
+```
+
+#### 4.20.2 MIB 管理模块
+
+| 层级 | 文件 | 职责 |
+|------|------|------|
+| UI 服务 | [`snmp_mib_service.go`](internal/ui/snmp_mib_service.go) | Wails 绑定入口，VM 转换，MIB 导入/查询/导出 |
+| 核心引擎 | [`mib_manager.go`](internal/snmp/mib_manager.go) | MIB 生命周期管理，LRU 缓存，gosmi 解析 |
+| 核心引擎 | [`oid_resolver.go`](internal/snmp/oid_resolver.go) | OID↔Name 双向解析，LRU 缓存，模糊搜索 |
+| 核心引擎 | [`mib_parser.go`](internal/snmp/mib_parser.go) | gosmi 底层 MIB 文件解析封装 |
+| 数据仓库 | [`mib_repository.go`](internal/repository/mib_repository.go) | GORM 实现 MIB 模块/节点 CRUD |
+
+**核心 View Model**：
+
+| 类型 | 字段 | 说明 |
+|------|------|------|
+| `MIBModuleVM` | ID, Name, FilePath, NodeCount, ImportedAt, Description | MIB 模块视图 |
+| `MIBNodeVM` | ID, ModuleID, ParentOID, OID, Name, Syntax, Access, Status, Description, Type | MIB 节点视图 |
+| `ImportMIBRequest` | FilePath, ModuleName, Overwrite | MIB 导入请求 |
+| `ResolvedOIDVM` | OID, Name, Module, Description, Type, Syntax | OID 解析结果 |
+
+**核心接口方法**：
+
+| 方法 | 功能 | 关键实现细节 |
+|------|------|-------------|
+| `GetMIBModules()` | 获取所有 MIB 模块 | 调用 `MIBRepository.GetAllModules()` |
+| `ImportMIB(req)` | 导入 MIB 文件 | 调用 `MIBManager.ImportMIB()`，通过 EventNotifier 推送进度 |
+| `GetMIBTree(moduleID)` | 获取 MIB 树形结构 | 递归构建 `MIBTreeNode`，含子节点 |
+| `ResolveOID(oid)` | OID→名称解析 | 调用 `OIDResolver.ResolveOID()`，LRU 缓存加速 |
+| `ResolveNameToOID(name)` | 名称→OID 解析 | 调用 `OIDResolver.ResolveNameToOID()` |
+| `ExportMIB(moduleID, format)` | 导出 MIB 模块 | 支持 JSON 格式，返回 Base64 编码 |
+
+**OID 解析缓存机制**：
+
+[`OIDResolver`](internal/snmp/oid_resolver.go) 使用 **hashicorp/golang-lru** 实现双层缓存：
+- **oidToNameCache**: OID→Name 映射，默认 5000 条
+- **nameToOidCache**: Name→OID 映射，默认 5000 条
+- 缓存命中时直接返回，未命中时查询数据库并回填缓存
+- 支持 `ClearCache()` 和 `RebuildCache()` 缓存重建
+
+#### 4.20.3 轮询模块
+
+| 层级 | 文件 | 职责 |
+|------|------|------|
+| UI 服务 | [`snmp_polling_service.go`](internal/ui/snmp_polling_service.go) | Wails 绑定入口，调度器控制，凭据/模板/目标 CRUD |
+| 核心引擎 | [`poller.go`](internal/snmp/poller.go) | SNMP GET/WALK 操作，重试机制，并发控制 |
+| 核心引擎 | [`poller_scheduler.go`](internal/snmp/poller_scheduler.go) | Cron 调度器，动态目标管理，超时控制 |
+| 核心引擎 | [`crypto.go`](internal/snmp/crypto.go) | AES-256-GCM 凭据加密，密钥管理 |
+| 数据仓库 | [`snmp_repository.go`](internal/repository/snmp_repository.go) | GORM 实现凭据/模板/目标/结果 CRUD |
+
+**核心 View Model**：
+
+| 类型 | 字段 | 说明 |
+|------|------|------|
+| `CredentialVM` | ID, Name, Version, Community, Username, AuthProtocol, PrivProtocol, MaskedCommunity | SNMP 凭据视图 |
+| `PollingTemplateVM` | ID, Name, Description, OIDItems, Interval, Timeout, Retries | 轮询模板视图 |
+| `PollingTargetVM` | ID, Name, IPAddress, Port, CredentialID, TemplateID, CronExpr, Enabled, LastPollAt | 轮询目标视图 |
+| `PollingResultVM` | ID, TargetID, TargetIP, OID, OIDName, Value, Status, BatchID, PollTime | 轮询结果视图 |
+| `SchedulerStatusVM` | IsRunning, TargetCount, ActiveCount, Uptime | 调度器状态 |
+| `PollingStatsVM` | TotalPolls, SuccessCount, FailureCount, TimeoutCount, SuccessRate, AvgResponseTime | 轮询统计 |
+| `PollingTrendVM` | OID, DataPoints, StartTime, EndTime | 趋势数据 |
+
+**核心接口方法**：
+
+| 方法 | 功能 | 关键实现细节 |
+|------|------|-------------|
+| `StartScheduler()` | 启动调度器 | 初始化 `PollerScheduler`，加载所有启用目标 |
+| `StopScheduler()` | 停止调度器 | 停止 Cron 调度，等待运行中任务完成 |
+| `PollNow(targetID)` | 立即轮询单目标 | 调用 `Poller.Poll()`，返回结果 VM 列表 |
+| `PollAllNow()` | 立即轮询所有目标 | 调用 `Poller.PollBatch()`，并发执行 |
+| `CreateCredential(req)` | 创建凭据 | AES-256-GCM 加密敏感字段后存储 |
+| `GetPollingTrend(targetID, oid, duration)` | 获取趋势数据 | 按时间范围聚合轮询结果 |
+
+**Poller 核心机制**：
+
+[`Poller`](internal/snmp/poller.go) 的关键设计：
+
+1. **并发控制**: 使用 `semaphore.Weighted` 限制并发轮询数（默认 10）
+2. **重试策略**: 应用层指数退避重试，基础延迟 1s，最大 10s，加入随机抖动
+3. **SNMP 版本支持**: v1 (GET/WALK)、v2c (GET/BULKWALK)、v3 (认证+加密)
+4. **批量轮询**: `PollBatch()` 并发轮询多目标，`PollBatchNoRetry()` 无重试版本
+5. **结果批处理**: 同一目标的多个 OID 结果共享 `batchID`
+
+**凭据加密机制**：
+
+[`CredentialCrypto`](internal/snmp/crypto.go) 实现 AES-256-GCM 加密：
+
+```
+密钥来源优先级:
+1. 环境变量 NETWEAVER_SNMP_KEY (32字节 hex)
+2. 密钥文件 ~/.netweaver/snmp.key
+3. 自动生成密钥 (保存到文件)
+
+加密格式: ENC1<base64(nonce+ciphertext+tag)>
+解密: 检测 ENC1 前缀 → Base64 解码 → AES-GCM 解密
+```
+
+**调度器设计**：
+
+[`PollerScheduler`](internal/snmp/poller_scheduler.go) 基于 **robfig/cron/v3** 实现：
+
+- 支持秒级精度的 Cron 表达式
+- 动态添加/删除/更新目标（无需重启调度器）
+- 每个目标独立 Cron Entry，通过 `AddFunc` 注册
+- 可配置轮询超时（默认 30s），通过 `context.WithTimeout` 控制
+- 优雅停止：`Stop()` 等待运行中任务完成
+
+#### 4.20.4 Trap 监听模块
+
+| 层级 | 文件 | 职责 |
+|------|------|------|
+| UI 服务 | [`snmp_trap_service.go`](internal/ui/snmp_trap_service.go) | Wails 绑定入口，监听器控制，记录/过滤/配置管理 |
+| 核心引擎 | [`trap_listener.go`](internal/snmp/trap_listener.go) | UDP Trap 监听，v1/v2c/v3 支持，异步配置更新 |
+| 核心引擎 | [`trap_handler.go`](internal/snmp/trap_handler.go) | Trap 包解析，OID 解析，严重级别推断 |
+| 核心引擎 | [`trap_filter.go`](internal/snmp/trap_filter.go) | 过滤引擎，OID 前缀/CIDR/正则匹配 |
+| 数据仓库 | [`snmp_repository.go`](internal/repository/snmp_repository.go) | GORM 实现 Trap 记录/过滤规则/服务器配置 CRUD |
+
+**核心 View Model**：
+
+| 类型 | 字段 | 说明 |
+|------|------|------|
+| `TrapRecordVM` | ID, SourceIP, SourcePort, Version, Community, TrapOID, TrapName, Enterprise, GenericTrap, SpecificTrap, Severity, Variables, Acknowledged, AcknowledgedAt, ReceivedAt | Trap 记录视图 |
+| `TrapFilterVM` | SourceIP, TrapOID, Severity, Version, Community, Acknowledged, StartTime, EndTime | Trap 过滤条件 |
+| `ServerConfigVM` | ID, Name, ListenAddr, Port, Community, Version, Enabled | 服务器配置 |
+| `FilterRuleVM` | ID, Name, Action, OIDPrefix, SourceIP, Community, SeverityOverride, RegexPattern, Enabled, Priority | 过滤规则 |
+| `V3UserVM` | Username, AuthProtocol, AuthKey, PrivProtocol, PrivKey | v3 用户配置 |
+| `CleanupConfigVM` | TrapRetentionDays, PollingRetentionDays, AutoCleanupEnabled, CleanupIntervalHours | 清理配置 |
+
+**核心接口方法**：
+
+| 方法 | 功能 | 关键实现细节 |
+|------|------|-------------|
+| `StartListener(config)` | 启动 Trap 监听器 | 配置 v1/v2c/v3 参数，启动 UDP 监听 |
+| `StopListener()` | 停止监听器 | 优雅关闭，等待处理完成 |
+| `GetTrapRecords(filter, page, pageSize)` | 分页查询 Trap 记录 | 支持多条件过滤，返回总数+记录列表 |
+| `AcknowledgeTrap(id)` | 确认单条 Trap | 更新 acknowledged 状态 |
+| `BatchAcknowledgeTraps(ids)` | 批量确认 | 事务内批量更新 |
+| `CreateFilterRule(req)` | 创建过滤规则 | 预编译正则表达式，缓存 CIDR 解析结果 |
+| `ReorderFilterRules(ids)` | 重排过滤规则优先级 | 按新顺序更新 Priority 字段 |
+| `RunCleanupNow()` | 立即执行清理 | 按保留天数删除过期记录 |
+
+**Trap 过滤引擎**：
+
+[`TrapFilter`](internal/snmp/trap_filter.go) 支持三种动作：
+
+| 动作 | 效果 |
+|------|------|
+| `accept` | 接受 Trap，正常处理 |
+| `drop` | 丢弃 Trap，不存储不通知 |
+| `severity_override` | 接受 Trap，但覆盖严重级别 |
+
+匹配条件：
+- **OID 前缀匹配**: `OIDPrefix` 字段，前缀比较
+- **源 IP 匹配**: `SourceIP` 字段，支持 CIDR 表示法（预编译缓存）
+- **Community 匹配**: 精确匹配
+- **正则匹配**: `RegexPattern` 字段，预编译 `regexp.Regexp`
+
+规则按 `Priority` 排序，**首次匹配即终止**（类似防火墙规则链）。
+
+**Trap 严重级别推断**：
+
+[`TrapHandler`](internal/snmp/trap_handler.go) 的严重级别推断逻辑：
+
+```
+1. v1 Trap: 根据 GenericTrap 值推断
+   - linkDown (2), coldStart (0), warmStart (1) → critical
+   - linkUp (3) → warning
+   - 其他 → info
+
+2. v2c/v3 Trap: 根据 Trap OID 推断
+   - 含 "linkDown", "coldStart", "warmStart", "authenticationFailure" → critical
+   - 含 "linkUp", "rateLimit" → warning
+   - 其他 → info
+
+3. 过滤规则覆盖: severity_override 动作可覆盖推断结果
+```
+
+#### 4.20.5 事件通知模块
+
+[`SNMPEventNotifier`](internal/ui/snmp_event_notifier.go) 定义的事件通道：
+
+| 事件名 | 触发时机 | 数据类型 |
+|--------|---------|---------|
+| `snmp:trap:received` | 收到 Trap | `TrapEvent` |
+| `snmp:trap:stats` | 统计更新 | `TrapStats` |
+| `snmp:listener:status` | 监听器状态变更 | `ListenerStatus` |
+| `snmp:polling:result` | 轮询完成 | `PollingResultEvent` |
+| `snmp:poll:error` | 轮询错误 | `{targetId, error}` |
+| `snmp:scheduler:status` | 调度器状态变更 | `SchedulerStatus` |
+| `snmp:mib:import:progress` | MIB 导入进度 | `MIBImportProgress` |
+| `snmp:mib:imported` | MIB 导入完成 | 模块信息 |
+| `snmp:mib:deleted` | MIB 删除 | 模块 ID |
+
+**解耦设计**：
+
+核心引擎层通过 `EventNotifier` 接口解耦，不直接依赖 Wails 框架。`SNMPEventNotifier` 在 UI 层实现该接口，桥接到 Wails Events。
+
+#### 4.20.6 数据模型关系
+
+```
+MIBModule ||--o{ MIBNode : "contains"
+MIBNode ||--o{ MIBNode : "parent-child (ParentOID)"
+
+SNMPCredential ||--o{ SNMPPollingTarget : "used by"
+SNMPPollingTemplate ||--o{ SNMPPollingTarget : "applied to"
+SNMPPollingTemplate ||--o{ SNMPOIDItem : "contains"
+SNMPPollingTarget ||--o{ SNMPPollingResult : "produces"
+
+SNMPServerConfig ||--o{ SNMPTrapFilterRule : "has"
+SNMPTrapFilterRule { int Priority, string Action }
+SNMPTrapRecord { string Severity, bool Acknowledged }
+
+SNMPCredential { string Version, string Community, string Username, string AuthProtocol, string PrivProtocol, string EncryptedAuthKey, string EncryptedPrivKey }
+```
+
+#### 4.20.7 文件索引
+
+| 分类 | 文件路径 | 核心职责 |
+|------|---------|---------|
+| **UI 服务** | [`internal/ui/snmp_mib_service.go`](internal/ui/snmp_mib_service.go) | MIB 管理 Wails 服务 |
+| | [`internal/ui/snmp_polling_service.go`](internal/ui/snmp_polling_service.go) | 轮询管理 Wails 服务 |
+| | [`internal/ui/snmp_trap_service.go`](internal/ui/snmp_trap_service.go) | Trap 管理 Wails 服务 |
+| | [`internal/ui/snmp_event_notifier.go`](internal/ui/snmp_event_notifier.go) | 事件通知桥接 |
+| **核心引擎** | [`internal/snmp/poller.go`](internal/snmp/poller.go) | SNMP 轮询引擎 |
+| | [`internal/snmp/poller_scheduler.go`](internal/snmp/poller_scheduler.go) | Cron 调度器 |
+| | [`internal/snmp/trap_listener.go`](internal/snmp/trap_listener.go) | Trap 监听器 |
+| | [`internal/snmp/trap_handler.go`](internal/snmp/trap_handler.go) | Trap 处理器 |
+| | [`internal/snmp/trap_filter.go`](internal/snmp/trap_filter.go) | 过滤引擎 |
+| | [`internal/snmp/mib_manager.go`](internal/snmp/mib_manager.go) | MIB 生命周期管理 |
+| | [`internal/snmp/oid_resolver.go`](internal/snmp/oid_resolver.go) | OID 解析服务 |
+| | [`internal/snmp/mib_parser.go`](internal/snmp/mib_parser.go) | gosmi 解析封装 |
+| | [`internal/snmp/crypto.go`](internal/snmp/crypto.go) | 凭据加密 |
+| | [`internal/snmp/types.go`](internal/snmp/types.go) | 核心类型定义 |
+| | [`internal/snmp/cleanup.go`](internal/snmp/cleanup.go) | 数据清理 |
+| **数据仓库** | [`internal/repository/interfaces.go`](internal/repository/interfaces.go) | 仓库接口定义 |
+| | [`internal/repository/snmp_repository.go`](internal/repository/snmp_repository.go) | GORM 实现 (Trap+Polling) |
+| | [`internal/repository/mib_repository.go`](internal/repository/mib_repository.go) | GORM 实现 (MIB) |
+| **数据模型** | [`internal/models/snmp.go`](internal/models/snmp.go) | SNMP 数据模型 |
 
 ---
 
@@ -659,13 +945,17 @@ frontend/src/
 │   ├── useConfigBuilder.ts    # 配置构建器
 │   ├── useColumnResize.ts     # 列宽调整
 │   ├── useCancellable.ts      # 可取消操作
-│   └── useTopologyReplay.ts   # 拓扑重放
+│   ├── useTopologyReplay.ts   # 拓扑重放
+│   ├── useMIBTree.ts          # MIB 树状态管理
+│   ├── useSNMPPolling.ts      # SNMP 轮询状态管理
+│   └── useSNMPTrapStream.ts   # SNMP Trap 实时流管理
 │
 ├── router/
 │   └── index.ts               # 路由配置（Hash 模式）
 │
 ├── services/
-│   └── api.ts                 # 统一 API 导出（命名空间模式）
+│   ├── api.ts                 # 统一 API 导出（命名空间模式）
+│   └── snmpApi.ts             # SNMP API 服务层 + 事件监听
 │
 ├── stores/
 │   └── taskexecStore.ts       # 任务执行状态管理
@@ -704,6 +994,10 @@ frontend/src/
     ├── TopologyCommandConfig.vue # 拓扑命令配置
     ├── PlanCompare.vue        # 规划比对
     ├── Settings.vue           # 系统设置
+    ├── SNMP/                  # SNMP 功能模块
+    │   ├── SNMPMib.vue        # MIB 管理界面
+    │   ├── SNMPPolling.vue    # 轮询管理界面
+    │   └── SNMPTraps.vue      # Trap 监控界面
     └── Tools/
         ├── BatchPing.vue      # 批量 Ping
         ├── ConfigForge.vue    # 配置生成器
@@ -726,6 +1020,9 @@ frontend/src/
 | `/topology` | Topology | 拓扑发现 |
 | `/topology-command-config` | TopologyCommandConfig | 拓扑命令配置 |
 | `/plan-compare` | PlanCompare | 规划比对 |
+| `/snmp/mib` | SNMPMib | SNMP MIB 管理 |
+| `/snmp/polling` | SNMPPolling | SNMP 轮询管理 |
+| `/snmp/traps` | SNMPTraps | SNMP Trap 监控 |
 | `/tools/calc` | NetworkCalc | 网络计算器 |
 | `/tools/protocol` | ProtocolRef | 协议参考 |
 | `/tools/config` | ConfigForge | 配置生成器 |
@@ -777,10 +1074,97 @@ export const TaskExecutionAPI = { ... }    // 任务执行
 export const TopologyCommandAPI = { ... }  // 拓扑命令配置
 ```
 
+**SNMP API 层设计**（[`frontend/src/services/snmpApi.ts`](frontend/src/services/snmpApi.ts)）：
+
+```typescript
+// 三大 API 命名空间
+export const SNMPMIBAPI = { ... }      // MIB 管理 API (14 个方法)
+export const SNMPTrapAPI = { ... }     // Trap 管理 API (20 个方法)
+export const SNMPPollingAPI = { ... }  // 轮询管理 API (18 个方法)
+
+// 三大事件命名空间
+export const SNMPEvents = { ... }           // MIB 事件 (3 个)
+export const SNMPTrapEvents = { ... }       // Trap 事件 (3 个)
+export const SNMPPollingEvents = { ... }    // 轮询事件 (3 个)
+```
+
 **类型来源规则**：
 1. 后端 DTO 类型：全部从 `bindings/` 导入
 2. 前端视图态/表单态类型：定义在 `types/` 目录
 3. `api.ts` 仅负责聚合导出，保持类型来源唯一
+
+### 5.6 SNMP 前端 Composables 层
+
+| Composable | 文件 | 职责 |
+|-----------|------|------|
+| `useMIBTree` | [`frontend/src/composables/useMIBTree.ts`](frontend/src/composables/useMIBTree.ts) | MIB 树视图状态管理，展开/折叠、搜索导航、节点选择 |
+| `useSNMPPolling` | [`frontend/src/composables/useSNMPPolling.ts`](frontend/src/composables/useSNMPPolling.ts) | 轮询状态管理，调度器控制、目标管理、实时结果监听 |
+| `useSNMPTrapStream` | [`frontend/src/composables/useSNMPTrapStream.ts`](frontend/src/composables/useSNMPTrapStream.ts) | Trap 实时流管理，监听器状态、实时 Trap 缓存、通知系统 |
+
+**useMIBTree 核心设计**：
+
+```typescript
+// 状态
+selectedNodeId, expandedNodeIds, searchQuery, searchResults, highlightedNodeIds
+
+// 计算属性
+flattenedNodes  // 扁平化可见节点列表（根据展开状态过滤）
+selectedNode    // 当前选中节点
+currentSearchResult  // 当前搜索结果
+
+// 关键方法
+searchNodes(query)     // 搜索：名称/OID/描述三维匹配
+expandToNode(nodeId)   // 展开路径到指定节点
+nextSearchResult()     // 搜索结果导航
+```
+
+**useSNMPPolling 核心设计**：
+
+```typescript
+// 状态
+schedulerStatus, targets, credentials, templates
+latestResults: Map<number, PollingResultEvent>  // 按目标 ID 索引
+targetStats: Map<number, PollingStatsVM>        // 按目标 ID 索引
+newResultTargetIds: Set<number>                 // 高亮目标集合
+
+// 事件监听 (Wails Events)
+onPollingResult → 更新 latestResults + 添加高亮
+onSchedulerStatusChanged → 更新 schedulerStatus
+onPollingError → 日志记录
+
+// 高亮机制
+addHighlight(targetId) → 5s 后自动移除
+isNewResult(targetId) → 模板中用于条件样式
+```
+
+**useSNMPTrapStream 核心设计**：
+
+```typescript
+// 状态
+latestTraps: TrapRecordVM[]       // 实时缓存 (最大 100 条)
+listenerStatus, trapStats
+newTrapIds: Set<number>           // 高亮 Trap 集合
+unacknowledgedCount               // 未确认计数
+notificationSettings              // 通知配置
+
+// 事件监听 (Wails Events)
+onTrapReceived → handleTrapReceived() → 添加到缓存 + 高亮 + 通知
+onListenerStatusChanged → 更新 listenerStatus
+onTrapStats → 更新 trapStats + unacknowledgedCount
+
+// 通知系统
+playAlertSound(severity)    // Web Audio API 生成提示音 (critical:880Hz, warning:660Hz, info:440Hz)
+sendDesktopNotification()   // Browser Notification API
+requestNotificationPermission()
+```
+
+### 5.7 SNMP 视图层
+
+| 视图 | 文件 | 布局 | 核心功能 |
+|------|------|------|---------|
+| `SNMPMib.vue` | [`frontend/src/views/SNMP/SNMPMib.vue`](frontend/src/views/SNMP/SNMPMib.vue) | 三栏：模块列表 + 树视图 + 节点详情 | MIB 导入/删除、树导航、OID 搜索、缓存管理、导出 |
+| `SNMPPolling.vue` | [`frontend/src/views/SNMP/SNMPPolling.vue`](frontend/src/views/SNMP/SNMPPolling.vue) | 选项卡式：概览/凭据/模板/目标/结果 | 调度器控制、CRUD 表单、实时结果、趋势图 |
+| `SNMPTraps.vue` | [`frontend/src/views/SNMP/SNMPTraps.vue`](frontend/src/views/SNMP/SNMPTraps.vue) | 选项卡式：记录/过滤规则/配置/v3用户 | 监听器控制、记录表格、批量确认、过滤管理 |
 
 ### 5.6 组件体系
 
@@ -808,8 +1192,11 @@ common/         → 通用 UI 组件
 | BatchPing | 结果表格、进度条 | 批量探测 |
 | FileServers | 服务器状态、日志 | 文件服务管理 |
 | Settings | RuntimeConfigPanel | 系统配置 |
+| SNMPMib | MIB 模块列表、树视图、节点详情 | MIB 管理 |
+| SNMPPolling | 调度器面板、目标/凭据/模板表单、趋势图 | SNMP 轮询 |
+| SNMPTraps | 记录表格、过滤规则、监听器配置 | Trap 监控 |
 
-### 5.7 样式架构
+### 5.8 样式架构
 
 采用 **Tailwind CSS 4.2 + CSS 变量主题系统**：
 
@@ -870,7 +1257,44 @@ styles/
 │ planned_links       │ 规划链路                               │
 │ diff_reports        │ 差异报告                               │
 │ diff_items          │ 差异项                                 │
+├─────────────────────┴───────────────────────────────────────┤
+│                      SNMP 功能表                             │
+├─────────────────────┬───────────────────────────────────────┤
+│ mib_modules         │ MIB 模块（名称/文件路径/导入时间）       │
+│ mib_nodes           │ MIB 节点（OID/名称/语法/访问/描述）      │
+│ snmp_credentials    │ SNMP 凭据（版本/Community/v3认证）      │
+│ snmp_polling_       │ 轮询模板（OID列表/间隔/超时/重试）       │
+│   templates         │                                        │
+│ snmp_oid_items      │ OID 采集项（OID/名称/模板关联）          │
+│ snmp_polling_       │ 轮询目标（IP/端口/凭据/模板/Cron）       │
+│   targets           │                                        │
+│ snmp_polling_       │ 轮询结果（目标/OID/值/状态/时间）        │
+│   results           │                                        │
+│ snmp_server_        │ SNMP Trap 服务器配置（监听地址/端口）    │
+│   configs           │                                        │
+│ snmp_trap_          │ Trap 过滤规则（动作/OID前缀/优先级）     │
+│   filter_rules      │                                        │
+│ snmp_trap_records   │ Trap 记录（源IP/OID/严重级别/变量）      │
+│ snmp_v3_users       │ SNMP v3 用户（用户名/认证/加密密钥）     │
 └─────────────────────┴───────────────────────────────────────┘
+```
+
+### 6.3 SNMP 数据模型关系
+
+```
+MIBModule ||--o{ MIBNode : "contains"
+MIBNode ||--o{ MIBNode : "parent-child (ParentOID)"
+
+SNMPCredential ||--o{ SNMPPollingTarget : "used by"
+SNMPPollingTemplate ||--o{ SNMPPollingTarget : "applied to"
+SNMPPollingTemplate ||--o{ SNMPOIDItem : "contains"
+SNMPPollingTarget ||--o{ SNMPPollingResult : "produces"
+
+SNMPServerConfig ||--o{ SNMPTrapFilterRule : "has"
+SNMPTrapFilterRule { int Priority, string Action }
+SNMPTrapRecord { string Severity, bool Acknowledged }
+
+SNMPCredential { string Version, string Community, string Username, string AuthProtocol, string PrivProtocol, string EncryptedAuthKey, string EncryptedPrivKey }
 ```
 
 ---
@@ -1011,6 +1435,120 @@ RuntimeManager.Execute()
             └── 冲突检测      → 冲突标记
 ```
 
+### SNMP MIB 导入数据流
+
+```
+用户选择 MIB 文件
+    │
+    ▼
+SNMPMib.vue 调用 snmpApi.importMIB(req)
+    │
+    ▼
+SNMPMIBService.ImportMIB(req)
+    │
+    ▼
+MIBManager.ImportMIB(filePath, overwrite)
+    │
+    ├── gosmi 解析 MIB 文件
+    │   └── MIBParser.Parse() → 模块 + 节点列表
+    │
+    ├── 保存到数据库
+    │   ├── MIBRepository.SaveModule()
+    │   └── MIBRepository.SaveNodes()
+    │
+    └── EventNotifier 推送进度事件
+        └── SNMPEventNotifier.Emit("snmp:mib:import:progress")
+```
+
+### SNMP 轮询数据流
+
+```
+用户启动调度器
+    │
+    ▼
+SNMPPollingService.StartScheduler()
+    │
+    ▼
+PollerScheduler.Start()
+    │
+    ├── 加载所有启用的轮询目标
+    │   └── PollingRepository.ListEnabledTargets()
+    │
+    ├── 为每个目标注册 Cron Entry
+    │   └── cron.AddFunc(target.CronExpr, func() { poll(target) })
+    │
+    └── 定时触发轮询
+        │
+        ▼
+    Poller.Poll(target)
+        │
+        ├── 建立 SNMP 连接 (gosnmp)
+        │   ├── v1/v2c: Community String
+        │   └── v3: USM 认证
+        │
+        ├── 执行 GET/WALK 操作
+        │   └── 遍历模板 OID 列表
+        │
+        ├── 重试机制 (指数退避)
+        │
+        └── 保存结果
+            ├── PollingRepository.SaveResult()
+            └── EventNotifier.Emit("snmp:polling:result")
+```
+
+### SNMP Trap 接收数据流
+
+```
+网络设备发送 SNMP Trap PDU (UDP)
+    │
+    ▼
+TrapListener 接收 UDP 数据包
+    │
+    ▼
+TrapHandler.Handle(packet)
+    │
+    ├── 解析 v1/v2c/v3 包头
+    │   ├── v1: Enterprise + GenericTrap + SpecificTrap
+    │   ├── v2c: TrapOID 变量绑定
+    │   └── v3: USM 解密 + 认证验证
+    │
+    ├── OID 解析
+    │   └── OIDResolver.ResolveOID(trapOID)
+    │
+    ├── 严重级别推断
+    │   └── TrapHandler.inferSeverity(trap)
+    │
+    ├── 应用过滤规则
+    │   └── TrapFilter.Apply(trap)
+    │       ├── OID 前缀匹配
+    │       ├── 源 IP CIDR 匹配
+    │       ├── 正则匹配
+    │       └── 首次匹配即终止
+    │
+    ├── 动作判断
+    │   ├── drop → 丢弃，不存储
+    │   ├── accept → 保存到数据库
+    │   └── severity_override → 覆盖严重级别后保存
+    │
+    └── 保存 + 事件推送
+        ├── TrapRepository.CreateTrap()
+        └── EventNotifier.Emit("snmp:trap:received")
+```
+
+### SNMP 实时通信机制
+
+```
+Go 后端
+├── 核心引擎 → 调用 EventNotifier 接口
+├── EventNotifier → 实现 SNMPEventNotifier
+└── SNMPEventNotifier → Emit Wails Runtime Events
+
+TypeScript 前端
+├── Events.On eventName → 回调 Composable 处理函数
+├── Composable → 更新 Vue Reactive State
+└── Vue Reactive State → 驱动 Vue 模板渲染
+```
+
 ---
 
 ## 10. 模块依赖关系
@@ -1055,8 +1593,17 @@ ui
     ├── normalize
     ├── plancompare
     ├── repository
+    ├── snmp
     ├── taskexec
     └── utils
+
+snmp
+    ├── config
+    ├── logger
+    ├── models
+    ├── repository
+    └── (外部依赖: github.com/gosnmp/gosnmp, github.com/sleepinggenius2/gosmi,
+              github.com/hashicorp/golang-lru, github.com/robfig/cron/v3)
 
 parser
     └── (独立，仅依赖标准库)
@@ -1105,6 +1652,41 @@ config
 
 models
     └── (独立，仅依赖标准库)
+```
+
+### 10.1 SNMP 模块依赖关系
+
+```
+Go 包依赖:
+
+internal/ui → internal/snmp
+internal/ui → internal/repository
+internal/ui → internal/models
+internal/snmp → internal/repository
+internal/snmp → internal/models
+
+internal/snmp → github.com/gosnmp/gosnmp
+internal/snmp → github.com/sleepinggenius2/gosmi
+internal/snmp → github.com/hashicorp/golang-lru
+internal/snmp → github.com/robfig/cron/v3
+
+internal/ui → wailsio/runtime
+internal/repository → gorm.io/gorm
+```
+
+### 10.2 SNMP 前端依赖关系
+
+```
+SNMPMib.vue → useMIBTree
+SNMPPolling.vue → useSNMPPolling
+SNMPTraps.vue → useSNMPTrapStream
+
+useMIBTree → snmpApi.ts
+useSNMPPolling → snmpApi.ts
+useSNMPTrapStream → snmpApi.ts
+
+snmpApi.ts → Wails Bindings
+snmpApi.ts → @wailsio/runtime Events
 ```
 
 ---
