@@ -60,6 +60,7 @@ func AutoMigrateSNMP() error {
 		&models.SNMPPollingTemplate{},
 		&models.SNMPPollingTarget{},
 		&models.SNMPPollingResult{},
+		&models.MIBFolder{},
 		&models.MIBModule{},
 		&models.MIBNode{},
 	)

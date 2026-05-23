@@ -1,5 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import ElementPlus from 'element-plus'
+import 'element-plus/dist/index.css'
 import './styles/index.css'
 import App from './App.vue'
 import router from './router'
@@ -20,6 +22,7 @@ setupGlobalErrorCapture()
 // ==================== Vue 应用初始化 ====================
 const app = createApp(App)
 app.use(createPinia())
+app.use(ElementPlus)
 
 // 全局错误处理器 - 捕获 Vue 组件渲染错误，并记录到日志系统
 app.config.errorHandler = (err, instance, info) => {

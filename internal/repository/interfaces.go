@@ -111,6 +111,14 @@ type MIBRepository interface {
 	SaveModule(module *models.MIBModule) error
 	DeleteModule(id uint) error
 
+	// 文件夹管理
+	GetAllFolders() ([]models.MIBFolder, error)
+	GetFolderByID(id uint) (*models.MIBFolder, error)
+	GetFolderByName(name string) (*models.MIBFolder, error)
+	SaveFolder(folder *models.MIBFolder) error
+	DeleteFolder(id uint) error
+	MoveModuleToFolder(moduleID uint, folderID *uint) error
+
 	// 节点管理
 	GetNodeByID(id uint) (*models.MIBNode, error)
 	GetNodeByOID(oid string) (*models.MIBNode, error)
@@ -123,6 +131,7 @@ type MIBRepository interface {
 	DeleteNode(id uint) error
 	DeleteNodesByModule(moduleID uint) error
 	SearchNodes(query string) ([]models.MIBNode, error)
+	SearchNodesInModule(moduleID uint, query string) ([]models.MIBNode, error)
 	GetAllNodes() ([]models.MIBNode, error)
 }
 

@@ -167,15 +167,26 @@ func (SNMPPollingResult) TableName() string { return "snmp_polling_results" }
 // MIB 管理（无内置 MIB，全部由用户创建或导入）
 // ============================================================================
 
+// MIBFolder 已创建的 MIB 文件夹
+type MIBFolder struct {
+	ID        uint      `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name      string    `json:"name" gorm:"uniqueIndex;not null"` // 文件夹名称（如 Huawei MIBs）
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+func (MIBFolder) TableName() string { return "mib_folders" }
+
 // MIBModule 已导入的 MIB 模块
 type MIBModule struct {
 	ID          uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name        string    `json:"name" gorm:"uniqueIndex;not null"` // 模块名（如 IF-MIB）
-	FileName    string    `json:"fileName"`                         // 原始文件名
+	FolderID    *uint     `json:"folderId" gorm:"column:folder_id;index"` // 关联的文件夹 ID
+	Name        string    `json:"name" gorm:"uniqueIndex;not null"`      // 模块名（如 IF-MIB）
+	FileName    string    `json:"fileName"`                              // 原始文件名
 	Description string    `json:"description"`
-	Source      string    `json:"source"`                           // import/manual
+	Source      string    `json:"source"`                                // import/manual
 	NodeCount   int       `json:"nodeCount"`
-	FilePath    string    `json:"filePath"`                         // MIB 文件存储路径
+	FilePath    string    `json:"filePath"`                              // MIB 文件存储路径
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }

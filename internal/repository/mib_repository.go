@@ -4,6 +4,7 @@ package repository
 
 import (
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/NetWeaverGo/core/internal/models"
 )
@@ -57,7 +58,78 @@ func (r *GormMIBRepository) SaveModule(module *models.MIBModule) error {
 }
 
 func (r *GormMIBRepository) DeleteModule(id uint) error {
-	return r.db.Delete(&models.MIBModule{}, id).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// 级联删除该模块下的所有节点
+		if err := tx.Where("module_id = ?", id).Delete(&models.MIBNode{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&models.MIBModule{}, id).Error
+	})
+}
+
+// ============================================================================
+// 文件夹管理
+// ============================================================================
+
+func (r *GormMIBRepository) GetAllFolders() ([]models.MIBFolder, error) {
+	var folders []models.MIBFolder
+	err := r.db.Order("name ASC").Find(&folders).Error
+	return folders, err
+}
+
+func (r *GormMIBRepository) GetFolderByID(id uint) (*models.MIBFolder, error) {
+	var folder models.MIBFolder
+	err := r.db.First(&folder, id).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &folder, nil
+}
+
+func (r *GormMIBRepository) GetFolderByName(name string) (*models.MIBFolder, error) {
+	var folder models.MIBFolder
+	err := r.db.Where("name = ?", name).First(&folder).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &folder, nil
+}
+
+func (r *GormMIBRepository) SaveFolder(folder *models.MIBFolder) error {
+	return r.db.Save(folder).Error
+}
+
+func (r *GormMIBRepository) DeleteFolder(id uint) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// 1. 查询该文件夹下的所有模块
+		var modules []models.MIBModule
+		if err := tx.Where("folder_id = ?", id).Find(&modules).Error; err != nil {
+			return err
+		}
+		
+		// 2. 依次删除所有模块及节点
+		for _, m := range modules {
+			if err := tx.Where("module_id = ?", m.ID).Delete(&models.MIBNode{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Delete(&models.MIBModule{}, m.ID).Error; err != nil {
+				return err
+			}
+		}
+		
+		// 3. 删除文件夹自身
+		return tx.Delete(&models.MIBFolder{}, id).Error
+	})
+}
+
+func (r *GormMIBRepository) MoveModuleToFolder(moduleID uint, folderID *uint) error {
+	return r.db.Model(&models.MIBModule{}).Where("id = ?", moduleID).Update("folder_id", folderID).Error
 }
 
 // ============================================================================
@@ -126,7 +198,10 @@ func (r *GormMIBRepository) SaveNodes(nodes []models.MIBNode) error {
 	if len(nodes) == 0 {
 		return nil
 	}
-	return r.db.CreateInBatches(nodes, 100).Error
+	return r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "oid"}},
+		DoUpdates: clause.AssignmentColumns([]string{"name", "parent_oid", "node_type", "syntax", "access", "status", "description", "source", "module_id", "updated_at"}),
+	}).CreateInBatches(nodes, 100).Error
 }
 
 func (r *GormMIBRepository) DeleteNode(id uint) error {
@@ -139,12 +214,25 @@ func (r *GormMIBRepository) DeleteNodesByModule(moduleID uint) error {
 
 func (r *GormMIBRepository) SearchNodes(query string) ([]models.MIBNode, error) {
 	var nodes []models.MIBNode
-	err := r.db.Where("name LIKE ? OR oid LIKE ?", "%"+query+"%", "%"+query+"%").
+	err := r.db.Joins("LEFT JOIN mib_modules ON mib_nodes.module_id = mib_modules.id").
+		Where("mib_nodes.name LIKE ? OR mib_nodes.oid LIKE ? OR mib_nodes.description LIKE ? OR mib_modules.name LIKE ?",
+			"%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%").
+		Order("mib_nodes.oid ASC").
+		Limit(100).
+		Find(&nodes).Error
+	return nodes, err
+}
+
+func (r *GormMIBRepository) SearchNodesInModule(moduleID uint, query string) ([]models.MIBNode, error) {
+	var nodes []models.MIBNode
+	err := r.db.Where("module_id = ? AND (name LIKE ? OR oid LIKE ? OR description LIKE ?)",
+		moduleID, "%"+query+"%", "%"+query+"%", "%"+query+"%").
 		Order("oid ASC").
 		Limit(100).
 		Find(&nodes).Error
 	return nodes, err
 }
+
 
 func (r *GormMIBRepository) GetAllNodes() ([]models.MIBNode, error) {
 	var nodes []models.MIBNode

@@ -25,6 +25,8 @@ const DefaultResolverCacheSize = 5000
 
 // ResolvedOID OID 解析结果
 type ResolvedOID struct {
+	ID          uint     `json:"id"`          // 数据库节点 ID
+	ModuleID    uint     `json:"moduleId"`    // 数据库模块 ID
 	OID         string   `json:"oid"`         // 原始 OID
 	Name        string   `json:"name"`        // 解析后的名称
 	ModuleName  string   `json:"moduleName"`  // 所属 MIB 模块
@@ -244,6 +246,7 @@ func (r *OIDResolver) GetSubtree(oid string) ([]*ResolvedOID, error) {
 // buildResolvedOID 从 MIBNode 构建解析结果
 func (r *OIDResolver) buildResolvedOID(node *models.MIBNode) *ResolvedOID {
 	result := &ResolvedOID{
+		ID:          node.ID,
 		OID:         node.OID,
 		Name:        node.Name,
 		Description: node.Description,
@@ -257,6 +260,7 @@ func (r *OIDResolver) buildResolvedOID(node *models.MIBNode) *ResolvedOID {
 
 	// 获取模块名称
 	if node.ModuleID != nil {
+		result.ModuleID = *node.ModuleID
 		module, err := r.repo.GetModuleByID(*node.ModuleID)
 		if err == nil && module != nil {
 			result.ModuleName = module.Name

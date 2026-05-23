@@ -29,7 +29,7 @@ func main() {
 	}
 
 	// 初始化前端日志写入器
-	if err := logger.InitFrontendLogWriter(pm.GetFrontendLogPath(), logger.DefaultFrontendLogWriterConfig); err != nil {
+	if err := logger.InitFrontendLogWriter(pm.GetFrontendLogPath(), logger.DefaultFrontendLogWriterConfig, true); err != nil {
 		logger.Error("System", "-", "前端日志系统初始化失败: %v", err)
 		// 非致命错误，继续运行
 	}

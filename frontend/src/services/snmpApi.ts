@@ -27,6 +27,7 @@ import * as $snmpModels from '../bindings/github.com/NetWeaverGo/core/internal/s
 
 // 重导出绑定类型供前端使用
 export type {
+  MIBFolderVM,
   MIBModuleVM,
   MIBNodeVM,
   ResolvedOIDVM,
@@ -92,13 +93,40 @@ export const SNMPMIBAPI = {
   },
 
   /** 批量导入 MIB 文件 */
-  importMIBFiles: async (filePaths: string[]): Promise<void> => {
-    return SNMPMIBServiceBinding.ImportMIBFiles(filePaths)
+  importMIBFiles: async (filePaths: string[], folderID: number | null): Promise<void> => {
+    return SNMPMIBServiceBinding.ImportMIBFiles(filePaths, folderID)
   },
 
   /** 删除 MIB 模块 */
   deleteMIBModule: async (moduleID: number): Promise<void> => {
     return SNMPMIBServiceBinding.DeleteMIBModule(moduleID)
+  },
+
+  // ==================== MIB 文件夹管理 ====================
+
+  /** 获取所有 MIB 文件夹 */
+  getMIBFolders: async (): Promise<$models.MIBFolderVM[]> => {
+    return SNMPMIBServiceBinding.GetMIBFolders()
+  },
+
+  /** 创建 MIB 文件夹 */
+  createMIBFolder: async (name: string): Promise<number> => {
+    return SNMPMIBServiceBinding.CreateMIBFolder(name)
+  },
+
+  /** 重命名 MIB 文件夹 */
+  renameMIBFolder: async (id: number, name: string): Promise<void> => {
+    return SNMPMIBServiceBinding.RenameMIBFolder(id, name)
+  },
+
+  /** 删除 MIB 文件夹 */
+  deleteMIBFolder: async (id: number): Promise<void> => {
+    return SNMPMIBServiceBinding.DeleteMIBFolder(id)
+  },
+
+  /** 移动 MIB 模块到文件夹 */
+  moveMIBModuleToFolder: async (moduleID: number, folderID: number | null): Promise<void> => {
+    return SNMPMIBServiceBinding.MoveMIBModuleToFolder(moduleID, folderID)
   },
 
   // ==================== MIB 节点管理 ====================
@@ -144,6 +172,17 @@ export const SNMPMIBAPI = {
   searchMIBNodes: async (query: string): Promise<$models.MIBNodeVM[]> => {
     return SNMPMIBServiceBinding.SearchMIBNodes(query)
   },
+
+  /** 在指定模块中搜索 MIB 节点 */
+  searchMIBNodesInModule: async (moduleID: number, query: string): Promise<$models.MIBNodeVM[]> => {
+    return SNMPMIBServiceBinding.SearchMIBNodesInModule(moduleID, query)
+  },
+
+  /** 导入 MIB 文件夹下的所有 MIB 文件 */
+  importMIBFolder: async (folderPath: string, folderID: number | null): Promise<void> => {
+    return SNMPMIBServiceBinding.ImportMIBFolder(folderPath, folderID)
+  },
+
 
   // ==================== 缓存管理 ====================
 
@@ -674,3 +713,4 @@ export type PollingTrend = $models.PollingTrendVM
 export type CleanupConfig = $models.CleanupConfigVM
 export type CleanupResult = $models.CleanupResultVM
 export type V3User = $models.V3UserVM
+export type MIBFolder = $models.MIBFolderVM

@@ -157,7 +157,7 @@
                 <line x1="12" y1="8" x2="12.01" y2="8"/>
               </svg>
               <p class="text-xs text-info break-words">
-                启用 Verbose 会自动同时启用 Debug。日志文件保存在 <code class="bg-bg-panel px-1 py-0.5 rounded break-all">{{ settings.storageRoot || './netWeaverGoData' }}/logs/app/app.log</code>
+                启用 Verbose 会自动同时启用 Debug。日志文件保存在 <code class="bg-bg-panel px-1 py-0.5 rounded break-all">{{ settings.storageRoot || './netWeaverGoData' }}/logs/app.log</code>
               </p>
             </div>
           </div>

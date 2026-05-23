@@ -6,6 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -22,6 +25,7 @@ import (
 // MIBModuleVM MIB 模块视图模型
 type MIBModuleVM struct {
 	ID          uint      `json:"id"`
+	FolderID    *uint     `json:"folderId"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	Version     string    `json:"version"`
@@ -34,6 +38,7 @@ type MIBModuleVM struct {
 type MIBNodeVM struct {
 	ID          uint   `json:"id"`
 	ModuleID    uint   `json:"moduleId"`
+	ModuleName  string `json:"moduleName"`
 	OID         string `json:"oid"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -46,9 +51,10 @@ type MIBNodeVM struct {
 
 // ImportMIBRequest 导入 MIB 请求
 type ImportMIBRequest struct {
-	FilePath     string `json:"filePath"`
-	ModuleName   string `json:"moduleName,omitempty"`
+	FilePath      string `json:"filePath"`
+	ModuleName    string `json:"moduleName,omitempty"`
 	PartialImport bool   `json:"partialImport"` // 是否允许部分导入
+	FolderID      *uint  `json:"folderId,omitempty"`
 }
 
 // CreateMIBNodeRequest 创建 MIB 节点请求
@@ -140,6 +146,7 @@ func (s *SNMPMIBService) GetMIBModules(ctx context.Context) ([]MIBModuleVM, erro
 	for _, m := range modules {
 		vms = append(vms, MIBModuleVM{
 			ID:          m.ID,
+			FolderID:    m.FolderID,
 			Name:        m.Name,
 			Description: m.Description,
 			Version:     "", // 从描述中提取版本信息（如果有）
@@ -167,6 +174,7 @@ func (s *SNMPMIBService) GetMIBModule(ctx context.Context, moduleID uint) (*MIBM
 
 	vm := &MIBModuleVM{
 		ID:          module.ID,
+		FolderID:    module.FolderID,
 		Name:        module.Name,
 		Description: module.Description,
 		NodeCount:   module.NodeCount,
@@ -187,7 +195,7 @@ func (s *SNMPMIBService) ImportMIB(ctx context.Context, req ImportMIBRequest) er
 	})
 
 	// 执行导入
-	result, err := s.mibManager.ImportMIBFile(ctx, req.FilePath)
+	result, err := s.mibManager.ImportMIBFile(ctx, req.FilePath, req.FolderID)
 	if err != nil {
 		// 发送错误事件
 		s.eventNotifier.NotifyMIBImportProgress(snmp.MIBImportProgress{
@@ -233,11 +241,14 @@ func (s *SNMPMIBService) ImportMIB(ctx context.Context, req ImportMIBRequest) er
 	logger.Info("SNMP", "-", "MIB 模块导入成功: %s (%d 节点, %d 错误)",
 		result.Module.Name, result.NodeCount, result.ErrorCount)
 
+	// 清除 OID 解析器缓存，确保新导入的节点和状态能被立即查到
+	s.oidResolver.ClearCache()
+
 	return nil
 }
 
 // ImportMIBFiles 批量导入 MIB 文件
-func (s *SNMPMIBService) ImportMIBFiles(ctx context.Context, filePaths []string) error {
+func (s *SNMPMIBService) ImportMIBFiles(ctx context.Context, filePaths []string, folderID *uint) error {
 	if len(filePaths) == 0 {
 		return nil
 	}
@@ -262,6 +273,7 @@ func (s *SNMPMIBService) ImportMIBFiles(ctx context.Context, filePaths []string)
 		err := s.ImportMIB(ctx, ImportMIBRequest{
 			FilePath:      filePath,
 			PartialImport: true,
+			FolderID:      folderID,
 		})
 
 		if err != nil {
@@ -309,6 +321,160 @@ func (s *SNMPMIBService) DeleteMIBModule(ctx context.Context, moduleID uint) err
 
 	logger.Info("SNMP", "-", "MIB 模块已删除: %s", moduleName)
 
+	// 清除 OID 解析器缓存，确保被删除的节点不会在缓存中残留
+	s.oidResolver.ClearCache()
+
+	return nil
+}
+
+// ============================================================================
+// MIB 文件夹管理
+// ============================================================================
+
+// MIBFolderVM MIB 文件夹视图模型
+type MIBFolderVM struct {
+	ID        uint      `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// GetMIBFolders 获取所有 MIB 文件夹列表
+func (s *SNMPMIBService) GetMIBFolders(ctx context.Context) ([]MIBFolderVM, error) {
+	folders, err := s.repo.GetAllFolders()
+	if err != nil {
+		logger.Error("SNMP", "-", "获取 MIB 文件夹列表失败: %v", err)
+		return nil, fmt.Errorf("获取 MIB 文件夹列表失败: %v", err)
+	}
+
+	vms := make([]MIBFolderVM, 0, len(folders))
+	for _, f := range folders {
+		vms = append(vms, MIBFolderVM{
+			ID:        f.ID,
+			Name:      f.Name,
+			CreatedAt: f.CreatedAt,
+			UpdatedAt: f.UpdatedAt,
+		})
+	}
+
+	logger.Debug("SNMP", "-", "获取 MIB 文件夹列表: %d 个", len(vms))
+	return vms, nil
+}
+
+// CreateMIBFolder 创建 MIB 文件夹
+func (s *SNMPMIBService) CreateMIBFolder(ctx context.Context, name string) (uint, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return 0, fmt.Errorf("文件夹名称不能为空")
+	}
+
+	// 检查重名
+	existing, err := s.repo.GetFolderByName(name)
+	if err != nil {
+		return 0, fmt.Errorf("检查文件夹重名失败: %v", err)
+	}
+	if existing != nil {
+		return 0, fmt.Errorf("已存在同名文件夹: %s", name)
+	}
+
+	folder := &models.MIBFolder{
+		Name: name,
+	}
+	if err := s.repo.SaveFolder(folder); err != nil {
+		logger.Error("SNMP", "-", "创建 MIB 文件夹失败: %v", err)
+		return 0, fmt.Errorf("创建 MIB 文件夹失败: %v", err)
+	}
+
+	logger.Info("SNMP", "-", "MIB 文件夹已创建: ID=%d, 名称=%s", folder.ID, folder.Name)
+	return folder.ID, nil
+}
+
+// RenameMIBFolder 重命名 MIB 文件夹
+func (s *SNMPMIBService) RenameMIBFolder(ctx context.Context, id uint, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("文件夹名称不能为空")
+	}
+
+	folder, err := s.repo.GetFolderByID(id)
+	if err != nil {
+		return fmt.Errorf("查询文件夹失败: %v", err)
+	}
+	if folder == nil {
+		return fmt.Errorf("文件夹不存在: ID %d", id)
+	}
+
+	if folder.Name == name {
+		return nil
+	}
+
+	// 检查重名
+	existing, err := s.repo.GetFolderByName(name)
+	if err != nil {
+		return fmt.Errorf("检查文件夹重名失败: %v", err)
+	}
+	if existing != nil {
+		return fmt.Errorf("已存在同名文件夹: %s", name)
+	}
+
+	folder.Name = name
+	if err := s.repo.SaveFolder(folder); err != nil {
+		logger.Error("SNMP", "-", "重命名 MIB 文件夹失败: ID=%d, %v", id, err)
+		return fmt.Errorf("重命名 MIB 文件夹失败: %v", err)
+	}
+
+	logger.Info("SNMP", "-", "MIB 文件夹已重命名: ID=%d, 新名称=%s", id, name)
+	return nil
+}
+
+// DeleteMIBFolder 删除 MIB 文件夹
+func (s *SNMPMIBService) DeleteMIBFolder(ctx context.Context, id uint) error {
+	folder, err := s.repo.GetFolderByID(id)
+	if err != nil {
+		return fmt.Errorf("查询文件夹失败: %v", err)
+	}
+	if folder == nil {
+		return fmt.Errorf("文件夹不存在: ID %d", id)
+	}
+
+	if err := s.repo.DeleteFolder(id); err != nil {
+		logger.Error("SNMP", "-", "删除 MIB 文件夹失败: ID=%d, %v", id, err)
+		return fmt.Errorf("删除 MIB 文件夹失败: %v", err)
+	}
+
+	// 重建缓存以释放已删除节点
+	_ = s.oidResolver.RebuildCache()
+
+	logger.Info("SNMP", "-", "MIB 文件夹已删除: ID=%d, 名称=%s", id, folder.Name)
+	return nil
+}
+
+// MoveMIBModuleToFolder 移动 MIB 模块到文件夹
+func (s *SNMPMIBService) MoveMIBModuleToFolder(ctx context.Context, moduleID uint, folderID *uint) error {
+	module, err := s.repo.GetModuleByID(moduleID)
+	if err != nil {
+		return fmt.Errorf("查询模块失败: %v", err)
+	}
+	if module == nil {
+		return fmt.Errorf("模块不存在: ID %d", moduleID)
+	}
+
+	if folderID != nil {
+		folder, err := s.repo.GetFolderByID(*folderID)
+		if err != nil {
+			return fmt.Errorf("查询目标文件夹失败: %v", err)
+		}
+		if folder == nil {
+			return fmt.Errorf("目标文件夹不存在: ID %d", *folderID)
+		}
+	}
+
+	if err := s.repo.MoveModuleToFolder(moduleID, folderID); err != nil {
+		logger.Error("SNMP", "-", "移动 MIB 模块失败: module=%d, folder=%v, %v", moduleID, folderID, err)
+		return fmt.Errorf("移动 MIB 模块失败: %v", err)
+	}
+
+	logger.Info("SNMP", "-", "MIB 模块已移动: module=%d, folder=%v", moduleID, folderID)
 	return nil
 }
 
@@ -335,13 +501,25 @@ func (s *SNMPMIBService) GetMIBTree(ctx context.Context, moduleID uint) ([]snmp.
 	}
 
 	// 构建树形结构
-	treeNodes := make([]snmp.MIBTreeNode, 0)
-	nodeMap := make(map[string]*snmp.MIBTreeNode)
+	// 使用 map 存储所有临时节点的指针
+	type tempNode struct {
+		ID          uint
+		OID         string
+		Name        string
+		NodeType    string
+		Syntax      string
+		Access      string
+		Status      string
+		Description string
+		Children    []*tempNode
+	}
 
-	// 第一遍：创建所有节点
+	nodeMap := make(map[string]*tempNode)
+
+	// 第一遍：创建所有模块内的节点
 	for i := range nodes {
 		node := &nodes[i]
-		treeNode := &snmp.MIBTreeNode{
+		nodeMap[node.OID] = &tempNode{
 			ID:          node.ID,
 			OID:         node.OID,
 			Name:        node.Name,
@@ -350,30 +528,157 @@ func (s *SNMPMIBService) GetMIBTree(ctx context.Context, moduleID uint) ([]snmp.
 			Access:      node.Access,
 			Status:      node.Status,
 			Description: node.Description,
-			Children:    []snmp.MIBTreeNode{},
-			HasChildren: false,
+			Children:    []*tempNode{},
 		}
-		nodeMap[node.OID] = treeNode
 	}
 
-	// 第二遍：建立父子关系
+	// 第二遍：为所有缺失的父节点创建全局父节点
 	for i := range nodes {
 		node := &nodes[i]
-		treeNode := nodeMap[node.OID]
-
-		if node.ParentOID == "" {
-			// 根节点
-			treeNodes = append(treeNodes, *treeNode)
-		} else {
-			// 添加到父节点
-			if parent, ok := nodeMap[node.ParentOID]; ok {
-				parent.Children = append(parent.Children, *treeNode)
-				parent.HasChildren = true
+		if node.ParentOID != "" {
+			if _, ok := nodeMap[node.ParentOID]; !ok {
+				// 父节点不在当前模块 of nodeMap 中，尝试从全局查询（包括虚拟节点）
+				globalParent, err := s.repo.GetNodeByOID(node.ParentOID)
+				if err == nil && globalParent != nil {
+					// 将全局父节点加入 nodeMap
+					nodeMap[node.ParentOID] = &tempNode{
+						ID:          globalParent.ID,
+						OID:         globalParent.OID,
+						Name:        globalParent.Name,
+						NodeType:    globalParent.NodeType,
+						Syntax:      globalParent.Syntax,
+						Access:      globalParent.Access,
+						Status:      globalParent.Status,
+						Description: globalParent.Description,
+						Children:    []*tempNode{},
+					}
+					logger.Debug("SNMP", "-", "MIB 节点引用全局父节点: OID=%s, ParentOID=%s, Name=%s, ParentSource=%s",
+						node.OID, node.ParentOID, node.Name, globalParent.Source)
+				} else {
+					logger.Warn("SNMP", "-", "MIB 节点父节点缺失: OID=%s, ParentOID=%s, Name=%s",
+						node.OID, node.ParentOID, node.Name)
+				}
 			}
 		}
 	}
 
+	// 第三遍：建立父子关系
+	for i := range nodes {
+		node := &nodes[i]
+		tNode := nodeMap[node.OID]
+		if tNode == nil {
+			continue
+		}
+
+		if node.ParentOID != "" {
+			if parent, ok := nodeMap[node.ParentOID]; ok {
+				parent.Children = append(parent.Children, tNode)
+			}
+		}
+	}
+
+	// 第四遍：收集所有根节点
+	// 根节点定义：ParentOID 为空，或者 ParentOID 不在 nodeMap 中
+	// 重要：必须在所有父子关系建立完成后，再从 nodeMap 提取根节点
+	rootNodes := make([]*tempNode, 0)
+	collectedRoots := make(map[string]bool)
+
+	// 收集模块内节点的根节点
+	for i := range nodes {
+		node := &nodes[i]
+		if node.ParentOID == "" {
+			// ParentOID 为空，是根节点
+			if !collectedRoots[node.OID] {
+				if tNode, ok := nodeMap[node.OID]; ok {
+					rootNodes = append(rootNodes, tNode)
+					collectedRoots[node.OID] = true
+				}
+			}
+		} else if _, ok := nodeMap[node.ParentOID]; !ok {
+			// ParentOID 不在 nodeMap 中，说明父节点缺失，该节点作为根节点
+			if !collectedRoots[node.OID] {
+				if tNode, ok := nodeMap[node.OID]; ok {
+					rootNodes = append(rootNodes, tNode)
+					collectedRoots[node.OID] = true
+				}
+			}
+		}
+	}
+
+	// 收集全局父节点作为根节点（它们没有父节点在 nodeMap 中）
+	for oid, tNode := range nodeMap {
+		// 检查是否是模块内的节点
+		isModuleNode := false
+		for _, n := range nodes {
+			if n.OID == oid {
+				isModuleNode = true
+				break
+			}
+		}
+		// 如果不是模块内的节点，说明是全局父节点，应该作为根节点
+		if !isModuleNode && !collectedRoots[oid] {
+			rootNodes = append(rootNodes, tNode)
+			collectedRoots[oid] = true
+		}
+	}
+
+	// 递归转换为 snmp.MIBTreeNode
+	var convert func(*tempNode) snmp.MIBTreeNode
+	convert = func(tn *tempNode) snmp.MIBTreeNode {
+		children := make([]snmp.MIBTreeNode, 0, len(tn.Children))
+		for _, child := range tn.Children {
+			children = append(children, convert(child))
+		}
+		return snmp.MIBTreeNode{
+			ID:          tn.ID,
+			OID:         tn.OID,
+			Name:        tn.Name,
+			NodeType:    tn.NodeType,
+			Syntax:      tn.Syntax,
+			Access:      tn.Access,
+			Status:      tn.Status,
+			Description: tn.Description,
+			Children:    children,
+			HasChildren: len(children) > 0,
+		}
+	}
+
+	treeNodes := make([]snmp.MIBTreeNode, 0, len(rootNodes))
+	for _, rn := range rootNodes {
+		treeNodes = append(treeNodes, convert(rn))
+	}
+
 	logger.Debug("SNMP", "-", "获取 MIB 树: %s (%d 根节点)", module.Name, len(treeNodes))
+
+	// 收集该模块在树中的所有最顶层入口节点（即节点本身属于该模块，且其祖先节点不属于该模块）
+	moduleOIDs := make(map[string]bool)
+	for i := range nodes {
+		moduleOIDs[nodes[i].OID] = true
+	}
+
+	var findModuleRoots func(node snmp.MIBTreeNode) []snmp.MIBTreeNode
+	findModuleRoots = func(node snmp.MIBTreeNode) []snmp.MIBTreeNode {
+		if moduleOIDs[node.OID] {
+			return []snmp.MIBTreeNode{node}
+		}
+		var roots []snmp.MIBTreeNode
+		for _, child := range node.Children {
+			roots = append(roots, findModuleRoots(child)...)
+		}
+		return roots
+	}
+
+	moduleRoots := make([]snmp.MIBTreeNode, 0)
+	for _, rn := range treeNodes {
+		moduleRoots = append(moduleRoots, findModuleRoots(rn)...)
+	}
+
+	if len(moduleRoots) > 0 {
+		logger.Debug("SNMP", "-", "找到模块主入口节点: %d 个", len(moduleRoots))
+		return moduleRoots, nil
+	}
+
+	logger.Debug("SNMP", "-", "未找到模块内节点，返回完整树")
 
 	return treeNodes, nil
 }
@@ -517,6 +822,9 @@ func (s *SNMPMIBService) SearchMIBNodes(ctx context.Context, query string) ([]MI
 	vms := make([]MIBNodeVM, 0, len(results))
 	for _, r := range results {
 		vm := MIBNodeVM{
+			ID:          r.ID,
+			ModuleID:    r.ModuleID,
+			ModuleName:  r.ModuleName,
 			OID:         r.OID,
 			Name:        r.Name,
 			Description: r.Description,
@@ -530,6 +838,69 @@ func (s *SNMPMIBService) SearchMIBNodes(ctx context.Context, query string) ([]MI
 	logger.Debug("SNMP", "-", "搜索 MIB 节点: '%s' -> %d 结果", query, len(vms))
 
 	return vms, nil
+}
+
+// SearchMIBNodesInModule 在指定 MIB 模块中搜索节点
+func (s *SNMPMIBService) SearchMIBNodesInModule(ctx context.Context, moduleID uint, query string) ([]MIBNodeVM, error) {
+	nodes, err := s.repo.SearchNodesInModule(moduleID, query)
+	if err != nil {
+		return nil, fmt.Errorf("模块内搜索节点失败: %v", err)
+	}
+
+	// 获取模块名称
+	moduleName := ""
+	module, err := s.repo.GetModuleByID(moduleID)
+	if err == nil && module != nil {
+		moduleName = module.Name
+	}
+
+	vms := make([]MIBNodeVM, 0, len(nodes))
+	for _, node := range nodes {
+		vm := MIBNodeVM{
+			ID:          node.ID,
+			ModuleID:    moduleID,
+			ModuleName:  moduleName,
+			OID:         node.OID,
+			Name:        node.Name,
+			Description: node.Description,
+			Type:        node.Syntax,
+			Access:      node.Access,
+			Status:      node.Status,
+		}
+		vms = append(vms, vm)
+	}
+
+	logger.Debug("SNMP", "-", "模块内搜索 MIB 节点: module=%d, '%s' -> %d 结果", moduleID, query, len(vms))
+
+	return vms, nil
+}
+
+// ImportMIBFolder 导入文件夹下的所有 MIB 文件
+func (s *SNMPMIBService) ImportMIBFolder(ctx context.Context, folderPath string, folderID *uint) error {
+	var filePaths []string
+	err := filepath.WalkDir(folderPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			ext := strings.ToLower(filepath.Ext(path))
+			if ext == ".mib" || ext == ".my" || ext == ".txt" {
+				filePaths = append(filePaths, path)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("读取文件夹失败: %v", err)
+	}
+
+	if len(filePaths) == 0 {
+		return fmt.Errorf("在该文件夹下未找到有效的 MIB 文件 (*.mib, *.my, *.txt)")
+	}
+
+	logger.Info("SNMP", "-", "开始从文件夹 %s 导入 %d 个 MIB 文件", folderPath, len(filePaths))
+
+	return s.ImportMIBFiles(ctx, filePaths, folderID)
 }
 
 // ============================================================================

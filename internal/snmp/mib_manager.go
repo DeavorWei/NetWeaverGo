@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -76,7 +77,7 @@ func (m *MIBManager) Close() {
 // ImportMIBFile 导入 MIB 文件
 // 流程：复制文件到存储目录 → 解析 MIB → 存入数据库 → 更新缓存
 // 支持部分导入策略：即使部分节点解析失败，已成功的节点仍保留
-func (m *MIBManager) ImportMIBFile(ctx context.Context, filePath string) (*MIBImportResult, error) {
+func (m *MIBManager) ImportMIBFile(ctx context.Context, filePath string, folderID *uint) (*MIBImportResult, error) {
 	importStartTime := time.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -106,7 +107,8 @@ func (m *MIBManager) ImportMIBFile(ctx context.Context, filePath string) (*MIBIm
 
 	// 解析 MIB 文件
 	parseStartTime := time.Now()
-	result, err := m.parser.ParseFile(storedPath)
+	dependencyDirs := []string{m.mibStoreDir, filepath.Dir(filePath)}
+	result, err := m.parser.ParseFileWithDependencies(storedPath, dependencyDirs)
 	if err != nil {
 		// 解析失败，删除已复制的文件
 		_ = os.Remove(storedPath)
@@ -128,6 +130,7 @@ func (m *MIBManager) ImportMIBFile(ctx context.Context, filePath string) (*MIBIm
 
 	// 保存模块到数据库
 	saveStartTime := time.Now()
+	result.Module.FolderID = folderID
 	if err := m.mibRepo.SaveModule(result.Module); err != nil {
 		_ = os.Remove(storedPath)
 		logger.Error("SNMP-MIB", "-", "保存 MIB 模块失败: %s, %v", result.Module.Name, err)
@@ -135,21 +138,52 @@ func (m *MIBManager) ImportMIBFile(ctx context.Context, filePath string) (*MIBIm
 	}
 	logger.Debug("SNMP-MIB", "-", "模块保存完成: ID=%d, 名称=%s, 耗时=%v", result.Module.ID, result.Module.Name, time.Since(saveStartTime))
 
-	// 设置节点的 ModuleID 并保存
+	// 设置节点的 ModuleID
 	moduleID := result.Module.ID
 	for i := range result.Nodes {
 		result.Nodes[i].ModuleID = &moduleID
 	}
 
-	if len(result.Nodes) > 0 {
+	// 检测并创建虚拟父节点
+	virtualStartTime := time.Now()
+	virtualNodes, err := m.detectAndCreateVirtualParentNodes(ctx, result.Nodes)
+	if err != nil {
+		logger.Warn("SNMP-MIB", "-", "检测虚拟父节点失败: %v", err)
+		// 不阻断导入流程，继续执行
+	} else if len(virtualNodes) > 0 {
+		// 保存虚拟父节点
+		if err := m.mibRepo.SaveNodes(virtualNodes); err != nil {
+			logger.Warn("SNMP-MIB", "-", "保存虚拟父节点失败: %v", err)
+		} else {
+			logger.Info("SNMP-MIB", "-", "虚拟父节点创建完成: 数量=%d, 耗时=%v", len(virtualNodes), time.Since(virtualStartTime))
+		}
+	}
+
+	// 合并虚拟节点（如果真实节点对应的虚拟节点已存在）
+	mergeStartTime := time.Now()
+	if err := m.mergeVirtualNodes(result.Nodes); err != nil {
+		logger.Warn("SNMP-MIB", "-", "合并虚拟节点失败: %v", err)
+		// 不阻断导入流程，继续执行
+	}
+	logger.Debug("SNMP-MIB", "-", "虚拟节点合并完成: 耗时=%v", time.Since(mergeStartTime))
+
+	// 过滤掉已经合并保存过的虚拟节点（ID != 0），避免触发 SQLite UNIQUE constraint failed: mib_nodes.id
+	newNodes := make([]models.MIBNode, 0, len(result.Nodes))
+	for _, node := range result.Nodes {
+		if node.ID == 0 {
+			newNodes = append(newNodes, node)
+		}
+	}
+
+	if len(newNodes) > 0 {
 		saveNodesStartTime := time.Now()
-		if err := m.mibRepo.SaveNodes(result.Nodes); err != nil {
+		if err := m.mibRepo.SaveNodes(newNodes); err != nil {
 			_ = m.mibRepo.DeleteModule(moduleID)
 			_ = os.Remove(storedPath)
 			logger.Error("SNMP-MIB", "-", "保存 MIB 节点失败: 模块=%s, %v", result.Module.Name, err)
 			return nil, fmt.Errorf("保存 MIB 节点失败: %v", err)
 		}
-		logger.Debug("SNMP-MIB", "-", "节点保存完成: 数量=%d, 耗时=%v", len(result.Nodes), time.Since(saveNodesStartTime))
+		logger.Debug("SNMP-MIB", "-", "节点保存完成: 数量=%d, 耗时=%v", len(newNodes), time.Since(saveNodesStartTime))
 	}
 
 	// 更新缓存
@@ -542,4 +576,168 @@ func (m *MIBManager) CacheStats() (nodeCacheLen, nameCacheLen int) {
 	defer m.mu.RUnlock()
 
 	return m.nodeCache.Len(), m.nameCache.Len()
+}
+
+// ============================================================================
+// 虚拟父节点管理
+// ============================================================================
+
+// detectAndCreateVirtualParentNodes 检测并创建缺失的父节点
+// 当导入的 MIB 节点引用了其他模块的父节点时，创建虚拟父节点以确保树结构完整
+func (m *MIBManager) detectAndCreateVirtualParentNodes(ctx context.Context, nodes []models.MIBNode) ([]models.MIBNode, error) {
+	requiredParentOIDs := make(map[string]bool)
+
+	// 收集所有需要的 ParentOID
+	for _, node := range nodes {
+		if node.ParentOID != "" {
+			requiredParentOIDs[node.ParentOID] = true
+		}
+	}
+
+	// 移除当前批次中已存在的 OID
+	for _, node := range nodes {
+		delete(requiredParentOIDs, node.OID)
+	}
+
+	// 检查数据库中是否存在，收集需要创建的虚拟节点
+	virtualNodes := []models.MIBNode{}
+	for oid := range requiredParentOIDs {
+		existing, err := m.mibRepo.GetNodeByOID(oid)
+		if err != nil {
+			logger.Warn("SNMP-MIB", "-", "查询父节点失败: OID=%s, 错误=%v", oid, err)
+			continue
+		}
+		if existing == nil {
+			// 创建虚拟节点
+			virtualNode := models.MIBNode{
+				OID:         oid,
+				Name:        m.generateVirtualNodeName(oid),
+				ParentOID:   m.calculateParentOID(oid),
+				NodeType:    "node",
+				Source:      "virtual",
+				ModuleID:    nil,
+				Description: "虚拟节点（待实际节点导入后替换）",
+			}
+			virtualNodes = append(virtualNodes, virtualNode)
+		}
+	}
+
+	// 递归处理虚拟节点的父节点
+	allVirtualNodes := []models.MIBNode{}
+	allVirtualNodes = append(allVirtualNodes, virtualNodes...)
+
+	// 递归创建祖先虚拟节点
+	for len(virtualNodes) > 0 {
+		ancestorVirtualNodes := []models.MIBNode{}
+		for _, vnode := range virtualNodes {
+			if vnode.ParentOID == "" {
+				continue // 已到达根节点
+			}
+
+			// 检查父节点是否存在
+			parentExists := false
+			// 检查当前批次节点
+			for _, n := range nodes {
+				if n.OID == vnode.ParentOID {
+					parentExists = true
+					break
+				}
+			}
+			// 检查已收集的虚拟节点
+			if !parentExists {
+				for _, vn := range allVirtualNodes {
+					if vn.OID == vnode.ParentOID {
+						parentExists = true
+						break
+					}
+				}
+			}
+			// 检查数据库
+			if !parentExists {
+				existing, err := m.mibRepo.GetNodeByOID(vnode.ParentOID)
+				if err == nil && existing != nil {
+					parentExists = true
+				}
+			}
+
+			// 如果父节点不存在，创建祖先虚拟节点
+			if !parentExists {
+				ancestorNode := models.MIBNode{
+					OID:         vnode.ParentOID,
+					Name:        m.generateVirtualNodeName(vnode.ParentOID),
+					ParentOID:   m.calculateParentOID(vnode.ParentOID),
+					NodeType:    "node",
+					Source:      "virtual",
+					ModuleID:    nil,
+					Description: "虚拟节点（待实际节点导入后替换）",
+				}
+				ancestorVirtualNodes = append(ancestorVirtualNodes, ancestorNode)
+			}
+		}
+
+		// 添加祖先虚拟节点到总列表
+		if len(ancestorVirtualNodes) > 0 {
+			allVirtualNodes = append(allVirtualNodes, ancestorVirtualNodes...)
+		}
+		// 继续处理祖先的祖先
+		virtualNodes = ancestorVirtualNodes
+	}
+
+	return allVirtualNodes, nil
+}
+
+// generateVirtualNodeName 为虚拟节点生成名称
+func (m *MIBManager) generateVirtualNodeName(oid string) string {
+	parts := strings.Split(oid, ".")
+	if len(parts) > 0 {
+		return "virtual_" + parts[len(parts)-1]
+	}
+	return "virtual_" + strings.ReplaceAll(oid, ".", "_")
+}
+
+// calculateParentOID 根据 OID 计算父节点 OID
+func (m *MIBManager) calculateParentOID(oid string) string {
+	if oid == "" {
+		return ""
+	}
+
+	parts := strings.Split(oid, ".")
+	if len(parts) <= 1 {
+		return "" // 根节点没有父节点
+	}
+
+	// 移除最后一个部分得到父节点 OID
+	return strings.Join(parts[:len(parts)-1], ".")
+}
+
+// mergeVirtualNodes 合并虚拟节点与真实节点
+// 当导入真实节点时，如果存在对应的虚拟节点，则更新为真实节点
+func (m *MIBManager) mergeVirtualNodes(nodes []models.MIBNode) error {
+	for i := range nodes {
+		existing, err := m.mibRepo.GetNodeByOID(nodes[i].OID)
+		if err != nil {
+			continue
+		}
+		if existing != nil && existing.Source == "virtual" {
+			// 更新虚拟节点为真实节点
+			existing.Name = nodes[i].Name
+			existing.NodeType = nodes[i].NodeType
+			existing.Syntax = nodes[i].Syntax
+			existing.Access = nodes[i].Access
+			existing.Status = nodes[i].Status
+			existing.Description = nodes[i].Description
+			existing.Source = nodes[i].Source
+			existing.ModuleID = nodes[i].ModuleID
+
+			if err := m.mibRepo.SaveNode(existing); err != nil {
+				logger.Warn("SNMP-MIB", "-", "合并虚拟节点失败: OID=%s, 错误=%v", nodes[i].OID, err)
+				continue
+			}
+
+			// 更新节点引用，使用已存在的 ID
+			nodes[i].ID = existing.ID
+			logger.Info("SNMP-MIB", "-", "虚拟节点已合并: OID=%s, 名称=%s", nodes[i].OID, nodes[i].Name)
+		}
+	}
+	return nil
 }

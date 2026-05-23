@@ -124,6 +124,18 @@ func (p *MIBParser) parseFileLocked(ctx context.Context, filePath string, depend
 	logger.Info("SNMP-Parser", "-", "MIB 解析完成: 文件=%s, 模块=%s, 节点数=%d, 错误数=%d, 总耗时=%v",
 		filePath, result.Module.Name, result.NodeCount, result.ErrorCount, totalLatency)
 
+	// 打印解析错误详情
+	if len(result.Errors) > 0 {
+		for _, parseErr := range result.Errors {
+			if parseErr.NodeName != "" {
+				logger.Warn("SNMP-Parser", "-", "MIB 解析错误: 节点=%s, 消息=%s",
+					parseErr.NodeName, parseErr.Message)
+			} else {
+				logger.Warn("SNMP-Parser", "-", "MIB 解析错误: 消息=%s", parseErr.Message)
+			}
+		}
+	}
+
 	return result, nil
 }
 
@@ -151,8 +163,24 @@ func (p *MIBParser) parseMibData(loadedMib *mib.Mib, filePath string) *MIBImport
 		return result
 	}
 
-	// 取第一个模块作为主模块（通常单文件加载只有一个模块）
-	primaryModule := modules[0]
+	// 找出与当前解析的文件路径匹配的模块作为主模块
+	var primaryModule *mib.Module
+	targetAbs, err := filepath.Abs(filePath)
+	if err == nil {
+		targetAbsLower := strings.ToLower(targetAbs)
+		for _, m := range modules {
+			mPathAbs, err := filepath.Abs(m.SourcePath())
+			if err == nil && targetAbsLower == strings.ToLower(mPathAbs) {
+				primaryModule = m
+				break
+			}
+		}
+	}
+
+	// 如果未找到路径完全匹配的，则尝试回退到第一个模块
+	if primaryModule == nil {
+		primaryModule = modules[0]
+	}
 
 	// 构建模块模型
 	mibModule := &models.MIBModule{
@@ -171,6 +199,10 @@ func (p *MIBParser) parseMibData(loadedMib *mib.Mib, filePath string) *MIBImport
 	root := loadedMib.Root()
 	if root != nil {
 		for node := range root.Subtree() {
+			// 仅保存当前主模块定义的节点
+			if node.Module() == nil || node.Module().Name() != primaryModule.Name() {
+				continue
+			}
 			mibNode, err := p.convertMibNodeToMIBNode(node, nil)
 			if err != nil {
 				parseErrors = append(parseErrors, MIBParseError{
@@ -213,8 +245,8 @@ func (p *MIBParser) convertMibNodeToMIBNode(node *mib.Node, moduleID *uint) (*mo
 	// 获取节点类型
 	nodeType := convertKind(node.Kind())
 
-	// 获取访问权限和状态（从 Object 获取）
-	access := "unknown"
+	// 获取访问权限和状态
+	access := "not-applicable"
 	status := "unknown"
 	syntax := ""
 	description := node.Description()
@@ -225,7 +257,36 @@ func (p *MIBParser) convertMibNodeToMIBNode(node *mib.Node, moduleID *uint) (*mo
 		if typ := obj.Type(); typ != nil {
 			syntax = typ.Name()
 		}
+		if description == "" {
+			description = obj.Description()
+		}
+	} else if node.IsObjectIdentity() {
+		if st, ok := node.ObjectIdentityStatus(); ok {
+			status = convertStatus(st)
+		}
+	} else if notif := node.Notification(); notif != nil {
+		status = convertStatus(notif.Status())
+		if description == "" {
+			description = notif.Description()
+		}
+	} else if grp := node.Group(); grp != nil {
+		status = convertStatus(grp.Status())
+		if description == "" {
+			description = grp.Description()
+		}
+	} else if comp := node.Compliance(); comp != nil {
+		status = convertStatus(comp.Status())
+		if description == "" {
+			description = comp.Description()
+		}
+	} else if capObj := node.Capability(); capObj != nil {
+		status = convertStatus(capObj.Status())
+		if description == "" {
+			description = capObj.Description()
+		}
 	}
+
+	description = cleanDescription(description)
 
 	return &models.MIBNode{
 		ModuleID:    moduleID,
@@ -397,4 +458,39 @@ func (p *MIBParser) ClearModules() {
 	defer p.mu.Unlock()
 
 	p.loadedMib = nil
+}
+
+// cleanDescription 过滤描述文本中多余的换行和连续空格，同时保留合法的段落换行
+func cleanDescription(desc string) string {
+	if desc == "" {
+		return ""
+	}
+
+	// 统一换行符
+	desc = strings.ReplaceAll(desc, "\r\n", "\n")
+	lines := strings.Split(desc, "\n")
+	var cleanedParagraphs []string
+	var currentParagraphLines []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			// 空行：当前段落结束
+			if len(currentParagraphLines) > 0 {
+				cleanedParagraphs = append(cleanedParagraphs, strings.Join(currentParagraphLines, " "))
+				currentParagraphLines = nil
+			}
+		} else {
+			// 非空行：清理行内多余的连续空格和 Tab 并合并到当前段落
+			words := strings.Fields(trimmed)
+			innerCleaned := strings.Join(words, " ")
+			currentParagraphLines = append(currentParagraphLines, innerCleaned)
+		}
+	}
+
+	if len(currentParagraphLines) > 0 {
+		cleanedParagraphs = append(cleanedParagraphs, strings.Join(currentParagraphLines, " "))
+	}
+
+	return strings.Join(cleanedParagraphs, "\n\n")
 }

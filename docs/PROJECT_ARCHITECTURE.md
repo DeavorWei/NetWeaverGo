@@ -291,7 +291,8 @@ main()
 ```
 StorageRoot (netWeaverGoData/)
 ├── db/netweaver.db              # SQLite 数据库
-├── logs/app/app.log             # 应用日志
+├── logs/app.log                 # 应用日志
+├── logs/frontend.log            # 前端日志
 ├── execution/reports/           # 执行报告 CSV
 ├── execution/live_logs/         # 实时日志
 ├── backup/configs/              # 配置备份
