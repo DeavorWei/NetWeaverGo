@@ -17,18 +17,18 @@ import { SNMPPollingAPI } from '@/services/snmpApi'
 import { useSNMPPolling } from '@/composables/useSNMPPolling'
 import { getLogger } from '@/utils/logger'
 import type {
-  Credential,
-  PollingTemplate,
-  PollingTarget,
-  PollingResult,
-  PollingResultFilter,
+  CredentialVM,
+  PollingTemplateVM,
+  PollingTargetVM,
+  PollingResultVM,
   CreateCredentialRequest,
   UpdateCredentialRequest,
   CreatePollingTemplateRequest,
   UpdatePollingTemplateRequest,
   CreatePollingTargetRequest,
   UpdatePollingTargetRequest,
-} from '@/types/snmp'
+} from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
+import { PollingResultFilterVM } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 
 const logger = getLogger()
 
@@ -64,7 +64,7 @@ const {
 // ==================== 状态 ====================
 
 /** 轮询结果列表 */
-const pollingResults = ref<PollingResult[]>([])
+const pollingResults = ref<PollingResultVM[]>([])
 const resultsLoading = ref(false)
 const totalResults = ref(0)
 const currentPage = ref(1)
@@ -72,11 +72,11 @@ const pageSize = ref(20)
 const totalPages = ref(0)
 
 /** 选中的目标 */
-const selectedTarget = ref<PollingTarget | null>(null)
-const selectedResult = ref<PollingResult | null>(null)
+const selectedTarget = ref<PollingTargetVM | null>(null)
+const selectedResult = ref<PollingResultVM | null>(null)
 
 /** 结果过滤条件 */
-const resultFilter = ref<PollingResultFilter>({})
+const resultFilter = ref<PollingResultFilterVM>(new PollingResultFilterVM())
 
 /** 目标过滤条件 */
 const targetFilterEnabled = ref<boolean | undefined>(undefined)
@@ -91,9 +91,9 @@ const showTemplateModal = ref(false)
 const showTargetModal = ref(false)
 
 /** 编辑状态 */
-const editingCredential = ref<Credential | null>(null)
-const editingTemplate = ref<PollingTemplate | null>(null)
-const editingTarget = ref<PollingTarget | null>(null)
+const editingCredential = ref<CredentialVM | null>(null)
+const editingTemplate = ref<PollingTemplateVM | null>(null)
+const editingTarget = ref<PollingTargetVM | null>(null)
 
 /** 面板宽度 */
 const leftPanelWidth = ref(280)
@@ -122,7 +122,6 @@ const credentialForm = ref<CreateCredentialRequest & { id?: number }>({
 /** 模板表单 */
 const templateForm = ref<CreatePollingTemplateRequest & { id?: number }>({
   name: '',
-  displayName: '',
   description: '',
   category: '',
   oidItems: [],
@@ -179,9 +178,11 @@ async function loadPollingResults() {
       currentPage.value,
       pageSize.value
     )
-    pollingResults.value = result.data
-    totalResults.value = result.total
-    totalPages.value = result.totalPages
+    if (result) {
+      pollingResults.value = result.data
+      totalResults.value = result.total
+      totalPages.value = result.totalPages
+    }
   } catch (error) {
     logger.error('SNMP-Polling', '加载轮询结果失败', error)
   } finally {
@@ -192,12 +193,12 @@ async function loadPollingResults() {
 /**
  * 选择目标
  */
-function selectTarget(target: PollingTarget) {
+function selectTarget(target: PollingTargetVM) {
   selectedTarget.value = target
   // 加载该目标的统计信息
   loadTargetStats(target.id)
   // 设置结果过滤
-  resultFilter.value = { targetId: target.id }
+  resultFilter.value = new PollingResultFilterVM({ targetId: target.id })
   currentPage.value = 1
   loadPollingResults()
 }
@@ -205,7 +206,7 @@ function selectTarget(target: PollingTarget) {
 /**
  * 选择轮询结果
  */
-function selectResult(result: PollingResult) {
+function selectResult(result: PollingResultVM) {
   selectedResult.value = result
 }
 
@@ -268,7 +269,7 @@ async function handlePollAllNow() {
 /**
  * 切换目标启用状态
  */
-async function handleToggleTarget(target: PollingTarget) {
+async function handleToggleTarget(target: PollingTargetVM) {
   try {
     await toggleTarget(target.id, !target.enabled)
   } catch {
@@ -279,7 +280,7 @@ async function handleToggleTarget(target: PollingTarget) {
 /**
  * 删除目标
  */
-async function handleDeleteTarget(target: PollingTarget) {
+async function handleDeleteTarget(target: PollingTargetVM) {
   try {
     await ElMessageBox.confirm(`确定要删除目标「${target.displayName}」吗？`, '删除确认', {
       confirmButtonText: '确定',
@@ -305,7 +306,7 @@ async function handleDeleteTarget(target: PollingTarget) {
 /**
  * 打开凭据编辑对话框
  */
-function openCredentialModal(credential: Credential | null = null) {
+function openCredentialModal(credential: CredentialVM | null = null) {
   if (credential) {
     editingCredential.value = credential
     credentialForm.value = {
@@ -387,7 +388,7 @@ async function saveCredential() {
 /**
  * 删除凭据
  */
-async function deleteCredential(credential: Credential) {
+async function deleteCredential(credential: CredentialVM) {
   try {
     await ElMessageBox.confirm(`确定要删除凭据「${credential.name}」吗？`, '删除确认', {
       confirmButtonText: '确定',
@@ -398,7 +399,7 @@ async function deleteCredential(credential: Credential) {
     return // 用户取消
   }
   try {
-    await SNMPPollingAPI.deleteCredential(credential.id)
+    await SNMPPollingAPI.deleteCredential(Number(credential.id))
     await loadCredentials()
   } catch (error) {
     logger.error('SNMP-Polling', '删除凭据失败', error)
@@ -415,7 +416,7 @@ function toggleCommunityVisibility(id: number) {
 /**
  * 获取 Community 显示文本
  */
-function getCommunityDisplay(credential: Credential): string {
+function getCommunityDisplay(credential: CredentialVM): string {
   const visible = showCommunityMap.value.get(credential.id) ?? false
   return visible ? credential.community : '••••••••'
 }
@@ -425,13 +426,12 @@ function getCommunityDisplay(credential: Credential): string {
 /**
  * 打开模板编辑对话框
  */
-function openTemplateModal(template: PollingTemplate | null = null) {
+function openTemplateModal(template: PollingTemplateVM | null = null) {
   if (template) {
     editingTemplate.value = template
     templateForm.value = {
       id: template.id,
       name: template.name,
-      displayName: template.displayName,
       description: template.description,
       category: template.category,
       oidItems: [...template.oidItems],
@@ -440,7 +440,6 @@ function openTemplateModal(template: PollingTemplate | null = null) {
     editingTemplate.value = null
     templateForm.value = {
       name: '',
-      displayName: '',
       description: '',
       category: '',
       oidItems: [],
@@ -485,7 +484,6 @@ async function saveTemplate() {
     } else {
       const req: CreatePollingTemplateRequest = {
         name: templateForm.value.name,
-        displayName: templateForm.value.displayName,
         description: templateForm.value.description,
         category: templateForm.value.category,
         oidItems: templateForm.value.oidItems,
@@ -502,7 +500,7 @@ async function saveTemplate() {
 /**
  * 删除模板
  */
-async function deleteTemplate(template: PollingTemplate) {
+async function deleteTemplate(template: PollingTemplateVM) {
   try {
     await ElMessageBox.confirm(`确定要删除模板「${template.name}」吗？`, '删除确认', {
       confirmButtonText: '确定',
@@ -525,7 +523,7 @@ async function deleteTemplate(template: PollingTemplate) {
 /**
  * 打开目标编辑对话框
  */
-function openTargetModal(target: PollingTarget | null = null) {
+function openTargetModal(target: PollingTargetVM | null = null) {
   if (target) {
     editingTarget.value = target
     targetForm.value = {
@@ -645,7 +643,7 @@ async function clearOldResults() {
  * 重置结果过滤
  */
 function resetResultFilter() {
-  resultFilter.value = {}
+  resultFilter.value = new PollingResultFilterVM()
   currentPage.value = 1
   loadPollingResults()
 }
@@ -843,7 +841,7 @@ watch(targetFilterEnabled, () => {
                 </div>
               </div>
               <div class="flex items-center gap-2 mt-1.5">
-                <span class="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">{{ cred.snmpVersion }}</span>
+                <span class="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">{{ cred.version }}</span>
                 <span class="text-xs text-text-muted font-mono">
                   {{ getCommunityDisplay(cred) }}
                 </span>
@@ -860,7 +858,7 @@ watch(targetFilterEnabled, () => {
                   </svg>
                 </button>
               </div>
-              <div v-if="cred.description" class="text-xs text-text-muted mt-1 truncate">{{ cred.description }}</div>
+              <div v-if="cred.hasAuthKey || cred.hasPrivKey" class="text-xs text-text-muted mt-1 truncate">{{ cred.hasAuthKey ? 'Auth: ✓' : '' }} {{ cred.hasPrivKey ? 'Priv: ✓' : '' }}</div>
             </div>
 
             <div v-if="credentials.length === 0" class="text-center text-text-muted text-sm py-4">
@@ -985,7 +983,7 @@ watch(targetFilterEnabled, () => {
                         'inline-block w-2 h-2 rounded-full',
                         !target.enabled ? 'bg-gray-500' :
                           getLatestResult(target.id)?.status === 'success' ? 'bg-green-500' :
-                          getLatestResult(target.id)?.status === 'error' ? 'bg-red-500' :
+                          getLatestResult(target.id)?.status === 'failure' ? 'bg-red-500' :
                           'bg-yellow-500'
                       ]"
                     ></span>
@@ -1002,7 +1000,7 @@ watch(targetFilterEnabled, () => {
                   <td class="px-3 py-2">
                     <span v-if="!target.enabled" class="text-xs px-1.5 py-0.5 rounded bg-gray-500/20 text-gray-400">已禁用</span>
                     <span v-else-if="getLatestResult(target.id)?.status === 'success'" class="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">正常</span>
-                    <span v-else-if="getLatestResult(target.id)?.status === 'error'" class="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">异常</span>
+                    <span v-else-if="getLatestResult(target.id)?.status === 'failure'" class="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">异常</span>
                     <span v-else class="text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">待轮询</span>
                   </td>
                   <!-- 最近轮询时间 -->
@@ -1186,11 +1184,11 @@ watch(targetFilterEnabled, () => {
             </div>
             <div class="flex justify-between">
               <span class="text-text-muted">凭据</span>
-              <span class="text-text-primary text-xs">{{ selectedTarget.credentialId ? getCredentialById(selectedTarget.credentialId)?.displayName ?? '-' : '-' }}</span>
+              <span class="text-text-primary text-xs">{{ selectedTarget.credentialId ? getCredentialById(selectedTarget.credentialId)?.name ?? '-' : '-' }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-text-muted">模板</span>
-              <span class="text-text-primary text-xs">{{ selectedTarget.templateId ? getTemplateById(selectedTarget.templateId)?.displayName ?? '-' : '-' }}</span>
+              <span class="text-text-primary text-xs">{{ selectedTarget.templateId ? getTemplateById(selectedTarget.templateId)?.name ?? '-' : '-' }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-text-muted">间隔</span>
@@ -1208,7 +1206,7 @@ watch(targetFilterEnabled, () => {
             </div>
             <div class="flex justify-between">
               <span class="text-text-muted">最后成功</span>
-              <span class="text-text-primary text-xs">{{ formatTime(selectedTarget.lastSuccessAt) }}</span>
+              <span class="text-text-primary text-xs">{{ formatTime(selectedTarget.lastPollAt) }}</span>
             </div>
           </div>
         </div>
@@ -1575,7 +1573,7 @@ watch(targetFilterEnabled, () => {
             </button>
             <button
               @click="saveTemplate"
-              :disabled="!templateForm.displayName || templateForm.oidItems.length === 0"
+              :disabled="!templateForm.name || templateForm.oidItems.length === 0"
               class="px-4 py-2 text-sm bg-accent hover:bg-accent-dark text-white rounded-md transition-colors disabled:opacity-50"
             >
               保存

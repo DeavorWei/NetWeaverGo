@@ -17,15 +17,15 @@ import { useSNMPTrapStream } from '@/composables/useSNMPTrapStream'
 import { useToast } from '@/utils/useToast'
 import { getLogger } from '@/utils/logger'
 import type {
-  TrapRecord,
-  TrapFilter,
-  ServerConfig,
-  FilterRule,
+  TrapRecordVM,
+  TrapFilterVM,
+  ServerConfigVM,
+  FilterRuleVM,
   CreateFilterRuleRequest,
   UpdateFilterRuleRequest,
-  V3User,
+  V3UserVM,
   AddV3UserRequest,
-} from '@/types/snmp'
+} from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 
 const logger = getLogger()
 const toast = useToast()
@@ -46,7 +46,7 @@ const {
 // ==================== 状态 ====================
 
 /** Trap 记录列表 */
-const trapRecords = ref<TrapRecord[]>([])
+const trapRecords = ref<TrapRecordVM[]>([])
 const recordsLoading = ref(false)
 const totalRecords = ref(0)
 const currentPage = ref(1)
@@ -54,24 +54,26 @@ const pageSize = ref(20)
 const totalPages = ref(0)
 
 /** 选中的 Trap 记录 */
-const selectedTrap = ref<TrapRecord | null>(null)
+const selectedTrap = ref<TrapRecordVM | null>(null)
 const selectedTrapIds = ref<Set<number>>(new Set())
 
 /** 过滤条件 */
-const filter = ref<TrapFilter>({
+const filter = ref<TrapFilterVM>({
   sourceIP: '',
   trapOID: '',
   severity: '',
-  acknowledged: undefined,
+  startTime: '',
+  endTime: '',
+  acknowledged: null,
   searchQuery: '',
 })
 
 /** 服务器配置 */
-const serverConfigs = ref<ServerConfig[]>([])
-const activeConfig = ref<ServerConfig | null>(null)
+const serverConfigs = ref<ServerConfigVM[]>([])
+const activeConfig = ref<ServerConfigVM | null>(null)
 
 /** 过滤规则 */
-const filterRules = ref<FilterRule[]>([])
+const filterRules = ref<FilterRuleVM[]>([])
 
 /** 面板显示状态 */
 const showFilterPanel = ref(true)
@@ -81,8 +83,8 @@ const showRuleModal = ref(false)
 const showV3UserModal = ref(false)
 
 /** v3 用户管理 */
-const v3Users = ref<V3User[]>([])
-const editingV3User = ref<V3User | null>(null)
+const v3Users = ref<V3UserVM[]>([])
+const editingV3User = ref<V3UserVM | null>(null)
 const v3UserForm = ref<AddV3UserRequest>({
   username: '',
   authProtocol: 'MD5',
@@ -93,8 +95,8 @@ const v3UserForm = ref<AddV3UserRequest>({
 })
 
 /** 编辑状态 */
-const editingConfig = ref<ServerConfig | null>(null)
-const editingRule = ref<FilterRule | null>(null)
+const editingConfig = ref<ServerConfigVM | null>(null)
+const editingRule = ref<FilterRuleVM | null>(null)
 
 /** 面板宽度 */
 const leftPanelWidth = ref(280)
@@ -147,10 +149,12 @@ async function loadTrapRecords() {
       currentPage.value,
       pageSize.value
     )
-    trapRecords.value = result.data
-    totalRecords.value = result.total
-    totalPages.value = result.totalPages
-    logger.debug(`SNMP-Trap: Trap 记录已加载 - ${result.data.length} 条`)
+    if (result) {
+      trapRecords.value = result.data
+      totalRecords.value = result.total
+      totalPages.value = result.totalPages
+      logger.debug(`SNMP-Trap: Trap 记录已加载 - ${result.data.length} 条`)
+    }
   } catch (error) {
     logger.error(`SNMP-Trap: 加载 Trap 记录失败 - ${error}`)
     toast.error('加载 Trap 记录失败')
@@ -162,7 +166,7 @@ async function loadTrapRecords() {
 /**
  * 选择 Trap 记录
  */
-function selectTrap(trap: TrapRecord) {
+function selectTrap(trap: TrapRecordVM) {
   selectedTrap.value = trap
 }
 
@@ -206,7 +210,9 @@ function resetFilter() {
     sourceIP: '',
     trapOID: '',
     severity: '',
-    acknowledged: undefined,
+    startTime: '',
+    endTime: '',
+    acknowledged: null,
     searchQuery: '',
   }
   currentPage.value = 1
@@ -294,7 +300,7 @@ async function acknowledgeSelected() {
 /**
  * 确认单个记录
  */
-async function acknowledgeSingle(trap: TrapRecord) {
+async function acknowledgeSingle(trap: TrapRecordVM) {
   try {
     await acknowledgeTrap(trap.id)
     toast.success('已确认')
@@ -309,7 +315,7 @@ async function acknowledgeSingle(trap: TrapRecord) {
 /**
  * 删除单个记录
  */
-async function deleteTrapRecord(trap: TrapRecord) {
+async function deleteTrapRecord(trap: TrapRecordVM) {
   try {
     await ElMessageBox.confirm('确定要删除此 Trap 记录吗？', '删除确认', {
       confirmButtonText: '确定',
@@ -401,16 +407,16 @@ async function loadV3Users() {
 /**
  * 打开 v3 用户添加对话框
  */
-function openV3UserModal(user: V3User | null = null) {
+function openV3UserModal(user: V3UserVM | null = null) {
   if (user) {
     editingV3User.value = user
     v3UserForm.value = {
       username: user.username,
       authProtocol: user.authProtocol,
       authKey: '',
-      privProtocol: user.privProtocol,
+      privProtocol: user.privProtocol || '',
       privKey: '',
-      securityLevel: user.securityLevel,
+      securityLevel: user.securityLevel as 'noAuthNoPriv' | 'authNoPriv' | 'authPriv',
     }
   } else {
     editingV3User.value = null
@@ -472,7 +478,7 @@ async function deleteV3User(username: string) {
 /**
  * 打开配置编辑对话框
  */
-function openConfigModal(config: ServerConfig | null = null) {
+function openConfigModal(config: ServerConfigVM | null = null) {
   if (config) {
     editingConfig.value = { ...config }
   } else {
@@ -494,7 +500,8 @@ async function saveConfig() {
   if (!editingConfig.value) return
 
   try {
-    if (editingConfig.value.id) {
+    // id > 0 表示更新现有配置，id === 0 表示创建新配置
+    if (editingConfig.value.id > 0) {
       await SNMPTrapAPI.updateServerConfig(editingConfig.value.id, {
         trapEnabled: editingConfig.value.trapEnabled,
         trapPort: editingConfig.value.trapPort,
@@ -502,6 +509,15 @@ async function saveConfig() {
         maxStorageDays: editingConfig.value.maxStorageDays,
       })
       toast.success('配置已更新')
+    } else {
+      // id === 0 时创建新配置
+      await SNMPTrapAPI.createServerConfig({
+        trapEnabled: editingConfig.value.trapEnabled,
+        trapPort: editingConfig.value.trapPort,
+        trapCommunity: editingConfig.value.trapCommunity,
+        maxStorageDays: editingConfig.value.maxStorageDays,
+      })
+      toast.success('配置已创建')
     }
     showConfigModal.value = false
     await loadServerConfigs()
@@ -514,7 +530,7 @@ async function saveConfig() {
 /**
  * 打开规则编辑对话框
  */
-function openRuleModal(rule: FilterRule | null = null) {
+function openRuleModal(rule: FilterRuleVM | null = null) {
   editingRule.value = rule ? { ...rule } : null
   showRuleModal.value = true
 }
@@ -566,7 +582,7 @@ async function saveRule() {
 /**
  * 删除过滤规则
  */
-async function deleteRule(rule: FilterRule) {
+async function deleteRule(rule: FilterRuleVM) {
   try {
     await ElMessageBox.confirm(`确定要删除规则 "${rule.name}" 吗？`, '删除确认', {
       confirmButtonText: '确定',
@@ -590,7 +606,7 @@ async function deleteRule(rule: FilterRule) {
 /**
  * 切换规则启用状态
  */
-async function toggleRuleEnabled(rule: FilterRule) {
+async function toggleRuleEnabled(rule: FilterRuleVM) {
   try {
     await SNMPTrapAPI.updateFilterRule(rule.id, {
       name: rule.name,

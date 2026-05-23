@@ -343,7 +343,9 @@ async function refreshData() {
         props.oid,
         selectedDuration.value
       )
-      dataPoints.value = trend.dataPoints
+      if (trend) {
+        dataPoints.value = trend.dataPoints
+      }
     } else {
       // 获取整体历史数据
       const history = await SNMPPollingAPI.getPollingHistory(
@@ -351,11 +353,13 @@ async function refreshData() {
         selectedDuration.value
       )
       // 将历史数据转换为趋势数据点
-      dataPoints.value = history.dataPoints.map((dp) => ({
-        timestamp: dp.timestamp,
-        value: Object.values(dp.values).join(', '),
-        numeric: Object.values(dp.values).some(v => !isNaN(parseFloat(v as string))),
-      }))
+      if (history) {
+        dataPoints.value = history.dataPoints.map((dp) => ({
+          timestamp: dp.timestamp,
+          value: Object.values(dp.values).join(', '),
+          numeric: Object.values(dp.values).some(v => !isNaN(parseFloat(v as string))),
+        }))
+      }
     }
 
     emit('loaded')

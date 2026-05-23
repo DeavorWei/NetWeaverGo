@@ -5,7 +5,7 @@
  */
 
 import { ref, computed, type Ref } from 'vue'
-import type { MIBTreeNode } from '../types/snmp'
+import type { MIBTreeNode } from '../bindings/github.com/NetWeaverGo/core/internal/snmp/models'
 
 /**
  * 树节点展开状态
@@ -98,17 +98,11 @@ export function useMIBTree(
           parentPath,
         }
 
-        if (parentExpanded) {
-          result.push({ ...nodeState, node })
-        }
+        result.push({ ...nodeState, node })
 
-        if (node.children && node.children.length > 0) {
-          flatten(
-            node.children,
-            level + 1,
-            [...parentPath, node.id],
-            parentExpanded && expandedNodeIds.value.has(node.id)
-          )
+        // 如果节点展开且有子节点，递归处理
+        if (node.children && node.children.length > 0 && expandedNodeIds.value.has(node.id)) {
+          flatten(node.children, level + 1, [...parentPath, node.id], true)
         }
       }
     }
@@ -117,27 +111,13 @@ export function useMIBTree(
     return result
   })
 
-  /**
-   * 可见节点数量
-   */
-  const visibleNodeCount = computed(() => flattenedNodes.value.length)
-
-  /**
-   * 当前选中的节点
-   */
+  /** 当前选中的节点 */
   const selectedNode = computed(() => {
     if (selectedNodeId.value === null) return null
     return findNodeById(treeData.value, selectedNodeId.value)
   })
 
-  /**
-   * 搜索结果数量
-   */
-  const searchResultCount = computed(() => searchResults.value.length)
-
-  /**
-   * 当前搜索结果
-   */
+  /** 当前搜索结果 */
   const currentSearchResult = computed(() => {
     if (currentSearchIndex.value < 0 || currentSearchIndex.value >= searchResults.value.length) {
       return null
@@ -156,8 +136,6 @@ export function useMIBTree(
     } else {
       expandedNodeIds.value.add(nodeId)
     }
-    // 触发响应式更新
-    expandedNodeIds.value = new Set(expandedNodeIds.value)
   }
 
   /**
@@ -165,7 +143,6 @@ export function useMIBTree(
    */
   function expandNode(nodeId: number) {
     expandedNodeIds.value.add(nodeId)
-    expandedNodeIds.value = new Set(expandedNodeIds.value)
   }
 
   /**
@@ -173,23 +150,28 @@ export function useMIBTree(
    */
   function collapseNode(nodeId: number) {
     expandedNodeIds.value.delete(nodeId)
-    expandedNodeIds.value = new Set(expandedNodeIds.value)
   }
 
   /**
    * 展开所有节点
    */
   function expandAllNodes() {
-    const allIds = new Set<number>()
-    collectNodeIds(treeData.value, allIds)
-    expandedNodeIds.value = allIds
+    function collectIds(nodes: MIBTreeNode[]) {
+      for (const node of nodes) {
+        if (node.children && node.children.length > 0) {
+          expandedNodeIds.value.add(node.id)
+          collectIds(node.children)
+        }
+      }
+    }
+    collectIds(treeData.value)
   }
 
   /**
    * 折叠所有节点
    */
-  function collapseAll() {
-    expandedNodeIds.value = new Set()
+  function collapseAllNodes() {
+    expandedNodeIds.value.clear()
   }
 
   /**
@@ -201,63 +183,48 @@ export function useMIBTree(
       for (const id of path) {
         expandedNodeIds.value.add(id)
       }
-      expandedNodeIds.value = new Set(expandedNodeIds.value)
     }
   }
 
   /**
-   * 选择节点
+   * 选中节点
    */
   function selectNode(nodeId: number | null) {
     selectedNodeId.value = nodeId
     if (nodeId !== null) {
-      // 确保选中的节点可见
+      // 展开到选中节点
       expandToNode(nodeId)
     }
-  }
-
-  /**
-   * 清除选择
-   */
-  function clearSelection() {
-    selectedNodeId.value = null
   }
 
   /**
    * 搜索节点
    */
   function searchNodes(query: string) {
-    searchQuery.value = query.trim()
+    searchQuery.value = query
+    searchResults.value = []
+    currentSearchIndex.value = -1
     highlightedNodeIds.value.clear()
 
-    if (!query.trim()) {
-      searchResults.value = []
-      currentSearchIndex.value = -1
-      return
-    }
+    if (!query.trim()) return
 
-    const results: SearchResult[] = []
-    const lowerQuery = query.toLowerCase()
-
-    searchInNodes(treeData.value, lowerQuery, results)
+    const results = searchInNodes(treeData.value, query.toLowerCase())
     searchResults.value = results
 
-    // 高亮匹配的节点
+    // 高亮所有匹配的节点
     for (const result of results) {
       highlightedNodeIds.value.add(result.node.id)
     }
 
-    // 如果有结果，跳转到第一个
+    // 如果有结果，选中第一个
     if (results.length > 0) {
       currentSearchIndex.value = 0
       jumpToSearchResult(0)
-    } else {
-      currentSearchIndex.value = -1
     }
   }
 
   /**
-   * 跳转到下一个搜索结果
+   * 下一个搜索结果
    */
   function nextSearchResult() {
     if (searchResults.value.length === 0) return
@@ -266,12 +233,12 @@ export function useMIBTree(
   }
 
   /**
-   * 跳转到上一个搜索结果
+   * 上一个搜索结果
    */
   function prevSearchResult() {
     if (searchResults.value.length === 0) return
-    currentSearchIndex.value = currentSearchIndex.value === 0
-      ? searchResults.value.length - 1
+    currentSearchIndex.value = currentSearchIndex.value === 0 
+      ? searchResults.value.length - 1 
       : currentSearchIndex.value - 1
     jumpToSearchResult(currentSearchIndex.value)
   }
@@ -284,6 +251,65 @@ export function useMIBTree(
     searchResults.value = []
     currentSearchIndex.value = -1
     highlightedNodeIds.value.clear()
+  }
+
+  /**
+   * 根据ID查找节点
+   */
+  function findNodeById(nodes: MIBTreeNode[], id: number): MIBTreeNode | null {
+    for (const node of nodes) {
+      if (node.id === id) return node
+      if (node.children) {
+        const found = findNodeById(node.children, id)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  /**
+   * 查找节点路径
+   */
+  function findNodePath(
+    nodes: MIBTreeNode[],
+    targetId: number,
+    path: number[] = []
+  ): number[] | null {
+    for (const node of nodes) {
+      const currentPath = [...path, node.id]
+      if (node.id === targetId) return currentPath
+      if (node.children) {
+        const found = findNodePath(node.children, targetId, currentPath)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  /**
+   * 收集所有节点ID
+   */
+  function collectNodeIds(nodes: MIBTreeNode[], ids: Set<number>) {
+    for (const node of nodes) {
+      ids.add(node.id)
+      if (node.children) {
+        collectNodeIds(node.children, ids)
+      }
+    }
+  }
+
+  /**
+   * 展开所有节点（别名）
+   */
+  function expandAll() {
+    expandAllNodes()
+  }
+
+  /**
+   * 折叠所有节点（别名）
+   */
+  function collapseAll() {
+    collapseAllNodes()
   }
 
   /**
@@ -301,68 +327,14 @@ export function useMIBTree(
   }
 
   /**
-   * 检查节点是否高亮（搜索匹配）
-   */
-  function isNodeHighlighted(nodeId: number): boolean {
-    return highlightedNodeIds.value.has(nodeId)
-  }
-
-  // ==================== 辅助函数 ====================
-
-  /**
-   * 根据 ID 查找节点
-   */
-  function findNodeById(nodes: MIBTreeNode[], id: number): MIBTreeNode | null {
-    for (const node of nodes) {
-      if (node.id === id) return node
-      if (node.children) {
-        const found = findNodeById(node.children, id)
-        if (found) return found
-      }
-    }
-    return null
-  }
-
-  /**
-   * 查找节点路径（从根到目标节点的 ID 列表）
-   */
-  function findNodePath(
-    nodes: MIBTreeNode[],
-    targetId: number,
-    path: number[] = []
-  ): number[] | null {
-    for (const node of nodes) {
-      if (node.id === targetId) {
-        return path
-      }
-      if (node.children) {
-        const found = findNodePath(node.children, targetId, [...path, node.id])
-        if (found) return found
-      }
-    }
-    return null
-  }
-
-  /**
-   * 收集所有节点 ID
-   */
-  function collectNodeIds(nodes: MIBTreeNode[], ids: Set<number>) {
-    for (const node of nodes) {
-      ids.add(node.id)
-      if (node.children) {
-        collectNodeIds(node.children, ids)
-      }
-    }
-  }
-
-  /**
    * 在节点中搜索
    */
   function searchInNodes(
     nodes: MIBTreeNode[],
-    query: string,
-    results: SearchResult[]
-  ) {
+    query: string
+  ): SearchResult[] {
+    const results: SearchResult[] = []
+
     for (const node of nodes) {
       // 搜索名称
       if (node.name.toLowerCase().includes(query)) {
@@ -381,7 +353,7 @@ export function useMIBTree(
         })
       }
       // 搜索描述
-      else if (node.description.toLowerCase().includes(query)) {
+      else if (node.description && node.description.toLowerCase().includes(query)) {
         results.push({
           node,
           matchType: 'description',
@@ -391,9 +363,11 @@ export function useMIBTree(
 
       // 递归搜索子节点
       if (node.children) {
-        searchInNodes(node.children, query, results)
+        results.push(...searchInNodes(node.children, query))
       }
     }
+
+    return results
   }
 
   /**
@@ -406,14 +380,10 @@ export function useMIBTree(
     }
   }
 
-  // ==================== 初始化 ====================
-
-  // 如果配置了展开所有，则展开
+  // 初始化：如果设置了 expandAll，展开所有节点
   if (initialExpandAll) {
     expandAllNodes()
   }
-
-  // ==================== 返回 ====================
 
   return {
     // 状态
@@ -426,26 +396,27 @@ export function useMIBTree(
 
     // 计算属性
     flattenedNodes,
-    visibleNodeCount,
     selectedNode,
-    searchResultCount,
     currentSearchResult,
 
     // 方法
     toggleNode,
     expandNode,
     collapseNode,
-    expandAll: expandAllNodes,
+    expandAllNodes,
+    collapseAllNodes,
+    expandAll,
     collapseAll,
+    isNodeExpanded,
+    isNodeSelected,
     expandToNode,
     selectNode,
-    clearSelection,
     searchNodes,
     nextSearchResult,
     prevSearchResult,
     clearSearch,
-    isNodeExpanded,
-    isNodeSelected,
-    isNodeHighlighted,
+    findNodeById,
+    findNodePath,
+    collectNodeIds,
   }
 }

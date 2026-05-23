@@ -376,12 +376,13 @@ func (s *SNMPTrapService) GetServerConfigs(ctx context.Context) ([]ServerConfigV
 		return nil, err
 	}
 
-	var configVMs []ServerConfigVM
+	// 初始化为空数组，避免 JSON 序列化为 null
+	configVMs := make([]ServerConfigVM, 0, len(configs))
 	for _, config := range configs {
 		configVMs = append(configVMs, ServerConfigVM{
-			ID:        config.ID,
-			TrapEnabled: config.TrapEnabled,
-			TrapPort:  config.TrapPort,
+			ID:            config.ID,
+			TrapEnabled:   config.TrapEnabled,
+			TrapPort:      config.TrapPort,
 			TrapCommunity: config.TrapCommunity,
 			MaxStorageDays: config.MaxStorageDays,
 		})
@@ -431,6 +432,23 @@ func (s *SNMPTrapService) UpdateServerConfig(ctx context.Context, id uint, req U
 		s.listener.UpdateConfig(config)
 	}
 
+	return nil
+}
+
+// CreateServerConfig 创建服务器配置
+func (s *SNMPTrapService) CreateServerConfig(ctx context.Context, req CreateServerConfigRequest) error {
+	config := &models.SNMPServerConfig{
+		TrapEnabled:    req.TrapEnabled,
+		TrapPort:       req.TrapPort,
+		TrapCommunity:  req.TrapCommunity,
+		MaxStorageDays: req.MaxStorageDays,
+	}
+
+	if err := s.trapRepo.CreateServerConfig(ctx, config); err != nil {
+		return err
+	}
+
+	logger.Info("SNMP-TrapService", "-", "创建服务器配置成功: ID=%d", config.ID)
 	return nil
 }
 
@@ -587,6 +605,14 @@ type UpdateFilterRuleRequest struct {
 	CommunityPattern string `json:"communityPattern"`
 	OverrideSeverity string `json:"overrideSeverity"`
 	Description      string `json:"description"`
+}
+
+// CreateServerConfigRequest 创建服务器配置请求
+type CreateServerConfigRequest struct {
+	TrapEnabled    bool   `json:"trapEnabled"`
+	TrapPort       int    `json:"trapPort"`
+	TrapCommunity  string `json:"trapCommunity"`
+	MaxStorageDays int    `json:"maxStorageDays"`
 }
 
 // UpdateServerConfigRequest 更新服务器配置请求

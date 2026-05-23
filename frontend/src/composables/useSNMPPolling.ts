@@ -9,20 +9,30 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { SNMPPollingAPI, SNMPPollingEvents } from '../services/snmpApi'
 import { getLogger } from '../utils/logger'
 import type {
-  SchedulerStatus,
-  PollingTarget,
-  PollingResult,
-  PollingResultEvent,
-  PollingStats,
-  Credential,
-  PollingTemplate,
-  PollingTargetFilter,
-} from '../types/snmp'
+  SchedulerStatusVM,
+  PollingTargetVM,
+  PollingResultVM,
+  PollingStatsVM,
+  CredentialVM,
+  PollingTemplateVM,
+  PollingTargetFilterVM,
+} from '../bindings/github.com/NetWeaverGo/core/internal/ui/models'
 
 const logger = getLogger()
 
 /** 新结果高亮持续时间（毫秒） */
 const HIGHLIGHT_DURATION = 5000
+
+/** 轮询结果事件接口 */
+export interface PollingResultEvent {
+  targetId: number
+  targetIP: string
+  status: 'success' | 'failure' | 'timeout'
+  pollTime: number
+  oidCount: number
+  batchId: string
+  error?: string
+}
 
 /**
  * SNMP 轮询状态管理组合式函数
@@ -37,22 +47,22 @@ export function useSNMPPolling() {
   // ==================== 状态 ====================
 
   /** 调度器状态 */
-  const schedulerStatus = ref<SchedulerStatus | null>(null)
+  const schedulerStatus = ref<SchedulerStatusVM | null>(null)
 
   /** 轮询目标列表 */
-  const targets = ref<PollingTarget[]>([])
+  const targets = ref<PollingTargetVM[]>([])
 
   /** 凭据列表 */
-  const credentials = ref<Credential[]>([])
+  const credentials = ref<CredentialVM[]>([])
 
   /** 模板列表 */
-  const templates = ref<PollingTemplate[]>([])
+  const templates = ref<PollingTemplateVM[]>([])
 
   /** 最新轮询结果事件（按目标 ID 索引） */
   const latestResults = ref<Map<number, PollingResultEvent>>(new Map())
 
   /** 目标统计信息（按目标 ID 索引） */
-  const targetStats = ref<Map<number, PollingStats>>(new Map())
+  const targetStats = ref<Map<number, PollingStatsVM>>(new Map())
 
   /** 事件连接状态 */
   const isConnected = ref(false)
@@ -104,8 +114,11 @@ export function useSNMPPolling() {
   async function loadSchedulerStatus() {
     statusLoading.value = true
     try {
-      schedulerStatus.value = await SNMPPollingAPI.getSchedulerStatus()
-      logger.debug(`SNMP-Polling: 调度器状态已加载 - ${schedulerStatus.value.isRunning}`)
+      const status = await SNMPPollingAPI.getSchedulerStatus()
+      schedulerStatus.value = status
+      if (status) {
+        logger.debug(`SNMP-Polling: 调度器状态已加载 - ${status.isRunning}`)
+      }
     } catch (error) {
       logger.error('SNMP-Polling', '加载调度器状态失败', error)
     } finally {
@@ -116,7 +129,7 @@ export function useSNMPPolling() {
   /**
    * 加载目标列表
    */
-  async function loadTargets(filter?: PollingTargetFilter) {
+  async function loadTargets(filter?: PollingTargetFilterVM) {
     targetsLoading.value = true
     try {
       targets.value = await SNMPPollingAPI.getPollingTargets(filter)
@@ -200,7 +213,7 @@ export function useSNMPPolling() {
   /**
    * 立即轮询单个目标
    */
-  async function pollNow(targetId: number): Promise<PollingResult[]> {
+  async function pollNow(targetId: number): Promise<PollingResultVM[]> {
     try {
       const results = await SNMPPollingAPI.pollNow(targetId)
       // 更新最新结果事件（构造成功事件）
@@ -286,7 +299,9 @@ export function useSNMPPolling() {
   async function loadTargetStats(targetId: number) {
     try {
       const stats = await SNMPPollingAPI.getPollingStats(targetId)
-      targetStats.value.set(targetId, stats)
+      if (stats) {
+        targetStats.value.set(targetId, stats)
+      }
       return stats
     } catch (error) {
       logger.error('SNMP-Polling', `获取目标 ${targetId} 统计失败`, error)
@@ -330,17 +345,19 @@ export function useSNMPPolling() {
 
     try {
       // 监听轮询结果事件
-      const unsubResult = SNMPPollingEvents.onPollingResult((result: PollingResultEvent) => {
-        logger.debug(`SNMP-Polling: 收到轮询结果 - 目标 ${result.targetId}`)
-        latestResults.value.set(result.targetId, result)
-        addHighlight(result.targetId)
+      const unsubResult = SNMPPollingEvents.onPollingResult((result: unknown) => {
+        const resultEvent = result as PollingResultEvent
+        logger.debug(`SNMP-Polling: 收到轮询结果 - 目标 ${resultEvent.targetId}`)
+        latestResults.value.set(resultEvent.targetId, resultEvent)
+        addHighlight(resultEvent.targetId)
       })
       unsubscribers.push(unsubResult)
 
       // 监听调度器状态变更事件
-      const unsubStatus = SNMPPollingEvents.onSchedulerStatusChanged((status: SchedulerStatus) => {
-        logger.debug(`SNMP-Polling: 调度器状态变更 - ${status.isRunning}`)
-        schedulerStatus.value = status
+      const unsubStatus = SNMPPollingEvents.onSchedulerStatusChanged((status: unknown) => {
+        const statusVM = status as SchedulerStatusVM
+        logger.debug(`SNMP-Polling: 调度器状态变更 - ${statusVM.isRunning}`)
+        schedulerStatus.value = statusVM
       })
       unsubscribers.push(unsubStatus)
 
@@ -392,21 +409,21 @@ export function useSNMPPolling() {
   /**
    * 获取目标的统计信息
    */
-  function getTargetStats(targetId: number): PollingStats | undefined {
+  function getTargetStats(targetId: number): PollingStatsVM | undefined {
     return targetStats.value.get(targetId)
   }
 
   /**
    * 根据凭据 ID 获取凭据
    */
-  function getCredentialById(id: number): Credential | undefined {
+  function getCredentialById(id: number): CredentialVM | undefined {
     return credentials.value.find(c => c.id === id)
   }
 
   /**
    * 根据模板 ID 获取模板
    */
-  function getTemplateById(id: number): PollingTemplate | undefined {
+  function getTemplateById(id: number): PollingTemplateVM | undefined {
     return templates.value.find(t => t.id === id)
   }
 

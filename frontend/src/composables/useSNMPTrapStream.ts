@@ -8,9 +8,8 @@
 
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { SNMPTrapAPI, SNMPTrapEvents, generateTempId } from '../services/snmpApi'
+import type { TrapRecordVM, ListenerStatusVM, TrapStatsVM } from '../bindings/github.com/NetWeaverGo/core/internal/ui/models'
 import { getLogger } from '../utils/logger'
-import type { TrapEvent, ListenerStatus, TrapStatsVM, TrapRecord, NotificationSettings } from '../types/snmp'
-import { DEFAULT_NOTIFICATION_SETTINGS } from '../types/snmp'
 
 const logger = getLogger()
 
@@ -19,6 +18,35 @@ const MAX_LATEST_TRAPS = 100
 
 /** 新 Trap 高亮持续时间（毫秒） */
 const HIGHLIGHT_DURATION = 5000
+
+/** 通知设置接口 */
+export interface NotificationSettings {
+  soundEnabled: boolean
+  desktopEnabled: boolean
+  criticalSound: boolean
+  warningSound: boolean
+  infoSound: boolean
+}
+
+const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  soundEnabled: true,
+  desktopEnabled: false,
+  criticalSound: true,
+  warningSound: true,
+  infoSound: false,
+}
+
+/** Trap 事件接口（轻量级，用于实时推送） */
+export interface TrapEvent {
+  sourceIP: string
+  sourcePort: number
+  trapOID: string
+  trapName: string
+  severity: string
+  community: string
+  version: string
+  receivedAt: string
+}
 
 /**
  * SNMP Trap 实时流组合式函数
@@ -33,10 +61,10 @@ export function useSNMPTrapStream() {
   // ==================== 状态 ====================
 
   /** 最新接收的 Trap 列表（实时缓存） */
-  const latestTraps = ref<TrapRecord[]>([])
+  const latestTraps = ref<TrapRecordVM[]>([])
 
   /** 监听器状态 */
-  const listenerStatus = ref<ListenerStatus | null>(null)
+  const listenerStatus = ref<ListenerStatusVM | null>(null)
 
   /** Trap 统计信息 */
   const trapStats = ref<TrapStatsVM | null>(null)
@@ -80,24 +108,27 @@ export function useSNMPTrapStream() {
 
     try {
       // 监听 Trap 接收事件
-      const unsubTrap = SNMPTrapEvents.onTrapReceived((trap: TrapEvent) => {
-        logger.debug(`SNMP-Trap: 收到 Trap 事件 - ${trap.trapOID}`)
-        handleTrapReceived(trap)
+      const unsubTrap = SNMPTrapEvents.onTrapReceived((trap: unknown) => {
+        const trapEvent = trap as TrapEvent
+        logger.debug(`SNMP-Trap: 收到 Trap 事件 - ${trapEvent.trapOID}`)
+        handleTrapReceived(trapEvent)
       })
       unsubscribers.push(unsubTrap)
 
       // 监听监听器状态变更事件
-      const unsubStatus = SNMPTrapEvents.onListenerStatusChanged((status: ListenerStatus) => {
-        logger.debug(`SNMP-Trap: 监听器状态变更 - ${status.isRunning}`)
-        listenerStatus.value = status
+      const unsubStatus = SNMPTrapEvents.onListenerStatusChanged((status: unknown) => {
+        const statusVM = status as ListenerStatusVM
+        logger.debug(`SNMP-Trap: 监听器状态变更 - ${statusVM.isRunning}`)
+        listenerStatus.value = statusVM
       })
       unsubscribers.push(unsubStatus)
 
       // 监听统计更新事件
-      const unsubStats = SNMPTrapEvents.onTrapStats((stats: TrapStatsVM) => {
-        logger.debug(`SNMP-Trap: 统计信息更新 - ${stats.totalCount}`)
-        trapStats.value = stats
-        unacknowledgedCount.value = stats.unacknowledged
+      const unsubStats = SNMPTrapEvents.onTrapStats((stats: unknown) => {
+        const statsVM = stats as TrapStatsVM
+        logger.debug(`SNMP-Trap: 统计信息更新 - ${statsVM.totalCount}`)
+        trapStats.value = statsVM
+        unacknowledgedCount.value = statsVM.unacknowledged
       })
       unsubscribers.push(unsubStats)
 
@@ -138,8 +169,8 @@ export function useSNMPTrapStream() {
    */
   function handleTrapReceived(trap: TrapEvent) {
     logger.debug(`SNMP-Trap: 处理 Trap - ${trap.sourceIP} -> ${trap.trapOID}`)
-    // 将 TrapEvent 转换为 TrapRecord 格式并添加到最新列表
-    const record: TrapRecord = {
+    // 将 TrapEvent 转换为 TrapRecordVM 格式并添加到最新列表
+    const record: Partial<TrapRecordVM> = {
       id: generateTempId(), // P3-8: 使用改进的临时 ID 生成器
       sourceIP: trap.sourceIP,
       sourcePort: trap.sourcePort,
@@ -158,7 +189,7 @@ export function useSNMPTrapStream() {
     }
 
     // 添加到最新列表头部
-    latestTraps.value.unshift(record)
+    latestTraps.value.unshift(record as TrapRecordVM)
 
     // 限制缓存大小
     if (latestTraps.value.length > MAX_LATEST_TRAPS) {
@@ -166,7 +197,7 @@ export function useSNMPTrapStream() {
     }
 
     // 添加高亮效果
-    addHighlight(record.id)
+    addHighlight(record.id!)
 
     // 更新未确认计数
     unacknowledgedCount.value++
@@ -212,8 +243,11 @@ export function useSNMPTrapStream() {
    */
   async function refreshStats() {
     try {
-      trapStats.value = await SNMPTrapAPI.getTrapStats()
-      unacknowledgedCount.value = trapStats.value.unacknowledged
+      const stats = await SNMPTrapAPI.getTrapStats()
+      if (stats) {
+        trapStats.value = stats
+        unacknowledgedCount.value = stats.unacknowledged
+      }
     } catch (error) {
       logger.error(`SNMP-Trap: 刷新统计信息失败 - ${error}`)
     }
@@ -342,7 +376,7 @@ export function useSNMPTrapStream() {
   /**
    * 发送桌面通知
    */
-  function sendDesktopNotification(trap: TrapRecord): void {
+  function sendDesktopNotification(trap: TrapRecordVM): void {
     if (!notificationSettings.value.desktopEnabled) return
     if (notificationPermission.value !== 'granted') return
 
@@ -372,7 +406,7 @@ export function useSNMPTrapStream() {
   /**
    * 处理 Trap 通知
    */
-  function handleTrapNotification(trap: TrapRecord): void {
+  function handleTrapNotification(trap: TrapRecordVM): void {
     const severity = trap.severity as 'critical' | 'warning' | 'info'
     playAlertSound(severity)
     sendDesktopNotification(trap)

@@ -18,12 +18,21 @@ import { useToast } from '@/utils/useToast'
 import { getLogger } from '@/utils/logger'
 import { Dialogs } from '@wailsio/runtime'
 import type {
-  MIBModule,
-  MIBTreeNode,
-  MIBNode,
-  MIBImportProgress,
-  ResolvedOID,
-} from '@/types/snmp'
+  MIBModuleVM,
+  MIBNodeVM,
+} from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
+import type { MIBTreeNode } from '@/bindings/github.com/NetWeaverGo/core/internal/snmp/models'
+
+/** MIB 导入进度接口 */
+interface MIBImportProgress {
+  fileName: string
+  moduleName: string
+  phase: 'parsing' | 'saving' | 'caching' | 'completed' | 'error'
+  progress: number
+  nodesDone: number
+  nodesTotal: number
+  error?: string
+}
 
 const logger = getLogger()
 const toast = useToast()
@@ -31,7 +40,7 @@ const toast = useToast()
 // ==================== 状态 ====================
 
 /** MIB 模块列表 */
-const modules = ref<MIBModule[]>([])
+const modules = ref<MIBModuleVM[]>([])
 const modulesLoading = ref(false)
 
 /** 当前选中的模块 ID */
@@ -42,15 +51,15 @@ const mibTreeData = ref<MIBTreeNode[]>([])
 const treeLoading = ref(false)
 
 /** 当前选中的节点详情 */
-const selectedNodeDetail = ref<MIBNode | null>(null)
+const selectedNodeDetail = ref<MIBNodeVM | null>(null)
 const nodeDetailLoading = ref(false)
 
 /** OID 解析结果 */
-const oidResolveResult = ref<ResolvedOID | null>(null)
+const oidResolveResult = ref<{ oid: string; name: string; moduleName: string; description: string; type: string; access: string; status: string; found: boolean } | null>(null)
 
 /** 搜索相关 */
 const searchQuery = ref('')
-const searchResults = ref<MIBNode[]>([])
+const searchResults = ref<MIBNodeVM[]>([])
 const searchLoading = ref(false)
 
 /** 导入相关 */
@@ -60,7 +69,7 @@ const importProgress = ref<MIBImportProgress | null>(null)
 const importing = ref(false)
 
 /** 缓存统计 */
-const cacheStats = ref({ oidCacheLen: 0, nameCacheLen: 0 })
+const cacheStats = ref<Record<string, number>>({})
 
 /** 面板宽度 */
 const leftPanelWidth = ref(280)
@@ -268,7 +277,7 @@ async function executeImport() {
 /**
  * 删除模块
  */
-async function deleteModule(module: MIBModule) {
+async function deleteModule(module: MIBModuleVM) {
   try {
     await ElMessageBox.confirm(
       `确定要删除 MIB 模块 "${module.name}" 吗？此操作不可恢复。`,
@@ -340,7 +349,8 @@ async function rebuildCache() {
  */
 async function loadCacheStats() {
   try {
-    cacheStats.value = await SNMPMIBAPI.getCacheStats()
+    const stats = await SNMPMIBAPI.getCacheStats()
+    cacheStats.value = stats as Record<string, number>
   } catch (error) {
     logger.error(`SNMP: 加载缓存统计失败 - ${error}`)
   }
@@ -405,13 +415,14 @@ let unsubscribeMIBDeleted: (() => void) | null = null
 
 function setupEventListeners() {
   // 监听导入进度
-  unsubscribeImportProgress = SNMPEvents.onMIBImportProgress((progress) => {
-    importProgress.value = progress
+  unsubscribeImportProgress = SNMPEvents.onMIBImportProgress((progress: unknown) => {
+    importProgress.value = progress as MIBImportProgress
   })
 
   // 监听导入完成
-  unsubscribeMIBImported = SNMPEvents.onMIBImported((module) => {
-    toast.success(`MIB 模块 "${module.name}" 导入完成`)
+  unsubscribeMIBImported = SNMPEvents.onMIBImported((module: unknown) => {
+    const moduleVM = module as { name: string }
+    toast.success(`MIB 模块 "${moduleVM.name}" 导入完成`)
     loadModules()
     loadCacheStats()
   })
