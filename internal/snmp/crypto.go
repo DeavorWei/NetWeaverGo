@@ -71,35 +71,41 @@ func getKeyFilePath() string {
 // loadOrGenerateKey 从环境变量、密钥文件加载或自动生成新密钥
 // 返回 32-byte AES-256 密钥
 func loadOrGenerateKey() ([]byte, error) {
+	logger.Debug("SNMP-Crypto", "-", "开始加载或生成 SNMP 加密密钥")
+
 	// 优先级 1: 环境变量（最高优先级，适用于容器化部署）
 	envKey := os.Getenv("NETWEAVER_SNMP_KEY")
 	if envKey != "" {
 		decoded, err := base64.StdEncoding.DecodeString(envKey)
 		if err == nil && len(decoded) == 32 {
-			logger.Info("SNMP", "-", "使用环境变量 NETWEAVER_SNMP_KEY 作为加密密钥")
+			logger.Info("SNMP-Crypto", "-", "使用环境变量 NETWEAVER_SNMP_KEY 作为加密密钥")
 			return decoded, nil
 		}
-		logger.Warn("SNMP", "-", "环境变量 NETWEAVER_SNMP_KEY 格式无效（需要 Base64 编码的 32 字节密钥），将尝试从文件加载")
+		logger.Warn("SNMP-Crypto", "-", "环境变量 NETWEAVER_SNMP_KEY 格式无效（需要 Base64 编码的 32 字节密钥），将尝试从文件加载")
 	}
 
 	// 优先级 2: 从密钥文件加载
 	keyFilePath := getKeyFilePath()
+	logger.Debug("SNMP-Crypto", "-", "尝试从密钥文件加载: %s", keyFilePath)
 	if key, err := loadKeyFile(keyFilePath); err == nil {
-		logger.Info("SNMP", "-", "从密钥文件加载加密密钥: %s", keyFilePath)
+		logger.Info("SNMP-Crypto", "-", "从密钥文件加载加密密钥成功: %s", keyFilePath)
 		return key, nil
 	} else if !os.IsNotExist(err) {
 		// 文件存在但读取失败（权限问题或损坏）
-		logger.Warn("SNMP", "-", "密钥文件读取失败: %v，将尝试生成新密钥", err)
+		logger.Warn("SNMP-Crypto", "-", "密钥文件读取失败: %v，将尝试生成新密钥", err)
+	} else {
+		logger.Debug("SNMP-Crypto", "-", "密钥文件不存在: %s", keyFilePath)
 	}
 
 	// 优先级 3: 自动生成新密钥并写入文件
-	logger.Info("SNMP", "-", "密钥文件不存在，自动生成新的随机密钥")
+	logger.Info("SNMP-Crypto", "-", "密钥文件不存在，自动生成新的随机密钥")
 	key, err := generateAndSaveKey(keyFilePath)
 	if err != nil {
+		logger.Error("SNMP-Crypto", "-", "生成并保存密钥失败: %v", err)
 		return nil, fmt.Errorf("生成并保存密钥失败: %w", err)
 	}
 
-	logger.Info("SNMP", "-", "SNMP 凭据加密密钥已初始化，密钥文件: %s", keyFilePath)
+	logger.Info("SNMP-Crypto", "-", "SNMP 凭据加密密钥已初始化，密钥文件: %s", keyFilePath)
 	return key, nil
 }
 
@@ -142,9 +148,10 @@ func writeKeyFile(path string, key []byte) error {
 	// 使用 0600 权限写入（仅所有者可读写，防止其他用户访问）
 	err := os.WriteFile(path, key, 0600)
 	if err != nil {
+		logger.Error("SNMP-Crypto", "-", "写入密钥文件失败: %s, %v", path, err)
 		return err
 	}
-	logger.Info("SNMP", "-", "密钥文件已写入（权限 0600）: %s", path)
+	logger.Info("SNMP-Crypto", "-", "密钥文件已写入（权限 0600）: %s", path)
 	return nil
 }
 

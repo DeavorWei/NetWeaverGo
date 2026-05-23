@@ -106,10 +106,14 @@ func (s *PollerScheduler) Start() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	startTime := time.Now()
+
 	if s.running {
 		logger.Warn("SNMP-Scheduler", "-", "调度器已在运行中")
 		return nil
 	}
+
+	logger.Info("SNMP-Scheduler", "-", "正在启动轮询调度器...")
 
 	// 加载已启用的轮询目标
 	enabled := true
@@ -121,13 +125,19 @@ func (s *PollerScheduler) Start() error {
 		return fmt.Errorf("加载轮询目标失败: %w", err)
 	}
 
+	logger.Debug("SNMP-Scheduler", "-", "已加载 %d 个启用的轮询目标", len(targets))
+
 	// 注册每个目标的定时任务
+	successCount := 0
+	failCount := 0
 	for _, target := range targets {
 		if err := s.addJob(target); err != nil {
 			logger.Error("SNMP-Scheduler", "-", "注册轮询任务失败: ID=%d, IP=%s, %v",
 				target.ID, target.TargetIP, err)
+			failCount++
 			continue
 		}
+		successCount++
 	}
 
 	// 启动 cron 调度器
@@ -140,7 +150,9 @@ func (s *PollerScheduler) Start() error {
 		s.notifier.NotifySchedulerStatus(true)
 	}
 
-	logger.Info("SNMP-Scheduler", "-", "轮询调度器已启动, 已注册 %d 个目标", len(s.jobs))
+	latency := time.Since(startTime)
+	logger.Info("SNMP-Scheduler", "-", "轮询调度器已启动: 注册成功=%d, 注册失败=%d, 耗时=%v",
+		successCount, failCount, latency)
 	return nil
 }
 
@@ -150,11 +162,19 @@ func (s *PollerScheduler) Stop() error {
 	defer s.mu.Unlock()
 
 	if !s.running {
+		logger.Debug("SNMP-Scheduler", "-", "调度器未运行，无需停止")
 		return nil
 	}
 
+	logger.Info("SNMP-Scheduler", "-", "正在停止轮询调度器...")
+
+	targetCount := len(s.jobs)
+	totalPolls := atomic.LoadInt64(&s.totalPolls)
+	uptime := time.Since(s.startTime)
+
 	// 停止 cron 调度器
 	ctx := s.scheduler.Stop()
+	logger.Debug("SNMP-Scheduler", "-", "等待正在执行的任务完成...")
 	<-ctx.Done() // 等待正在执行的任务完成
 
 	// 清空任务映射
@@ -166,7 +186,8 @@ func (s *PollerScheduler) Stop() error {
 		s.notifier.NotifySchedulerStatus(false)
 	}
 
-	logger.Info("SNMP-Scheduler", "-", "轮询调度器已停止")
+	logger.Info("SNMP-Scheduler", "-", "轮询调度器已停止: 原调度目标=%d, 总轮询次数=%d, 运行时长=%v",
+		targetCount, totalPolls, uptime)
 	return nil
 }
 
@@ -279,17 +300,23 @@ func (s *PollerScheduler) UpdateTarget(target *models.SNMPPollingTarget, templat
 
 // RunNow 立即执行一次轮询
 func (s *PollerScheduler) RunNow(ctx context.Context, targetID uint) ([]*models.SNMPPollingResult, error) {
+	pollStartTime := time.Now()
+	logger.Info("SNMP-Scheduler", "-", "立即轮询请求: TargetID=%d", targetID)
+
 	s.mu.RLock()
 	job, exists := s.jobs[targetID]
 	s.mu.RUnlock()
 
 	if !exists {
+		logger.Debug("SNMP-Scheduler", "-", "目标不在调度中，尝试从数据库加载: TargetID=%d", targetID)
 		// 任务不在调度中，尝试从数据库加载
 		target, err := s.repo.GetPollingTarget(ctx, targetID)
 		if err != nil {
+			logger.Error("SNMP-Scheduler", "-", "获取轮询目标失败: TargetID=%d, %v", targetID, err)
 			return nil, fmt.Errorf("获取轮询目标失败: %w", err)
 		}
 		if target == nil {
+			logger.Error("SNMP-Scheduler", "-", "轮询目标不存在: TargetID=%d", targetID)
 			return nil, fmt.Errorf("轮询目标不存在: ID=%d", targetID)
 		}
 
@@ -299,9 +326,11 @@ func (s *PollerScheduler) RunNow(ctx context.Context, targetID uint) ([]*models.
 
 		if target.TemplateID != nil {
 			template, _ = s.repo.GetPollingTemplate(ctx, *target.TemplateID)
+			logger.Debug("SNMP-Scheduler", "-", "已加载模板: TargetID=%d, TemplateID=%d", targetID, *target.TemplateID)
 		}
 		if target.CredentialID != nil {
 			cred, _ = s.repo.GetCredential(ctx, *target.CredentialID)
+			logger.Debug("SNMP-Scheduler", "-", "已加载凭据: TargetID=%d, CredentialID=%d", targetID, *target.CredentialID)
 		}
 
 		job = &scheduledJob{
@@ -320,18 +349,31 @@ func (s *PollerScheduler) RunNow(ctx context.Context, targetID uint) ([]*models.
 	}
 
 	results, err := s.poller.PollSingle(ctx, pollTarget)
+	pollLatency := time.Since(pollStartTime)
+
 	if err != nil {
+		logger.Error("SNMP-Scheduler", job.Target.TargetIP, "立即轮询失败: TargetID=%d, 耗时=%v, 错误=%v",
+			targetID, pollLatency, err)
+		s.updateTargetPollError(ctx, job.Target, err)
 		return nil, err
 	}
 
+	logger.Info("SNMP-Scheduler", job.Target.TargetIP, "立即轮询成功: TargetID=%d, 结果数=%d, 耗时=%v",
+		targetID, len(results), pollLatency)
+
 	// 保存结果到数据库
 	if len(results) > 0 {
+		saveStartTime := time.Now()
 		resultPtrs := make([]*models.SNMPPollingResult, len(results))
 		for i := range results {
 			resultPtrs[i] = results[i]
 		}
 		if err := s.repo.CreatePollingResults(ctx, resultPtrs); err != nil {
-			logger.Error("SNMP-Scheduler", "-", "保存轮询结果失败: %v", err)
+			logger.Error("SNMP-Scheduler", job.Target.TargetIP, "保存轮询结果失败: TargetID=%d, 耗时=%v, %v",
+				targetID, time.Since(saveStartTime), err)
+		} else {
+			logger.Debug("SNMP-Scheduler", job.Target.TargetIP, "轮询结果已保存: TargetID=%d, 结果数=%d, 耗时=%v",
+				targetID, len(results), time.Since(saveStartTime))
 		}
 	}
 
@@ -494,11 +536,12 @@ func (s *PollerScheduler) removeJob(targetID uint) error {
 // P2-18: 使用可配置的超时时间
 func (s *PollerScheduler) createPollFunc(job *scheduledJob) func() {
 	return func() {
+		pollStartTime := time.Now()
 		ctx, cancel := context.WithTimeout(context.Background(), s.pollTimeout)
 		defer cancel()
 
-		logger.Debug("SNMP-Scheduler", "-", "定时轮询触发: ID=%d, IP=%s",
-			job.TargetID, job.Target.TargetIP)
+		logger.Debug("SNMP-Scheduler", job.Target.TargetIP, "定时轮询触发: ID=%d, 超时=%v",
+			job.TargetID, s.pollTimeout)
 
 		pollTarget := &PollTarget{
 			Target:   job.Target,
@@ -507,20 +550,29 @@ func (s *PollerScheduler) createPollFunc(job *scheduledJob) func() {
 		}
 
 		results, err := s.poller.PollSingle(ctx, pollTarget)
+		pollLatency := time.Since(pollStartTime)
+
 		if err != nil {
-			logger.Error("SNMP-Scheduler", "-", "定时轮询失败: ID=%d, IP=%s, %v",
-				job.TargetID, job.Target.TargetIP, err)
+			logger.Error("SNMP-Scheduler", job.Target.TargetIP, "定时轮询失败: ID=%d, 耗时=%v, 错误=%v",
+				job.TargetID, pollLatency, err)
 
 			// 更新目标状态为错误
 			s.updateTargetPollError(ctx, job.Target, err)
 			return
 		}
 
+		logger.Info("SNMP-Scheduler", job.Target.TargetIP, "定时轮询完成: ID=%d, 结果数=%d, 耗时=%v",
+			job.TargetID, len(results), pollLatency)
+
 		// 保存结果到数据库
 		if len(results) > 0 {
+			saveStartTime := time.Now()
 			if err := s.repo.CreatePollingResults(ctx, results); err != nil {
-				logger.Error("SNMP-Scheduler", "-", "保存轮询结果失败: ID=%d, %v",
-					job.TargetID, err)
+				logger.Error("SNMP-Scheduler", job.Target.TargetIP, "保存轮询结果失败: ID=%d, 耗时=%v, 错误=%v",
+					job.TargetID, time.Since(saveStartTime), err)
+			} else {
+				logger.Debug("SNMP-Scheduler", job.Target.TargetIP, "轮询结果已保存: ID=%d, 结果数=%d, 耗时=%v",
+					job.TargetID, len(results), time.Since(saveStartTime))
 			}
 		}
 

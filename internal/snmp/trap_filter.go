@@ -39,7 +39,11 @@ func NewTrapFilterEngine(rules []*models.SNMPTrapFilterRule) *TrapFilterEngine {
 	// 预编译规则
 	engine.compileRules()
 
-	logger.Info("SNMP-Filter", "-", "过滤引擎已初始化，规则数: %d", len(rules))
+	// 统计编译结果
+	regexCount := len(engine.regexCache)
+	cidrCount := len(engine.cidrCache)
+	logger.Info("SNMP-Filter", "-", "过滤引擎已初始化: 规则数=%d, 正则规则=%d, CIDR规则=%d",
+		len(rules), regexCount, cidrCount)
 	return engine
 }
 
@@ -117,14 +121,15 @@ func (e *TrapFilterEngine) AddRule(rule *models.SNMPTrapFilterRule) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	ruleCount := len(e.rules)
 	e.rules = append(e.rules, rule)
 	e.compileSingleRule(rule)
 
 	// 按优先级排序
 	e.sortRules()
 
-	logger.Info("SNMP-Filter", "-", "添加过滤规则: ID=%d, Name=%s, Priority=%d",
-		rule.ID, rule.Name, rule.Priority)
+	logger.Info("SNMP-Filter", "-", "添加过滤规则: ID=%d, 名称=%s, 动作=%s, 优先级=%d (规则数: %d -> %d)",
+		rule.ID, rule.Name, rule.Action, rule.Priority, ruleCount, len(e.rules))
 }
 
 // RemoveRule 移除过滤规则
@@ -132,6 +137,7 @@ func (e *TrapFilterEngine) RemoveRule(ruleID uint) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	ruleCount := len(e.rules)
 	for i, rule := range e.rules {
 		if rule.ID == ruleID {
 			// 清理缓存
@@ -140,10 +146,12 @@ func (e *TrapFilterEngine) RemoveRule(ruleID uint) {
 
 			// 移除规则
 			e.rules = append(e.rules[:i], e.rules[i+1:]...)
-			logger.Info("SNMP-Filter", "-", "移除过滤规则: ID=%d", ruleID)
+			logger.Info("SNMP-Filter", "-", "移除过滤规则: ID=%d, 名称=%s (规则数: %d -> %d)",
+				ruleID, rule.Name, ruleCount, len(e.rules))
 			return
 		}
 	}
+	logger.Warn("SNMP-Filter", "-", "移除过滤规则失败: 规则不存在 ID=%d", ruleID)
 }
 
 // UpdateRules 更新所有规则（完全替换）

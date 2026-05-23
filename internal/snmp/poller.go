@@ -331,19 +331,29 @@ func (p *Poller) PollBatch(ctx context.Context, targets []*PollTarget) [][]*mode
 		return nil
 	}
 
-	logger.Info("SNMP-Poller", "-", "开始批量轮询: 目标数=%d, 应用层重试启用", len(targets))
+	batchStartTime := time.Now()
+	logger.Info("SNMP-Poller", "-", "开始批量轮询: 目标数=%d, 并发数=%d, 应用层重试启用",
+		len(targets), p.config.MaxWorkers)
 
 	results := make([][]*models.SNMPPollingResult, len(targets))
 	var wg sync.WaitGroup
 
+	// 并发控制统计
+	activeCount := int64(0)
+
 	for i, target := range targets {
 		// 获取信号量，限制并发数
 		p.workerSem <- struct{}{}
+		active := atomic.AddInt64(&activeCount, 1)
+		logger.Debug("SNMP-Poller", "-", "并发状态: 活跃=%d, 等待=%d", active, len(targets)-i-1)
 
 		wg.Add(1)
 		go func(idx int, t *PollTarget) {
 			defer wg.Done()
-			defer func() { <-p.workerSem }()
+			defer func() {
+				<-p.workerSem
+				atomic.AddInt64(&activeCount, -1)
+			}()
 
 			// 使用带重试的轮询方法
 			result, err := p.pollWithRetry(ctx, t)
@@ -360,13 +370,17 @@ func (p *Poller) PollBatch(ctx context.Context, targets []*PollTarget) [][]*mode
 	wg.Wait()
 
 	successCount := 0
+	totalOidCount := 0
 	for _, r := range results {
 		if r != nil {
 			successCount++
+			totalOidCount += len(r)
 		}
 	}
 
-	logger.Info("SNMP-Poller", "-", "批量轮询完成: 成功=%d/%d", successCount, len(targets))
+	batchLatency := time.Since(batchStartTime)
+	logger.Info("SNMP-Poller", "-", "批量轮询完成: 成功=%d/%d, 总OID数=%d, 总耗时=%v, 平均耗时=%v/目标",
+		successCount, len(targets), totalOidCount, batchLatency, batchLatency/time.Duration(len(targets)))
 
 	return results
 }
@@ -378,7 +392,9 @@ func (p *Poller) PollBatchNoRetry(ctx context.Context, targets []*PollTarget) []
 		return nil
 	}
 
-	logger.Info("SNMP-Poller", "-", "开始批量轮询（无应用重试）: 目标数=%d", len(targets))
+	batchStartTime := time.Now()
+	logger.Info("SNMP-Poller", "-", "开始批量轮询（无应用重试）: 目标数=%d, 并发数=%d",
+		len(targets), p.config.MaxWorkers)
 
 	results := make([][]*models.SNMPPollingResult, len(targets))
 	var wg sync.WaitGroup
@@ -412,7 +428,9 @@ func (p *Poller) PollBatchNoRetry(ctx context.Context, targets []*PollTarget) []
 		}
 	}
 
-	logger.Info("SNMP-Poller", "-", "批量轮询完成: 成功=%d/%d", successCount, len(targets))
+	batchLatency := time.Since(batchStartTime)
+	logger.Info("SNMP-Poller", "-", "批量轮询（无重试）完成: 成功=%d/%d, 总耗时=%v",
+		successCount, len(targets), batchLatency)
 
 	return results
 }
@@ -423,6 +441,9 @@ func (p *Poller) PollBatchNoRetry(ctx context.Context, targets []*PollTarget) []
 
 // Get 执行 SNMP GET 操作
 func (p *Poller) Get(ctx context.Context, addr string, oids []string, cred *models.SNMPCredential) ([]gosnmp.SnmpPDU, error) {
+	startTime := time.Now()
+	logger.Debug("SNMP-Poller", "-", "SNMP GET 请求: 地址=%s, OID数=%d", addr, len(oids))
+
 	community, err := p.getCommunity(cred)
 	if err != nil {
 		return nil, err
@@ -436,14 +457,20 @@ func (p *Poller) Get(ctx context.Context, addr string, oids []string, cred *mode
 
 	result, err := client.Get(oids)
 	if err != nil {
+		logger.Warn("SNMP-Poller", "-", "SNMP GET 失败: 地址=%s, 错误=%v", addr, err)
 		return nil, fmt.Errorf("SNMP GET 失败: %w", err)
 	}
 
+	latency := time.Since(startTime)
+	logger.Debug("SNMP-Poller", "-", "SNMP GET 成功: 地址=%s, 返回PDU数=%d, 耗时=%v", addr, len(result.Variables), latency)
 	return result.Variables, nil
 }
 
 // Walk 执行 SNMP WALK 操作
 func (p *Poller) Walk(ctx context.Context, addr string, rootOID string, cred *models.SNMPCredential) ([]gosnmp.SnmpPDU, error) {
+	startTime := time.Now()
+	logger.Debug("SNMP-Poller", "-", "SNMP WALK 请求: 地址=%s, 根OID=%s", addr, rootOID)
+
 	community, err := p.getCommunity(cred)
 	if err != nil {
 		return nil, err
@@ -461,9 +488,12 @@ func (p *Poller) Walk(ctx context.Context, addr string, rootOID string, cred *mo
 		return nil
 	})
 	if err != nil {
+		logger.Warn("SNMP-Poller", "-", "SNMP WALK 失败: 地址=%s, 根OID=%s, 错误=%v", addr, rootOID, err)
 		return nil, fmt.Errorf("SNMP WALK 失败: %w", err)
 	}
 
+	latency := time.Since(startTime)
+	logger.Debug("SNMP-Poller", "-", "SNMP WALK 成功: 地址=%s, 根OID=%s, 返回PDU数=%d, 耗时=%v", addr, rootOID, len(results), latency)
 	return results, nil
 }
 
@@ -513,20 +543,31 @@ func (p *Poller) pollOID(ctx context.Context, client *gosnmp.GoSNMP, target *mod
 
 // getOID 执行单个 OID 的 GET 操作
 func (p *Poller) getOID(client *gosnmp.GoSNMP, oid string) (gosnmp.SnmpPDU, error) {
+	startTime := time.Now()
+	logger.Verbose("SNMP-Poller", client.Target, "发送 GET 请求: OID=%s", oid)
+
 	result, err := client.Get([]string{oid})
 	if err != nil {
+		logger.Verbose("SNMP-Poller", client.Target, "GET 请求失败: OID=%s, 错误=%v", oid, err)
 		return gosnmp.SnmpPDU{}, fmt.Errorf("GET %s 失败: %w", oid, err)
 	}
 
 	if len(result.Variables) == 0 {
+		logger.Verbose("SNMP-Poller", client.Target, "GET 请求无返回: OID=%s", oid)
 		return gosnmp.SnmpPDU{}, fmt.Errorf("GET %s 无返回结果", oid)
 	}
 
+	latency := time.Since(startTime)
+	logger.Verbose("SNMP-Poller", client.Target, "GET 请求成功: OID=%s, 类型=%s, 耗时=%v",
+		oid, p.getPDUTypeString(result.Variables[0]), latency)
 	return result.Variables[0], nil
 }
 
 // walkOID 执行 WALK 操作
 func (p *Poller) walkOID(client *gosnmp.GoSNMP, rootOID string) ([]gosnmp.SnmpPDU, error) {
+	startTime := time.Now()
+	logger.Verbose("SNMP-Poller", client.Target, "发送 WALK 请求: 根OID=%s", rootOID)
+
 	var results []gosnmp.SnmpPDU
 
 	err := client.Walk(rootOID, func(pdu gosnmp.SnmpPDU) error {
@@ -535,14 +576,21 @@ func (p *Poller) walkOID(client *gosnmp.GoSNMP, rootOID string) ([]gosnmp.SnmpPD
 	})
 
 	if err != nil {
+		logger.Verbose("SNMP-Poller", client.Target, "WALK 请求失败: 根OID=%s, 错误=%v", rootOID, err)
 		return nil, fmt.Errorf("WALK %s 失败: %w", rootOID, err)
 	}
 
+	latency := time.Since(startTime)
+	logger.Verbose("SNMP-Poller", client.Target, "WALK 请求成功: 根OID=%s, 返回PDU数=%d, 耗时=%v",
+		rootOID, len(results), latency)
 	return results, nil
 }
 
 // bulkWalk 执行 GetBulk 操作（v2c 优化）
 func (p *Poller) bulkWalk(client *gosnmp.GoSNMP, rootOID string) ([]gosnmp.SnmpPDU, error) {
+	startTime := time.Now()
+	logger.Verbose("SNMP-Poller", client.Target, "发送 BULK WALK 请求: 根OID=%s", rootOID)
+
 	var results []gosnmp.SnmpPDU
 
 	// 使用 BulkWalk 替代普通 Walk（更高效）
@@ -552,9 +600,13 @@ func (p *Poller) bulkWalk(client *gosnmp.GoSNMP, rootOID string) ([]gosnmp.SnmpP
 	})
 
 	if err != nil {
+		logger.Verbose("SNMP-Poller", client.Target, "BULK WALK 请求失败: 根OID=%s, 错误=%v", rootOID, err)
 		return nil, fmt.Errorf("BULK WALK %s 失败: %w", rootOID, err)
 	}
 
+	latency := time.Since(startTime)
+	logger.Verbose("SNMP-Poller", client.Target, "BULK WALK 请求成功: 根OID=%s, 返回PDU数=%d, 耗时=%v",
+		rootOID, len(results), latency)
 	return results, nil
 }
 
@@ -679,9 +731,14 @@ func (p *Poller) createSNMPClient(addr string, community string, cred *models.SN
 func (p *Poller) createV1V2Client(target string, port uint16, community string, cred *models.SNMPCredential) (*gosnmp.GoSNMP, error) {
 	// 确定协议版本
 	version := gosnmp.Version2c
+	versionStr := "v2c"
 	if cred != nil && strings.ToLower(cred.Version) == "v1" {
 		version = gosnmp.Version1
+		versionStr = "v1"
 	}
+
+	logger.Debug("SNMP-Poller", target, "创建 SNMP%s 客户端: 地址=%s:%d, 超时=%v, 重试=%d",
+		versionStr, target, port, p.config.Timeout, p.config.Retries)
 
 	client := &gosnmp.GoSNMP{
 		Target:             target,
@@ -698,19 +755,26 @@ func (p *Poller) createV1V2Client(target string, port uint16, community string, 
 
 	err := client.Connect()
 	if err != nil {
+		logger.Warn("SNMP-Poller", target, "SNMP%s 连接失败: 地址=%s:%d, 错误=%v",
+			versionStr, target, port, err)
 		return nil, fmt.Errorf("连接 SNMP 目标失败 (%s:%d): %w", target, port, err)
 	}
 
+	logger.Debug("SNMP-Poller", target, "SNMP%s 连接建立成功: 地址=%s:%d", versionStr, target, port)
 	return client, nil
 }
 
 // createV3Client 创建 SNMP v3 客户端
 func (p *Poller) createV3Client(target string, port uint16, cred *models.SNMPCredential) (*gosnmp.GoSNMP, error) {
+	logger.Debug("SNMP-Poller", target, "创建 SNMPv3 客户端: 地址=%s:%d, 用户=%s, 安全级别=%s, 认证协议=%s, 加密协议=%s",
+		target, port, cred.Username, cred.SecurityLevel, cred.AuthProtocol, cred.PrivProtocol)
+
 	// 解密认证和加密密钥
 	authPassword := ""
 	if cred.AuthPassword != "" {
 		decrypted, err := p.crypto.DecryptCredential(cred.AuthPassword)
 		if err != nil {
+			logger.Warn("SNMP-Poller", target, "解密认证密钥失败: %v", err)
 			return nil, fmt.Errorf("解密认证密钥失败: %w", err)
 		}
 		authPassword = decrypted
@@ -720,6 +784,7 @@ func (p *Poller) createV3Client(target string, port uint16, cred *models.SNMPCre
 	if cred.PrivPassword != "" {
 		decrypted, err := p.crypto.DecryptCredential(cred.PrivPassword)
 		if err != nil {
+			logger.Warn("SNMP-Poller", target, "解密加密密钥失败: %v", err)
 			return nil, fmt.Errorf("解密加密密钥失败: %w", err)
 		}
 		privPassword = decrypted
@@ -759,9 +824,12 @@ func (p *Poller) createV3Client(target string, port uint16, cred *models.SNMPCre
 
 	err := client.Connect()
 	if err != nil {
+		logger.Warn("SNMP-Poller", target, "SNMPv3 连接失败: 地址=%s:%d, 用户=%s, 错误=%v",
+			target, port, cred.Username, err)
 		return nil, fmt.Errorf("连接 SNMPv3 目标失败 (%s:%d): %w", target, port, err)
 	}
 
+	logger.Debug("SNMP-Poller", target, "SNMPv3 连接建立成功: 地址=%s:%d, 用户=%s", target, port, cred.Username)
 	return client, nil
 }
 

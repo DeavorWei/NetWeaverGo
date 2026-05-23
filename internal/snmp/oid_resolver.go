@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 
@@ -87,7 +88,7 @@ func NewOIDResolver(mibManager *MIBManager, repo repository.MIBRepository) *OIDR
 // ResolveOID 解析 OID 到名称和信息
 // 如果未找到对应 MIB 节点，返回优雅降级结果（Found=false）
 func (r *OIDResolver) ResolveOID(oid string) (*ResolvedOID, error) {
-	// 标准化 OID 格式
+	resolveStartTime := time.Now()
 	oid = normalizeOID(oid)
 
 	// 统一在锁内完成缓存读取和写入，避免 TOCTOU 竞态
@@ -96,12 +97,17 @@ func (r *OIDResolver) ResolveOID(oid string) (*ResolvedOID, error) {
 
 	// 先查缓存
 	if cached, ok := r.oidCache.Get(oid); ok {
+		logger.Verbose("SNMP-Resolver", "-", "OID 缓存命中: %s -> %s (命中=%v)", oid, cached.Name, cached.Found)
 		return cached, nil
 	}
 
+	logger.Verbose("SNMP-Resolver", "-", "OID 缓存未命中: %s, 查询数据库", oid)
+
 	// 查询数据库
+	dbStartTime := time.Now()
 	node, err := r.repo.GetNodeByOID(oid)
 	if err != nil {
+		logger.Error("SNMP-Resolver", "-", "查询 OID 节点失败: %s, 耗时=%v, 错误=%v", oid, time.Since(dbStartTime), err)
 		return nil, fmt.Errorf("查询 OID 节点失败: %v", err)
 	}
 
@@ -114,6 +120,7 @@ func (r *OIDResolver) ResolveOID(oid string) (*ResolvedOID, error) {
 		}
 		// 缓存未找到的结果（避免重复查询）
 		r.oidCache.Add(oid, result)
+		logger.Debug("SNMP-Resolver", "-", "OID 未找到: %s, 耗时=%v", oid, time.Since(resolveStartTime))
 		return result, nil
 	}
 
@@ -124,6 +131,10 @@ func (r *OIDResolver) ResolveOID(oid string) (*ResolvedOID, error) {
 	// 缓存结果
 	r.oidCache.Add(oid, result)
 	r.nameCache.Add(node.Name, oid)
+
+	resolveLatency := time.Since(resolveStartTime)
+	logger.Debug("SNMP-Resolver", "-", "OID 解析成功: %s -> %s (模块: %s), 耗时=%v",
+		oid, result.Name, result.ModuleName, resolveLatency)
 
 	return result, nil
 }

@@ -87,6 +87,7 @@ func (h *TrapHandler) SetTimeout(timeout time.Duration) {
 // HandleTrap 处理接收到的 Trap
 // 实现 gosnmp.TrapListenerFunc 接口
 func (h *TrapHandler) HandleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) error {
+	handleStartTime := time.Now()
 	h.mu.Lock()
 	h.stats.TotalReceived++
 	h.mu.Unlock()
@@ -95,52 +96,66 @@ func (h *TrapHandler) HandleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) e
 		h.mu.Lock()
 		h.stats.TotalErrors++
 		h.mu.Unlock()
+		logger.Error("SNMP-Handler", "-", "无效的 Trap 数据包或地址")
 		return fmt.Errorf("无效的 Trap 数据包或地址")
 	}
 
-	logger.Debug("SNMP-Handler", "-", "收到 Trap: from=%s, version=%s, community=%s",
-		addr.IP.String(), packet.Version.String(), string(packet.Community))
+	logger.Debug("SNMP-Handler", addr.IP.String(), "收到 Trap: 版本=%s, Community=%s, PDU类型=%s",
+		packet.Version.String(), string(packet.Community), packet.PDUType.String())
 
 	// 1. 解析 Trap 数据包
+	parseStartTime := time.Now()
 	trap, err := h.parseTrap(packet, addr)
 	if err != nil {
 		h.mu.Lock()
 		h.stats.TotalErrors++
 		h.mu.Unlock()
-		logger.Error("SNMP-Handler", "-", "解析 Trap 失败: from=%s, %v", addr.IP.String(), err)
+		logger.Error("SNMP-Handler", addr.IP.String(), "解析 Trap 失败: 耗时=%v, 错误=%v",
+			time.Since(parseStartTime), err)
 		return err
 	}
+	parseLatency := time.Since(parseStartTime)
 
 	// 2. 应用过滤规则
+	filterLatency := time.Duration(0)
 	if h.filter != nil {
+		filterStartTime := time.Now()
 		filterResult := h.filter.ApplyFilter(trap)
+		filterLatency = time.Since(filterStartTime)
 
 		if filterResult.Action == "drop" {
 			h.mu.Lock()
 			h.stats.TotalFiltered++
 			h.mu.Unlock()
-			logger.Debug("SNMP-Handler", "-", "Trap 已过滤: OID=%s, RuleID=%d, RuleName=%s",
-				trap.TrapOID, filterResult.RuleID, filterResult.RuleName)
+			logger.Debug("SNMP-Handler", addr.IP.String(), "Trap 已过滤: OID=%s, 规则ID=%d, 规则名=%s, 过滤耗时=%v",
+				trap.TrapOID, filterResult.RuleID, filterResult.RuleName, filterLatency)
 			return nil
 		}
 
 		// 应用严重级别覆盖
 		if filterResult.Action == "severity_override" && filterResult.OverrideSeverity != "" {
-			logger.Debug("SNMP-Handler", "-", "Trap 严重级别覆盖: OID=%s, %s -> %s",
+			logger.Debug("SNMP-Handler", addr.IP.String(), "Trap 严重级别覆盖: OID=%s, %s -> %s",
 				trap.TrapOID, trap.Severity, filterResult.OverrideSeverity)
 			trap.Severity = filterResult.OverrideSeverity
 		}
 	}
 
 	// 3. 使用 OID 解析器解析 Trap OID
+	resolveLatency := time.Duration(0)
 	if h.resolver != nil {
+		resolveStartTime := time.Now()
 		resolved, err := h.resolver.ResolveOID(trap.TrapOID)
 		if err == nil && resolved.Found {
 			trap.TrapName = resolved.Name
+			logger.Verbose("SNMP-Handler", addr.IP.String(), "OID 解析成功: %s -> %s (模块: %s)",
+				trap.TrapOID, resolved.Name, resolved.ModuleName)
+		} else if err != nil {
+			logger.Verbose("SNMP-Handler", addr.IP.String(), "OID 解析失败: %s, %v", trap.TrapOID, err)
 		}
 
 		// 解析 VarBinds 中的 OID
 		h.resolveVarBinds(trap)
+		resolveLatency = time.Since(resolveStartTime)
 	}
 
 	// 4. 存储到数据库（使用带超时的上下文，避免阻塞）
@@ -150,13 +165,16 @@ func (h *TrapHandler) HandleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) e
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	storeStartTime := time.Now()
 	if err := h.repo.CreateTrap(ctx, trap); err != nil {
 		h.mu.Lock()
 		h.stats.TotalErrors++
 		h.mu.Unlock()
-		logger.Error("SNMP-Handler", "-", "存储 Trap 失败: OID=%s, %v", trap.TrapOID, err)
+		logger.Error("SNMP-Handler", addr.IP.String(), "存储 Trap 失败: OID=%s, 耗时=%v, 错误=%v",
+			trap.TrapOID, time.Since(storeStartTime), err)
 		return err
 	}
+	storeLatency := time.Since(storeStartTime)
 
 	h.mu.Lock()
 	h.stats.TotalStored++
@@ -178,8 +196,9 @@ func (h *TrapHandler) HandleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) e
 		})
 	}
 
-	logger.Debug("SNMP-Handler", "-", "Trap 已处理: OID=%s, Name=%s, Source=%s, Severity=%s",
-		trap.TrapOID, trap.TrapName, trap.SourceIP, trap.Severity)
+	totalLatency := time.Since(handleStartTime)
+	logger.Info("SNMP-Handler", addr.IP.String(), "Trap 处理完成: OID=%s, 名称=%s, 严重级别=%s, 总耗时=%v (解析=%v, 过滤=%v, 解析OID=%v, 存储=%v)",
+		trap.TrapOID, trap.TrapName, trap.Severity, totalLatency, parseLatency, filterLatency, resolveLatency, storeLatency)
 
 	return nil
 }

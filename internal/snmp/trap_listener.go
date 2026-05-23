@@ -110,14 +110,24 @@ func NewTrapListener(handler *TrapHandler, config *models.SNMPServerConfig, noti
 // AddV3User 添加 v3 用户配置
 func (l *TrapListener) AddV3User(config *V3UserConfig) error {
 	if config == nil || config.Username == "" {
+		logger.Warn("SNMP-Listener", "-", "添加 v3 用户失败: 配置无效")
 		return fmt.Errorf("v3 用户配置无效")
 	}
 
 	l.v3Mu.Lock()
 	defer l.v3Mu.Unlock()
 
+	// 检查是否已存在
+	_, exists := l.v3Users[config.Username]
 	l.v3Users[config.Username] = config
-	logger.Info("SNMP-Listener", "-", "添加 SNMPv3 用户: %s (安全级别: %s)", config.Username, config.SecurityLevel)
+
+	if exists {
+		logger.Info("SNMP-Listener", "-", "更新 SNMPv3 用户: %s (安全级别: %s, 认证: %s, 加密: %s)",
+			config.Username, config.SecurityLevel, config.AuthProtocol, config.PrivProtocol)
+	} else {
+		logger.Info("SNMP-Listener", "-", "添加 SNMPv3 用户: %s (安全级别: %s, 认证: %s, 加密: %s)",
+			config.Username, config.SecurityLevel, config.AuthProtocol, config.PrivProtocol)
+	}
 	return nil
 }
 
@@ -127,11 +137,12 @@ func (l *TrapListener) RemoveV3User(username string) error {
 	defer l.v3Mu.Unlock()
 
 	if _, exists := l.v3Users[username]; !exists {
+		logger.Warn("SNMP-Listener", "-", "移除 v3 用户失败: 用户不存在 (%s)", username)
 		return fmt.Errorf("v3 用户不存在: %s", username)
 	}
 
 	delete(l.v3Users, username)
-	logger.Info("SNMP-Listener", "-", "移除 SNMPv3 用户: %s", username)
+	logger.Info("SNMP-Listener", "-", "移除 SNMPv3 用户: %s (当前用户数: %d)", username, len(l.v3Users))
 	return nil
 }
 
@@ -233,7 +244,11 @@ func (l *TrapListener) Stop() error {
 		return nil
 	}
 
-	logger.Info("SNMP-Listener", "-", "正在停止 Trap 监听器...")
+	// 记录停止前的统计信息
+	totalTraps := l.stats.TotalTraps
+	uptime := time.Since(l.stats.StartTime)
+
+	logger.Info("SNMP-Listener", "-", "正在停止 Trap 监听器... (总接收=%d, 运行时长=%v)", totalTraps, uptime)
 
 	// 发送停止信号
 	close(l.stopCh)
@@ -252,7 +267,8 @@ func (l *TrapListener) Stop() error {
 		l.notifier.NotifyListenerStatus(&l.stats)
 	}
 
-	logger.Info("SNMP-Listener", "-", "Trap 监听器已停止")
+	logger.Info("SNMP-Listener", "-", "Trap 监听器已停止: 总接收=%d, 过滤=%d, 运行时长=%v",
+		totalTraps, l.stats.FilteredOut, uptime)
 	return nil
 }
 

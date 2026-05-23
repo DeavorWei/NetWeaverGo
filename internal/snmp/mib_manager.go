@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 
@@ -76,36 +77,49 @@ func (m *MIBManager) Close() {
 // 流程：复制文件到存储目录 → 解析 MIB → 存入数据库 → 更新缓存
 // 支持部分导入策略：即使部分节点解析失败，已成功的节点仍保留
 func (m *MIBManager) ImportMIBFile(ctx context.Context, filePath string) (*MIBImportResult, error) {
+	importStartTime := time.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// 检查上下文是否已取消
 	if ctx.Err() != nil {
+		logger.Warn("SNMP-MIB", "-", "MIB 导入取消: 文件=%s, 原因=%v", filePath, ctx.Err())
 		return nil, ctx.Err()
 	}
 
+	logger.Info("SNMP-MIB", "-", "开始导入 MIB 文件: 路径=%s", filePath)
+
 	// 检查文件是否存在
 	if _, err := os.Stat(filePath); err != nil {
+		logger.Error("SNMP-MIB", "-", "MIB 文件不存在: %s", filePath)
 		return nil, fmt.Errorf("MIB 文件不存在: %s", filePath)
 	}
 
 	// 复制文件到 MIB 存储目录
+	copyStartTime := time.Now()
 	storedPath, err := m.copyMIBFile(filePath)
 	if err != nil {
+		logger.Error("SNMP-MIB", "-", "复制 MIB 文件失败: %s, %v", filePath, err)
 		return nil, fmt.Errorf("复制 MIB 文件失败: %v", err)
 	}
+	logger.Debug("SNMP-MIB", "-", "文件复制完成: 源=%s, 目标=%s, 耗时=%v", filePath, storedPath, time.Since(copyStartTime))
 
 	// 解析 MIB 文件
+	parseStartTime := time.Now()
 	result, err := m.parser.ParseFile(storedPath)
 	if err != nil {
 		// 解析失败，删除已复制的文件
 		_ = os.Remove(storedPath)
+		logger.Error("SNMP-MIB", "-", "解析 MIB 文件失败: %s, 耗时=%v, 错误=%v", filePath, time.Since(parseStartTime), err)
 		return nil, fmt.Errorf("解析 MIB 文件失败: %v", err)
 	}
+	logger.Debug("SNMP-MIB", "-", "MIB 解析完成: 模块=%s, 节点数=%d, 错误数=%d, 耗时=%v",
+		result.Module.Name, result.NodeCount, result.ErrorCount, time.Since(parseStartTime))
 
 	// 检查是否已存在同名模块
 	existing, _ := m.mibRepo.GetModuleByName(result.Module.Name)
 	if existing != nil {
+		logger.Info("SNMP-MIB", "-", "检测到同名模块，将覆盖: 模块=%s, 旧ID=%d", result.Module.Name, existing.ID)
 		// 删除已存在的模块和文件
 		_ = os.Remove(existing.FilePath)
 		_ = m.mibRepo.DeleteNodesByModule(existing.ID)
@@ -113,10 +127,13 @@ func (m *MIBManager) ImportMIBFile(ctx context.Context, filePath string) (*MIBIm
 	}
 
 	// 保存模块到数据库
+	saveStartTime := time.Now()
 	if err := m.mibRepo.SaveModule(result.Module); err != nil {
 		_ = os.Remove(storedPath)
+		logger.Error("SNMP-MIB", "-", "保存 MIB 模块失败: %s, %v", result.Module.Name, err)
 		return nil, fmt.Errorf("保存 MIB 模块失败: %v", err)
 	}
+	logger.Debug("SNMP-MIB", "-", "模块保存完成: ID=%d, 名称=%s, 耗时=%v", result.Module.ID, result.Module.Name, time.Since(saveStartTime))
 
 	// 设置节点的 ModuleID 并保存
 	moduleID := result.Module.ID
@@ -125,21 +142,28 @@ func (m *MIBManager) ImportMIBFile(ctx context.Context, filePath string) (*MIBIm
 	}
 
 	if len(result.Nodes) > 0 {
+		saveNodesStartTime := time.Now()
 		if err := m.mibRepo.SaveNodes(result.Nodes); err != nil {
 			_ = m.mibRepo.DeleteModule(moduleID)
 			_ = os.Remove(storedPath)
+			logger.Error("SNMP-MIB", "-", "保存 MIB 节点失败: 模块=%s, %v", result.Module.Name, err)
 			return nil, fmt.Errorf("保存 MIB 节点失败: %v", err)
 		}
+		logger.Debug("SNMP-MIB", "-", "节点保存完成: 数量=%d, 耗时=%v", len(result.Nodes), time.Since(saveNodesStartTime))
 	}
 
 	// 更新缓存
+	cacheStartTime := time.Now()
 	for i := range result.Nodes {
 		m.nodeCache.Add(result.Nodes[i].OID, &result.Nodes[i])
 		m.nameCache.Add(result.Nodes[i].Name, result.Nodes[i].OID)
 	}
+	logger.Debug("SNMP-MIB", "-", "缓存更新完成: 新增=%d, 总计=%d, 耗时=%v",
+		len(result.Nodes), m.nodeCache.Len(), time.Since(cacheStartTime))
 
-	logger.Info("SNMP", "-", "MIB 模块导入成功: %s (%d 节点, %d 错误)",
-		result.Module.Name, result.NodeCount, result.ErrorCount)
+	totalLatency := time.Since(importStartTime)
+	logger.Info("SNMP-MIB", "-", "MIB 模块导入成功: 模块=%s, 节点数=%d, 错误数=%d, 总耗时=%v",
+		result.Module.Name, result.NodeCount, result.ErrorCount, totalLatency)
 
 	return result, nil
 }

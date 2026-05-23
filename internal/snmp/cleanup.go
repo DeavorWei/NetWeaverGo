@@ -78,6 +78,9 @@ func NewDataCleaner(
 		config.CleanupIntervalHours = 24
 	}
 
+	logger.Info("SNMP-Cleanup", "-", "数据清理器已创建: Trap保留=%d天, 轮询保留=%d天, 清理间隔=%d小时, 启用=%v",
+		config.TrapRetentionDays, config.PollResultRetentionDays, config.CleanupIntervalHours, config.Enabled)
+
 	return &DataCleaner{
 		trapRepo: trapRepo,
 		pollRepo: pollRepo,

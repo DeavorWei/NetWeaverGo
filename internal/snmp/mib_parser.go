@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/golangsnmp/gomib"
 	"github.com/golangsnmp/gomib/mib"
 
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 )
 
@@ -65,14 +67,19 @@ func (p *MIBParser) ParseFileWithDependencies(filePath string, dependencyDirs []
 
 // parseFileLocked 解析 MIB 文件的内部实现（调用方需持有锁）
 func (p *MIBParser) parseFileLocked(ctx context.Context, filePath string, dependencyDirs []string) (*MIBImportResult, error) {
+	parseStartTime := time.Now()
+	logger.Info("SNMP-Parser", "-", "开始解析 MIB 文件: 路径=%s", filePath)
+
 	// 1. 检查文件存在性
 	if _, err := os.Stat(filePath); err != nil {
+		logger.Error("SNMP-Parser", "-", "MIB 文件不存在: %s", filePath)
 		return nil, fmt.Errorf("MIB 文件不存在: %s", filePath)
 	}
 
 	// 2. 构建加载选项
 	fileSrc, err := gomib.File(filePath)
 	if err != nil {
+		logger.Error("SNMP-Parser", "-", "创建 MIB 文件源失败: %s, %v", filePath, err)
 		return nil, fmt.Errorf("创建 MIB 文件源失败: %v", err)
 	}
 	opts := []gomib.LoadOption{
@@ -81,11 +88,15 @@ func (p *MIBParser) parseFileLocked(ctx context.Context, filePath string, depend
 
 	// 3. 添加依赖搜索路径
 	if len(dependencyDirs) > 0 {
+		logger.Debug("SNMP-Parser", "-", "添加依赖搜索路径: 数量=%d", len(dependencyDirs))
 		var sources []gomib.Source
 		for _, dir := range dependencyDirs {
 			src, err := gomib.Dir(dir)
 			if err == nil {
 				sources = append(sources, src)
+				logger.Debug("SNMP-Parser", "-", "依赖路径添加成功: %s", dir)
+			} else {
+				logger.Warn("SNMP-Parser", "-", "依赖路径添加失败: %s, %v", dir, err)
 			}
 		}
 		if len(sources) > 0 {
@@ -94,16 +105,26 @@ func (p *MIBParser) parseFileLocked(ctx context.Context, filePath string, depend
 	}
 
 	// 4. 加载 MIB 文件
+	loadStartTime := time.Now()
 	loadedMib, err := gomib.Load(ctx, opts...)
 	if err != nil {
+		logger.Error("SNMP-Parser", "-", "加载 MIB 文件失败: %s, 耗时=%v, 错误=%v",
+			filePath, time.Since(loadStartTime), err)
 		return nil, fmt.Errorf("解析 MIB 文件失败: %s: %v", filePath, err)
 	}
+	logger.Debug("SNMP-Parser", "-", "MIB 加载完成: 耗时=%v", time.Since(loadStartTime))
 
 	// 5. 保存加载结果
 	p.loadedMib = loadedMib
 
 	// 6. 转换为内部数据结构
-	return p.parseMibData(loadedMib, filePath), nil
+	result := p.parseMibData(loadedMib, filePath)
+
+	totalLatency := time.Since(parseStartTime)
+	logger.Info("SNMP-Parser", "-", "MIB 解析完成: 文件=%s, 模块=%s, 节点数=%d, 错误数=%d, 总耗时=%v",
+		filePath, result.Module.Name, result.NodeCount, result.ErrorCount, totalLatency)
+
+	return result, nil
 }
 
 // parseMibData 从 gomib.Mib 提取所有节点
