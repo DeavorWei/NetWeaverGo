@@ -1,25 +1,28 @@
 // Package snmp 提供 SNMP 核心业务功能
-// mib_parser.go 实现 MIB 文件解析，封装 gosmi 库
+// mib_parser.go 实现 MIB 文件解析，封装 gomib 库（CGO-Free）
 package snmp
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	gosmi "github.com/sleepinggenius2/gosmi"
-	"github.com/sleepinggenius2/gosmi/types"
+	"github.com/golangsnmp/gomib"
+	"github.com/golangsnmp/gomib/mib"
 
 	"github.com/NetWeaverGo/core/internal/models"
 )
 
 // MIBParser MIB 文件解析器
-// 使用 gosmi 库解析 SMIv1/SMIv2 格式的 MIB 文件
+// 使用 gomib 库解析 SMIv1/SMIv2 格式的 MIB 文件
 // 支持部分导入策略：即使部分节点解析失败，已成功的节点仍保留
+// gomib 是纯 Go 实现，无 CGO 依赖，天然支持并发
 type MIBParser struct {
-	mu sync.Mutex
+	mu        sync.Mutex
+	loadedMib *mib.Mib // 已加载的 MIB 数据
 }
 
 // NewMIBParser 创建 MIB 解析器实例
@@ -27,14 +30,18 @@ func NewMIBParser() *MIBParser {
 	return &MIBParser{}
 }
 
-// Init 初始化 gosmi 库（应用启动时调用一次）
+// Init 初始化解析器（保持接口兼容，实际无操作）
+// gomib 无全局状态，无需初始化
 func (p *MIBParser) Init() {
-	gosmi.Init()
+	// gomib 无全局状态，无需初始化
+	// 保留空实现以兼容 MIBManager
 }
 
-// Exit 清理 gosmi 库资源（应用关闭时调用）
+// Exit 清理解析器资源（保持接口兼容，实际无操作）
+// gomib 无全局状态，无需清理
 func (p *MIBParser) Exit() {
-	gosmi.Exit()
+	// gomib 无全局状态，无需清理
+	// 保留空实现以兼容 MIBManager
 }
 
 // ParseFile 解析单个 MIB 文件
@@ -44,7 +51,7 @@ func (p *MIBParser) ParseFile(filePath string) (*MIBImportResult, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	return p.parseFileLocked(filePath)
+	return p.parseFileLocked(context.Background(), filePath, nil)
 }
 
 // ParseFileWithDependencies 解析 MIB 文件及其依赖
@@ -53,90 +60,105 @@ func (p *MIBParser) ParseFileWithDependencies(filePath string, dependencyDirs []
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// 设置 MIB 搜索路径（包含依赖目录）
-	for _, dir := range dependencyDirs {
-		gosmi.AppendPath(dir)
-	}
-
-	return p.parseFileLocked(filePath)
+	return p.parseFileLocked(context.Background(), filePath, dependencyDirs)
 }
 
 // parseFileLocked 解析 MIB 文件的内部实现（调用方需持有锁）
-func (p *MIBParser) parseFileLocked(filePath string) (*MIBImportResult, error) {
-	// 检查文件是否存在
+func (p *MIBParser) parseFileLocked(ctx context.Context, filePath string, dependencyDirs []string) (*MIBImportResult, error) {
+	// 1. 检查文件存在性
 	if _, err := os.Stat(filePath); err != nil {
 		return nil, fmt.Errorf("MIB 文件不存在: %s", filePath)
 	}
 
-	// 加载 MIB 模块
-	moduleName, err := gosmi.LoadModule(filePath)
+	// 2. 构建加载选项
+	fileSrc, err := gomib.File(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("加载 MIB 模块失败: %s: %v", filePath, err)
+		return nil, fmt.Errorf("创建 MIB 文件源失败: %v", err)
+	}
+	opts := []gomib.LoadOption{
+		gomib.WithSource(fileSrc),
 	}
 
-	// 获取模块信息
-	module, err := gosmi.GetModule(moduleName)
-	if err != nil {
-		return nil, fmt.Errorf("获取模块信息失败: %s: %v", moduleName, err)
+	// 3. 添加依赖搜索路径
+	if len(dependencyDirs) > 0 {
+		var sources []gomib.Source
+		for _, dir := range dependencyDirs {
+			src, err := gomib.Dir(dir)
+			if err == nil {
+				sources = append(sources, src)
+			}
+		}
+		if len(sources) > 0 {
+			opts = append(opts, gomib.WithSource(gomib.Multi(sources...)))
+		}
 	}
 
-	return p.parseModuleNodes(module, filePath), nil
+	// 4. 加载 MIB 文件
+	loadedMib, err := gomib.Load(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("解析 MIB 文件失败: %s: %v", filePath, err)
+	}
+
+	// 5. 保存加载结果
+	p.loadedMib = loadedMib
+
+	// 6. 转换为内部数据结构
+	return p.parseMibData(loadedMib, filePath), nil
 }
 
-// parseModuleNodes 从 gosmi 模块中提取所有节点
-func (p *MIBParser) parseModuleNodes(module gosmi.SmiModule, filePath string) *MIBImportResult {
+// parseMibData 从 gomib.Mib 提取所有节点
+func (p *MIBParser) parseMibData(loadedMib *mib.Mib, filePath string) *MIBImportResult {
 	result := &MIBImportResult{
 		Errors: []MIBParseError{},
 	}
 
+	// 使用 recover 捕获 panic
+	defer func() {
+		if r := recover(); r != nil {
+			result.Errors = append(result.Errors, MIBParseError{
+				Message: fmt.Sprintf("解析过程发生异常: %v", r),
+			})
+		}
+	}()
+
+	// 获取所有模块
+	modules := loadedMib.Modules()
+	if len(modules) == 0 {
+		result.Errors = append(result.Errors, MIBParseError{
+			Message: "未找到任何 MIB 模块",
+		})
+		return result
+	}
+
+	// 取第一个模块作为主模块（通常单文件加载只有一个模块）
+	primaryModule := modules[0]
+
 	// 构建模块模型
 	mibModule := &models.MIBModule{
-		Name:        module.Name,
+		Name:        primaryModule.Name(),
 		FileName:    filepath.Base(filePath),
-		Description: module.Description,
+		Description: primaryModule.Description(),
 		Source:      "import",
 		FilePath:    filePath,
 	}
 
-	// 获取模块根节点
-	identityNode, ok := module.GetIdentityNode()
-	if !ok {
-		result.Errors = append(result.Errors, MIBParseError{
-			Message: "模块缺少 identity 节点定义",
-		})
-	}
-
-	// 遍历并解析所有节点
+	// 遍历所有节点
 	nodes := []models.MIBNode{}
 	parseErrors := []MIBParseError{}
 
-	if ok && identityNode.Name != "" {
-		// 从 identity 节点开始遍历子树
-		subtreeNodes := identityNode.GetSubtree()
-		for _, smiNode := range subtreeNodes {
-			node, err := p.convertSmiNodeToMIBNode(smiNode, nil)
+	// 从根节点开始遍历整个 OID 树
+	root := loadedMib.Root()
+	if root != nil {
+		for node := range root.Subtree() {
+			mibNode, err := p.convertMibNodeToMIBNode(node, nil)
 			if err != nil {
 				parseErrors = append(parseErrors, MIBParseError{
-					NodeName: smiNode.Name,
+					NodeName: node.Name(),
 					Message:  err.Error(),
 				})
 				continue
 			}
-			nodes = append(nodes, *node)
-		}
-	} else {
-		// 尝试获取模块中的所有节点
-		allNodes := module.GetNodes()
-		for _, smiNode := range allNodes {
-			node, err := p.convertSmiNodeToMIBNode(smiNode, nil)
-			if err != nil {
-				parseErrors = append(parseErrors, MIBParseError{
-					NodeName: smiNode.Name,
-					Message:  err.Error(),
-				})
-				continue
-			}
-			nodes = append(nodes, *node)
+			nodes = append(nodes, *mibNode)
 		}
 	}
 
@@ -150,14 +172,16 @@ func (p *MIBParser) parseModuleNodes(module gosmi.SmiModule, filePath string) *M
 	return result
 }
 
-// convertSmiNodeToMIBNode 将 gosmi SmiNode 转换为 models.MIBNode
-func (p *MIBParser) convertSmiNodeToMIBNode(smiNode gosmi.SmiNode, moduleID *uint) (*models.MIBNode, error) {
-	if smiNode.Name == "" {
+// convertMibNodeToMIBNode 将 mib.Node 转换为 models.MIBNode
+func (p *MIBParser) convertMibNodeToMIBNode(node *mib.Node, moduleID *uint) (*models.MIBNode, error) {
+	name := node.Name()
+	if name == "" {
 		return nil, fmt.Errorf("节点名称为空")
 	}
 
-	// 获取 OID 字符串
-	oidStr := smiNode.Oid.String()
+	// 获取 OID
+	oid := node.OID()
+	oidStr := oid.String()
 	if oidStr == "" {
 		return nil, fmt.Errorf("节点 OID 为空")
 	}
@@ -166,37 +190,34 @@ func (p *MIBParser) convertSmiNodeToMIBNode(smiNode gosmi.SmiNode, moduleID *uin
 	parentOID := calculateParentOID(oidStr)
 
 	// 获取节点类型
-	nodeType := getNodeType(smiNode.Kind.String())
+	nodeType := convertKind(node.Kind())
 
-	// 获取访问权限
-	access := getAccessLevel(smiNode.Access.String())
-
-	// 获取状态
-	status := getStatus(smiNode.Status.String())
-
-	// 获取语法类型
+	// 获取访问权限和状态（从 Object 获取）
+	access := "unknown"
+	status := "unknown"
 	syntax := ""
-	if smiNode.Type != nil {
-		syntax = smiNode.Type.Name
-		if syntax == "" {
-			syntax = smiNode.Type.BaseType.String()
+	description := node.Description()
+
+	if obj := node.Object(); obj != nil {
+		access = convertAccess(obj.Access())
+		status = convertStatus(obj.Status())
+		if typ := obj.Type(); typ != nil {
+			syntax = typ.Name()
 		}
 	}
 
-	node := &models.MIBNode{
+	return &models.MIBNode{
 		ModuleID:    moduleID,
 		OID:         oidStr,
-		Name:        smiNode.Name,
+		Name:        name,
 		ParentOID:   parentOID,
 		NodeType:    nodeType,
 		Syntax:      syntax,
 		Access:      access,
 		Status:      status,
-		Description: smiNode.Description,
+		Description: description,
 		Source:      "import",
-	}
-
-	return node, nil
+	}, nil
 }
 
 // calculateParentOID 计算父 OID
@@ -208,114 +229,151 @@ func calculateParentOID(oid string) string {
 	return strings.Join(parts[:len(parts)-1], ".")
 }
 
-// getNodeType 转换节点类型
-func getNodeType(kind string) string {
+// convertKind 转换节点类型
+func convertKind(kind mib.Kind) string {
 	switch kind {
-	case "Node":
+	case mib.KindNode:
 		return "node"
-	case "Scalar":
+	case mib.KindScalar:
 		return "scalar"
-	case "Table":
+	case mib.KindTable:
 		return "table"
-	case "Row":
+	case mib.KindRow:
 		return "row"
-	case "Column":
+	case mib.KindColumn:
 		return "column"
-	case "Notification":
+	case mib.KindNotification:
 		return "notification"
-	case "Group":
+	case mib.KindGroup:
 		return "group"
-	case "Compliance":
+	case mib.KindCompliance:
 		return "compliance"
-	case "Capabilities":
-		return "capabilities"
+	case mib.KindCapability:
+		return "capability"
 	default:
 		return "node"
 	}
 }
 
-// getAccessLevel 转换访问权限
-func getAccessLevel(access string) string {
+// convertAccess 转换访问权限
+func convertAccess(access mib.Access) string {
 	switch access {
-	case "ReadOnly":
+	case mib.AccessReadOnly:
 		return "read-only"
-	case "ReadWrite":
+	case mib.AccessReadWrite:
 		return "read-write"
-	case "NotAccessible":
+	case mib.AccessReadCreate:
+		return "read-create"
+	case mib.AccessNotAccessible:
 		return "not-accessible"
-	case "Notify":
-		return "notify"
-	case "ReportOnly":
-		return "report-only"
-	case "EventOnly":
-		return "event-only"
+	case mib.AccessAccessibleForNotify:
+		return "accessible-for-notify"
+	case mib.AccessWriteOnly:
+		return "write-only"
+	case mib.AccessNotImplemented:
+		return "not-implemented"
 	default:
 		return "unknown"
 	}
 }
 
-// getStatus 转换状态
-func getStatus(status string) string {
+// convertStatus 转换状态
+func convertStatus(status mib.Status) string {
 	switch status {
-	case "Current":
+	case mib.StatusCurrent:
 		return "current"
-	case "Deprecated":
+	case mib.StatusDeprecated:
 		return "deprecated"
-	case "Obsolete":
+	case mib.StatusObsolete:
 		return "obsolete"
-	case "Mandatory":
+	case mib.StatusMandatory:
 		return "mandatory"
-	case "Optional":
+	case mib.StatusOptional:
 		return "optional"
 	default:
 		return "unknown"
 	}
 }
 
-// GetNodeByOID 通过 OID 获取节点信息（直接从 gosmi 查询）
+// GetNodeByOID 通过 OID 获取节点信息
+// 注意：此方法现在依赖已加载的 MIB 数据
 func (p *MIBParser) GetNodeByOID(oidStr string) (*models.MIBNode, error) {
-	oid, err := types.OidFromString(oidStr)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.loadedMib == nil {
+		return nil, fmt.Errorf("请先导入 MIB 模块")
+	}
+
+	// 解析 OID
+	oid, err := mib.ParseOID(oidStr)
 	if err != nil {
 		return nil, fmt.Errorf("无效的 OID 格式: %s", oidStr)
 	}
 
-	smiNode, err := gosmi.GetNodeByOID(oid)
-	if err != nil {
-		return nil, err
+	// 查找节点
+	node := p.loadedMib.Root().LongestPrefix(oid)
+	if node == nil {
+		return nil, fmt.Errorf("未找到节点: %s", oidStr)
 	}
 
-	return p.convertSmiNodeToMIBNode(smiNode, nil)
+	return p.convertMibNodeToMIBNode(node, nil)
 }
 
 // GetNodeByName 通过名称获取节点信息
+// 注意：此方法现在依赖已加载的 MIB 数据
 func (p *MIBParser) GetNodeByName(name string) (*models.MIBNode, error) {
-	smiNode, err := gosmi.GetNode(name)
-	if err != nil {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.loadedMib == nil {
+		return nil, fmt.Errorf("请先导入 MIB 模块")
+	}
+
+	// 通过名称查找节点
+	node := p.loadedMib.Node(name)
+	if node == nil {
 		return nil, fmt.Errorf("未找到节点: %s", name)
 	}
 
-	return p.convertSmiNodeToMIBNode(smiNode, nil)
+	return p.convertMibNodeToMIBNode(node, nil)
 }
 
-// ResolveOID 解析 OID 为名称（优雅降级）
-// 如果找不到对应节点，返回原始 OID 字符串
+// ResolveOID 解析 OID 为名称
+// 优雅降级：如果找不到对应节点，返回原始 OID 字符串
 func (p *MIBParser) ResolveOID(oidStr string) string {
-	oid, err := types.OidFromString(oidStr)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.loadedMib == nil {
+		return oidStr // 未加载 MIB，返回原始 OID
+	}
+
+	// 解析 OID
+	oid, err := mib.ParseOID(oidStr)
 	if err != nil {
 		return oidStr // 无效 OID，返回原始字符串
 	}
 
-	smiNode, err := gosmi.GetNodeByOID(oid)
-	if err != nil {
+	// 查找节点
+	node := p.loadedMib.Root().LongestPrefix(oid)
+	if node == nil {
 		return oidStr // 未找到节点，返回原始 OID
 	}
 
-	return smiNode.Name
+	name := node.Name()
+	if name == "" {
+		return oidStr
+	}
+
+	return name
 }
 
 // ClearModules 清除已加载的模块（用于重新导入）
+// gomib 无全局状态，只需清空内部引用
 func (p *MIBParser) ClearModules() {
-	// gosmi 没有提供清除单个模块的方法，需要重新初始化
-	gosmi.Exit()
-	gosmi.Init()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.loadedMib = nil
 }
