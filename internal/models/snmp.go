@@ -38,22 +38,22 @@ func (SNMPServerConfig) TableName() string { return "snmp_server_config" }
 // SNMPTrapRecord SNMP Trap 告警记录
 type SNMPTrapRecord struct {
 	ID             uint       `json:"id" gorm:"primaryKey;autoIncrement"`
-	SourceIP       string     `json:"sourceIP" gorm:"index"`
-	SourcePort     int        `json:"sourcePort"`
-	Version        string     `json:"version"`               // v1/v2c（阶段2）；v3（阶段4）
-	Community      string     `json:"community"`
-	TrapOID        string     `json:"trapOID" gorm:"index"`
-	TrapName       string     `json:"trapName"`              // MIB 解析后名称
-	Enterprise     string     `json:"enterprise"`            // Enterprise OID（v1）
-	GenericTrap    int        `json:"genericTrap"`           // Generic Trap 类型（v1）
-	SpecificTrap   int        `json:"specificTrap"`          // Specific Trap 类型（v1）
-	Severity       string     `json:"severity" gorm:"index"` // critical/major/minor/info/unknown
-	Variables      string     `json:"variables" gorm:"type:text"` // VarBinds JSON 序列化
-	RawHex         string     `json:"rawHex" gorm:"type:text"`
-	Acknowledged   bool       `json:"acknowledged"`
-	AcknowledgedAt *time.Time `json:"acknowledgedAt"`
-	ReceivedAt     time.Time  `json:"receivedAt" gorm:"index"`
-	CreatedAt      time.Time  `json:"createdAt"`
+	SourceIP       string     `json:"sourceIP" gorm:"column:source_ip;index"`
+	SourcePort     int        `json:"sourcePort" gorm:"column:source_port"`
+	Version        string     `json:"version" gorm:"column:version"`                 // v1/v2c（阶段2）；v3（阶段4）
+	Community      string     `json:"community" gorm:"column:community"`
+	TrapOID        string     `json:"trapOID" gorm:"column:trap_oid;index"`
+	TrapName       string     `json:"trapName" gorm:"column:trap_name"`              // MIB 解析后名称
+	Enterprise     string     `json:"enterprise" gorm:"column:enterprise"`           // Enterprise OID（v1）
+	GenericTrap    int        `json:"genericTrap" gorm:"column:generic_trap"`        // Generic Trap 类型（v1）
+	SpecificTrap   int        `json:"specificTrap" gorm:"column:specific_trap"`      // Specific Trap 类型（v1）
+	Severity       string     `json:"severity" gorm:"column:severity;index"`         // critical/major/minor/info/unknown
+	Variables      string     `json:"variables" gorm:"column:variables;type:text"`   // VarBinds JSON 序列化
+	RawHex         string     `json:"rawHex" gorm:"column:raw_hex;type:text"`
+	Acknowledged   bool       `json:"acknowledged" gorm:"column:acknowledged"`
+	AcknowledgedAt *time.Time `json:"acknowledgedAt" gorm:"column:acknowledged_at"`
+	ReceivedAt     time.Time  `json:"receivedAt" gorm:"column:received_at;index"`
+	CreatedAt      time.Time  `json:"createdAt" gorm:"column:created_at"`
 }
 
 func (SNMPTrapRecord) TableName() string { return "snmp_trap_records" }
@@ -185,18 +185,18 @@ func (MIBModule) TableName() string { return "mib_modules" }
 // MIBNode MIB 节点
 type MIBNode struct {
 	ID          uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	ModuleID    *uint     `json:"moduleId" gorm:"index"`
-	OID         string    `json:"oid" gorm:"uniqueIndex;not null"`
-	Name        string    `json:"name" gorm:"index"`
-	ParentOID   string    `json:"parentOid" gorm:"index"`
-	NodeType    string    `json:"nodeType"`                        // scalar/table/row/column/notification
-	Syntax      string    `json:"syntax"`                          // INTEGER/OCTET STRING 等
-	Access      string    `json:"access"`                          // read-only/read-write/not-accessible
-	Status      string    `json:"status"`                          // current/deprecated/obsolete
-	Description string    `json:"description" gorm:"type:text"`
-	Source      string    `json:"source"`                          // import/manual
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ModuleID    *uint     `json:"moduleId" gorm:"column:module_id;index"`
+	OID         string    `json:"oid" gorm:"column:oid;uniqueIndex;not null"`
+	Name        string    `json:"name" gorm:"column:name;index"`
+	ParentOID   string    `json:"parentOid" gorm:"column:parent_oid;index"`
+	NodeType    string    `json:"nodeType" gorm:"column:node_type"`                        // scalar/table/row/column/notification
+	Syntax      string    `json:"syntax" gorm:"column:syntax"`                          // INTEGER/OCTET STRING 等
+	Access      string    `json:"access" gorm:"column:access"`                          // read-only/read-write/not-accessible
+	Status      string    `json:"status" gorm:"column:status"`                          // current/deprecated/obsolete
+	Description string    `json:"description" gorm:"column:description;type:text"`
+	Source      string    `json:"source" gorm:"column:source"`                          // import/manual
+	CreatedAt   time.Time `json:"createdAt" gorm:"column:created_at"`
+	UpdatedAt   time.Time `json:"updatedAt" gorm:"column:updated_at"`
 }
 
 func (MIBNode) TableName() string { return "mib_nodes" }
