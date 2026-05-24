@@ -14,6 +14,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
@@ -68,6 +69,11 @@ func NewMIBManager(mibRepo repository.MIBRepository, mibStoreDir string) *MIBMan
 // Close 清理 MIB 管理器资源
 func (m *MIBManager) Close() {
 	m.parser.Exit()
+}
+
+// GetMIBStoreDir 获取 MIB 文件存储目录路径
+func (m *MIBManager) GetMIBStoreDir() string {
+	return m.mibStoreDir
 }
 
 // ============================================================================
@@ -202,6 +208,386 @@ func (m *MIBManager) ImportMIBFile(ctx context.Context, filePath string, folderI
 	return result, nil
 }
 
+// ============================================================================
+// MIB 批量导入（优化版）
+// ============================================================================
+
+// ImportMIBFilesBatch 批量导入 MIB 文件（核心优化方法）
+// 采用 5 阶段流水线：复制 → 构建依赖源 → 并发解析 → 批量保存 → 缓存更新
+// 通过 errgroup 控制并发度，通过 context 支持取消
+//
+// 锁策略：
+//   - 阶段零（复制）：无锁
+//   - 阶段一（构建依赖源）：无锁
+//   - 阶段二（并发解析）：无锁（使用不可变的 depSource）
+//   - 阶段三（批量保存）：短锁（仅 DB 写入时）
+//   - 阶段四（缓存更新）：独立锁（cacheMu）
+func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string, opts MIBBatchImportOptions, notifier EventNotifier) (*MIBBatchImportResult, error) {
+	startTime := time.Now()
+	result := &MIBBatchImportResult{
+		TotalFiles: len(filePaths),
+		Results:    make([]FileImportResult, 0, len(filePaths)),
+		Errors:     make([]FileImportError, 0),
+	}
+
+	if len(filePaths) == 0 {
+		return result, nil
+	}
+
+	// 设置默认并发度
+	if opts.Concurrency <= 0 {
+		opts.Concurrency = 4
+	}
+	// [S1] 添加并发度上限检查，防止资源耗尽
+	if opts.Concurrency > 16 {
+		opts.Concurrency = 16
+	}
+
+	// 生成批次 ID
+	batchID := fmt.Sprintf("batch-%d", time.Now().UnixMilli())
+
+	logger.Info("SNMP-MIB", "-", "开始批量导入 MIB 文件: 批次ID=%s, 文件数=%d, 并发度=%d",
+		batchID, len(filePaths), opts.Concurrency)
+
+	// === 阶段零：批量复制文件（无锁） ===
+	if notifier != nil {
+		notifier.NotifyMIBImportProgress(MIBImportProgress{
+			BatchID:      batchID,
+			TotalFiles:   len(filePaths),
+			CurrentPhase: "copy",
+			Message:      "正在复制 MIB 文件...",
+		})
+	}
+
+	copiedPaths := make([]string, 0, len(filePaths))
+	copyErrors := make([]FileImportError, 0)
+
+	for _, fp := range filePaths {
+		dstPath, err := m.copyMIBFile(fp)
+		if err != nil {
+			copyErrors = append(copyErrors, FileImportError{
+				FileName:  filepath.Base(fp),
+				Error:     err.Error(),
+				ErrorType: "copy",
+			})
+			result.FailedCount++
+			continue
+		}
+		copiedPaths = append(copiedPaths, dstPath)
+	}
+
+	// 记录复制错误
+	if len(copyErrors) > 0 {
+		result.Errors = append(result.Errors, copyErrors...)
+		logger.Warn("SNMP-MIB", "-", "批量复制完成: 成功=%d, 失败=%d",
+			len(copiedPaths), len(copyErrors))
+	}
+
+	if len(copiedPaths) == 0 {
+		result.TotalDuration = time.Since(startTime).Milliseconds()
+		return result, fmt.Errorf("所有文件复制失败")
+	}
+
+	// === 阶段一：预构建依赖源（无锁） ===
+	if notifier != nil {
+		notifier.NotifyMIBImportProgress(MIBImportProgress{
+			BatchID:      batchID,
+			TotalFiles:   len(filePaths),
+			CurrentPhase: "parse",
+			Message:      "正在构建 MIB 依赖源...",
+		})
+	}
+
+	depDirs := opts.DependencyDirs
+	if len(depDirs) == 0 {
+		depDirs = []string{m.mibStoreDir}
+	}
+	depSource, err := m.parser.BuildDependencySource(depDirs)
+	if err != nil {
+		result.TotalDuration = time.Since(startTime).Milliseconds()
+		return result, fmt.Errorf("构建依赖源失败: %w", err)
+	}
+	logger.Debug("SNMP-MIB", "-", "依赖源构建完成: 目录数=%d", len(depDirs))
+
+	// === 阶段二：并发解析（无锁） ===
+	if notifier != nil {
+		notifier.NotifyMIBImportProgress(MIBImportProgress{
+			BatchID:      batchID,
+			TotalFiles:   len(copiedPaths),
+			CurrentPhase: "parse",
+			Message:      "正在并发解析 MIB 文件...",
+		})
+	}
+
+	type parseOutput struct {
+		filePath   string
+		result     *MIBImportResult
+		err        error
+		duration   time.Duration
+	}
+
+	parseOutputs := make([]parseOutput, len(copiedPaths))
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(opts.Concurrency)
+
+	for i, fp := range copiedPaths {
+		i, fp := i, fp // 捕获循环变量
+		g.Go(func() error {
+			start := time.Now()
+			parseResult, err := m.parser.ParseFileConcurrent(gctx, fp, depSource)
+			parseOutputs[i] = parseOutput{
+				filePath: fp,
+				result:   parseResult,
+				err:      err,
+				duration: time.Since(start),
+			}
+			return nil // 不返回错误，让其他 goroutine 继续
+		})
+	}
+	g.Wait() // 忽略 group 错误，我们通过 parseOutputs 收集结果
+
+	// 收集成功的解析结果
+	type moduleNodes struct {
+		moduleName string
+		nodes      []models.MIBNode
+	}
+	var allModuleNodes []moduleNodes
+	parsedCount := 0
+
+	for _, po := range parseOutputs {
+		fileName := filepath.Base(po.filePath)
+		if po.err != nil {
+			errType := "parse"
+			if strings.Contains(po.err.Error(), "dependency") || strings.Contains(po.err.Error(), "依赖") {
+				errType = "dependency"
+			}
+			result.Errors = append(result.Errors, FileImportError{
+				FileName:  fileName,
+				Error:     po.err.Error(),
+				ErrorType: errType,
+			})
+			result.FailedCount++
+			continue
+		}
+
+		result.Results = append(result.Results, FileImportResult{
+			FileName:   fileName,
+			ModuleName: po.result.Module.Name,
+			NodeCount:  len(po.result.Nodes),
+			Duration:   po.duration.Milliseconds(),
+			Status:     "success",
+		})
+		result.SuccessCount++
+
+		allModuleNodes = append(allModuleNodes, moduleNodes{
+			moduleName: po.result.Module.Name,
+			nodes:      po.result.Nodes,
+		})
+		parsedCount++
+
+		if notifier != nil {
+			notifier.NotifyMIBImportProgress(MIBImportProgress{
+				BatchID:        batchID,
+				TotalFiles:     len(copiedPaths),
+				ProcessedFiles: parsedCount,
+				CurrentPhase:   "parse",
+				Message:        fmt.Sprintf("已解析 %d/%d 文件", parsedCount, len(copiedPaths)),
+			})
+		}
+	}
+
+	logger.Info("SNMP-MIB", "-", "并发解析完成: 成功=%d, 失败=%d, 耗时=%v",
+		result.SuccessCount, result.FailedCount, time.Since(startTime))
+
+	// === 阶段三：批量保存节点（短锁） ===
+	if notifier != nil {
+		notifier.NotifyMIBImportProgress(MIBImportProgress{
+			BatchID:        batchID,
+			TotalFiles:     len(copiedPaths),
+			ProcessedFiles: parsedCount,
+			CurrentPhase:   "save",
+			Message:        "正在批量保存 MIB 节点...",
+		})
+	}
+
+	var allNodes []models.MIBNode
+	for _, mn := range allModuleNodes {
+		// 查找对应的解析结果以获取模块信息
+		var moduleInfo *models.MIBModule
+		for _, po := range parseOutputs {
+			if po.result != nil && po.result.Module.Name == mn.moduleName {
+				moduleInfo = po.result.Module
+				break
+			}
+		}
+		if moduleInfo == nil {
+			continue
+		}
+
+		// 批量保存节点
+		if err := m.SaveNodesBatch(ctx, moduleInfo, mn.nodes, opts.OverwriteExisting); err != nil {
+			result.Errors = append(result.Errors, FileImportError{
+				FileName:  mn.moduleName,
+				Error:     err.Error(),
+				ErrorType: "database",
+			})
+			result.FailedCount++
+			// [M3] 防止 SuccessCount 变为负数
+			if result.SuccessCount > 0 {
+				result.SuccessCount--
+			}
+			continue
+		}
+		allNodes = append(allNodes, mn.nodes...)
+	}
+
+	// === 阶段四：缓存更新（独立锁） ===
+	if notifier != nil {
+		notifier.NotifyMIBImportProgress(MIBImportProgress{
+			BatchID:        batchID,
+			TotalFiles:     len(copiedPaths),
+			ProcessedFiles: len(copiedPaths),
+			CurrentPhase:   "cache",
+			Message:        "正在更新 MIB 缓存...",
+		})
+	}
+
+	m.UpdateCacheBatch(allNodes)
+
+	// 计算跳过数
+	result.SkippedCount = result.TotalFiles - result.SuccessCount - result.FailedCount
+	result.TotalDuration = time.Since(startTime).Milliseconds()
+
+	logger.Info("SNMP-MIB", "-", "批量导入完成: 成功=%d, 失败=%d, 跳过=%d, 总耗时=%dms",
+		result.SuccessCount, result.FailedCount, result.SkippedCount, result.TotalDuration)
+
+	if notifier != nil {
+		notifier.NotifyMIBImportProgress(MIBImportProgress{
+			BatchID:        batchID,
+			TotalFiles:     len(copiedPaths),
+			ProcessedFiles: len(copiedPaths),
+			CurrentPhase:   "done",
+			Message:        fmt.Sprintf("批量导入完成，成功 %d，失败 %d，耗时 %dms", result.SuccessCount, result.FailedCount, result.TotalDuration),
+		})
+	}
+
+	return result, nil
+}
+
+// SaveNodesBatch 批量保存节点（短锁策略）
+// 仅在数据库写入时持有短锁，避免长时间阻塞读取
+func (m *MIBManager) SaveNodesBatch(ctx context.Context, module *models.MIBModule, nodes []models.MIBNode, overwrite bool) error {
+	if len(nodes) == 0 || module == nil {
+		return nil
+	}
+
+	// 检查上下文取消
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	// 短锁：仅在数据库操作时加锁
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// 1. 检查是否已存在同名模块
+	existing, _ := m.mibRepo.GetModuleByName(module.Name)
+	if existing != nil {
+		if overwrite {
+			logger.Info("SNMP-MIB", "-", "检测到同名模块，将覆盖: 模块=%s, 旧ID=%d", module.Name, existing.ID)
+			// 删除已存在的模块和文件
+			if existing.FilePath != "" {
+				_ = os.Remove(existing.FilePath)
+			}
+			_ = m.mibRepo.DeleteNodesByModule(existing.ID)
+			_ = m.mibRepo.DeleteModule(existing.ID)
+		} else {
+			// 不覆盖，跳过此模块
+			logger.Info("SNMP-MIB", "-", "检测到同名模块，跳过: 模块=%s", module.Name)
+			return nil
+		}
+	}
+
+	// 2. 保存模块到数据库
+	module.ID = 0 // 确保是新记录
+	if err := m.mibRepo.SaveModule(module); err != nil {
+		return fmt.Errorf("保存 MIB 模块失败: %w", err)
+	}
+	logger.Debug("SNMP-MIB", "-", "模块保存完成: ID=%d, 名称=%s", module.ID, module.Name)
+
+	// 3. 设置节点的 ModuleID
+	moduleID := module.ID
+	for i := range nodes {
+		nodes[i].ID = 0 // 确保是新记录
+		nodes[i].ModuleID = &moduleID
+	}
+
+	// 4. 检测并创建虚拟父节点
+	virtualNodes, err := m.detectAndCreateVirtualParentNodes(ctx, nodes)
+	if err != nil {
+		logger.Warn("SNMP-MIB", "-", "检测虚拟父节点失败: %v", err)
+		// 不阻断导入流程，继续执行
+	} else if len(virtualNodes) > 0 {
+		// 保存虚拟父节点
+		if err := m.mibRepo.SaveNodes(virtualNodes); err != nil {
+			logger.Warn("SNMP-MIB", "-", "保存虚拟父节点失败: %v", err)
+		} else {
+			logger.Info("SNMP-MIB", "-", "虚拟父节点创建完成: 数量=%d", len(virtualNodes))
+		}
+	}
+
+	// 5. 合并虚拟节点（如果真实节点对应的虚拟节点已存在）
+	if err := m.mergeVirtualNodes(nodes); err != nil {
+		logger.Warn("SNMP-MIB", "-", "合并虚拟节点失败: %v", err)
+		// 不阻断导入流程，继续执行
+	}
+
+	// 6. 过滤掉已经合并保存过的虚拟节点（ID != 0）
+	newNodes := make([]models.MIBNode, 0, len(nodes))
+	for _, node := range nodes {
+		if node.ID == 0 {
+			newNodes = append(newNodes, node)
+		}
+	}
+
+	// 7. 批量保存节点
+	if len(newNodes) > 0 {
+		if err := m.mibRepo.SaveNodes(newNodes); err != nil {
+			_ = m.mibRepo.DeleteModule(moduleID)
+			return fmt.Errorf("保存 MIB 节点失败: %w", err)
+		}
+		logger.Debug("SNMP-MIB", "-", "节点保存完成: 数量=%d", len(newNodes))
+	}
+
+	return nil
+}
+
+// UpdateCacheBatch 批量更新缓存（独立锁）
+// 使用独立的 cacheMu 锁，避免阻塞主锁 mu
+func (m *MIBManager) UpdateCacheBatch(nodes []models.MIBNode) {
+	if len(nodes) == 0 {
+		return
+	}
+
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+
+	addedCount := 0
+	for i := range nodes {
+		if nodes[i].OID != "" {
+			m.nodeCache.Add(nodes[i].OID, &nodes[i])
+			addedCount++
+		}
+		if nodes[i].Name != "" {
+			m.nameCache.Add(nodes[i].Name, nodes[i].OID)
+		}
+	}
+
+	logger.Debug("SNMP-MIB", "-", "缓存批量更新完成: 新增=%d, 总计=%d", addedCount, m.nodeCache.Len())
+}
+
 // copyMIBFile 复制 MIB 文件到存储目录
 func (m *MIBManager) copyMIBFile(srcPath string) (string, error) {
 	// 确保存储目录存在
@@ -270,9 +656,11 @@ func (m *MIBManager) AddManualNode(node *models.MIBNode) error {
 		return fmt.Errorf("保存节点失败: %v", err)
 	}
 
-	// 更新缓存
+	// [S1-S2] 更新缓存：使用 cacheMu 锁保护缓存操作
+	m.cacheMu.Lock()
 	m.nodeCache.Add(node.OID, node)
 	m.nameCache.Add(node.Name, node.OID)
+	m.cacheMu.Unlock()
 
 	return nil
 }
@@ -309,9 +697,11 @@ func (m *MIBManager) UpdateManualNode(id uint, node *models.MIBNode) error {
 		return fmt.Errorf("更新节点失败: %v", err)
 	}
 
-	// 更新缓存
+	// [S1-S2] 更新缓存：使用 cacheMu 锁保护缓存操作
+	m.cacheMu.Lock()
 	m.nodeCache.Add(existing.OID, existing)
 	m.nameCache.Add(existing.Name, existing.OID)
+	m.cacheMu.Unlock()
 
 	return nil
 }
@@ -335,9 +725,11 @@ func (m *MIBManager) DeleteNode(id uint) error {
 		return fmt.Errorf("删除节点失败: %v", err)
 	}
 
-	// 清除缓存
+	// [S1-S2] 清除缓存：使用 cacheMu 锁保护缓存操作
+	m.cacheMu.Lock()
 	m.nodeCache.Remove(node.OID)
 	m.nameCache.Remove(node.Name)
+	m.cacheMu.Unlock()
 
 	return nil
 }
@@ -377,11 +769,13 @@ func (m *MIBManager) DeleteModule(id uint) error {
 		_ = os.Remove(module.FilePath)
 	}
 
-	// 清除缓存
+	// [S1-S2] 清除缓存：使用 cacheMu 锁保护缓存操作
+	m.cacheMu.Lock()
 	for _, node := range nodes {
 		m.nodeCache.Remove(node.OID)
 		m.nameCache.Remove(node.Name)
 	}
+	m.cacheMu.Unlock()
 
 	logger.Info("SNMP", "-", "MIB 模块已删除: %s", module.Name)
 
@@ -547,17 +941,21 @@ func (m *MIBManager) GetNodeByOID(oid string) (*models.MIBNode, error) {
 // RebuildCache 重建内存缓存（从数据库重新加载所有节点）
 func (m *MIBManager) RebuildCache() error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	// 从数据库加载所有节点（持有主锁）
+	nodes, err := m.mibRepo.GetAllNodes()
+	m.mu.Unlock()
+
+	if err != nil {
+		return fmt.Errorf("加载节点失败: %v", err)
+	}
+
+	// [S1-S2] 缓存操作使用独立的 cacheMu 锁
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
 
 	// 清空现有缓存
 	m.nodeCache.Purge()
 	m.nameCache.Purge()
-
-	// 从数据库加载所有节点
-	nodes, err := m.mibRepo.GetAllNodes()
-	if err != nil {
-		return fmt.Errorf("加载节点失败: %v", err)
-	}
 
 	// 填充缓存
 	for i := range nodes {

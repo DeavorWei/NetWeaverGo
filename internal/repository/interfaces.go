@@ -124,6 +124,7 @@ type MIBRepository interface {
 	GetNodeByOID(oid string) (*models.MIBNode, error)
 	GetNodeByName(name string) (*models.MIBNode, error)
 	GetNodesByModule(moduleID uint) ([]models.MIBNode, error)
+	GetNodesByOIDs(oids []string) ([]models.MIBNode, error)
 	GetChildNodes(parentOID string) ([]models.MIBNode, error)
 	CountChildNodes(parentOID string) (int64, error)
 	SaveNode(node *models.MIBNode) error

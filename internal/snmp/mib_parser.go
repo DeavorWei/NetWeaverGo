@@ -46,6 +46,122 @@ func (p *MIBParser) Exit() {
 	// 保留空实现以兼容 MIBManager
 }
 
+// BuildDependencySource 预构建不可变的依赖源对象
+// 该方法在批量导入开始前调用一次，避免每个文件重复构建
+// 返回的 gomib.Source 是线程安全的，可被多个 goroutine 并发使用
+//
+// 参数说明：
+//   - dirs: 依赖搜索目录列表，如果为空则返回空的 Multi 源
+//
+// 返回值：
+//   - gomib.Source: 组合后的依赖源，可安全并发使用
+//   - error: 目录访问错误（如目录不存在）
+//
+// 线程安全：此方法不访问 p.mu 锁，不修改解析器状态，可安全并发调用
+func (p *MIBParser) BuildDependencySource(dirs []string) (gomib.Source, error) {
+	// 处理空目录列表 - 返回空的 Multi 源
+	if len(dirs) == 0 {
+		return gomib.Multi(), nil
+	}
+
+	// 构建目录源列表
+	sources := make([]gomib.Source, 0, len(dirs))
+	for _, dir := range dirs {
+		src, err := gomib.Dir(dir)
+		if err != nil {
+			// 记录警告但继续处理其他目录
+			logger.Warn("SNMP-Parser", "-", "依赖目录添加失败: %s, %v", dir, err)
+			continue
+		}
+		sources = append(sources, src)
+		logger.Debug("SNMP-Parser", "-", "依赖目录添加成功: %s", dir)
+	}
+
+	// 使用 Multi 组合多个目录源
+	// Multi 返回的 Source 是不可变的，线程安全
+	return gomib.Multi(sources...), nil
+}
+
+// ParseFileConcurrent 无锁版本的 MIB 解析方法
+// 接收预构建的依赖源，支持并发调用
+// ctx 用于支持取消操作
+//
+// 参数说明：
+//   - ctx: 上下文，用于取消操作和超时控制
+//   - filePath: 要解析的 MIB 文件路径
+//   - depSource: 预构建的依赖源（通过 BuildDependencySource 构建），可为 nil
+//
+// 返回值：
+//   - *MIBImportResult: 解析结果，包含模块信息和节点列表
+//   - error: 解析错误（文件不存在、格式错误等）
+//
+// 线程安全：此方法不使用 p.mu 锁，因为 depSource 是不可变的。
+// 可被多个 goroutine 并发调用。注意：此方法不修改 p.loadedMib。
+func (p *MIBParser) ParseFileConcurrent(ctx context.Context, filePath string, depSource gomib.Source) (*MIBImportResult, error) {
+	// 检查上下文取消
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	parseStartTime := time.Now()
+	logger.Info("SNMP-Parser", "-", "开始并发解析 MIB 文件: 路径=%s", filePath)
+
+	// 1. 检查文件存在性
+	if _, err := os.Stat(filePath); err != nil {
+		logger.Error("SNMP-Parser", "-", "MIB 文件不存在: %s", filePath)
+		return nil, fmt.Errorf("MIB 文件不存在: %s", filePath)
+	}
+
+	// 2. 构建加载选项：文件源 + 共享依赖源（如果有）
+	fileSrc, err := gomib.File(filePath)
+	if err != nil {
+		logger.Error("SNMP-Parser", "-", "创建 MIB 文件源失败: %s, %v", filePath, err)
+		return nil, fmt.Errorf("创建 MIB 文件源失败: %v", err)
+	}
+
+	opts := []gomib.LoadOption{
+		gomib.WithSource(fileSrc),
+	}
+	// 添加预构建的依赖源（如果有）
+	if depSource != nil {
+		opts = append(opts, gomib.WithSource(depSource))
+		logger.Debug("SNMP-Parser", "-", "使用预构建依赖源解析文件")
+	}
+
+	// 3. 加载 MIB 文件（不使用 p.mu 锁）
+	loadStartTime := time.Now()
+	loadedMib, err := gomib.Load(ctx, opts...)
+	if err != nil {
+		logger.Error("SNMP-Parser", "-", "并发加载 MIB 文件失败: %s, 耗时=%v, 错误=%v",
+			filePath, time.Since(loadStartTime), err)
+		return nil, fmt.Errorf("解析 MIB 文件失败: %s: %v", filePath, err)
+	}
+	logger.Debug("SNMP-Parser", "-", "MIB 并发加载完成: 耗时=%v", time.Since(loadStartTime))
+
+	// 4. 转换为内部数据结构（不设置 p.loadedMib，保持无状态）
+	result := p.parseMibData(loadedMib, filePath)
+
+	totalLatency := time.Since(parseStartTime)
+	logger.Info("SNMP-Parser", "-", "MIB 并发解析完成: 文件=%s, 模块=%s, 节点数=%d, 错误数=%d, 总耗时=%v",
+		filePath, result.Module.Name, result.NodeCount, result.ErrorCount, totalLatency)
+
+	// 打印解析错误详情
+	if len(result.Errors) > 0 {
+		for _, parseErr := range result.Errors {
+			if parseErr.NodeName != "" {
+				logger.Warn("SNMP-Parser", "-", "MIB 解析错误: 节点=%s, 消息=%s",
+					parseErr.NodeName, parseErr.Message)
+			} else {
+				logger.Warn("SNMP-Parser", "-", "MIB 解析错误: 消息=%s", parseErr.Message)
+			}
+		}
+	}
+
+	return result, nil
+}
+
 // ParseFile 解析单个 MIB 文件
 // 返回解析结果，包含成功解析的节点和错误列表
 // 即使有错误，已成功解析的节点仍会返回（部分导入策略）
@@ -66,6 +182,7 @@ func (p *MIBParser) ParseFileWithDependencies(filePath string, dependencyDirs []
 }
 
 // parseFileLocked 解析 MIB 文件的内部实现（调用方需持有锁）
+// 复用 BuildDependencySource 构建依赖源，保持代码一致性
 func (p *MIBParser) parseFileLocked(ctx context.Context, filePath string, dependencyDirs []string) (*MIBImportResult, error) {
 	parseStartTime := time.Now()
 	logger.Info("SNMP-Parser", "-", "开始解析 MIB 文件: 路径=%s", filePath)
@@ -76,7 +193,14 @@ func (p *MIBParser) parseFileLocked(ctx context.Context, filePath string, depend
 		return nil, fmt.Errorf("MIB 文件不存在: %s", filePath)
 	}
 
-	// 2. 构建加载选项
+	// 2. 使用 BuildDependencySource 构建依赖源（复用逻辑）
+	depSource, err := p.BuildDependencySource(dependencyDirs)
+	if err != nil {
+		logger.Warn("SNMP-Parser", "-", "构建依赖源失败: %v，继续无依赖解析", err)
+		depSource = nil // 失败时继续无依赖解析
+	}
+
+	// 3. 构建加载选项：文件源 + 依赖源
 	fileSrc, err := gomib.File(filePath)
 	if err != nil {
 		logger.Error("SNMP-Parser", "-", "创建 MIB 文件源失败: %s, %v", filePath, err)
@@ -85,23 +209,8 @@ func (p *MIBParser) parseFileLocked(ctx context.Context, filePath string, depend
 	opts := []gomib.LoadOption{
 		gomib.WithSource(fileSrc),
 	}
-
-	// 3. 添加依赖搜索路径
-	if len(dependencyDirs) > 0 {
-		logger.Debug("SNMP-Parser", "-", "添加依赖搜索路径: 数量=%d", len(dependencyDirs))
-		var sources []gomib.Source
-		for _, dir := range dependencyDirs {
-			src, err := gomib.Dir(dir)
-			if err == nil {
-				sources = append(sources, src)
-				logger.Debug("SNMP-Parser", "-", "依赖路径添加成功: %s", dir)
-			} else {
-				logger.Warn("SNMP-Parser", "-", "依赖路径添加失败: %s, %v", dir, err)
-			}
-		}
-		if len(sources) > 0 {
-			opts = append(opts, gomib.WithSource(gomib.Multi(sources...)))
-		}
+	if depSource != nil {
+		opts = append(opts, gomib.WithSource(depSource))
 	}
 
 	// 4. 加载 MIB 文件
@@ -114,7 +223,7 @@ func (p *MIBParser) parseFileLocked(ctx context.Context, filePath string, depend
 	}
 	logger.Debug("SNMP-Parser", "-", "MIB 加载完成: 耗时=%v", time.Since(loadStartTime))
 
-	// 5. 保存加载结果
+	// 5. 保存加载结果（此方法持有锁，可安全修改实例状态）
 	p.loadedMib = loadedMib
 
 	// 6. 转换为内部数据结构

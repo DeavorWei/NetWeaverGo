@@ -57,6 +57,16 @@ type ImportMIBRequest struct {
 	FolderID      *uint  `json:"folderId,omitempty"`
 }
 
+// ImportMIBFilesRequest 批量导入 MIB 文件请求
+type ImportMIBFilesRequest struct {
+	FilePaths         []string `json:"filePaths"`           // 文件路径列表
+	FolderID          *uint    `json:"folderId,omitempty"`  // 目标文件夹 ID
+	Concurrency       int      `json:"concurrency"`         // 并发度（1-8）
+	SkipErrors        bool     `json:"skipErrors"`          // 是否跳过错误继续��入
+	OverwriteExisting bool     `json:"overwriteExisting"`   // 是否覆盖已存在的模块
+	DependencyDirs    []string `json:"dependencyDirs"`      // 依赖目录列表
+}
+
 // CreateMIBNodeRequest 创建 MIB 节点请求
 type CreateMIBNodeRequest struct {
 	ModuleID    uint   `json:"moduleId"`
@@ -247,53 +257,93 @@ func (s *SNMPMIBService) ImportMIB(ctx context.Context, req ImportMIBRequest) er
 	return nil
 }
 
-// ImportMIBFiles 批量导入 MIB 文件
+// ImportMIBFiles 批量导入 MIB 文件（简化版本）
+// 使用默认配置调用批量导入方法
 func (s *SNMPMIBService) ImportMIBFiles(ctx context.Context, filePaths []string, folderID *uint) error {
 	if len(filePaths) == 0 {
 		return nil
 	}
 
-	totalFiles := len(filePaths)
-	successCount := 0
-	errorCount := 0
-
-	for i, filePath := range filePaths {
-		// 检查上下文是否已取消
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		// 发送整体进度
-		s.eventNotifier.NotifyMIBImportProgress(snmp.MIBImportProgress{
-			FileName: filePath,
-			Phase:    "parsing",
-			Progress: float64(i) / float64(totalFiles) * 100,
-		})
-
-		err := s.ImportMIB(ctx, ImportMIBRequest{
-			FilePath:      filePath,
-			PartialImport: true,
-			FolderID:      folderID,
-		})
-
-		if err != nil {
-			errorCount++
-			logger.Warn("SNMP", "-", "批量导入文件失败 [%d/%d]: %s, %v",
-				i+1, totalFiles, filePath, err)
-			continue
-		}
-
-		successCount++
+	// 使用默认配置调用批量导入
+	opts := snmp.MIBBatchImportOptions{
+		Concurrency:       4, // 默认并发度
+		SkipErrors:        true,
+		OverwriteExisting: true,
+		DependencyDirs:    []string{s.mibManager.GetMIBStoreDir()},
 	}
 
-	logger.Info("SNMP", "-", "批量导入完成: 成功 %d, 失败 %d, 总计 %d",
-		successCount, errorCount, totalFiles)
+	result, err := s.mibManager.ImportMIBFilesBatch(ctx, filePaths, opts, s.eventNotifier)
+	if err != nil {
+		return err
+	}
 
-	if errorCount > 0 {
-		return fmt.Errorf("部分文件导入失败: 成功 %d, 失败 %d", successCount, errorCount)
+	// 清除 OID 解析器缓存，确保新导入的节点能被立即查到
+	s.oidResolver.ClearCache()
+
+	logger.Info("SNMP", "-", "批量导入完成: 成功 %d, 失败 %d, 跳过 %d, 总耗时 %dms",
+		result.SuccessCount, result.FailedCount, result.SkippedCount, result.TotalDuration)
+
+	// [M6] 在错误信息中包含失败文件列表摘要
+	if result.FailedCount > 0 {
+		var failedFiles []string
+		for _, e := range result.Errors {
+			failedFiles = append(failedFiles, e.FileName)
+		}
+		if len(failedFiles) > 5 {
+			failedFiles = append(failedFiles[:5], fmt.Sprintf("... 等 %d 个文件", len(failedFiles)-5))
+		}
+		return fmt.Errorf("部分文件导入失败: 成功 %d, 失败 %d [%s]", result.SuccessCount, result.FailedCount, strings.Join(failedFiles, ", "))
 	}
 
 	return nil
+}
+
+// ImportMIBFilesWithOptions 批量导入 MIB 文件（完整版本）
+// 支持自定义并发度、错误处理策略等选项
+func (s *SNMPMIBService) ImportMIBFilesWithOptions(ctx context.Context, req ImportMIBFilesRequest) (*snmp.MIBBatchImportResult, error) {
+	if len(req.FilePaths) == 0 {
+		return &snmp.MIBBatchImportResult{
+			TotalFiles: 0,
+			Results:    []snmp.FileImportResult{},
+			Errors:     []snmp.FileImportError{},
+		}, nil
+	}
+
+	// 构建批量导入选项
+	opts := snmp.MIBBatchImportOptions{
+		Concurrency:       req.Concurrency,
+		SkipErrors:        req.SkipErrors,
+		OverwriteExisting: req.OverwriteExisting,
+		DependencyDirs:    req.DependencyDirs,
+	}
+
+	// 如果未指定并发度，使用默认值
+	if opts.Concurrency <= 0 {
+		opts.Concurrency = 4
+	}
+	// [S4] 添加并发度范围验证
+	if opts.Concurrency > 16 {
+		opts.Concurrency = 16
+	}
+
+	// 如果未指定依赖目录，添加默认目录
+	if len(opts.DependencyDirs) == 0 {
+		opts.DependencyDirs = []string{s.mibManager.GetMIBStoreDir()}
+	}
+
+	// 调用 MIBManager 的批量导入方法
+	result, err := s.mibManager.ImportMIBFilesBatch(ctx, req.FilePaths, opts, s.eventNotifier)
+	if err != nil {
+		return nil, err
+	}
+
+	// 清除 OID 解析器缓存，确保新导入的节点能被立即查到
+	s.oidResolver.ClearCache()
+
+	logger.Info("SNMP", "-", "批量导入完成: 成功 %d, 失败 %d, 跳过 %d, 总耗时 %dms",
+		result.SuccessCount, result.FailedCount, result.SkippedCount, result.TotalDuration)
+
+	return result, nil
 }
 
 // DeleteMIBModule 删除 MIB 模块

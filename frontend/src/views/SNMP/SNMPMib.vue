@@ -24,16 +24,21 @@ import type {
   MIBNodeVM,
 } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 import type { MIBTreeNode } from '@/bindings/github.com/NetWeaverGo/core/internal/snmp/models'
+// [M1] 使用 @/types/snmp.ts 中的类型，删除组件内的重复定义
+import type { MIBImportProgress } from '@/types/snmp'
 
-/** MIB 导入进度接口 */
-interface MIBImportProgress {
-  fileName: string
-  moduleName: string
-  phase: 'parsing' | 'saving' | 'caching' | 'completed' | 'error'
-  progress: number
-  nodesDone: number
-  nodesTotal: number
-  error?: string
+/** 阶段中文映射 */
+const phaseLabels: Record<string, string> = {
+  'copy': '复制文件',
+  'parse': '解析中',
+  'save': '保存中',
+  'cache': '更新缓存',
+  'done': '完成',
+  'parsing': '解析中',
+  'saving': '保存中',
+  'caching': '更新缓存',
+  'completed': '完成',
+  'error': '错误',
 }
 
 const logger = getLogger()
@@ -1317,20 +1322,45 @@ watch(importType, () => {
 
           <!-- 导入进度 -->
           <div v-if="importProgress" class="space-y-2 pt-2 border-t border-border">
-            <div class="flex items-center justify-between text-sm">
-              <span class="text-text-muted truncate max-w-[70%]">{{ importProgress.fileName }}</span>
-              <span class="text-text-primary font-semibold">{{ ((importProgress?.progress) ?? 0).toFixed(0) }}%</span>
+            <!-- 批量导入进度 -->
+            <div v-if="importProgress.batchId && importProgress.totalFiles" class="space-y-2">
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-text-muted">批量导入进度</span>
+                <span class="text-text-primary font-semibold">
+                  {{ importProgress.processedFiles ?? 0 }} / {{ importProgress.totalFiles }} 文件
+                </span>
+              </div>
+              <div class="h-2 bg-bg-primary rounded-full overflow-hidden">
+                <div
+                  class="h-full bg-accent transition-all duration-300"
+                  :style="{ width: `${((importProgress.processedFiles ?? 0) / (importProgress.totalFiles ?? 1)) * 100}%` }"
+                ></div>
+              </div>
+              <div class="flex items-center justify-between text-xs text-text-muted">
+                <span>当前阶段: {{ phaseLabels[importProgress.currentPhase ?? 'parse'] ?? importProgress.currentPhase }}</span>
+                <span v-if="importProgress.message">{{ importProgress.message }}</span>
+              </div>
             </div>
-            <div class="h-2 bg-bg-primary rounded-full overflow-hidden">
-              <div
-                class="h-full bg-accent transition-all duration-300"
-                :style="{ width: `${importProgress?.progress ?? 0}%` }"
-              ></div>
+            
+            <!-- 单文件进度 -->
+            <div v-else class="space-y-2">
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-text-muted truncate max-w-[70%]">{{ importProgress.fileName }}</span>
+                <span class="text-text-primary font-semibold">{{ ((importProgress?.progress) ?? 0).toFixed(0) }}%</span>
+              </div>
+              <div class="h-2 bg-bg-primary rounded-full overflow-hidden">
+                <div
+                  class="h-full bg-accent transition-all duration-300"
+                  :style="{ width: `${importProgress?.progress ?? 0}%` }"
+                ></div>
+              </div>
+              <div class="text-xs text-text-muted flex justify-between">
+                <span>状态: {{ phaseLabels[importProgress.phase] ?? importProgress.phase }}</span>
+                <span>已导入: {{ importProgress.nodesDone }} / {{ importProgress.nodesTotal }} 节点</span>
+              </div>
             </div>
-            <div class="text-xs text-text-muted flex justify-between">
-              <span>状态: {{ importProgress.phase }}</span>
-              <span>已导入: {{ importProgress.nodesDone }} / {{ importProgress.nodesTotal }} 节点</span>
-            </div>
+            
+            <!-- 错误信息 -->
             <div v-if="importProgress.error" class="text-xs text-error mt-1 whitespace-pre-wrap">
               错误: {{ importProgress.error }}
             </div>

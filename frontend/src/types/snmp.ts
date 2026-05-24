@@ -134,6 +134,73 @@ export interface MIBImportProgress {
   nodesDone: number
   nodesTotal: number
   error?: string
+  message?: string
+
+  // 批量导入扩展字段
+  batchId?: string
+  totalFiles?: number
+  processedFiles?: number
+  currentPhase?: 'copy' | 'parse' | 'save' | 'cache' | 'done'
+}
+
+/**
+ * 批量导入结果
+ * @对应后端 MIBBatchImportResult
+ */
+export interface MIBBatchImportResult {
+  totalFiles: number
+  successCount: number
+  failedCount: number
+  skippedCount: number
+  results: FileImportResult[]
+  errors: FileImportError[]
+  totalDuration: number // 毫秒
+}
+
+/**
+ * 单文件导入结果
+ * @对应后端 FileImportResult
+ */
+export interface FileImportResult {
+  fileName: string
+  moduleName: string
+  nodeCount: number
+  duration: number // 毫秒
+  status: 'success' | 'failed' | 'skipped'
+}
+
+/**
+ * 文件导入错误
+ * @对应后端 FileImportError
+ */
+export interface FileImportError {
+  fileName: string
+  error: string
+  errorType: 'parse' | 'dependency' | 'database' | 'unknown'
+}
+
+/**
+ * 批量导入选项
+ * @对应后端 MIBBatchImportOptions
+ */
+export interface MIBBatchImportOptions {
+  concurrency: number // 1-8
+  skipErrors: boolean
+  overwriteExisting: boolean
+  dependencyDirs: string[]
+}
+
+/**
+ * 批量导入请求
+ * @对应后端 ImportMIBFilesRequest
+ */
+export interface ImportMIBFilesRequest {
+  filePaths: string[]
+  folderId?: number
+  concurrency: number
+  skipErrors: boolean
+  overwriteExisting: boolean
+  dependencyDirs: string[]
 }
 
 /**

@@ -41,13 +41,20 @@ type EventNotifier interface {
 
 // MIBImportProgress MIB 导入进度事件
 type MIBImportProgress struct {
-	FileName   string  `json:"fileName"`   // 正在导入的文件名
-	ModuleName string  `json:"moduleName"` // 模块名
-	Phase      string  `json:"phase"`      // 当前阶段：parsing/saving/caching/completed/error
-	Progress   float64 `json:"progress"`   // 进度百分比 0-100
-	NodesDone  int     `json:"nodesDone"`  // 已处理节点数
-	NodesTotal int     `json:"nodesTotal"` // 总节点数（预估）
-	Error      string  `json:"error"`      // 错误信息（仅 error 阶段）
+	FileName   string  `json:"fileName"`            // 正在导入的文件名
+	ModuleName string  `json:"moduleName"`          // 模块名
+	Phase      string  `json:"phase"`               // 当前阶段：parsing/saving/caching/completed/error
+	Progress   float64 `json:"progress"`            // 进度百分比 0-100
+	NodesDone  int     `json:"nodesDone"`           // 已处理节点数
+	NodesTotal int     `json:"nodesTotal"`          // 总节点数（预估）
+	Error      string  `json:"error"`               // 错误信息（仅 error 阶段）
+	Message    string  `json:"message,omitempty"`   // 进度描述信息
+
+	// 批量导入扩展字段
+	BatchID        string `json:"batchId,omitempty"`        // 批量导入批次 ID
+	TotalFiles     int    `json:"totalFiles,omitempty"`     // 批量导入总文件数
+	ProcessedFiles int    `json:"processedFiles,omitempty"` // 已处理文件数
+	CurrentPhase   string `json:"currentPhase,omitempty"`   // 批量导入当前阶段：copy/parse/save/cache/done
 }
 
 // TrapEvent Trap 接收事件（轻量级，用于实时推送）
@@ -235,4 +242,43 @@ type CancellableOperation interface {
 	Start(ctx context.Context) error
 	Stop() error
 	IsRunning() bool
+}
+
+// ============================================================================
+// 批量导入相关类型
+// ============================================================================
+
+// MIBBatchImportResult 批量导入结果
+type MIBBatchImportResult struct {
+	TotalFiles    int               `json:"totalFiles"`
+	SuccessCount  int               `json:"successCount"`
+	FailedCount   int               `json:"failedCount"`
+	SkippedCount  int               `json:"skippedCount"`
+	Results       []FileImportResult `json:"results"`
+	Errors        []FileImportError  `json:"errors"`
+	TotalDuration int64             `json:"totalDuration"` // 毫秒数
+}
+
+// FileImportResult 单文件导入结果
+type FileImportResult struct {
+	FileName   string `json:"fileName"`
+	ModuleName string `json:"moduleName"`
+	NodeCount  int    `json:"nodeCount"`
+	Duration   int64  `json:"duration"` // 毫秒数
+	Status     string `json:"status"`   // "success", "failed", "skipped"
+}
+
+// FileImportError 文件导入错误
+type FileImportError struct {
+	FileName  string `json:"fileName"`
+	Error     string `json:"error"`
+	ErrorType string `json:"errorType"` // "parse", "dependency", "database", "unknown"
+}
+
+// MIBBatchImportOptions 批量导入选项
+type MIBBatchImportOptions struct {
+	Concurrency       int      `json:"concurrency"`
+	SkipErrors        bool     `json:"skipErrors"`
+	OverwriteExisting bool     `json:"overwriteExisting"`
+	DependencyDirs    []string `json:"dependencyDirs"`
 }

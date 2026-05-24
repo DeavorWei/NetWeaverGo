@@ -178,6 +178,16 @@ func (r *GormMIBRepository) GetNodesByModule(moduleID uint) ([]models.MIBNode, e
 	return nodes, err
 }
 
+// GetNodesByOIDs 批量查询 OID 对应的节点
+func (r *GormMIBRepository) GetNodesByOIDs(oids []string) ([]models.MIBNode, error) {
+	if len(oids) == 0 {
+		return []models.MIBNode{}, nil
+	}
+	var nodes []models.MIBNode
+	err := r.db.Where("oid IN ?", oids).Find(&nodes).Error
+	return nodes, err
+}
+
 func (r *GormMIBRepository) GetChildNodes(parentOID string) ([]models.MIBNode, error) {
 	var nodes []models.MIBNode
 	err := r.db.Where("parent_oid = ?", parentOID).Order("oid ASC").Find(&nodes).Error
@@ -198,9 +208,11 @@ func (r *GormMIBRepository) SaveNodes(nodes []models.MIBNode) error {
 	if len(nodes) == 0 {
 		return nil
 	}
+	// UPSERT 策略：ON CONFLICT(oid) 时更新节点属性，但不更新 module_id
+	// 避免模块归属漂移问题——同一 OID 被不同模块重复导入时，保留首次归属
 	return r.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "oid"}},
-		DoUpdates: clause.AssignmentColumns([]string{"name", "parent_oid", "node_type", "syntax", "access", "status", "description", "source", "module_id", "updated_at"}),
+		DoUpdates: clause.AssignmentColumns([]string{"name", "parent_oid", "node_type", "syntax", "access", "status", "description", "source", "updated_at"}),
 	}).CreateInBatches(nodes, 100).Error
 }
 
