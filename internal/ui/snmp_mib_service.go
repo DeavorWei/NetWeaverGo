@@ -32,6 +32,7 @@ type MIBModuleVM struct {
 	NodeCount   int       `json:"nodeCount"`
 	ImportedAt  time.Time `json:"importedAt"`
 	Status      string    `json:"status"` // active, error, partial
+	IsBuiltIn   bool      `json:"isBuiltIn"`
 }
 
 // MIBNodeVM MIB 节点视图模型
@@ -163,6 +164,7 @@ func (s *SNMPMIBService) GetMIBModules(ctx context.Context) ([]MIBModuleVM, erro
 			NodeCount:   m.NodeCount,
 			ImportedAt:  m.CreatedAt,
 			Status:      "active",
+			IsBuiltIn:   m.IsBuiltIn,
 		})
 	}
 
@@ -190,6 +192,7 @@ func (s *SNMPMIBService) GetMIBModule(ctx context.Context, moduleID uint) (*MIBM
 		NodeCount:   module.NodeCount,
 		ImportedAt:  module.CreatedAt,
 		Status:      "active",
+		IsBuiltIn:   module.IsBuiltIn,
 	}
 
 	return vm, nil

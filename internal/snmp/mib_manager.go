@@ -4,6 +4,7 @@ package snmp
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"io"
 	"os"
@@ -20,6 +21,9 @@ import (
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/repository"
 )
+
+//go:embed mibs/*.mib
+var coreMIBsFS embed.FS
 
 // DefaultLRUCacheSize LRU 缓存默认容量
 const DefaultLRUCacheSize = 10000
@@ -62,6 +66,9 @@ func NewMIBManager(mibRepo repository.MIBRepository, mibStoreDir string) *MIBMan
 
 	// 初始化 gosmi 库
 	mgr.parser.Init()
+
+	// 异步确保内置核心 MIB 已加载
+	go mgr.EnsureCoreMIBsLoaded(context.Background())
 
 	return mgr
 }
@@ -1138,4 +1145,80 @@ func (m *MIBManager) mergeVirtualNodes(nodes []models.MIBNode) error {
 		}
 	}
 	return nil
+}
+// ============================================================================
+// 内置核心库加载
+// ============================================================================
+
+// EnsureCoreMIBsLoaded 确保内置核心 MIB 库已加载
+// 遍历 embed 目录中的 mibs，如果发现未导入则自动导入并打上 IsBuiltIn 标记
+func (m *MIBManager) EnsureCoreMIBsLoaded(ctx context.Context) {
+	logger.Info("SNMP-MIB", "-", "开始检查内置核心 MIB 库...")
+	entries, err := coreMIBsFS.ReadDir("mibs")
+	if err != nil {
+		logger.Error("SNMP-MIB", "-", "读取内置 MIB 目录失败: %v", err)
+		return
+	}
+
+	// 1. 创建临时目录释放内嵌文件，以便解析器能使用依赖源
+	tempDir, err := os.MkdirTemp("", "core-mibs-*")
+	if err != nil {
+		logger.Error("SNMP-MIB", "-", "创建内置库临时解压目录失败: %v", err)
+		return
+	}
+	defer os.RemoveAll(tempDir)
+
+	var filePaths []string
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".mib" {
+			continue
+		}
+		fileName := entry.Name()
+		content, err := coreMIBsFS.ReadFile("mibs/" + fileName)
+		if err != nil {
+			logger.Warn("SNMP-MIB", "-", "读取内置文件失败 %s: %v", fileName, err)
+			continue
+		}
+
+		tmpFilePath := filepath.Join(tempDir, fileName)
+		if err := os.WriteFile(tmpFilePath, content, 0644); err != nil {
+			logger.Warn("SNMP-MIB", "-", "释放内置文件失败 %s: %v", fileName, err)
+			continue
+		}
+		filePaths = append(filePaths, tmpFilePath)
+	}
+
+	if len(filePaths) == 0 {
+		return
+	}
+
+	// 2. 批量导入
+	opts := MIBBatchImportOptions{
+		Concurrency:       4,
+		SkipErrors:        true,
+		OverwriteExisting: false, // 已经存在的就不覆盖了
+		DependencyDirs:    []string{tempDir},
+	}
+
+	result, err := m.ImportMIBFilesBatch(ctx, filePaths, opts, nil)
+	if err != nil {
+		logger.Error("SNMP-MIB", "-", "内置核心 MIB 库导入失败: %v", err)
+		return
+	}
+
+	// 3. 将相关模块标记为内置库
+	m.mu.Lock()
+	for _, res := range result.Results {
+		if res.Status == "success" {
+			mod, err := m.mibRepo.GetModuleByName(res.ModuleName)
+			if err == nil && mod != nil {
+				mod.IsBuiltIn = true
+				_ = m.mibRepo.SaveModule(mod)
+			}
+		}
+	}
+	m.mu.Unlock()
+
+	logger.Info("SNMP-MIB", "-", "内置核心 MIB 库检查完成: 成功=%d, 失败=%d, 跳过=%d",
+		result.SuccessCount, result.FailedCount, result.SkippedCount)
 }

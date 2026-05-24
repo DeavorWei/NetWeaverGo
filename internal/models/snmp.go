@@ -180,13 +180,14 @@ func (MIBFolder) TableName() string { return "mib_folders" }
 // MIBModule 已导入的 MIB 模块
 type MIBModule struct {
 	ID          uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	FolderID    *uint     `json:"folderId" gorm:"column:folder_id;index"` // 关联的文件夹 ID
-	Name        string    `json:"name" gorm:"uniqueIndex;not null"`      // 模块名（如 IF-MIB）
+	FolderID    *uint     `json:"folderId" gorm:"column:folder_id;index"` // 文件夹 ID
+	Name        string    `json:"name" gorm:"uniqueIndex;not null"`      // 模块名称 (如 IF-MIB)
 	FileName    string    `json:"fileName"`                              // 原始文件名
 	Description string    `json:"description"`
 	Source      string    `json:"source"`                                // import/manual
 	NodeCount   int       `json:"nodeCount"`
 	FilePath    string    `json:"filePath"`                              // MIB 文件存储路径
+	IsBuiltIn   bool      `json:"isBuiltIn" gorm:"default:false"`        // 是否为内置标准库
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
