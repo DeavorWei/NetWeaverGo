@@ -250,7 +250,7 @@ function handleClose() {
 <style scoped>
 .form-tip {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   margin-top: 4px;
 }
 

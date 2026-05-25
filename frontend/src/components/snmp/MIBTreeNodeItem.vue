@@ -182,12 +182,12 @@ function getTypeTagType(): 'success' | 'warning' | 'danger' | 'info' | '' {
 }
 
 .node-row:hover {
-  background-color: var(--bg-hover);
+  background-color: var(--color-bg-hover);
 }
 
 .node-row.is-selected {
-  background-color: var(--accent-bg);
-  color: var(--accent);
+  background-color: var(--color-accent-bg);
+  color: var(--color-accent-primary);
 }
 
 .expand-icon {
@@ -196,7 +196,7 @@ function getTypeTagType(): 'success' | 'warning' | 'danger' | 'info' | '' {
   justify-content: center;
   width: 16px;
   height: 16px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   cursor: pointer;
 }
 
@@ -214,38 +214,38 @@ function getTypeTagType(): 'success' | 'warning' | 'danger' | 'info' | '' {
 }
 
 .type-scalar {
-  color: var(--info);
+  color: var(--color-info);
 }
 
 .type-table {
-  color: var(--success);
+  color: var(--color-success);
 }
 
 .type-row {
-  color: var(--warning);
+  color: var(--color-warning);
 }
 
 .type-column {
-  color: var(--text-muted);
+  color: var(--color-text-muted);
 }
 
 .type-notification {
-  color: var(--danger);
+  color: var(--color-error);
 }
 
 .type-default {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .node-oid {
   font-size: 12px;
   font-family: 'Consolas', monospace;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .node-name {
   font-size: 12px;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -258,7 +258,7 @@ function getTypeTagType(): 'success' | 'warning' | 'danger' | 'info' | '' {
 }
 
 .node-children {
-  border-left: 1px dashed var(--border);
+  border-left: 1px dashed var(--color-border-default);
   margin-left: 12px;
 }
 
@@ -267,7 +267,7 @@ function getTypeTagType(): 'success' | 'warning' | 'danger' | 'info' | '' {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   font-size: 12px;
 }
 </style>

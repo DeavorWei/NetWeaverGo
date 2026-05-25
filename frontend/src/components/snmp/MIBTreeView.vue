@@ -206,7 +206,7 @@ watch(() => props.treeData, () => {
 
 .search-count {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
 }
 
 .tree-toolbar {
@@ -232,7 +232,7 @@ watch(() => props.treeData, () => {
   justify-content: center;
   gap: 8px;
   padding: 24px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   font-size: 13px;
 }
 
@@ -253,24 +253,24 @@ watch(() => props.treeData, () => {
 }
 
 .search-result-item:hover {
-  background-color: var(--bg-hover);
+  background-color: var(--color-bg-hover);
 }
 
 .search-result-item.is-selected {
-  background-color: var(--accent-bg);
-  color: var(--accent);
+  background-color: var(--color-accent-bg);
+  color: var(--color-accent-primary);
 }
 
 .result-oid {
   font-size: 12px;
   font-family: 'Consolas', monospace;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   flex-shrink: 0;
 }
 
 .result-name {
   font-size: 12px;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;

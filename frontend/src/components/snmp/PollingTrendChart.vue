@@ -418,10 +418,10 @@ onMounted(() => {
 
 <style scoped>
 .polling-trend-chart {
-  background: var(--bg-secondary, #1e1e2e);
+  background: var(--color-bg-secondary);
   border-radius: 8px;
   padding: 16px;
-  border: 1px solid var(--border-color, #313244);
+  border: 1px solid var(--color-border-default);
 }
 
 .chart-header {
@@ -435,7 +435,7 @@ onMounted(() => {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--color-text-primary);
 }
 
 .chart-controls {
@@ -445,32 +445,32 @@ onMounted(() => {
 }
 
 .duration-select {
-  background: var(--bg-tertiary, #313244);
-  border: 1px solid var(--border-color, #45475a);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-default);
   border-radius: 4px;
   padding: 4px 8px;
-  color: var(--text-primary, #cdd6f4);
+  color: var(--color-text-primary);
   font-size: 12px;
   cursor: pointer;
 }
 
 .duration-select:hover {
-  border-color: var(--accent-color, #89b4fa);
+  border-color: var(--color-accent-primary);
 }
 
 .refresh-btn {
   background: transparent;
-  border: 1px solid var(--border-color, #45475a);
+  border: 1px solid var(--color-border-default);
   border-radius: 4px;
   padding: 4px 8px;
   cursor: pointer;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--color-text-secondary);
   transition: all 0.2s;
 }
 
 .refresh-btn:hover:not(:disabled) {
-  border-color: var(--accent-color, #89b4fa);
-  color: var(--accent-color, #89b4fa);
+  border-color: var(--color-accent-primary);
+  color: var(--color-accent-primary);
 }
 
 .refresh-btn:disabled {
@@ -506,15 +506,15 @@ onMounted(() => {
   justify-content: center;
   height: 100%;
   min-height: 200px;
-  color: var(--text-secondary, #a6adc8);
+  color: var(--color-text-secondary);
   gap: 8px;
 }
 
 .loading-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid var(--border-color, #45475a);
-  border-top-color: var(--accent-color, #89b4fa);
+  border: 2px solid var(--color-border-default);
+  border-top-color: var(--color-accent-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -530,45 +530,45 @@ onMounted(() => {
 }
 
 .grid-line {
-  stroke: var(--border-color, #313244);
+  stroke: var(--color-border-default);
   stroke-dasharray: 2, 2;
 }
 
 .axis-line {
-  stroke: var(--border-color, #45475a);
+  stroke: var(--color-border-default);
   stroke-width: 1;
 }
 
 .axis-label {
-  fill: var(--text-secondary, #a6adc8);
+  fill: var(--color-text-secondary);
   font-size: 10px;
 }
 
 .data-line {
-  stroke: var(--accent-color, #89b4fa);
+  stroke: var(--color-accent-primary);
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .data-point {
-  fill: var(--accent-color, #89b4fa);
-  stroke: var(--bg-secondary, #1e1e2e);
+  fill: var(--color-accent-primary);
+  stroke: var(--color-bg-secondary);
   stroke-width: 1;
 }
 
 .data-point.numeric {
-  fill: var(--success-color, #a6e3a1);
+  fill: var(--color-success);
 }
 
 .data-area {
-  fill: var(--accent-color, #89b4fa);
+  fill: var(--color-accent-primary);
   fill-opacity: 0.1;
 }
 
 .chart-footer {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid var(--border-color, #313244);
+  border-top: 1px solid var(--color-border-default);
 }
 
 .chart-stats {
@@ -584,11 +584,11 @@ onMounted(() => {
 }
 
 .stat-label {
-  color: var(--text-secondary, #a6adc8);
+  color: var(--color-text-secondary);
 }
 
 .stat-value {
-  color: var(--text-primary, #cdd6f4);
+  color: var(--color-text-primary);
   font-weight: 500;
 }
 </style>

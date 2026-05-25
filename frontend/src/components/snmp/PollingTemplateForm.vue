@@ -320,9 +320,9 @@ function handleCancel() {
   align-items: center;
   gap: 8px;
   padding: 8px;
-  background-color: var(--bg-tertiary);
+  background-color: var(--color-bg-tertiary);
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border-default);
 }
 
 .oid-item-fields {
@@ -362,7 +362,7 @@ function handleCancel() {
 .oid-empty {
   text-align: center;
   padding: 12px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   font-size: 12px;
 }
 
@@ -371,7 +371,7 @@ function handleCancel() {
   justify-content: flex-end;
   gap: 8px;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border-default);
 }
 
 .w-full {

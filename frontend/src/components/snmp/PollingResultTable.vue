@@ -215,19 +215,19 @@ function formatTime(timeStr: string): string {
 .oid-value {
   font-size: 12px;
   font-family: 'Consolas', monospace;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   word-break: break-all;
 }
 
 .oid-name {
   font-size: 12px;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
 }
 
 .result-value {
   font-size: 12px;
   font-family: 'Consolas', monospace;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   max-width: 300px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -237,7 +237,7 @@ function formatTime(timeStr: string): string {
 
 .poll-time {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .pagination-wrapper {

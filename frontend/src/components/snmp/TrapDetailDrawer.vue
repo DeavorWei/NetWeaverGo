@@ -245,9 +245,9 @@ function getSeverityText(severity: string): string {
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border-default);
   margin: 0;
 }
 
@@ -269,12 +269,12 @@ function getSeverityText(severity: string): string {
 
 .detail-label {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
 }
 
 .detail-value {
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   word-break: break-all;
 }
 
@@ -290,9 +290,9 @@ function getSeverityText(severity: string): string {
 }
 
 .varbind-item {
-  background-color: var(--bg-tertiary);
+  background-color: var(--color-bg-tertiary);
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border-default);
   overflow: hidden;
 }
 
@@ -301,20 +301,20 @@ function getSeverityText(severity: string): string {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background-color: var(--bg-hover);
-  border-bottom: 1px solid var(--border);
+  background-color: var(--color-bg-hover);
+  border-bottom: 1px solid var(--color-border-default);
 }
 
 .varbind-index {
   font-size: 11px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--color-accent-primary);
 }
 
 .varbind-oid {
   font-size: 11px;
   font-family: 'Consolas', monospace;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .varbind-body {
@@ -331,26 +331,26 @@ function getSeverityText(severity: string): string {
 }
 
 .varbind-label {
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   flex-shrink: 0;
 }
 
 .varbind-value {
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   word-break: break-all;
 }
 
 .varbinds-empty {
   text-align: center;
   padding: 16px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   font-size: 12px;
 }
 
 .raw-data-container {
-  background-color: var(--bg-tertiary);
+  background-color: var(--color-bg-tertiary);
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border-default);
   overflow: auto;
   max-height: 200px;
 }
@@ -360,7 +360,7 @@ function getSeverityText(severity: string): string {
   padding: 12px;
   font-size: 11px;
   font-family: 'Consolas', monospace;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   white-space: pre-wrap;
   word-break: break-all;
 }

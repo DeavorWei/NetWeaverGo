@@ -227,7 +227,7 @@ function getStatusTagType(status: string): 'success' | 'warning' | 'info' | '' {
   justify-content: center;
   gap: 8px;
   padding: 24px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   font-size: 13px;
 }
 
@@ -242,20 +242,20 @@ function getStatusTagType(status: string): 'success' | 'warning' | 'info' | '' {
   flex-direction: column;
   gap: 4px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border-default);
 }
 
 .node-name {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   margin: 0;
 }
 
 .node-oid {
   font-size: 12px;
   font-family: 'Consolas', monospace;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
 }
 
 .detail-section {
@@ -267,7 +267,7 @@ function getStatusTagType(status: string): 'success' | 'warning' | 'info' | '' {
 .section-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   margin: 0;
 }
 
@@ -289,12 +289,12 @@ function getStatusTagType(status: string): 'success' | 'warning' | 'info' | '' {
 
 .info-label {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
 }
 
 .info-value {
   font-size: 12px;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   word-break: break-all;
 }
 
@@ -304,20 +304,20 @@ function getStatusTagType(status: string): 'success' | 'warning' | 'info' | '' {
 
 .description-content {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  background-color: var(--bg-tertiary);
+  background-color: var(--color-bg-tertiary);
   padding: 12px;
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border-default);
 }
 
 .detail-actions {
   display: flex;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border-default);
 }
 </style>

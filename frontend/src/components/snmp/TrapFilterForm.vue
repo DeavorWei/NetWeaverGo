@@ -263,7 +263,7 @@ function handleCancel() {
 
 .form-tip {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   margin-top: 4px;
 }
 
@@ -272,7 +272,7 @@ function handleCancel() {
   justify-content: flex-end;
   gap: 8px;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border-default);
 }
 
 .w-full {

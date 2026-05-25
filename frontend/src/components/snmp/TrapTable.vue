@@ -357,7 +357,7 @@ function getRowClassName({ row }: { row: TrapRecord }): string {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background-color: var(--bg-secondary);
+  background-color: var(--color-bg-secondary);
   border-radius: 6px;
 }
 
@@ -369,7 +369,7 @@ function getRowClassName({ row }: { row: TrapRecord }): string {
 
 .selected-count {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
 }
 
 .toolbar-right {
@@ -390,13 +390,13 @@ function getRowClassName({ row }: { row: TrapRecord }): string {
 
 .trap-oid {
   font-size: 12px;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   word-break: break-all;
 }
 
 .trap-name {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
 }
 
 .source-ip {
@@ -406,7 +406,7 @@ function getRowClassName({ row }: { row: TrapRecord }): string {
 
 .receive-time {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .action-buttons {
@@ -423,13 +423,13 @@ function getRowClassName({ row }: { row: TrapRecord }): string {
 
 /* 新 Trap 高亮样式 */
 .new-trap-row {
-  background-color: rgba(var(--accent-rgb), 0.1) !important;
+  background-color: var(--color-accent-10) !important;
   animation: highlight-fade 3s ease-out forwards;
 }
 
 @keyframes highlight-fade {
   0% {
-    background-color: rgba(var(--accent-rgb), 0.3);
+    background-color: var(--color-accent-25);
   }
   100% {
     background-color: transparent;

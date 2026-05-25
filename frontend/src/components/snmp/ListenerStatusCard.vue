@@ -161,17 +161,17 @@ function formatTime(timeStr: string): string {
   gap: 12px;
   padding: 16px;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  background-color: var(--bg-secondary);
+  border: 1px solid var(--color-border-default);
+  background-color: var(--color-bg-secondary);
   transition: border-color 0.3s;
 }
 
 .listener-status-card.is-running {
-  border-color: rgba(34, 197, 94, 0.3);
+  border-color: var(--color-success-15);
 }
 
 .listener-status-card.is-stopped {
-  border-color: rgba(239, 68, 68, 0.3);
+  border-color: var(--color-error-15);
 }
 
 .card-header {
@@ -193,13 +193,13 @@ function formatTime(timeStr: string): string {
 }
 
 .dot-running {
-  background-color: #22c55e;
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+  background-color: var(--color-success);
+  box-shadow: var(--shadow-success-glow);
   animation: pulse 2s infinite;
 }
 
 .dot-stopped {
-  background-color: #ef4444;
+  background-color: var(--color-error);
   box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
 }
 
@@ -218,17 +218,17 @@ function formatTime(timeStr: string): string {
 }
 
 .is-running .status-text {
-  color: #22c55e;
+  color: var(--color-success);
 }
 
 .is-stopped .status-text {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .card-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
 }
 
 .card-body {
@@ -246,30 +246,30 @@ function formatTime(timeStr: string): string {
 
 .info-label {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
 }
 
 .info-value {
   font-size: 12px;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
   font-family: 'Consolas', monospace;
 }
 
 .info-value.highlight {
-  color: var(--accent);
+  color: var(--color-accent-primary);
   font-weight: 600;
 }
 
 .handler-stats {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border-default);
 }
 
 .stats-title {
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   margin-bottom: 8px;
 }
 
@@ -289,22 +289,22 @@ function formatTime(timeStr: string): string {
 .stat-value {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--color-text-primary);
 }
 
 .stat-value.error {
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .stat-label {
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
 }
 
 .card-footer {
   display: flex;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border-default);
 }
 </style>
