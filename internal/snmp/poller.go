@@ -629,7 +629,7 @@ func (p *Poller) pduToResult(pdu gosnmp.SnmpPDU, target *models.SNMPPollingTarge
 		TargetID:  target.ID,
 		TargetIP:  target.TargetIP,
 		BatchID:   batchID,
-		OID:       pdu.Name,
+		OID:       normalizeOID(pdu.Name),
 		OIDName:   oidName,
 		Value:     value,
 		ValueType: valueType,
@@ -664,6 +664,14 @@ func (p *Poller) formatPDUValue(pdu gosnmp.SnmpPDU) string {
 		duration := time.Duration(ticks) * time.Millisecond * 10
 		return fmt.Sprintf("%v (%s)", ticks, duration.String())
 
+	// SNMP 异常类型 - 无实际值
+	case gosnmp.NoSuchObject:
+		return ""
+	case gosnmp.NoSuchInstance:
+		return ""
+	case gosnmp.EndOfMibView:
+		return ""
+
 	default:
 		// 数值类型使用 BigInt 处理
 		return fmt.Sprintf("%v", gosnmp.ToBigInt(pdu.Value))
@@ -697,6 +705,13 @@ func (p *Poller) getPDUTypeString(pdu gosnmp.SnmpPDU) string {
 		return "double"
 	case gosnmp.Null:
 		return "null"
+	// SNMP 异常类型
+	case gosnmp.NoSuchObject:
+		return "noSuchObject"
+	case gosnmp.NoSuchInstance:
+		return "noSuchInstance"
+	case gosnmp.EndOfMibView:
+		return "endOfMibView"
 	default:
 		return fmt.Sprintf("unknown(%d)", pdu.Type)
 	}

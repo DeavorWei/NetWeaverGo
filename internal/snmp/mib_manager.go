@@ -28,6 +28,23 @@ var coreMIBsFS embed.FS
 // DefaultLRUCacheSize LRU 缓存默认容量
 const DefaultLRUCacheSize = 10000
 
+// currentPhaseToPhase 将 CurrentPhase 转换为对应的 Phase 值
+// 用于批量导入进度通知
+func currentPhaseToPhase(currentPhase string) string {
+	switch currentPhase {
+	case "copy", "parse":
+		return "parsing"
+	case "save":
+		return "saving"
+	case "cache":
+		return "caching"
+	case "done":
+		return "completed"
+	default:
+		return currentPhase
+	}
+}
+
 // MIBManager MIB 生命周期管理器
 // 负责 MIB 文件导入/删除、LRU 缓存、OID 树构建
 type MIBManager struct {
@@ -253,15 +270,23 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 	// 生成批次 ID
 	batchID := fmt.Sprintf("batch-%d", time.Now().UnixMilli())
 
-	logger.Info("SNMP-MIB", "-", "开始批量导入 MIB 文件: 批次ID=%s, 文件数=%d, 并发度=%d",
-		batchID, len(filePaths), opts.Concurrency)
+	// 调试日志：追踪 folderID 传递
+	if opts.FolderID != nil {
+		logger.Info("SNMP-MIB", "-", "开始批量导入 MIB 文件: 批次ID=%s, 文件数=%d, 并发度=%d, 目标文件夹ID=%d",
+			batchID, len(filePaths), opts.Concurrency, *opts.FolderID)
+	} else {
+		logger.Info("SNMP-MIB", "-", "开始批量导入 MIB 文件: 批次ID=%s, 文件数=%d, 并发度=%d, 目标文件夹ID=nil",
+			batchID, len(filePaths), opts.Concurrency)
+	}
 
 	// === 阶段零：批量复制文件（无锁） ===
 	if notifier != nil {
 		notifier.NotifyMIBImportProgress(MIBImportProgress{
 			BatchID:      batchID,
 			TotalFiles:   len(filePaths),
+			Phase:        currentPhaseToPhase("copy"),
 			CurrentPhase: "copy",
+			Progress:     5, // 复制阶段 5%
 			Message:      "正在复制 MIB 文件...",
 		})
 	}
@@ -300,7 +325,9 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 		notifier.NotifyMIBImportProgress(MIBImportProgress{
 			BatchID:      batchID,
 			TotalFiles:   len(filePaths),
+			Phase:        currentPhaseToPhase("parse"),
 			CurrentPhase: "parse",
+			Progress:     8, // 依赖源构建阶段 8%
 			Message:      "正在构建 MIB 依赖源...",
 		})
 	}
@@ -321,7 +348,9 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 		notifier.NotifyMIBImportProgress(MIBImportProgress{
 			BatchID:      batchID,
 			TotalFiles:   len(copiedPaths),
+			Phase:        currentPhaseToPhase("parse"),
 			CurrentPhase: "parse",
+			Progress:     10, // 解析阶段开始 10%
 			Message:      "正在并发解析 MIB 文件...",
 		})
 	}
@@ -393,11 +422,15 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 		parsedCount++
 
 		if notifier != nil {
+			// 计算进度百分比：解析阶段占 10%-60%
+			progress := 10.0 + float64(parsedCount)/float64(len(copiedPaths))*50.0
 			notifier.NotifyMIBImportProgress(MIBImportProgress{
 				BatchID:        batchID,
 				TotalFiles:     len(copiedPaths),
 				ProcessedFiles: parsedCount,
+				Phase:          currentPhaseToPhase("parse"),
 				CurrentPhase:   "parse",
+				Progress:       progress,
 				Message:        fmt.Sprintf("已解析 %d/%d 文件", parsedCount, len(copiedPaths)),
 			})
 		}
@@ -412,7 +445,9 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 			BatchID:        batchID,
 			TotalFiles:     len(copiedPaths),
 			ProcessedFiles: parsedCount,
+			Phase:          currentPhaseToPhase("save"),
 			CurrentPhase:   "save",
+			Progress:       65.0, // 保存阶段开始 65%
 			Message:        "正在批量保存 MIB 节点...",
 		})
 	}
@@ -432,7 +467,7 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 		}
 
 		// 批量保存节点
-		if err := m.SaveNodesBatch(ctx, moduleInfo, mn.nodes, opts.OverwriteExisting); err != nil {
+		if err := m.SaveNodesBatch(ctx, moduleInfo, mn.nodes, opts.OverwriteExisting, opts.FolderID); err != nil {
 			result.Errors = append(result.Errors, FileImportError{
 				FileName:  mn.moduleName,
 				Error:     err.Error(),
@@ -454,7 +489,9 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 			BatchID:        batchID,
 			TotalFiles:     len(copiedPaths),
 			ProcessedFiles: len(copiedPaths),
+			Phase:          currentPhaseToPhase("cache"),
 			CurrentPhase:   "cache",
+			Progress:       85.0, // 缓存阶段 85%
 			Message:        "正在更新 MIB 缓存...",
 		})
 	}
@@ -473,7 +510,9 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 			BatchID:        batchID,
 			TotalFiles:     len(copiedPaths),
 			ProcessedFiles: len(copiedPaths),
+			Phase:          currentPhaseToPhase("done"),
 			CurrentPhase:   "done",
+			Progress:       100.0, // 完成 100%
 			Message:        fmt.Sprintf("批量导入完成，成功 %d，失败 %d，耗时 %dms", result.SuccessCount, result.FailedCount, result.TotalDuration),
 		})
 	}
@@ -483,7 +522,7 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 
 // SaveNodesBatch 批量保存节点（短锁策略）
 // 仅在数据库写入时持有短锁，避免长时间阻塞读取
-func (m *MIBManager) SaveNodesBatch(ctx context.Context, module *models.MIBModule, nodes []models.MIBNode, overwrite bool) error {
+func (m *MIBManager) SaveNodesBatch(ctx context.Context, module *models.MIBModule, nodes []models.MIBNode, overwrite bool, folderID *uint) error {
 	if len(nodes) == 0 || module == nil {
 		return nil
 	}
@@ -517,12 +556,19 @@ func (m *MIBManager) SaveNodesBatch(ctx context.Context, module *models.MIBModul
 		}
 	}
 
-	// 2. 保存模块到数据库
+	// 2. 设置文件夹 ID 并保存模块到数据库
 	module.ID = 0 // 确保是新记录
+	module.FolderID = folderID // 设置目标文件夹
+	// 调试日志：追踪 folderID 设置
+	if folderID != nil {
+		logger.Debug("SNMP-MIB", "-", "SaveNodesBatch: 模块 %s 设置 FolderID=%d", module.Name, *folderID)
+	} else {
+		logger.Debug("SNMP-MIB", "-", "SaveNodesBatch: 模块 %s 设置 FolderID=nil", module.Name)
+	}
 	if err := m.mibRepo.SaveModule(module); err != nil {
 		return fmt.Errorf("保存 MIB 模块失败: %w", err)
 	}
-	logger.Debug("SNMP-MIB", "-", "模块保存完成: ID=%d, 名称=%s", module.ID, module.Name)
+	logger.Debug("SNMP-MIB", "-", "模块保存完成: ID=%d, 名称=%s, FolderID=%v", module.ID, module.Name, module.FolderID)
 
 	// 3. 设置节点的 ModuleID
 	moduleID := module.ID

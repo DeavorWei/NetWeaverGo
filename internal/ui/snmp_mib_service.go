@@ -267,12 +267,20 @@ func (s *SNMPMIBService) ImportMIBFiles(ctx context.Context, filePaths []string,
 		return nil
 	}
 
+	// 调试日志：追踪 folderID 传递
+	if folderID != nil {
+		logger.Debug("SNMP", "-", "ImportMIBFiles: 接收到 folderID=%d", *folderID)
+	} else {
+		logger.Debug("SNMP", "-", "ImportMIBFiles: 接收到 folderID=nil")
+	}
+
 	// 使用默认配置调用批量导入
 	opts := snmp.MIBBatchImportOptions{
 		Concurrency:       4, // 默认并发度
 		SkipErrors:        true,
 		OverwriteExisting: true,
 		DependencyDirs:    []string{s.mibManager.GetMIBStoreDir()},
+		FolderID:          folderID, // 传递目标文件夹 ID
 	}
 
 	result, err := s.mibManager.ImportMIBFilesBatch(ctx, filePaths, opts, s.eventNotifier)
@@ -318,6 +326,7 @@ func (s *SNMPMIBService) ImportMIBFilesWithOptions(ctx context.Context, req Impo
 		SkipErrors:        req.SkipErrors,
 		OverwriteExisting: req.OverwriteExisting,
 		DependencyDirs:    req.DependencyDirs,
+		FolderID:          req.FolderID, // 传递目标文件夹 ID
 	}
 
 	// 如果未指定并发度，使用默认值
@@ -951,7 +960,12 @@ func (s *SNMPMIBService) ImportMIBFolder(ctx context.Context, folderPath string,
 		return fmt.Errorf("在该文件夹下未找到有效的 MIB 文件 (*.mib, *.my, *.txt)")
 	}
 
-	logger.Info("SNMP", "-", "开始从文件夹 %s 导入 %d 个 MIB 文件", folderPath, len(filePaths))
+	// 调试日志：追踪 folderID 传递
+	if folderID != nil {
+		logger.Info("SNMP", "-", "开始从文件夹 %s 导入 %d 个 MIB 文件, 目标文件夹ID=%d", folderPath, len(filePaths), *folderID)
+	} else {
+		logger.Info("SNMP", "-", "开始从文件夹 %s 导入 %d 个 MIB 文件, 目标文件夹ID=nil(未分类)", folderPath, len(filePaths))
+	}
 
 	return s.ImportMIBFiles(ctx, filePaths, folderID)
 }

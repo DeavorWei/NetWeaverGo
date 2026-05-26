@@ -281,4 +281,5 @@ type MIBBatchImportOptions struct {
 	SkipErrors        bool     `json:"skipErrors"`
 	OverwriteExisting bool     `json:"overwriteExisting"`
 	DependencyDirs    []string `json:"dependencyDirs"`
+	FolderID          *uint    `json:"folderId,omitempty"` // 目标文件夹 ID
 }

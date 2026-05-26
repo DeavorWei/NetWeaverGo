@@ -266,7 +266,7 @@ func (h *TrapHandler) parseV2cTrap(packet *gosnmp.SnmpPacket, trap *models.SNMPT
 			switch pdu.Type {
 			case gosnmp.ObjectIdentifier:
 				if oid, ok := pdu.Value.(string); ok {
-					trap.TrapOID = oid
+					trap.TrapOID = normalizeOID(oid)
 				}
 			}
 			break
@@ -275,7 +275,7 @@ func (h *TrapHandler) parseV2cTrap(packet *gosnmp.SnmpPacket, trap *models.SNMPT
 
 	// 如果没有找到 Trap OID，使用 PDU 的 Name
 	if trap.TrapOID == "" && len(packet.Variables) > 0 {
-		trap.TrapOID = packet.Variables[0].Name
+		trap.TrapOID = normalizeOID(packet.Variables[0].Name)
 	}
 }
 
@@ -352,7 +352,7 @@ func (h *TrapHandler) parseVarBinds(variables []gosnmp.SnmpPDU) (string, string)
 
 	for _, pdu := range variables {
 		vb := VarBind{
-			OID:   pdu.Name,
+			OID:   normalizeOID(pdu.Name),
 			Type:  pduTypeToString(pdu.Type),
 			Value: pduValueToString(pdu),
 		}

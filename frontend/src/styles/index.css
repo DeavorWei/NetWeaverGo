@@ -20,7 +20,10 @@
 /* 第三层：基础重置样式 (Base Reset) */
 @import "./foundation/_reset.css";
 
-/* 第四层：工具类 (Utility Classes) */
+/* 第四层：组件样式 (Component Styles) */
+@import "./components/_element-plus.css";
+
+/* 第五层：工具类 (Utility Classes) */
 @import "./utilities/_index.css";
 
 /* Tailwind CSS 基础 */
