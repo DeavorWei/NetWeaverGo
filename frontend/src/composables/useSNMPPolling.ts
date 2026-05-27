@@ -42,8 +42,10 @@ export interface PollingResultEvent {
  * - 维护调度器状态同步
  * - 提供目标管理方法
  * - 新结果高亮效果管理
+ *
+ * @param onResultReceived 可选回调，当收到轮询结果事件时调用（用于自动刷新结果列表）
  */
-export function useSNMPPolling() {
+export function useSNMPPolling(onResultReceived?: (event: PollingResultEvent) => void) {
   // ==================== 状态 ====================
 
   /** 调度器状态 */
@@ -350,6 +352,8 @@ export function useSNMPPolling() {
         logger.debug(`SNMP-Polling: 收到轮询结果 - 目标 ${resultEvent.targetId}`)
         latestResults.value.set(resultEvent.targetId, resultEvent)
         addHighlight(resultEvent.targetId)
+        // 触发外部回调（用于自动刷新结果列表）
+        onResultReceived?.(resultEvent)
       })
       unsubscribers.push(unsubResult)
 

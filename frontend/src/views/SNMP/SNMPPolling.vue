@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * SNMP 设备轮询管理页面
+ * SNMP 设备轮询管理页面（重构版）
  *
  * 功能：
  * - 调度器状态监控和启停控制
@@ -10,11 +10,14 @@
  * - 轮询结果列表展示（支持分页、筛选）
  * - 轮询结果详情查看
  * - 实时轮询结果推送和高亮显示
+ * - 可拖拽面板布局 + 折叠展开
+ * - 自动结果更新（Wails 事件订阅）
  */
-import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { ref, computed, onMounted } from 'vue'
+import { ElMessageBox, ElMessage } from 'element-plus'
 import { SNMPPollingAPI } from '@/services/snmpApi'
 import { useSNMPPolling } from '@/composables/useSNMPPolling'
+import { usePanelResize } from '@/composables/usePanelResize'
 import { getLogger } from '@/utils/logger'
 import type {
   CredentialVM,
@@ -29,10 +32,25 @@ import type {
   UpdatePollingTargetRequest,
 } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 import { PollingResultFilterVM } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
+import type { PollingResultEvent } from '@/composables/useSNMPPolling'
 
 const logger = getLogger()
 
 // ==================== 组合式函数 ====================
+
+/** 自动刷新防抖定时器 */
+let autoRefreshTimer: ReturnType<typeof setTimeout> | null = null
+const AUTO_REFRESH_DEBOUNCE = 500
+
+/**
+ * 轮询结果事件回调 - 收到新结果时自动刷新结果列表（500ms 防抖）
+ */
+function handlePollingResultEvent(_event: PollingResultEvent) {
+  if (autoRefreshTimer) clearTimeout(autoRefreshTimer)
+  autoRefreshTimer = setTimeout(() => {
+    loadPollingResults()
+  }, AUTO_REFRESH_DEBOUNCE)
+}
 
 const {
   schedulerStatus,
@@ -59,7 +77,25 @@ const {
   getTemplateById,
   getLatestResult,
   getTargetStats,
-} = useSNMPPolling()
+} = useSNMPPolling(handlePollingResultEvent)
+
+// ==================== 面板拖拽布局 ====================
+
+const mainContainerRef = ref<HTMLElement | null>(null)
+
+/** 水平面板：左侧面板 | 中间主面板 | 右侧面板 */
+const horizontalResize = usePanelResize(mainContainerRef, 'horizontal', [
+  { initialSize: 280, minSize: 0, maxSize: 500 },   // 左侧凭据/模板面板
+  { initialSize: 600, minSize: 300 },                 // 中间主面板
+  { initialSize: 360, minSize: 0, maxSize: 600 },    // 右侧详情面板
+])
+
+/** 垂直面板：目标列表 | 结果列表 */
+const centerContainerRef = ref<HTMLElement | null>(null)
+const verticalResize = usePanelResize(centerContainerRef, 'vertical', [
+  { initialSize: 400, minSize: 150 },  // 目标列表
+  { initialSize: 256, minSize: 120 },  // 结果列表
+])
 
 // ==================== 状态 ====================
 
@@ -81,10 +117,6 @@ const resultFilter = ref<PollingResultFilterVM>(new PollingResultFilterVM())
 /** 目标过滤条件 */
 const targetFilterEnabled = ref<boolean | undefined>(undefined)
 
-/** 面板显示状态 */
-const showLeftPanel = ref(true)
-const showDetailPanel = ref(true)
-
 /** 模态框状态 */
 const showCredentialModal = ref(false)
 const showTemplateModal = ref(false)
@@ -94,10 +126,6 @@ const showTargetModal = ref(false)
 const editingCredential = ref<CredentialVM | null>(null)
 const editingTemplate = ref<PollingTemplateVM | null>(null)
 const editingTarget = ref<PollingTargetVM | null>(null)
-
-/** 面板宽度 */
-const leftPanelWidth = ref(280)
-const rightPanelWidth = ref(360)
 
 /** 操作加载状态 */
 const schedulerOperating = ref(false)
@@ -615,27 +643,36 @@ function formatLatency(ms: number): string {
 }
 
 /**
- * 清理过期结果
+ * 清理过期结果（使用 ElMessageBox.prompt 替代原生 prompt）
  */
 async function clearOldResults() {
-  const days = prompt('请输入要保留的天数（之前的记录将被删除）：', '30')
-  if (!days) return
-
-  const daysNum = parseInt(days)
-  if (isNaN(daysNum)) {
-    return
-  }
-
-  const before = new Date()
-  before.setDate(before.getDate() - daysNum)
-  const beforeStr = before.toISOString().split('T')[0] || ''
-
   try {
+    const { value: days } = await ElMessageBox.prompt(
+      '请输入要保留的天数（之前的记录将被删除）：',
+      '清理过期结果',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        inputPattern: /^\d+$/,
+        inputErrorMessage: '请输入有效的数字',
+        inputPlaceholder: '30',
+        inputValue: '30',
+      }
+    )
+
+    const daysNum = parseInt(days)
+    if (isNaN(daysNum)) return
+
+    const before = new Date()
+    before.setDate(before.getDate() - daysNum)
+    const beforeStr = before.toISOString().split('T')[0] || ''
+
     const count = await SNMPPollingAPI.clearPollingResults(beforeStr)
     await loadPollingResults()
+    ElMessage.success(`已清理 ${count} 条结果`)
     logger.info(`SNMP-Polling: 已清理 ${count} 条结果`)
-  } catch (error) {
-    logger.error('SNMP-Polling', '清理结果失败', error)
+  } catch {
+    // 用户取消或输入无效
   }
 }
 
@@ -655,10 +692,6 @@ onMounted(async () => {
   await loadPollingResults()
 })
 
-// 监听目标过滤条件变化
-watch(targetFilterEnabled, () => {
-  // 过滤条件变化时不需要重新请求后端，前端过滤即可
-})
 </script>
 
 <template>
@@ -720,7 +753,7 @@ watch(targetFilterEnabled, () => {
         <button
           @click="loadAll(); loadPollingResults()"
           class="p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded-md transition-colors"
-          title="刷新"
+          title="手动刷新"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m0 0H9" />
@@ -733,201 +766,213 @@ watch(targetFilterEnabled, () => {
         >
           清理结果
         </button>
-
-        <!-- 面板切换 -->
-        <button
-          @click="showLeftPanel = !showLeftPanel"
-          :class="[
-            'p-2 rounded-md transition-colors',
-            showLeftPanel ? 'text-accent bg-accent-bg' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
-          ]"
-          title="凭据/模板面板"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        <button
-          @click="showDetailPanel = !showDetailPanel"
-          :class="[
-            'p-2 rounded-md transition-colors',
-            showDetailPanel ? 'text-accent bg-accent-bg' : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
-          ]"
-          title="详情面板"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-        </button>
       </div>
     </header>
 
-    <!-- 主内容区域 -->
-    <div class="flex flex-1 min-h-0 overflow-hidden">
+    <!-- 主内容区域：可拖拽三栏布局 -->
+    <div ref="mainContainerRef" class="flex flex-1 min-h-0 overflow-hidden relative">
       <!-- 左侧面板：凭据和模板 -->
       <aside
-        v-if="showLeftPanel"
-        :style="{ width: `${leftPanelWidth}px` }"
-        class="flex flex-col bg-bg-secondary border-r border-border/50 flex-shrink-0"
+        :style="horizontalResize.getPanelStyle(0)"
+        :class="[
+          'flex flex-col bg-bg-secondary border-r border-border/50',
+          horizontalResize.isResizing.value ? 'select-none' : '',
+          'transition-[width] duration-200 ease-in-out',
+        ]"
       >
-        <!-- 标签页切换 -->
-        <div class="flex border-b border-border/30">
-          <button
-            @click="leftActiveTab = 'credentials'"
-            :class="[
-              'flex-1 px-3 py-2 text-sm font-medium transition-colors border-b-2',
-              leftActiveTab === 'credentials'
-                ? 'text-accent border-accent'
-                : 'text-text-muted hover:text-text-primary border-transparent'
-            ]"
-          >
-            凭据
-          </button>
-          <button
-            @click="leftActiveTab = 'templates'"
-            :class="[
-              'flex-1 px-3 py-2 text-sm font-medium transition-colors border-b-2',
-              leftActiveTab === 'templates'
-                ? 'text-accent border-accent'
-                : 'text-text-muted hover:text-text-primary border-transparent'
-            ]"
-          >
-            模板
-          </button>
-        </div>
-
-        <!-- 凭据列表 -->
-        <div v-if="leftActiveTab === 'credentials'" class="flex-1 overflow-y-auto p-3">
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-xs text-text-muted">{{ credentials.length }} 个凭据</span>
+        <template v-if="!horizontalResize.isCollapsed(0)">
+          <!-- 标签页切换 -->
+          <div class="flex border-b border-border/30">
             <button
-              @click="openCredentialModal(null)"
-              class="p-1 text-text-muted hover:text-accent transition-colors"
-              title="添加凭据"
+              @click="leftActiveTab = 'credentials'"
+              :class="[
+                'flex-1 px-3 py-2 text-sm font-medium transition-colors border-b-2',
+                leftActiveTab === 'credentials'
+                  ? 'text-accent border-accent'
+                  : 'text-text-muted hover:text-text-primary border-transparent'
+              ]"
             >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-              </svg>
+              凭据
+            </button>
+            <button
+              @click="leftActiveTab = 'templates'"
+              :class="[
+                'flex-1 px-3 py-2 text-sm font-medium transition-colors border-b-2',
+                leftActiveTab === 'templates'
+                  ? 'text-accent border-accent'
+                  : 'text-text-muted hover:text-text-primary border-transparent'
+              ]"
+            >
+              模板
             </button>
           </div>
 
-          <div class="space-y-2">
-            <div
-              v-for="cred in credentials"
-              :key="cred.id"
-              class="p-2.5 bg-bg-tertiary rounded-md border border-border/30 hover:border-border/60 transition-colors"
-            >
-              <div class="flex items-center justify-between">
-                <span class="text-sm text-text-primary font-medium truncate">{{ cred.name }}</span>
-                <div class="flex items-center gap-1">
+          <!-- 凭据列表 -->
+          <div v-if="leftActiveTab === 'credentials'" class="flex-1 overflow-y-auto p-3">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs text-text-muted">{{ credentials.length }} 个凭据</span>
+              <button
+                @click="openCredentialModal(null)"
+                class="p-1 text-text-muted hover:text-accent transition-colors"
+                title="添加凭据"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            </div>
+
+            <div class="space-y-2">
+              <div
+                v-for="cred in credentials"
+                :key="cred.id"
+                class="p-2.5 bg-bg-tertiary rounded-md border border-border/30 hover:border-border/60 transition-colors"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-text-primary font-medium truncate">{{ cred.name }}</span>
+                  <div class="flex items-center gap-1">
+                    <button
+                      @click="openCredentialModal(cred)"
+                      class="p-1 text-text-muted hover:text-accent transition-colors"
+                      title="编辑"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    <button
+                      @click="deleteCredential(cred)"
+                      class="p-1 text-text-muted hover:text-red-400 transition-colors"
+                      title="删除"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 mt-1.5">
+                  <span class="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">{{ cred.version }}</span>
+                  <span class="text-xs text-text-muted font-mono">
+                    {{ getCommunityDisplay(cred) }}
+                  </span>
                   <button
-                    @click="openCredentialModal(cred)"
-                    class="p-1 text-text-muted hover:text-accent transition-colors"
-                    title="编辑"
+                    @click="toggleCommunityVisibility(cred.id)"
+                    class="p-0.5 text-text-muted hover:text-text-primary transition-colors"
                   >
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    <svg v-if="showCommunityMap.get(cred.id)" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
-                  </button>
-                  <button
-                    @click="deleteCredential(cred)"
-                    class="p-1 text-text-muted hover:text-red-400 transition-colors"
-                    title="删除"
-                  >
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                     </svg>
                   </button>
                 </div>
+                <div v-if="cred.hasAuthKey || cred.hasPrivKey" class="text-xs text-text-muted mt-1 truncate">{{ cred.hasAuthKey ? 'Auth: ✓' : '' }} {{ cred.hasPrivKey ? 'Priv: ✓' : '' }}</div>
               </div>
-              <div class="flex items-center gap-2 mt-1.5">
-                <span class="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">{{ cred.version }}</span>
-                <span class="text-xs text-text-muted font-mono">
-                  {{ getCommunityDisplay(cred) }}
-                </span>
-                <button
-                  @click="toggleCommunityVisibility(cred.id)"
-                  class="p-0.5 text-text-muted hover:text-text-primary transition-colors"
-                >
-                  <svg v-if="showCommunityMap.get(cred.id)" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                  </svg>
-                </button>
-              </div>
-              <div v-if="cred.hasAuthKey || cred.hasPrivKey" class="text-xs text-text-muted mt-1 truncate">{{ cred.hasAuthKey ? 'Auth: ✓' : '' }} {{ cred.hasPrivKey ? 'Priv: ✓' : '' }}</div>
-            </div>
 
-            <div v-if="credentials.length === 0" class="text-center text-text-muted text-sm py-4">
-              暂无凭据
+              <div v-if="credentials.length === 0" class="text-center text-text-muted text-sm py-4">
+                暂无凭据
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- 模板列表 -->
-        <div v-if="leftActiveTab === 'templates'" class="flex-1 overflow-y-auto p-3">
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-xs text-text-muted">{{ templates.length }} 个模板</span>
-            <button
-              @click="openTemplateModal(null)"
-              class="p-1 text-text-muted hover:text-accent transition-colors"
-              title="添加模板"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-              </svg>
-            </button>
-          </div>
+          <!-- 模板列表 -->
+          <div v-if="leftActiveTab === 'templates'" class="flex-1 overflow-y-auto p-3">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs text-text-muted">{{ templates.length }} 个模板</span>
+              <button
+                @click="openTemplateModal(null)"
+                class="p-1 text-text-muted hover:text-accent transition-colors"
+                title="添加模板"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            </div>
 
-          <div class="space-y-2">
-            <div
-              v-for="tmpl in templates"
-              :key="tmpl.id"
-              class="p-2.5 bg-bg-tertiary rounded-md border border-border/30 hover:border-border/60 transition-colors"
-            >
-              <div class="flex items-center justify-between">
-                <span class="text-sm text-text-primary font-medium truncate">{{ tmpl.name }}</span>
-                <div class="flex items-center gap-1">
-                  <button
-                    @click="openTemplateModal(tmpl)"
-                    class="p-1 text-text-muted hover:text-accent transition-colors"
-                    title="编辑"
-                  >
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button
-                    @click="deleteTemplate(tmpl)"
-                    class="p-1 text-text-muted hover:text-red-400 transition-colors"
-                    title="删除"
-                  >
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+            <div class="space-y-2">
+              <div
+                v-for="tmpl in templates"
+                :key="tmpl.id"
+                class="p-2.5 bg-bg-tertiary rounded-md border border-border/30 hover:border-border/60 transition-colors"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-text-primary font-medium truncate">{{ tmpl.name }}</span>
+                  <div class="flex items-center gap-1">
+                    <button
+                      @click="openTemplateModal(tmpl)"
+                      class="p-1 text-text-muted hover:text-accent transition-colors"
+                      title="编辑"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    <button
+                      @click="deleteTemplate(tmpl)"
+                      class="p-1 text-text-muted hover:text-red-400 transition-colors"
+                      title="删除"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
+                <div class="flex items-center gap-2 mt-1.5">
+                  <span class="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">{{ tmpl.oidItems.length }} OID</span>
+                </div>
+                <div v-if="tmpl.description" class="text-xs text-text-muted mt-1 truncate">{{ tmpl.description }}</div>
               </div>
-              <div class="flex items-center gap-2 mt-1.5">
-                <span class="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">{{ tmpl.oidItems.length }} OID</span>
-              </div>
-              <div v-if="tmpl.description" class="text-xs text-text-muted mt-1 truncate">{{ tmpl.description }}</div>
-            </div>
 
-            <div v-if="templates.length === 0" class="text-center text-text-muted text-sm py-4">
-              暂无模板
+              <div v-if="templates.length === 0" class="text-center text-text-muted text-sm py-4">
+                暂无模板
+              </div>
             </div>
           </div>
+        </template>
+
+        <!-- 折叠时的展开按钮 -->
+        <div v-else class="flex-1 flex items-center justify-center">
+          <button
+            @click="horizontalResize.expandPanel(0)"
+            class="w-8 h-8 rounded-full glass-strong border border-border/50 flex items-center justify-center text-text-muted hover:text-accent hover:border-accent transition-all shadow-md"
+            title="展开凭据/模板面板"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
       </aside>
 
+      <!-- 左侧拖拽手柄 -->
+      <div
+        v-if="!horizontalResize.isCollapsed(0)"
+        class="w-1 flex-shrink-0 cursor-col-resize group relative z-10"
+        @mousedown="(e) => horizontalResize.startResize(0, e)"
+      >
+        <div class="absolute inset-y-0 left-0 w-px bg-border/30 group-hover:bg-accent transition-colors"></div>
+        <div class="absolute inset-y-0 -left-1 w-3"></div>
+      </div>
+
       <!-- 中间面板：目标列表 + 轮询结果 -->
-      <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <main
+        ref="centerContainerRef"
+        :style="horizontalResize.getPanelStyle(1)"
+        :class="[
+          'flex flex-col min-w-0 overflow-hidden',
+          horizontalResize.isResizing.value ? 'select-none' : '',
+        ]"
+      >
         <!-- 目标列表区域 -->
-        <div class="flex-1 flex flex-col min-h-0 border-b border-border/30">
+        <div
+          :style="{ height: `${verticalResize.sizes.value[0]}px`, flexShrink: 0 }"
+          class="flex flex-col min-h-0 overflow-hidden"
+        >
           <!-- 目标工具栏 -->
           <div class="flex items-center justify-between px-4 py-2 bg-bg-secondary/50 border-b border-border/30 flex-shrink-0">
             <div class="flex items-center gap-3">
@@ -1074,8 +1119,20 @@ watch(targetFilterEnabled, () => {
           </div>
         </div>
 
+        <!-- 垂直拖拽手柄（目标/结果间） -->
+        <div
+          class="h-1 flex-shrink-0 cursor-row-resize group relative z-10"
+          @mousedown="(e) => verticalResize.startResize(0, e)"
+        >
+          <div class="absolute inset-x-0 top-0 h-px bg-border/30 group-hover:bg-accent transition-colors"></div>
+          <div class="absolute inset-x-0 -top-1 h-3"></div>
+        </div>
+
         <!-- 轮询结果区域 -->
-        <div class="h-64 flex flex-col min-h-0">
+        <div
+          :style="{ height: `${verticalResize.sizes.value[1]}px`, flexShrink: 0 }"
+          class="flex flex-col min-h-0 overflow-hidden"
+        >
           <!-- 结果工具栏 -->
           <div class="flex items-center justify-between px-4 py-2 bg-bg-secondary/50 border-b border-border/30 flex-shrink-0">
             <div class="flex items-center gap-3">
@@ -1163,137 +1220,165 @@ watch(targetFilterEnabled, () => {
         </div>
       </main>
 
+      <!-- 右侧拖拽手柄 -->
+      <div
+        v-if="!horizontalResize.isCollapsed(2)"
+        class="w-1 flex-shrink-0 cursor-col-resize group relative z-10"
+        @mousedown="(e) => horizontalResize.startResize(1, e)"
+      >
+        <div class="absolute inset-y-0 left-0 w-px bg-border/30 group-hover:bg-accent transition-colors"></div>
+        <div class="absolute inset-y-0 -left-1 w-3"></div>
+      </div>
+
       <!-- 右侧面板：详情 -->
       <aside
-        v-if="showDetailPanel"
-        :style="{ width: `${rightPanelWidth}px` }"
-        class="flex flex-col bg-bg-secondary border-l border-border/50 flex-shrink-0 overflow-y-auto"
+        :style="horizontalResize.getPanelStyle(2)"
+        :class="[
+          'flex flex-col bg-bg-secondary border-l border-border/50 overflow-y-auto',
+          horizontalResize.isResizing.value ? 'select-none' : '',
+          'transition-[width] duration-200 ease-in-out',
+        ]"
       >
-        <!-- 目标详情 -->
-        <div v-if="selectedTarget" class="p-4 border-b border-border/30">
-          <h3 class="text-sm font-medium text-text-primary mb-3">目标详情</h3>
-          
-          <div class="space-y-2 text-sm">
-            <div class="flex justify-between">
-              <span class="text-text-muted">名称</span>
-              <span class="text-text-primary">{{ selectedTarget.displayName }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">地址</span>
-              <span class="text-text-primary font-mono text-xs">{{ selectedTarget.targetIP }}:{{ selectedTarget.targetPort }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">凭据</span>
-              <span class="text-text-primary text-xs">{{ selectedTarget.credentialId ? getCredentialById(selectedTarget.credentialId)?.name ?? '-' : '-' }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">模板</span>
-              <span class="text-text-primary text-xs">{{ selectedTarget.templateId ? getTemplateById(selectedTarget.templateId)?.name ?? '-' : '-' }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">间隔</span>
-              <span class="text-text-primary">{{ selectedTarget.pollInterval }}s</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">状态</span>
-              <span :class="selectedTarget.enabled ? 'text-green-400' : 'text-gray-400'">
-                {{ selectedTarget.enabled ? '已启用' : '已禁用' }}
-              </span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">最后轮询</span>
-              <span class="text-text-primary text-xs">{{ formatTime(selectedTarget.lastPollAt) }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">最后成功</span>
-              <span class="text-text-primary text-xs">{{ formatTime(selectedTarget.lastPollAt) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 统计信息 -->
-        <div v-if="selectedTargetStats" class="p-4 border-b border-border/30">
-          <h3 class="text-sm font-medium text-text-primary mb-3">统计信息</h3>
-          
-          <div class="space-y-2 text-sm">
-            <div class="flex justify-between">
-              <span class="text-text-muted">总轮询</span>
-              <span class="text-text-primary">{{ selectedTargetStats.totalPolls }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">成功</span>
-              <span class="text-green-400">{{ selectedTargetStats.successCount }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">失败</span>
-              <span class="text-red-400">{{ selectedTargetStats.failCount }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">成功率</span>
-              <span class="text-text-primary">
-                {{ selectedTargetStats.totalPolls > 0
-                  ? ((selectedTargetStats.successCount / selectedTargetStats.totalPolls) * 100).toFixed(1)
-                  : 0 }}%
-              </span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">平均延迟</span>
-              <span class="text-text-primary">{{ formatLatency(selectedTargetStats.avgLatencyMs) }}</span>
+        <template v-if="!horizontalResize.isCollapsed(2)">
+          <!-- 目标详情 -->
+          <div v-if="selectedTarget" class="p-4 border-b border-border/30">
+            <h3 class="text-sm font-medium text-text-primary mb-3">目标详情</h3>
+            
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-text-muted">名称</span>
+                <span class="text-text-primary">{{ selectedTarget.displayName }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">地址</span>
+                <span class="text-text-primary font-mono text-xs">{{ selectedTarget.targetIP }}:{{ selectedTarget.targetPort }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">凭据</span>
+                <span class="text-text-primary text-xs">{{ selectedTarget.credentialId ? getCredentialById(selectedTarget.credentialId)?.name ?? '-' : '-' }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">模板</span>
+                <span class="text-text-primary text-xs">{{ selectedTarget.templateId ? getTemplateById(selectedTarget.templateId)?.name ?? '-' : '-' }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">间隔</span>
+                <span class="text-text-primary">{{ selectedTarget.pollInterval }}s</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">状态</span>
+                <span :class="selectedTarget.enabled ? 'text-green-400' : 'text-gray-400'">
+                  {{ selectedTarget.enabled ? '已启用' : '已禁用' }}
+                </span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">最后轮询</span>
+                <span class="text-text-primary text-xs">{{ formatTime(selectedTarget.lastPollAt) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">轮询状态</span>
+                <span class="text-text-primary text-xs">{{ selectedTarget.lastPollStatus || '未知' }}</span>
+              </div>
             </div>
           </div>
 
-          <!-- 成功率进度条 -->
-          <div class="mt-3">
-            <div class="w-full h-2 bg-bg-tertiary rounded-full overflow-hidden">
-              <div
-                class="h-full rounded-full transition-all duration-500"
-                :class="selectedTargetStats.totalPolls > 0 && (selectedTargetStats.successCount / selectedTargetStats.totalPolls) >= 0.8 ? 'bg-green-500' : 'bg-yellow-500'"
-                :style="{
-                  width: `${selectedTargetStats.totalPolls > 0 ? (selectedTargetStats.successCount / selectedTargetStats.totalPolls) * 100 : 0}%`
-                }"
-              ></div>
+          <!-- 统计信息 -->
+          <div v-if="selectedTargetStats" class="p-4 border-b border-border/30">
+            <h3 class="text-sm font-medium text-text-primary mb-3">统计信息</h3>
+            
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-text-muted">总轮询</span>
+                <span class="text-text-primary">{{ selectedTargetStats.totalPolls }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">成功</span>
+                <span class="text-green-400">{{ selectedTargetStats.successCount }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">失败</span>
+                <span class="text-red-400">{{ selectedTargetStats.failCount }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">成功率</span>
+                <span class="text-text-primary">
+                  {{ selectedTargetStats.totalPolls > 0
+                    ? ((selectedTargetStats.successCount / selectedTargetStats.totalPolls) * 100).toFixed(1)
+                    : 0 }}%
+                </span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">平均延迟</span>
+                <span class="text-text-primary">{{ formatLatency(selectedTargetStats.avgLatencyMs) }}</span>
+              </div>
+            </div>
+
+            <!-- 成功率进度条 -->
+            <div class="mt-3">
+              <div class="w-full h-2 bg-bg-tertiary rounded-full overflow-hidden">
+                <div
+                  class="h-full rounded-full transition-all duration-500"
+                  :class="selectedTargetStats.totalPolls > 0 && (selectedTargetStats.successCount / selectedTargetStats.totalPolls) >= 0.8 ? 'bg-green-500' : 'bg-yellow-500'"
+                  :style="{
+                    width: `${selectedTargetStats.totalPolls > 0 ? (selectedTargetStats.successCount / selectedTargetStats.totalPolls) * 100 : 0}%`
+                  }"
+                ></div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- 最新结果详情 -->
-        <div v-if="selectedResult" class="p-4">
-          <h3 class="text-sm font-medium text-text-primary mb-3">结果详情</h3>
-          
-          <div class="space-y-2 text-sm mb-3">
-            <div class="flex justify-between">
-              <span class="text-text-muted">时间</span>
-              <span class="text-text-primary text-xs">{{ formatTime(selectedResult.pollTime) }}</span>
+          <!-- 最新结果详情 -->
+          <div v-if="selectedResult" class="p-4">
+            <h3 class="text-sm font-medium text-text-primary mb-3">结果详情</h3>
+            
+            <div class="space-y-2 text-sm mb-3">
+              <div class="flex justify-between">
+                <span class="text-text-muted">时间</span>
+                <span class="text-text-primary text-xs">{{ formatTime(selectedResult.pollTime) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">目标 IP</span>
+                <span class="text-text-primary text-xs font-mono">{{ selectedResult.targetIP }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-text-muted">批次 ID</span>
+                <span class="text-text-secondary text-xs font-mono truncate max-w-[150px]">{{ selectedResult.batchId }}</span>
+              </div>
             </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">目标 IP</span>
-              <span class="text-text-primary text-xs font-mono">{{ selectedResult.targetIP }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-text-muted">批次 ID</span>
-              <span class="text-text-secondary text-xs font-mono truncate max-w-[150px]">{{ selectedResult.batchId }}</span>
+
+            <!-- OID 详情 -->
+            <div class="p-2.5 bg-bg-tertiary rounded border border-border/20">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs text-accent font-mono truncate">{{ selectedResult.oid }}</span>
+                <span class="text-xs px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 ml-2 flex-shrink-0">{{ selectedResult.valueType || '未知' }}</span>
+              </div>
+              <div v-if="selectedResult.oidName" class="text-xs text-text-muted mb-1 truncate">{{ selectedResult.oidName }}</div>
+              <div class="text-xs text-text-primary break-all bg-bg-primary p-1.5 rounded mt-1">{{ selectedResult.value || '(无值)' }}</div>
             </div>
           </div>
 
-          <!-- OID 详情 -->
-          <div class="p-2.5 bg-bg-tertiary rounded border border-border/20">
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-xs text-accent font-mono truncate">{{ selectedResult.oid }}</span>
-              <span class="text-xs px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 ml-2 flex-shrink-0">{{ selectedResult.valueType || '未知' }}</span>
+          <!-- 无选中状态 -->
+          <div v-if="!selectedTarget && !selectedResult" class="flex-1 flex items-center justify-center">
+            <div class="text-center text-text-muted">
+              <svg class="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <p class="text-sm">选择目标查看详情</p>
             </div>
-            <div v-if="selectedResult.oidName" class="text-xs text-text-muted mb-1 truncate">{{ selectedResult.oidName }}</div>
-            <div class="text-xs text-text-primary break-all bg-bg-primary p-1.5 rounded mt-1">{{ selectedResult.value || '(无值)' }}</div>
           </div>
-        </div>
+        </template>
 
-        <!-- 无选中状态 -->
-        <div v-if="!selectedTarget && !selectedResult" class="flex-1 flex items-center justify-center">
-          <div class="text-center text-text-muted">
-            <svg class="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        <!-- 折叠时的展开按钮 -->
+        <div v-else class="flex-1 flex items-center justify-center">
+          <button
+            @click="horizontalResize.expandPanel(2)"
+            class="w-8 h-8 rounded-full glass-strong border border-border/50 flex items-center justify-center text-text-muted hover:text-accent hover:border-accent transition-all shadow-md"
+            title="展开详情面板"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
-            <p class="text-sm">选择目标查看详情</p>
-          </div>
+          </button>
         </div>
       </aside>
     </div>

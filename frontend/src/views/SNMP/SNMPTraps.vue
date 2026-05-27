@@ -10,7 +10,7 @@
  * - 服务器配置管理
  * - 实时 Trap 推送和高亮显示
  */
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { SNMPTrapAPI } from '@/services/snmpApi'
 import { useSNMPTrapStream } from '@/composables/useSNMPTrapStream'
@@ -341,27 +341,33 @@ async function deleteTrapRecord(trap: TrapRecordVM) {
  * 清理过期记录
  */
 async function clearOldRecords() {
-  const days = prompt('请输入要保留的天数（之前的记录将被删除）：', '30')
-  if (!days) return
-
-  const daysNum = parseInt(days)
-  if (isNaN(daysNum)) {
-    toast.warning('请输入有效的数字')
-    return
-  }
-
-  const before = new Date()
-  before.setDate(before.getDate() - daysNum)
-  const beforeStr = before.toISOString().split('T')[0] || ''
-
   try {
+    const { value: days } = await ElMessageBox.prompt(
+      '请输入要保留的天数（之前的记录将被删除）：',
+      '清理过期记录',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        inputPattern: /^\d+$/,
+        inputErrorMessage: '请输入有效的数字',
+        inputPlaceholder: '30',
+        inputValue: '30',
+      }
+    )
+
+    const daysNum = parseInt(days)
+    if (isNaN(daysNum)) return
+
+    const before = new Date()
+    before.setDate(before.getDate() - daysNum)
+    const beforeStr = before.toISOString().split('T')[0] || ''
+
     const count = await SNMPTrapAPI.clearTrapRecords(beforeStr)
     toast.success(`已清理 ${count} 条记录`)
     await loadTrapRecords()
     await refreshStats()
-  } catch (error) {
-    logger.error(`SNMP-Trap: 清理记录失败 - ${error}`)
-    toast.error('清理记录失败')
+  } catch {
+    // 用户取消或输入无效
   }
 }
 
@@ -703,10 +709,6 @@ onMounted(async () => {
   ])
 })
 
-// 监听过滤条件变化
-watch(filter, () => {
-  // 防抖处理
-}, { deep: true })
 </script>
 
 <template>
