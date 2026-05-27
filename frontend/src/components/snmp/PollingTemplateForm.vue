@@ -78,9 +78,9 @@
                 size="small"
                 class="operation-field"
               >
-                <el-option label="GET" value="get" />
-                <el-option label="WALK" value="walk" />
                 <el-option label="BULK" value="bulk" />
+                <el-option label="WALK" value="walk" />
+                <el-option label="GET" value="get" />
               </el-select>
               <el-input
                 v-model="item.description"

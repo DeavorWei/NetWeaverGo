@@ -1529,8 +1529,9 @@ watch(targetFilterEnabled, () => {
                       v-model="oid.operation"
                       class="px-2 py-1 text-xs bg-bg-primary border border-border/50 rounded text-text-primary focus:outline-none focus:border-accent"
                     >
-                      <option value="get">GET</option>
+                      <option value="bulk">BULK</option>
                       <option value="walk">WALK</option>
+                      <option value="get">GET</option>
                     </select>
                     <button
                       @click="removeOIDFromTemplate(idx)"
