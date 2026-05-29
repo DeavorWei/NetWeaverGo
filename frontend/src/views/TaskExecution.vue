@@ -353,7 +353,7 @@
               <div class="grid grid-cols-3 gap-4">
                 <div
                   v-for="unit in visibleUnits"
-                  :key="unit.id"
+                  :key="unit.targetKey"
                   class="bg-bg-card border rounded-xl overflow-hidden shadow-card transition-all duration-300"
                   :class="statusBorder(unit.status)"
                 >
@@ -1118,12 +1118,6 @@ const deviceCardUnits = computed<UnitSnapshot[]>(() => {
     .filter((unit): unit is UnitSnapshot => unit !== null);
 
   return projected.sort((left, right) => {
-    const priorityDiff =
-      deviceUnitPriority(right, stageOrderMap) -
-      deviceUnitPriority(left, stageOrderMap);
-    if (priorityDiff !== 0) {
-      return priorityDiff;
-    }
     return normalizeString(left.targetKey).localeCompare(
       normalizeString(right.targetKey),
     );
