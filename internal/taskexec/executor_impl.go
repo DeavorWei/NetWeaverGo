@@ -944,6 +944,9 @@ func (e *TopologyBuildExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 		edgeCount = result.TotalEdges
 	}
 
+	// Update stage progress to 100% before emitting completion event
+	applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), 1, 0, 0, 100, "更新拓扑构建阶段进度")
+
 	// Emit completion event
 	emitProjectedStageEvent(ctx, stage.ID, EventTypeStageFinished, EventLevelInfo, fmt.Sprintf("Topology build completed with %d edges", edgeCount))
 
