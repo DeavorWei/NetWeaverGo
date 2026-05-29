@@ -16,20 +16,25 @@ vars:
 
 tasks:
   build:
-    summary: Builds the application for Windows
+    summary: Builds the application for Windows (Debug version with console window)
     cmds:
-      # Auto-detect CGO: if CGO_ENABLED=1, use Docker; otherwise use native Go cross-compile
-      - task: '{{if and (ne OS "windows") (eq .CGO_ENABLED "1")}}build:docker{{else}}build:native{{end}}'
+      # Debug build by default - shows console window, preserves debug info
+      - task: build:native
         vars:
           ARCH: "{{.ARCH}}"
-          DEV: "{{.DEV}}"
-          EXTRA_TAGS: "{{.EXTRA_TAGS}}"
+          VERSION: "{{.VERSION}}"
     vars:
       # Default to CGO_ENABLED=0 if not explicitly set
       CGO_ENABLED: '{{.CGO_ENABLED | default "0"}}'
 
   build:native:
-    summary: Builds the application using native Go cross-compilation
+    summary: Builds the application using native Go cross-compilation (Debug version)
+    desc: |
+      Debug build configuration:
+      - Shows console window (no -H windowsgui)
+      - Preserves debug info (no -w -s)
+      - Preserves full path info (no -trimpath)
+      - Disables optimization and inlining (-gcflags="all=-N -l")
     internal: true
     deps:
       - task: common:go:mod:tidy
@@ -48,7 +53,42 @@ tasks:
       - cmd: rm -f ./{{.MAIN_DIR}}/*.syso
         platforms: [linux, darwin]
     vars:
-      BUILD_FLAGS: '{{if eq .DEV "true"}}{{if .EXTRA_TAGS}}-tags {{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"{{end}}'
+      # Debug build flags: preserve debug info, show console window
+      BUILD_FLAGS: '-tags dev -gcflags="all=-N -l" -ldflags="-X main.version={{.VERSION}}"'
+      VERSION: '{{.VERSION | default "dev"}}'
+    env:
+      GOOS: windows
+      CGO_ENABLED: '{{.CGO_ENABLED | default "0"}}'
+      GOARCH: "{{.ARCH | default ARCH}}"
+
+  build:release:
+    summary: Builds the application for release (Production version without console window)
+    desc: |
+      Release build configuration:
+      - Hides console window (-H windowsgui)
+      - Strips debug info (-w -s)
+      - Trims path info (-trimpath)
+      - Optimized for production
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+          DEV:
+            ref: .DEV
+      - task: common:generate:icons
+    cmds:
+      - task: generate:syso
+      - go build {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}.exe" ./{{.MAIN_DIR}}
+      - cmd: powershell Remove-item ./{{.MAIN_DIR}}/*.syso -ErrorAction SilentlyContinue
+        platforms: [windows]
+      - cmd: rm -f ./{{.MAIN_DIR}}/*.syso
+        platforms: [linux, darwin]
+    vars:
+      # Release build flags: optimized, no console, stripped debug info
+      BUILD_FLAGS: '-tags production -trimpath -ldflags="-w -s -H windowsgui -X main.version={{.VERSION}}"'
+      VERSION: '{{.VERSION | default "dev"}}'
     env:
       GOOS: windows
       CGO_ENABLED: '{{.CGO_ENABLED | default "0"}}'
