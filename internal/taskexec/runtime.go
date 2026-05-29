@@ -941,8 +941,10 @@ func (m *RuntimeManager) emitError(runID, stageID, unitID, message string) {
 
 func finishRunWithStatus(handler *ErrorHandler, runtimeCtx *defaultRuntimeContext, status string, operation string) {
 	now := time.Now()
+	progress := 100 // 强制设置进度为100，避免竞态条件导致的进度计算错误
 	handler.UpdateRunBestEffort(runtimeCtx, &RunPatch{
 		Status:     &status,
+		Progress:   &progress,
 		FinishedAt: &now,
 	}, operation)
 }

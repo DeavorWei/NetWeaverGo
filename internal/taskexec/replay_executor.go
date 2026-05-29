@@ -445,9 +445,9 @@ func (e *ReplayExecutor) getDeviceVendor(runID, deviceIP string) string {
 func (e *ReplayExecutor) executeBuild(ctx context.Context, replayRunID string, stats *ReplayStatistics) error {
 	logger.Info("Replay", replayRunID, "开始拓扑构建阶段")
 
-	// 使用现有的 TopologyBuilder
+	// 使用现有的 TopologyBuilder（重放不需要进度回调）
 	builder := NewTopologyBuilder(e.db, DefaultTopologyBuildConfig())
-	output, err := builder.Build(ctx, replayRunID)
+	output, err := builder.Build(ctx, replayRunID, nil)
 	if err != nil {
 		return fmt.Errorf("拓扑构建失败: %w", err)
 	}

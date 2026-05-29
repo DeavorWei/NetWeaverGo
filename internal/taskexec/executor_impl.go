@@ -906,8 +906,16 @@ func (e *TopologyBuildExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 	var result *models.TopologyBuildResult
 	var err error
 
+	// 创建进度回调函数
+	progressCallback := func(step int, totalSteps int, stepName string) {
+		progress := int((float64(step) / float64(totalSteps)) * 100)
+		emitProjectedStageEvent(ctx, stage.ID, EventTypeStageProgress, EventLevelInfo,
+			fmt.Sprintf("%s (%d/%d)", stepName, step, totalSteps))
+		applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), 0, 0, 0, progress, stepName)
+	}
+
 	logger.Info("TaskExec", ctx.RunID(), "Using topology builder")
-	output, buildErr := BuildTopologyWithNewLogic(e.db, ctx.RunID())
+	output, buildErr := BuildTopologyWithNewLogic(ctx.Context(), e.db, ctx.RunID(), progressCallback)
 	if buildErr != nil {
 		err = buildErr
 	} else if output != nil {
@@ -938,6 +946,14 @@ func (e *TopologyBuildExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 	if result != nil {
 		edgeCount = result.TotalEdges
 	}
+
+	// Update unit status to completed first
+	unitStatus := string(UnitStatusCompleted)
+	unitDoneSteps := 1
+	handler.UpdateUnitBestEffort(ctx, stage.Units[0].ID, &UnitPatch{
+		Status:    &unitStatus,
+		DoneSteps: &unitDoneSteps,
+	}, "写入拓扑构建单元完成状态")
 
 	// Update stage progress to 100% before emitting completion event
 	applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), 1, 0, 0, 100, "更新拓扑构建阶段进度")

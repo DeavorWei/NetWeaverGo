@@ -21,6 +21,12 @@ import (
 // 本文件实现分层架构的拓扑构建器，支持可解释、可追溯的拓扑还原
 // =============================================================================
 
+// BuildProgressCallback 进度回调函数类型
+// step: 当前步骤号 (1-based)
+// totalSteps: 总步骤数
+// stepName: 步骤名称
+type BuildProgressCallback func(step int, totalSteps int, stepName string)
+
 // TopologyBuilder 拓扑构建器
 // 实现分层构建流程：事实收集 -> 标准化 -> 候选生成 -> 评分 -> 冲突消解 -> 边落库
 type TopologyBuilder struct {
@@ -37,47 +43,114 @@ func NewTopologyBuilder(db *gorm.DB, cfg TopologyBuildConfig) *TopologyBuilder {
 }
 
 // Build 执行拓扑构建主流程
-func (b *TopologyBuilder) Build(ctx context.Context, runID string) (*TopologyBuildOutput, error) {
+// onProgress: 进度回调函数，可为nil
+func (b *TopologyBuilder) Build(ctx context.Context, runID string, onProgress BuildProgressCallback) (*TopologyBuildOutput, error) {
 	startedAt := time.Now()
 	output := &TopologyBuildOutput{
 		Errors: []string{},
 	}
+	const totalSteps = 10
 
 	// Step 1: 收集构建输入
+	if onProgress != nil {
+		onProgress(1, totalSteps, "收集构建输入")
+	}
 	input, err := b.collectBuildInputs(runID)
 	if err != nil {
 		return nil, fmt.Errorf("收集构建输入失败: %w", err)
 	}
 	input.BuildConfig = b.config
 
+	// 检查取消
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// Step 2: 创建事实快照
+	if onProgress != nil {
+		onProgress(2, totalSteps, "创建事实快照")
+	}
 	snapshot := b.createFactSnapshot(input)
 	output.FactSnapshot = snapshot
 
 	// Step 3: 标准化事实
+	if onProgress != nil {
+		onProgress(3, totalSteps, "标准化处理")
+	}
 	normalized := b.normalizeFacts(input)
 
+	// 检查取消
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// Step 4: 生成 LLDP 候选
+	if onProgress != nil {
+		onProgress(4, totalSteps, "LLDP候选生成")
+	}
 	lldpCandidates := b.buildLLDPCandidates(normalized)
 
 	// Step 5: 生成 FDB/ARP 推断候选
+	if onProgress != nil {
+		onProgress(5, totalSteps, "FDB/ARP推断候选生成")
+	}
 	fdbCandidates := b.buildFDBARPCandidates(normalized)
 
+	// 检查取消
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// Step 6: 合并候选
+	if onProgress != nil {
+		onProgress(6, totalSteps, "候选合并")
+	}
 	allCandidates := make([]*TopologyEdgeCandidate, 0, len(lldpCandidates)+len(fdbCandidates))
 	allCandidates = append(allCandidates, lldpCandidates...)
 	allCandidates = append(allCandidates, fdbCandidates...)
 
 	// Step 7: 用接口事实丰富候选
+	if onProgress != nil {
+		onProgress(7, totalSteps, "接口事实丰富")
+	}
 	b.enrichCandidatesWithInterfaceFacts(allCandidates, normalized)
 
+	// 检查取消
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// Step 8: 全局冲突消解
+	if onProgress != nil {
+		onProgress(8, totalSteps, "全局冲突消解")
+	}
 	resolvedCandidates, decisionTraces := b.resolveCandidatesGlobal(allCandidates)
 
 	// Step 9: 生成最终边
+	if onProgress != nil {
+		onProgress(9, totalSteps, "边物化")
+	}
 	edges := b.materializeEdges(resolvedCandidates, runID)
 
+	// 检查取消
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// Step 10: 持久化结果
+	if onProgress != nil {
+		onProgress(10, totalSteps, "结果持久化")
+	}
 	if err := b.persistResults(runID, edges, allCandidates, decisionTraces, snapshot); err != nil {
 		return nil, fmt.Errorf("持久化结果失败: %w", err)
 	}
@@ -1319,7 +1392,9 @@ func EnsureDBTables(db *gorm.DB) error {
 }
 
 // BuildTopologyWithNewLogic 使用新逻辑构建拓扑（入口函数）
-func BuildTopologyWithNewLogic(db *gorm.DB, runID string) (*TopologyBuildOutput, error) {
+// ctx: 上下文，用于取消操作
+// onProgress: 进度回调函数，可为nil
+func BuildTopologyWithNewLogic(ctx context.Context, db *gorm.DB, runID string, onProgress BuildProgressCallback) (*TopologyBuildOutput, error) {
 	cfg := DefaultTopologyBuildConfig()
 
 	// 从运行时配置加载参数
@@ -1334,5 +1409,5 @@ func BuildTopologyWithNewLogic(db *gorm.DB, runID string) (*TopologyBuildOutput,
 	cfg.SaveDecisionTraces = saveTraces
 
 	builder := NewTopologyBuilder(db, cfg)
-	return builder.Build(context.Background(), runID)
+	return builder.Build(ctx, runID, onProgress)
 }
