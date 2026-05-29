@@ -1477,13 +1477,17 @@ async function syncExecutionView() {
             "aborted",
           ];
           if (terminalStatuses.includes(snapshot.status)) {
-            // 任务已完成（终态），重置执行视图返回任务列表
-            // 用户离开页面后返回，应该看到任务列表而非已完成的执行详情
+            // 任务已完成（终态），保留在执行详情页面
+            // 用户可以查看执行结果、日志和拓扑采集证据
+            // 由用户主动点击"返回任务列表"按钮退出
             logger.debug(
-              `任务已完成，重置执行视图，status=${snapshot.status}`,
+              `任务已完成，保留执行视图以查看结果，status=${snapshot.status}`,
               'TaskExecution',
             );
-            resetExecutionViewState("task-completed-on-mount");
+            // 更新当前快照数据，确保UI显示最新状态
+            taskexecStore.updateSnapshot(snapshot.runId, snapshot);
+            taskexecStore.setCurrentRunId(snapshot.runId);
+            executionView.value.active = true;
             return;
           }
         }
