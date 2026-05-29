@@ -31,6 +31,29 @@ tasks:
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
+  dev:debug:
+    summary: Runs the application with debugger support (Delve)
+    cmds:
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}} -debug
+
+  dev:clean:
+    summary: Cleans development artifacts
+    cmds:
+      - powershell Remove-Item -Recurse -Force build/bin -ErrorAction SilentlyContinue
+      - powershell Remove-Item -Recurse -Force frontend/dist -ErrorAction SilentlyContinue
+
+  dev:reset:
+    summary: Full reset of development environment
+    deps: [dev:clean]
+    cmds:
+      - powershell Remove-Item -Recurse -Force frontend/node_modules -ErrorAction SilentlyContinue
+      - task: common:install:frontend:deps
+
+  dev:logs:
+    summary: View development logs in real-time
+    cmds:
+      - powershell Get-Content -Path "build/bin/netWeaverGoData/logs/app.log" -Wait -ErrorAction SilentlyContinue
+
   setup:docker:
     summary: Builds Docker image for cross-compilation (~800MB download)
     cmds:
