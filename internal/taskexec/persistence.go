@@ -256,6 +256,18 @@ func (r *GormRepository) UpdateUnit(ctx context.Context, unitID string, patch *U
 	if patch.FinishedAt != nil {
 		updates["finished_at"] = *patch.FinishedAt
 	}
+	if patch.DetailLogPath != nil {
+		updates["detail_log_path"] = *patch.DetailLogPath
+	}
+	if patch.RawLogPath != nil {
+		updates["raw_log_path"] = *patch.RawLogPath
+	}
+	if patch.SummaryLogPath != nil {
+		updates["summary_log_path"] = *patch.SummaryLogPath
+	}
+	if patch.JournalLogPath != nil {
+		updates["journal_log_path"] = *patch.JournalLogPath
+	}
 
 	if len(updates) == 0 {
 		return nil

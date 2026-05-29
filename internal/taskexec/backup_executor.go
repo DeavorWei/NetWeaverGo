@@ -87,7 +87,7 @@ loop:
 			defer func() { <-semaphore }()
 
 			if ctx.IsCancelled() {
-				handler.MarkUnitCancelled(ctx, u.ID, "run cancelled before collect unit start", intPtrLocal(0))
+				handler.MarkUnitCancelled(ctx, u.ID, u.Target.Key, "run cancelled before collect unit start", intPtrLocal(0))
 				mu.Lock()
 				cancelledCount++
 				mu.Unlock()
@@ -138,28 +138,26 @@ loop:
 // executeBackupUnit 执行单个设备的备份单元
 func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, unit *UnitPlan) error {
 	handler := NewErrorHandler(ctx.RunID())
+	deviceIP := unit.Target.Key
 	if ctx.IsCancelled() {
-		return cancelUnitExecution(ctx, handler, unit.ID, "run cancelled before collect unit start", intPtrLocal(0))
+		return cancelUnitExecution(ctx, handler, unit.ID, deviceIP, "run cancelled before collect unit start", intPtrLocal(0))
 	}
 
 	if err := markUnitRunning(handler, ctx, unit.ID, "设置采集 Unit 为 running"); err != nil {
 		return err
 	}
-
 	if unit.Target.Type != "device_ip" {
 		errMsg := fmt.Sprintf("unsupported target type: %s", unit.Target.Type)
-		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集 Unit 失败状态", nil)
+		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "写入采集 Unit 失败状态", nil)
 		return fmt.Errorf("%s", errMsg)
 	}
-
-	deviceIP := unit.Target.Key
 	scope := LogScope{RunID: ctx.RunID(), StageID: stageID, UnitID: unit.ID, UnitKey: deviceIP}
 	runtimeLogger := ctx.Logger(scope)
 
 	device, err := e.repo.FindByIP(deviceIP)
 	if err != nil {
 		errMsg := fmt.Sprintf("device not found: %v", err)
-		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入采集设备不存在状态", nil)
+		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "写入采集设备不存在状态", nil)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordDeviceMissing, fmt.Sprintf("采集设备不存在: %v", err), 0, 0)
 		return fmt.Errorf("device not found: %w", err)
 	}
@@ -171,7 +169,7 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 	}
 	if strings.ToLower(protocol) == "telnet" {
 		errMsg := fmt.Sprintf("设备 %s 使用 Telnet 协议，不支持配置备份（备份功能依赖 SFTP 文件传输，仅支持 SSH 协议）。请将设备协议更改为 SSH，或手动备份配置", deviceIP)
-		failUnitExecution(handler, ctx, unit.ID, errMsg, "Telnet 协议不支持备份", nil)
+		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "Telnet 协议不支持备份", nil)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordDeviceMissing, errMsg, 0, 0)
 		return fmt.Errorf("%s", errMsg)
 	}
@@ -199,7 +197,7 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 
 	if err := exec.Connect(ctx.Context(), unit.Timeout); err != nil {
 		errMsg := fmt.Sprintf("连接失败: %v", err)
-		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入连接失败状态", nil)
+		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "写入连接失败状态", nil)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordSessionConnectFailed, errMsg, 0, 0)
 		return fmt.Errorf("连接失败: %w", err)
 	}
@@ -207,14 +205,14 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 	cmdOutput, err := exec.ExecuteCommandSync(ctx.Context(), startupCommand, unit.Timeout)
 	if err != nil {
 		errMsg := fmt.Sprintf("执行启动配置命令失败: %v", err)
-		failUnitExecution(handler, ctx, unit.ID, errMsg, "写入命令失败状态", nil)
+		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "写入命令失败状态", nil)
 		return fmt.Errorf("执行启动配置命令失败: %w", err)
 	}
 	
 	remotePath := e.extractNextStartupConfigPath(cmdOutput)
 	if remotePath == "" {
 		errMsg := fmt.Sprintf("未能从输出中提取配置文件路径:\n%s", cmdOutput)
-		failUnitExecution(handler, ctx, unit.ID, errMsg, "提取失败", nil)
+		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "提取失败", nil)
 		return fmt.Errorf("未能从输出中提取配置文件路径: %s", truncateForError(cmdOutput, 200))
 	}
 	
@@ -260,14 +258,14 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 	sftpClient, err := sftputil.NewSFTPClient(ctx.Context(), sftpSSHConfig)
 	if err != nil {
 		errMsg := fmt.Sprintf("建立SFTP会话失败: %v", err)
-		failUnitExecution(handler, ctx, unit.ID, errMsg, "SFTP失败", nil)
+		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "SFTP失败", nil)
 		return fmt.Errorf("建立SFTP会话失败: %w", err)
 	}
 	defer sftpClient.Close()
 
 	if err := sftpClient.DownloadFile(remotePath, localPath); err != nil {
 		errMsg := fmt.Sprintf("SFTP下载文件失败: %v", err)
-		failUnitExecution(handler, ctx, unit.ID, errMsg, "下载失败", nil)
+		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "下载失败", nil)
 		return fmt.Errorf("SFTP下载文件失败: %w", err)
 	}
 
@@ -279,7 +277,7 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 
 	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeStepFinished, EventLevelInfo, "下载配置完成")
 
-	if err := completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), 2, "写入采集完成状态"); err != nil {
+	if err := completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), 2, "写入采集完成状态", deviceIP); err != nil {
 		return err
 	}
 	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionSucceeded, "备份完成", 2, 2)

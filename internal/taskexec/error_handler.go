@@ -128,7 +128,7 @@ func IsContextCancelled(ctx RuntimeContext, err error) bool {
 }
 
 // MarkUnitCancelled 将 Unit 标记为取消态，失败仅记录日志
-func (h *ErrorHandler) MarkUnitCancelled(ctx RuntimeContext, unitID string, reason string, doneSteps *int) {
+func (h *ErrorHandler) MarkUnitCancelled(ctx RuntimeContext, unitID string, targetKey string, reason string, doneSteps *int) {
 	cancelled := string(UnitStatusCancelled)
 	now := timeNow()
 	patch := &UnitPatch{
@@ -138,6 +138,22 @@ func (h *ErrorHandler) MarkUnitCancelled(ctx RuntimeContext, unitID string, reas
 	}
 	if doneSteps != nil {
 		patch.DoneSteps = doneSteps
+	}
+	// 添加日志路径到 patch
+	if targetKey != "" {
+		paths := ctx.GetDeviceLogPaths(targetKey)
+		if paths.DetailPath != "" {
+			patch.DetailLogPath = &paths.DetailPath
+		}
+		if paths.RawPath != "" {
+			patch.RawLogPath = &paths.RawPath
+		}
+		if paths.SummaryPath != "" {
+			patch.SummaryLogPath = &paths.SummaryPath
+		}
+		if paths.JournalPath != "" {
+			patch.JournalLogPath = &paths.JournalPath
+		}
 	}
 	if err := ctx.UpdateUnit(unitID, patch); err != nil {
 		h.LogUpdateError("标记 Unit 已取消", err)

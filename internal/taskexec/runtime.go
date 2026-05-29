@@ -36,6 +36,9 @@ type RuntimeContext interface {
 
 	// 取消检查
 	IsCancelled() bool
+
+	// 获取设备日志路径
+	GetDeviceLogPaths(targetKey string) report.DeviceLogPaths
 }
 
 // defaultRuntimeContext 默认运行时上下文实现
@@ -113,6 +116,14 @@ func (c *defaultRuntimeContext) IsCancelled() bool {
 	default:
 		return false
 	}
+}
+
+// GetDeviceLogPaths 获取设备日志路径
+func (c *defaultRuntimeContext) GetDeviceLogPaths(targetKey string) report.DeviceLogPaths {
+	if c.logStore == nil {
+		return report.DeviceLogPaths{}
+	}
+	return c.logStore.GetDeviceLogPaths(targetKey)
 }
 
 func (c *defaultRuntimeContext) applyRunPatchToSnapshot(patch *RunPatch) bool {
@@ -968,7 +979,7 @@ func (m *RuntimeManager) projectCancellationToUnits(runtimeCtx *defaultRuntimeCo
 			continue
 		}
 		reason := "run cancelled"
-		handler.MarkUnitCancelled(runtimeCtx, unit.ID, reason, &unit.DoneSteps)
+		handler.MarkUnitCancelled(runtimeCtx, unit.ID, unit.TargetKey, reason, &unit.DoneSteps)
 		unit.Status = string(UnitStatusCancelled)
 		unit.ErrorMessage = reason
 		finishedAt := time.Now()

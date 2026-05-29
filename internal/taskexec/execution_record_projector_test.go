@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/executor"
+	"github.com/NetWeaverGo/core/internal/report"
 )
 
 func TestProjectStageCompletion(t *testing.T) {
@@ -125,6 +126,10 @@ func (c *projectorTestRuntimeContext) Logger(_ LogScope) RuntimeLogger {
 
 func (c *projectorTestRuntimeContext) IsCancelled() bool {
 	return false
+}
+
+func (c *projectorTestRuntimeContext) GetDeviceLogPaths(_ string) report.DeviceLogPaths {
+	return report.DeviceLogPaths{}
 }
 
 func TestProjectExecutorRecord_EmitsCommandLifecycleEvents(t *testing.T) {

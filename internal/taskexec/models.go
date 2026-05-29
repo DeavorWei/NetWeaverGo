@@ -216,9 +216,13 @@ type StagePatch struct {
 
 // UnitPatch Unit更新补丁
 type UnitPatch struct {
-	Status       *string    `json:"status,omitempty"`
-	DoneSteps    *int       `json:"doneSteps,omitempty"`
-	ErrorMessage *string    `json:"errorMessage,omitempty"`
-	StartedAt    *time.Time `json:"startedAt,omitempty"`
-	FinishedAt   *time.Time `json:"finishedAt,omitempty"`
+	Status         *string    `json:"status,omitempty"`
+	DoneSteps      *int       `json:"doneSteps,omitempty"`
+	ErrorMessage   *string    `json:"errorMessage,omitempty"`
+	StartedAt      *time.Time `json:"startedAt,omitempty"`
+	FinishedAt     *time.Time `json:"finishedAt,omitempty"`
+	DetailLogPath  *string    `json:"detailLogPath,omitempty"`
+	RawLogPath     *string    `json:"rawLogPath,omitempty"`
+	SummaryLogPath *string    `json:"summaryLogPath,omitempty"`
+	JournalLogPath *string    `json:"journalLogPath,omitempty"`
 }
