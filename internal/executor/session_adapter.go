@@ -10,6 +10,9 @@ import (
 
 // SessionAdapter 会话适配器
 // 统一封装 Replayer + Detector + Reducer 的会话处理流程。
+//
+// 并发约束（C-001）：SessionAdapter 的所有方法仅限在 StreamEngine.Run 的主事件循环
+// goroutine 中调用，不支持并发访问。如果未来需要多 goroutine 使用，必须添加互斥锁保护。
 type SessionAdapter struct {
 	detector *SessionDetector
 	reducer  *SessionReducer
@@ -40,6 +43,8 @@ func NewSessionAdapter(width int, commands []string, m *matcher.StreamMatcher) *
 }
 
 // FeedTransitionBatch 消费原始 chunk，返回 reducer 批次结果。
+//
+// 注意：此方法仅限单 goroutine 调用（由 StreamEngine 主事件循环驱动），不支持并发访问。
 func (a *SessionAdapter) FeedTransitionBatch(chunk string) *TransitionBatch {
 	// 当存在活跃命令时，将原始 chunk 追加到当前命令的 RawBuffer
 	if a.newContext.Current != nil {

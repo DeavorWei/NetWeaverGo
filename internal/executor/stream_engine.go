@@ -110,6 +110,7 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 
 	// 丢弃并记录 stderr（SSH 有独立 stderr，Telnet 没有）
 	// 通过类型断言检查是否支持 stderr
+	// R-002 修复：为 stderr 消费添加 context 取消支持
 	type stderrProvider interface {
 		Stderr() io.Reader
 	}
@@ -120,7 +121,25 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 					logger.Warn("StreamEngine", "-", "stderr 协程 panic 已恢复: %v", r)
 				}
 			}()
-			_, _ = io.Copy(io.Discard, sp.Stderr())
+			stderr := sp.Stderr()
+			buf := make([]byte, 4096)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					// 使用非阻塞读取，避免在连接异常时长时间阻塞
+					n, err := stderr.Read(buf)
+					if err != nil {
+						// 连接关闭或出错，退出协程
+						return
+					}
+					if n > 0 {
+						// 丢弃数据，仅用于消费 stderr 避免缓冲区满
+						logger.Verbose("StreamEngine", "-", "stderr: %d bytes discarded", n)
+					}
+				}
+			}
 		}()
 	}
 
@@ -170,6 +189,12 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 	for {
 		select {
 		case <-ctx.Done():
+			// R-001 修复：强制设置 ReadDeadline 解除阻塞的 Read 调用
+			// 当 ctx 被取消时，底层 TCP 连接上的 Read 可能仍在阻塞，
+			// 设置一个已过期的 deadline 可以强制解除阻塞，让后台读取协程退出
+			if e.conn != nil {
+				_ = e.conn.SetReadDeadline(time.Now())
+			}
 			e.adapter.MarkFailed("上下文取消")
 			return e.adapter.Results(), ctx.Err()
 

@@ -246,6 +246,9 @@ type RuntimeManager struct {
 	runningRuns map[string]*defaultRuntimeContext
 	logStores   map[string]*report.ExecutionLogStore
 	mu          sync.RWMutex
+
+	// C-003 修复：stopping 标志位，阻止在 Stop 期间注册新的 run
+	stopping bool
 }
 
 // NewRuntimeManager 创建运行时管理器
@@ -288,7 +291,9 @@ func (m *RuntimeManager) GetEventBus() *EventBus {
 func (m *RuntimeManager) Stop() {
 	m.eventBus.Stop()
 
-	m.mu.RLock()
+	// C-003 修复：使用写锁设置 stopping 标志并收集 runIDs，避免窗口期
+	m.mu.Lock()
+	m.stopping = true
 	runIDs := make([]string, 0, len(m.runningRuns)+len(m.logStores))
 	seen := make(map[string]struct{}, len(m.runningRuns)+len(m.logStores))
 	for runID := range m.runningRuns {
@@ -301,7 +306,7 @@ func (m *RuntimeManager) Stop() {
 		}
 		runIDs = append(runIDs, runID)
 	}
-	m.mu.RUnlock()
+	m.mu.Unlock()
 
 	for _, runID := range runIDs {
 		m.finalizeRunResources(runID, nil)
@@ -423,7 +428,14 @@ func (m *RuntimeManager) Execute(ctx context.Context, plan *ExecutionPlan, def *
 		factory := NewDefaultLoggerFactory(config.GetPathManager().GetStorageRoot(), store, enableRawLog)
 		runtimeCtx.logger = NewDefaultRuntimeLogger(factory)
 		logger.Debug("TaskExec", run.ID, "执行日志存储已创建: raw=%t", enableRawLog)
+		// C-003 修复：检查 stopping 标志，避免在 Stop 期间注册新 run
 		m.mu.Lock()
+		if m.stopping {
+			m.mu.Unlock()
+			cancel()
+			store.Close()
+			return run, fmt.Errorf("runtime manager is stopping, cannot execute new run")
+		}
 		m.logStores[run.ID] = store
 		m.runningRuns[run.ID] = runtimeCtx
 		m.mu.Unlock()
@@ -435,7 +447,13 @@ func (m *RuntimeManager) Execute(ctx context.Context, plan *ExecutionPlan, def *
 	}
 
 	// 注册到运行中集合
+	// C-003 修复：检查 stopping 标志，避免在 Stop 期间注册新 run
 	m.mu.Lock()
+	if m.stopping {
+		m.mu.Unlock()
+		cancel()
+		return run, fmt.Errorf("runtime manager is stopping, cannot execute new run")
+	}
 	m.runningRuns[run.ID] = runtimeCtx
 	m.mu.Unlock()
 

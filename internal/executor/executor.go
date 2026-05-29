@@ -86,6 +86,12 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 		factory = connutil.NewDefaultConnectionFactory()
 	}
 
+	// B-001 修复：从 deviceProfile.PTY.Width 获取动态终端宽度，避免硬编码
+	terminalWidth := 80 // 默认宽度
+	if profile != nil && profile.PTY.Width > 0 {
+		terminalWidth = profile.PTY.Width
+	}
+
 	return &DeviceExecutor{
 		IP:                ip,
 		Port:              port,
@@ -99,7 +105,7 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 		algorithms:        opts.Algorithms,
 		logSession:        opts.LogSession,
 		deviceProfile:     profile,
-		replayer:          terminal.NewReplayer(80), // 实验性：使用标准终端宽度 80
+		replayer:          terminal.NewReplayer(terminalWidth),
 	}
 }
 
@@ -321,7 +327,12 @@ func (e *DeviceExecutor) executeInternal(
 	}
 
 	// 创建 StreamEngine
-	engine := NewStreamEngine(e, e.conn, commandStrings, 80)
+	// B-001 修复：从设备 Profile 获取 PTY 宽度，避免硬编码 80
+	ptyWidth := 80
+	if e.deviceProfile != nil && e.deviceProfile.PTY.Width > 0 {
+		ptyWidth = e.deviceProfile.PTY.Width
+	}
+	engine := NewStreamEngine(e, e.conn, commandStrings, ptyWidth)
 	engine.SetExecutionEventCallback(eventCallback)
 
 	// 设置命令标识
@@ -477,6 +488,9 @@ func (e *DeviceExecutor) dropInitResults(results []*CommandResult, initCmdCount 
 		return results
 	}
 	if len(results) <= initCmdCount {
+		// L-001 修复：添加 Warning 日志记录初始化阶段失败
+		logger.Warn("Executor", e.IP, "初始化命令结果被丢弃: initCmdCount=%d, resultsCount=%d, 初始化阶段可能失败",
+			initCmdCount, len(results))
 		return []*CommandResult{}
 	}
 	trimmed := make([]*CommandResult, len(results)-initCmdCount)

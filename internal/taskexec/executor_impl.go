@@ -94,12 +94,16 @@ loop:
 
 			if ctx.IsCancelled() {
 				handler.MarkUnitCancelled(ctx, u.ID, u.Target.Key, "run cancelled before unit start", intPtrLocal(0))
+				// C-002 修复：将计数器读取移入锁保护范围，避免竞态条件
 				mu.Lock()
 				cancelledCount++
 				unitProgress[u.ID] = 0
 				stageProgress := aggregateUnitProgress(unitProgress, len(stage.Units))
+				localCompleted := completedCount
+				localFailed := failedCount
+				localCancelled := cancelledCount
 				mu.Unlock()
-				applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), completedCount, failedCount, cancelledCount, stageProgress, "更新命令阶段细粒度进度")
+				applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled, stageProgress, "更新命令阶段细粒度进度")
 				return
 			}
 
@@ -166,6 +170,8 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		logger.Error("TaskExec", ctx.RunID(), "Failed to find device %s: %v", deviceIP, err)
 		errMsg := fmt.Sprintf("Device not found: %s", deviceIP)
 		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "写入设备不存在失败状态", nil)
+		// H-002 说明：logSession 生命周期由 RuntimeLogger 管理，随 run 结束时统一清理（通过
+		// ExecutionLogStore.Close），此处无需显式关闭。
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordDeviceMissing, fmt.Sprintf("设备不存在: %s", deviceIP), 0, 0)
 		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, fmt.Sprintf("Device not found: %s", deviceIP))
 		return fmt.Errorf("%s", errMsg)
@@ -220,11 +226,19 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		if e.settings.ConnectTimeout != "" {
 			if d, err := time.ParseDuration(e.settings.ConnectTimeout); err == nil {
 				connTimeout = d
+			} else {
+				// H-003 修复：配置解析失败时记录 Warning 日志
+				logger.Warn("TaskExec", ctx.RunID(), "连接超时配置格式错误: %s, 使用默认值 30s, 错误: %v",
+					e.settings.ConnectTimeout, err)
 			}
 		}
 		if e.settings.CommandTimeout != "" {
 			if d, err := time.ParseDuration(e.settings.CommandTimeout); err == nil {
 				cmdTimeout = d
+			} else {
+				// H-003 修复：配置解析失败时记录 Warning 日志
+				logger.Warn("TaskExec", ctx.RunID(), "命令超时配置格式错误: %s, 使用默认值 60s, 错误: %v",
+					e.settings.CommandTimeout, err)
 			}
 		}
 	}
