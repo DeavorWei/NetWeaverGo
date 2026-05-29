@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/connutil"
 	"github.com/NetWeaverGo/core/internal/sshutil"
 )
 
@@ -205,14 +206,16 @@ func TestExecutePlan_UnifiedInitCommandsNotInBusinessResults(t *testing.T) {
 	}
 	writer := &writeBuffer{}
 
+	client := &sshutil.SSHClient{
+		IP:     "192.168.58.200",
+		Stdin:  writer,
+		Stdout: reader,
+		Stderr: strings.NewReader(""),
+	}
 	e := &DeviceExecutor{
-		IP: "192.168.58.200",
-		Client: &sshutil.SSHClient{
-			IP:     "192.168.58.200",
-			Stdin:  writer,
-			Stdout: reader,
-			Stderr: strings.NewReader(""),
-		},
+		IP:     "192.168.58.200",
+		Client: client,
+		conn:   connutil.NewSSHConnectionAdapter(client),
 		deviceProfile: &config.DeviceProfile{
 			Init: config.InitConfig{
 				DisablePagerCommands: []string{"screen-length 0 temporary"},
@@ -307,14 +310,16 @@ func TestExecutePlan_UnifiedInitCommands_MultiVendorReplay(t *testing.T) {
 
 			reader := &scriptReader{chunks: chunks}
 			writer := &writeBuffer{}
+			client := &sshutil.SSHClient{
+				IP:     "192.168.58.200",
+				Stdin:  writer,
+				Stdout: reader,
+				Stderr: strings.NewReader(""),
+			}
 			e := &DeviceExecutor{
-				IP: "192.168.58.200",
-				Client: &sshutil.SSHClient{
-					IP:     "192.168.58.200",
-					Stdin:  writer,
-					Stdout: reader,
-					Stderr: strings.NewReader(""),
-				},
+				IP:           "192.168.58.200",
+				Client:       client,
+				conn:         connutil.NewSSHConnectionAdapter(client),
 				deviceProfile: profile,
 			}
 

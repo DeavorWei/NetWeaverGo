@@ -39,8 +39,11 @@ type SSHClient struct {
 	// conn 保存底层的 TCP 连接，用于设置 deadline
 	conn net.Conn
 
-	// 读写锁：保护 Stdin/Stdout 的并发访问
-	mu sync.RWMutex
+	// stdinMu 保护 Stdin 的并发写入
+	stdinMu sync.Mutex
+
+	// closeOnce 确保 Close() 只执行一次
+	closeOnce sync.Once
 
 	// closed 标记连接是否已关闭
 	closed atomic.Bool
@@ -718,8 +721,8 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 
 // SendCommand 发送单条命令及回车换行符到流中
 func (c *SSHClient) SendCommand(cmd string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.stdinMu.Lock()
+	defer c.stdinMu.Unlock()
 
 	// 检查是否已关闭
 	if c.closed.Load() {
@@ -734,14 +737,20 @@ func (c *SSHClient) SendCommand(cmd string) error {
 		c.transcriptSink.WriteMarker("\n[%s] >>> %s\n", time.Now().Format("15:04:05"), cmd)
 	}
 	// 恢复标准 \n。之前改为 \r\n 导致部分交换机将其解析为两下回车，严重干扰 Prompt 匹配缓冲流。
-	_, err := fmt.Fprintf(c.Stdin, "%s\n", cmd)
+	payload := fmt.Sprintf("%s\n", cmd)
+	n, err := fmt.Fprint(c.Stdin, payload)
+	if err != nil {
+		logger.Error("SSH", c.IP, "SendCommand 写入失败: cmd=%q, bytes=%d, err=%v", cmd, n, err)
+	} else {
+		logger.Debug("SSH", c.IP, "SendCommand 写入成功: cmd=%q, payload=%q, bytes=%d", cmd, payload, n)
+	}
 	return err
 }
 
 // SendRawBytes 发送原生字节序列到终端流中（不附加回车换行）
 func (c *SSHClient) SendRawBytes(data []byte) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.stdinMu.Lock()
+	defer c.stdinMu.Unlock()
 
 	// 检查是否已关闭
 	if c.closed.Load() {
@@ -759,12 +768,10 @@ func (c *SSHClient) SendRawBytes(data []byte) error {
 	return err
 }
 
-// Read 从 Stdout 读取数据（线程安全）
+// Read 从 Stdout 读取数据
+// 注意：Stdout.Read() 底层是 io.Pipe，本身并发安全，无需外部加锁
 func (c *SSHClient) Read(p []byte) (n int, err error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	// 检查是否已关闭
+	// 快速路径：已关闭则直接返回错误
 	if c.closed.Load() {
 		return 0, net.ErrClosed
 	}
@@ -777,31 +784,36 @@ func (c *SSHClient) Read(p []byte) (n int, err error) {
 }
 
 // Close 断开流释放句柄
+// 使用 sync.Once 确保关闭操作只执行一次，避免锁竞争
 func (c *SSHClient) Close() error {
-	// 原子性地标记为已关闭
-	if c.closed.Swap(true) {
-		return nil // 已经关闭
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	var err error
-	if c.Session != nil {
+	c.closeOnce.Do(func() {
+		// 标记为已关闭（用于快速路径检查）
+		c.closed.Store(true)
+
+		// 关闭 Stdin，解除 Read() 的阻塞
 		if c.Stdin != nil {
 			c.Stdin.Close()
 		}
-		err = c.Session.Close()
-	}
-	if c.Client != nil {
-		clientErr := c.Client.Close()
-		if err == nil {
-			err = clientErr
+
+		// 关闭 Session
+		if c.Session != nil {
+			err = c.Session.Close()
 		}
-	}
-	if c.transcriptSink != nil {
-		c.transcriptSink.WriteMarker("\n========== SESSION END %s ==========\n", time.Now().Format(time.RFC3339))
-	}
+
+		// 关闭底层 SSH Client
+		if c.Client != nil {
+			clientErr := c.Client.Close()
+			if err == nil {
+				err = clientErr
+			}
+		}
+
+		// 写入结束标记（无需加锁）
+		if c.transcriptSink != nil {
+			c.transcriptSink.WriteMarker("\n========== SESSION END %s ==========\n", time.Now().Format(time.RFC3339))
+		}
+	})
 	return err
 }
 
@@ -813,10 +825,8 @@ func (c *SSHClient) IsClosed() bool {
 // SetReadDeadline 设置读取超时时间，用于实现非阻塞读取
 // 注意：SSH Session 的 Stdout 是通过管道实现的，不支持直接设置 deadline
 // 此方法通过底层 TCP 连接来设置 deadline 以中断阻塞的读取操作
+// 操作底层 TCP 连接无需与 Stdin 互斥
 func (c *SSHClient) SetReadDeadline(t time.Time) error {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	// 检查是否已关闭
 	if c.closed.Load() {
 		return net.ErrClosed
@@ -835,9 +845,6 @@ func (c *SSHClient) SetReadDeadline(t time.Time) error {
 // CancelRead 强制中断当前的读取操作
 // 用于紧急情况下快速终止阻塞的读取
 func (c *SSHClient) CancelRead() {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	// 取消读取上下文
 	if c.readCancel != nil {
 		c.readCancel()

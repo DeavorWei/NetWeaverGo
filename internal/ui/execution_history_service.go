@@ -462,7 +462,38 @@ func (s *ExecutionHistoryService) GetDeviceDetails(req DeviceDetailsRequest) (*D
 		return nil, err
 	}
 
-	// 3. 转换为视图
+	// 3. 拓扑任务特殊处理：只显示采集阶段的设备
+	if run.RunKind == "topology" {
+		// 获取所有阶段，找到采集阶段
+		stages, err := s.repo.GetStagesByRun(context.Background(), req.RunID)
+		if err != nil {
+			logger.Error("ExecutionHistoryService", req.RunID, "获取阶段信息失败: %v", err)
+			return nil, err
+		}
+
+		// 找到采集阶段的ID（StageKind 为 "device_collect"）
+		var collectStageID string
+		for _, stage := range stages {
+			if stage.StageKind == "device_collect" {
+				collectStageID = stage.ID
+				break
+			}
+		}
+
+		// 过滤出采集阶段的设备 Units
+		if collectStageID != "" {
+			filteredUnits := make([]taskexec.TaskRunUnit, 0)
+			for _, unit := range units {
+				if unit.TaskRunStageID == collectStageID && unit.UnitKind == "device" {
+					filteredUnits = append(filteredUnits, unit)
+				}
+			}
+			units = filteredUnits
+			logger.Debug("ExecutionHistoryService", req.RunID, "拓扑任务过滤: 采集阶段ID=%s, 过滤后设备数=%d", collectStageID, len(units))
+		}
+	}
+
+	// 4. 转换为视图
 	devices := make([]DeviceExecutionView, 0, len(units))
 	for _, unit := range units {
 		device := DeviceExecutionView{

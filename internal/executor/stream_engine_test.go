@@ -43,7 +43,8 @@ func (m *mockDeviceConnection) Write(p []byte) (int, error) { return m.writer.Wr
 func (m *mockDeviceConnection) Close() error                { return nil }
 
 func (m *mockDeviceConnection) SendCommand(cmd string) (string, error) {
-	return "", nil
+	_, err := m.writer.Write([]byte(cmd + "\n"))
+	return "", err
 }
 
 func (m *mockDeviceConnection) SendRawBytes(data []byte) error {

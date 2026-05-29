@@ -405,16 +405,32 @@ func (b *SnapshotBuilder) BuildSummary(run *TaskRun, stages []TaskRunStage) *Run
 	cancelledUnits := 0
 	partialUnits := 0
 
+	// 对于拓扑任务，只统计采集阶段的设备单元
+	// 因为解析阶段和构建阶段的单元不是实际设备
+	isTopology := run.RunKind == string(RunKindTopology)
+
 	for _, s := range stages {
 		if StageStatus(s.Status).IsTerminal() {
 			completedStages++
 		}
-		// 聚合所有 stage 的单元统计
-		totalUnits += s.TotalUnits
-		successUnits += s.SuccessUnits
-		failedUnits += s.FailedUnits
-		cancelledUnits += s.CancelledUnits
-		partialUnits += s.PartialUnits
+
+		// 拓扑任务：只统计采集阶段的设备单元
+		if isTopology {
+			if s.StageKind == string(StageKindDeviceCollect) {
+				totalUnits += s.TotalUnits
+				successUnits += s.SuccessUnits
+				failedUnits += s.FailedUnits
+				cancelledUnits += s.CancelledUnits
+				partialUnits += s.PartialUnits
+			}
+		} else {
+			// 其他任务：聚合所有 stage 的单元统计
+			totalUnits += s.TotalUnits
+			successUnits += s.SuccessUnits
+			failedUnits += s.FailedUnits
+			cancelledUnits += s.CancelledUnits
+			partialUnits += s.PartialUnits
+		}
 	}
 
 	durationMs := int64(0)

@@ -865,6 +865,9 @@ import StageProgress from "../components/task/StageProgress.vue";
 import type { StageSnapshot, UnitSnapshot } from "../types/taskexec";
 import { getLogger } from '@/utils/logger'
 
+// 创建模块专用logger，用于调试日志写入frontend.log
+const log = getLogger().createModuleLogger('TaskExecution')
+// 保留logger变量以兼容其他代码
 const logger = getLogger()
 
 const router = useRouter();
@@ -996,11 +999,36 @@ const executionRunStatus = computed(() => {
 });
 
 function isDeviceExecutionUnit(unit: UnitSnapshot): boolean {
-  return (
-    normalizeString(unit.kind) === "device" &&
-    normalizeString(unit.targetType) === "device_ip" &&
-    normalizeString(unit.targetKey) !== ""
-  );
+  // 基本条件：必须是设备类型单元且有有效目标
+  if (
+    normalizeString(unit.kind) !== "device" ||
+    normalizeString(unit.targetType) !== "device_ip" ||
+    normalizeString(unit.targetKey) === ""
+  ) {
+    return false;
+  }
+
+  // 拓扑任务特殊处理：只显示 device_collect 阶段的设备单元
+  const taskType = executionView.value.taskType;
+  log.debug(`[isDeviceExecutionUnit] taskType=${taskType}, unit.stageId=${unit.stageId}, unit.targetKey=${unit.targetKey}, executionStages count=${executionStages.value.length}`);
+
+  if (taskType === "topology") {
+    const stage = executionStages.value.find((s) => s.id === unit.stageId);
+    log.debug(`[isDeviceExecutionUnit] Topology task - stage found=${!!stage}, stage.kind=${stage?.kind}, stage.id=${stage?.id}`);
+
+    if (stage && normalizeString(stage.kind) !== "device_collect") {
+      log.debug(`[isDeviceExecutionUnit] Filtering out unit - stage.kind=${stage.kind}, unit.targetKey=${unit.targetKey}`);
+      return false;
+    }
+
+    if (!stage) {
+      log.debug(`[isDeviceExecutionUnit] WARNING: No stage found for unit.stageId=${unit.stageId}, Available stage IDs=${executionStages.value.map(s => s.id).join(",")}`);
+    }
+  } else {
+    log.debug(`[isDeviceExecutionUnit] Non-topology task, skipping stage filter`);
+  }
+
+  return true;
 }
 
 function deviceUnitPriority(
@@ -1027,11 +1055,40 @@ function deviceUnitPriority(
 }
 
 const deviceCardUnits = computed<UnitSnapshot[]>(() => {
+  const taskType = executionView.value.taskType;
+  const stages = executionStages.value;
+  const units = executionUnits.value;
+
+  log.debug(`[deviceCardUnits] computed START - taskType=${taskType}, stages=${stages.length}, units=${units.length}`);
+
+  if (stages.length > 0) {
+    const stageDetails = stages.map((s, idx) => `[${idx}] id=${s.id}, kind=${s.kind}, name=${s.name}`).join("; ");
+    log.debug(`[deviceCardUnits] Stage details: ${stageDetails}`);
+  }
+
+  if (units.length > 0) {
+    const unitDetails = units.slice(0, 5).map((u, idx) => `[${idx}] id=${u.id}, stageId=${u.stageId}, kind=${u.kind}, targetKey=${u.targetKey}`).join("; ");
+    log.debug(`[deviceCardUnits] Unit details (first 5): ${unitDetails}`);
+  }
+
   const stageOrderMap = new Map<string, number>(
-    executionStages.value.map((stage) => [stage.id, stage.order]),
+    stages.map((stage) => [stage.id, stage.order]),
   );
   const groups = new Map<string, UnitSnapshot[]>();
 
+  let filteredCount = 0;
+  let passedCount = 0;
+  for (const unit of units) {
+    if (!isDeviceExecutionUnit(unit)) {
+      filteredCount++;
+      continue;
+    }
+    passedCount++;
+  }
+
+  log.debug(`[deviceCardUnits] computed END - filtered out=${filteredCount}, passed=${passedCount}`);
+  
+  // Reset iteration
   for (const unit of executionUnits.value) {
     if (!isDeviceExecutionUnit(unit)) {
       continue;
@@ -1626,12 +1683,20 @@ watch(
 // 监听快照变化
 watch(executionSnapshot, (snapshot) => {
   if (snapshot) {
+    log.debug(`[executionSnapshot watch] triggered - runKind=${snapshot.runKind}, runId=${snapshot.runId}, stages=${snapshot.stages?.length || 0}, units=${snapshot.units?.length || 0}`);
+
+    if (snapshot.stages && snapshot.stages.length > 0) {
+      const stageDetails = snapshot.stages.map((s, idx) => `[${idx}] id=${s.id}, kind=${s.kind}, name=${s.name}`).join("; ");
+      log.debug(`[executionSnapshot watch] Stage details: ${stageDetails}`);
+    }
+
     awaitingSnapshot.value = false;
     clearSnapshotTimeout();
     executionView.value.active = true;
     executionView.value.runId = snapshot.runId;
-    executionView.value.taskType =
-      snapshot.runKind === "topology" ? "topology" : "normal";
+    const newTaskType = snapshot.runKind === "topology" ? "topology" : "normal";
+    log.debug(`[executionSnapshot watch] Setting taskType=${newTaskType} (was: ${executionView.value.taskType})`);
+    executionView.value.taskType = newTaskType;
     if (snapshot.taskName) {
       executionView.value.taskName = snapshot.taskName;
     }

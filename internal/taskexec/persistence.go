@@ -517,6 +517,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&TopologyDecisionTrace{},
 		// 离线重放模式新增表
 		&TopologyReplayRecord{},
+		&TopologyFactSnapshot{},
 	)
 }
 

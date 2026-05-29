@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(npm run *)",
-      "Bash(xxd internal/snmp/mib_manager.go)"
-    ]
-  }
-}
