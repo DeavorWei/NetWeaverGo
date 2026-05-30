@@ -6,7 +6,7 @@ import * as DeviceService from '@/bindings/github.com/NetWeaverGo/core/internal/
 import type { PingConfig, BatchPingProgress, HostPingUpdate } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
 import type { PingRequest } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 import type { DeviceAssetListItem } from '@/bindings/github.com/NetWeaverGo/core/internal/models/models'
-import { useToast } from '@/utils/useToast'
+import { ElMessage } from 'element-plus'
 import { getLogger } from '@/utils/logger'
 import PingSettingsModal from '@/components/tools/PingSettingsModal.vue'
 import { DualListSelector } from '@/components/common/DualListSelector'
@@ -17,8 +17,6 @@ const logger = getLogger()
 // Duration 常量 (纳秒)
 const MILLISECOND = 1000000  // 1ms = 1,000,000 ns
 const SECOND = 1000000000    // 1s = 1,000,000,000 ns
-
-const toast = useToast()
 
 // 数据包大小限制常量
 const MAX_DATA_SIZE = 65500  // Windows API 理论最大值
@@ -85,7 +83,7 @@ const loadColumnConfig = () => {
 const saveColumnConfig = () => {
   localStorage.setItem('pingColumns', JSON.stringify(columns.value))
   showColumnConfig.value = false
-  toast.success('列配置已保存')
+  ElMessage.success('列配置已保存')
 }
 
 const resetColumnConfig = () => {
@@ -302,7 +300,7 @@ const loadDevices = async () => {
     const result = await DeviceService.ListDevices()
     devices.value = result || []
   } catch (err) {
-    toast.error('加载设备列表失败')
+    ElMessage.error('加载设备列表失败')
     logger.error('Failed to load devices', 'BatchPing', err)
   } finally {
     loadingDevices.value = false
@@ -321,7 +319,7 @@ const handleDeviceConfirm = async (items: ListItem[]) => {
   const selectedIds = items.map(item => item.key as number)
 
   if (selectedIds.length === 0) {
-    toast.warning('请选择至少一个设备')
+    ElMessage.warning('请选择至少一个设备')
     return
   }
 
@@ -331,12 +329,12 @@ const handleDeviceConfirm = async (items: ListItem[]) => {
       const existing = targetInput.value.trim()
       const newIps = ips.join('\n')
       targetInput.value = existing ? existing + '\n' + newIps : newIps
-      toast.success(`已导入 ${ips.length} 个设备 IP`)
+      ElMessage.success(`已导入 ${ips.length} 个设备 IP`)
     } else {
-      toast.warning('所选设备没有有效的 IP 地址')
+      ElMessage.warning('所选设备没有有效的 IP 地址')
     }
   } catch (err) {
-    toast.error('导入设备 IP 失败')
+    ElMessage.error('导入设备 IP 失败')
     logger.error('Failed to import devices', 'BatchPing', err)
   }
 }
@@ -380,21 +378,21 @@ const stopPolling = () => {
 const startPing = async () => {
   // 验证输入
   if (!targetInput.value.trim()) {
-    toast.error('请输入目标 IP 地址')
+    ElMessage.error('请输入目标 IP 地址')
     return
   }
 
   // 验证数据包大小
   if (config.value.DataSize > MAX_DATA_SIZE) {
-    toast.error(`数据包大小超过 Windows API 限制 (最大 ${MAX_DATA_SIZE} 字节)`)
+    ElMessage.error(`数据包大小超过 Windows API 限制 (最大 ${MAX_DATA_SIZE} 字节)`)
     return
   }
 
   // 大数据包警告提示
   if (config.value.DataSize > RECOMMENDED_MAX_SIZE) {
-    toast.warning(`数据包大小 ${config.value.DataSize} 字节超过推荐值，可能因 MTU 限制或系统资源不足而失败`)
+    ElMessage.warning(`数据包大小 ${config.value.DataSize} 字节超过推荐值，可能因 MTU 限制或系统资源不足而失败`)
   } else if (config.value.DataSize > MTU_LIMIT) {
-    toast.warning(`数据包大小 ${config.value.DataSize} 字节需要 IP 分片，某些网络环境可能失败`)
+    ElMessage.warning(`数据包大小 ${config.value.DataSize} 字节需要 IP 分片，某些网络环境可能失败`)
   }
 
   // 清空上次的 overlay 状态
@@ -419,11 +417,11 @@ const startPing = async () => {
     // 启动轮询兜底
     startPolling()
 
-    toast.success('批量 Ping 已启动')
+    ElMessage.success('批量 Ping 已启动')
   } catch (err: any) {
     logger.error('Failed to start ping', 'BatchPing', err)
     const errorMsg = err?.message || err?.toString() || '启动失败'
-    toast.error(`启动失败: ${errorMsg}`)
+    ElMessage.error(`启动失败: ${errorMsg}`)
   }
 }
 
@@ -431,10 +429,10 @@ const stopPing = async () => {
   try {
     await PingService.StopBatchPing()
     stopPolling()
-    toast.info('正在停止...')
+    ElMessage.info('正在停止...')
   } catch (err: any) {
     logger.error('Failed to stop ping', 'BatchPing', err)
-    toast.error(`停止失败: ${err?.message || '未知错误'}`)
+    ElMessage.error(`停止失败: ${err?.message || '未知错误'}`)
   }
 }
 
@@ -442,7 +440,7 @@ const exportCSV = async () => {
   try {
     const result = await PingService.ExportPingResultCSV()
     if (!result || !result.content) {
-      toast.warning('没有可导出的数据')
+      ElMessage.warning('没有可导出的数据')
       return
     }
 
@@ -456,10 +454,10 @@ const exportCSV = async () => {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
-    toast.success('导出成功')
+    ElMessage.success('导出成功')
   } catch (err: any) {
     logger.error('Failed to export CSV', 'BatchPing', err)
-    toast.error(`导出失败: ${err?.message || '未知错误'}`)
+    ElMessage.error(`导出失败: ${err?.message || '未知错误'}`)
   }
 }
 

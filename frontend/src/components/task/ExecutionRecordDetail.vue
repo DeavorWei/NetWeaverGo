@@ -1,207 +1,173 @@
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
-      <div
-        v-if="modelValue && record"
-        class="modal-detail"
-        @click.self="closeModal"
-      >
-        <div class="modal-detail-content" @click.stop>
-          <!-- 头部 -->
-          <div class="modal-header">
-            <h3 class="modal-header-title">执行详情</h3>
-            <button class="btn-icon-close" @click="closeModal">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+  <el-dialog
+    v-model="dialogVisible"
+    title="执行详情"
+    width="800px"
+    @closed="closeModal"
+    destroy-on-close
+  >
+    <div v-if="record" class="flex flex-col gap-6 -mt-4">
+      <!-- 基本信息 -->
+      <div class="grid grid-cols-2 gap-4 p-4 bg-bg-panel rounded-lg">
+        <div class="text-sm">
+          <span class="text-text-muted mr-2 inline-block w-16">任务名称</span>
+          <span class="text-text-primary font-medium">{{ record.taskName }}</span>
+        </div>
+        <div class="text-sm">
+          <span class="text-text-muted mr-2 inline-block w-16">执行模式</span>
+          <span class="text-text-primary">{{ getModeText(record.mode) }}</span>
+        </div>
+        <div class="text-sm flex items-center">
+          <span class="text-text-muted mr-2 inline-block w-16">执行状态</span>
+          <el-tag size="small" :type="getStatusType(record.status)">
+            {{ getStatusText(record.status) }}
+          </el-tag>
+        </div>
+        <div class="text-sm">
+          <span class="text-text-muted mr-2 inline-block w-16">执行时长</span>
+          <span class="text-text-primary">{{ formatDuration(record.durationMs) }}</span>
+        </div>
+        <div class="text-sm">
+          <span class="text-text-muted mr-2 inline-block w-16">开始时间</span>
+          <span class="text-text-primary">{{ formatTime(record.startedAt) }}</span>
+        </div>
+        <div class="text-sm">
+          <span class="text-text-muted mr-2 inline-block w-16">结束时间</span>
+          <span class="text-text-primary">{{ formatTime(record.finishedAt) }}</span>
+        </div>
+        <div class="text-sm col-span-2 flex items-center gap-2" v-if="record.reportPath">
+          <span class="text-text-muted mr-2 inline-block w-16 flex-shrink-0">报告文件</span>
+          <span class="font-mono text-[11px] text-text-primary truncate" :title="record.reportPath">
+            {{ record.reportPath }}
+          </span>
+          <el-button size="small" type="primary" plain @click="openReportFile" class="ml-2">
+            打开报告
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 统计信息 -->
+      <div>
+        <h4 class="text-sm font-semibold text-text-primary mb-3">执行统计</h4>
+        <div class="grid grid-cols-5 gap-3 text-center">
+          <div class="border border-border bg-bg-panel rounded-lg p-3">
+            <div class="text-lg font-semibold text-text-primary">{{ record.totalDevices }}</div>
+            <div class="text-xs text-text-muted mt-1">设备总数</div>
           </div>
-
-          <!-- 内容 -->
-          <div class="modal-body">
-            <!-- 基本信息 -->
-            <div class="info-section">
-              <div class="info-row">
-                <span class="info-label">任务名称</span>
-                <span class="info-value">{{ record.taskName }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">执行模式</span>
-                <span class="info-value">{{ getModeText(record.mode) }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">执行状态</span>
-                <span
-                  class="status-badge"
-                  :class="`status-badge-${getStatusClass(record.status)}`"
-                >
-                  {{ getStatusText(record.status) }}
-                </span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">开始时间</span>
-                <span class="info-value">{{ formatTime(record.startedAt) }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">结束时间</span>
-                <span class="info-value">{{ formatTime(record.finishedAt) }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">执行时长</span>
-                <span class="info-value">{{ formatDuration(record.durationMs) }}</span>
-              </div>
-              <div class="info-row" v-if="record.reportPath">
-                <span class="info-label">报告文件</span>
-                <div class="info-value-with-action">
-                  <span class="info-value font-mono text-[11px] max-w-[200px] truncate">
-                    {{ record.reportPath }}
-                  </span>
-                  <button
-                    class="btn-file btn-file-sm"
-                    @click="openReportFile"
-                    title="打开报告"
-                  >
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                      <polyline points="15 3 21 3 21 9"></polyline>
-                      <line x1="10" y1="14" x2="21" y2="3"></line>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- 统计信息 -->
-            <div class="mb-5">
-              <h4 class="text-sm font-semibold text-text-primary mb-3">执行统计</h4>
-              <div class="grid gap-3 grid-cols-[repeat(auto-fit,minmax(100px,1fr))]">
-                <div class="stat-card">
-                  <span class="stat-value">{{ record.totalDevices }}</span>
-                  <span class="stat-label">设备总数</span>
-                </div>
-                <div class="stat-card stat-card-success">
-                  <span class="stat-value">{{ record.successCount }}</span>
-                  <span class="stat-label">成功</span>
-                </div>
-                <div class="stat-card stat-card-error" v-if="record.errorCount > 0">
-                  <span class="stat-value">{{ record.errorCount }}</span>
-                  <span class="stat-label">失败</span>
-                </div>
-                <div class="stat-card stat-card-warning" v-if="(record.abortedCount || 0) > 0">
-                  <span class="stat-value">{{ record.abortedCount || 0 }}</span>
-                  <span class="stat-label">中止</span>
-                </div>
-                <div class="stat-card" v-if="(record.warningCount || 0) > 0">
-                  <span class="stat-value">{{ record.warningCount || 0 }}</span>
-                  <span class="stat-label">告警</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- 设备执行进度列表 -->
-            <div class="section">
-              <div class="section-header">
-                <h4 class="text-sm font-semibold text-text-primary">设备执行进度</h4>
-                <span class="text-xs text-text-secondary">{{ deviceDetails.length }} 台设备</span>
-              </div>
-              <DeviceExecutionProgressList
-                :run-id="record.id"
-                :devices="deviceDetails"
-                :loading="loadingDevices"
-                @select="handleDeviceSelect"
-              />
-            </div>
-
-            <!-- 选中设备的文件操作 -->
-            <div v-if="selectedDevice" class="section device-files-section">
-              <div class="section-header">
-                <h4 class="text-sm font-semibold text-text-primary">{{ selectedDevice.deviceIp }} - 文件操作</h4>
-              </div>
-              <div class="device-files-grid">
-                <!-- 详细日志 -->
-                <div class="file-item">
-                  <span class="file-label">详细日志</span>
-                  <FileOperationButtons
-                    :run-id="record.id"
-                    :unit-id="selectedDevice.unitId"
-                    file-type="detail"
-                    :has-file="!!selectedDevice.detailLogPath"
-                    :exists="selectedDevice.detailLogExists"
-                    size="small"
-                  />
-                </div>
-
-                <!-- 原始日志 -->
-                <div v-if="selectedDevice.rawLogPath" class="file-item">
-                  <span class="file-label">原始日志</span>
-                  <FileOperationButtons
-                    :run-id="record.id"
-                    :unit-id="selectedDevice.unitId"
-                    file-type="raw"
-                    :has-file="true"
-                    :exists="selectedDevice.rawLogExists"
-                    size="small"
-                  />
-                </div>
-
-                <!-- 摘要日志 -->
-                <div v-if="selectedDevice.summaryLogPath" class="file-item">
-                  <span class="file-label">摘要日志</span>
-                  <FileOperationButtons
-                    :run-id="record.id"
-                    :unit-id="selectedDevice.unitId"
-                    file-type="summary"
-                    :has-file="true"
-                    :exists="selectedDevice.summaryLogExists"
-                    size="small"
-                  />
-                </div>
-
-                <!-- 流水日志 -->
-                <div v-if="selectedDevice.journalLogPath" class="file-item">
-                  <span class="file-label">流水日志</span>
-                  <FileOperationButtons
-                    :run-id="record.id"
-                    :unit-id="selectedDevice.unitId"
-                    file-type="journal"
-                    :has-file="true"
-                    :exists="selectedDevice.journalLogExists"
-                    size="small"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <!-- 报告文件操作 -->
-            <div v-if="reportPath" class="section">
-              <div class="section-header">
-                <h4 class="text-sm font-semibold text-text-primary">执行报告</h4>
-                <FileOperationButtons
-                  :run-id="record.id"
-                  file-type="report"
-                  :has-file="true"
-                  :exists="reportExists"
-                  size="medium"
-                  show-text
-                />
-              </div>
-            </div>
+          <div class="border border-success/30 bg-success/5 rounded-lg p-3">
+            <div class="text-lg font-semibold text-success">{{ record.successCount }}</div>
+            <div class="text-xs text-text-muted mt-1">成功</div>
+          </div>
+          <div class="border border-error/30 bg-error/5 rounded-lg p-3" v-if="record.errorCount > 0">
+            <div class="text-lg font-semibold text-error">{{ record.errorCount }}</div>
+            <div class="text-xs text-text-muted mt-1">失败</div>
+          </div>
+          <div class="border border-warning/30 bg-warning/5 rounded-lg p-3" v-if="(record.abortedCount || 0) > 0">
+            <div class="text-lg font-semibold text-warning">{{ record.abortedCount || 0 }}</div>
+            <div class="text-xs text-text-muted mt-1">中止</div>
+          </div>
+          <div class="border border-info/30 bg-info/5 rounded-lg p-3" v-if="(record.warningCount || 0) > 0">
+            <div class="text-lg font-semibold text-info">{{ record.warningCount || 0 }}</div>
+            <div class="text-xs text-text-muted mt-1">告警</div>
           </div>
         </div>
       </div>
-    </Transition>
-  </Teleport>
+
+      <!-- 设备执行进度列表 -->
+      <div class="min-h-0 flex flex-col h-64">
+        <div class="flex justify-between items-center mb-3 flex-shrink-0">
+          <h4 class="text-sm font-semibold text-text-primary">设备执行进度</h4>
+          <span class="text-xs text-text-secondary">{{ deviceDetails.length }} 台设备</span>
+        </div>
+        <div class="flex-1 overflow-auto border border-border rounded-lg bg-bg-panel">
+          <DeviceExecutionProgressList
+            :run-id="record.id"
+            :devices="deviceDetails"
+            :loading="loadingDevices"
+            @select="handleDeviceSelect"
+          />
+        </div>
+      </div>
+
+      <!-- 选中设备的文件操作 -->
+      <div v-if="selectedDevice" class="bg-bg-panel border border-border rounded-lg p-4">
+        <h4 class="text-sm font-semibold text-text-primary mb-3">{{ selectedDevice.deviceIp }} - 文件操作</h4>
+        <div class="flex flex-wrap gap-4">
+          <!-- 详细日志 -->
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-text-muted">详细日志</span>
+            <FileOperationButtons
+              :run-id="record.id"
+              :unit-id="selectedDevice.unitId"
+              file-type="detail"
+              :has-file="!!selectedDevice.detailLogPath"
+              :exists="selectedDevice.detailLogExists"
+              size="small"
+            />
+          </div>
+          <!-- 原始日志 -->
+          <div v-if="selectedDevice.rawLogPath" class="flex items-center gap-2">
+            <span class="text-xs text-text-muted">原始日志</span>
+            <FileOperationButtons
+              :run-id="record.id"
+              :unit-id="selectedDevice.unitId"
+              file-type="raw"
+              :has-file="true"
+              :exists="selectedDevice.rawLogExists"
+              size="small"
+            />
+          </div>
+          <!-- 摘要日志 -->
+          <div v-if="selectedDevice.summaryLogPath" class="flex items-center gap-2">
+            <span class="text-xs text-text-muted">摘要日志</span>
+            <FileOperationButtons
+              :run-id="record.id"
+              :unit-id="selectedDevice.unitId"
+              file-type="summary"
+              :has-file="true"
+              :exists="selectedDevice.summaryLogExists"
+              size="small"
+            />
+          </div>
+          <!-- 流水日志 -->
+          <div v-if="selectedDevice.journalLogPath" class="flex items-center gap-2">
+            <span class="text-xs text-text-muted">流水日志</span>
+            <FileOperationButtons
+              :run-id="record.id"
+              :unit-id="selectedDevice.unitId"
+              file-type="journal"
+              :has-file="true"
+              :exists="selectedDevice.journalLogExists"
+              size="small"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- 报告文件操作 -->
+      <div v-if="reportPath" class="bg-bg-panel border border-border rounded-lg p-4 flex justify-between items-center">
+        <h4 class="text-sm font-semibold text-text-primary m-0">执行报告</h4>
+        <FileOperationButtons
+          :run-id="record.id"
+          file-type="report"
+          :has-file="true"
+          :exists="reportExists"
+          size="medium"
+          show-text
+        />
+      </div>
+    </div>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, watch, computed } from "vue";
 import { ExecutionHistoryAPI } from "../../services/api";
 import type {
   ExecutionHistoryRecord,
   DeviceExecutionView,
 } from "../../types/executionHistory";
-import { useToast } from "../../utils/useToast";
+import { ElMessage } from "element-plus";
 import DeviceExecutionProgressList from "./DeviceExecutionProgressList.vue";
 import FileOperationButtons from "./FileOperationButtons.vue";
 import { getLogger } from '@/utils/logger'
@@ -218,7 +184,10 @@ const emit = defineEmits<{
   (e: "close"): void;
 }>();
 
-const toast = useToast();
+const dialogVisible = computed({
+  get: () => props.modelValue,
+  set: (val) => emit("update:modelValue", val)
+});
 
 // 设备详情相关
 const deviceDetails = ref<DeviceExecutionView[]>([]);
@@ -296,10 +265,10 @@ const openReportFile = async () => {
       fileType: "report",
     });
     if (result && !result.success) {
-      toast.error(result.message || "打开报告文件失败");
+      ElMessage.error(result.message || "打开报告文件失败");
     }
   } catch (error) {
-    toast.error(`打开报告文件失败: ${error}`);
+    ElMessage.error(`打开报告文件失败: ${error}`);
   }
 };
 
@@ -337,15 +306,14 @@ const getStatusText = (status: string) => {
   return statusMap[status] || status;
 };
 
-// 获取状态样式类名
-const getStatusClass = (status: string) => {
-  const classMap: Record<string, string> = {
+const getStatusType = (status: string) => {
+  const typeMap: Record<string, "success" | "warning" | "danger" | "info"> = {
     completed: "success",
     partial: "warning",
-    failed: "error",
-    cancelled: "muted",
+    failed: "danger",
+    cancelled: "info",
   };
-  return classMap[status] || "muted";
+  return typeMap[status] || "info";
 };
 
 // 获取模式文本
@@ -360,31 +328,5 @@ const getModeText = (mode: string) => {
 };
 </script>
 
-<style scoped lang="postcss">
-@reference "../../styles/index.css";
-
-/* 组件特有样式 */
-.section {
-  @apply mb-5;
-}
-
-.section-header {
-  @apply flex justify-between items-center mb-3;
-}
-
-/* 动画 */
-.modal-enter-active,
-.modal-leave-active {
-  @apply transition-all duration-200;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  @apply opacity-0;
-}
-
-.modal-enter-from .modal-detail-content,
-.modal-leave-to .modal-detail-content {
-  @apply scale-95;
-}
+<style scoped>
 </style>

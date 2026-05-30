@@ -3,6 +3,7 @@ import { ref, computed } from "vue";
 import { CommandGroupAPI } from "../../services/api";
 import type { CommandGroup } from "../../services/api";
 import { getLogger } from '@/utils/logger'
+import { ElMessage } from 'element-plus'
 
 const logger = getLogger()
 
@@ -14,7 +15,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
   success: [message: string, count: number, ids: string[]];
-  toast: [message: string];
 }>();
 
 const saving = ref(false);
@@ -94,12 +94,12 @@ const executeSend = async () => {
 
   const { name, description, tags } = form.value;
   if (!name.trim()) {
-    emit("toast", "请输入命令组名称");
+    ElMessage.warning("请输入命令组名称");
     return;
   }
 
   if (props.outputBlocks.length === 0) {
-    emit("toast", "没有可发送的配置");
+    ElMessage.warning("没有可发送的配置");
     return;
   }
 
@@ -167,7 +167,7 @@ const executeSend = async () => {
     emit("close");
   } catch (err: any) {
     logger.error("创建命令组失败", 'SendCommandModal', err);
-    emit("toast", "创建失败: " + (err.message || err));
+    ElMessage.error("创建失败: " + (err.message || err));
   } finally {
     saving.value = false;
   }
@@ -178,48 +178,16 @@ defineExpose({ resetForm });
 </script>
 
 <template>
-  <Transition name="modal">
-    <div v-if="show" class="modal-container modal-active">
-      <div class="modal-overlay" @click="$emit('close')"></div>
+  <el-dialog
+    :model-value="show"
+    @update:model-value="$emit('close')"
+    title="发送到命令管理"
+    width="800px"
+    class="custom-dialog"
+    destroy-on-close
+  >
+    <div class="space-y-5">
 
-      <div class="modal modal-lg modal-glass">
-        <div class="modal-header">
-          <h3 class="modal-header-title">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-5 w-5 text-success"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-            发送到命令管理
-          </h3>
-          <button @click="$emit('close')" class="modal-close">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <div class="modal-body space-y-5">
           <!-- 模式选择 -->
           <div class="space-y-3">
             <label class="text-sm font-medium text-text-primary"
@@ -321,23 +289,19 @@ defineExpose({ resetForm });
               </div>
             </div>
           </div>
-        </div>
-
-        <div class="modal-footer">
-          <button @click="$emit('close')" class="btn btn-secondary">
-            取消
-          </button>
-          <button
-            @click="executeSend"
-            :disabled="saving"
-            class="btn btn-primary"
-          >
-            {{ saving ? "创建中..." : "确认创建" }}
-          </button>
-        </div>
-      </div>
     </div>
-  </Transition>
+
+    <template #footer>
+      <el-button @click="$emit('close')">取消</el-button>
+      <el-button
+        type="primary"
+        @click="executeSend"
+        :loading="saving"
+      >
+        {{ saving ? "创建中..." : "确认创建" }}
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped lang="postcss">

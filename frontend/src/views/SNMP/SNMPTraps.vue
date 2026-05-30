@@ -11,10 +11,9 @@
  * - 实时 Trap 推送和高亮显示
  */
 import { ref, computed, onMounted } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessageBox, ElMessage } from 'element-plus'
 import { SNMPTrapAPI } from '@/services/snmpApi'
 import { useSNMPTrapStream } from '@/composables/useSNMPTrapStream'
-import { useToast } from '@/utils/useToast'
 import { getLogger } from '@/utils/logger'
 import type {
   TrapRecordVM,
@@ -28,7 +27,6 @@ import type {
 } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 
 const logger = getLogger()
-const toast = useToast()
 
 // ==================== 组合式函数 ====================
 
@@ -157,7 +155,7 @@ async function loadTrapRecords() {
     }
   } catch (error) {
     logger.error(`SNMP-Trap: 加载 Trap 记录失败 - ${error}`)
-    toast.error('加载 Trap 记录失败')
+    ElMessage.error('加载 Trap 记录失败')
   } finally {
     recordsLoading.value = false
   }
@@ -241,18 +239,18 @@ function changePageSize(size: number) {
  */
 async function startListener() {
   if (!activeConfig.value) {
-    toast.warning('请先配置服务器参数')
+    ElMessage.warning('请先配置服务器参数')
     return
   }
 
   listenerOperating.value = true
   try {
     await SNMPTrapAPI.startListener(activeConfig.value)
-    toast.success('Trap 监听器已启动')
+    ElMessage.success('Trap 监听器已启动')
     await refreshStatus()
   } catch (error) {
     logger.error('SNMP-Trap', '启动监听器失败', error)
-    toast.error('启动监听器失败')
+    ElMessage.error('启动监听器失败')
   } finally {
     listenerOperating.value = false
   }
@@ -265,11 +263,11 @@ async function stopListener() {
   listenerOperating.value = true
   try {
     await SNMPTrapAPI.stopListener()
-    toast.success('Trap 监听器已停止')
+    ElMessage.success('Trap 监听器已停止')
     await refreshStatus()
   } catch (error) {
     logger.error('SNMP-Trap', '停止监听器失败', error)
-    toast.error('停止监听器失败')
+    ElMessage.error('停止监听器失败')
   } finally {
     listenerOperating.value = false
   }
@@ -285,13 +283,13 @@ async function acknowledgeSelected() {
   try {
     const ids = Array.from(selectedTrapIds.value)
     await batchAcknowledge(ids)
-    toast.success(`已确认 ${ids.length} 条记录`)
+    ElMessage.success(`已确认 ${ids.length} 条记录`)
     selectedTrapIds.value.clear()
     await loadTrapRecords()
     await refreshStats()
   } catch (error) {
     logger.error('SNMP-Trap', '批量确认失败', error)
-    toast.error('批量确认失败')
+    ElMessage.error('批量确认失败')
   } finally {
     acknowledging.value = false
   }
@@ -303,12 +301,12 @@ async function acknowledgeSelected() {
 async function acknowledgeSingle(trap: TrapRecordVM) {
   try {
     await acknowledgeTrap(trap.id)
-    toast.success('已确认')
+    ElMessage.success('已确认')
     trap.acknowledged = true
     await refreshStats()
   } catch (error) {
     logger.error('SNMP-Trap', '确认失败', error)
-    toast.error('确认失败')
+    ElMessage.error('确认失败')
   }
 }
 
@@ -328,12 +326,12 @@ async function deleteTrapRecord(trap: TrapRecordVM) {
 
   try {
     await SNMPTrapAPI.deleteTrapRecord(trap.id)
-    toast.success('已删除')
+    ElMessage.success('已删除')
     await loadTrapRecords()
     await refreshStats()
   } catch (error) {
     logger.error('SNMP-Trap', '删除失败', error)
-    toast.error('删除失败')
+    ElMessage.error('删除失败')
   }
 }
 
@@ -363,7 +361,7 @@ async function clearOldRecords() {
     const beforeStr = before.toISOString().split('T')[0] || ''
 
     const count = await SNMPTrapAPI.clearTrapRecords(beforeStr)
-    toast.success(`已清理 ${count} 条记录`)
+    ElMessage.success(`已清理 ${count} 条记录`)
     await loadTrapRecords()
     await refreshStats()
   } catch {
@@ -448,12 +446,12 @@ async function saveV3User() {
       await SNMPTrapAPI.removeV3User(editingV3User.value.username)
     }
     await SNMPTrapAPI.addV3User(v3UserForm.value)
-    toast.success(editingV3User.value ? 'v3 用户已更新' : 'v3 用户已添加')
+    ElMessage.success(editingV3User.value ? 'v3 用户已更新' : 'v3 用户已添加')
     showV3UserModal.value = false
     await loadV3Users()
   } catch (error) {
     logger.error('SNMP-Trap', '保存 v3 用户失败', error)
-    toast.error('保存 v3 用户失败')
+    ElMessage.error('保存 v3 用户失败')
   }
 }
 
@@ -473,11 +471,11 @@ async function deleteV3User(username: string) {
 
   try {
     await SNMPTrapAPI.removeV3User(username)
-    toast.success('v3 用户已删除')
+    ElMessage.success('v3 用户已删除')
     await loadV3Users()
   } catch (error) {
     logger.error('SNMP-Trap', '删除 v3 用户失败', error)
-    toast.error('删除 v3 用户失败')
+    ElMessage.error('删除 v3 用户失败')
   }
 }
 
@@ -514,7 +512,7 @@ async function saveConfig() {
         trapCommunity: editingConfig.value.trapCommunity,
         maxStorageDays: editingConfig.value.maxStorageDays,
       })
-      toast.success('配置已更新')
+      ElMessage.success('配置已更新')
     } else {
       // id === 0 时创建新配置
       await SNMPTrapAPI.createServerConfig({
@@ -523,13 +521,13 @@ async function saveConfig() {
         trapCommunity: editingConfig.value.trapCommunity,
         maxStorageDays: editingConfig.value.maxStorageDays,
       })
-      toast.success('配置已创建')
+      ElMessage.success('配置已创建')
     }
     showConfigModal.value = false
     await loadServerConfigs()
   } catch (error) {
     logger.error('SNMP-Trap', '保存配置失败', error)
-    toast.error('保存配置失败')
+    ElMessage.error('保存配置失败')
   }
 }
 
@@ -561,7 +559,7 @@ async function saveRule() {
         description: editingRule.value.description,
       }
       await SNMPTrapAPI.updateFilterRule(editingRule.value.id, req)
-      toast.success('规则已更新')
+      ElMessage.success('规则已更新')
     } else {
       const req: CreateFilterRuleRequest = {
         name: editingRule.value.name,
@@ -575,13 +573,13 @@ async function saveRule() {
         description: editingRule.value.description,
       }
       await SNMPTrapAPI.createFilterRule(req)
-      toast.success('规则已创建')
+      ElMessage.success('规则已创建')
     }
     showRuleModal.value = false
     await loadFilterRules()
   } catch (error) {
     logger.error('SNMP-Trap', '保存规则失败', error)
-    toast.error('保存规则失败')
+    ElMessage.error('保存规则失败')
   }
 }
 
@@ -601,11 +599,11 @@ async function deleteRule(rule: FilterRuleVM) {
 
   try {
     await SNMPTrapAPI.deleteFilterRule(rule.id)
-    toast.success('规则已删除')
+    ElMessage.success('规则已删除')
     await loadFilterRules()
   } catch (error) {
     logger.error('SNMP-Trap', '删除规则失败', error)
-    toast.error('删除规则失败')
+    ElMessage.error('删除规则失败')
   }
 }
 
@@ -626,10 +624,10 @@ async function toggleRuleEnabled(rule: FilterRuleVM) {
       description: rule.description,
     })
     rule.enabled = !rule.enabled
-    toast.success(rule.enabled ? '规则已启用' : '规则已禁用')
+    ElMessage.success(rule.enabled ? '规则已启用' : '规则已禁用')
   } catch (error) {
     logger.error('SNMP-Trap', '切换规则状态失败', error)
-    toast.error('操作失败')
+    ElMessage.error('操作失败')
   }
 }
 

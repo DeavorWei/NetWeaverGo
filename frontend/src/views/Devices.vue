@@ -9,39 +9,24 @@
       @add="openAddModal"
     />
 
-    <!-- 页面提示 -->
-    <div
-      v-if="pageNotice"
-      class="px-3 py-2 text-sm text-error bg-error-bg border border-error/30 rounded-lg"
-    >
-      {{ pageNotice }}
-    </div>
+
 
     <!-- 数据表格 -->
     <DeviceTable
       :devices="data"
       :loading="loading"
       :selected-ids="selectedIds"
-      :is-selecting-all="isSelectingAll"
-      :is-all-selected="isAllSelected"
-      :is-indeterminate="isIndeterminate"
       :selected-count="selectedCount"
       :page="page"
-      :total-pages="totalPages"
       :total="total"
       :page-size="pageSize"
-      :jump-page-input="jumpPageInput"
-      @toggle-select="toggleSelect"
-      @toggle-select-all="handleToggleSelectAll(data.map((d) => d.id))"
-      @clear-selection="clearSelection"
+      @update-selection="handleUpdateSelection"
       @edit="openEditModal"
       @delete="openDeleteConfirm"
       @batch-edit="openBatchEditModal"
       @batch-delete="openBatchDeleteConfirm"
-      @prev-page="handlePrevPage"
-      @next-page="handleNextPage"
-      @jump-page="jumpToPage"
-      @update:jumpPageInput="jumpPageInput = $event"
+      @page-change="page = $event"
+      @size-change="handleSizeChange"
     />
 
     <!-- 新增/编辑设备弹窗 -->
@@ -67,31 +52,12 @@
       @close="closeBatchModal"
       @save="saveBatchEdit"
     />
-
-    <!-- 删除确认弹窗 -->
-    <DeviceDeleteConfirm
-      ref="deleteConfirmRef"
-      :show="showDeleteConfirm"
-      :is-batch="false"
-      :device="deviceToDelete"
-      @close="showDeleteConfirm = false"
-      @confirm="deleteDevice"
-    />
-
-    <!-- 批量删除确认弹窗 -->
-    <DeviceDeleteConfirm
-      ref="batchDeleteConfirmRef"
-      :show="showBatchDeleteConfirm"
-      :is-batch="true"
-      :selected-count="selectedCount"
-      @close="showBatchDeleteConfirm = false"
-      @confirm="batchDeleteDevices"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { QueryAPI, DeviceAPI } from "@/services/api";
 import type { DeviceAsset } from "@/services/api";
 import { getLogger } from "@/utils/logger";
@@ -101,7 +67,6 @@ import DeviceSearchBar from "@/components/device/DeviceSearchBar.vue";
 import DeviceTable from "@/components/device/DeviceTable.vue";
 import DeviceEditModal from "@/components/device/DeviceEditModal.vue";
 import DeviceBatchEditModal from "@/components/device/DeviceBatchEditModal.vue";
-import DeviceDeleteConfirm from "@/components/device/DeviceDeleteConfirm.vue";
 
 // Composables 导入
 import { useDeviceSearch } from "@/composables/useDeviceSearch";
@@ -131,13 +96,15 @@ const {
 
 const {
   selectedIds,
-  isSelectingAll,
   selectedCount,
-  isAllSelected,
-  isIndeterminate,
-  toggleSelect,
   clearSelection,
 } = useDeviceSelection();
+
+function handleUpdateSelection(ids: number[]) {
+  const newSet = new Set<number>();
+  ids.forEach(id => newSet.add(id));
+  selectedIds.value = newSet;
+}
 
 // ==================== 数据状态 ====================
 
@@ -145,9 +112,14 @@ const data = ref<Device[]>([]);
 const total = ref(0);
 const totalPages = ref(1);
 const page = ref(1);
-const pageSize = 10;
-const jumpPageInput = ref("");
+const pageSize = ref(10);
 const loading = ref(false);
+
+function handleSizeChange(newSize: number) {
+  pageSize.value = newSize;
+  page.value = 1;
+  loadDevices();
+}
 
 // ==================== 弹窗状态 ====================
 
@@ -156,10 +128,6 @@ const isEditing = ref(false);
 const editingDeviceId = ref<number | null>(null);
 const formData = ref<DeviceFormData | undefined>(undefined);
 
-const showDeleteConfirm = ref(false);
-const deviceToDelete = ref<Device | null>(null);
-
-const showBatchDeleteConfirm = ref(false);
 const showBatchModal = ref(false);
 const batchField = ref<BatchField | null>(null);
 
@@ -172,20 +140,7 @@ const protocolDefaultPorts = ref<Record<string, number>>({
 });
 const validProtocols = ref<string[]>(["SSH", "SNMP", "TELNET"]);
 
-// ==================== 页面提示 ====================
 
-const pageNotice = ref("");
-let pageNoticeTimer: ReturnType<typeof setTimeout> | null = null;
-
-function showPageNotice(message: string) {
-  pageNotice.value = message;
-  if (pageNoticeTimer) {
-    clearTimeout(pageNoticeTimer);
-  }
-  pageNoticeTimer = setTimeout(() => {
-    pageNotice.value = "";
-  }, 5000);
-}
 
 // ==================== 组件引用 ====================
 
@@ -193,12 +148,6 @@ const editModalRef = ref<InstanceType<typeof DeviceEditModal> | null>(null);
 const batchEditModalRef = ref<InstanceType<typeof DeviceBatchEditModal> | null>(
   null,
 );
-const deleteConfirmRef = ref<InstanceType<typeof DeviceDeleteConfirm> | null>(
-  null,
-);
-const batchDeleteConfirmRef = ref<InstanceType<
-  typeof DeviceDeleteConfirm
-> | null>(null);
 
 // ==================== 数据加载 ====================
 
@@ -212,7 +161,7 @@ async function loadDevices() {
       filterField: searchType.value,
       filterValue: "",
       page: page.value,
-      pageSize: pageSize,
+      pageSize: pageSize.value,
       sortBy: "ip",
       sortOrder: "asc",
     });
@@ -255,56 +204,6 @@ function resetSearch() {
   resetSearchState();
   page.value = 1;
   loadDevices();
-}
-
-// ==================== 分页处理 ====================
-
-function handlePrevPage() {
-  if (page.value > 1) {
-    page.value--;
-  }
-}
-
-function handleNextPage() {
-  if (page.value < totalPages.value) {
-    page.value++;
-  }
-}
-
-function jumpToPage() {
-  const target = parseInt(jumpPageInput.value);
-  if (isNaN(target)) {
-    jumpPageInput.value = "";
-    return;
-  }
-
-  if (target >= 1 && target <= totalPages.value) {
-    page.value = target;
-  } else if (target < 1) {
-    page.value = 1;
-  } else if (target > totalPages.value) {
-    page.value = totalPages.value;
-  }
-  jumpPageInput.value = "";
-}
-
-// ==================== 全选处理 ====================
-
-function handleToggleSelectAll(allIds: number[]) {
-  // 检查当前页是否全部选中
-  const currentPageSelected = allIds.every((id) => selectedIds.value.has(id));
-
-  if (currentPageSelected) {
-    // 如果当前页全选，则取消当前页的选择
-    const newSet = new Set(selectedIds.value);
-    allIds.forEach((id) => newSet.delete(id));
-    selectedIds.value = newSet;
-  } else {
-    // 否则选中当前页所有设备
-    const newSet = new Set(selectedIds.value);
-    allIds.forEach((id) => newSet.add(id));
-    selectedIds.value = newSet;
-  }
 }
 
 // ==================== 弹窗操作 ====================
@@ -350,17 +249,14 @@ async function openEditModal(device: Device) {
 
 function closeModal() {
   showModal.value = false;
-  // 显式清空密码，确保内存中不留痕迹
   if (formData.value?.password) {
     formData.value.password = "";
   }
   formData.value = undefined;
 }
 
-// 监听弹窗关闭事件，确保密码清理
 watch(showModal, (newVal) => {
   if (!newVal && formData.value?.password) {
-    // 弹窗关闭时清理密码
     formData.value.password = "";
   }
 });
@@ -371,13 +267,12 @@ async function saveDevice(deviceData: DeviceFormData) {
 
   try {
     if (isEditing.value && editingDeviceId.value) {
-      // 编辑模式 - 包含密码字段
       await DeviceAPI.updateDevice(editingDeviceId.value, {
         ip: deviceData.ip,
         port: deviceData.port,
         protocol: deviceData.protocol,
         username: deviceData.username,
-        password: deviceData.password, // 传递密码字段
+        password: deviceData.password,
         group: deviceData.group,
         tags: deviceData.tags,
         vendor: deviceData.vendor,
@@ -386,16 +281,15 @@ async function saveDevice(deviceData: DeviceFormData) {
         displayName: deviceData.displayName,
         description: deviceData.description,
       } as unknown as DeviceAsset);
-      showPageNotice("设备更新成功");
+      ElMessage.success("设备更新成功");
     } else {
-      // 新增模式 - 包含密码字段
       await DeviceAPI.addDevices([
         {
           ip: deviceData.ip,
           port: deviceData.port,
           protocol: deviceData.protocol,
           username: deviceData.username,
-          password: deviceData.password, // 传递密码字段
+          password: deviceData.password,
           group: deviceData.group,
           tags: deviceData.tags,
           vendor: deviceData.vendor,
@@ -405,7 +299,7 @@ async function saveDevice(deviceData: DeviceFormData) {
           description: deviceData.description,
         } as unknown as DeviceAsset,
       ]);
-      showPageNotice("设备添加成功");
+      ElMessage.success("设备添加成功");
     }
 
     closeModal();
@@ -437,7 +331,7 @@ async function resetSSHHostKey() {
   editModalRef.value?.setError("");
   try {
     await DeviceAPI.resetDeviceSSHHostKey(editingDeviceId.value);
-    showPageNotice(`设备 ${formData.value.ip} 的 SSH 主机密钥已重置`);
+    ElMessage.success(`设备 ${formData.value.ip} 的 SSH 主机密钥已重置`);
   } catch (err: unknown) {
     logger.error("重置 SSH 主机密钥失败", 'Devices', err);
     const message =
@@ -451,29 +345,25 @@ async function resetSSHHostKey() {
 // ==================== 删除操作 ====================
 
 function openDeleteConfirm(device: Device) {
-  deviceToDelete.value = device;
-  showDeleteConfirm.value = true;
-}
-
-async function deleteDevice() {
-  if (!deviceToDelete.value) return;
-
-  deleteConfirmRef.value?.setDeleting(true);
-
-  try {
-    await DeviceAPI.deleteDevice(deviceToDelete.value.id);
-    showPageNotice("设备删除成功");
-    showDeleteConfirm.value = false;
-    deviceToDelete.value = null;
-    loadDevices();
-  } catch (err: unknown) {
-    logger.error("删除设备失败", 'Devices', err);
-    const message =
-      (err as { message?: string })?.message || "删除失败，请重试";
-    showPageNotice(message);
-  } finally {
-    deleteConfirmRef.value?.setDeleting(false);
-  }
+  ElMessageBox.confirm(
+    `确定要删除设备 ${device.ip} 吗？此操作不可撤销。`,
+    '确认删除',
+    {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger'
+    }
+  ).then(async () => {
+    try {
+      await DeviceAPI.deleteDevice(device.id);
+      ElMessage.success("设备删除成功");
+      loadDevices();
+    } catch (err: any) {
+      logger.error("删除设备失败", 'Devices', err);
+      ElMessage.error(err.message || "删除失败");
+    }
+  }).catch(() => {});
 }
 
 // ==================== 批量操作 ====================
@@ -498,20 +388,17 @@ async function saveBatchEdit(field: BatchField, value: string | number) {
     const ids = Array.from(selectedIds.value);
 
     if (field === "tag") {
-      // 标签特殊处理：解析逗号分隔的标签
       const tags = (value as string)
         .split(/[,，]/)
         .map((t) => t.trim())
         .filter((t) => t);
 
-      // 字段级更新：只传递 tags 字段，不展开整个设备对象
       for (const id of ids) {
         await DeviceAPI.updateDevice(id, {
           tags,
         } as unknown as DeviceAsset);
       }
     } else {
-      // 其他字段批量更新 - 字段级更新，不展开整个设备对象
       for (const id of ids) {
         await DeviceAPI.updateDevice(id, {
           [field]: value,
@@ -519,7 +406,7 @@ async function saveBatchEdit(field: BatchField, value: string | number) {
       }
     }
 
-    showPageNotice(
+    ElMessage.success(
       `成功修改 ${ids.length} 台设备的${field === "tag" ? "标签" : field}`,
     );
     closeBatchModal();
@@ -536,29 +423,28 @@ async function saveBatchEdit(field: BatchField, value: string | number) {
 }
 
 function openBatchDeleteConfirm() {
-  showBatchDeleteConfirm.value = true;
-}
-
-async function batchDeleteDevices() {
   if (selectedCount.value === 0) return;
-
-  batchDeleteConfirmRef.value?.setDeleting(true);
-
-  try {
-    const ids = Array.from(selectedIds.value);
-    await DeviceAPI.deleteDevices(ids);
-    showPageNotice(`成功删除 ${ids.length} 台设备`);
-    showBatchDeleteConfirm.value = false;
-    clearSelection();
-    loadDevices();
-  } catch (err: unknown) {
-    logger.error("批量删除失败", 'Devices', err);
-    const message =
-      (err as { message?: string })?.message || "批量删除失败，请重试";
-    showPageNotice(message);
-  } finally {
-    batchDeleteConfirmRef.value?.setDeleting(false);
-  }
+  ElMessageBox.confirm(
+    `确定要删除选中的 ${selectedCount.value} 台设备吗？此操作不可撤销。`,
+    '批量删除确认',
+    {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger'
+    }
+  ).then(async () => {
+    try {
+      const ids = Array.from(selectedIds.value);
+      await DeviceAPI.deleteDevices(ids);
+      ElMessage.success(`成功删除 ${ids.length} 台设备`);
+      clearSelection();
+      loadDevices();
+    } catch (err: any) {
+      logger.error("批量删除失败", 'Devices', err);
+      ElMessage.error(err.message || "批量删除失败");
+    }
+  }).catch(() => {});
 }
 
 // ==================== 监听器 ====================

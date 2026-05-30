@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { Events, Dialogs } from '@wailsio/runtime'
-import { useToast } from '@/utils/useToast'
+import { ElMessage } from 'element-plus'
 import { getLogger } from '@/utils/logger'
 import * as FileServerService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/fileserverservice'
 import { FileServerConfig } from '@/bindings/github.com/NetWeaverGo/core/internal/models/models'
@@ -18,7 +18,6 @@ interface LogEvent {
   file?: string
 }
 
-const toast = useToast()
 
 const activeProtocol = ref<string>('sftp')
 const configs = ref<Record<string, FileServerConfig>>({})
@@ -133,9 +132,9 @@ async function saveConfig() {
   if (!currentConfig.value) return
   try {
     await FileServerService.SaveServerConfig(currentConfig.value)
-    toast.success('配置已保存')
+    ElMessage.success('配置已保存')
   } catch (error) {
-    toast.error('保存配置失败')
+    ElMessage.error('保存配置失败')
   }
 }
 
@@ -158,18 +157,18 @@ async function toggleServer() {
       }
     }
     
-    toast.success(start ? `${activeProtocol.value.toUpperCase()} 服务器已启动` : `${activeProtocol.value.toUpperCase()} 服务器已停止`)
+    ElMessage.success(start ? `${activeProtocol.value.toUpperCase()} 服务器已启动` : `${activeProtocol.value.toUpperCase()} 服务器已停止`)
   } catch (error) {
-    toast.error(`操作失败: ${error}`)
+    ElMessage.error(`操作失败: ${error}`)
   }
 }
 
 async function disconnectAll() {
   try {
     await FileServerService.DisconnectAll(activeProtocol.value)
-    toast.success('所有连接已断开')
+    ElMessage.success('所有连接已断开')
   } catch (error) {
-    toast.error('断开连接失败')
+    ElMessage.error('断开连接失败')
   }
 }
 

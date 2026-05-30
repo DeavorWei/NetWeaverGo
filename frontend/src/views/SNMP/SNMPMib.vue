@@ -11,11 +11,10 @@
  * - 实时导入进度显示
  */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessageBox, ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import { SNMPMIBAPI, SNMPEvents } from '@/services/snmpApi'
 import { useMIBTree } from '@/composables/useMIBTree'
-import { useToast } from '@/utils/useToast'
 import { getLogger } from '@/utils/logger'
 import { Dialogs } from '@wailsio/runtime'
 import type {
@@ -42,7 +41,6 @@ const phaseLabels: Record<string, string> = {
 }
 
 const logger = getLogger()
-const toast = useToast()
 
 // ==================== 状态 ====================
 
@@ -165,7 +163,7 @@ async function loadFolders() {
     })
   } catch (error) {
     logger.error(`SNMP: 加载 MIB 文件夹失败 - ${error}`)
-    toast.error('加载 MIB 文件夹失败')
+    ElMessage.error('加载 MIB 文件夹失败')
   } finally {
     foldersLoading.value = false
   }
@@ -181,7 +179,7 @@ async function loadModules() {
     logger.info(`SNMP: MIB 模块列表已加载 - ${modules.value.length} 个`)
   } catch (error) {
     logger.error(`SNMP: 加载 MIB 模块列表失败 - ${error}`)
-    toast.error('加载 MIB 模块列表失败')
+    ElMessage.error('加载 MIB 模块列表失败')
   } finally {
     modulesLoading.value = false
   }
@@ -207,7 +205,7 @@ async function selectModule(moduleId: number | null) {
     logger.debug(`SNMP: MIB 树已加载 - ${mibTreeData.value.length} 个节点`)
   } catch (error) {
     logger.error(`SNMP: 加载 MIB 树失败 - ${error}`)
-    toast.error('加载 MIB 树失败')
+    ElMessage.error('加载 MIB 树失败')
     mibTreeData.value = []
   } finally {
     treeLoading.value = false
@@ -228,8 +226,7 @@ async function selectMIBNode(nodeId: number) {
     }
   } catch (error) {
     logger.error(`SNMP: 加载节点详情失败 - ${error}`)
-    toast.error('加载节点详情失败')
-    selectedNodeDetail.value = null
+    ElMessage.error('加载节点详情失败')
   } finally {
     nodeDetailLoading.value = false
   }
@@ -279,8 +276,7 @@ async function executeModalSearch() {
     }
   } catch (error) {
     logger.error(`SNMP: 搜索失败 - ${error}`)
-    toast.error('搜索失败')
-    modalSearchResults.value = []
+    ElMessage.error('搜索失败')
   } finally {
     modalSearchLoading.value = false
   }
@@ -358,7 +354,7 @@ async function selectMIBFiles() {
     }
   } catch (error) {
     logger.error(`SNMP: 文件选择失败 - ${error}`)
-    toast.error('文件选择失败')
+    ElMessage.error('文件选择失败')
   }
 }
 
@@ -384,7 +380,7 @@ async function selectMIBFolder() {
     }
   } catch (error) {
     logger.error(`SNMP: 文件夹选择失败 - ${error}`)
-    toast.error('文件夹选择失败')
+    ElMessage.error('文件夹选择失败')
   }
 }
 
@@ -393,11 +389,11 @@ async function selectMIBFolder() {
  */
 async function executeImport() {
   if (importType.value === 'files' && importFilePaths.value.length === 0) {
-    toast.warning('请选择要导入的 MIB 文件')
+    ElMessage.warning('请选择要导入的 MIB 文件')
     return
   }
   if (importType.value === 'folder' && !importFolderPath.value) {
-    toast.warning('请选择要导入的 MIB 文件夹')
+    ElMessage.warning('请选择要导入的 MIB 文件夹')
     return
   }
 
@@ -426,14 +422,14 @@ async function executeImport() {
         await SNMPMIBAPI.importMIBFiles(importFilePaths.value, targetFolderId.value)
       }
     }
-    toast.success('MIB 导入成功')
+    ElMessage.success('MIB 导入成功')
     showImportModal.value = false
     await loadFolders()
     await loadModules()
     await loadCacheStats()
   } catch (error) {
     logger.error(`SNMP: 导入 MIB 失败 - ${error}`)
-    toast.error('导入 MIB 失败')
+    ElMessage.error('导入 MIB 失败')
   } finally {
     importing.value = false
     importProgress.value = null
@@ -460,7 +456,7 @@ async function deleteModule(module: MIBModuleVM) {
 
   try {
     await SNMPMIBAPI.deleteMIBModule(module.id)
-    toast.success(`MIB 模块 "${module.name}" 已删除`)
+    ElMessage.success(`MIB 模块 "${module.name}" 已删除`)
     await loadModules()
     if (selectedModuleId.value === module.id) {
       await selectModule(null)
@@ -468,7 +464,7 @@ async function deleteModule(module: MIBModuleVM) {
     await loadCacheStats()
   } catch (error) {
     logger.error(`SNMP: 删除 MIB 模块失败 - ${error}`)
-    toast.error('删除 MIB 模块失败')
+    ElMessage.error('删除 MIB 模块失败')
   }
 }
 
@@ -486,14 +482,14 @@ async function createFolder() {
     
     if (name) {
       const folderId = await SNMPMIBAPI.createMIBFolder(name)
-      toast.success('文件夹创建成功')
+      ElMessage.success('文件夹创建成功')
       await loadFolders()
       expandedFolders.value[folderId] = true
     }
   } catch (error) {
     if (error !== 'cancel') {
       logger.error(`SNMP: 创建文件夹失败 - ${error}`)
-      toast.error('创建文件夹失败')
+      ElMessage.error('创建文件夹失败')
     }
   }
 }
@@ -513,13 +509,13 @@ async function renameFolder(folder: MIBFolderVM) {
     
     if (name && name !== folder.name) {
       await SNMPMIBAPI.renameMIBFolder(folder.id, name)
-      toast.success('文件夹已重命名')
+      ElMessage.success('文件夹已重命名')
       await loadFolders()
     }
   } catch (error) {
     if (error !== 'cancel') {
       logger.error(`SNMP: 重命名文件夹失败 - ${error}`)
-      toast.error('重命名文件夹失败')
+      ElMessage.error('重命名文件夹失败')
     }
   }
 }
@@ -540,7 +536,7 @@ async function deleteFolder(folder: MIBFolderVM) {
     )
     
     await SNMPMIBAPI.deleteMIBFolder(folder.id)
-    toast.success('文件夹已删除')
+    ElMessage.success('文件夹已删除')
     
     // 如果选中的模块在被删除的文件夹下，清空当前选中模块
     const affectedModules = groupedModules.value[folder.id] || []
@@ -555,7 +551,7 @@ async function deleteFolder(folder: MIBFolderVM) {
   } catch (error) {
     if (error !== 'cancel') {
       logger.error(`SNMP: 删除文件夹失败 - ${error}`)
-      toast.error('删除文件夹失败')
+      ElMessage.error('删除文件夹失败')
     }
   }
 }
@@ -566,11 +562,11 @@ async function deleteFolder(folder: MIBFolderVM) {
 async function moveModule(module: MIBModuleVM, folderId: number | null) {
   try {
     await SNMPMIBAPI.moveMIBModuleToFolder(module.id, folderId)
-    toast.success('已移动 MIB 模块')
+    ElMessage.success('已移动 MIB 模块')
     await loadModules()
   } catch (error) {
     logger.error(`SNMP: 移动模块失败 - ${error}`)
-    toast.error('移动模块失败')
+    ElMessage.error('移动模块失败')
   }
 }
 
@@ -590,11 +586,11 @@ async function clearCache() {
 
   try {
     await SNMPMIBAPI.clearResolverCache()
-    toast.success('缓存已清除')
+    ElMessage.success('缓存已清除')
     await loadCacheStats()
   } catch (error) {
     logger.error(`SNMP: 清除缓存失败 - ${error}`)
-    toast.error('清除缓存失败')
+    ElMessage.error('清除缓存失败')
   }
 }
 
@@ -604,11 +600,11 @@ async function clearCache() {
 async function rebuildCache() {
   try {
     await SNMPMIBAPI.rebuildResolverCache()
-    toast.success('缓存已重建')
+    ElMessage.success('缓存已重建')
     await loadCacheStats()
   } catch (error) {
     logger.error(`SNMP: 重建缓存失败 - ${error}`)
-    toast.error('重建缓存失败')
+    ElMessage.error('重建缓存失败')
   }
 }
 
@@ -690,7 +686,7 @@ function setupEventListeners() {
   // 监听导入完成
   unsubscribeMIBImported = SNMPEvents.onMIBImported((module: unknown) => {
     const moduleVM = module as { name: string }
-    toast.success(`MIB 模块 "${moduleVM.name}" 导入完成`)
+    ElMessage.success(`MIB 模块 "${moduleVM.name}" 导入完成`)
     loadFolders()
     loadModules()
     loadCacheStats()

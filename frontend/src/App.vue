@@ -1,73 +1,47 @@
 <template>
-  <div
-    class="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary text-text-primary font-sans"
-  >
+  <div class="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary text-text-primary font-sans">
     <!-- 自定义标题栏 -->
     <TitleBar />
 
-    <!-- 主内容区域 -->
-    <div class="flex flex-1 min-h-0">
+    <el-container class="flex-1 min-h-0">
       <!-- 侧边栏 -->
-      <aside
-        :class="[
-          'flex flex-col transition-all duration-300 ease-in-out bg-bg-secondary flex-shrink-0',
-          collapsed ? 'w-16' : 'w-56',
-        ]"
-      >
+      <el-aside :width="collapsed ? '64px' : '224px'" class="transition-all duration-300 ease-in-out bg-bg-secondary border-r border-border flex flex-col">
         <!-- 导航菜单 -->
-        <nav class="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-          <button
-            v-for="item in menuItems"
-            :key="item.key"
-            @click="handleNav(item.key)"
-            :class="[
-              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group',
-              activeKey === item.key
-                ? 'bg-accent-bg text-accent border border-accent/30 shadow-glow'
-                : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary border border-transparent',
-            ]"
+        <el-menu
+          :default-active="activeKey"
+          :collapse="collapsed"
+          :collapse-transition="false"
+          class="border-r-0 flex-1 overflow-y-auto scrollbar-custom bg-transparent custom-menu"
+          @select="handleNav"
+        >
+          <el-menu-item 
+            v-for="item in menuItems" 
+            :key="item.key" 
+            :index="item.key"
           >
-            <span class="flex-shrink-0 w-5 h-5" v-html="item.icon"></span>
-            <span
-              v-if="!collapsed"
-              class="animate-fade-in whitespace-nowrap overflow-hidden flex-1 text-left"
-              >{{ item.label }}</span
-            >
-          </button>
-        </nav>
+            <el-icon><span v-html="item.icon" class="w-5 h-5 flex items-center justify-center"></span></el-icon>
+            <template #title>
+              <span class="font-medium">{{ item.label }}</span>
+            </template>
+          </el-menu-item>
+        </el-menu>
 
         <!-- 折叠按钮 -->
-        <div class="p-3">
-          <button
-            @click="collapsed = !collapsed"
-            class="w-full flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-hover transition-all duration-200"
-            :title="collapsed ? '展开侧边栏' : '折叠侧边栏'"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="w-4 h-4 transition-transform duration-300"
-              :class="collapsed ? 'rotate-180' : ''"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
+        <div class="p-3 flex justify-center cursor-pointer hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors border-t border-border" @click="collapsed = !collapsed" :title="collapsed ? '展开侧边栏' : '折叠侧边栏'">
+          <el-icon :size="18" class="transition-transform duration-300" :class="collapsed ? 'rotate-180' : ''">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />
             </svg>
-          </button>
+          </el-icon>
         </div>
-      </aside>
+      </el-aside>
 
       <!-- 主内容区 -->
-      <div class="flex flex-col flex-1 min-w-0">
+      <el-container class="flex-col bg-bg-primary min-w-0">
         <!-- 顶部导航栏 -->
-        <header
-          class="flex items-center justify-between px-6 h-16 bg-bg-secondary flex-shrink-0"
-        >
+        <el-header height="64px" class="flex items-center justify-between px-6 bg-bg-secondary border-b border-border flex-shrink-0">
           <div class="flex items-center gap-3">
-            <h1 class="text-base font-semibold text-text-primary">
+            <h1 class="text-base font-semibold text-text-primary m-0">
               {{ currentTitle }}
             </h1>
           </div>
@@ -76,10 +50,10 @@
             <ThemeSwitch />
             <div class="text-xs text-text-muted font-mono">v1.0</div>
           </div>
-        </header>
+        </el-header>
 
         <!-- 内容主体 -->
-        <main class="flex-1 overflow-auto scrollbar-custom bg-bg-primary p-6">
+        <el-main class="p-6 overflow-auto scrollbar-custom relative">
           <Suspense>
             <template #default>
               <router-view />
@@ -88,12 +62,10 @@
               <RouteLoading />
             </template>
           </Suspense>
-        </main>
-      </div>
-    </div>
+        </el-main>
+      </el-container>
+    </el-container>
   </div>
-  <!-- 全局 Toast 通知 -->
-  <GlobalToast />
 </template>
 
 <script setup lang="ts">
@@ -101,7 +73,6 @@ import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import ThemeSwitch from "@/components/common/ThemeSwitch.vue";
 import TitleBar from "@/components/common/TitleBar.vue";
-import GlobalToast from "@/components/common/GlobalToast.vue";
 import RouteLoading from "@/components/common/RouteLoading.vue";
 import { useTheme } from "@/composables/useTheme";
 import { useTaskexecStore } from "@/stores/taskexecStore";
@@ -304,3 +275,33 @@ onUnmounted(() => {
   taskexecStore.cleanupListeners();
 });
 </script>
+
+<style scoped>
+.custom-menu {
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: var(--color-text-secondary);
+  --el-menu-hover-text-color: var(--color-text-primary);
+  --el-menu-active-color: var(--color-accent);
+  padding: 8px;
+  border-right: none;
+}
+.custom-menu :deep(.el-menu-item) {
+  border-radius: 8px;
+  margin-bottom: 4px;
+  height: 44px;
+  line-height: 44px;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+.custom-menu :deep(.el-menu-item:hover) {
+  background-color: var(--color-bg-hover);
+}
+.custom-menu :deep(.el-menu-item.is-active) {
+  background-color: var(--color-accent-bg);
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: var(--shadow-glow);
+}
+html.dark .custom-menu :deep(.el-menu-item.is-active) {
+  border-color: rgba(96, 165, 250, 0.3);
+}
+</style>

@@ -216,68 +216,7 @@
     @apply px-3 py-1 text-xs;
   }
 
-  /* ===== 弹窗组件 ===== */
 
-  .modal-overlay {
-    @apply fixed inset-0 z-50 bg-black/50
-           transition-opacity duration-200 backdrop-blur-[4px];
-  }
-
-  .modal-container {
-    @apply fixed inset-0 z-[51] flex items-center justify-center p-4
-           pointer-events-none;
-  }
-
-  .modal {
-    @apply relative z-[52] w-full max-w-[32rem] max-h-[90vh] overflow-hidden
-           bg-bg-secondary border border-border rounded-2xl shadow-xl
-           pointer-events-auto
-           transition-all duration-200 scale-95 opacity-0;
-  }
-
-  .modal-active .modal {
-    @apply scale-100 opacity-100;
-  }
-
-  .modal-lg {
-    @apply max-w-[48rem];
-  }
-
-  .modal-xl {
-    @apply max-w-[64rem];
-  }
-
-  .modal-glass {
-    @apply backdrop-blur-[20px];
-  }
-
-  .modal-header {
-    @apply flex items-center justify-between px-6 py-4
-           border-b border-border;
-  }
-
-  .modal-header-title {
-    @apply flex items-center gap-2 text-lg font-semibold text-text-primary;
-  }
-
-  .modal-close {
-    @apply flex items-center justify-center w-8 h-8
-           text-text-muted bg-transparent border-none rounded-md
-           cursor-pointer transition-all duration-150;
-  }
-
-  .modal-close:hover {
-    @apply text-text-primary bg-bg-hover;
-  }
-
-  .modal-body {
-    @apply p-6 overflow-y-auto max-h-[calc(90vh-140px)];
-  }
-
-  .modal-footer {
-    @apply flex items-center justify-end gap-3 px-6 py-4
-           border-t border-border bg-bg-tertiary;
-  }
 
   /* ===== 卡片头部 ===== */
 
@@ -344,103 +283,6 @@
     @apply font-mono tracking-wider;
   }
 
-  /* ===== Toast 组件 ===== */
-
-  .toast-container {
-    @apply fixed z-[100] flex flex-col gap-3 pointer-events-none;
-  }
-
-  .toast-container-top-center {
-    @apply top-6 left-1/2 -translate-x-1/2;
-  }
-
-  .toast-container-top-right {
-    @apply top-6 right-6;
-  }
-
-  .toast-container-bottom-center {
-    @apply bottom-6 left-1/2 -translate-x-1/2;
-  }
-
-  .toast-container-bottom-right {
-    @apply bottom-6 right-6;
-  }
-
-  .toast {
-    @apply flex items-center gap-3
-           min-w-[280px] max-w-[420px] px-5 py-3
-           bg-bg-secondary border border-border rounded-xl
-           shadow-lg pointer-events-auto
-           transition-all duration-200 -translate-y-[10px] opacity-0;
-  }
-
-  .toast-visible {
-    @apply translate-y-0 opacity-100;
-  }
-
-  .toast-icon {
-    @apply flex-shrink-0 w-5 h-5;
-  }
-
-  .toast-content {
-    @apply flex-1 min-w-0;
-  }
-
-  .toast-title {
-    @apply text-sm font-semibold text-text-primary;
-  }
-
-  .toast-message {
-    @apply text-sm text-text-secondary leading-relaxed;
-  }
-
-  .toast-close {
-    @apply flex-shrink-0 flex items-center justify-center
-           w-6 h-6 text-text-muted bg-transparent border-none rounded-md
-           cursor-pointer transition-all duration-150;
-  }
-
-  .toast-close:hover {
-    @apply text-text-primary bg-bg-hover;
-  }
-
-  .toast-success {
-    @apply border-l-4 border-l-success;
-  }
-
-  .toast-success .toast-icon {
-    @apply text-success;
-  }
-
-  .toast-error {
-    @apply border-l-4 border-l-error;
-  }
-
-  .toast-error .toast-icon {
-    @apply text-error;
-  }
-
-  .toast-warning {
-    @apply border-l-4 border-l-warning;
-  }
-
-  .toast-warning .toast-icon {
-    @apply text-warning;
-  }
-
-  .toast-info {
-    @apply border-l-4 border-l-info;
-  }
-
-  .toast-info .toast-icon {
-    @apply text-info;
-  }
-
-  .toast-link {
-    @apply text-accent text-sm font-medium
-           bg-transparent border-none cursor-pointer
-           hover:underline transition-all duration-150;
-  }
 
   /* ===== 按钮变体 - 用于任务组件 ===== */
 
@@ -505,19 +347,7 @@
     @apply opacity-90;
   }
 
-  /* ===== 模态框变体 - 用于详情弹窗 ===== */
 
-  /* 详情模态框容器 */
-  .modal-detail {
-    @apply fixed inset-0 z-[1100] flex items-center justify-center p-5
-           bg-black/70 backdrop-blur-[4px];
-  }
-
-  .modal-detail-content {
-    @apply relative w-full max-w-[800px] max-h-[90vh]
-           bg-bg-tertiary border border-border rounded-xl
-           flex flex-col overflow-hidden;
-  }
 
   /* ===== 抽屉组件 ===== */
 
@@ -736,5 +566,47 @@
 
   .text-terminal-text {
     color: var(--color-terminal-text);
+  }
+
+  /* ===== 高级输入框 ===== */
+  .premium-textarea {
+    @apply w-full h-full p-4 bg-transparent border-none outline-none
+           text-text-primary resize-none font-mono text-sm leading-relaxed
+           transition-all duration-300 rounded-xl;
+  }
+
+  .premium-textarea::placeholder {
+    @apply text-text-muted/70 italic;
+  }
+
+  /* ===== Toast 组件 ===== */
+  .toast-container {
+    @apply fixed z-[100] flex flex-col gap-3 pointer-events-none;
+  }
+
+  .toast-container-top-center {
+    @apply top-6 left-1/2 -translate-x-1/2;
+  }
+
+  .toast {
+    @apply flex items-center gap-3 px-5 py-4 rounded-xl
+           bg-bg-tertiary border border-border shadow-lg
+           transition-all duration-300 opacity-0 scale-95;
+  }
+
+  .toast-visible {
+    @apply opacity-100 scale-100;
+  }
+
+  .toast-success {
+    @apply bg-success/95 text-white shadow-success/20;
+  }
+
+  .toast-icon {
+    @apply flex-shrink-0 w-5 h-5;
+  }
+
+  .toast-message {
+    @apply text-sm font-medium tracking-wide;
   }
 }

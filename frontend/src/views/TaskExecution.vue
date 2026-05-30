@@ -8,80 +8,35 @@
 
       <!-- 操作按钮区域 -->
       <div class="flex gap-3">
-        <button
+        <el-button
           v-if="executionView.active && isRunning"
+          type="danger"
+          plain
           @click="stopExecution"
-          class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-error/10 border border-error/30 text-error hover:bg-error hover:text-white"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-4 h-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <rect x="6" y="6" width="12" height="12" rx="1" />
-          </svg>
           停止任务
-        </button>
-        <button
+        </el-button>
+        <el-button
+          :icon="Plus"
           @click="goToTaskCreate"
-          class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-4 h-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
           创建新任务
-        </button>
+        </el-button>
         <!-- 执行详情视图时显示返回按钮，否则显示刷新按钮 -->
-        <button
+        <el-button
           v-if="shouldShowExecutionView"
+          :icon="Back"
           @click="closeExecutionView"
-          class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-4 h-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
           返回任务列表
-        </button>
-        <button
+        </el-button>
+        <el-button
           v-else
+          :icon="RefreshRight"
           @click="refreshTaskList"
-          class="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 shadow-card bg-bg-card border border-border text-text-muted hover:text-text-primary hover:border-accent/50"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-4 h-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="23 4 23 10 17 10" />
-            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-          </svg>
           刷新
-        </button>
+        </el-button>
       </div>
     </div>
 
@@ -89,181 +44,107 @@
     <div class="flex-1 min-h-0 flex flex-col gap-4">
       <!-- 搜索和筛选 -->
       <div class="flex items-center gap-4 flex-shrink-0">
-        <div class="relative flex-1 max-w-md">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="搜索任务..."
-            class="w-full pl-10 pr-4 py-2 rounded-lg bg-bg-card border border-border text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
-          />
-        </div>
-        <select
-          v-model="filterStatus"
-          class="px-3 py-2 rounded-lg bg-bg-card border border-border text-sm text-text-primary focus:outline-none focus:border-accent/50 transition-all"
-        >
-          <option value="">全部状态</option>
-          <option value="pending">待执行</option>
-          <option value="running">执行中</option>
-          <option value="completed">已完成</option>
-          <option value="partial">部分成功</option>
-          <option value="failed">失败</option>
-        </select>
-        <select
-          v-model="filterMode"
-          class="px-3 py-2 rounded-lg bg-bg-card border border-border text-sm text-text-primary focus:outline-none focus:border-accent/50 transition-all"
-        >
-          <option value="">全部模式</option>
-          <option value="group">模式A（命令组→设备组）</option>
-          <option value="binding">模式B（IP绑定→独立命令）</option>
-        </select>
+        <el-input
+          v-model="searchQuery"
+          placeholder="搜索任务..."
+          :prefix-icon="Search"
+          class="w-64"
+        />
+        <el-select v-model="filterStatus" placeholder="全部状态" class="w-32" clearable>
+          <el-option label="待执行" value="pending" />
+          <el-option label="执行中" value="running" />
+          <el-option label="已完成" value="completed" />
+          <el-option label="部分成功" value="partial" />
+          <el-option label="失败" value="failed" />
+        </el-select>
+        <el-select v-model="filterMode" placeholder="全部模式" class="w-48" clearable>
+          <el-option label="模式A（命令组→设备组）" value="group" />
+          <el-option label="模式B（IP绑定→独立命令）" value="binding" />
+        </el-select>
       </div>
 
-      <div
-        class="flex items-center justify-between gap-3 flex-shrink-0 px-3 py-2 rounded-lg border border-border bg-bg-card/70 text-xs text-text-muted"
-      >
-        <span
-          >状态：tasks={{ tasks.length }} / filtered={{
-            filteredTasks.length
-          }}
-          / active={{ shouldShowExecutionView ? "true" : "false" }} / running={{
-            isRunning ? "true" : "false"
-          }}
-          / awaiting={{ awaitingSnapshot ? "true" : "false" }}</span
-        >
-        <span class="font-mono"
-          >run={{
-            executionView.runId || taskexecStore.currentRunId || "-"
-          }}</span
-        >
+      <div class="flex items-center justify-between gap-3 flex-shrink-0 px-3 py-2 rounded-lg border border-border bg-bg-card/70 text-xs text-text-muted">
+        <span>状态：tasks={{ tasks.length }} / filtered={{ filteredTasks.length }} / active={{ shouldShowExecutionView ? "true" : "false" }} / running={{ isRunning ? "true" : "false" }} / awaiting={{ awaitingSnapshot ? "true" : "false" }}</span>
+        <span class="font-mono">run={{ executionView.runId || taskexecStore.currentRunId || "-" }}</span>
       </div>
 
       <!-- 执行视图（正在运行时显示） -->
       <template v-if="shouldShowExecutionView">
         <div class="flex-1 flex flex-col gap-4">
-          <div
-            class="bg-bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-4"
-          >
-            <div class="space-y-2">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-sm font-semibold text-text-primary">
-                  {{ executionView.taskName || "任务执行" }}
-                </span>
-                <span
-                  class="px-2.5 py-1 rounded-full text-xs border flex items-center gap-1.5"
-                  :class="taskStatusBadge(executionRunStatus)"
-                >
+          <el-card shadow="never" :body-style="{ padding: '16px' }">
+            <div class="flex items-start justify-between gap-4">
+              <div class="space-y-2">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-semibold text-text-primary">
+                    {{ executionView.taskName || "任务执行" }}
+                  </span>
                   <span
-                    class="w-1.5 h-1.5 rounded-full"
-                    :class="taskStatusDot(executionRunStatus)"
-                  ></span>
-                  {{ taskStatusLabel(executionRunStatus) }}
-                </span>
-                <span
-                  v-if="executionView.taskType === 'topology'"
-                  class="px-2 py-0.5 rounded text-xs bg-accent/10 border border-accent/20 text-accent"
-                >
-                  拓扑采集
-                </span>
+                    class="px-2.5 py-1 rounded-full text-xs border flex items-center gap-1.5"
+                    :class="taskStatusBadge(executionRunStatus)"
+                  >
+                    <span
+                      class="w-1.5 h-1.5 rounded-full"
+                      :class="taskStatusDot(executionRunStatus)"
+                    ></span>
+                    {{ taskStatusLabel(executionRunStatus) }}
+                  </span>
+                  <el-tag v-if="executionView.taskType === 'topology'" size="small">
+                    拓扑采集
+                  </el-tag>
+                </div>
+                <p class="text-sm text-text-primary">
+                  {{ executionStatusSummary }}
+                </p>
+                <p v-if="executionStatusDetail" class="text-xs" :class="executionStatusDetailClass">
+                  {{ executionStatusDetail }}
+                </p>
               </div>
-              <p class="text-sm text-text-primary">
-                {{ executionStatusSummary }}
-              </p>
-              <p
-                v-if="executionStatusDetail"
-                class="text-xs"
-                :class="executionStatusDetailClass"
+              <el-button
+                v-if="executionView.taskType === 'topology' && isExecutionTerminal"
+                plain
+                type="primary"
+                @click="router.push('/topology')"
               >
-                {{ executionStatusDetail }}
-              </p>
+                查看拓扑图谱
+              </el-button>
             </div>
-            <button
-              v-if="
-                executionView.taskType === 'topology' && isExecutionTerminal
-              "
-              @click="router.push('/topology')"
-              class="px-3 py-2 rounded-lg text-sm font-medium border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
-            >
-              查看拓扑图谱
-            </button>
-          </div>
+          </el-card>
 
           <!-- 进度条 -->
           <div class="flex-shrink-0 space-y-1.5">
-            <div
-              class="flex items-center justify-between text-xs text-text-muted"
-            >
+            <div class="flex items-center justify-between text-xs text-text-muted">
               <span>{{ executionView.taskName || "任务执行" }} - 总体进度</span>
               <span class="font-mono">{{ progressPercent }}%</span>
             </div>
-            <div
-              class="h-2 bg-bg-card rounded-full overflow-hidden border border-border"
-            >
-              <div
-                class="h-full rounded-full transition-all duration-500 ease-out"
-                :class="progressPercent === 100 ? 'bg-success' : 'bg-accent'"
-                :style="{ width: progressPercent + '%' }"
-              ></div>
-            </div>
+            <el-progress :percentage="progressPercent" :status="progressPercent === 100 ? 'success' : ''" :show-text="false" />
           </div>
 
-          <!-- Stage 进度展示 (新运行时支持) -->
+          <!-- Stage 进度展示 -->
           <div v-if="executionStages.length > 0" class="flex-shrink-0">
             <StageProgress :stages="executionStages" :units="executionUnits" />
           </div>
 
           <!-- 拓扑采集计划证据 -->
-          <div
+          <el-card
             v-if="executionView.taskType === 'topology'"
-            class="flex-shrink-0 bg-bg-card border border-border rounded-xl p-4 space-y-3"
+            shadow="never"
+            :body-style="{ padding: '16px' }"
           >
-            <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center justify-between gap-3 mb-3">
               <div>
-                <h4 class="text-sm font-semibold text-text-primary">
-                  拓扑采集计划证据
-                </h4>
-                <p class="text-xs text-text-muted mt-1">
-                  展示字段启停、命令来源与厂商来源，支持运行后复盘。
-                </p>
+                <h4 class="text-sm font-semibold">拓扑采集计划证据</h4>
+                <p class="text-xs text-text-muted mt-1">展示字段启停、命令来源与厂商来源，支持运行后复盘。</p>
               </div>
               <div class="text-xs text-text-muted text-right">
                 <div>设备计划: {{ topologyCollectionPlanRows.length }}</div>
-                <div>
-                  启用字段: {{ topologyPlanEnabledCount }} / 禁用字段:
-                  {{ topologyPlanDisabledCount }}
-                </div>
+                <div>启用字段: {{ topologyPlanEnabledCount }} / 禁用字段: {{ topologyPlanDisabledCount }}</div>
               </div>
             </div>
 
-            <div v-if="topologyPlanLoading" class="text-xs text-text-muted">
-              正在加载采集计划快照...
-            </div>
-            <div
-              v-else-if="topologyPlanError"
-              class="text-xs text-error bg-error/10 border border-error/20 rounded-lg px-3 py-2"
-            >
-              加载采集计划失败：{{ topologyPlanError }}
-            </div>
-            <div
-              v-else-if="topologyCollectionPlanRows.length === 0"
-              class="text-xs text-text-muted"
-            >
-              暂无采集计划快照，待设备采集阶段产物生成后自动展示。
-            </div>
-            <div
-              v-else
-              class="space-y-3 max-h-64 overflow-auto scrollbar-custom pr-1"
-            >
+            <div v-if="topologyPlanLoading" class="text-xs text-text-muted">正在加载采集计划快照...</div>
+            <el-alert v-else-if="topologyPlanError" type="error" :closable="false" :title="`加载采集计划失败：${topologyPlanError}`" />
+            <el-empty v-else-if="topologyCollectionPlanRows.length === 0" description="暂无采集计划快照，待设备采集阶段产物生成后自动展示。" :image-size="60" />
+            <div v-else class="space-y-3 max-h-64 overflow-auto scrollbar-custom pr-1">
               <div
                 v-for="plan in topologyCollectionPlanRows"
                 :key="`${plan.artifactKey || '-'}:${plan.deviceIp}:${String(plan.generatedAt || '-')}`"
@@ -271,83 +152,42 @@
               >
                 <div class="flex items-center justify-between gap-3 text-xs">
                   <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-mono text-text-primary">{{
-                      plan.deviceIp
-                    }}</span>
-                    <span
-                      class="px-2 py-0.5 rounded border bg-accent/10 border-accent/20 text-accent"
-                    >
-                      厂商: {{ plan.resolvedVendor || "-" }}
-                    </span>
-                    <span class="text-text-muted">
-                      来源: {{ vendorSourceLabel(plan.vendorSource) }}
-                    </span>
+                    <span class="font-mono font-medium">{{ plan.deviceIp }}</span>
+                    <el-tag size="small" type="info">厂商: {{ plan.resolvedVendor || "-" }}</el-tag>
+                    <span class="text-text-muted">来源: {{ vendorSourceLabel(plan.vendorSource) }}</span>
                   </div>
-                  <span class="text-text-muted">
-                    {{ formatDate(String(plan.generatedAt || "")) }}
-                  </span>
+                  <span class="text-text-muted">{{ formatDate(String(plan.generatedAt || "")) }}</span>
                 </div>
-
-                <div class="text-xs text-text-muted">
-                  字段: 启用 {{ enabledCommandCount(plan) }} / 禁用
-                  {{ disabledCommandCount(plan) }}
-                </div>
-
+                <div class="text-xs text-text-muted">字段: 启用 {{ enabledCommandCount(plan) }} / 禁用 {{ disabledCommandCount(plan) }}</div>
                 <div class="flex flex-wrap gap-1.5">
                   <span
                     v-for="cmd in (plan.commands || []).slice(0, 6)"
                     :key="`${cmd.fieldKey}:${cmd.commandSource}`"
                     class="px-1.5 py-0.5 rounded border text-[11px]"
-                    :class="
-                      cmd.enabled
-                        ? 'border-success/30 bg-success/10 text-success'
-                        : 'border-border bg-bg-card text-text-muted'
-                    "
+                    :class="cmd.enabled ? 'border-success/30 bg-success/10 text-success' : 'border-border bg-bg-card text-text-muted'"
                   >
-                    {{ cmd.fieldKey }} ·
-                    {{ commandSourceLabel(cmd.commandSource) }}
+                    {{ cmd.fieldKey }} · {{ commandSourceLabel(cmd.commandSource) }}
                   </span>
-                  <span
-                    v-if="(plan.commands || []).length > 6"
-                    class="px-1.5 py-0.5 rounded border border-border text-[11px] text-text-muted"
-                  >
+                  <span v-if="(plan.commands || []).length > 6" class="px-1.5 py-0.5 rounded border border-border text-[11px] text-text-muted">
                     +{{ (plan.commands || []).length - 6 }}
                   </span>
                 </div>
               </div>
             </div>
-          </div>
+          </el-card>
 
           <!-- 设备卡片网格 -->
-          <div
-            class="flex-1 overflow-auto scrollbar-custom min-h-0 relative"
-            ref="devicesContainer"
-          >
-            <div
-              v-if="
-                deviceCardUnits.length === 0 && (isRunning || awaitingSnapshot)
-              "
-              class="flex flex-col items-center justify-center h-48 text-text-muted gap-3"
-            >
-              <div
-                class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"
-              ></div>
+          <div class="flex-1 overflow-auto scrollbar-custom min-h-0 relative" ref="devicesContainer">
+            <div v-if="deviceCardUnits.length === 0 && (isRunning || awaitingSnapshot)" class="flex flex-col items-center justify-center h-48 text-text-muted gap-3">
+              <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
               <p class="text-sm">正在初始化任务...</p>
             </div>
             <div v-else>
-              <div
-                v-if="deviceCardUnits.length > 50"
-                class="text-xs text-text-muted mb-2 px-1"
-              >
-                共 {{ deviceCardUnits.length }} 台设备，显示前
-                {{ visibleUnitCount }} 台活跃设备
-                <button
-                  v-if="deviceCardUnits.length > visibleUnitCount"
-                  @click="showAllDevices = !showAllDevices"
-                  class="ml-2 text-accent hover:underline"
-                >
+              <div v-if="deviceCardUnits.length > 50" class="text-xs text-text-muted mb-2 px-1">
+                共 {{ deviceCardUnits.length }} 台设备，显示前 {{ visibleUnitCount }} 台活跃设备
+                <el-button v-if="deviceCardUnits.length > visibleUnitCount" link type="primary" class="ml-2" @click="showAllDevices = !showAllDevices">
                   {{ showAllDevices ? "收起" : "显示全部" }}
-                </button>
+                </el-button>
               </div>
 
               <div class="grid grid-cols-3 gap-4">
@@ -357,66 +197,29 @@
                   class="bg-bg-card border rounded-xl overflow-hidden shadow-card transition-all duration-300"
                   :class="statusBorder(unit.status)"
                 >
-                  <div
-                    class="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-panel"
-                  >
-                    <span
-                      class="font-mono text-sm font-semibold text-text-primary"
-                      >{{ unit.targetKey }}</span
-                    >
-                    <span
-                      class="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border"
-                      :class="statusBadge(unit.status)"
-                    >
-                      <span
-                        class="w-1.5 h-1.5 rounded-full"
-                        :class="statusDot(unit.status)"
-                      ></span>
+                  <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-panel">
+                    <span class="font-mono text-sm font-semibold">{{ unit.targetKey }}</span>
+                    <span class="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border" :class="statusBadge(unit.status)">
+                      <span class="w-1.5 h-1.5 rounded-full" :class="statusDot(unit.status)"></span>
                       {{ statusLabel(unit.status) }}
                     </span>
                   </div>
-                  <div
-                    class="px-4 py-2 border-b border-border bg-bg-card/50 space-y-1"
-                  >
-                    <div
-                      class="flex items-center justify-between gap-3 text-xs"
-                    >
+                  <div class="px-4 py-2 border-b border-border bg-bg-card/50 space-y-1">
+                    <div class="flex items-center justify-between gap-3 text-xs">
                       <span class="text-text-muted">步骤进度</span>
-                      <span class="font-mono text-text-primary"
-                        >{{ unit.doneSteps }}/{{ unit.totalSteps }}</span
-                      >
+                      <span class="font-mono text-text-primary">{{ unit.doneSteps }}/{{ unit.totalSteps }}</span>
                     </div>
-                    <div
-                      v-if="unit.errorMessage"
-                      class="text-xs text-error break-all"
-                    >
+                    <div v-if="unit.errorMessage" class="text-xs text-error break-all">
                       {{ unit.errorMessage }}
                     </div>
                   </div>
-                  <VirtualLogTerminal
-                    :logs="unit.logs || []"
-                    :total-count="unit.logCount || 0"
-                    :truncated="unit.truncated || false"
-                    :device-ip="unit.targetKey"
-                  />
+                  <VirtualLogTerminal :logs="unit.logs || []" :total-count="unit.logCount || 0" :truncated="unit.truncated || false" :device-ip="unit.targetKey" />
                 </div>
               </div>
 
-              <div
-                v-if="
-                  !showAllDevices && deviceCardUnits.length > visibleUnitCount
-                "
-                class="text-center py-4 text-text-muted text-sm"
-              >
-                还有
-                {{ deviceCardUnits.length - visibleUnitCount }}
-                台设备已完成或等待中
-                <button
-                  @click="showAllDevices = true"
-                  class="ml-2 text-accent hover:underline"
-                >
-                  显示全部
-                </button>
+              <div v-if="!showAllDevices && deviceCardUnits.length > visibleUnitCount" class="text-center py-4 text-text-muted text-sm">
+                还有 {{ deviceCardUnits.length - visibleUnitCount }} 台设备已完成或等待中
+                <el-button link type="primary" class="ml-2" @click="showAllDevices = true">显示全部</el-button>
               </div>
             </div>
           </div>
@@ -427,219 +230,54 @@
       <template v-else>
         <div class="flex-1 overflow-auto scrollbar-custom min-h-0 space-y-4">
           <div v-if="loading" class="flex items-center justify-center h-48">
-            <div
-              class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"
-            ></div>
+            <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
           </div>
-          <div
-            v-else-if="loadError"
-            class="flex flex-col items-center justify-center h-48 text-text-muted gap-3"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="w-12 h-12 opacity-30"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <circle cx="12" cy="12" r="9" />
-              <line x1="12" y1="8" x2="12" y2="13" />
-              <circle cx="12" cy="16" r="0.5" fill="currentColor" />
-            </svg>
-            <p class="text-sm text-error">任务列表加载失败</p>
-            <p class="text-xs max-w-md text-center break-all">
-              {{ loadError }}
-            </p>
-            <button
-              @click="loadTasks('retry')"
-              class="px-3 py-1.5 rounded-lg text-xs font-medium bg-bg-card border border-border text-text-primary hover:border-accent/50 transition-all"
-            >
-              重试加载
-            </button>
-          </div>
-          <div
-            v-else-if="filteredTasks.length === 0"
-            class="flex flex-col items-center justify-center h-48 text-text-muted gap-3"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="w-12 h-12 opacity-30"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-            >
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <line x1="9" y1="9" x2="15" y2="15" />
-              <line x1="15" y1="9" x2="9" y2="15" />
-            </svg>
-            <p class="text-sm">暂无任务，请前往「任务创建」页面创建</p>
-          </div>
+          <el-empty v-else-if="loadError" :description="`任务列表加载失败: ${loadError}`" :image-size="80">
+            <el-button @click="loadTasks('retry')">重试加载</el-button>
+          </el-empty>
+          <el-empty v-else-if="filteredTasks.length === 0" description="暂无任务，请前往「任务创建」页面创建" :image-size="80" />
           <div v-else class="grid grid-cols-2 gap-4">
-            <div
+            <el-card
               v-for="task in filteredTasks"
               :key="task.id"
-              class="bg-bg-card border border-border rounded-xl overflow-hidden shadow-card hover:border-accent/30 transition-all duration-300 group/card"
+              shadow="hover"
+              :body-style="{ padding: '0px' }"
+              class="border border-border rounded-xl group/card"
             >
               <!-- 卡片头部 -->
-              <div
-                class="flex items-start justify-between px-4 py-3 border-b border-border bg-bg-panel"
-              >
+              <div class="flex items-start justify-between px-4 py-3 border-b border-border bg-bg-panel">
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
-                    <h3
-                      class="text-sm font-semibold text-text-primary truncate"
-                    >
-                      {{ task.name }}
-                    </h3>
-                    <span
-                      class="flex-shrink-0 text-xs px-2 py-0.5 rounded-full border font-medium"
-                      :class="
-                        isTopologyTask(task)
-                          ? 'bg-accent/10 border-accent/30 text-accent'
-                          : 'bg-bg-panel border-border text-text-muted'
-                      "
-                    >
-                      {{ isTopologyTask(task) ? "拓扑采集" : "普通任务" }}
-                    </span>
-                    <span
-                      class="flex-shrink-0 text-xs px-2 py-0.5 rounded-full border font-medium"
-                      :class="
-                        task.mode === 'group'
-                          ? 'bg-info/10 border-info/30 text-info'
-                          : 'bg-warning/10 border-warning/30 text-warning'
-                      "
-                      >{{ task.mode === "group" ? "模式A" : "模式B" }}</span
-                    >
+                    <h3 class="text-sm font-semibold truncate">{{ task.name }}</h3>
+                    <el-tag size="small" :type="isTopologyTask(task) ? '' : 'info'">{{ isTopologyTask(task) ? "拓扑采集" : "普通任务" }}</el-tag>
+                    <el-tag size="small" :type="task.mode === 'group' ? 'success' : 'warning'">{{ task.mode === "group" ? "模式A" : "模式B" }}</el-tag>
                     <span
                       class="flex-shrink-0 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium"
-                      :class="
-                        taskStatusBadge(task.latestRunStatus || task.status)
-                      "
+                      :class="taskStatusBadge(task.latestRunStatus || task.status)"
                     >
-                      <span
-                        class="w-1.5 h-1.5 rounded-full"
-                        :class="
-                          taskStatusDot(task.latestRunStatus || task.status)
-                        "
-                      ></span>
+                      <span class="w-1.5 h-1.5 rounded-full" :class="taskStatusDot(task.latestRunStatus || task.status)"></span>
                       {{ taskStatusLabel(task.latestRunStatus || task.status) }}
                     </span>
                   </div>
-                  <p class="text-xs text-text-muted line-clamp-1 mt-1">
-                    {{ task.description || "暂无描述" }}
-                  </p>
+                  <p class="text-xs text-text-muted line-clamp-1 mt-1">{{ task.description || "暂无描述" }}</p>
                 </div>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-1 ml-2">
-                  <button
-                    @click="openTaskDetail(task)"
-                    class="p-1.5 rounded-md text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
-                    title="查看详情"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      class="w-4 h-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  </button>
-                  <button
-                    @click="openTaskEdit(task)"
-                    :disabled="!task.canEdit"
-                    class="p-1.5 rounded-md text-text-muted transition-colors"
-                    :class="
-                      task.canEdit
-                        ? 'hover:text-warning hover:bg-warning/10'
-                        : 'opacity-40 cursor-not-allowed'
-                    "
-                    :title="
-                      !task.canEdit
-                        ? '任务存在活跃运行，不可编辑'
-                        : isTopologyTask(task)
-                          ? '编辑拓扑任务（支持字段级覆盖）'
-                          : '编辑任务'
-                    "
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      class="w-4 h-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path
-                        d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-                      />
-                      <path
-                        d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    @click="showExecutionHistory(task)"
-                    class="p-1.5 rounded-md text-text-muted hover:text-info hover:bg-info/10 transition-colors"
-                    title="查看执行历史"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      class="w-4 h-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="M3 3v5h5" />
-                      <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
-                      <path d="M12 7v5l4 2" />
-                    </svg>
-                  </button>
-                  <button
-                    @click="executeTask(task)"
-                    :disabled="isRunning || awaitingSnapshot"
-                    class="p-1.5 rounded-md text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
-                    :class="
-                      isRunning || awaitingSnapshot
-                        ? 'opacity-50 cursor-not-allowed'
-                        : ''
-                    "
-                    title="执行"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      class="w-4 h-4"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <polygon points="5 3 19 12 5 21 5 3" />
-                    </svg>
-                  </button>
-                  <button
-                    @click="confirmDelete(task)"
-                    class="p-1.5 rounded-md text-text-muted hover:text-error hover:bg-error/10 transition-colors"
-                    title="删除"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      class="w-4 h-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <polyline points="3 6 5 6 21 6" />
-                      <path
-                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                      />
-                    </svg>
-                  </button>
+                  <el-tooltip content="查看详情" placement="top">
+                    <el-button :icon="Document" circle size="small" @click="openTaskDetail(task)" />
+                  </el-tooltip>
+                  <el-tooltip :content="!task.canEdit ? '任务存在活跃运行，不可编辑' : isTopologyTask(task) ? '编辑拓扑任务（支持字段级覆盖）' : '编辑任务'" placement="top">
+                    <el-button :icon="Edit" circle size="small" :disabled="!task.canEdit" @click="openTaskEdit(task)" />
+                  </el-tooltip>
+                  <el-tooltip content="查看执行历史" placement="top">
+                    <el-button :icon="TopRight" circle size="small" @click="showExecutionHistory(task)" />
+                  </el-tooltip>
+                  <el-tooltip content="执行" placement="top">
+                    <el-button :icon="VideoPlay" type="primary" plain circle size="small" :disabled="isRunning || awaitingSnapshot" @click="executeTask(task)" />
+                  </el-tooltip>
+                  <el-tooltip content="删除" placement="top">
+                    <el-button :icon="Delete" type="danger" plain circle size="small" @click="confirmDelete(task)" />
+                  </el-tooltip>
                 </div>
               </div>
 
@@ -647,88 +285,25 @@
               <div class="px-4 py-3">
                 <template v-if="isTopologyTask(task)">
                   <div class="flex items-center gap-2 text-xs">
-                    <span
-                      class="px-2 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent font-mono"
-                    >
-                      厂商: {{ topologyVendorLabel(task) }}
-                    </span>
-                    <span class="text-text-secondary">
-                      {{ topologyDeviceCount(task) }} 台设备
-                    </span>
+                    <el-tag size="small" type="info">厂商: {{ topologyVendorLabel(task) }}</el-tag>
+                    <span class="text-text-secondary">{{ topologyDeviceCount(task) }} 台设备</span>
                   </div>
                 </template>
                 <template v-else-if="task.mode === 'group'">
-                  <div
-                    v-for="(item, idx) in task.items || []"
-                    :key="idx"
-                    class="flex items-center gap-2 text-xs"
-                  >
-                    <span
-                      class="px-2 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent font-mono truncate max-w-[200px]"
-                    >
-                      命令组:
-                      {{
-                        String(item.commandGroupId || "-").substring(0, 8)
-                      }}...
-                    </span>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      class="w-3.5 h-3.5 text-text-muted flex-shrink-0"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                      <polyline points="12 5 19 12 12 19" />
-                    </svg>
-                    <span class="text-text-secondary"
-                      >{{
-                        Array.isArray(item.deviceIDs)
-                          ? item.deviceIDs.length
-                          : 0
-                      }}
-                      台设备</span
-                    >
+                  <div v-for="(item, idx) in task.items || []" :key="idx" class="flex items-center gap-2 text-xs">
+                    <el-tag size="small" type="info" class="max-w-[200px] truncate">命令组: {{ String(item.commandGroupId || "-").substring(0, 8) }}...</el-tag>
+                    <el-icon class="text-text-muted"><Right /></el-icon>
+                    <span class="text-text-secondary">{{ Array.isArray(item.deviceIDs) ? item.deviceIDs.length : 0 }} 台设备</span>
                   </div>
                 </template>
                 <template v-else>
                   <div class="space-y-1">
-                    <div
-                      v-for="(item, idx) in (task.items || []).slice(0, 3)"
-                      :key="idx"
-                      class="flex items-center gap-2 text-xs"
-                    >
-                      <span class="font-mono text-text-secondary">{{
-                        Array.isArray(item.deviceIDs) &&
-                        item.deviceIDs.length > 0
-                          ? item.deviceIDs[0]
-                          : "-"
-                      }}</span>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="w-3 h-3 text-text-muted flex-shrink-0"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                        <polyline points="12 5 19 12 12 19" />
-                      </svg>
-                      <span class="text-text-muted truncate"
-                        >{{
-                          Array.isArray(item.commands)
-                            ? item.commands.length
-                            : 0
-                        }}
-                        条命令</span
-                      >
+                    <div v-for="(item, idx) in (task.items || []).slice(0, 3)" :key="idx" class="flex items-center gap-2 text-xs">
+                      <span class="font-mono text-text-secondary">{{ Array.isArray(item.deviceIDs) && item.deviceIDs.length > 0 ? item.deviceIDs[0] : "-" }}</span>
+                      <el-icon class="text-text-muted"><Right /></el-icon>
+                      <span class="text-text-muted truncate">{{ Array.isArray(item.commands) ? item.commands.length : 0 }} 条命令</span>
                     </div>
-                    <div
-                      v-if="(task.items || []).length > 3"
-                      class="text-xs text-text-muted"
-                    >
+                    <div v-if="(task.items || []).length > 3" class="text-xs text-text-muted">
                       +{{ (task.items || []).length - 3 }} 台设备...
                     </div>
                   </div>
@@ -736,82 +311,17 @@
               </div>
 
               <!-- 标签和时间 -->
-              <div
-                class="px-4 py-2 border-t border-border bg-bg-secondary/30 text-xs text-text-muted flex items-center justify-between"
-              >
+              <div class="px-4 py-2 border-t border-border bg-bg-secondary/30 text-xs text-text-muted flex items-center justify-between">
                 <div class="flex items-center gap-1.5 overflow-hidden">
-                  <span
-                    v-for="tag in (task.tags || []).slice(0, 3)"
-                    :key="tag"
-                    class="px-1.5 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent truncate"
-                    >{{ tag }}</span
-                  >
+                  <el-tag v-for="tag in (task.tags || []).slice(0, 3)" :key="tag" size="small" type="info">{{ tag }}</el-tag>
                 </div>
-                <span class="flex-shrink-0 ml-2">{{
-                  formatDate(task.updatedAt)
-                }}</span>
+                <span class="flex-shrink-0 ml-2">{{ formatDate(task.updatedAt) }}</span>
               </div>
-            </div>
+            </el-card>
           </div>
         </div>
       </template>
     </div>
-
-    <!-- 删除确认弹窗 -->
-    <Transition name="modal">
-      <div
-        v-if="deleteModal.show"
-        class="fixed inset-0 z-50 flex items-center justify-center"
-      >
-        <div
-          class="absolute inset-0 bg-black/60 backdrop-blur-sm"
-          @click="deleteModal.show = false"
-        ></div>
-        <div
-          class="relative bg-bg-card border border-error/30 rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden animate-slide-in"
-        >
-          <div class="px-5 py-4 space-y-3">
-            <h3 class="text-sm font-semibold text-text-primary">确认删除</h3>
-            <p class="text-xs text-text-muted">
-              确定要删除任务「{{ deleteModal.taskName }}」吗？此操作不可撤销。
-            </p>
-          </div>
-          <div class="flex justify-end gap-3 px-5 py-3 border-t border-border">
-            <button
-              @click="deleteModal.show = false"
-              class="px-4 py-2 rounded-lg text-sm font-medium bg-bg-panel border border-border text-text-secondary hover:text-text-primary transition-all"
-            >
-              取消
-            </button>
-            <button
-              @click="doDelete"
-              class="px-4 py-2 rounded-lg text-sm font-semibold bg-error hover:bg-error/80 text-white transition-all"
-            >
-              删除
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-
-    <!-- Toast 通知 -->
-    <Transition name="toast">
-      <div
-        v-if="showToast"
-        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50"
-      >
-        <div
-          class="flex items-center gap-2 px-5 py-3 rounded-xl shadow-2xl border"
-          :class="
-            toastType === 'success'
-              ? 'bg-success/10 border-success/30 text-success'
-              : 'bg-error/10 border-error/30 text-error'
-          "
-        >
-          <span class="text-sm font-medium">{{ toastMessage }}</span>
-        </div>
-      </div>
-    </Transition>
 
     <!-- 执行历史抽屉 -->
     <ExecutionHistoryDrawer
@@ -842,6 +352,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { Search, Plus, Back, RefreshRight, Document, Edit, TopRight, VideoPlay, Delete, Right } from "@element-plus/icons-vue";
 import {
   CommandGroupAPI,
   DeviceAPI,
@@ -896,8 +408,7 @@ const SNAPSHOT_TIMEOUT = 10000;
 let snapshotPollTimer: ReturnType<typeof setInterval> | null = null;
 const SNAPSHOT_POLL_INTERVAL = 1000;
 
-// 删除弹窗
-const deleteModal = ref({ show: false, taskId: 0 as number, taskName: "" });
+// 删除弹窗 (Removed)
 
 // 执行历史抽屉
 const historyDrawer = ref({
@@ -935,20 +446,12 @@ const topologyPlanLastRevision = ref(-1);
 const showAllDevices = ref(false);
 const VISIBLE_DEVICE_LIMIT = 30;
 
-// Toast
-const showToast = ref(false);
-const toastMessage = ref("");
-const toastType = ref<"success" | "error">("success");
-let toastTimer: ReturnType<typeof setTimeout> | null = null;
-
 function triggerToast(msg: string, type: "success" | "error" = "success") {
-  toastMessage.value = msg;
-  toastType.value = type;
-  showToast.value = true;
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    showToast.value = false;
-  }, 3000);
+  if (type === "success") {
+    ElMessage.success(msg);
+  } else {
+    ElMessage.error(msg);
+  }
 }
 
 // ================== 计算属性 - 从 Store 获取 ==================
@@ -1276,10 +779,6 @@ onMounted(() => {
 onUnmounted(() => {
   clearSnapshotTimeout();
   stopSnapshotPolling();
-  if (toastTimer) {
-    clearTimeout(toastTimer);
-    toastTimer = null;
-  }
 });
 
 watch(isRunning, (running, wasRunning) => {
@@ -1711,13 +1210,22 @@ watch(executionSnapshot, (snapshot) => {
 
 // 删除任务
 function confirmDelete(task: TaskGroupListView) {
-  deleteModal.value = { show: true, taskId: task.id, taskName: task.name };
+  ElMessageBox.confirm(
+    `确定要删除任务「${task.name}」吗？此操作不可撤销。`,
+    '确认删除',
+    {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(() => {
+    doDelete(task.id);
+  }).catch(() => {});
 }
 
-async function doDelete() {
+async function doDelete(taskId: number) {
   try {
-    await TaskGroupAPI.deleteTaskGroup(deleteModal.value.taskId);
-    deleteModal.value.show = false;
+    await TaskGroupAPI.deleteTaskGroup(taskId);
     triggerToast("任务已删除", "success");
     void loadTasks();
   } catch (err: any) {

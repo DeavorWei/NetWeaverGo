@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { TaskGroupAPI, DeviceAPI } from "../../services/api";
 import { getLogger } from '@/utils/logger'
+import { ElMessage } from 'element-plus'
 
 const logger = getLogger()
 
@@ -15,7 +16,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
   success: [message: string, count: number];
-  toast: [message: string];
 }>();
 
 const saving = ref(false);
@@ -57,11 +57,11 @@ const removeTag = (index: number) => {
 const executeSend = async () => {
   if (saving.value) return;
   if (!name.value.trim()) {
-    emit("toast", "请输入任务名称");
+    ElMessage.warning("请输入任务名称");
     return;
   }
   if (props.bindingPreview.length === 0) {
-    emit("toast", "没有可发送的绑定配置");
+    ElMessage.warning("没有可发送的绑定配置");
     return;
   }
 
@@ -123,7 +123,7 @@ const executeSend = async () => {
     emit("close");
   } catch (err: any) {
     logger.error("发送到任务执行失败", 'SendTaskModal', err);
-    emit("toast", "发送失败: " + (err.message || err));
+    ElMessage.error("发送失败: " + (err.message || err));
   } finally {
     saving.value = false;
   }
@@ -134,46 +134,16 @@ defineExpose({ resetForm });
 </script>
 
 <template>
-  <Transition name="modal">
-    <div v-if="show" class="modal-container modal-active">
-      <div class="modal-overlay" @click="$emit('close')"></div>
-      <div class="modal modal-lg modal-glass">
-        <div class="modal-header">
-          <h3 class="modal-header-title">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-5 w-5 text-warning"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <polygon
-                points="5 3 19 12 5 21 5 3"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              />
-            </svg>
-            发送到任务执行
-          </h3>
-          <button @click="$emit('close')" class="modal-close">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-        <div class="modal-body space-y-5">
+  <el-dialog
+    :model-value="show"
+    @update:model-value="$emit('close')"
+    title="发送到任务执行"
+    width="800px"
+    class="custom-dialog"
+    destroy-on-close
+  >
+    <div class="space-y-5">
+
           <!-- 无效 IP 警告 -->
           <div
             v-if="hasInvalidIP"
@@ -300,22 +270,18 @@ defineExpose({ resetForm });
               </div>
             </div>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button @click="$emit('close')" class="btn btn-secondary">
-            取消
-          </button>
-          <button
-            @click="executeSend"
-            :disabled="saving"
-            class="btn btn-primary"
-          >
-            {{ saving ? "发送中..." : "确认发送" }}
-          </button>
-        </div>
-      </div>
     </div>
-  </Transition>
+    <template #footer>
+      <el-button @click="$emit('close')">取消</el-button>
+      <el-button
+        type="primary"
+        @click="executeSend"
+        :loading="saving"
+      >
+        {{ saving ? "发送中..." : "确认发送" }}
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped lang="postcss">

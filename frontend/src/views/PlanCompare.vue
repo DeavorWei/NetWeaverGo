@@ -1,151 +1,150 @@
 <template>
-  <div class="space-y-5 animate-slide-in">
-    <div>
+  <div class="space-y-5 animate-slide-in h-full flex flex-col">
+    <div class="flex-shrink-0">
       <h2 class="text-lg font-semibold text-text-primary">规划比对</h2>
       <p class="text-xs text-text-muted mt-1">
         导入固定模板 CSV，执行实际拓扑与规划链路的无向比对。
       </p>
     </div>
 
-    <div class="bg-bg-card border border-border rounded-xl p-4 space-y-3">
-      <div class="text-sm font-medium text-text-primary">1. 导入规划文件</div>
-      <div class="flex items-center gap-2">
-        <input
+    <el-card shadow="never" class="flex-shrink-0">
+      <template #header>
+        <div class="text-sm font-medium">1. 导入规划文件</div>
+      </template>
+      <div class="flex items-center gap-3">
+        <el-input
           v-model="importPath"
           placeholder="输入 CSV 文件绝对路径"
-          class="flex-1 px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
+          class="flex-1"
+          clearable
         />
-        <button
+        <el-button
+          type="primary"
           @click="importPlan"
-          :disabled="!importPath || importing"
-          class="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
-          :class="
-            !importPath || importing
-              ? 'bg-bg-panel border border-border text-text-muted cursor-not-allowed'
-              : 'bg-accent text-white border border-accent/40 hover:bg-accent-glow'
-          "
+          :disabled="!importPath"
+          :loading="importing"
         >
-          {{ importing ? "导入中..." : "导入" }}
-        </button>
+          导入
+        </el-button>
       </div>
-    </div>
+    </el-card>
 
-    <div class="bg-bg-card border border-border rounded-xl p-4 space-y-3">
-      <div class="text-sm font-medium text-text-primary">2. 选择任务与规划文件</div>
-      <div class="grid grid-cols-2 gap-3">
-        <select
+    <el-card shadow="never" class="flex-shrink-0">
+      <template #header>
+        <div class="text-sm font-medium">2. 选择任务与规划文件</div>
+      </template>
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <el-select
           v-model="selectedRunId"
-          class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
+          placeholder="选择拓扑运行"
+          class="w-full"
+          clearable
         >
-          <option value="">选择拓扑运行</option>
-          <option v-for="run in topologyRuns" :key="run.runId" :value="run.runId">
-            {{ run.taskName || run.runId.slice(0, 8) }} - {{ run.status }} ({{ run.successUnits }}/{{ run.totalUnits }})
-          </option>
-        </select>
-        <select
+          <el-option
+            v-for="run in topologyRuns"
+            :key="run.runId"
+            :label="`${run.taskName || run.runId.slice(0, 8)} - ${run.status} (${run.successUnits}/${run.totalUnits})`"
+            :value="run.runId"
+          />
+        </el-select>
+        <el-select
           v-model="selectedPlanID"
-          class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
+          placeholder="选择规划文件"
+          class="w-full"
+          clearable
         >
-          <option value="">选择规划文件</option>
-          <option v-for="plan in plans" :key="plan.id" :value="plan.id">
-            {{ plan.fileName }} ({{ plan.totalLinks }})
-          </option>
-        </select>
+          <el-option
+            v-for="plan in plans"
+            :key="plan.id"
+            :label="`${plan.fileName} (${plan.totalLinks})`"
+            :value="plan.id"
+          />
+        </el-select>
       </div>
-      <div class="flex gap-2">
-        <button
+      <div class="flex gap-3">
+        <el-button
+          type="primary"
           @click="compareNow"
-          :disabled="!selectedRunId || !selectedPlanID || comparing"
-          class="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
-          :class="
-            !selectedRunId || !selectedPlanID || comparing
-              ? 'bg-bg-panel border border-border text-text-muted cursor-not-allowed'
-              : 'bg-accent text-white border border-accent/40 hover:bg-accent-glow'
-          "
+          :disabled="!selectedRunId || !selectedPlanID"
+          :loading="comparing"
         >
-          {{ comparing ? "比对中..." : "执行比对" }}
-        </button>
-        <button
+          执行比对
+        </el-button>
+        <el-button
           @click="exportReport('json')"
           :disabled="!compareResult.reportId"
-          class="px-4 py-2 rounded-lg text-sm border border-border text-text-secondary hover:text-text-primary"
         >
           导出 JSON
-        </button>
-        <button
+        </el-button>
+        <el-button
           @click="exportReport('csv')"
           :disabled="!compareResult.reportId"
-          class="px-4 py-2 rounded-lg text-sm border border-border text-text-secondary hover:text-text-primary"
         >
           导出 CSV
-        </button>
-        <button
+        </el-button>
+        <el-button
           @click="exportReport('html')"
           :disabled="!compareResult.reportId"
-          class="px-4 py-2 rounded-lg text-sm border border-border text-text-secondary hover:text-text-primary"
         >
           导出 HTML
-        </button>
+        </el-button>
       </div>
-    </div>
+    </el-card>
 
-    <div class="grid grid-cols-4 gap-3">
-      <div class="bg-bg-card border border-border rounded-lg p-3">
+    <div class="grid grid-cols-4 gap-4 flex-shrink-0">
+      <el-card shadow="never" :body-style="{ padding: '16px' }">
         <div class="text-xs text-text-muted">规划链路</div>
-        <div class="text-xl font-semibold text-text-primary mt-1">{{ compareResult.totalPlanned }}</div>
-      </div>
-      <div class="bg-bg-card border border-border rounded-lg p-3">
+        <div class="text-xl font-semibold mt-1">{{ compareResult.totalPlanned }}</div>
+      </el-card>
+      <el-card shadow="never" :body-style="{ padding: '16px' }">
         <div class="text-xs text-text-muted">实际链路</div>
-        <div class="text-xl font-semibold text-text-primary mt-1">{{ compareResult.totalActual }}</div>
-      </div>
-      <div class="bg-bg-card border border-border rounded-lg p-3">
+        <div class="text-xl font-semibold mt-1">{{ compareResult.totalActual }}</div>
+      </el-card>
+      <el-card shadow="never" :body-style="{ padding: '16px' }">
         <div class="text-xs text-text-muted">匹配</div>
         <div class="text-xl font-semibold text-success mt-1">{{ compareResult.matched }}</div>
-      </div>
-      <div class="bg-bg-card border border-border rounded-lg p-3">
+      </el-card>
+      <el-card shadow="never" :body-style="{ padding: '16px' }">
         <div class="text-xs text-text-muted">差异总数</div>
         <div class="text-xl font-semibold text-error mt-1">{{ totalDiff }}</div>
-      </div>
+      </el-card>
     </div>
 
-    <div class="bg-bg-card border border-border rounded-xl overflow-hidden">
-      <div class="px-4 py-3 border-b border-border bg-bg-panel text-sm font-medium text-text-primary">
-        差异明细
-      </div>
-      <div class="max-h-[48vh] overflow-auto scrollbar-custom">
-        <table class="w-full text-sm">
-          <thead class="bg-bg-panel text-text-secondary text-xs sticky top-0">
-            <tr>
-              <th class="text-left px-3 py-2">类型</th>
-              <th class="text-left px-3 py-2">A 端</th>
-              <th class="text-left px-3 py-2">B 端</th>
-              <th class="text-left px-3 py-2">原因</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-border">
-            <tr v-for="item in allDiffItems" :key="`${item.diffType}-${item.id}`">
-              <td class="px-3 py-2">
-                <span class="px-2 py-0.5 rounded text-xs" :class="diffClass(item.diffType)">
-                  {{ item.diffType }}
-                </span>
-              </td>
-              <td class="px-3 py-2 font-mono text-text-primary">
-                {{ item.aDeviceName }} {{ item.aIf }}
-              </td>
-              <td class="px-3 py-2 font-mono text-text-primary">
-                {{ item.bDeviceName }} {{ item.bIf }}
-              </td>
-              <td class="px-3 py-2 text-text-muted">{{ item.reason }}</td>
-            </tr>
-            <tr v-if="allDiffItems.length === 0">
-              <td colspan="4" class="px-3 py-8 text-center text-text-muted">暂无差异</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <el-card shadow="never" class="flex-1 min-h-0 flex flex-col" :body-style="{ padding: '0', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }">
+      <template #header>
+        <div class="text-sm font-medium">差异明细</div>
+      </template>
+      <el-table
+        :data="allDiffItems"
+        style="width: 100%; height: 100%"
+        height="100%"
+        empty-text="暂无差异"
+      >
+        <el-table-column label="类型" width="120">
+          <template #default="{ row }">
+            <el-tag
+              size="small"
+              :type="diffTagType(row.diffType)"
+            >
+              {{ row.diffType }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="A 端" min-width="180">
+          <template #default="{ row }">
+            <span class="font-mono text-text-primary">{{ row.aDeviceName }} {{ row.aIf }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="B 端" min-width="180">
+          <template #default="{ row }">
+            <span class="font-mono text-text-primary">{{ row.bDeviceName }} {{ row.bIf }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="reason" label="原因" min-width="200" />
+      </el-table>
+    </el-card>
 
-    <div v-if="lastExportPath" class="text-xs text-text-muted">
+    <div v-if="lastExportPath" class="text-xs text-text-muted flex-shrink-0 mt-2">
       报告已导出: {{ lastExportPath }}
     </div>
   </div>
@@ -199,14 +198,14 @@ const allDiffItems = computed<DiffItem[]>(() => {
 
 const totalDiff = computed(() => allDiffItems.value.length);
 
-function diffClass(diffType: string) {
+function diffTagType(diffType: string) {
   if (diffType.includes("missing") || diffType.includes("mismatch")) {
-    return "bg-error/20 text-error";
+    return "danger";
   }
   if (diffType.includes("unexpected") || diffType.includes("one_side")) {
-    return "bg-warning/20 text-warning";
+    return "warning";
   }
-  return "bg-text-muted/20 text-text-muted";
+  return "info";
 }
 
 async function loadBaseData() {

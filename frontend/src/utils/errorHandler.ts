@@ -95,8 +95,8 @@ export async function safeCall<T>(
     
     if (showToast) {
       // 动态导入 Toast 服务避免循环依赖
-      import('./useToast').then(({ useToast }) => {
-        useToast().error(errorMessage)
+      import('element-plus').then(({ ElMessage }) => {
+        ElMessage.error(errorMessage)
       })
     }
     

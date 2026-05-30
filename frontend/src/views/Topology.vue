@@ -1,6 +1,6 @@
 <template>
-  <div class="space-y-5 animate-slide-in">
-    <div class="flex items-center justify-between gap-3">
+  <div class="space-y-5 animate-slide-in h-full flex flex-col">
+    <div class="flex items-center justify-between gap-3 flex-shrink-0">
       <div>
         <h2 class="text-lg font-semibold text-text-primary">拓扑视图</h2>
         <p class="text-xs text-text-muted mt-1">
@@ -8,213 +8,149 @@
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <select
-          v-model="selectedRunId"
-          class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary min-w-[260px]"
-        >
-          <option value="">选择拓扑运行</option>
-          <option
+        <el-select v-model="selectedRunId" placeholder="选择拓扑运行" style="width: 300px" clearable>
+          <el-option
             v-for="run in topologyRuns"
             :key="run.runId"
+            :label="`${run.taskName || run.runId} (${StatusNames[run.status] || run.status})`"
             :value="run.runId"
-          >
-            {{ run.taskName || run.runId }} ({{
-              StatusNames[run.status] || run.status
-            }})
-          </option>
-        </select>
-        <button
+          />
+        </el-select>
+        <el-button
+          :icon="RefreshRight"
           @click="refreshGraph"
           :disabled="!selectedRunId || building"
-          class="px-4 py-2 rounded-lg text-sm font-medium border border-border text-text-secondary hover:text-text-primary"
         >
           刷新图谱
-        </button>
+        </el-button>
         <!-- 离线重放按钮 -->
-        <button
+        <el-button
+          type="primary"
+          :icon="VideoPlay"
           @click="openReplayDialog"
           :disabled="!selectedRunId"
-          class="px-4 py-2 rounded-lg text-sm font-medium bg-accent text-white hover:bg-accent/90 disabled:opacity-50"
           title="从历史Raw文件重新解析构建拓扑"
         >
-          <svg class="w-4 h-4 inline mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
           离线重放
-        </button>
+        </el-button>
       </div>
     </div>
 
-    <div class="bg-bg-card border border-border rounded-xl p-4">
+    <el-card shadow="never" :body-style="{ padding: '16px' }" class="flex-shrink-0">
       <div class="grid grid-cols-5 gap-3">
-        <input
+        <el-input
           v-model="keyword"
           placeholder="搜索设备/接口"
-          class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
+          :prefix-icon="Search"
+          clearable
         />
-        <select
-          v-model="statusFilter"
-          class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
-        >
-          <option value="all">全部状态</option>
-          <option value="confirmed">confirmed</option>
-          <option value="semi_confirmed">semi_confirmed</option>
-          <option value="inferred">inferred</option>
-          <option value="conflict">conflict</option>
-        </select>
-        <select
-          v-model="viewMode"
-          class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
-        >
-          <option value="all">全部链路</option>
-          <option value="logical">逻辑视图</option>
-          <option value="physical">物理视图</option>
-        </select>
-        <select
-          v-model="roleFilter"
-          class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
-        >
-          <option value="all">全部角色</option>
-          <option v-for="role in roleOptions" :key="role" :value="role">
-            {{ role }}
-          </option>
-        </select>
-        <select
-          v-model="siteFilter"
-          class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
-        >
-          <option value="all">全部站点</option>
-          <option v-for="site in siteOptions" :key="site" :value="site">
-            {{ site }}
-          </option>
-        </select>
+        <el-select v-model="statusFilter" placeholder="全部状态">
+          <el-option label="全部状态" value="all" />
+          <el-option label="confirmed" value="confirmed" />
+          <el-option label="semi_confirmed" value="semi_confirmed" />
+          <el-option label="inferred" value="inferred" />
+          <el-option label="conflict" value="conflict" />
+        </el-select>
+        <el-select v-model="viewMode" placeholder="全部链路">
+          <el-option label="全部链路" value="all" />
+          <el-option label="逻辑视图" value="logical" />
+          <el-option label="物理视图" value="physical" />
+        </el-select>
+        <el-select v-model="roleFilter" placeholder="全部角色">
+          <el-option label="全部角色" value="all" />
+          <el-option v-for="role in roleOptions" :key="role" :label="role" :value="role" />
+        </el-select>
+        <el-select v-model="siteFilter" placeholder="全部站点">
+          <el-option label="全部站点" value="all" />
+          <el-option v-for="site in siteOptions" :key="site" :label="site" :value="site" />
+        </el-select>
       </div>
-    </div>
+    </el-card>
 
-    <div class="grid grid-cols-5 gap-3">
-      <div class="bg-bg-card border border-border rounded-lg p-3">
+    <div class="grid grid-cols-5 gap-3 flex-shrink-0">
+      <el-card shadow="never" :body-style="{ padding: '12px' }">
         <div class="text-xs text-text-muted">可见链路</div>
-        <div class="text-xl font-semibold text-text-primary mt-1">
+        <div class="text-xl font-semibold mt-1">
           {{ filteredEdges.length }}
         </div>
-      </div>
-      <div class="bg-bg-card border border-border rounded-lg p-3">
+      </el-card>
+      <el-card shadow="never" :body-style="{ padding: '12px' }">
         <div class="text-xs text-text-muted">confirmed</div>
         <div class="text-xl font-semibold text-success mt-1">
           {{ countByStatus("confirmed") }}
         </div>
-      </div>
-      <div class="bg-bg-card border border-border rounded-lg p-3">
+      </el-card>
+      <el-card shadow="never" :body-style="{ padding: '12px' }">
         <div class="text-xs text-text-muted">semi_confirmed</div>
         <div class="text-xl font-semibold text-warning mt-1">
           {{ countByStatus("semi_confirmed") }}
         </div>
-      </div>
-      <div class="bg-bg-card border border-border rounded-lg p-3">
+      </el-card>
+      <el-card shadow="never" :body-style="{ padding: '12px' }">
         <div class="text-xs text-text-muted">inferred</div>
         <div class="text-xl font-semibold text-warning mt-1">
           {{ countByStatus("inferred") }}
         </div>
-      </div>
-      <div class="bg-bg-card border border-border rounded-lg p-3">
+      </el-card>
+      <el-card shadow="never" :body-style="{ padding: '12px' }">
         <div class="text-xs text-text-muted">conflict</div>
         <div class="text-xl font-semibold text-error mt-1">
           {{ countByStatus("conflict") }}
         </div>
-      </div>
+      </el-card>
     </div>
 
     <!-- 视图切换 -->
-    <div class="flex items-center gap-2">
-      <button
-        @click="viewType = 'graph'"
-        :class="
-          viewType === 'graph'
-            ? 'bg-accent text-white'
-            : 'bg-bg-panel text-text-secondary'
-        "
-        class="px-3 py-1.5 rounded-lg text-sm font-medium border border-border"
-      >
-        图形视图
-      </button>
-      <button
-        @click="viewType = 'table'"
-        :class="
-          viewType === 'table'
-            ? 'bg-accent text-white'
-            : 'bg-bg-panel text-text-secondary'
-        "
-        class="px-3 py-1.5 rounded-lg text-sm font-medium border border-border"
-      >
-        表格视图
-      </button>
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <el-radio-group v-model="viewType">
+        <el-radio-button label="graph">图形视图</el-radio-button>
+        <el-radio-button label="table">表格视图</el-radio-button>
+      </el-radio-group>
     </div>
 
     <!-- 解析错误提示 -->
-    <div
+    <el-alert
       v-if="summary.errors && summary.errors.length > 0"
-      class="bg-error/10 border border-error/30 rounded-lg p-3"
+      type="error"
+      :closable="false"
+      class="flex-shrink-0"
+      :title="`拓扑构建完成，但存在 ${summary.errors.length} 个数据问题`"
     >
-      <div class="flex items-center gap-2 text-sm text-error font-medium">
-        <svg
-          class="w-4 h-4"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-        >
-          <circle cx="12" cy="12" r="10" stroke-width="2" />
-          <line
-            x1="12"
-            y1="8"
-            x2="12"
-            y2="12"
-            stroke-width="2"
-            stroke-linecap="round"
-          />
-          <line
-            x1="12"
-            y1="16"
-            x2="12.01"
-            y2="16"
-            stroke-width="2"
-            stroke-linecap="round"
-          />
-        </svg>
-        拓扑构建完成，但存在 {{ summary.errors.length }} 个数据问题
-      </div>
       <div class="mt-2 space-y-1 max-h-[120px] overflow-auto scrollbar-custom">
         <div
           v-for="(err, idx) in summary.errors"
           :key="idx"
-          class="text-xs text-error/80 font-mono bg-error/5 px-2 py-1 rounded"
+          class="text-xs font-mono bg-error/10 px-2 py-1 rounded text-error"
         >
           {{ err }}
         </div>
       </div>
-    </div>
+    </el-alert>
 
-    <div
+    <el-alert
       v-if="selectedRunId && graph.edges.length === 0"
-      class="bg-warning/10 border border-warning/30 rounded-lg p-3 space-y-2"
+      type="warning"
+      :closable="false"
+      class="flex-shrink-0"
     >
-      <div class="text-sm text-warning font-medium">
+      <div class="text-sm font-medium">
         {{
           graph.nodes.length > 0
             ? `当前运行未发现任何拓扑链路，但已识别 ${graph.nodes.length} 个设备节点。图形视图会显示孤立节点，表格视图暂无链路记录。`
             : "当前运行未返回任何拓扑节点和链路，图形视图与表格视图都会为空。"
         }}
       </div>
-      <ul class="text-xs text-text-muted list-disc pl-5 space-y-1">
+      <ul class="text-xs list-disc pl-5 space-y-1 mt-2">
         <li v-for="reason in emptyGraphReasons" :key="reason">{{ reason }}</li>
       </ul>
-    </div>
+    </el-alert>
 
     <!-- 图形视图 -->
     <div
       v-if="viewType === 'graph'"
-      class="bg-bg-card border border-border rounded-xl overflow-hidden"
+      class="flex-1 min-h-0 bg-bg-card border border-border rounded-xl overflow-hidden relative"
     >
-      <div class="h-[60vh]">
+      <div class="absolute inset-0">
         <TopologyGraph
           :nodes="graphNodes"
           :edges="graphEdges"
@@ -225,86 +161,53 @@
     </div>
 
     <!-- 表格视图 -->
-    <div v-if="viewType === 'table'" class="grid grid-cols-3 gap-4 items-start">
-      <div
-        class="col-span-2 bg-bg-card border border-border rounded-xl overflow-hidden"
-      >
-        <div
-          class="px-4 py-3 border-b border-border bg-bg-panel flex items-center justify-between"
-        >
-          <span class="text-sm font-medium text-text-primary">链路列表</span>
-          <span class="text-xs text-text-muted"
-            >节点 {{ graph.nodes.length }} / 边 {{ filteredEdges.length }}</span
-          >
-        </div>
-        <div class="max-h-[58vh] overflow-auto scrollbar-custom">
-          <table class="w-full text-sm">
-            <thead class="bg-bg-panel text-text-secondary text-xs sticky top-0">
-              <tr>
-                <th class="text-left px-3 py-2">源设备</th>
-                <th class="text-left px-3 py-2">源接口</th>
-                <th class="text-left px-3 py-2">目标设备</th>
-                <th class="text-left px-3 py-2">目标接口</th>
-                <th class="text-left px-3 py-2">类型</th>
-                <th class="text-left px-3 py-2">状态</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border">
-              <tr
-                v-for="edge in filteredEdges"
-                :key="edge.id"
-                class="hover:bg-bg-hover cursor-pointer"
-                @click="loadEdgeDetail(edge.id)"
-              >
-                <td class="px-3 py-2 text-text-primary">
-                  <button
-                    class="hover:text-accent"
-                    @click.stop="openDeviceDetail(edge.source)"
-                  >
-                    {{ displayNodeLabel(edge.source) }}
-                  </button>
-                </td>
-                <td class="px-3 py-2 font-mono text-text-muted">
-                  {{ edge.sourceIf }}
-                </td>
-                <td class="px-3 py-2 text-text-primary">
-                  <button
-                    class="hover:text-accent"
-                    @click.stop="openDeviceDetail(edge.target)"
-                  >
-                    {{ displayNodeLabel(edge.target) }}
-                  </button>
-                </td>
-                <td class="px-3 py-2 font-mono text-text-muted">
-                  {{ edge.targetIf }}
-                </td>
-                <td class="px-3 py-2 text-text-secondary">
-                  {{ edge.edgeType }}
-                </td>
-                <td class="px-3 py-2">
-                  <span
-                    class="px-2 py-0.5 rounded text-xs"
-                    :class="statusClass(edge.status)"
-                  >
-                    {{ edge.status }}
-                  </span>
-                </td>
-              </tr>
-              <tr v-if="filteredEdges.length === 0">
-                <td colspan="6" class="px-3 py-8 text-center text-text-muted">
-                  暂无匹配的链路
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="space-y-4">
-        <div class="bg-bg-card border border-border rounded-xl overflow-hidden">
-          <div class="px-4 py-3 border-b border-border bg-bg-panel">
-            <span class="text-sm font-medium text-text-primary">链路证据</span>
+    <div v-if="viewType === 'table'" class="flex-1 min-h-0 grid grid-cols-3 gap-4 items-start overflow-hidden">
+      <el-card class="col-span-2 h-full flex flex-col" shadow="never" :body-style="{ padding: '0', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }">
+        <template #header>
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">链路列表</span>
+            <span class="text-xs text-text-muted">节点 {{ graph.nodes.length }} / 边 {{ filteredEdges.length }}</span>
           </div>
+        </template>
+        <el-table
+          :data="filteredEdges"
+          style="width: 100%; height: 100%"
+          height="100%"
+          highlight-current-row
+          @row-click="(row: any) => loadEdgeDetail(row.id)"
+        >
+          <el-table-column label="源设备" min-width="120">
+            <template #default="{ row }">
+              <el-button link type="primary" @click.stop="openDeviceDetail(row.source)">
+                {{ displayNodeLabel(row.source) }}
+              </el-button>
+            </template>
+          </el-table-column>
+          <el-table-column prop="sourceIf" label="源接口" min-width="100" />
+          <el-table-column label="目标设备" min-width="120">
+            <template #default="{ row }">
+              <el-button link type="primary" @click.stop="openDeviceDetail(row.target)">
+                {{ displayNodeLabel(row.target) }}
+              </el-button>
+            </template>
+          </el-table-column>
+          <el-table-column prop="targetIf" label="目标接口" min-width="100" />
+          <el-table-column prop="edgeType" label="类型" width="100" />
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.status === 'confirmed' ? 'success' : (row.status === 'conflict' ? 'danger' : 'warning')">
+                {{ row.status }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
+      <div class="space-y-4 h-full overflow-auto pr-2 scrollbar-custom">
+        <el-card shadow="never" :body-style="{ padding: '0' }">
+          <template #header>
+            <span class="text-sm font-medium">链路证据</span>
+          </template>
           <div v-if="edgeDetail" class="p-4 space-y-2 text-sm">
             <div class="text-text-primary">
               {{ edgeDetail.aDevice.label || edgeDetail.aDevice.id }}:{{
@@ -347,15 +250,13 @@
             </div>
           </div>
           <div v-else class="p-4 text-xs text-text-muted">点击链路查看证据</div>
-        </div>
+        </el-card>
 
-        <div class="bg-bg-card border border-border rounded-xl overflow-hidden">
-          <div class="px-4 py-3 border-b border-border bg-bg-panel">
-            <span class="text-sm font-medium text-text-primary">设备详情</span>
-          </div>
-          <div v-if="loadingDeviceDetail" class="p-4 text-xs text-text-muted">
-            加载中...
-          </div>
+        <el-card shadow="never" :body-style="{ padding: '0' }">
+          <template #header>
+            <span class="text-sm font-medium">设备详情</span>
+          </template>
+          <div v-if="loadingDeviceDetail" class="p-4 text-xs text-text-muted" v-loading="true"></div>
           <div v-else-if="deviceDetail" class="p-4 space-y-2 text-xs">
             <div class="text-text-primary font-semibold">
               {{
@@ -397,7 +298,7 @@
           <div v-else class="p-4 text-xs text-text-muted">
             点击设备名称查看详情
           </div>
-        </div>
+        </el-card>
       </div>
     </div>
   </div>
@@ -430,6 +331,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { Search, RefreshRight, VideoPlay } from '@element-plus/icons-vue';
 import {
   TaskExecutionAPI,
   type ParsedResult,
@@ -662,15 +564,6 @@ const emptyGraphReasons = computed(() => {
   return reasons;
 });
 
-function statusClass(status: string) {
-  const map: Record<string, string> = {
-    confirmed: "bg-success/20 text-success",
-    semi_confirmed: "bg-warning/20 text-warning",
-    inferred: "bg-warning/20 text-warning",
-    conflict: "bg-error/20 text-error",
-  };
-  return map[status] || "bg-text-muted/20 text-text-muted";
-}
 
 function countByStatus(status: string) {
   return filteredEdges.value.filter((edge) => edge.status === status).length;

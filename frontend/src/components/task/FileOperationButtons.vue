@@ -73,7 +73,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { ExecutionHistoryAPI } from "../../services/api";
-import { useToast } from "../../utils/useToast";
+import { ElMessage } from "element-plus";
 import type { FileType } from "../../types/executionHistory";
 
 const props = defineProps<{
@@ -85,8 +85,6 @@ const props = defineProps<{
   size?: "small" | "medium" | "large";
   showText?: boolean;
 }>();
-
-const toast = useToast();
 
 const fileTypeText = computed(() => {
   const textMap: Record<string, string> = {
@@ -109,10 +107,10 @@ const handleOpenFile = async () => {
     });
 
     if (result && !result.success) {
-      toast.error(result.message || "打开文件失败");
+      ElMessage.error(result.message || "打开文件失败");
     }
   } catch (error) {
-    toast.error(`打开${fileTypeText.value}失败: ${error}`);
+    ElMessage.error(`打开${fileTypeText.value}失败: ${error}`);
   }
 };
 
@@ -126,10 +124,10 @@ const handleOpenFolder = async () => {
     });
 
     if (result && !result.success) {
-      toast.error(result.message || "打开文件夹失败");
+      ElMessage.error(result.message || "打开文件夹失败");
     }
   } catch (error) {
-    toast.error(`打开文件夹失败: ${error}`);
+    ElMessage.error(`打开文件夹失败: ${error}`);
   }
 };
 </script>

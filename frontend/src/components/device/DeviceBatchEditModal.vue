@@ -1,149 +1,87 @@
 <template>
-  <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center">
-    <!-- 背景遮罩 -->
-    <div
-      class="absolute inset-0 bg-black/50 backdrop-blur-sm"
-      @click="$emit('close')"
-    ></div>
-
-    <!-- 弹窗内容 -->
-    <div
-      class="relative bg-bg-card border border-border rounded-xl shadow-2xl w-full max-w-sm mx-4 animate-slide-in"
-    >
-      <!-- 标题栏 -->
-      <div
-        class="flex items-center justify-between px-6 py-4 border-b border-border"
-      >
-        <h3 class="text-lg font-semibold text-text-primary">
+  <el-dialog
+    :model-value="show"
+    @update:model-value="$emit('close')"
+    :title="`批量修改${batchFieldLabel}`"
+    width="400px"
+    destroy-on-close
+    :close-on-click-modal="false"
+  >
+    <template #header="{ titleId, titleClass }">
+      <div class="flex items-center">
+        <h4 :id="titleId" :class="titleClass">
           批量修改{{ batchFieldLabel }}
-          <span
-            v-if="selectedCount > 0"
-            class="ml-2 text-sm font-normal text-accent"
-          >
+          <span v-if="selectedCount > 0" class="ml-2 text-sm font-normal text-accent">
             ({{ selectedCount }} 台设备)
           </span>
-        </h3>
-        <button
-          @click="$emit('close')"
-          class="p-1 text-text-muted hover:text-text-primary transition-colors"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="w-5 h-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+        </h4>
       </div>
+    </template>
 
-      <!-- 表单 -->
-      <form @submit.prevent="handleSubmit" class="p-6 space-y-4">
-        <p class="text-sm text-text-secondary">
-          将选中的设备的{{ batchFieldLabel }}修改为：
-        </p>
+    <div class="mb-4 text-sm text-text-secondary">
+      将选中的设备的{{ batchFieldLabel }}修改为：
+    </div>
 
-        <!-- 协议选择 -->
-        <div v-if="field === 'protocol'">
-          <select
+    <el-form @submit.prevent="handleSubmit" label-width="0">
+      <el-form-item v-if="field === 'protocol'">
+        <el-select v-model="localValue" class="w-full">
+          <el-option v-for="p in validProtocols" :key="p" :label="p" :value="p" />
+        </el-select>
+      </el-form-item>
+
+      <el-form-item v-else-if="field === 'port'">
+        <el-input-number
+          v-model="localValue"
+          :min="1"
+          :max="65535"
+          controls-position="right"
+          class="w-full"
+          placeholder="端口号"
+        />
+      </el-form-item>
+
+      <el-form-item v-else-if="field === 'password'">
+        <el-input
+          v-model="localValue"
+          type="password"
+          show-password
+          :placeholder="`请输入${batchFieldLabel}`"
+        />
+      </el-form-item>
+      
+      <el-form-item v-else-if="field === 'tag'">
+        <div class="w-full">
+          <el-input
             v-model="localValue"
-            class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary focus:border-accent focus:outline-none transition-colors"
-          >
-            <option v-for="p in validProtocols" :key="p" :value="p">
-              {{ p }}
-            </option>
-          </select>
-        </div>
-
-        <!-- 端口输入 -->
-        <div v-else-if="field === 'port'">
-          <input
-            v-model.number="localValue"
-            type="number"
-            placeholder="端口号"
-            class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
-            min="1"
-            max="65535"
+            :placeholder="`请输入${batchFieldLabel} (多个用逗号分隔)`"
           />
-        </div>
-
-        <!-- 用户名输入 -->
-        <div v-else-if="field === 'username'">
-          <input
-            v-model="localValue"
-            type="text"
-            :placeholder="'请输入' + batchFieldLabel"
-            class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
-          />
-        </div>
-
-        <!-- 密码输入 -->
-        <div v-else-if="field === 'password'">
-          <input
-            v-model="localValue"
-            type="password"
-            :placeholder="'请输入' + batchFieldLabel"
-            class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
-          />
-        </div>
-
-        <!-- 分组输入 -->
-        <div v-else-if="field === 'group'">
-          <input
-            v-model="localValue"
-            type="text"
-            :placeholder="'请输入' + batchFieldLabel"
-            class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
-          />
-        </div>
-
-        <!-- 标签输入 -->
-        <div v-else-if="field === 'tag'">
-          <div class="space-y-2">
-            <input
-              v-model="localValue"
-              type="text"
-              :placeholder="'请输入' + batchFieldLabel + ' (多个用逗号分隔)'"
-              class="w-full px-3 py-2 text-sm bg-bg-panel border border-border rounded-lg text-text-primary placeholder-text-muted/50 focus:border-accent focus:outline-none transition-colors"
-            />
-            <p class="text-[10px] text-text-muted">
-              提示：输入多个标签时请使用英文或中文逗号分隔。
-            </p>
+          <div class="mt-1 text-[10px] text-text-muted leading-tight">
+            提示：输入多个标签时请使用英文或中文逗号分隔。
           </div>
         </div>
+      </el-form-item>
 
-        <!-- 错误消息 -->
-        <div
-          v-if="errorMessage"
-          class="px-3 py-2 text-sm text-error bg-error-bg border border-error/30 rounded-lg"
-        >
-          {{ errorMessage }}
-        </div>
+      <el-form-item v-else>
+        <el-input
+          v-model="localValue"
+          :placeholder="`请输入${batchFieldLabel}`"
+        />
+      </el-form-item>
+    </el-form>
 
-        <!-- 操作按钮 -->
-        <div class="flex items-center justify-end gap-3 pt-2">
-          <button
-            type="button"
-            @click="$emit('close')"
-            class="px-4 py-2 text-sm font-medium text-text-secondary bg-bg-panel border border-border rounded-lg hover:bg-bg-hover transition-colors"
-          >
-            取消
-          </button>
-          <button
-            type="submit"
-            :disabled="isSaving"
-            class="px-4 py-2 text-sm font-medium text-white bg-accent hover:bg-accent/90 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {{ isSaving ? "保存中..." : "确定" }}
-          </button>
-        </div>
-      </form>
+    <div v-if="errorMessage" class="mb-4 px-3 py-2 text-sm text-error bg-error-bg border border-error/30 rounded-lg">
+      {{ errorMessage }}
     </div>
-  </div>
+
+    <template #footer>
+      <div class="flex justify-end gap-2">
+        <el-button @click="$emit('close')">取消</el-button>
+        <el-button type="primary" :loading="isSaving" @click="handleSubmit">
+          确定
+        </el-button>
+      </div>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">

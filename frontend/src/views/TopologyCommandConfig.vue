@@ -1,6 +1,6 @@
 <template>
-  <div class="space-y-5 animate-slide-in">
-    <div class="flex items-center justify-between gap-3">
+  <div class="space-y-5 animate-slide-in h-full flex flex-col">
+    <div class="flex items-center justify-between gap-3 flex-shrink-0">
       <div>
         <h2 class="text-lg font-semibold text-text-primary">拓扑命令配置中心</h2>
         <p class="text-xs text-text-muted mt-1">
@@ -8,167 +8,169 @@
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <button
-          class="px-4 py-2 rounded-lg text-sm font-medium border border-border text-text-secondary hover:text-text-primary disabled:opacity-50"
+        <el-button
+          :icon="RefreshRight"
           :disabled="loadingConfig"
           @click="refreshCurrentVendor"
         >
           刷新
-        </button>
+        </el-button>
       </div>
     </div>
 
-    <div class="bg-bg-card border border-border rounded-xl p-4 space-y-4">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <el-card shadow="never" :body-style="{ padding: '16px' }" class="flex-shrink-0">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="space-y-2">
           <label class="text-sm font-medium text-text-primary">厂商</label>
-          <select
+          <el-select
             v-model="selectedVendor"
-            class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
+            placeholder="请选择厂商"
+            class="w-full"
             :disabled="loadingVendors || loadingConfig"
           >
-            <option value="" disabled>请选择厂商</option>
-            <option v-for="vendor in vendors" :key="vendor" :value="vendor">
-              {{ vendor }}
-            </option>
-          </select>
+            <el-option v-for="vendor in vendors" :key="vendor" :label="vendor" :value="vendor" />
+          </el-select>
         </div>
 
         <div class="space-y-2">
           <label class="text-sm font-medium text-text-primary">字段总数</label>
-          <div class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary">
+          <div class="px-3 py-1.5 rounded-lg bg-bg-panel border border-border text-sm text-text-primary">
             {{ commands.length }}
           </div>
         </div>
 
         <div class="space-y-2">
           <label class="text-sm font-medium text-text-primary">启用字段数</label>
-          <div class="px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary">
+          <div class="px-3 py-1.5 rounded-lg bg-bg-panel border border-border text-sm text-text-primary">
             {{ enabledCount }}
           </div>
         </div>
       </div>
 
-      <div
+      <el-alert
         v-if="invalidCount > 0"
-        class="rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs text-error"
-      >
-        存在 {{ invalidCount }} 条无效配置（启用但命令为空，或超时时间小于等于 0），请修正后再保存。
-      </div>
+        type="error"
+        :closable="false"
+        class="mt-4"
+        show-icon
+        :title="`存在 ${invalidCount} 条无效配置（启用但命令为空，或超时时间小于等于 0），请修正后再保存。`"
+      />
 
-      <div class="flex items-center justify-end gap-2">
-        <button
-          class="px-4 py-2 rounded-lg text-sm font-medium border border-warning/40 text-warning hover:bg-warning/10 disabled:opacity-50"
+      <div class="flex items-center justify-end gap-2 mt-4">
+        <el-button
+          type="warning"
+          plain
           :disabled="!selectedVendor || loadingConfig || resetting"
           @click="resetVendor"
         >
           {{ resetting ? "重置中..." : "重置为系统默认" }}
-        </button>
-        <button
-          class="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-glow disabled:opacity-50"
+        </el-button>
+        <el-button
+          type="primary"
           :disabled="!canSave"
+          :loading="saving"
           @click="saveVendor"
         >
-          {{ saving ? "保存中..." : "保存配置" }}
-        </button>
+          保存配置
+        </el-button>
       </div>
-    </div>
+    </el-card>
 
-    <div class="bg-bg-card border border-border rounded-xl overflow-hidden">
-      <div class="max-h-[62vh] overflow-auto scrollbar-custom">
-        <table class="w-full text-sm">
-          <thead class="bg-bg-panel text-text-secondary text-xs sticky top-0 z-10">
-            <tr>
-              <th class="text-left px-3 py-2 min-w-[140px]">字段</th>
-              <th class="text-left px-3 py-2 min-w-[320px]">命令</th>
-              <th class="text-left px-3 py-2 min-w-[120px]">超时(秒)</th>
-              <th class="text-left px-3 py-2 min-w-[80px]">启用</th>
-              <th class="text-left px-3 py-2 min-w-[160px]">备注</th>
-              <th class="text-left px-3 py-2 min-w-[130px]">来源</th>
-              <th class="text-left px-3 py-2 min-w-[80px]">操作</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-border">
-            <tr v-if="loadingConfig">
-              <td colspan="7" class="px-4 py-8 text-center text-text-muted">加载配置中...</td>
-            </tr>
-            <tr v-else-if="commands.length === 0">
-              <td colspan="7" class="px-4 py-8 text-center text-text-muted">暂无可编辑字段</td>
-            </tr>
-            <tr v-for="row in commands" :key="row.fieldKey" class="hover:bg-bg-hover/30 align-top">
-              <td class="px-3 py-3">
-                <div class="font-medium text-text-primary">{{ row.displayName || row.fieldKey }}</div>
-                <div class="text-xs text-text-muted font-mono mt-1">{{ row.fieldKey }}</div>
-                <div class="text-[11px] text-text-muted mt-1">{{ row.description || "-" }}</div>
-                <span
-                  v-if="row.required"
-                  class="inline-flex mt-2 px-2 py-0.5 rounded bg-warning/15 text-warning text-[11px]"
-                >
-                  必填字段
-                </span>
-              </td>
+    <div class="flex-1 min-h-0 bg-bg-card border border-border rounded-xl overflow-hidden relative">
+      <el-table
+        :data="commands"
+        style="width: 100%; height: 100%"
+        height="100%"
+        v-loading="loadingConfig"
+        empty-text="暂无可编辑字段"
+      >
+        <el-table-column label="字段" min-width="160">
+          <template #default="{ row }">
+            <div class="font-medium text-text-primary">{{ row.displayName || row.fieldKey }}</div>
+            <div class="text-xs text-text-muted font-mono mt-1">{{ row.fieldKey }}</div>
+            <div class="text-[11px] text-text-muted mt-1">{{ row.description || "-" }}</div>
+            <el-tag
+              v-if="row.required"
+              type="warning"
+              size="small"
+              class="mt-1"
+            >
+              必填字段
+            </el-tag>
+          </template>
+        </el-table-column>
 
-              <td class="px-3 py-3">
-                <textarea
-                  v-model="row.command"
-                  rows="3"
-                  class="w-full px-3 py-2 rounded-lg bg-terminal-bg text-terminal-text border border-border font-mono text-xs resize-y focus:outline-none focus:border-accent/50"
-                  placeholder="请输入命令"
-                  @input="markDirty"
-                />
-                <div class="text-[11px] text-text-muted mt-1">解析绑定: {{ row.parserBinding || "-" }}</div>
-              </td>
+        <el-table-column label="命令" min-width="320">
+          <template #default="{ row }">
+            <el-input
+              v-model="row.command"
+              type="textarea"
+              :rows="3"
+              placeholder="请输入命令"
+              @input="markDirty"
+              class="font-mono text-xs"
+            />
+            <div class="text-[11px] text-text-muted mt-1">解析绑定: {{ row.parserBinding || "-" }}</div>
+          </template>
+        </el-table-column>
 
-              <td class="px-3 py-3">
-                <input
-                  v-model.number="row.timeoutSec"
-                  type="number"
-                  min="1"
-                  class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-sm text-text-primary"
-                  @input="markDirty"
-                />
-              </td>
+        <el-table-column label="超时(秒)" width="120">
+          <template #default="{ row }">
+            <el-input-number
+              v-model="row.timeoutSec"
+              :min="1"
+              size="small"
+              class="w-full"
+              controls-position="right"
+              @change="markDirty"
+            />
+          </template>
+        </el-table-column>
 
-              <td class="px-3 py-3">
-                <label class="inline-flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    v-model="row.enabled"
-                    type="checkbox"
-                    class="w-4 h-4 rounded border-border"
-                    @change="markDirty"
-                  />
-                  <span class="text-xs text-text-secondary">{{ row.enabled ? "启用" : "停用" }}</span>
-                </label>
-              </td>
+        <el-table-column label="启用" width="100">
+          <template #default="{ row }">
+            <el-switch
+              v-model="row.enabled"
+              inline-prompt
+              active-text="启"
+              inactive-text="停"
+              @change="markDirty"
+            />
+          </template>
+        </el-table-column>
 
-              <td class="px-3 py-3">
-                <input
-                  v-model="row.notes"
-                  type="text"
-                  class="w-full px-3 py-2 rounded-lg bg-bg-panel border border-border text-xs text-text-primary"
-                  placeholder="可选备注"
-                  @input="markDirty"
-                />
-              </td>
+        <el-table-column label="备注" min-width="160">
+          <template #default="{ row }">
+            <el-input
+              v-model="row.notes"
+              placeholder="可选备注"
+              size="small"
+              @input="markDirty"
+            />
+          </template>
+        </el-table-column>
 
-              <td class="px-3 py-3">
-                <span class="inline-flex px-2 py-1 rounded text-[11px] border" :class="sourceClass(row.source)">
-                  {{ sourceLabel(row.source) }}
-                </span>
-              </td>
+        <el-table-column label="来源" width="120">
+          <template #default="{ row }">
+            <el-tag size="small" :type="sourceType(row.source)">
+              {{ sourceLabel(row.source) }}
+            </el-tag>
+          </template>
+        </el-table-column>
 
-              <td class="px-3 py-3">
-                <button
-                  class="text-xs px-2 py-1 rounded border border-border text-text-secondary hover:text-text-primary"
-                  @click="resetRow(row.fieldKey)"
-                >
-                  撤销
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <el-table-column label="操作" width="80" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              size="small"
+              @click="resetRow(row.fieldKey)"
+            >
+              撤销
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
     </div>
   </div>
 </template>
@@ -180,11 +182,11 @@ import {
   type TopologyVendorCommandItemView,
   type TopologyVendorCommandSaveRequest,
 } from "@/services/api";
-import { useToast } from "@/utils/useToast";
+import { ElMessage } from "element-plus";
+import { RefreshRight } from "@element-plus/icons-vue";
 import { getLogger } from '@/utils/logger'
 
 const logger = getLogger()
-const toast = useToast();
 
 const vendors = ref<string[]>([]);
 const selectedVendor = ref("");
@@ -248,7 +250,7 @@ async function loadVendors() {
       selectedVendor.value = "";
       commands.value = [];
       baselineCommands.value = [];
-      toast.warning("当前没有可用的拓扑厂商");
+      ElMessage.warning("当前没有可用的拓扑厂商");
       return;
     }
     if (!vendors.value.includes(selectedVendor.value)) {
@@ -256,7 +258,7 @@ async function loadVendors() {
     }
   } catch (err: any) {
     logger.error('加载厂商列表失败', 'TopologyCommandConfig', err);
-    toast.error(`加载厂商列表失败: ${err?.message || err}`);
+    ElMessage.error(`加载厂商列表失败: ${err?.message || err}`);
   } finally {
     loadingVendors.value = false;
   }
@@ -273,7 +275,7 @@ async function loadVendorConfig(vendor: string) {
     logger.error('加载厂商配置失败', 'TopologyCommandConfig', err);
     commands.value = [];
     baselineCommands.value = [];
-    toast.error(`加载 ${vendor} 配置失败: ${err?.message || err}`);
+    ElMessage.error(`加载 ${vendor} 配置失败: ${err?.message || err}`);
   } finally {
     loadingConfig.value = false;
   }
@@ -304,10 +306,10 @@ async function saveVendor() {
     const normalized = normalizeCommands(saved?.commands || []);
     commands.value = normalized;
     baselineCommands.value = cloneCommands(normalized);
-    toast.success(`厂商 ${selectedVendor.value} 配置保存成功`);
+    ElMessage.success(`厂商 ${selectedVendor.value} 配置保存成功`);
   } catch (err: any) {
     logger.error('保存厂商配置失败', 'TopologyCommandConfig', err);
-    toast.error(`保存失败: ${err?.message || err}`);
+    ElMessage.error(`保存失败: ${err?.message || err}`);
   } finally {
     saving.value = false;
   }
@@ -321,10 +323,10 @@ async function resetVendor() {
     const normalized = normalizeCommands(reset?.commands || []);
     commands.value = normalized;
     baselineCommands.value = cloneCommands(normalized);
-    toast.success(`已重置 ${selectedVendor.value} 为系统默认配置`);
+    ElMessage.success(`已重置 ${selectedVendor.value} 为系统默认配置`);
   } catch (err: any) {
     logger.error('重置厂商配置失败', 'TopologyCommandConfig', err);
-    toast.error(`重置失败: ${err?.message || err}`);
+    ElMessage.error(`重置失败: ${err?.message || err}`);
   } finally {
     resetting.value = false;
   }
@@ -392,14 +394,11 @@ function sourceLabel(source: string) {
   }
 }
 
-function sourceClass(source: string) {
+function sourceType(source: string) {
   switch (source) {
-    case "vendor_config":
-      return "border-accent/30 text-accent bg-accent/10";
-    case "profile_seed":
-      return "border-info/30 text-info bg-info/10";
-    default:
-      return "border-border text-text-muted bg-bg-panel";
+    case "vendor_config": return "success";
+    case "profile_seed": return "info";
+    default: return "info";
   }
 }
 </script>

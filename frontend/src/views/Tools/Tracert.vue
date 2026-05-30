@@ -4,7 +4,7 @@ import { Events } from '@wailsio/runtime'
 import * as TracertService from '@/bindings/github.com/NetWeaverGo/core/internal/ui/tracertservice'
 import type { TracertConfig, TracertProgress, TracertHopUpdate, TracertHopResult } from '@/bindings/github.com/NetWeaverGo/core/internal/icmp/models'
 import type { TracertRequest } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
-import { useToast } from '@/utils/useToast'
+import { ElMessage } from 'element-plus'
 import { getLogger } from '@/utils/logger'
 import TracertSettingsModal from '@/components/tools/TracertSettingsModal.vue'
 
@@ -30,7 +30,6 @@ interface TracertGeoResolvedEvent {
   geo: GeoInfo | null
 }
 
-const toast = useToast()
 
 // State
 const target = ref('')
@@ -100,7 +99,7 @@ const loadColumnConfig = () => {
 const saveColumnConfig = () => {
   localStorage.setItem('tracertColumns', JSON.stringify(columns.value))
   showColumnConfig.value = false
-  toast.success('列配置已保存')
+  ElMessage.success('列配置已保存')
 }
 
 const resetColumnConfig = () => {
@@ -416,7 +415,7 @@ const stopPolling = () => {
 // Methods
 const startTracert = async () => {
   if (!target.value.trim()) {
-    toast.error('请输入目标地址')
+    ElMessage.error('请输入目标地址')
     return
   }
 
@@ -432,11 +431,11 @@ const startTracert = async () => {
     progress.value = result
     lastProgressTime = Date.now()
     startPolling()
-    toast.success('路径探测已启动')
+    ElMessage.success('路径探测已启动')
   } catch (err: any) {
     logger.error('Failed to start tracert', 'Tracert', err)
     const errorMsg = err?.message || err?.toString() || '启动失败'
-    toast.error(`启动失败: ${errorMsg}`)
+    ElMessage.error(`启动失败: ${errorMsg}`)
   }
 }
 
@@ -444,10 +443,10 @@ const stopTracert = async () => {
   try {
     await TracertService.StopTracert()
     stopPolling()
-    toast.info('正在停止...')
+    ElMessage.info('正在停止...')
   } catch (err: any) {
     logger.error('Failed to stop tracert', 'Tracert', err)
-    toast.error(`停止失败: ${err?.message || '未知错误'}`)
+    ElMessage.error(`停止失败: ${err?.message || '未知错误'}`)
   }
 }
 
@@ -455,14 +454,14 @@ const exportCSV = async () => {
   try {
     const result = await TracertService.ExportTracertResultCSV()
     if (!result || !result.content) {
-      toast.warning('没有可导出的数据')
+      ElMessage.warning('没有可导出的数据')
       return
     }
     downloadFile(result.content, result.fileName || 'tracert_result.csv')
-    toast.success('CSV 导出成功')
+    ElMessage.success('CSV 导出成功')
   } catch (err: any) {
     logger.error('Failed to export CSV', 'Tracert', err)
-    toast.error(`导出失败: ${err?.message || '未知错误'}`)
+    ElMessage.error(`导出失败: ${err?.message || '未知错误'}`)
   }
 }
 
@@ -470,14 +469,14 @@ const exportTXT = async () => {
   try {
     const result = await TracertService.ExportTracertResultTXT()
     if (!result || !result.content) {
-      toast.warning('没有可导出的数据')
+      ElMessage.warning('没有可导出的数据')
       return
     }
     downloadFile(result.content, result.fileName || 'tracert_result.txt')
-    toast.success('TXT 导出成功')
+    ElMessage.success('TXT 导出成功')
   } catch (err: any) {
     logger.error('Failed to export TXT', 'Tracert', err)
-    toast.error(`导出失败: ${err?.message || '未知错误'}`)
+    ElMessage.error(`导出失败: ${err?.message || '未知错误'}`)
   }
 }
 

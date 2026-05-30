@@ -30,14 +30,11 @@
           <!-- 错误处理模式 -->
           <div class="space-y-2">
             <label class="settings-label">错误处理模式 <HelpTip text="命令执行出错时的处理策略：挂起询问、跳过继续或终止执行。" /></label>
-          <select
-            v-model="settings.errorMode"
-            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-          >
-              <option value="pause">挂起询问</option>
-              <option value="skip">跳过继续</option>
-              <option value="abort">终止执行</option>
-            </select>
+            <el-select v-model="settings.errorMode" class="w-full">
+              <el-option label="挂起询问" value="pause" />
+              <el-option label="跳过继续" value="skip" />
+              <el-option label="终止执行" value="abort" />
+            </el-select>
           </div>
         </div>
       </div>
@@ -54,23 +51,13 @@
           <!-- 连接超时 -->
           <div class="space-y-2">
             <label class="settings-label">连接超时 <HelpTip text="SSH/SFTP 连接阶段允许等待的最长时间，例如 10s。" /></label>
-          <input
-            type="text"
-            v-model="settings.connectTimeout"
-            placeholder="如: 10s"
-            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-          />
+            <el-input v-model="settings.connectTimeout" placeholder="如: 10s" />
           </div>
 
           <!-- 命令超时 -->
           <div class="space-y-2">
             <label class="settings-label">命令超时 <HelpTip text="单条命令执行允许持续的最长时间，例如 30s。" /></label>
-          <input
-            type="text"
-            v-model="settings.commandTimeout"
-            placeholder="如: 30s"
-            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-          />
+            <el-input v-model="settings.commandTimeout" placeholder="如: 30s" />
           </div>
         </div>
       </div>
@@ -86,12 +73,7 @@
         <div class="settings-auto-grid">
           <div class="space-y-2">
             <label class="settings-label">数据根目录 <HelpTip text="统一数据根目录，系统会在其下自动创建 db/logs/execution/backup 子目录。" /></label>
-          <input
-            type="text"
-            v-model="settings.storageRoot"
-            placeholder="如: ./netWeaverGoData"
-            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-          />
+            <el-input v-model="settings.storageRoot" placeholder="如: ./netWeaverGoData" />
           </div>
         </div>
       </div>
@@ -118,14 +100,9 @@
                 <span class="px-2 py-0.5 text-xs bg-info/20 text-info rounded">Debug</span>
               </div>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                v-model="settings.debug"
-                class="sr-only peer"
-              />
-              <div class="w-11 h-6 bg-bg-panel border border-border peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-accent/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-text-inverse after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-inverse after:border-border-muted after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
-            </label>
+            <div class="flex items-center">
+              <el-switch v-model="settings.debug" />
+            </div>
           </div>
 
           <!-- Verbose 开关 -->
@@ -137,15 +114,9 @@
                 <span class="px-2 py-0.5 text-xs bg-warning/20 text-warning rounded">Verbose</span>
               </div>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                v-model="settings.verbose"
-                @change="onVerboseChange"
-                class="sr-only peer"
-              />
-              <div class="w-11 h-6 bg-bg-panel border border-border peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-warning/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-text-inverse after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-inverse after:border-border-muted after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-warning"></div>
-            </label>
+            <div class="flex items-center">
+              <el-switch v-model="settings.verbose" @change="onVerboseChange" />
+            </div>
           </div>
 
           <!-- 提示信息 -->
@@ -177,14 +148,11 @@
         <!-- 预设模式选择 -->
         <div class="space-y-2 mb-4">
           <label class="settings-label">预设模式 <HelpTip :text="presetModeDescription || '选择 SSH 算法策略：安全优先、兼容模式或自定义。'" /></label>
-          <select
-            v-model="settings.sshAlgorithms.presetMode"
-            class="w-full px-3 py-2 bg-bg-panel border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 transition-all"
-          >
-            <option value="secure">安全优先</option>
-            <option value="compatible">兼容模式（推荐）</option>
-            <option value="custom">自定义</option>
-          </select>
+          <el-select v-model="settings.sshAlgorithms.presetMode" class="w-full">
+            <el-option label="安全优先" value="secure" />
+            <el-option label="兼容模式（推荐）" value="compatible" />
+            <el-option label="自定义" value="custom" />
+          </el-select>
         </div>
 
         <!-- 预设模式说明 -->
@@ -233,13 +201,15 @@
                 </div>
               </div>
             </div>
-            <button
-              type="button"
-              class="algo-open-modal-btn"
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              class="algo-open-modal-btn mt-2"
               @click="openCustomAlgorithmModal"
             >
               打开算法选择窗口
-            </button>
+            </el-button>
           </div>
         </div>
       </div>
@@ -247,24 +217,19 @@
 
       <!-- 全局设置操作按钮 -->
       <div class="settings-actions">
-        <button
+        <el-button
           @click="resetSettings"
           :disabled="saving"
-          class="px-4 py-2 text-sm font-medium text-text-secondary bg-bg-panel border border-border rounded-lg hover:bg-bg-hover hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
         >
           重置默认
-        </button>
-        <button
+        </el-button>
+        <el-button
+          type="primary"
           @click="saveSettings"
-          :disabled="saving"
-          class="px-4 py-2 text-sm font-medium text-white bg-accent rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
+          :loading="saving"
         >
-          <svg v-if="saving" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
-            <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
-          </svg>
-          {{ saving ? '保存中...' : '保存设置' }}
-        </button>
+          保存设置
+        </el-button>
       </div>
 
       <!-- 运行时配置面板 -->
@@ -273,28 +238,20 @@
       </div>
     </div>
 
-    <Transition name="algo-modal">
-      <div
-        v-if="showCustomAlgorithmModal && settings.sshAlgorithms.presetMode === 'custom'"
-        class="algo-modal-overlay"
-        @click.self="closeCustomAlgorithmModal"
-      >
-        <div class="algo-modal-panel settings-card" @click.stop>
-          <div class="algo-modal-header">
-            <div>
-              <h3 class="algo-modal-title">自定义 SSH 算法</h3>
-              <p class="algo-modal-subtitle">请按算法类别进行筛选与多选</p>
-            </div>
-            <button
-              type="button"
-              class="algo-modal-close"
-              @click="closeCustomAlgorithmModal"
-            >
-              关闭
-            </button>
-          </div>
-
-          <div class="algo-modal-body">
+    <el-dialog
+      v-model="showCustomAlgorithmModal"
+      title="自定义 SSH 算法"
+      width="1120px"
+      class="custom-dialog algo-modal-dialog"
+      :close-on-click-modal="true"
+      destroy-on-close
+    >
+      <!-- Subtitle -->
+      <div class="text-[0.75rem] text-text-muted mb-4 mt-[-10px]">
+        请按算法类别进行筛选与多选
+      </div>
+      
+      <div class="algo-modal-body">
             <div class="algo-modal-grid">
               <div
                 v-for="section in algorithmSections"
@@ -304,26 +261,26 @@
                 <label class="settings-label">{{ section.label }} <HelpTip :text="section.help" /></label>
 
                 <div class="algo-toolbar">
-                  <input
+                  <el-input
                     v-model="sshAlgorithmSearch[section.key]"
-                    type="text"
                     :placeholder="section.searchPlaceholder"
+                    clearable
                     class="algo-search-input"
                   />
-                  <button
-                    type="button"
-                    class="algo-action-btn"
+                  <el-button
+                    type="default"
+                    size="small"
                     @click="selectAllAlgorithms(section.key)"
                   >
                     全选
-                  </button>
-                  <button
-                    type="button"
-                    class="algo-action-btn"
+                  </el-button>
+                  <el-button
+                    type="default"
+                    size="small"
                     @click="clearAllAlgorithms(section.key)"
                   >
                     清空
-                  </button>
+                  </el-button>
                 </div>
 
                 <div class="algo-count-line">
@@ -354,19 +311,11 @@
                 </div>
               </div>
             </div>
-          </div>
-        </div>
       </div>
-    </Transition>
-
-    <!-- Toast 提示 -->
-    <div
-      v-if="toast.show"
-      class="fixed top-20 left-1/2 -translate-x-1/2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium animate-slide-up z-50"
-      :class="toast.type === 'success' ? 'bg-success text-white' : 'bg-error text-white'"
-    >
-      {{ toast.message }}
-    </div>
+      <template #footer>
+        <el-button @click="closeCustomAlgorithmModal">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -376,6 +325,7 @@ import { SettingsAPI } from '../services/api'
 import type { GlobalSettings as BackendSettings } from '../services/api'
 import RuntimeConfigPanel from '../components/settings/RuntimeConfigPanel.vue'
 import HelpTip from '../components/common/HelpTip.vue'
+import { ElMessage } from 'element-plus'
 import { getLogger } from '@/utils/logger'
 
 const logger = getLogger()
@@ -496,12 +446,6 @@ const defaultSettings: GlobalSettings = {
   verbose: false,
   sshAlgorithms: { ...defaultSSHAlgorithms }
 }
-
-const toast = ref({
-  show: false,
-  message: '',
-  type: 'success' as 'success' | 'error'
-})
 
 // 预设模式说明
 const presetModeDescription = computed(() => {
@@ -629,10 +573,11 @@ function closeCustomAlgorithmModal() {
 }
 
 function showToast(message: string, type: 'success' | 'error' = 'success') {
-  toast.value = { show: true, message, type }
-  setTimeout(() => {
-    toast.value.show = false
-  }, 3000)
+  if (type === 'success') {
+    ElMessage.success(message)
+  } else {
+    ElMessage.error(message)
+  }
 }
 
 async function loadSettings() {
@@ -866,18 +811,7 @@ onMounted(() => {
 }
 
 .algo-search-input {
-  @apply flex-1 min-h-8 rounded-[0.65rem] border border-border bg-bg-primary;
-  @apply text-text-primary px-2.5 py-1.5 text-sm;
-}
-
-.algo-action-btn {
-  @apply border border-border bg-bg-secondary text-text-secondary;
-  @apply rounded-[0.6rem] text-[0.75rem] px-2 py-1;
-  @apply transition-colors duration-200;
-}
-
-.algo-action-btn:hover {
-  @apply border-border-focus text-text-primary;
+  @apply flex-1;
 }
 
 .algo-count-line {
@@ -934,57 +868,7 @@ onMounted(() => {
   @apply p-3 text-center text-[0.75rem] text-text-muted;
 }
 
-/* 算法模态框 */
-.algo-modal-overlay {
-  @apply fixed inset-0 z-[1300] flex items-center justify-center;
-  @apply bg-black/55 p-4;
-}
 
-.algo-modal-panel {
-  @apply w-[min(1120px,96vw)] max-h-[88vh] flex flex-col;
-}
-
-.algo-modal-panel:hover {
-  @apply shadow-2xl border-border;
-}
-
-.algo-modal-header {
-  @apply flex items-center justify-between gap-4 px-4 py-4;
-  @apply border-b border-border;
-}
-
-.algo-modal-title {
-  @apply text-[0.95rem] font-bold text-text-primary;
-}
-
-.algo-modal-subtitle {
-  @apply mt-1 text-[0.75rem] text-text-muted;
-}
-
-.algo-modal-close {
-  @apply border border-border bg-bg-primary text-text-secondary;
-  @apply rounded-[0.6rem] text-[0.75rem] px-2 py-1;
-  @apply transition-colors duration-200;
-}
-
-.algo-modal-close:hover {
-  @apply text-text-primary border-border-focus;
-}
-
-.algo-modal-body {
-  @apply overflow-y-auto p-4;
-}
-
-.algo-modal-grid {
-  @apply grid gap-3;
-  grid-template-columns: var(--grid-settings-form);
-}
-
-.algo-modal-body .algo-options-list {
-  @apply max-h-60;
-}
-
-/* algo-modal 过渡动画已移至全局 _animations.css */
 
 /* 操作按钮区域 */
 .settings-actions {
