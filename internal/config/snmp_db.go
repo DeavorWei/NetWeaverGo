@@ -9,6 +9,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // SNMPDB SNMP 专用数据库连接（独立于主数据库）
@@ -24,6 +25,7 @@ func InitSNMPDB(dbPath string) error {
 	dsn := dbPath + "?_journal=WAL&_busy_timeout=5000&_cache_size=10000&_foreign_keys=1&_synchronous=NORMAL"
 
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+		Logger:                 gormlogger.Default.LogMode(gormlogger.Silent), // 静默GORM日志，避免输出到控制台
 		SkipDefaultTransaction: true,
 		PrepareStmt:            true,
 	})
