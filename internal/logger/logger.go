@@ -1,9 +1,7 @@
 package logger
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -63,54 +61,7 @@ func openGlobalLogFile(logPath string, truncate bool) error {
 	appLogFile = file
 	appLogPath = logPath
 
-	// 重定向 stdout 和 stderr 到日志文件，同时保持控制台输出
-	// 仅在首次初始化时执行重定向
-	if truncate {
-		redirectStdio()
-	}
-
 	return nil
-}
-
-// redirectStdio 重定向 stdout 和 stderr 到日志系统
-// 保持控制台输出的同时，将所有输出记录到日志文件
-func redirectStdio() {
-	// 保存原始 stdout/stderr
-	originalStdout := os.Stdout
-	originalStderr := os.Stderr
-
-	// 创建管道用于捕获输出
-	rOut, wOut, _ := os.Pipe()
-	rErr, wErr, _ := os.Pipe()
-
-	// 替换 stdout 和 stderr
-	os.Stdout = wOut
-	os.Stderr = wErr
-
-	// 启动 goroutine 读取 stdout 管道并写入日志
-	go func() {
-		scanner := bufio.NewScanner(rOut)
-		for scanner.Scan() {
-			line := scanner.Text()
-			// 同时输出到控制台和日志文件
-			fmt.Fprintln(originalStdout, line)
-			writeGlobalLog("Info", "Stdout", "-", "%s", line)
-		}
-	}()
-
-	// 启动 goroutine 读取 stderr 管道并写入日志
-	go func() {
-		scanner := bufio.NewScanner(rErr)
-		for scanner.Scan() {
-			line := scanner.Text()
-			// 同时输出到控制台和日志文件
-			fmt.Fprintln(originalStderr, line)
-			writeGlobalLog("Warn", "Stderr", "-", "%s", line)
-		}
-	}()
-
-	// 避免未使用变量警告
-	_ = io.EOF
 }
 
 // GetGlobalLogPath 返回当前全局日志文件路径
