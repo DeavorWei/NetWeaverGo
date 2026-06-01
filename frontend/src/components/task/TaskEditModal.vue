@@ -43,6 +43,18 @@
           </button>
         </div>
 
+        <div class="px-6 py-4 border-b border-border bg-bg-secondary/30 flex items-center gap-2 flex-wrap">
+          <button
+            v-for="tab in tabs"
+            :key="tab.key"
+            @click="activeTab = tab.key"
+            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+            :class="activeTab === tab.key ? 'bg-accent text-white' : 'bg-bg-card border border-border text-text-muted hover:text-text-primary'"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+
         <div class="flex-1 overflow-y-auto scrollbar-custom p-6">
           <div v-if="loading" class="h-64 flex items-center justify-center">
             <div
@@ -56,8 +68,9 @@
             暂无可编辑任务
           </div>
           <template v-else>
-            <div class="grid grid-cols-2 gap-4">
-              <div class="space-y-4">
+            <section v-show="activeTab === 'basic'" class="space-y-5">
+              <div class="grid grid-cols-2 gap-4">
+                <div class="space-y-4">
                 <div>
                   <label
                     class="block text-sm font-medium text-text-primary mb-2"
@@ -150,10 +163,11 @@
                 </div>
               </div>
 
-              <div
-                class="rounded-xl border border-border bg-bg-panel p-4 space-y-3"
-              >
-                <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-4">
+                <div
+                  class="rounded-xl border border-border bg-bg-panel p-4 space-y-3"
+                >
+                  <div class="grid grid-cols-2 gap-3">
                   <label class="block">
                     <span
                       class="block text-sm font-medium text-text-primary mb-2"
@@ -251,11 +265,14 @@
                   }}</span>
                 </div>
               </div>
+              </div>
             </div>
+            </section>
 
-            <div
-              v-if="task.mode === 'group' && !isTopologyTaskValue && !isBackupTaskValue"
-              class="mt-6 grid grid-cols-[320px,1fr] gap-4"
+            <section v-show="activeTab === 'config'" class="space-y-4">
+              <div
+                v-if="task.mode === 'group' && !isTopologyTaskValue && !isBackupTaskValue"
+              class="grid grid-cols-[320px,1fr] gap-4"
             >
               <div
                 class="rounded-xl border border-border bg-bg-panel p-4 space-y-3"
@@ -320,7 +337,7 @@
               </div>
             </div>
 
-            <div v-else-if="isTopologyTaskValue" class="mt-6 space-y-4">
+            <div v-else-if="isTopologyTaskValue" class="space-y-4">
               <div class="grid grid-cols-[320px,1fr] gap-4">
                 <div
                   class="rounded-xl border border-border bg-bg-panel p-4 space-y-3"
@@ -630,7 +647,7 @@
               </div>
             </div>
 
-            <div v-else-if="isBackupTaskValue" class="mt-6 space-y-4">
+            <div v-else-if="isBackupTaskValue" class="space-y-4">
               <div class="grid grid-cols-[320px,1fr] gap-4">
                 <div
                   class="rounded-xl border border-border bg-bg-panel p-4 space-y-3"
@@ -712,7 +729,7 @@
               </div>
             </div>
 
-            <div v-else class="mt-6 space-y-4">
+            <div v-else class="space-y-4">
               <div class="flex items-center justify-between">
                 <h4 class="text-sm font-semibold text-text-primary">
                   任务项编辑
@@ -806,6 +823,7 @@
                 </div>
               </div>
             </div>
+            </section>
 
             <div
               v-if="formError"
@@ -883,6 +901,22 @@ const emit = defineEmits<{
   (e: "update:modelValue", value: boolean): void;
   (e: "save", payload: TaskGroup): void;
 }>();
+
+const tabs = [
+  { key: 'basic', label: '基础设置' },
+  { key: 'config', label: '任务配置' }
+] as const;
+
+const activeTab = ref<typeof tabs[number]['key']>('basic');
+
+watch(
+  () => props.modelValue,
+  (value) => {
+    if (value) {
+      activeTab.value = 'basic';
+    }
+  }
+);
 
 const form = reactive({
   name: "",
