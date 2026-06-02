@@ -142,7 +142,7 @@
               <span class="text-sm font-semibold">3. 配置备份参数</span>
             </div>
           </template>
-          <div class="flex-1 space-y-4 min-h-0 overflow-y-auto scrollbar-custom pr-1">
+          <div class="flex-1 flex flex-col gap-4 min-h-0 overflow-y-auto scrollbar-custom pr-1">
             <el-alert
               type="info"
               :closable="false"
@@ -162,6 +162,19 @@
                 <div class="text-xs text-text-muted mt-1">SFTP 下载大配置文件时的独立超时时间。设置为 0 时，自动使用普通命令超时的 2 倍。</div>
               </div>
               <el-input-number v-model="backupSftpTimeoutSec" :min="0" controls-position="right" class="w-32" />
+            </div>
+
+            <!-- 备份操作逻辑说明 -->
+            <div class="rounded-xl border border-border bg-bg-panel/40 p-4 space-y-3">
+              <div class="text-sm font-semibold text-text-primary flex items-center gap-2">
+                <el-icon><InfoFilled /></el-icon>
+                备份操作逻辑说明
+              </div>
+              <div class="text-xs text-text-muted leading-relaxed space-y-2">
+                <p><strong>1. 查询启动配置：</strong> 系统首先通过 SSH 登录目标设备，执行预设的查询命令（默认为 <code class="font-mono bg-bg-card px-1 py-0.5 rounded border border-border text-primary">display startup</code>），获取设备的启动配置信息。</p>
+                <p><strong>2. 解析文件路径：</strong> 系统自动解析命令回显结果，从中提取出启动配置文件的具体名称及路径（例如 <code class="font-mono bg-bg-card px-1 py-0.5 rounded border border-border text-primary">vrpcfg.zip</code> 或 <code class="font-mono bg-bg-card px-1 py-0.5 rounded border border-border text-primary">startup.cfg</code> 等）。</p>
+                <p><strong>3. 文件下载备份：</strong> 提取成功后，系统会通过 SFTP 协议建立文件传输通道，将该配置文件安全下载至执行器的本地存储中，完成闭环备份。</p>
+              </div>
             </div>
           </div>
         </el-card>
@@ -215,16 +228,14 @@
                 </div>
               </div>
 
-              <el-alert v-if="topologyPreviewDirty" type="warning" :closable="false" show-icon class="py-1 flex-shrink-0">
-                检测到未刷新的拓扑命令变更，请先刷新预览后再创建任务。
-              </el-alert>
+
 
               <el-alert v-if="topologyPreviewError" type="error" :closable="false" show-icon class="py-1 flex-shrink-0">
                 {{ topologyPreviewError }}
               </el-alert>
 
               <!-- 预览加载/空状态 -->
-              <div v-if="topologyPreviewLoading" class="flex-1 flex flex-col justify-center items-center text-xs text-text-muted py-8">
+              <div v-if="topologyPreviewLoading && topologyPreviewCommands.length === 0" class="flex-1 flex flex-col justify-center items-center text-xs text-text-muted py-8">
                 <el-icon class="animate-spin text-lg mb-2"><Refresh /></el-icon>
                 正在加载拓扑命令预览...
               </div>
@@ -410,7 +421,7 @@
 import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
-import { Plus, Position, Right, Cpu, Connection, Folder, Tickets, Refresh, Setting, Delete, Check } from "@element-plus/icons-vue";
+import { Plus, Position, Right, Cpu, Connection, Folder, Tickets, Refresh, Setting, Delete, Check, InfoFilled } from "@element-plus/icons-vue";
 import {
   DeviceAPI,
   TaskGroupAPI,
@@ -444,10 +455,21 @@ const autoBuildTopology = ref(true);
 const backupSftpTimeoutSec = ref(0);
 
 const topologyOverrides = ref<TopologyTaskFieldOverride[]>([]);
+const baseTopologyOverrides = ref<TopologyTaskFieldOverride[]>([]);
 const topologyPreview = ref<TopologyCommandPreviewView | null>(null);
 const topologyPreviewLoading = ref(false);
 const topologyPreviewError = ref("");
-const topologyPreviewDirty = ref(false);
+const topologyPreviewDirty = computed(() => {
+  if (topologyOverrides.value.length !== baseTopologyOverrides.value.length) return true;
+  for (const base of baseTopologyOverrides.value) {
+    const current = topologyOverrides.value.find(o => o.fieldKey === base.fieldKey);
+    if (!current) return true;
+    if (current.command !== base.command) return true;
+    if (current.timeoutSec !== base.timeoutSec) return true;
+    if (current.enabled !== base.enabled) return true;
+  }
+  return false;
+});
 
 const selectedDeviceIDsSignature = computed(() =>
   [...selectedDevices.value]
@@ -462,10 +484,11 @@ const topologyPreviewCommands = computed(
 
 const topologyInvalidCount = computed(
   () =>
-    topologyOverrides.value.filter(
-      (item: TopologyTaskFieldOverride) =>
-        item.enabled === true && String(item.command || "").trim() === "",
-    ).length,
+    topologyPreviewCommands.value.filter((cmd: any) => {
+      const isEnabled = topologyEnabledValue(cmd.fieldKey, cmd.enabled);
+      const commandStr = topologyCommandValue(cmd.fieldKey, cmd.command);
+      return isEnabled && String(commandStr).trim() === "";
+    }).length,
 );
 
 const canCreate = computed(() => {
@@ -501,10 +524,7 @@ function generateDefaultName() {
 
 function openCreateModal() {
   if (!canCreate.value) return;
-  if (selectedTaskType.value === "topology" && topologyPreviewDirty.value) {
-    ElMessage.error("拓扑命令存在未刷新的变更，请先刷新命令预览");
-    return;
-  }
+
   createModal.value = {
     show: true,
     name: generateDefaultName(),
@@ -530,10 +550,7 @@ async function confirmCreate() {
       ElMessage.error("存在无效拓扑覆盖项，请修正后重试");
       return;
     }
-    if (topologyPreviewDirty.value) {
-      ElMessage.error("拓扑命令存在未刷新的变更，请先刷新命令预览");
-      return;
-    }
+
   }
 
   try {
@@ -615,8 +632,8 @@ function cloneTopologyOverrides(
 ): TopologyTaskFieldOverride[] {
   return (overrides || []).map((item) => ({
     fieldKey: String(item.fieldKey || "").trim(),
-    command: String(item.command || ""),
-    timeoutSec: Number(item.timeoutSec || 0),
+    command: item.command !== undefined ? String(item.command) : undefined,
+    timeoutSec: item.timeoutSec !== undefined ? Number(item.timeoutSec) : undefined,
     enabled: typeof item.enabled === "boolean" ? item.enabled : undefined,
   }));
 }
@@ -641,8 +658,6 @@ function ensureTopologyOverride(fieldKey: string) {
   }
   item = {
     fieldKey: normalizedFieldKey,
-    command: "",
-    timeoutSec: 0,
   };
   topologyOverrides.value = [...topologyOverrides.value, item];
   return item;
@@ -657,8 +672,8 @@ function compactTopologyOverride(fieldKey: string) {
   if (!current) {
     return;
   }
-  const hasCommand = String(current.command || "") !== "";
-  const hasTimeout = Number(current.timeoutSec || 0) > 0;
+  const hasCommand = current.command !== undefined;
+  const hasTimeout = current.timeoutSec !== undefined && Number(current.timeoutSec) > 0;
   const hasEnabled = typeof current.enabled === "boolean";
   if (hasCommand || hasTimeout || hasEnabled) {
     return;
@@ -668,13 +683,19 @@ function compactTopologyOverride(fieldKey: string) {
   );
 }
 
+let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 function markTopologyPreviewDirty() {
-  topologyPreviewDirty.value = true;
+  if (previewDebounceTimer) {
+    clearTimeout(previewDebounceTimer);
+  }
+  previewDebounceTimer = setTimeout(() => {
+    loadTopologyPreview();
+  }, 500);
 }
 
 function topologyCommandValue(fieldKey: string, fallback: string) {
   const override = findTopologyOverride(fieldKey);
-  if (override && override.command !== "") {
+  if (override && override.command !== undefined) {
     return override.command;
   }
   return fallback || "";
@@ -698,7 +719,7 @@ function topologyEnabledValue(fieldKey: string, fallback: boolean) {
 
 function onTopologyCommandInput(fieldKey: string, value: string) {
   const override = ensureTopologyOverride(fieldKey);
-  override.command = value || "";
+  override.command = value;
   compactTopologyOverride(fieldKey);
   markTopologyPreviewDirty();
 }
@@ -706,7 +727,7 @@ function onTopologyCommandInput(fieldKey: string, value: string) {
 function onTopologyTimeoutInput(fieldKey: string, value: number | undefined) {
   const override = ensureTopologyOverride(fieldKey);
   const v = Number(value || 0);
-  override.timeoutSec = Number.isFinite(v) && v > 0 ? v : 0;
+  override.timeoutSec = Number.isFinite(v) && v > 0 ? v : undefined;
   compactTopologyOverride(fieldKey);
   markTopologyPreviewDirty();
 }
@@ -723,7 +744,6 @@ async function resetTopologyOverride(fieldKey: string) {
     (item: TopologyTaskFieldOverride) => item.fieldKey !== fieldKey,
   );
   markTopologyPreviewDirty();
-  await loadTopologyPreview();
 }
 
 async function loadTopologyPreview() {
@@ -739,10 +759,24 @@ async function loadTopologyPreview() {
       cloneTopologyOverrides(topologyOverrides.value),
     );
     topologyPreview.value = nextPreview;
-    topologyOverrides.value = cloneTopologyOverrides(
+    const cloned = cloneTopologyOverrides(
       nextPreview?.taskOverrides || [],
     );
-    topologyPreviewDirty.value = false;
+    
+    const isSame = 
+      topologyOverrides.value.length === cloned.length &&
+      cloned.every((c) => {
+        const o = topologyOverrides.value.find(x => x.fieldKey === c.fieldKey);
+        return o && o.command === c.command && o.timeoutSec === c.timeoutSec && o.enabled === c.enabled;
+      });
+      
+    if (!isSame) {
+      topologyOverrides.value = cloned;
+    }
+    
+    baseTopologyOverrides.value = cloneTopologyOverrides(
+      nextPreview?.taskOverrides || [],
+    );
   } catch (err: any) {
     logger.error('加载拓扑命令预览失败', 'Tasks', err);
     topologyPreviewError.value = `命令预览加载失败: ${err?.message || err}`;
@@ -793,7 +827,8 @@ watch(
     }
     if (selectedDevices.value.length === 0) {
       topologyPreview.value = null;
-      topologyPreviewDirty.value = false;
+      baseTopologyOverrides.value = [];
+      topologyOverrides.value = [];
       topologyPreviewError.value = "";
       return;
     }
@@ -805,14 +840,15 @@ watch(selectedTaskType, async (value) => {
   if (value !== "topology") {
     topologyPreview.value = null;
     topologyPreviewError.value = "";
-    topologyPreviewDirty.value = false;
+    baseTopologyOverrides.value = [];
     topologyOverrides.value = [];
     return;
   }
   if (selectedDevices.value.length === 0) {
     topologyPreview.value = null;
     topologyPreviewError.value = "";
-    topologyPreviewDirty.value = false;
+    baseTopologyOverrides.value = [];
+    topologyOverrides.value = [];
     return;
   }
   await loadTopologyPreview();

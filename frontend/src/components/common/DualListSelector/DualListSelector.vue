@@ -14,7 +14,7 @@
 
         <!-- 弹窗主体 -->
         <div
-          class="relative w-[900px] max-h-[90vh] bg-bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          class="relative w-[1000px] max-h-[90vh] bg-bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         >
           <!-- 头部 -->
           <div
@@ -112,7 +112,7 @@
             </div>
 
             <!-- 主选择区 -->
-            <div class="flex items-center justify-center gap-4 flex-1 min-h-0">
+            <div class="flex items-stretch justify-center gap-3 flex-1 min-h-0">
               <!-- 左栏 -->
               <SourcePanel
                 :title="mergedConfig.sourceTitle"

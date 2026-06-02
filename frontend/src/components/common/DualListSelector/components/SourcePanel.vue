@@ -1,8 +1,8 @@
 <template>
-  <div class="flex flex-col w-[340px] h-[350px] bg-bg-panel border border-border rounded-lg overflow-hidden">
+  <div class="flex flex-col flex-1 h-[480px] bg-bg-panel border border-border rounded-xl shadow-sm overflow-hidden">
     <!-- 头部 -->
-    <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-bg-card">
-      <span class="text-sm font-medium text-text-primary">{{ title }}</span>
+    <div class="flex items-center justify-between px-5 py-4 border-b border-border bg-bg-card">
+      <span class="text-sm font-semibold text-text-primary">{{ title }}</span>
       <span class="text-xs text-text-muted bg-bg-secondary px-2 py-0.5 rounded-full">{{ items.length }}</span>
     </div>
 
@@ -14,7 +14,7 @@
         v-memo="[selected.has(item.key)]"
         @click="!item.disabled && $emit('toggle', item.key)"
         :class="[
-          'flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-all duration-200 hover:bg-bg-hover',
+          'flex items-center gap-4 px-4 py-3 mb-1.5 rounded-lg cursor-pointer transition-all duration-200 hover:bg-bg-hover',
           {
             'bg-accent/5 border-l-2 border-l-accent': selected.has(item.key),
             'opacity-50 cursor-not-allowed': item.disabled,

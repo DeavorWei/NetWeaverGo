@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col items-center gap-3 w-[80px]">
+  <div class="flex flex-col items-center justify-center gap-3 w-[60px] shrink-0">
     <button
       class="w-10 h-10 flex items-center justify-center rounded-lg border transition-all duration-200 bg-accent text-white border-accent hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-accent/50 disabled:border-accent/50"
       :disabled="!canMoveRight"

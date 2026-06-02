@@ -45,18 +45,16 @@
       </el-form-item>
 
       <el-form-item label="标签" prop="tags">
-        <div class="flex flex-col gap-2 w-full">
-          <div class="flex flex-wrap gap-2">
-            <el-tag
-              v-for="(tag, index) in localForm.tags"
-              :key="index"
-              closable
-              @close="removeTag(index)"
-            >
-              {{ tag }}
-            </el-tag>
-          </div>
-          <div class="flex gap-2">
+        <div class="flex flex-wrap items-center gap-2 w-full">
+          <el-tag
+            v-for="(tag, index) in localForm.tags"
+            :key="index"
+            closable
+            @close="removeTag(index)"
+          >
+            {{ tag }}
+          </el-tag>
+          <div class="flex items-center gap-2 flex-1 min-w-[180px]">
             <el-input
               v-model="newTag"
               placeholder="添加标签"
