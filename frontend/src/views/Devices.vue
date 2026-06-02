@@ -62,6 +62,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { QueryAPI, DeviceAPI } from "@/services/api";
 import type { DeviceAsset } from "@/services/api";
 import { getLogger } from "@/utils/logger";
+import { parseErrorMessage } from "@/utils/errorHandler";
 
 // 组件导入
 import DeviceSearchBar from "@/components/device/DeviceSearchBar.vue";
@@ -307,9 +308,8 @@ async function saveDevice(deviceData: DeviceFormData) {
     loadDevices();
   } catch (err: unknown) {
     logger.error("保存设备失败", 'Devices', err);
-    const message =
-      (err as { message?: string })?.message || "保存失败，请重试";
-    editModalRef.value?.setError(message);
+    const message = parseErrorMessage(err);
+    editModalRef.value?.setError(message || "保存失败，请重试");
   } finally {
     editModalRef.value?.setSaving(false);
   }
@@ -338,9 +338,8 @@ async function resetSSHHostKey() {
       ElMessage.success(`设备 ${formData.value?.ip} 的 SSH 主机密钥已重置`);
     } catch (err: unknown) {
       logger.error("重置 SSH 主机密钥失败", 'Devices', err);
-      const message =
-        (err as { message?: string })?.message || "重置 SSH 主机密钥失败，请重试";
-      editModalRef.value?.setError(message);
+      const message = parseErrorMessage(err);
+      editModalRef.value?.setError(message || "重置 SSH 主机密钥失败，请重试");
     } finally {
       editModalRef.value?.setSaving(false);
     }
@@ -366,7 +365,7 @@ function openDeleteConfirm(device: Device) {
       loadDevices();
     } catch (err: any) {
       logger.error("删除设备失败", 'Devices', err);
-      ElMessage.error(err.message || "删除失败");
+      ElMessage.error(parseErrorMessage(err) || "删除失败");
     }
   }).catch(() => {});
 }
@@ -419,9 +418,8 @@ async function saveBatchEdit(field: BatchField, value: string | number) {
     loadDevices();
   } catch (err: unknown) {
     logger.error("批量修改失败", 'Devices', err);
-    const message =
-      (err as { message?: string })?.message || "批量修改失败，请重试";
-    batchEditModalRef.value?.setError(message);
+    const message = parseErrorMessage(err);
+    batchEditModalRef.value?.setError(message || "批量修改失败，请重试");
   } finally {
     batchEditModalRef.value?.setSaving(false);
   }
@@ -447,7 +445,7 @@ function openBatchResetSSHKeyConfirm() {
       clearSelection();
     } catch (err: any) {
       logger.error("批量重置主机SSH密钥失败", 'Devices', err);
-      ElMessage.error(err.message || "批量重置主机SSH密钥失败");
+      ElMessage.error(parseErrorMessage(err) || "批量重置主机SSH密钥失败");
     }
   }).catch(() => {});
 }
@@ -472,7 +470,7 @@ function openBatchDeleteConfirm() {
       loadDevices();
     } catch (err: any) {
       logger.error("批量删除失败", 'Devices', err);
-      ElMessage.error(err.message || "批量删除失败");
+      ElMessage.error(parseErrorMessage(err) || "批量删除失败");
     }
   }).catch(() => {});
 }

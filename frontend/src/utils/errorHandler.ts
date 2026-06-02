@@ -32,21 +32,32 @@ export interface CallResult<T> {
  * @param error 未知错误对象
  * @returns 格式化的错误消息
  */
-function parseErrorMessage(error: unknown): string {
+export function parseErrorMessage(error: unknown): string {
+  let errStr = ''
   if (error instanceof Error) {
-    return error.message
-  }
-  if (typeof error === 'string') {
-    return error
-  }
-  if (typeof error === 'object' && error !== null) {
+    errStr = error.message
+  } else if (typeof error === 'string') {
+    errStr = error
+  } else if (typeof error === 'object' && error !== null) {
     if ('message' in error) {
-      return String((error as Record<string, unknown>).message)
-    }
-    if ('error' in error) {
-      return String((error as Record<string, unknown>).error)
+      errStr = String((error as Record<string, unknown>).message)
+    } else if ('error' in error) {
+      errStr = String((error as Record<string, unknown>).error)
     }
   }
+
+  if (errStr) {
+    try {
+      const parsed = JSON.parse(errStr)
+      if (parsed && typeof parsed === 'object' && 'message' in parsed) {
+        return String(parsed.message)
+      }
+    } catch (e) {
+      // Not a valid JSON string, ignore
+    }
+    return errStr
+  }
+
   return '未知错误'
 }
 
