@@ -50,9 +50,6 @@ dev_mode:
       - .gitkeep
     watched_extension:
       - "*.go"
-      - "*.js"
-      - "*.ts"
-      - "*.vue"
       - "*.yaml"
       - "*.yml"
     git_ignore: true

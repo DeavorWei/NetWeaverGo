@@ -18,6 +18,9 @@ export default defineConfig({
     open: false, // Wails 应用不需要自动打开浏览器
     hmr: {
       overlay: true // 显示错误覆盖层
+    },
+    watch: {
+      usePolling: false // 使用原生文件系统事件，更高效
     }
   },
   build: {
