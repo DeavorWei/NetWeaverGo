@@ -78,6 +78,26 @@
         </div>
       </div>
 
+      <!-- 外观设置 -->
+      <div class="settings-card bg-bg-card border border-border rounded-xl p-5 shadow-card settings-panel-card">
+        <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+          外观设置
+        </h3>
+        <div class="settings-auto-grid">
+          <div class="space-y-2">
+            <label class="settings-label">系统主题 <HelpTip text="选择系统外观的主题：浅色模式、深色模式或跟随系统主题。" /></label>
+            <el-select v-model="settings.theme" class="w-full" @change="handleThemeChange">
+              <el-option label="浅色模式" value="light" />
+              <el-option label="深色模式" value="dark" />
+              <el-option label="跟随系统" value="system" />
+            </el-select>
+          </div>
+        </div>
+      </div>
+
       <!-- 调试日志设置 -->
       <div class="settings-card bg-bg-card border border-border rounded-xl p-5 shadow-card settings-panel-card">
         <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
@@ -322,6 +342,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { SettingsAPI } from '../services/api'
+import { useTheme } from '@/composables/useTheme'
 import type { GlobalSettings as BackendSettings } from '../services/api'
 import RuntimeConfigPanel from '../components/settings/RuntimeConfigPanel.vue'
 import HelpTip from '../components/common/HelpTip.vue'
@@ -371,6 +392,7 @@ interface GlobalSettings {
   errorMode: string
   debug: boolean
   verbose: boolean
+  theme: string
   sshAlgorithms: SSHAlgorithmSettings
 }
 
@@ -434,6 +456,7 @@ const settings = ref<GlobalSettings>({
   errorMode: 'pause',
   debug: false,
   verbose: false,
+  theme: 'system',
   sshAlgorithms: { ...defaultSSHAlgorithms }
 })
 
@@ -444,6 +467,7 @@ const defaultSettings: GlobalSettings = {
   errorMode: 'pause',
   debug: false,
   verbose: false,
+  theme: 'system',
   sshAlgorithms: { ...defaultSSHAlgorithms }
 }
 
@@ -460,6 +484,16 @@ const presetModeDescription = computed(() => {
       return ''
   }
 })
+
+const { setTheme, followSystemTheme } = useTheme()
+
+function handleThemeChange(val: string) {
+  if (val === 'system') {
+    followSystemTheme()
+  } else {
+    setTheme(val)
+  }
+}
 
 // Verbose 变更处理：启用 Verbose 时自动启用 Debug
 function onVerboseChange() {
@@ -597,6 +631,7 @@ async function loadSettings() {
         errorMode: result.errorMode || 'pause',
         debug: rawResult.debug || false,
         verbose: rawResult.verbose || false,
+        theme: rawResult.theme || 'system',
         sshAlgorithms: rawResult.sshAlgorithms || { ...defaultSSHAlgorithms }
       }
     }
@@ -619,6 +654,7 @@ function toBackendSettings(frontend: GlobalSettings): BackendSettings {
     errorMode: frontend.errorMode,
     debug: frontend.debug,
     verbose: frontend.verbose,
+    theme: frontend.theme,
     sshAlgorithms: {
       presetMode: frontend.sshAlgorithms.presetMode,
       ciphers: frontend.sshAlgorithms.ciphers,

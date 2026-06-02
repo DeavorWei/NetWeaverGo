@@ -1,11 +1,12 @@
 <template>
-  <div class="animate-slide-in space-y-5 h-full flex flex-col">
+  <div class="animate-slide-in gap-5 h-full flex flex-col p-1">
     <!-- 标题栏 -->
-    <div class="flex items-center justify-between flex-shrink-0">
-      <p class="text-sm text-text-muted">
-        选择设备和命令组，创建任务绑定到任务执行页
-      </p>
-      <div class="flex gap-3">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-border bg-bg-panel/40 backdrop-blur-md shadow-sm flex-shrink-0">
+      <div>
+        <h1 class="text-lg font-semibold text-text-primary">新建任务</h1>
+        <p class="text-xs text-text-muted mt-1">配置执行目标设备与操作指令，发布并执行采集/备份/交互命令任务</p>
+      </div>
+      <div class="flex items-center gap-3">
         <el-button :icon="Position" @click="goToTaskExecution">
           前往任务执行
         </el-button>
@@ -14,117 +15,151 @@
           :icon="Plus"
           @click="openCreateModal"
           :disabled="!canCreate"
+          class="shadow-md shadow-primary/10"
         >
           创建任务
         </el-button>
       </div>
     </div>
 
-    <!-- 步骤选择区域 -->
-    <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
-      <div class="flex-1 overflow-y-auto scrollbar-custom pr-1">
+    <!-- 主体区域：左右双栏布局 -->
+    <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 min-h-0 overflow-hidden">
+      <!-- 左侧面板: 基础配置与设备选择 -->
+      <div class="lg:col-span-4 flex flex-col gap-4 min-h-0">
+        
         <!-- 任务类型 -->
-        <el-card shadow="never" class="mb-3" :body-style="{ padding: '16px' }">
+        <el-card shadow="never" class="border-border rounded-xl flex-shrink-0" :body-style="{ padding: '16px' }">
           <template #header>
-            <div class="flex items-center">
-              <span class="text-sm font-medium">任务类型</span>
+            <div class="flex items-center gap-2">
+              <el-icon class="text-primary"><Tickets /></el-icon>
+              <span class="text-sm font-semibold">1. 选择任务类型</span>
             </div>
           </template>
-          <el-radio-group v-model="selectedTaskType">
-            <el-radio-button label="normal" value="normal">普通任务</el-radio-button>
-            <el-radio-button label="topology" value="topology">拓扑采集任务</el-radio-button>
-            <el-radio-button label="backup" value="backup">配置备份任务</el-radio-button>
+          <el-radio-group v-model="selectedTaskType" class="w-full flex">
+            <el-radio-button label="normal" value="normal" class="flex-1 text-center">普通任务</el-radio-button>
+            <el-radio-button label="topology" value="topology" class="flex-1 text-center">拓扑采集</el-radio-button>
+            <el-radio-button label="backup" value="backup" class="flex-1 text-center">配置备份</el-radio-button>
           </el-radio-group>
         </el-card>
 
-        <!-- 步骤1: 选择目标设备 -->
+        <!-- 目标设备 -->
         <el-card
           shadow="never"
-          class="mb-3"
-          :style="{ height: devicePanelHeight + 'px', minHeight: '200px' }"
-          :body-style="{ padding: '12px', height: 'calc(100% - 55px)', overflowY: 'auto' }"
+          class="border-border rounded-xl flex-1 flex flex-col min-h-0"
+          :body-style="{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }"
         >
           <template #header>
-            <div class="flex items-center gap-3">
-              <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">1</div>
-              <span class="text-sm font-medium">选择目标设备</span>
-              <span v-if="selectedDevices.length > 0" class="ml-2 text-xs text-accent font-mono">
-                已选 {{ selectedDevices.length }} 台
-              </span>
-              <el-button link type="primary" class="ml-auto" @click="goToDevices">
-                管理设备资产
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <el-icon class="text-primary"><Cpu /></el-icon>
+                <span class="text-sm font-semibold">2. 目标设备</span>
+                <el-tag v-if="selectedDevices.length > 0" size="small" type="primary" effect="light" class="font-mono">
+                  已选 {{ selectedDevices.length }}
+                </el-tag>
+              </div>
+              <el-button link type="primary" size="small" @click="goToDevices">
+                管理资产
               </el-button>
             </div>
           </template>
-          <div class="flex flex-col h-full">
-            <el-button class="w-full mb-3" type="primary" plain @click="showDeviceSelector = true">
-              点击选择设备
+          
+          <div class="flex flex-col h-full flex-1 min-h-0">
+            <el-button class="w-full mb-3 shadow-sm" type="primary" plain :icon="Plus" @click="showDeviceSelector = true">
+              选择目标设备
             </el-button>
-            <div v-if="selectedDevices.length > 0" class="text-xs text-text-muted">
-              已选设备预览:
-              <span class="font-mono text-text-primary">
-                {{ selectedDevices.map(d => d.ip).slice(0, 5).join(', ') }}{{ selectedDevices.length > 5 ? '...' : '' }}
-              </span>
+            
+            <!-- 已选设备列表 -->
+            <div v-if="selectedDevices.length > 0" class="flex-1 overflow-y-auto scrollbar-custom border border-border rounded-lg bg-bg-panel/20 p-2 min-h-0">
+              <div class="space-y-1.5">
+                <div
+                  v-for="(dev, idx) in selectedDevices"
+                  :key="dev.ip"
+                  class="group flex items-center justify-between p-2 rounded bg-bg-card hover:bg-bg-panel border border-border/40 transition-colors text-xs"
+                >
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="font-mono font-medium truncate text-text-primary">{{ dev.ip }}</span>
+                    <el-tag size="small" type="info" class="flex-shrink-0">{{ dev.protocol }}</el-tag>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-text-muted truncate max-w-[80px]" :title="dev.group">{{ dev.group || '默认分组' }}</span>
+                    <el-button
+                      link
+                      type="danger"
+                      size="small"
+                      :icon="Delete"
+                      class="hover:text-red-500 opacity-60 group-hover:opacity-100 transition-opacity"
+                      @click="selectedDevices.splice(idx, 1)"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
+            <el-empty
+              v-else
+              description="暂未选择任何执行目标设备"
+              :image-size="60"
+              class="flex-1 flex flex-col justify-center items-center py-6"
+            />
           </div>
         </el-card>
 
-        <!-- 可拖拽分隔条 -->
-        <div
-          class="h-2 flex items-center justify-center cursor-row-resize group py-1"
-          @mousedown="startResize"
-        >
-          <div class="w-16 h-1.5 rounded-full bg-border group-hover:bg-accent/50 transition-colors"></div>
-        </div>
+      </div>
 
+      <!-- 右侧面板: 核心业务参数配置 -->
+      <div class="lg:col-span-8 flex flex-col min-h-0">
+        
         <!-- 步骤2: 普通任务命令组 -->
         <el-card
           v-if="selectedTaskType === 'normal'"
           shadow="never"
-          class="mb-4"
-          :style="{ minHeight: commandPanelMinHeight + 'px' }"
-          :body-style="{ padding: '12px' }"
+          class="border-border rounded-xl h-full flex flex-col"
+          :body-style="{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }"
         >
           <template #header>
-            <div class="flex items-center gap-3">
-              <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">2</div>
-              <span class="text-sm font-medium">选择命令组</span>
-              <span v-if="selectedCommandGroup" class="ml-2 text-xs text-accent font-mono">
-                {{ selectedCommandGroup.name }}
-              </span>
+            <div class="flex items-center gap-2">
+              <el-icon class="text-primary"><Tickets /></el-icon>
+              <span class="text-sm font-semibold">3. 选择命令组</span>
             </div>
           </template>
-          <CommandGroupSelector
-            v-model="selectedCommandGroupId"
-            @selectionChange="onCommandGroupChange"
-          />
+          <div class="flex-1 min-h-0">
+            <CommandGroupSelector
+              v-model="selectedCommandGroupId"
+              @selectionChange="onCommandGroupChange"
+            />
+          </div>
         </el-card>
 
         <!-- 步骤2: 备份采集参数 -->
         <el-card
           v-else-if="selectedTaskType === 'backup'"
           shadow="never"
-          class="mb-4"
-          :style="{ minHeight: commandPanelMinHeight + 'px' }"
-          :body-style="{ padding: '16px' }"
+          class="border-border rounded-xl h-full flex flex-col"
+          :body-style="{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }"
         >
           <template #header>
-            <div class="flex items-center gap-3">
-              <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">2</div>
-              <span class="text-sm font-medium">备份采集说明</span>
+            <div class="flex items-center gap-2">
+              <el-icon class="text-primary"><Folder /></el-icon>
+              <span class="text-sm font-semibold">3. 配置备份参数</span>
             </div>
           </template>
-          <div class="space-y-4">
+          <div class="flex-1 space-y-4 min-h-0 overflow-y-auto scrollbar-custom pr-1">
             <el-alert
               type="info"
               :closable="false"
-              title="此任务类型将自动连接目标设备下载启动配置（通常为 startup-config 或 saved-configuration）。默认参数将在创建任务时自动生成，您也可以在任务列表中点击编辑进行详情配置。"
-            />
-            <!-- SFTP超时配置 -->
-            <div class="rounded-lg border border-border bg-bg-panel p-3 flex items-center justify-between">
+              class="border border-info/20"
+            >
+              <template #title>
+                <span class="font-medium text-xs">配置备份说明</span>
+              </template>
+              <span class="text-xs">
+                此任务类型将自动连接目标设备下载启动配置（通常为 startup-config 或 saved-configuration）。默认参数将在创建任务时自动生成，您也可以在任务列表中点击编辑进行详情配置。
+              </span>
+            </el-alert>
+            
+            <div class="rounded-xl border border-border bg-bg-panel/40 p-4 flex items-center justify-between">
               <div>
-                <div class="text-sm font-medium">SFTP下载超时(秒)</div>
-                <div class="text-xs text-text-muted mt-1">SFTP下载大文件时的独立超时时间，设置为0时自动使用命令超时的2倍。</div>
+                <div class="text-sm font-semibold text-text-primary">SFTP 下载超时 (秒)</div>
+                <div class="text-xs text-text-muted mt-1">SFTP 下载大配置文件时的独立超时时间。设置为 0 时，自动使用普通命令超时的 2 倍。</div>
               </div>
               <el-input-number v-model="backupSftpTimeoutSec" :min="0" controls-position="right" class="w-32" />
             </div>
@@ -135,84 +170,97 @@
         <el-card
           v-else
           shadow="never"
-          class="mb-4"
-          :style="{ minHeight: commandPanelMinHeight + 'px' }"
-          :body-style="{ padding: '16px' }"
+          class="border-border rounded-xl h-full flex flex-col"
+          :body-style="{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }"
         >
           <template #header>
-            <div class="flex items-center gap-3">
-              <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-xs font-semibold text-accent">2</div>
-              <span class="text-sm font-medium">拓扑采集参数</span>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <el-icon class="text-primary"><Connection /></el-icon>
+                <span class="text-sm font-semibold">3. 拓扑采集参数</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <el-button :loading="topologyPreviewLoading" :icon="Refresh" @click="loadTopologyPreview" size="small" type="primary" plain>
+                  刷新预览
+                </el-button>
+                <el-button @click="goToTopologyCommandConfig" size="small" :icon="Setting" plain>
+                  配置中心
+                </el-button>
+              </div>
             </div>
           </template>
           
-          <el-form label-position="top">
-            <el-form-item label="目标厂商">
-              <el-select v-model="topologyVendor" class="w-full">
-                <el-option label="自动识别" value="" />
-                <el-option v-for="vendor in supportedVendors" :key="vendor" :label="vendor" :value="vendor" />
-              </el-select>
-            </el-form-item>
+          <div class="flex-1 flex flex-col gap-4 min-h-0">
+            <el-form label-position="top" class="grid grid-cols-1 md:grid-cols-2 gap-4 flex-shrink-0">
+              <el-form-item label="目标厂商" class="mb-0">
+                <el-select v-model="topologyVendor" class="w-full">
+                  <el-option label="自动识别" value="" />
+                  <el-option v-for="vendor in supportedVendors" :key="vendor" :label="vendor" :value="vendor" />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item label="自动构建拓扑" class="mb-0">
+                <div class="w-full flex items-center justify-between h-[32px] px-3 rounded-lg border border-border bg-bg-panel/20">
+                  <span class="text-xs text-text-muted">采集完成后自动触发拓扑构建</span>
+                  <el-switch v-model="autoBuildTopology" size="small" />
+                </div>
+              </el-form-item>
+            </el-form>
             
-            <div class="rounded-lg border border-border bg-bg-panel p-3 mb-4 flex items-center justify-between">
-              <div>
-                <div class="text-sm font-medium">自动构建拓扑</div>
-                <div class="text-xs text-text-muted mt-1">采集完成后自动触发拓扑构建。</div>
-              </div>
-              <el-switch v-model="autoBuildTopology" />
-            </div>
-
-            <div class="rounded-lg border border-border bg-bg-panel p-4 space-y-4">
-              <div class="flex items-center justify-between gap-2">
-                <div>
-                  <div class="text-sm font-medium">字段级命令覆盖</div>
-                  <div class="text-xs text-text-muted mt-1">在任务维度覆盖默认命令，执行前将按覆盖结果重新生成采集计划。</div>
-                </div>
-                <div class="flex items-center gap-2">
-                  <el-button @click="loadTopologyPreview" :loading="topologyPreviewLoading">
-                    刷新预览
-                  </el-button>
-                  <el-button @click="goToTopologyCommandConfig" plain>
-                    配置中心
-                  </el-button>
+            <div class="flex-1 flex flex-col min-h-0 rounded-xl border border-border bg-bg-panel/20 p-4 gap-3">
+              <div class="flex items-center justify-between flex-shrink-0">
+                <h4 class="text-xs font-semibold text-text-primary">字段级命令覆盖</h4>
+                <div class="text-[10px] text-text-muted">
+                  在任务维度覆盖默认命令，执行前将按覆盖结果重新生成采集计划
                 </div>
               </div>
 
-              <el-alert v-if="topologyPreviewDirty" type="warning" :closable="false" show-icon>
+              <el-alert v-if="topologyPreviewDirty" type="warning" :closable="false" show-icon class="py-1 flex-shrink-0">
                 检测到未刷新的拓扑命令变更，请先刷新预览后再创建任务。
               </el-alert>
 
-              <el-alert v-if="topologyPreviewError" type="error" :closable="false" show-icon>
+              <el-alert v-if="topologyPreviewError" type="error" :closable="false" show-icon class="py-1 flex-shrink-0">
                 {{ topologyPreviewError }}
               </el-alert>
 
-              <div v-if="topologyPreviewLoading" class="text-xs px-2.5 py-2 rounded-lg border border-border bg-bg-card text-text-muted">
+              <!-- 预览加载/空状态 -->
+              <div v-if="topologyPreviewLoading" class="flex-1 flex flex-col justify-center items-center text-xs text-text-muted py-8">
+                <el-icon class="animate-spin text-lg mb-2"><Refresh /></el-icon>
                 正在加载拓扑命令预览...
               </div>
 
-              <el-empty v-else-if="topologyPreviewCommands.length === 0" description="暂无预览命令。请选择设备后再刷新预览。" :image-size="60" />
+              <el-empty
+                v-else-if="topologyPreviewCommands.length === 0"
+                description="暂无预览命令。请先选择设备并刷新预览。"
+                :image-size="60"
+                class="flex-1 flex flex-col justify-center items-center py-6 bg-bg-card/40 rounded-lg border border-dashed border-border"
+              />
 
-              <div v-else class="space-y-3 max-h-[340px] overflow-y-auto scrollbar-custom pr-1">
+              <!-- 命令列表 -->
+              <div v-else class="flex-1 overflow-y-auto scrollbar-custom pr-1 space-y-3 min-h-0">
                 <div
                   v-for="cmd in topologyPreviewCommands"
                   :key="cmd.fieldKey"
-                  class="rounded-lg border border-border bg-bg-card p-3 space-y-3"
+                  class="rounded-xl border border-border bg-bg-card p-3 space-y-3 shadow-sm hover:shadow-md transition-shadow"
                 >
                   <div class="flex items-start justify-between gap-3">
-                    <div>
-                      <div class="flex items-center gap-2 flex-wrap mb-1">
-                        <span class="text-sm font-medium">{{ cmd.displayName }}</span>
-                        <el-tag size="small" type="info">{{ cmd.fieldKey }}</el-tag>
-                        <el-tag size="small" :type="cmd.required ? 'warning' : 'info'">{{ cmd.required ? "关键字段" : "可选字段" }}</el-tag>
-                        <el-tag size="small">{{ cmd.commandSource || "unknown" }}</el-tag>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-1.5 flex-wrap mb-1">
+                        <span class="text-xs font-semibold text-text-primary">{{ cmd.displayName }}</span>
+                        <el-tag size="small" type="info" effect="plain" class="font-mono text-[10px]">{{ cmd.fieldKey }}</el-tag>
+                        <el-tag size="small" :type="cmd.required ? 'warning' : 'info'" effect="light" class="text-[10px]">
+                          {{ cmd.required ? "关键" : "可选" }}
+                        </el-tag>
+                        <el-tag size="small" type="success" effect="plain" class="text-[10px]">{{ cmd.commandSource || "unknown" }}</el-tag>
                       </div>
-                      <div class="text-xs text-text-muted">
+                      <div class="text-[11px] text-text-muted leading-relaxed">
                         {{ cmd.description || "无描述" }}
                       </div>
                     </div>
                     <el-checkbox
                       :model-value="topologyEnabledValue(cmd.fieldKey, cmd.enabled)"
                       @change="onTopologyEnabledChange(cmd.fieldKey, $event as boolean)"
+                      size="small"
                     >
                       启用
                     </el-checkbox>
@@ -221,40 +269,46 @@
                   <div class="flex gap-2 items-start">
                     <el-input
                       type="textarea"
-                      :rows="2"
-                      placeholder="命令内容"
+                      :rows="1"
+                      autosize
+                      placeholder="请输入命令内容"
                       :model-value="topologyCommandValue(cmd.fieldKey, cmd.command)"
                       @input="onTopologyCommandInput(cmd.fieldKey, $event)"
-                      class="flex-1 font-mono"
+                      class="flex-1 font-mono text-xs"
                     />
-                    <el-input-number
-                      :model-value="topologyTimeoutValue(cmd.fieldKey, cmd.timeoutSec)"
-                      @change="onTopologyTimeoutInput(cmd.fieldKey, $event)"
-                      :min="0"
-                      controls-position="right"
-                      class="w-32"
-                    />
-                    <el-button @click="resetTopologyOverride(cmd.fieldKey)">
-                      恢复继承
+                    <div class="flex flex-col gap-1 items-end">
+                      <el-input-number
+                        :model-value="topologyTimeoutValue(cmd.fieldKey, cmd.timeoutSec)"
+                        @change="onTopologyTimeoutInput(cmd.fieldKey, $event)"
+                        :min="0"
+                        controls-position="right"
+                        class="w-24 text-xs"
+                        size="small"
+                      />
+                      <span class="text-[9px] text-text-muted">超时(秒)</span>
+                    </div>
+                    <el-button @click="resetTopologyOverride(cmd.fieldKey)" size="small" type="warning" plain>
+                      重置
                     </el-button>
                   </div>
                 </div>
               </div>
 
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-text-muted">覆盖项 {{ topologyOverrides.length }} 条</span>
-                <span v-if="topologyInvalidCount > 0" class="text-error">
-                  存在 {{ topologyInvalidCount }} 条已启用但命令为空的覆盖项
+              <div class="flex items-center justify-between text-xs pt-2 border-t border-border flex-shrink-0">
+                <span class="text-text-muted">已覆盖 {{ topologyOverrides.length }} 个字段</span>
+                <span v-if="topologyInvalidCount > 0" class="text-error font-medium">
+                  存在 {{ topologyInvalidCount }} 项已启用但命令为空的覆盖
                 </span>
-                <span v-else class="text-success">覆盖项校验通过</span>
+                <span v-else class="text-success font-medium flex items-center gap-1">
+                  <el-icon><Check /></el-icon> 校验通过
+                </span>
               </div>
             </div>
-          </el-form>
+          </div>
         </el-card>
+
       </div>
     </div>
-
-
 
     <!-- 创建任务弹窗 -->
     <el-dialog
@@ -263,6 +317,7 @@
       width="500px"
       destroy-on-close
       :close-on-click-modal="false"
+      class="rounded-xl"
     >
       <el-form label-position="top">
         <el-form-item label="任务名称" required>
@@ -352,10 +407,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
-import { Plus, Position, Right } from "@element-plus/icons-vue";
+import { Plus, Position, Right, Cpu, Connection, Folder, Tickets, Refresh, Setting, Delete, Check } from "@element-plus/icons-vue";
 import {
   DeviceAPI,
   TaskGroupAPI,
@@ -394,16 +449,6 @@ const topologyPreviewLoading = ref(false);
 const topologyPreviewError = ref("");
 const topologyPreviewDirty = ref(false);
 
-// 面板高度控制
-const devicePanelHeight = ref(280);
-const commandPanelMinHeight = 300;
-const minHeight = 150;
-
-// 拖拽调整高度相关
-let isResizing = false;
-let startY = 0;
-let startHeight = 0;
-
 const selectedDeviceIDsSignature = computed(() =>
   [...selectedDevices.value]
     .map((item) => item.id)
@@ -422,39 +467,6 @@ const topologyInvalidCount = computed(
         item.enabled === true && String(item.command || "").trim() === "",
     ).length,
 );
-
-function startResize(e: MouseEvent) {
-  isResizing = true;
-  startY = e.clientY;
-  startHeight = devicePanelHeight.value;
-  document.addEventListener("mousemove", onResize);
-  document.addEventListener("mouseup", stopResize);
-  document.body.style.cursor = "row-resize";
-  document.body.style.userSelect = "none";
-}
-
-function onResize(e: MouseEvent) {
-  if (!isResizing) return;
-  const deltaY = e.clientY - startY;
-  const newHeight = startHeight + deltaY;
-
-  if (newHeight >= minHeight) {
-    devicePanelHeight.value = newHeight;
-  }
-}
-
-function stopResize() {
-  isResizing = false;
-  document.removeEventListener("mousemove", onResize);
-  document.removeEventListener("mouseup", stopResize);
-  document.body.style.cursor = "";
-  document.body.style.userSelect = "";
-}
-
-onUnmounted(() => {
-  document.removeEventListener("mousemove", onResize);
-  document.removeEventListener("mouseup", stopResize);
-});
 
 const canCreate = computed(() => {
   if (selectedTaskType.value === "topology") {

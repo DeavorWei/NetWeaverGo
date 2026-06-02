@@ -38,19 +38,7 @@
 
       <!-- 主内容区 -->
       <el-container class="flex-col bg-bg-primary min-w-0">
-        <!-- 顶部导航栏 -->
-        <el-header height="64px" class="flex items-center justify-between px-6 bg-bg-secondary border-b border-border flex-shrink-0">
-          <div class="flex items-center gap-3">
-            <h1 class="text-base font-semibold text-text-primary m-0">
-              {{ currentTitle }}
-            </h1>
-          </div>
-          <div class="flex items-center gap-4">
-            <!-- 使用主题切换组件 -->
-            <ThemeSwitch />
-            <div class="text-xs text-text-muted font-mono">v1.0</div>
-          </div>
-        </el-header>
+
 
         <!-- 内容主体 -->
         <el-main class="p-6 overflow-auto scrollbar-custom relative">
@@ -71,7 +59,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import ThemeSwitch from "@/components/common/ThemeSwitch.vue";
 import TitleBar from "@/components/common/TitleBar.vue";
 import RouteLoading from "@/components/common/RouteLoading.vue";
 import { useTheme } from "@/composables/useTheme";
