@@ -23,82 +23,11 @@
         >
           刷新图谱
         </el-button>
-        <!-- 离线重放按钮 -->
-        <el-button
-          type="primary"
-          :icon="VideoPlay"
-          @click="openReplayDialog"
-          :disabled="!selectedRunId"
-          title="从历史Raw文件重新解析构建拓扑"
-        >
-          离线重放
-        </el-button>
+
       </div>
     </div>
 
-    <el-card shadow="never" :body-style="{ padding: '16px' }" class="flex-shrink-0">
-      <div class="grid grid-cols-5 gap-3">
-        <el-input
-          v-model="keyword"
-          placeholder="搜索设备/接口"
-          :prefix-icon="Search"
-          clearable
-        />
-        <el-select v-model="statusFilter" placeholder="全部状态">
-          <el-option label="全部状态" value="all" />
-          <el-option label="confirmed" value="confirmed" />
-          <el-option label="semi_confirmed" value="semi_confirmed" />
-          <el-option label="inferred" value="inferred" />
-          <el-option label="conflict" value="conflict" />
-        </el-select>
-        <el-select v-model="viewMode" placeholder="全部链路">
-          <el-option label="全部链路" value="all" />
-          <el-option label="逻辑视图" value="logical" />
-          <el-option label="物理视图" value="physical" />
-        </el-select>
-        <el-select v-model="roleFilter" placeholder="全部角色">
-          <el-option label="全部角色" value="all" />
-          <el-option v-for="role in roleOptions" :key="role" :label="role" :value="role" />
-        </el-select>
-        <el-select v-model="siteFilter" placeholder="全部站点">
-          <el-option label="全部站点" value="all" />
-          <el-option v-for="site in siteOptions" :key="site" :label="site" :value="site" />
-        </el-select>
-      </div>
-    </el-card>
 
-    <div class="grid grid-cols-5 gap-3 flex-shrink-0">
-      <el-card shadow="never" :body-style="{ padding: '12px' }">
-        <div class="text-xs text-text-muted">可见链路</div>
-        <div class="text-xl font-semibold mt-1">
-          {{ filteredEdges.length }}
-        </div>
-      </el-card>
-      <el-card shadow="never" :body-style="{ padding: '12px' }">
-        <div class="text-xs text-text-muted">confirmed</div>
-        <div class="text-xl font-semibold text-success mt-1">
-          {{ countByStatus("confirmed") }}
-        </div>
-      </el-card>
-      <el-card shadow="never" :body-style="{ padding: '12px' }">
-        <div class="text-xs text-text-muted">semi_confirmed</div>
-        <div class="text-xl font-semibold text-warning mt-1">
-          {{ countByStatus("semi_confirmed") }}
-        </div>
-      </el-card>
-      <el-card shadow="never" :body-style="{ padding: '12px' }">
-        <div class="text-xs text-text-muted">inferred</div>
-        <div class="text-xl font-semibold text-warning mt-1">
-          {{ countByStatus("inferred") }}
-        </div>
-      </el-card>
-      <el-card shadow="never" :body-style="{ padding: '12px' }">
-        <div class="text-xs text-text-muted">conflict</div>
-        <div class="text-xl font-semibold text-error mt-1">
-          {{ countByStatus("conflict") }}
-        </div>
-      </el-card>
-    </div>
 
     <!-- 视图切换 -->
     <div class="flex items-center gap-2 flex-shrink-0">
@@ -303,14 +232,7 @@
     </div>
   </div>
 
-  <!-- 离线重放对话框 -->
-  <ReplayDialog
-    :visible="showReplayDialog"
-    :original-run-id="selectedRunId"
-    :run-info="replayRunInfo"
-    @close="showReplayDialog = false"
-    @complete="handleReplayComplete"
-  />
+
 
   <!-- 设备详情弹窗 -->
   <TopologyDeviceDetailModal
@@ -331,7 +253,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { Search, RefreshRight, VideoPlay } from '@element-plus/icons-vue';
+import { RefreshRight } from '@element-plus/icons-vue';
 import {
   TaskExecutionAPI,
   type ParsedResult,
@@ -340,9 +262,8 @@ import {
   type TopologyGraphView,
 } from "../services/api";
 import { useTaskexecStore } from "../stores/taskexecStore";
-import { StatusNames, type ReplayableRunInfo } from "../types/taskexec";
+import { StatusNames } from "../types/taskexec";
 import TopologyGraph, { type GraphNode } from "../components/topology/TopologyGraph.vue";
-import ReplayDialog from "../components/topology/ReplayDialog.vue";
 import TopologyDeviceDetailModal from "../components/topology/TopologyDeviceDetailModal.vue";
 import TopologyEdgeDetailModal from "../components/topology/TopologyEdgeDetailModal.vue";
 import { getLogger } from '@/utils/logger'
@@ -353,10 +274,6 @@ const logger = getLogger()
 const taskexecStore = useTaskexecStore();
 const selectedRunId = ref("");
 const lastGraphLoadAt = ref<string>("");
-
-// 离线重放对话框状态
-const showReplayDialog = ref(false);
-const replayRunInfo = ref<ReplayableRunInfo | null>(null);
 
 // 计算属性：筛选拓扑类型的运行
 const topologyRuns = computed(() => {
@@ -692,32 +609,5 @@ onMounted(() => {
   void loadTasks();
 });
 
-// 离线重放功能
-function openReplayDialog() {
-  if (!selectedRunId.value) return;
-  
-  // 构建可重放运行信息
-  const run = selectedRun.value;
-  if (run) {
-    replayRunInfo.value = {
-      runId: run.runId,
-      taskName: run.taskName || run.runId,
-      status: run.status,
-      runKind: run.runKind,
-      deviceCount: 0, // 将由对话框加载
-      rawFileCount: 0, // 将由对话框加载
-      createdAt: run.startedAt || new Date().toISOString(),
-      hasRawFiles: true // 假设已选择运行都有Raw文件
-    };
-  }
-  showReplayDialog.value = true;
-}
 
-function handleReplayComplete(result: { replayRunId: string }) {
-  showReplayDialog.value = false;
-  // 切换到新的重放运行ID
-  selectedRunId.value = result.replayRunId;
-  // 刷新历史记录
-  void loadTasks();
-}
 </script>

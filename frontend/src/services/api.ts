@@ -174,17 +174,7 @@ export const TaskExecutionAPI = {
   /** 获取拓扑采集计划快照 */
   getTopologyCollectionPlans:
     TaskExecutionUIServiceBinding.GetTopologyCollectionPlans,
-  // 离线重放模式
-  /** 从Raw文件重放拓扑构建 */
-  replayTopologyFromRaw: TaskExecutionUIServiceBinding.ReplayTopologyFromRaw,
-  /** 列出可重放的运行记录 */
-  listReplayableRuns: TaskExecutionUIServiceBinding.ListReplayableRuns,
-  /** 获取重放历史 */
-  getReplayHistory: TaskExecutionUIServiceBinding.GetReplayHistory,
-  /** 获取Raw文件预览 */
-  getRawFilePreview: TaskExecutionUIServiceBinding.GetRawFilePreview,
-  /** 列出指定设备的Raw文件 */
-  listRawFiles: TaskExecutionUIServiceBinding.ListRawFiles,
+
   // 决策轨迹
   /** 获取边解释视图（包含候选和决策轨迹） */
   getTopologyEdgeExplain: TaskExecutionUIServiceBinding.GetTopologyEdgeExplain,

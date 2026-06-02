@@ -103,35 +103,7 @@ func (s *TaskExecutionUIService) GetTopologyCollectionPlans(runID string) ([]tas
 	return s.service.ListTopologyCollectionPlans(runID)
 }
 
-// =============================================================================
-// 离线重放模式 API
-// =============================================================================
 
-// ReplayTopologyFromRaw 从Raw文件重放拓扑构建
-// 跳过采集阶段，直接执行 Parse -> TopologyBuild
-func (s *TaskExecutionUIService) ReplayTopologyFromRaw(originalRunID string, opts taskexec.ReplayOptions) (*taskexec.ReplayResult, error) {
-	return s.service.ReplayTopologyFromRaw(originalRunID, opts)
-}
-
-// ListReplayableRuns 列出可重放的运行记录
-func (s *TaskExecutionUIService) ListReplayableRuns(limit int) ([]taskexec.ReplayableRunInfo, error) {
-	return s.service.ListReplayableRuns(limit)
-}
-
-// GetReplayHistory 获取重放历史
-func (s *TaskExecutionUIService) GetReplayHistory(originalRunID string) ([]taskexec.TopologyReplayRecord, error) {
-	return s.service.GetReplayHistory(originalRunID)
-}
-
-// GetRawFilePreview 获取Raw文件预览
-func (s *TaskExecutionUIService) GetRawFilePreview(runID string, deviceIP string, commandKey string) (*taskexec.RawFilePreview, error) {
-	return s.service.GetRawFilePreview(runID, deviceIP, commandKey)
-}
-
-// ListRawFiles 列出指定设备的Raw文件
-func (s *TaskExecutionUIService) ListRawFiles(runID string, deviceIP string) ([]taskexec.RawFileInfo, error) {
-	return s.service.ListRawFiles(runID, deviceIP)
-}
 
 // GetTopologyEdgeExplain 获取边解释视图（包含候选和决策轨迹）
 func (s *TaskExecutionUIService) GetTopologyEdgeExplain(runID string, edgeID string) (*models.TopologyEdgeExplainView, error) {
