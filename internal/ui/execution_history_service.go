@@ -707,6 +707,8 @@ func (s *ExecutionHistoryService) validatePathWithinAllowedDir(filePath string) 
 		pm.ExecutionLiveLogDir,
 		pm.TopologyRawDir,
 		filepath.Join(pm.StorageRoot, "topology", "normalized"),
+		pm.ExecutionReportDir,
+		pm.TopologyExportDir,
 	}
 
 	for _, allowedDir := range allowedDirs {
