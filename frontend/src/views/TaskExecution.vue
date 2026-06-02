@@ -71,6 +71,24 @@
       <!-- 执行视图（正在运行时显示） -->
       <template v-if="shouldShowExecutionView">
         <div class="flex-1 flex flex-col gap-4">
+          <!-- 批量重置 SSH 密钥提示条 -->
+          <el-alert
+            v-if="sshKeyMismatchUnits.length > 0 && !hideSshMismatchBanner"
+            type="warning"
+            show-icon
+            class="shrink-0"
+            @close="hideSshMismatchBanner = true"
+          >
+            <template #title>
+              <div class="flex items-center justify-between w-full">
+                <span>发现 {{ sshKeyMismatchUnits.length }} 台设备主机密钥不匹配导致连接失败。</span>
+                <el-button type="primary" size="small" @click="sshMismatchModal.show = true">
+                  批量处理
+                </el-button>
+              </div>
+            </template>
+          </el-alert>
+
           <el-card shadow="never" :body-style="{ padding: '16px' }">
             <div class="flex items-start justify-between gap-4">
               <div class="space-y-2">
@@ -323,6 +341,57 @@
       </template>
     </div>
 
+    <!-- SSH 密钥重置冲突弹窗 -->
+    <el-dialog
+      v-model="sshMismatchModal.show"
+      title="主机密钥不匹配"
+      width="500px"
+      :close-on-click-modal="false"
+      class="rounded-xl overflow-hidden"
+    >
+      <div class="space-y-4">
+        <el-alert
+          type="warning"
+          show-icon
+          :closable="false"
+          title="检测到以下设备的 SSH 主机密钥发生改变，可能是由于设备重装或网络变更导致。"
+        />
+        <div class="bg-bg-panel border border-border rounded-lg p-3 max-h-48 overflow-y-auto scrollbar-custom space-y-1.5">
+          <div
+            v-for="unit in sshKeyMismatchUnits"
+            :key="unit.targetKey"
+            class="flex items-center gap-2 text-sm"
+          >
+            <span class="font-mono text-text-primary">{{ unit.targetKey }}</span>
+            <el-tag size="small" type="danger">指纹冲突</el-tag>
+          </div>
+        </div>
+        <p class="text-sm text-text-muted">
+          您可以选择批量清理这些设备的已知指纹记录，重置后下次连接会自动接受新密钥。
+        </p>
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-3 mt-4">
+          <el-button @click="sshMismatchModal.show = false">取消</el-button>
+          <el-button
+            type="warning"
+            plain
+            :loading="sshMismatchModal.processing"
+            @click="handleResetSSHAndRetry(false)"
+          >
+            仅重置密钥
+          </el-button>
+          <el-button
+            type="primary"
+            :loading="sshMismatchModal.processing"
+            @click="handleResetSSHAndRetry(true)"
+          >
+            重置并重试任务
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- 执行历史抽屉 -->
     <ExecutionHistoryDrawer
       v-model="historyDrawer.show"
@@ -445,6 +514,13 @@ const topologyPlanLastRevision = ref(-1);
 // 虚拟滚动优化状态
 const showAllDevices = ref(false);
 const VISIBLE_DEVICE_LIMIT = 30;
+
+// SSH 主机密钥不匹配处理状态
+const hideSshMismatchBanner = ref(false);
+const sshMismatchModal = ref({
+  show: false,
+  processing: false
+});
 
 function triggerToast(msg: string, type: "success" | "error" = "success") {
   if (type === "success") {
@@ -625,6 +701,14 @@ const deviceCardUnits = computed<UnitSnapshot[]>(() => {
       normalizeString(right.targetKey),
     );
   });
+});
+
+const sshKeyMismatchUnits = computed(() => {
+  return deviceCardUnits.value.filter((unit) =>
+    unit.status === "failed" &&
+    (normalizeString(unit.errorMessage).includes("knownhosts: key mismatch") ||
+     normalizeString(unit.errorMessage).includes("主机密钥不匹配"))
+  );
 });
 
 const failedExecutionUnitCount = computed(() => {
@@ -914,6 +998,7 @@ function resetExecutionViewState(reason: string) {
   clearSnapshotTimeout();
   stopSnapshotPolling();
   taskexecStore.setCurrentRunId(null);
+  hideSshMismatchBanner.value = false;
   topologyCollectionPlanRows.value = [];
   topologyPlanError.value = "";
   topologyPlanLoading.value = false;
@@ -1242,6 +1327,54 @@ function closeExecutionView() {
 }
 
 // 停止执行任务 (阶段3: 使用统一运行时的CancelTask)
+async function handleResetSSHAndRetry(retry: boolean) {
+  sshMismatchModal.value.processing = true;
+  try {
+    const mismatchUnits = sshKeyMismatchUnits.value;
+    if (mismatchUnits.length === 0) {
+      return;
+    }
+    const failedIps = mismatchUnits.map((u) => normalizeString(u.targetKey));
+
+    // 1. 获取设备列表并匹配 ID
+    const allDevices = await DeviceAPI.listDevices();
+    const targetDevices = allDevices.filter((d) => failedIps.includes(d.ip));
+
+    // 2. 批量重置 SSH 密钥
+    if (targetDevices.length > 0) {
+      const resetPromises = targetDevices.map((dev) =>
+        DeviceAPI.resetDeviceSSHHostKey(dev.id)
+      );
+      await Promise.all(resetPromises);
+      triggerToast(`成功重置了 ${targetDevices.length} 台设备的主机密钥`);
+    }
+
+    sshMismatchModal.value.show = false;
+    hideSshMismatchBanner.value = true;
+
+    // 3. 如果需要重试
+    if (retry) {
+      if (isRunning.value) {
+        await stopExecution();
+      }
+      const currentTask = tasks.value.find(
+        (t) => t.id === executionView.value.taskId
+      );
+      if (currentTask) {
+        // executeTask expect task as param
+        await executeTask(currentTask);
+      } else {
+        triggerToast("未找到当前任务配置，无法重试", "error");
+      }
+    }
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    triggerToast(`处理失败: ${msg}`, "error");
+  } finally {
+    sshMismatchModal.value.processing = false;
+  }
+}
+
 async function stopExecution() {
   if (!confirm("确定要停止当前执行任务吗？")) {
     return;
