@@ -96,9 +96,15 @@ func ValidateStorageRootWritable(candidate string) error {
 
 // newPathManager 创建路径管理器
 func newPathManager() *PathManager {
-	cwd, err := os.Getwd()
-	if err != nil {
-		cwd = "."
+	var cwd string
+	exePath, err := os.Executable()
+	if err == nil {
+		cwd = filepath.Dir(exePath)
+	} else {
+		cwd, err = os.Getwd()
+		if err != nil {
+			cwd = "."
+		}
 	}
 
 	defaultRoot := filepath.Join(cwd, defaultStorageRootName)
