@@ -40,7 +40,10 @@ dev_mode:
       - .git
       - node_modules
       - frontend/dist
+      - frontend\dist
+      - dist
       - bin
+      - netWeaverGoData
     file:
       - .DS_Store
       - .gitignore

@@ -12,6 +12,7 @@ export default defineConfig({
     }
   },
   server: {
+    host: '127.0.0.1',
     port: 9245,
     strictPort: true,
     open: false, // Wails 应用不需要自动打开浏览器
