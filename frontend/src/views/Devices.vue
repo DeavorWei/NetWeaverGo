@@ -24,6 +24,7 @@
       @edit="openEditModal"
       @delete="openDeleteConfirm"
       @batch-edit="openBatchEditModal"
+      @batch-reset-ssh-key="openBatchResetSSHKeyConfirm"
       @batch-delete="openBatchDeleteConfirm"
       @page-change="page = $event"
       @size-change="handleSizeChange"
@@ -320,26 +321,30 @@ async function resetSSHHostKey() {
     return;
   }
 
-  const confirmed = confirm(
+  ElMessageBox.confirm(
     `确定要清除设备 ${formData.value.ip} 的 SSH 主机密钥记录吗？\n清除后，下次连接会重新学习该主机密钥。`,
-  );
-  if (!confirmed) {
-    return;
-  }
-
-  editModalRef.value?.setSaving(true);
-  editModalRef.value?.setError("");
-  try {
-    await DeviceAPI.resetDeviceSSHHostKey(editingDeviceId.value);
-    ElMessage.success(`设备 ${formData.value.ip} 的 SSH 主机密钥已重置`);
-  } catch (err: unknown) {
-    logger.error("重置 SSH 主机密钥失败", 'Devices', err);
-    const message =
-      (err as { message?: string })?.message || "重置 SSH 主机密钥失败，请重试";
-    editModalRef.value?.setError(message);
-  } finally {
-    editModalRef.value?.setSaving(false);
-  }
+    '重置主机SSH密钥',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(async () => {
+    editModalRef.value?.setSaving(true);
+    editModalRef.value?.setError("");
+    try {
+      // @ts-ignore - editingDeviceId.value is checked above
+      await DeviceAPI.resetDeviceSSHHostKey(editingDeviceId.value);
+      ElMessage.success(`设备 ${formData.value?.ip} 的 SSH 主机密钥已重置`);
+    } catch (err: unknown) {
+      logger.error("重置 SSH 主机密钥失败", 'Devices', err);
+      const message =
+        (err as { message?: string })?.message || "重置 SSH 主机密钥失败，请重试";
+      editModalRef.value?.setError(message);
+    } finally {
+      editModalRef.value?.setSaving(false);
+    }
+  }).catch(() => {});
 }
 
 // ==================== 删除操作 ====================
@@ -420,6 +425,31 @@ async function saveBatchEdit(field: BatchField, value: string | number) {
   } finally {
     batchEditModalRef.value?.setSaving(false);
   }
+}
+
+function openBatchResetSSHKeyConfirm() {
+  if (selectedCount.value === 0) return;
+  ElMessageBox.confirm(
+    `确定要清除选中的 ${selectedCount.value} 台设备的 SSH 主机密钥记录吗？\n清除后，下次连接会重新学习这些主机的密钥。`,
+    '批量重置主机SSH密钥确认',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(async () => {
+    try {
+      const ids = Array.from(selectedIds.value);
+      for (const id of ids) {
+        await DeviceAPI.resetDeviceSSHHostKey(id);
+      }
+      ElMessage.success(`成功重置 ${ids.length} 台设备的主机SSH密钥`);
+      clearSelection();
+    } catch (err: any) {
+      logger.error("批量重置主机SSH密钥失败", 'Devices', err);
+      ElMessage.error(err.message || "批量重置主机SSH密钥失败");
+    }
+  }).catch(() => {});
 }
 
 function openBatchDeleteConfirm() {

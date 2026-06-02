@@ -14,13 +14,22 @@
           清空选择
         </el-button>
       </div>
-      <el-button
-        type="danger"
-        size="small"
-        @click="$emit('batch-delete')"
-      >
-        批量删除
-      </el-button>
+      <div class="flex items-center gap-2">
+        <el-button
+          type="warning"
+          size="small"
+          @click="$emit('batch-reset-ssh-key')"
+        >
+          重置主机SSH密钥
+        </el-button>
+        <el-button
+          type="danger"
+          size="small"
+          @click="$emit('batch-delete')"
+        >
+          批量删除
+        </el-button>
+      </div>
     </div>
 
     <!-- 表格区域 -->
@@ -186,6 +195,7 @@ interface Emits {
   (e: "edit", device: DeviceAsset): void;
   (e: "delete", device: DeviceAsset): void;
   (e: "batch-edit", field: string): void;
+  (e: "batch-reset-ssh-key"): void;
   (e: "batch-delete"): void;
   (e: "page-change", page: number): void;
   (e: "size-change", size: number): void;
