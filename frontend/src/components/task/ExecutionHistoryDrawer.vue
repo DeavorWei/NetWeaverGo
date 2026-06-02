@@ -105,6 +105,7 @@ const props = defineProps<{
   modelValue: boolean;
   taskGroupId?: string;
   taskGroupName?: string;
+  runKind?: string;
 }>();
 
 const emit = defineEmits<{
@@ -148,7 +149,7 @@ const loadRecords = async () => {
   loading.value = true;
   try {
     const result = await ExecutionHistoryAPI.listTaskRunRecords({
-      runKind: "",
+      runKind: props.runKind || "",
       status: filterStatus.value,
       limit: pageSize * currentPage.value,
       taskGroupId: props.taskGroupId || "",
@@ -250,6 +251,7 @@ const deleteAllRecords = () => {
     try {
       const result = await ExecutionHistoryAPI.deleteAllRunRecords({
         taskGroupId: props.taskGroupId || "",
+        runKind: props.runKind || "",
       });
       if (result?.success) {
         ElMessage.success(result.message || "删除成功");

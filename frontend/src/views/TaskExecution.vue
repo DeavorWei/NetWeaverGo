@@ -165,7 +165,7 @@
             <div v-else class="space-y-3 max-h-64 overflow-auto scrollbar-custom pr-1">
               <div
                 v-for="plan in topologyCollectionPlanRows"
-                :key="`${plan.artifactKey || '-'}:${plan.deviceIp}:${String(plan.generatedAt || '-')}`"
+                :key="plan.deviceIp"
                 class="rounded-lg border border-border bg-bg-panel/40 px-3 py-2 space-y-2"
               >
                 <div class="flex items-center justify-between gap-3 text-xs">
@@ -1222,9 +1222,13 @@ async function loadTopologyCollectionPlans(runId: string) {
   try {
     const plans =
       await TaskExecutionAPI.getTopologyCollectionPlans(normalizedRunID);
-    topologyCollectionPlanRows.value = Array.isArray(plans)
-      ? plans.filter(Boolean)
-      : [];
+    if (Array.isArray(plans)) {
+      const validPlans = plans.filter(Boolean);
+      validPlans.sort((a, b) => (a.deviceIp || "").localeCompare(b.deviceIp || ""));
+      topologyCollectionPlanRows.value = validPlans;
+    } else {
+      topologyCollectionPlanRows.value = [];
+    }
   } catch (err: any) {
     topologyPlanError.value = err?.message || String(err);
     topologyCollectionPlanRows.value = [];

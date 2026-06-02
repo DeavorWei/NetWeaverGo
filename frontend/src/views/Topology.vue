@@ -23,7 +23,12 @@
         >
           刷新图谱
         </el-button>
-
+        <el-button
+          :icon="Setting"
+          @click="showHistoryDrawer = true"
+        >
+          历史管理
+        </el-button>
       </div>
     </div>
 
@@ -249,11 +254,17 @@
     :edge-detail="edgeDetail"
     @device-click="openDeviceDetail"
   />
+  <!-- 历史记录抽屉 -->
+  <ExecutionHistoryDrawer
+    v-model="showHistoryDrawer"
+    run-kind="topology"
+    task-group-name="拓扑采集"
+  />
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { RefreshRight } from '@element-plus/icons-vue';
+import { RefreshRight, Setting } from '@element-plus/icons-vue';
 import {
   TaskExecutionAPI,
   type ParsedResult,
@@ -266,6 +277,7 @@ import { StatusNames } from "../types/taskexec";
 import TopologyGraph, { type GraphNode } from "../components/topology/TopologyGraph.vue";
 import TopologyDeviceDetailModal from "../components/topology/TopologyDeviceDetailModal.vue";
 import TopologyEdgeDetailModal from "../components/topology/TopologyEdgeDetailModal.vue";
+import ExecutionHistoryDrawer from "../components/task/ExecutionHistoryDrawer.vue";
 import { getLogger } from '@/utils/logger'
 
 const logger = getLogger()
@@ -284,6 +296,7 @@ const selectedRun = computed(
     topologyRuns.value.find((run) => run.runId === selectedRunId.value) || null,
 );
 const building = ref(false);
+const showHistoryDrawer = ref(false);
 
 const keyword = ref("");
 const statusFilter = ref("all");

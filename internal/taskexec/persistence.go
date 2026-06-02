@@ -116,7 +116,11 @@ func (r *GormRepository) UpdateRun(ctx context.Context, runID string, patch *Run
 // ListRuns 列出Runs
 func (r *GormRepository) ListRuns(ctx context.Context, limit int) ([]TaskRun, error) {
 	var runs []TaskRun
-	err := r.db.WithContext(ctx).Order("created_at DESC").Limit(limit).Find(&runs).Error
+	query := r.db.WithContext(ctx).Order("created_at DESC")
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	err := query.Find(&runs).Error
 	return runs, err
 }
 

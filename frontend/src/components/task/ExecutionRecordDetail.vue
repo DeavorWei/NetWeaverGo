@@ -6,7 +6,7 @@
     @closed="closeModal"
     destroy-on-close
   >
-    <div v-if="record" class="flex flex-col gap-6 -mt-4">
+    <div v-if="record" class="flex flex-col gap-4 -mt-4">
       <!-- 基本信息 -->
       <div class="grid grid-cols-2 gap-4 p-4 bg-bg-panel rounded-lg">
         <div class="text-sm">
@@ -47,34 +47,34 @@
       </div>
 
       <!-- 统计信息 -->
-      <div>
-        <h4 class="text-sm font-semibold text-text-primary mb-3">执行统计</h4>
-        <div class="grid grid-cols-5 gap-3 text-center">
-          <div class="border border-border bg-bg-panel rounded-lg p-3">
-            <div class="text-lg font-semibold text-text-primary">{{ record.totalDevices }}</div>
-            <div class="text-xs text-text-muted mt-1">设备总数</div>
+      <div class="flex items-center gap-6 bg-bg-panel rounded-lg p-3">
+        <h4 class="text-sm font-semibold text-text-primary m-0 border-r border-border pr-6">执行统计</h4>
+        <div class="flex items-center gap-6">
+          <div class="flex items-baseline gap-2">
+            <span class="text-xs text-text-muted">设备总数</span>
+            <span class="text-base font-semibold text-text-primary">{{ record.totalDevices }}</span>
           </div>
-          <div class="border border-success/30 bg-success/5 rounded-lg p-3">
-            <div class="text-lg font-semibold text-success">{{ record.successCount }}</div>
-            <div class="text-xs text-text-muted mt-1">成功</div>
+          <div class="flex items-baseline gap-2">
+            <span class="text-xs text-text-muted">成功</span>
+            <span class="text-base font-semibold text-success">{{ record.successCount }}</span>
           </div>
-          <div class="border border-error/30 bg-error/5 rounded-lg p-3" v-if="record.errorCount > 0">
-            <div class="text-lg font-semibold text-error">{{ record.errorCount }}</div>
-            <div class="text-xs text-text-muted mt-1">失败</div>
+          <div class="flex items-baseline gap-2" v-if="record.errorCount > 0">
+            <span class="text-xs text-text-muted">失败</span>
+            <span class="text-base font-semibold text-error">{{ record.errorCount }}</span>
           </div>
-          <div class="border border-warning/30 bg-warning/5 rounded-lg p-3" v-if="(record.abortedCount || 0) > 0">
-            <div class="text-lg font-semibold text-warning">{{ record.abortedCount || 0 }}</div>
-            <div class="text-xs text-text-muted mt-1">中止</div>
+          <div class="flex items-baseline gap-2" v-if="(record.abortedCount || 0) > 0">
+            <span class="text-xs text-text-muted">中止</span>
+            <span class="text-base font-semibold text-warning">{{ record.abortedCount || 0 }}</span>
           </div>
-          <div class="border border-info/30 bg-info/5 rounded-lg p-3" v-if="(record.warningCount || 0) > 0">
-            <div class="text-lg font-semibold text-info">{{ record.warningCount || 0 }}</div>
-            <div class="text-xs text-text-muted mt-1">告警</div>
+          <div class="flex items-baseline gap-2" v-if="(record.warningCount || 0) > 0">
+            <span class="text-xs text-text-muted">告警</span>
+            <span class="text-base font-semibold text-info">{{ record.warningCount || 0 }}</span>
           </div>
         </div>
       </div>
 
       <!-- 设备执行进度列表 -->
-      <div class="min-h-0 flex flex-col h-64">
+      <div class="min-h-0 flex flex-col h-[400px]">
         <div class="flex justify-between items-center mb-3 flex-shrink-0">
           <h4 class="text-sm font-semibold text-text-primary">设备执行进度</h4>
           <span class="text-xs text-text-secondary">{{ deviceDetails.length }} 台设备</span>

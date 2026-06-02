@@ -142,6 +142,7 @@ type DeleteRunRecordResponse struct {
 // DeleteAllRunRecordsRequest 删除所有运行记录请求
 type DeleteAllRunRecordsRequest struct {
 	TaskGroupID string `json:"taskGroupId"` // 可选：任务组ID筛选
+	RunKind     string `json:"runKind"`     // 可选：运行类型筛选 (normal / topology)
 }
 
 // DeleteRunRecord 删除单条运行记录
@@ -204,7 +205,7 @@ func (s *ExecutionHistoryService) DeleteRunRecord(req DeleteRunRecordRequest) (*
 
 // DeleteAllRunRecords 删除运行记录（支持按任务组筛选）
 func (s *ExecutionHistoryService) DeleteAllRunRecords(req DeleteAllRunRecordsRequest) (*DeleteRunRecordResponse, error) {
-	logger.Debug("ExecutionHistoryService", "-", "开始删除运行记录: taskGroupId=%s", req.TaskGroupID)
+	logger.Debug("ExecutionHistoryService", "-", "开始删除运行记录: taskGroupId=%s, runKind=%s", req.TaskGroupID, req.RunKind)
 
 	if s.repo == nil {
 		logger.Error("ExecutionHistoryService", "-", "仓库未初始化，无法删除记录")
@@ -227,11 +228,19 @@ func (s *ExecutionHistoryService) DeleteAllRunRecords(req DeleteAllRunRecordsReq
 		return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("检查运行状态失败: %v", err)}, nil
 	}
 
-	// 如果指定了 taskGroupId，只检查该任务组的运行状态
+	// 过滤运行状态检查
 	if taskGroupID > 0 {
 		var filteredRunning []taskexec.TaskRun
 		for _, run := range running {
 			if run.TaskGroupID == taskGroupID {
+				filteredRunning = append(filteredRunning, run)
+			}
+		}
+		running = filteredRunning
+	} else if req.RunKind != "" {
+		var filteredRunning []taskexec.TaskRun
+		for _, run := range running {
+			if run.RunKind == req.RunKind {
 				filteredRunning = append(filteredRunning, run)
 			}
 		}
@@ -249,7 +258,9 @@ func (s *ExecutionHistoryService) DeleteAllRunRecords(req DeleteAllRunRecordsReq
 	var runs []taskexec.TaskRun
 	if taskGroupID > 0 {
 		// 只获取指定任务组的记录
-		runs, _ = s.repo.ListRunsFiltered(context.Background(), 0, taskGroupID, "", "")
+		runs, _ = s.repo.ListRunsFiltered(context.Background(), 0, taskGroupID, req.RunKind, "")
+	} else if req.RunKind != "" {
+		runs, _ = s.repo.ListRunsFiltered(context.Background(), 0, 0, req.RunKind, "")
 	} else {
 		// 获取所有记录
 		runs, _ = s.repo.ListRuns(context.Background(), 0)
@@ -260,10 +271,30 @@ func (s *ExecutionHistoryService) DeleteAllRunRecords(req DeleteAllRunRecordsReq
 		return &DeleteRunRecordResponse{Success: true, Message: "没有可删除的记录"}, nil
 	}
 
+	// 收集待删除的产物文件路径（在删除数据库记录前获取，否则外键级联后查不到）
+	var artifactPaths []string
+	if s.repo != nil {
+		for _, run := range runs {
+			if artifacts, err := s.repo.GetArtifactsByRun(context.Background(), run.ID); err == nil {
+				for _, art := range artifacts {
+					if art.FilePath != "" {
+						artifactPaths = append(artifactPaths, art.FilePath)
+					}
+				}
+			}
+		}
+	}
+
 	// 删除数据库记录
 	if taskGroupID > 0 {
 		// 按任务组删除
 		if err := s.repo.DeleteRunsByTaskGroup(context.Background(), taskGroupID); err != nil {
+			logger.Error("ExecutionHistoryService", "-", "删除数据库记录失败: %v", err)
+			return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("删除失败: %v", err)}, nil
+		}
+	} else if req.RunKind != "" {
+		// 按运行类型删除
+		if err := s.repo.DeleteRunsByKind(context.Background(), req.RunKind); err != nil {
 			logger.Error("ExecutionHistoryService", "-", "删除数据库记录失败: %v", err)
 			return &DeleteRunRecordResponse{Success: false, Message: fmt.Sprintf("删除失败: %v", err)}, nil
 		}
@@ -276,7 +307,7 @@ func (s *ExecutionHistoryService) DeleteAllRunRecords(req DeleteAllRunRecordsReq
 	}
 
 	// 异步删除关联文件
-	go s.deleteAllRunFiles(runs)
+	go s.deleteAllRunFiles(runs, artifactPaths)
 
 	logger.Info("ExecutionHistoryService", "-", "运行记录删除成功: count=%d", len(runs))
 	return &DeleteRunRecordResponse{Success: true, Message: fmt.Sprintf("成功删除 %d 条记录", len(runs))}, nil
@@ -334,7 +365,7 @@ func (s *ExecutionHistoryService) deleteLogFile(path, runID, logType string) {
 }
 
 // deleteAllRunFiles 删除所有运行的文件
-func (s *ExecutionHistoryService) deleteAllRunFiles(runs []taskexec.TaskRun) {
+func (s *ExecutionHistoryService) deleteAllRunFiles(runs []taskexec.TaskRun, artifactPaths []string) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error("ExecutionHistoryService", "-", "批量删除文件时发生panic: %v", r)
@@ -342,26 +373,48 @@ func (s *ExecutionHistoryService) deleteAllRunFiles(runs []taskexec.TaskRun) {
 	}()
 
 	pm := config.GetPathManager()
-
-	// 删除整个拓扑目录
-	if err := os.RemoveAll(pm.TopologyRawDir); err != nil {
-		logger.Error("ExecutionHistoryService", "-", "删除原始数据目录失败: %v", err)
-	}
-
 	normalizedDir := filepath.Join(pm.StorageRoot, "topology", "normalized")
-	if err := os.RemoveAll(normalizedDir); err != nil {
-		logger.Error("ExecutionHistoryService", "-", "删除标准化数据目录失败: %v", err)
+
+	runPrefixes := make(map[string]bool, len(runs))
+	for _, run := range runs {
+		if run.RunKind == "topology" {
+			os.RemoveAll(filepath.Join(pm.TopologyRawDir, "run_"+run.ID))
+			os.RemoveAll(filepath.Join(normalizedDir, "run_"+run.ID))
+		}
+		if len(run.ID) >= 8 {
+			runPrefixes[run.ID[:8]] = true
+		}
 	}
 
-	// 删除执行日志目录
-	if err := os.RemoveAll(pm.ExecutionLiveLogDir); err != nil {
-		logger.Error("ExecutionHistoryService", "-", "删除执行日志目录失败: %v", err)
+	// 安全删除执行日志文件，避免因个别文件被占用导致删除失败 (Windows下常见)
+	entries, err := os.ReadDir(pm.ExecutionLiveLogDir)
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			parts := strings.Split(name, "_")
+			if len(parts) >= 3 {
+				prefix := parts[2]
+				if runPrefixes[prefix] {
+					fileToDel := filepath.Join(pm.ExecutionLiveLogDir, name)
+					if err := os.Remove(fileToDel); err != nil && !os.IsNotExist(err) {
+						logger.Error("ExecutionHistoryService", "-", "删除执行日志文件失败 [%s]: %v", fileToDel, err)
+					}
+				}
+			}
+		}
 	}
 
-	// 重新创建空目录
-	os.MkdirAll(pm.TopologyRawDir, 0755)
-	os.MkdirAll(normalizedDir, 0755)
-	os.MkdirAll(pm.ExecutionLiveLogDir, 0755)
+	// 安全删除产物文件（包括生成的报告等）
+	for _, path := range artifactPaths {
+		if path != "" {
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				logger.Error("ExecutionHistoryService", "-", "删除产物文件失败 [%s]: %v", path, err)
+			}
+		}
+	}
 }
 
 // ==================== 文件操作常量 ====================
