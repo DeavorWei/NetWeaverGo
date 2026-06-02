@@ -254,12 +254,7 @@
       </div>
     </div>
 
-    <!-- 底部提示 -->
-    <div class="flex-shrink-0 text-center py-2">
-      <p class="text-sm text-text-muted">
-        选择设备并确认拓扑预览后，点击「创建任务」将绑定组合发送到任务执行页
-      </p>
-    </div>
+
 
     <!-- 创建任务弹窗 -->
     <el-dialog
