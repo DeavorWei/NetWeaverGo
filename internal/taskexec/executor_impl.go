@@ -476,7 +476,6 @@ func (e *DeviceCollectExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID string, unit *UnitPlan) error {
 	handler := NewErrorHandler(ctx.RunID())
 	pm := config.GetPathManager()
-	normalizedRoot := filepath.Join(pm.GetStorageRoot(), "topology", "normalized")
 	// Get device info from unit target
 	deviceIP := unit.Target.Key
 	if ctx.IsCancelled() {
@@ -744,11 +743,6 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 	}
 	e.updateRunDeviceStatus(ctx.RunID(), deviceIP, deviceStatus, "")
 	projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionSucceeded, fmt.Sprintf("采集完成: status=%s, success=%d/%d", status, successCount, len(report.Results)), len(report.Results), successCount)
-
-	planPath := filepath.Join(normalizedRoot, taskID, deviceIP, "topology_collection_plan.json")
-	if err := e.persistCollectionPlanArtifact(taskID, stageID, unit.ID, deviceIP, resolution, commandKeys, planPath); err != nil {
-		logger.Warn("TaskExec", ctx.RunID(), "persist collection plan artifact failed: device=%s err=%v", deviceIP, err)
-	}
 
 	logger.Debug("TaskExec", ctx.RunID(), "Collection completed for device: %s", deviceIP)
 	return nil
@@ -1085,78 +1079,7 @@ func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, res
 	return e.db.Create(output).Error
 }
 
-func (e *DeviceCollectExecutor) persistCollectionPlanArtifact(taskRunID, stageID, unitID, deviceIP string, resolution *TopologyCommandResolution, commandKeys []string, planPath string) error {
-	if strings.TrimSpace(planPath) == "" {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(planPath), 0755); err != nil {
-		return err
-	}
 
-	type collectionPlanItem struct {
-		FieldKey       string `json:"fieldKey"`
-		DisplayName    string `json:"displayName"`
-		Enabled        bool   `json:"enabled"`
-		Command        string `json:"command"`
-		TimeoutSec     int    `json:"timeoutSec"`
-		CommandSource  string `json:"commandSource"`
-		ResolvedVendor string `json:"resolvedVendor"`
-		VendorSource   string `json:"vendorSource"`
-		ParserBinding  string `json:"parserBinding"`
-		Required       bool   `json:"required"`
-		Description    string `json:"description"`
-	}
-	type collectionPlanDoc struct {
-		RunID           string               `json:"runId"`
-		StageID         string               `json:"stageId"`
-		UnitID          string               `json:"unitId"`
-		DeviceIP        string               `json:"deviceIp"`
-		ResolvedVendor  string               `json:"resolvedVendor"`
-		VendorSource    string               `json:"vendorSource"`
-		CollectedFields []string             `json:"collectedFields"`
-		Commands        []collectionPlanItem `json:"commands"`
-		GeneratedAt     time.Time            `json:"generatedAt"`
-	}
-
-	doc := collectionPlanDoc{
-		RunID:           taskRunID,
-		StageID:         stageID,
-		UnitID:          unitID,
-		DeviceIP:        strings.TrimSpace(deviceIP),
-		CollectedFields: append([]string(nil), commandKeys...),
-		GeneratedAt:     time.Now(),
-		Commands:        make([]collectionPlanItem, 0),
-	}
-	if resolution != nil {
-		doc.ResolvedVendor = strings.TrimSpace(resolution.ResolvedVendor)
-		doc.VendorSource = strings.TrimSpace(resolution.VendorSource)
-		for _, cmd := range resolution.Commands {
-			doc.Commands = append(doc.Commands, collectionPlanItem{
-				FieldKey:       strings.TrimSpace(cmd.FieldKey),
-				DisplayName:    strings.TrimSpace(cmd.DisplayName),
-				Enabled:        cmd.Enabled,
-				Command:        strings.TrimSpace(cmd.Command),
-				TimeoutSec:     cmd.TimeoutSec,
-				CommandSource:  strings.TrimSpace(cmd.CommandSource),
-				ResolvedVendor: strings.TrimSpace(cmd.ResolvedVendor),
-				VendorSource:   strings.TrimSpace(cmd.VendorSource),
-				ParserBinding:  strings.TrimSpace(cmd.ParserBinding),
-				Required:       cmd.Required,
-				Description:    strings.TrimSpace(cmd.Description),
-			})
-		}
-	}
-
-	payload, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(planPath, payload, 0644); err != nil {
-		return err
-	}
-	e.createArtifact(taskRunID, stageID, unitID, string(ArtifactTypeTopologyCollectionPlan), fmt.Sprintf("%s:topology_collection_plan", strings.TrimSpace(deviceIP)), planPath)
-	return nil
-}
 
 func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vendor string) error {
 	handler := NewErrorHandler(ctx.RunID())

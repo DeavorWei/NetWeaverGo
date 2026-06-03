@@ -171,9 +171,7 @@ export const TaskExecutionAPI = {
   getSupportedTopologyVendors: TaskExecutionUIServiceBinding.GetSupportedTopologyVendors,
   /** 获取运行产物索引 */
   getRunArtifacts: TaskExecutionUIServiceBinding.GetRunArtifacts,
-  /** 获取拓扑采集计划快照 */
-  getTopologyCollectionPlans:
-    TaskExecutionUIServiceBinding.GetTopologyCollectionPlans,
+
 
   // 决策轨迹
   /** 获取边解释视图（包含候选和决策轨迹） */
@@ -400,8 +398,6 @@ export type {
 
 export type {
   TaskArtifact,
-  TopologyCollectionPlanArtifact,
-  TopologyCollectionPlanCommand,
 } from '../bindings/github.com/NetWeaverGo/core/internal/taskexec/models.js'
 
 export type { ParsedResult } from '../bindings/github.com/NetWeaverGo/core/internal/parser/models.js'

@@ -99,9 +99,7 @@ func (s *TaskExecutionUIService) GetRunArtifacts(runID string) ([]taskexec.TaskA
 	return s.service.GetRunArtifacts(runID)
 }
 
-func (s *TaskExecutionUIService) GetTopologyCollectionPlans(runID string) ([]taskexec.TopologyCollectionPlanArtifact, error) {
-	return s.service.ListTopologyCollectionPlans(runID)
-}
+
 
 
 
