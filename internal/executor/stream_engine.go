@@ -276,7 +276,6 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 			data, err := res.data, res.err
 
 			if len(data) > 0 {
-				logger.Debug("StreamEngine", "-", "收到数据: bytes=%d, state=%s, hex=%x", len(data), e.adapter.NewState(), data)
 				// 接收到数据，重置计时器
 				if !timer.Stop() {
 					select {
