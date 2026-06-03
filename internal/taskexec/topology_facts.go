@@ -296,6 +296,18 @@ func MapCommandOutput(mapper parser.ResultMapper, commandKey string, rows []map[
 		}
 		batch.ARPs = items
 
+	case "mac_address":
+		items, err := mapper.ToFDB(rows)
+		if err != nil {
+			return nil, fmt.Errorf("映射FDB失败: %w", err)
+		}
+		for i := range items {
+			items[i].CommandKey = commandKey
+			items[i].RawRefID = rawRefID
+		}
+		batch.FDBs = items
+
+
 	case "eth_trunk", "eth_trunk_verbose":
 		items, err := mapper.ToAggregate(rows)
 		if err != nil {

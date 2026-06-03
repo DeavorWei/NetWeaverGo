@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
 )
 
@@ -112,7 +113,11 @@ func (m *ParserManager) compileTemplate(tpl *RegexTemplate) (*CompiledTemplate, 
 	case EngineRegex:
 		// 编译主正则模式
 		if tpl.Pattern != "" {
-			re, err := regexp.Compile(tpl.Pattern)
+			pattern := tpl.Pattern
+			if tpl.Multiline && !strings.HasPrefix(pattern, "(?m)") {
+				pattern = "(?m)" + pattern
+			}
+			re, err := regexp.Compile(pattern)
 			if err != nil {
 				return nil, fmt.Errorf("编译正则模式失败: %w", err)
 			}

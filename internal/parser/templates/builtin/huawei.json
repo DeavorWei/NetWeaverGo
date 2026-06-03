@@ -71,7 +71,7 @@
     "mac_address": {
       "commandKey": "mac_address",
       "engine": "regex",
-      "pattern": "^\\s*(?P<mac>[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})\\s+(?P<vlan>\\d+)\\s+(?P<interface>\\S+)\\s+(?P<type>\\S+)",
+      "pattern": "^\\s*(?P<mac>[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})\\s+(?P<vlan>\\S+)\\s+(?P<interface>\\S+)\\s+(?P<type>\\S+)",
       "multiline": true,
       "description": "MAC地址表"
     },
@@ -112,7 +112,7 @@
     "arp_all": {
       "commandKey": "arp_all",
       "engine": "regex",
-      "pattern": "^\\s*(?P<ip>\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+(?P<mac>[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})\\s+(?P<interface>\\S+)\\s+(?P<type>\\S+)",
+      "pattern": "^\\s*(?P<ip>\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+(?P<mac>[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})(?:\\s+\\d+)?\\s+(?P<type>\\S+)\\s+(?P<interface>\\S+)",
       "multiline": true,
       "description": "ARP表"
     }
