@@ -153,6 +153,7 @@ func registerVendorProfiles() {
 			{Command: "display interface", CommandKey: "interface_detail", TimeoutSec: 60},
 			{Command: "display eth-trunk", CommandKey: "eth_trunk", TimeoutSec: 30},
 			{Command: "display arp", CommandKey: "arp_all", TimeoutSec: 60},
+			{Command: "display mac-address", CommandKey: "mac_address", TimeoutSec: 60},
 		},
 	}
 
@@ -191,6 +192,7 @@ func registerVendorProfiles() {
 			{Command: "display interface brief", CommandKey: "interface_brief", TimeoutSec: 30},
 			{Command: "display link-aggregation verbose", CommandKey: "eth_trunk", TimeoutSec: 30},
 			{Command: "display arp all", CommandKey: "arp_all", TimeoutSec: 60},
+			{Command: "display mac-address", CommandKey: "mac_address", TimeoutSec: 60},
 		},
 	}
 
@@ -228,6 +230,7 @@ func registerVendorProfiles() {
 			{Command: "show interface status", CommandKey: "interface_brief", TimeoutSec: 30},
 			{Command: "show etherchannel summary", CommandKey: "eth_trunk", TimeoutSec: 30},
 			{Command: "show ip arp", CommandKey: "arp_all", TimeoutSec: 60},
+			{Command: "show mac address-table", CommandKey: "mac_address", TimeoutSec: 60},
 		},
 	}
 }

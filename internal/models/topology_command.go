@@ -19,6 +19,7 @@ var defaultTopologyFieldCatalog = []TopologyFieldSpec{
 	{FieldKey: "interface_brief", Name: "接口概要", Phase: "collect", Required: true, ParserBinding: "interface_brief", DefaultEnabled: true, Description: "采集接口 up/down 与基础摘要。"},
 	{FieldKey: "lldp_neighbor", Name: "LLDP 邻居", Phase: "collect", Required: true, ParserBinding: "lldp_neighbor", DefaultEnabled: true, Description: "采集 LLDP 邻居发现结果。"},
 	{FieldKey: "arp_all", Name: "ARP 表", Phase: "collect", Required: true, ParserBinding: "arp_all", DefaultEnabled: true, Description: "采集 ARP 地址表。"},
+	{FieldKey: "mac_address", Name: "MAC 地址表", Phase: "collect", Required: false, ParserBinding: "mac_address", DefaultEnabled: true, Description: "采集 FDB/MAC 地址转发表，用于推断终端设备连接。"},
 	{FieldKey: "eth_trunk", Name: "聚合链路", Phase: "collect", Required: false, ParserBinding: "eth_trunk", DefaultEnabled: true, Description: "采集 Eth-Trunk/Port-Channel 聚合信息。"},
 }
 
