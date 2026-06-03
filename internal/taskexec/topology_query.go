@@ -309,6 +309,7 @@ func (s *TaskExecutionService) GetTopologyDeviceDetail(runID, deviceIP string) (
 		result.Identity = &parser.DeviceIdentity{
 			Vendor:       dev.Vendor,
 			Model:        dev.Model,
+			Version:      dev.Version,
 			Hostname:     dev.Hostname,
 			MgmtIP:       dev.MgmtIP,
 			ChassisID:    dev.ChassisID,

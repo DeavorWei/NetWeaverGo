@@ -34,6 +34,7 @@ func (m *HuaweiMapper) ToDeviceInfo(rows []map[string]string) (*DeviceIdentity, 
 	identity := &DeviceIdentity{
 		Vendor:       "huawei",
 		Model:        data["model"],
+		Version:      data["version"],
 		Hostname:     data["hostname"],
 	}
 

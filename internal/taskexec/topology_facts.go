@@ -32,6 +32,7 @@ func (p *TopologyFactsPersister) SaveDeviceIdentity(runID, deviceIP string, iden
 		Updates(map[string]interface{}{
 			"vendor":          identity.Vendor,
 			"model":           identity.Model,
+			"version":         identity.Version,
 			"hostname":        identity.Hostname,
 			"normalized_name": identity.Hostname,
 			"mgmt_ip":         identity.MgmtIP,

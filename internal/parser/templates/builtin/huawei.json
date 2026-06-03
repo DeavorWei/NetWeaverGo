@@ -4,7 +4,7 @@
     "version": {
       "commandKey": "version",
       "engine": "regex",
-      "pattern": "^Huawei\\s+(?P<model>[A-Za-z0-9\\-_\\/\\.]+)|^<(?P<hostname>\\S+)>",
+      "pattern": "Version\\s+.*?\\((?P<model>[A-Za-z0-9\\-_\\/\\.]+)\\s+(?P<version>[A-Za-z0-9\\-_\\/\\.]+)\\)|^<(?P<hostname>[^>]+)>",
       "multiline": true,
       "description": "设备版本信息"
     },

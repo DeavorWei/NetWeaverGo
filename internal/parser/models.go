@@ -10,6 +10,7 @@ import (
 type DeviceIdentity struct {
 	Vendor       string `json:"vendor"`       // 厂商：huawei / h3c / cisco
 	Model        string `json:"model"`        // 型号
+	Version      string `json:"version"`      // 软件版本
 	Hostname     string `json:"hostname"`     // 主机名
 	MgmtIP       string `json:"mgmtIp"`       // 管理IP
 	ChassisID    string `json:"chassisId"`    // 机箱ID（LLDP）

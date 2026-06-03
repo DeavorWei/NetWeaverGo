@@ -23,6 +23,7 @@ type TaskRunDevice struct {
 	Site           string        `json:"site"`
 	Hostname       string        `json:"hostname"`
 	Model          string        `json:"model"`
+	Version        string        `json:"version"`
 	MgmtIP         string        `json:"mgmtIp"`
 	NormalizedName string        `json:"normalizedName"`
 	ChassisID      string        `json:"chassisId"`

@@ -44,6 +44,32 @@
         <el-input v-model="localForm.password" type="password" show-password placeholder="登录密码 (可选)" autocomplete="off" />
       </el-form-item>
 
+      <el-form-item label="厂商" prop="vendor">
+        <el-select v-model="localForm.vendor" placeholder="选择或输入设备厂商 (可选)" filterable allow-create default-first-option class="w-full" clearable>
+          <el-option label="Huawei (华为)" value="huawei" />
+          <el-option label="H3C (华三)" value="h3c" />
+          <el-option label="Cisco (思科)" value="cisco" />
+          <el-option label="Ruijie (锐捷)" value="ruijie" />
+          <el-option label="Arista" value="arista" />
+          <el-option label="Juniper" value="juniper" />
+          <el-option label="Linux" value="linux" />
+          <el-option label="Server" value="server" />
+        </el-select>
+      </el-form-item>
+
+      <el-form-item label="设备类型" prop="role">
+        <el-select v-model="localForm.role" placeholder="选择或输入设备类型/角色 (可选)" filterable allow-create default-first-option class="w-full" clearable>
+          <el-option label="核心交换机 (Core)" value="core" />
+          <el-option label="汇聚交换机 (Aggregation)" value="aggregation" />
+          <el-option label="接入交换机 (Access)" value="access" />
+          <el-option label="路由器 (Router)" value="router" />
+          <el-option label="防火墙 (Firewall)" value="firewall" />
+          <el-option label="无线控制器 (WLC)" value="wlc" />
+          <el-option label="无线AP (AP)" value="ap" />
+          <el-option label="服务器 (Server)" value="server" />
+        </el-select>
+      </el-form-item>
+
       <el-form-item label="标签" prop="tags">
         <div class="flex flex-wrap items-center gap-2 w-full">
           <el-tag
