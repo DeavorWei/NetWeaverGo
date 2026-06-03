@@ -20,7 +20,8 @@ export default defineConfig({
       overlay: true // 显示错误覆盖层
     },
     watch: {
-      usePolling: false // 使用原生文件系统事件，更高效
+      usePolling: false, // 使用原生文件系统事件，更高效
+      ignored: ['**/src/bindings/**']
     }
   },
   build: {
