@@ -265,8 +265,8 @@ function initGraph() {
             statusColors[ele.data("status")] || edgeDefault,
           "target-arrow-color": (ele: EdgeSingular) =>
             statusColors[ele.data("status")] || edgeDefault,
-          "target-arrow-shape": "triangle",
-          "curve-style": "bezier",
+          "target-arrow-shape": "none",
+          "curve-style": "straight",
           label: "",
           "source-label": "data(sourceIf)",
           "target-label": "data(targetIf)",
