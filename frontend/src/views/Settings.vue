@@ -4,7 +4,7 @@
     <div class="settings-page-header">
       <div class="space-y-1">
         <h2 class="settings-page-title">系统设置</h2>
-        <p class="settings-page-subtitle">管理应用全局参数、日志策略与 SSH 安全策略</p>
+        <p class="settings-page-subtitle">管理应用全局参数、日志策略、SSH 安全策略与拓扑命令配置</p>
       </div>
       <div class="settings-page-badge">Global Preferences</div>
     </div>
@@ -17,7 +17,9 @@
 
     <!-- 设置表单 -->
     <div v-else class="settings-content">
-      <div class="global-settings-panels-flow">
+      <el-tabs v-model="activeTab" class="custom-settings-tabs">
+        <el-tab-pane label="常规设置" name="general">
+          <div class="global-settings-panels-flow">
       <!-- 执行参数 -->
       <div class="settings-card bg-bg-card border border-border rounded-xl p-5 shadow-card settings-panel-card">
         <h3 class="text-sm font-semibold text-text-secondary mb-4 flex items-center gap-2">
@@ -256,6 +258,11 @@
       <div class="runtime-panel-wrap">
         <RuntimeConfigPanel />
       </div>
+        </el-tab-pane>
+        <el-tab-pane label="拓扑命令配置" name="topologyCmd">
+          <TopologyCommandConfig />
+        </el-tab-pane>
+      </el-tabs>
     </div>
 
     <el-dialog
@@ -346,6 +353,7 @@ import { useTheme } from '@/composables/useTheme'
 import type { GlobalSettings as BackendSettings } from '../services/api'
 import RuntimeConfigPanel from '../components/settings/RuntimeConfigPanel.vue'
 import HelpTip from '../components/common/HelpTip.vue'
+import TopologyCommandConfig from './TopologyCommandConfig.vue'
 import { ElMessage } from 'element-plus'
 import { getLogger } from '@/utils/logger'
 
@@ -398,6 +406,7 @@ interface GlobalSettings {
 
 const loading = ref(true)
 const saving = ref(false)
+const activeTab = ref('general')
 const showCustomAlgorithmModal = ref(false)
 const initialPresetMode = ref<string | null>(null)
 const sshAlgorithmOptions = ref<SSHAlgorithmOptions>({
@@ -717,7 +726,7 @@ onMounted(() => {
 
 /* 页面容器 */
 .settings-page {
-  @apply flex flex-col gap-5 max-w-[1400px] mx-auto pb-4;
+  @apply flex flex-col gap-5 max-w-[1400px] mx-auto pb-4 h-full;
 }
 
 /* 页面头部 */
@@ -746,7 +755,19 @@ onMounted(() => {
 
 /* 内容区域 */
 .settings-content {
-  @apply flex flex-col gap-5;
+  @apply flex flex-col gap-5 flex-1 min-h-0;
+}
+
+.custom-settings-tabs {
+  @apply flex-1 flex flex-col min-h-0 w-full;
+}
+
+.custom-settings-tabs :deep(.el-tabs__content) {
+  @apply flex-1 min-h-0 p-0;
+}
+
+.custom-settings-tabs :deep(.el-tab-pane) {
+  @apply h-full overflow-y-auto flex flex-col gap-5;
 }
 
 /* 网格布局 */

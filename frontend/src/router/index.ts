@@ -14,7 +14,6 @@ const FileServers = () => import('../views/Tools/FileServers.vue')
 const Settings = () => import('../views/Settings.vue')
 const Topology = () => import('../views/Topology.vue')
 const PlanCompare = () => import('../views/PlanCompare.vue')
-const TopologyCommandConfig = () => import('../views/TopologyCommandConfig.vue')
 const SNMPMib = () => import('../views/SNMP/SNMPMib.vue')
 const SNMPTraps = () => import('../views/SNMP/SNMPTraps.vue')
 const SNMPPolling = () => import('../views/SNMP/SNMPPolling.vue')
@@ -93,11 +92,7 @@ const routes = [
     name: 'PlanCompare',
     component: PlanCompare
   },
-  {
-    path: '/topology-command-config',
-    name: 'TopologyCommandConfig',
-    component: TopologyCommandConfig
-  },
+
   {
     path: '/snmp-mib',
     name: 'SNMPMib',

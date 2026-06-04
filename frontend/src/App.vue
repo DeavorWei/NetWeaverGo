@@ -121,15 +121,7 @@ const menuItems = [
       <path d="M9 13h6M9 17h6"/>
     </svg>`,
   },
-  {
-    key: "TopologyCommandConfig",
-    label: "拓扑命令配置",
-    icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 3v18M3 12h18"/>
-      <circle cx="12" cy="12" r="9"/>
-      <path d="M7.5 12h9M12 7.5v9"/>
-    </svg>`,
-  },
+
   {
     key: "NetworkCalc",
     label: "子网计算",
@@ -226,7 +218,6 @@ const titleMap: Record<string, string> = {
   SNMPMib: "SNMP MIB 管理",
   SNMPTraps: "Trap 告警中心",
   SNMPPolling: "SNMP 设备轮询",
-  TopologyCommandConfig: "拓扑命令配置中心",
   Settings: "系统设置",
 };
 
