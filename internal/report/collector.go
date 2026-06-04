@@ -425,9 +425,15 @@ func renderProgressBar(current, total int) string {
 	return bar
 }
 
-// ExportCSV 生成小票结尾结算文档并返回报告路径
 func (p *ProgressTracker) ExportCSV() (string, error) {
-	outputDir := config.GetPathManager().GetExecutionReportDir()
+	taskNameSafe := SanitizeLogName(p.taskName)
+	if taskNameSafe == "" {
+		taskNameSafe = "task"
+	}
+	timeStr := p.startTime.Format("20060102_150405")
+	dirName := fmt.Sprintf("%s-%s", timeStr, taskNameSafe)
+
+	outputDir := filepath.Join(config.GetPathManager().GetStorageRoot(), "execution", dirName)
 	logger.Debug("Report", "-", "开始生成结算 CSV 报表 -> %s", outputDir)
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -438,7 +444,7 @@ func (p *ProgressTracker) ExportCSV() (string, error) {
 		return "", fmt.Errorf("创建报告目录失败: %v", err)
 	}
 
-	reportName := fmt.Sprintf("report_%s.csv", time.Now().Format("20060102_150405"))
+	reportName := "report.csv"
 	reportPath := filepath.Join(outputDir, reportName)
 
 	file, err := os.Create(reportPath)

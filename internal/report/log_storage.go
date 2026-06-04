@@ -95,12 +95,20 @@ type ExecutionLogStore struct {
 
 // NewExecutionLogStore 创建日志存储管理器。
 func NewExecutionLogStore(taskName string, startTime time.Time) (*ExecutionLogStore, error) {
-	storageDir := config.GetPathManager().GetExecutionLiveLogDir()
-	if err := os.MkdirAll(storageDir, 0755); err != nil {
-		return nil, fmt.Errorf("创建日志目录失败: %v", err)
-	}
 	if startTime.IsZero() {
 		startTime = time.Now()
+	}
+
+	taskNameSafe := SanitizeLogName(taskName)
+	if taskNameSafe == "" {
+		taskNameSafe = "task"
+	}
+	timeStr := startTime.Format("20060102_150405")
+	dirName := fmt.Sprintf("%s-%s", timeStr, taskNameSafe)
+
+	storageDir := filepath.Join(config.GetPathManager().GetStorageRoot(), "execution", dirName)
+	if err := os.MkdirAll(storageDir, 0755); err != nil {
+		return nil, fmt.Errorf("创建日志目录失败: %v", err)
 	}
 
 	return &ExecutionLogStore{
@@ -289,15 +297,14 @@ func (ls *ExecutionLogStore) Close() {
 }
 
 func (ls *ExecutionLogStore) buildFilePath(ip string, suffix string) string {
-	taskName := sanitizeLogName(ls.taskName)
-	if taskName == "" {
-		taskName = "task"
+	stem := SanitizeLogName(ip)
+	if stem == "" {
+		stem = "unknown"
 	}
-	stem := fmt.Sprintf("%s_%s_%s", ls.startTime.Format("20060102_150405"), taskName, sanitizeLogName(ip))
 	return filepath.Join(ls.storageDir, fmt.Sprintf("%s_%s.log", stem, suffix))
 }
 
-func sanitizeLogName(value string) string {
+func SanitizeLogName(value string) string {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		return ""

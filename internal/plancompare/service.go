@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -98,16 +97,7 @@ func (s *Service) ImportPlanCSV(filePath string) (*models.PlanImportResult, erro
 		return nil, fmt.Errorf("规划文件不存在: %w", err)
 	}
 
-	if err := os.MkdirAll(s.pm.GetPlanImportDir(), 0755); err != nil {
-		return nil, fmt.Errorf("创建规划目录失败: %w", err)
-	}
-
-	copiedPath, err := s.copyImportedFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	f, err := os.Open(copiedPath)
+	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("打开CSV失败: %w", err)
 	}
@@ -130,8 +120,8 @@ func (s *Service) ImportPlanCSV(filePath string) (*models.PlanImportResult, erro
 	}
 
 	plan := models.PlanFile{
-		FileName:   filepath.Base(copiedPath),
-		FilePath:   copiedPath,
+		FileName:   filepath.Base(filePath),
+		FilePath:   filePath,
 		TotalLinks: len(links),
 		Warnings:   warnings,
 		ImportedAt: time.Now(),
@@ -444,7 +434,10 @@ func (s *Service) ExportDiffReport(reportID string, format string, targetPath st
 	if err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(s.pm.GetTopologyExportDir(), 0755); err != nil {
+	if targetPath == "" {
+		return "", fmt.Errorf("targetPath 不能为空")
+	}
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 		return "", err
 	}
 
@@ -456,9 +449,6 @@ func (s *Service) ExportDiffReport(reportID string, format string, targetPath st
 	switch format {
 	case "json":
 		outputPath := targetPath
-		if outputPath == "" {
-			outputPath = filepath.Join(s.pm.GetTopologyExportDir(), fmt.Sprintf("diff_%s.json", reportID))
-		}
 		data, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
 			return "", err
@@ -468,10 +458,10 @@ func (s *Service) ExportDiffReport(reportID string, format string, targetPath st
 		}
 		return outputPath, nil
 	case "csv":
-		outputPath := targetPath
-		if outputPath == "" {
-			outputPath = filepath.Join(s.pm.GetTopologyExportDir(), fmt.Sprintf("diff_%s.csv", reportID))
+		if targetPath == "" {
+			return "", fmt.Errorf("targetPath 不能为空")
 		}
+		outputPath := targetPath
 		file, err := os.Create(outputPath)
 		if err != nil {
 			return "", err
@@ -547,9 +537,6 @@ func collectDiffItems(result *models.CompareResult) []models.DiffItem {
 
 func (s *Service) exportDiffReportHTML(reportID string, result *models.CompareResult, targetPath string) (string, error) {
 	outputPath := targetPath
-	if outputPath == "" {
-		outputPath = filepath.Join(s.pm.GetTopologyExportDir(), fmt.Sprintf("diff_%s.html", reportID))
-	}
 	items := collectDiffItems(result)
 
 	var b strings.Builder
@@ -598,29 +585,7 @@ func normalizePlanID(planID string) string {
 	return trimmed
 }
 
-func (s *Service) copyImportedFile(sourcePath string) (string, error) {
-	source, err := os.Open(sourcePath)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = source.Close() }()
 
-	base := filepath.Base(sourcePath)
-	target := filepath.Join(
-		s.pm.GetPlanImportDir(),
-		fmt.Sprintf("%s_%s", time.Now().Format("20060102_150405"), base),
-	)
-	out, err := os.Create(target)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = out.Close() }()
-
-	if _, err := io.Copy(out, source); err != nil {
-		return "", err
-	}
-	return target, nil
-}
 
 type planColumnIndex struct {
 	aName int

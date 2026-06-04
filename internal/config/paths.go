@@ -34,18 +34,14 @@ type PathManager struct {
 	DBPath              string
 	AppLogDir           string
 	AppLogPath          string
-	FrontendLogDir      string
-	FrontendLogPath     string
-	ExecutionReportDir  string
-	ExecutionLiveLogDir string
-	BackupConfigDir     string
-	SSHDir              string
-	SSHKnownHostsPath   string
+	FrontendLogDir     string
+	FrontendLogPath    string
+	BackupConfigDir    string
+	SSHDir             string
+	SSHKnownHostsPath  string
 
 	// 拓扑发现相关路径
 	TopologyRawDir    string // 原始 CLI 输出目录
-	TopologyExportDir string // 导出图谱目录
-	PlanImportDir     string // 规划文件导入目录
 
 	// SNMP 相关路径
 	SNMPDBPath      string // SNMP 独立数据库路径
@@ -143,16 +139,12 @@ func (pm *PathManager) rebuildDerivedPathsLocked() {
 	pm.AppLogPath = filepath.Join(pm.AppLogDir, "app.log")
 	pm.FrontendLogDir = filepath.Join(pm.StorageRoot, "logs")
 	pm.FrontendLogPath = filepath.Join(pm.FrontendLogDir, "frontend.log")
-	pm.ExecutionReportDir = filepath.Join(pm.StorageRoot, "execution", "reports")
-	pm.ExecutionLiveLogDir = filepath.Join(pm.StorageRoot, "execution", "live-logs")
 	pm.BackupConfigDir = filepath.Join(pm.StorageRoot, "backup", "config")
 	pm.SSHDir = filepath.Join(pm.StorageRoot, "ssh")
 	pm.SSHKnownHostsPath = filepath.Join(pm.SSHDir, "known_hosts")
 
 	// 拓扑发现相关路径
 	pm.TopologyRawDir = filepath.Join(pm.StorageRoot, "topology", "raw")
-	pm.TopologyExportDir = filepath.Join(pm.StorageRoot, "topology", "export")
-	pm.PlanImportDir = filepath.Join(pm.StorageRoot, "topology", "plans")
 
 	// SNMP 相关路径
 	pm.SNMPDBPath = filepath.Join(pm.DBDir, "snmp.db")
@@ -164,15 +156,11 @@ func (pm *PathManager) ensureDirectoriesLocked() error {
 		pm.DBDir,
 		pm.AppLogDir,
 		pm.FrontendLogDir,
-		pm.ExecutionReportDir,
-		pm.ExecutionLiveLogDir,
 		pm.BackupConfigDir,
 		pm.SSHDir,
 		filepath.Dir(pm.bootstrapPath),
 		// 拓扑发现相关目录
 		pm.TopologyRawDir,
-		pm.TopologyExportDir,
-		pm.PlanImportDir,
 		// SNMP 相关目录
 		pm.SNMPMIBStoreDir,
 	}
@@ -254,18 +242,6 @@ func (pm *PathManager) GetFrontendLogPath() string {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 	return pm.FrontendLogPath
-}
-
-func (pm *PathManager) GetExecutionReportDir() string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return pm.ExecutionReportDir
-}
-
-func (pm *PathManager) GetExecutionLiveLogDir() string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return pm.ExecutionLiveLogDir
 }
 
 func (pm *PathManager) GetBackupDir() string {
@@ -389,19 +365,7 @@ func (pm *PathManager) GetTopologyRawDir() string {
 	return pm.TopologyRawDir
 }
 
-// GetTopologyExportDir 获取拓扑导出目录
-func (pm *PathManager) GetTopologyExportDir() string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return pm.TopologyExportDir
-}
 
-// GetPlanImportDir 获取规划文件导入目录
-func (pm *PathManager) GetPlanImportDir() string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-	return pm.PlanImportDir
-}
 
 // GetDiscoveryRawFilePath 获取发现任务原始审计输出文件路径
 // 格式: <TopologyRawDir>/<taskID>/<deviceIP>/<commandKey>.txt
@@ -432,8 +396,6 @@ func (pm *PathManager) GetAllPaths() map[string]string {
 		"storageRoot":         pm.StorageRoot,
 		"dbPath":              pm.DBPath,
 		"appLogPath":          pm.AppLogPath,
-		"executionReportDir":  pm.ExecutionReportDir,
-		"executionLiveLogDir": pm.ExecutionLiveLogDir,
 		"backupConfigDir":     pm.BackupConfigDir,
 		"sshKnownHostsPath":   pm.SSHKnownHostsPath,
 	}

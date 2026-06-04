@@ -1089,12 +1089,23 @@ func (m *RuntimeManager) exportExecutionReportCSV(runID string, snapshot *Execut
 		return "", nil
 	}
 
-	outputDir := config.GetPathManager().GetExecutionReportDir()
+	taskNameSafe := report.SanitizeLogName(snapshot.TaskName)
+	if taskNameSafe == "" {
+		taskNameSafe = "task"
+	}
+	t := time.Now()
+	if snapshot.StartedAt != nil {
+		t = *snapshot.StartedAt
+	}
+	timeStr := t.Format("20060102_150405")
+	dirName := fmt.Sprintf("%s-%s", timeStr, taskNameSafe)
+
+	outputDir := filepath.Join(config.GetPathManager().GetStorageRoot(), "execution", dirName)
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return "", fmt.Errorf("创建报告目录失败: %v", err)
 	}
 
-	reportName := fmt.Sprintf("report_%s_%s.csv", runID, time.Now().Format("20060102_150405"))
+	reportName := "report.csv"
 	reportPath := filepath.Join(outputDir, reportName)
 
 	file, err := os.Create(reportPath)

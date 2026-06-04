@@ -271,8 +271,8 @@ func (s *ExecutionHistoryService) DeleteAllRunRecords(req DeleteAllRunRecordsReq
 		return &DeleteRunRecordResponse{Success: true, Message: "没有可删除的记录"}, nil
 	}
 
-	// 收集待删除的产物文件路径（在删除数据库记录前获取，否则外键级联后查不到）
 	var artifactPaths []string
+	var logPaths []string
 	if s.repo != nil {
 		for _, run := range runs {
 			if artifacts, err := s.repo.GetArtifactsByRun(context.Background(), run.ID); err == nil {
@@ -280,6 +280,14 @@ func (s *ExecutionHistoryService) DeleteAllRunRecords(req DeleteAllRunRecordsReq
 					if art.FilePath != "" {
 						artifactPaths = append(artifactPaths, art.FilePath)
 					}
+				}
+			}
+			if units, err := s.repo.GetUnitsByRun(context.Background(), run.ID); err == nil {
+				for _, u := range units {
+					if u.SummaryLogPath != "" { logPaths = append(logPaths, u.SummaryLogPath) }
+					if u.DetailLogPath != "" { logPaths = append(logPaths, u.DetailLogPath) }
+					if u.RawLogPath != "" { logPaths = append(logPaths, u.RawLogPath) }
+					if u.JournalLogPath != "" { logPaths = append(logPaths, u.JournalLogPath) }
 				}
 			}
 		}
@@ -307,7 +315,7 @@ func (s *ExecutionHistoryService) DeleteAllRunRecords(req DeleteAllRunRecordsReq
 	}
 
 	// 异步删除关联文件
-	go s.deleteAllRunFiles(runs, artifactPaths)
+	go s.deleteAllRunFiles(runs, artifactPaths, logPaths)
 
 	logger.Info("ExecutionHistoryService", "-", "运行记录删除成功: count=%d", len(runs))
 	return &DeleteRunRecordResponse{Success: true, Message: fmt.Sprintf("成功删除 %d 条记录", len(runs))}, nil
@@ -325,8 +333,8 @@ func (s *ExecutionHistoryService) deleteRunFiles(runID, runKind string, units []
 
 	// 1. 删除拓扑采集文件目录
 	if runKind == "topology" {
-		rawDir := filepath.Join(pm.TopologyRawDir, "run_"+runID)
-		normalizedDir := filepath.Join(pm.StorageRoot, "topology", "normalized", "run_"+runID)
+		rawDir := filepath.Join(pm.TopologyRawDir, runID)
+		normalizedDir := filepath.Join(pm.StorageRoot, "topology", "normalized", runID)
 
 		if err := os.RemoveAll(rawDir); err != nil {
 			logger.Error("ExecutionHistoryService", runID, "删除原始数据目录失败: %v", err)
@@ -336,20 +344,41 @@ func (s *ExecutionHistoryService) deleteRunFiles(runID, runKind string, units []
 		}
 	}
 
-	// 2. 删除执行日志文件（从 Unit 的日志路径）
+	// 收集待删除的目录
+	executionBaseDir := filepath.Join(pm.StorageRoot, "execution")
+	dirsToDelete := make(map[string]bool)
+
+	// 2. 删除执行日志文件（从 Unit 的日志路径）并收集目录
 	for _, unit := range units {
-		s.deleteLogFile(unit.SummaryLogPath, runID, "summary")
-		s.deleteLogFile(unit.DetailLogPath, runID, "detail")
-		s.deleteLogFile(unit.RawLogPath, runID, "raw")
-		s.deleteLogFile(unit.JournalLogPath, runID, "journal")
+		paths := []string{unit.SummaryLogPath, unit.DetailLogPath, unit.RawLogPath, unit.JournalLogPath}
+		for _, p := range paths {
+			if p != "" {
+				dir := filepath.Dir(p)
+				if strings.HasPrefix(dir, executionBaseDir) {
+					dirsToDelete[dir] = true
+				}
+				s.deleteLogFile(p, runID, "log")
+			}
+		}
 	}
 
-	// 3. 删除产物文件
+	// 3. 删除产物文件并收集目录
 	for _, artifact := range artifacts {
 		if artifact.FilePath != "" {
+			dir := filepath.Dir(artifact.FilePath)
+			if strings.HasPrefix(dir, executionBaseDir) {
+				dirsToDelete[dir] = true
+			}
 			if err := os.Remove(artifact.FilePath); err != nil && !os.IsNotExist(err) {
 				logger.Error("ExecutionHistoryService", runID, "删除产物文件失败 [%s]: %v", artifact.FilePath, err)
 			}
+		}
+	}
+
+	// 4. 删除收集到的目录
+	for dir := range dirsToDelete {
+		if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {
+			logger.Error("ExecutionHistoryService", runID, "删除任务目录失败 [%s]: %v", dir, err)
 		}
 	}
 }
@@ -365,7 +394,7 @@ func (s *ExecutionHistoryService) deleteLogFile(path, runID, logType string) {
 }
 
 // deleteAllRunFiles 删除所有运行的文件
-func (s *ExecutionHistoryService) deleteAllRunFiles(runs []taskexec.TaskRun, artifactPaths []string) {
+func (s *ExecutionHistoryService) deleteAllRunFiles(runs []taskexec.TaskRun, artifactPaths []string, logPaths []string) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Error("ExecutionHistoryService", "-", "批量删除文件时发生panic: %v", r)
@@ -375,44 +404,46 @@ func (s *ExecutionHistoryService) deleteAllRunFiles(runs []taskexec.TaskRun, art
 	pm := config.GetPathManager()
 	normalizedDir := filepath.Join(pm.StorageRoot, "topology", "normalized")
 
-	runPrefixes := make(map[string]bool, len(runs))
 	for _, run := range runs {
 		if run.RunKind == "topology" {
-			os.RemoveAll(filepath.Join(pm.TopologyRawDir, "run_"+run.ID))
-			os.RemoveAll(filepath.Join(normalizedDir, "run_"+run.ID))
-		}
-		if len(run.ID) >= 8 {
-			runPrefixes[run.ID[:8]] = true
+			os.RemoveAll(filepath.Join(pm.TopologyRawDir, run.ID))
+			os.RemoveAll(filepath.Join(normalizedDir, run.ID))
 		}
 	}
 
-	// 安全删除执行日志文件，避免因个别文件被占用导致删除失败 (Windows下常见)
-	entries, err := os.ReadDir(pm.ExecutionLiveLogDir)
-	if err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
+	executionBaseDir := filepath.Join(pm.StorageRoot, "execution")
+	dirsToDelete := make(map[string]bool)
+
+	// 安全删除执行日志文件并收集目录
+	for _, path := range logPaths {
+		if path != "" {
+			dir := filepath.Dir(path)
+			if strings.HasPrefix(dir, executionBaseDir) {
+				dirsToDelete[dir] = true
 			}
-			name := entry.Name()
-			parts := strings.Split(name, "_")
-			if len(parts) >= 3 {
-				prefix := parts[2]
-				if runPrefixes[prefix] {
-					fileToDel := filepath.Join(pm.ExecutionLiveLogDir, name)
-					if err := os.Remove(fileToDel); err != nil && !os.IsNotExist(err) {
-						logger.Error("ExecutionHistoryService", "-", "删除执行日志文件失败 [%s]: %v", fileToDel, err)
-					}
-				}
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				logger.Error("ExecutionHistoryService", "-", "删除执行日志文件失败 [%s]: %v", path, err)
 			}
 		}
 	}
 
-	// 安全删除产物文件（包括生成的报告等）
+	// 安全删除产物文件（包括生成的报告等）并收集目录
 	for _, path := range artifactPaths {
 		if path != "" {
+			dir := filepath.Dir(path)
+			if strings.HasPrefix(dir, executionBaseDir) {
+				dirsToDelete[dir] = true
+			}
 			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 				logger.Error("ExecutionHistoryService", "-", "删除产物文件失败 [%s]: %v", path, err)
 			}
+		}
+	}
+
+	// 删除收集到的目录
+	for dir := range dirsToDelete {
+		if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {
+			logger.Error("ExecutionHistoryService", "-", "删除任务目录失败 [%s]: %v", dir, err)
 		}
 	}
 }
@@ -757,11 +788,9 @@ func (s *ExecutionHistoryService) validatePathWithinAllowedDir(filePath string) 
 	// 获取允许的基础目录
 	pm := config.GetPathManager()
 	allowedDirs := []string{
-		pm.ExecutionLiveLogDir,
 		pm.TopologyRawDir,
 		filepath.Join(pm.StorageRoot, "topology", "normalized"),
-		pm.ExecutionReportDir,
-		pm.TopologyExportDir,
+		filepath.Join(pm.StorageRoot, "execution"),
 	}
 
 	for _, allowedDir := range allowedDirs {
