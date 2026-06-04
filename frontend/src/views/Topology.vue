@@ -8,7 +8,12 @@
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <el-select v-model="selectedRunId" placeholder="选择拓扑运行" style="width: 300px" clearable>
+        <el-select
+          v-model="selectedRunId"
+          placeholder="选择拓扑运行"
+          style="width: 300px"
+          clearable
+        >
           <el-option
             v-for="run in topologyRuns"
             :key="run.runId"
@@ -23,16 +28,11 @@
         >
           刷新图谱
         </el-button>
-        <el-button
-          :icon="Setting"
-          @click="showHistoryDrawer = true"
-        >
+        <el-button :icon="Setting" @click="showHistoryDrawer = true">
           历史管理
         </el-button>
       </div>
     </div>
-
-
 
     <!-- 视图切换 -->
     <div class="flex items-center gap-2 flex-shrink-0">
@@ -95,12 +95,38 @@
     </div>
 
     <!-- 表格视图 -->
-    <div v-if="viewType === 'table'" class="flex-1 min-h-0 grid grid-cols-3 gap-4 items-start overflow-hidden">
-      <el-card class="col-span-2 h-full flex flex-col" shadow="never" :body-style="{ padding: '0', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }">
+    <div
+      v-if="viewType === 'table'"
+      class="flex-1 min-h-0 grid grid-cols-3 gap-4 items-start overflow-hidden"
+    >
+      <el-card
+        class="col-span-2 h-full flex flex-col"
+        shadow="never"
+        :body-style="{
+          padding: '0',
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+        }"
+      >
         <template #header>
           <div class="flex items-center justify-between">
             <span class="text-sm font-medium">链路列表</span>
-            <span class="text-xs text-text-muted">节点 {{ graph.nodes.length }} / 边 {{ filteredEdges.length }}</span>
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-text-muted"
+                >节点 {{ graph.nodes.length }} / 边
+                {{ filteredEdges.length }}</span
+              >
+              <el-button
+                size="small"
+                :icon="Download"
+                @click="exportCSV"
+                :disabled="filteredEdges.length === 0"
+              >
+                导出
+              </el-button>
+            </div>
           </div>
         </template>
         <el-table
@@ -112,7 +138,11 @@
         >
           <el-table-column label="源设备" min-width="120">
             <template #default="{ row }">
-              <el-button link type="primary" @click.stop="openDeviceDetail(row.source)">
+              <el-button
+                link
+                type="primary"
+                @click.stop="openDeviceDetail(row.source)"
+              >
                 {{ displayNodeLabel(row.source) }}
               </el-button>
             </template>
@@ -120,7 +150,11 @@
           <el-table-column prop="sourceIf" label="源接口" min-width="100" />
           <el-table-column label="目标设备" min-width="120">
             <template #default="{ row }">
-              <el-button link type="primary" @click.stop="openDeviceDetail(row.target)">
+              <el-button
+                link
+                type="primary"
+                @click.stop="openDeviceDetail(row.target)"
+              >
                 {{ displayNodeLabel(row.target) }}
               </el-button>
             </template>
@@ -129,7 +163,16 @@
           <el-table-column prop="edgeType" label="类型" width="100" />
           <el-table-column label="状态" width="100">
             <template #default="{ row }">
-              <el-tag size="small" :type="row.status === 'confirmed' ? 'success' : (row.status === 'conflict' ? 'danger' : 'warning')">
+              <el-tag
+                size="small"
+                :type="
+                  row.status === 'confirmed'
+                    ? 'success'
+                    : row.status === 'conflict'
+                      ? 'danger'
+                      : 'warning'
+                "
+              >
                 {{ row.status }}
               </el-tag>
             </template>
@@ -172,12 +215,20 @@
                 </div>
                 <!-- 互联详情：展示远端设备信息 -->
                 <div
-                  v-if="ev.remoteName || ev.remoteIf || ev.remoteMac || ev.remoteIp"
+                  v-if="
+                    ev.remoteName || ev.remoteIf || ev.remoteMac || ev.remoteIp
+                  "
                   class="text-text-muted font-mono mt-1 pt-1 border-t border-border"
                 >
-                  <span v-if="ev.remoteName" class="mr-2">远端设备: {{ ev.remoteName }}</span>
-                  <span v-if="ev.remoteIf" class="mr-2">接口: {{ ev.remoteIf }}</span>
-                  <span v-if="ev.remoteMac" class="mr-2">MAC: {{ ev.remoteMac }}</span>
+                  <span v-if="ev.remoteName" class="mr-2"
+                    >远端设备: {{ ev.remoteName }}</span
+                  >
+                  <span v-if="ev.remoteIf" class="mr-2"
+                    >接口: {{ ev.remoteIf }}</span
+                  >
+                  <span v-if="ev.remoteMac" class="mr-2"
+                    >MAC: {{ ev.remoteMac }}</span
+                  >
                   <span v-if="ev.remoteIp">IP: {{ ev.remoteIp }}</span>
                 </div>
               </div>
@@ -190,7 +241,11 @@
           <template #header>
             <span class="text-sm font-medium">设备详情</span>
           </template>
-          <div v-if="loadingDeviceDetail" class="p-4 text-xs text-text-muted" v-loading="true"></div>
+          <div
+            v-if="loadingDeviceDetail"
+            class="p-4 text-xs text-text-muted"
+            v-loading="true"
+          ></div>
           <div v-else-if="deviceDetail" class="p-4 space-y-2 text-xs">
             <div class="text-text-primary font-semibold">
               {{
@@ -200,13 +255,26 @@
             </div>
             <div class="text-text-muted">IP: {{ deviceDetail.deviceIp }}</div>
             <!-- 推断节点显示MAC信息 -->
-            <div v-if="isInferredNode(nodeByID.get(selectedDeviceID))" class="space-y-1">
+            <div
+              v-if="isInferredNode(nodeByID.get(selectedDeviceID))"
+              class="space-y-1"
+            >
               <div class="text-warning font-medium">推断节点</div>
-              <div v-if="nodeByID.get(selectedDeviceID)?.macAddress" class="text-text-muted">
+              <div
+                v-if="nodeByID.get(selectedDeviceID)?.macAddress"
+                class="text-text-muted"
+              >
                 MAC: {{ nodeByID.get(selectedDeviceID)?.macAddress }}
               </div>
-              <div v-if="(nodeByID.get(selectedDeviceID)?.macAddresses?.length ?? 0) > 1" class="text-text-muted">
-                多MAC: {{ nodeByID.get(selectedDeviceID)?.macAddresses?.join(', ') }}
+              <div
+                v-if="
+                  (nodeByID.get(selectedDeviceID)?.macAddresses?.length ?? 0) >
+                  1
+                "
+                class="text-text-muted"
+              >
+                多MAC:
+                {{ nodeByID.get(selectedDeviceID)?.macAddresses?.join(", ") }}
               </div>
               <div class="text-text-muted text-xs italic">
                 此设备通过FDB/ARP推断，未直接采集
@@ -237,8 +305,6 @@
     </div>
   </div>
 
-
-
   <!-- 设备详情弹窗 -->
   <TopologyDeviceDetailModal
     v-model:show="showDeviceModal"
@@ -264,7 +330,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { RefreshRight, Setting } from '@element-plus/icons-vue';
+import { RefreshRight, Setting, Download } from "@element-plus/icons-vue";
 import {
   TaskExecutionAPI,
   type ParsedResult,
@@ -274,13 +340,15 @@ import {
 } from "../services/api";
 import { useTaskexecStore } from "../stores/taskexecStore";
 import { StatusNames } from "../types/taskexec";
-import TopologyGraph, { type GraphNode } from "../components/topology/TopologyGraph.vue";
+import TopologyGraph, {
+  type GraphNode,
+} from "../components/topology/TopologyGraph.vue";
 import TopologyDeviceDetailModal from "../components/topology/TopologyDeviceDetailModal.vue";
 import TopologyEdgeDetailModal from "../components/topology/TopologyEdgeDetailModal.vue";
 import ExecutionHistoryDrawer from "../components/task/ExecutionHistoryDrawer.vue";
-import { getLogger } from '@/utils/logger'
+import { getLogger } from "@/utils/logger";
 
-const logger = getLogger()
+const logger = getLogger();
 
 // 阶段4: 统一执行框架 - 使用runId替代taskId
 const taskexecStore = useTaskexecStore();
@@ -494,7 +562,6 @@ const emptyGraphReasons = computed(() => {
   return reasons;
 });
 
-
 function countByStatus(status: string) {
   return filteredEdges.value.filter((edge) => edge.status === status).length;
 }
@@ -506,7 +573,73 @@ function displayNodeLabel(nodeID: string) {
 
 // 判断是否为推断节点
 function isInferredNode(node: GraphNode | undefined): boolean {
-  return node?.nodeType === 'inferred' || node?.nodeType === 'unknown';
+  return node?.nodeType === "inferred" || node?.nodeType === "unknown";
+}
+
+async function exportCSV() {
+  const header = [
+    "源设备",
+    "源设备IP",
+    "源接口",
+    "目标设备",
+    "目标设备IP",
+    "目标接口",
+    "类型",
+    "状态",
+  ];
+  const rows = filteredEdges.value.map((edge) => {
+    const sourceNode = nodeByID.value.get(edge.source);
+    const targetNode = nodeByID.value.get(edge.target);
+
+    return [
+      sourceNode?.label || edge.source,
+      sourceNode?.ip || "",
+      edge.sourceIf || "",
+      targetNode?.label || edge.target,
+      targetNode?.ip || "",
+      edge.targetIf || "",
+      edge.edgeType || "",
+      edge.status || "",
+    ]
+      .map((field) => `"${String(field).replace(/"/g, '""')}"`)
+      .join(",");
+  });
+
+  const csvContent = "\uFEFF" + [header.join(","), ...rows].join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const dateStr = new Date().toISOString().replace(/[:.]/g, "-");
+  const fileName = `topology_links_${selectedRunId.value || dateStr}.csv`;
+
+  try {
+    if ("showSaveFilePicker" in window) {
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: fileName,
+        types: [
+          {
+            description: "CSV 文件",
+            accept: { "text/csv": [".csv"] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+    } else {
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", fileName);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+  } catch (err: any) {
+    if (err.name !== "AbortError") {
+      console.error("导出失败:", err);
+    }
+  }
 }
 
 function applySummaryFromGraph() {
@@ -540,7 +673,7 @@ async function refreshGraph() {
   const startedAt = new Date();
   logger.debug(
     `开始刷新拓扑图，runId=${selectedRunId.value}, status=${selectedRun.value?.status}`,
-    'Topology',
+    "Topology",
   );
   const g = await TaskExecutionAPI.getTopologyGraph(selectedRunId.value);
   graph.value = g || { taskId: selectedRunId.value, nodes: [], edges: [] };
@@ -548,19 +681,21 @@ async function refreshGraph() {
   applySummaryFromGraph();
   logger.debug(
     `拓扑图刷新完成，nodes=${graph.value.nodes?.length || 0}, edges=${graph.value.edges?.length || 0}`,
-    'Topology',
+    "Topology",
   );
   if ((graph.value.edges?.length || 0) === 0) {
     logger.warn(
-      `当前运行未返回任何拓扑边，runId=${selectedRunId.value}, reasons=${emptyGraphReasons.value.join(', ')}`,
-      'Topology',
+      `当前运行未返回任何拓扑边，runId=${selectedRunId.value}, reasons=${emptyGraphReasons.value.join(", ")}`,
+      "Topology",
     );
   }
 }
 
 async function loadEdgeDetail(edgeID: string) {
   if (!selectedRunId.value) return;
-  showEdgeModal.value = true;
+  if (viewType.value === "graph") {
+    showEdgeModal.value = true;
+  }
   edgeDetail.value = await TaskExecutionAPI.getTopologyEdgeDetail(
     selectedRunId.value,
     edgeID,
@@ -570,7 +705,9 @@ async function loadEdgeDetail(edgeID: string) {
 async function openDeviceDetail(deviceID: string) {
   selectedDeviceID.value = deviceID;
   loadingDeviceDetail.value = true;
-  showDeviceModal.value = true;
+  if (viewType.value === "graph") {
+    showDeviceModal.value = true;
+  }
   try {
     if (
       !selectedRunId.value ||
@@ -605,7 +742,7 @@ async function openDeviceDetail(deviceID: string) {
 watch(selectedRunId, (value) => {
   logger.debug(
     `切换拓扑运行，runId=${value}, taskName=${selectedRun.value?.taskName}`,
-    'Topology',
+    "Topology",
   );
   edgeDetail.value = null;
   deviceDetail.value = null;
@@ -621,6 +758,4 @@ watch(selectedRunId, (value) => {
 onMounted(() => {
   void loadTasks();
 });
-
-
 </script>

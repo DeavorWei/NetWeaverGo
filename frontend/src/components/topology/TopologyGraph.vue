@@ -102,7 +102,7 @@
           @keyup.enter="onZoomInputChange"
           class="w-12 text-center bg-transparent focus:outline-none text-sm text-text-primary"
           style="-moz-appearance: textfield;"
-          min="30" max="200"
+          min="30" max="150"
         />
         <span class="text-sm text-text-muted select-none">%</span>
       </div>
@@ -442,9 +442,9 @@ function initGraph() {
         },
       },
     ],
-    layout: getLayoutOpts() as cytoscape.LayoutOptions,
+    layout: getLayoutOpts(true) as cytoscape.LayoutOptions,
     minZoom: 0.3,
-    maxZoom: 2,
+    maxZoom: 1.5,
     wheelSensitivity: 0.3,
   });
 
@@ -485,6 +485,9 @@ function initGraph() {
   });
 
   // 确保初始加载完成时也能自适应
+  cy.ready(() => {
+    safeFit();
+  });
   cy.on("layoutstop", safeFit);
 }
 
@@ -492,6 +495,15 @@ function safeFit() {
   if (!cy || !cyContainer.value) return;
   if (cyContainer.value.clientHeight > 50) {
     cy.fit(undefined, 50);
+    // cy.fit 会忽略 min/maxZoom 限制，因此需要手动钳制
+    const zoom = cy.zoom();
+    if (zoom > 1.5) {
+      cy.zoom(1.5);
+      cy.center();
+    } else if (zoom < 0.5) {
+      cy.zoom(0.5);
+      cy.center();
+    }
   } else {
     setTimeout(safeFit, 100);
   }
@@ -504,7 +516,7 @@ function fitToScreen() {
 function zoomIn() {
   if (!cy) return;
   const currentZoom = cy.zoom();
-  const nextZoom = Math.min(2.0, currentZoom + 0.2);
+  const nextZoom = Math.min(1.5, currentZoom + 0.2);
   cy.zoom({ level: nextZoom, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
 }
 
@@ -520,7 +532,7 @@ function onZoomInputChange() {
   isZoomingFromInput = true;
   let val = zoomPercentInput.value;
   if (val < 30) val = 30;
-  if (val > 200) val = 200;
+  if (val > 150) val = 150;
   zoomPercentInput.value = val;
   cy.zoom({ level: val / 100, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
   isZoomingFromInput = false;
@@ -531,15 +543,18 @@ function onLayoutChange() {
   applyLayout();
 }
 
-function getLayoutOpts() {
+function getLayoutOpts(isInitial = false) {
+  const animate = !isInitial;
+
   if (rootNodeId.value) {
     return {
       name: "breadthfirst",
       directed: false,
       roots: `[id = "${rootNodeId.value}"]`,
-      spacingFactor: 1.2,
+      spacingFactor: 1.5,
       avoidOverlap: true,
-      animate: true,
+      nodeDimensionsIncludeLabels: true,
+      animate: animate,
       animationDuration: 300,
       fit: false,
     };
@@ -549,28 +564,61 @@ function getLayoutOpts() {
     return {
       name: "dagre",
       rankDir: "TB",
-      nodeSep: 80,
+      nodeSep: 100,
       edgeSep: 40,
       rankSep: 120,
-      animate: true,
+      nodeDimensionsIncludeLabels: true,
+      animate: animate,
       animationDuration: 300,
+      fit: false,
+    };
+  }
+  
+  if (currentLayout.value === "cose") {
+    return {
+      name: "cose",
+      animate: animate,
+      animationDuration: 300,
+      nodeRepulsion: 300000,
+      idealEdgeLength: 150,
+      edgeElasticity: 100,
+      gravity: 150,
+      numIter: 1000,
+      initialTemp: 200,
+      coolingFactor: 0.95,
+      minTemp: 1.0,
+      nodeDimensionsIncludeLabels: true,
+      fit: false,
+    };
+  }
+
+  if (currentLayout.value === "concentric") {
+    return {
+      name: "concentric",
+      animate: animate,
+      animationDuration: 300,
+      avoidOverlap: true,
+      nodeDimensionsIncludeLabels: true,
+      minNodeSpacing: 80,
+      spacingFactor: 1.5,
       fit: false,
     };
   }
 
   return {
     name: currentLayout.value,
-    animate: true,
+    animate: animate,
     animationDuration: 300,
     avoidOverlap: true,
-    spacingFactor: 1.2,
+    nodeDimensionsIncludeLabels: true,
+    spacingFactor: 1.5,
     fit: false,
   };
 }
 
 function applyLayout() {
   if (!cy) return;
-  const layout = cy.layout(getLayoutOpts() as cytoscape.LayoutOptions);
+  const layout = cy.layout(getLayoutOpts(false) as cytoscape.LayoutOptions);
   layout.on('layoutstop', safeFit);
   layout.run();
 }

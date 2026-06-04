@@ -1000,6 +1000,15 @@ func (b *TopologyBuilder) enrichCandidatesWithInterfaceFacts(candidates []*Topol
 type endpointOccupancy struct {
 	occupiedBy string
 	score      float64
+	isTerminal bool
+}
+
+func isTerminalCandidate(c *TopologyEdgeCandidate) bool {
+	return c.BDeviceID == "" ||
+		strings.HasPrefix(c.BDeviceID, "unknown:") ||
+		strings.HasPrefix(c.BDeviceID, "endpoint:") ||
+		strings.HasPrefix(c.BDeviceID, "server:") ||
+		strings.HasPrefix(c.BDeviceID, "terminal:")
 }
 
 // resolveCandidatesGlobal 全局冲突消解
@@ -1018,11 +1027,7 @@ func (b *TopologyBuilder) resolveCandidatesGlobal(candidates []*TopologyEdgeCand
 		localA := c.ADeviceID + "|" + chooseValue(c.LogicalAIf, c.AIf, "unknown")
 		endpointCandidates[localA] = append(endpointCandidates[localA], c)
 
-		if c.BDeviceID != "" &&
-			!strings.HasPrefix(c.BDeviceID, "unknown:") &&
-			!strings.HasPrefix(c.BDeviceID, "endpoint:") &&
-			!strings.HasPrefix(c.BDeviceID, "server:") &&
-			!strings.HasPrefix(c.BDeviceID, "terminal:") {
+		if !isTerminalCandidate(c) {
 			localB := c.BDeviceID + "|" + chooseValue(c.LogicalBIf, c.BIf, "unknown")
 			endpointCandidates[localB] = append(endpointCandidates[localB], c)
 		}
@@ -1048,11 +1053,8 @@ func (b *TopologyBuilder) resolveCandidatesGlobal(candidates []*TopologyEdgeCand
 
 		localA := c.ADeviceID + "|" + chooseValue(c.LogicalAIf, c.AIf, "unknown")
 		localB := ""
-		if c.BDeviceID != "" &&
-			!strings.HasPrefix(c.BDeviceID, "unknown:") &&
-			!strings.HasPrefix(c.BDeviceID, "endpoint:") &&
-			!strings.HasPrefix(c.BDeviceID, "server:") &&
-			!strings.HasPrefix(c.BDeviceID, "terminal:") {
+		isTerm := isTerminalCandidate(c)
+		if !isTerm {
 			localB = c.BDeviceID + "|" + chooseValue(c.LogicalBIf, c.BIf, "unknown")
 		}
 
@@ -1060,13 +1062,20 @@ func (b *TopologyBuilder) resolveCandidatesGlobal(candidates []*TopologyEdgeCand
 		aOcc, aOccupied := endpointMap[localA]
 		bOcc, bOccupied := endpointMap[localB]
 
-		if !aOccupied && !bOccupied {
-			// 两个端点均空闲 → retained
+		aConflict := aOccupied
+		if aOccupied && isTerm && aOcc.isTerminal {
+			aConflict = false // 允许多个终端设备连接到同一个接口
+		}
+
+		if !aConflict && !bOccupied {
+			// 端点可用 → retained
 			c.Status = "retained"
 			c.DecisionReason = "highest score candidate (global)"
-			endpointMap[localA] = endpointOccupancy{occupiedBy: c.CandidateID, score: c.TotalScore}
+			if !aOccupied {
+				endpointMap[localA] = endpointOccupancy{occupiedBy: c.CandidateID, score: c.TotalScore, isTerminal: isTerm}
+			}
 			if localB != "" {
-				endpointMap[localB] = endpointOccupancy{occupiedBy: c.CandidateID, score: c.TotalScore}
+				endpointMap[localB] = endpointOccupancy{occupiedBy: c.CandidateID, score: c.TotalScore, isTerminal: false}
 			}
 			decided[c.CandidateID] = true
 
@@ -1125,6 +1134,12 @@ func (b *TopologyBuilder) traceConflictWindow(retainedCand *TopologyEdgeCandidat
 			if c.CandidateID == retainedCand.CandidateID || decided[c.CandidateID] {
 				continue
 			}
+
+			// 如果是本地接口端点，并且保留候选和当前候选都是连接到终端，则不认为它们相互冲突
+			if endpoint == localA && isTerminalCandidate(retainedCand) && isTerminalCandidate(c) {
+				continue
+			}
+
 			if c.TotalScore >= retainedCand.TotalScore-b.config.ConflictWindow {
 				conflictCandidates = append(conflictCandidates, c)
 			}
@@ -1153,16 +1168,12 @@ func (b *TopologyBuilder) traceConflictWindow(retainedCand *TopologyEdgeCandidat
 		// 锁定 conflict 候选的端点，防止后续候选误占
 		confLocalA := c.ADeviceID + "|" + chooseValue(c.LogicalAIf, c.AIf, "unknown")
 		if _, ok := endpointMap[confLocalA]; !ok {
-			endpointMap[confLocalA] = endpointOccupancy{occupiedBy: c.CandidateID, score: c.TotalScore}
+			endpointMap[confLocalA] = endpointOccupancy{occupiedBy: c.CandidateID, score: c.TotalScore, isTerminal: isTerminalCandidate(c)}
 		}
-		if c.BDeviceID != "" &&
-			!strings.HasPrefix(c.BDeviceID, "unknown:") &&
-			!strings.HasPrefix(c.BDeviceID, "endpoint:") &&
-			!strings.HasPrefix(c.BDeviceID, "server:") &&
-			!strings.HasPrefix(c.BDeviceID, "terminal:") {
+		if !isTerminalCandidate(c) {
 			confLocalB := c.BDeviceID + "|" + chooseValue(c.LogicalBIf, c.BIf, "unknown")
 			if _, ok := endpointMap[confLocalB]; !ok {
-				endpointMap[confLocalB] = endpointOccupancy{occupiedBy: c.CandidateID, score: c.TotalScore}
+				endpointMap[confLocalB] = endpointOccupancy{occupiedBy: c.CandidateID, score: c.TotalScore, isTerminal: false}
 			}
 		}
 
