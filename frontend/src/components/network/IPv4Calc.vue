@@ -199,18 +199,18 @@ const exportToCSV = () => {
         </svg>
         参数输入
       </h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-text-secondary">IP 地址</label>
+          <label class="text-sm font-medium text-text-secondary">IP 地址</label>
           <input
             type="text"
             v-model="ipStr"
             placeholder="例如: 192.168.1.10"
-            class="px-3 py-2 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
+            class="px-4 py-2.5 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
           />
         </div>
         <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-text-secondary"
+          <label class="text-sm font-medium text-text-secondary"
             >子网掩码
             <span class="font-normal text-text-muted"
               >(CIDR/十进制/反掩码)</span
@@ -220,22 +220,17 @@ const exportToCSV = () => {
             type="text"
             v-model="maskStr"
             placeholder="例如: 24 或 255.255.255.0"
-            class="px-3 py-2 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-text-primary placeholder-text-muted"
+            class="px-4 py-2.5 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
           />
         </div>
-      </div>
-
-      <div
-        class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-border"
-      >
-        <div class="flex flex-col gap-1.5">
+      <div class="flex flex-col gap-1.5">
           <label
-            class="text-xs font-medium text-text-secondary flex items-center justify-between"
+            class="text-sm font-medium text-text-secondary flex items-center justify-between"
           >
             选项一：需划分的主机数
             <span
               v-if="subnetCountStr.length > 0"
-              class="text-xs text-warning font-medium"
+              class="text-sm text-warning font-medium"
               >已被互斥禁用</span
             >
           </label>
@@ -245,7 +240,7 @@ const exportToCSV = () => {
               v-model="hostCountStr"
               :disabled="subnetCountStr.length > 0"
               placeholder="例如: 50"
-              class="px-3 py-2 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono disabled:opacity-50 disabled:cursor-not-allowed text-text-primary placeholder-text-muted"
+              class="px-4 py-2.5 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm disabled:opacity-50 disabled:cursor-not-allowed text-text-primary placeholder-text-muted"
             />
             <button
               v-if="hostCountStr"
@@ -270,12 +265,12 @@ const exportToCSV = () => {
         </div>
         <div class="flex flex-col gap-1.5">
           <label
-            class="text-xs font-medium text-text-secondary flex items-center justify-between"
+            class="text-sm font-medium text-text-secondary flex items-center justify-between"
           >
             选项二：需划分的小子网数
             <span
               v-if="hostCountStr.length > 0"
-              class="text-xs text-warning font-medium"
+              class="text-sm text-warning font-medium"
               >已被互斥禁用</span
             >
           </label>
@@ -285,7 +280,7 @@ const exportToCSV = () => {
               v-model="subnetCountStr"
               :disabled="hostCountStr.length > 0"
               placeholder="例如: 4"
-              class="px-3 py-2 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono disabled:opacity-50 disabled:cursor-not-allowed text-text-primary placeholder-text-muted"
+              class="px-4 py-2.5 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm disabled:opacity-50 disabled:cursor-not-allowed text-text-primary placeholder-text-muted"
             />
             <button
               v-if="subnetCountStr"
@@ -370,7 +365,7 @@ const exportToCSV = () => {
         <div
           class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2"
         >
-          <h2 class="text-sm font-semibold text-text-primary flex items-center">
+          <h2 class="text-base font-semibold text-text-primary flex items-center">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               class="h-5 w-5 mr-2 text-accent"
@@ -389,7 +384,7 @@ const exportToCSV = () => {
           </h2>
           <div class="flex items-center gap-2">
             <span
-              class="text-xs font-medium text-text-secondary bg-bg-tertiary px-3 py-1 rounded-full border border-border"
+              class="text-sm font-medium text-text-secondary bg-bg-tertiary px-3 py-1 rounded-full border border-border"
             >
               共划分出
               <span class="text-accent font-bold mx-1">{{
@@ -399,7 +394,7 @@ const exportToCSV = () => {
             </span>
             <button
               @click="exportToCSV"
-              class="flex items-center text-xs font-medium text-white bg-accent hover:bg-accent/90 px-3 py-1 rounded-full shadow-glow transition-all focus:ring-2 focus:ring-accent outline-none"
+              class="flex items-center text-sm font-medium text-white bg-accent hover:bg-accent/90 px-3 py-1 rounded-full shadow-glow transition-all focus:ring-2 focus:ring-accent outline-none"
               title="导出为 CSV (Excel可打开)"
             >
               <svg
@@ -423,7 +418,7 @@ const exportToCSV = () => {
 
         <div
           v-if="subnettingEvaluation.warning"
-          class="bg-warning-bg text-warning border border-warning/30 p-3 rounded-lg flex shadow-sm mb-3 text-xs items-start justify-between"
+          class="bg-warning-bg text-warning border border-warning/30 p-3 rounded-lg flex shadow-sm mb-3 text-sm items-start justify-between"
         >
           <div class="flex items-start">
             <svg
@@ -447,7 +442,7 @@ const exportToCSV = () => {
           <button
             v-if="subnettingEvaluation.showForceButton"
             @click="forceDisplayAllSubnets = true"
-            class="ml-3 shrink-0 px-2 py-1 bg-warning/20 hover:bg-warning/30 text-warning font-medium rounded transition-colors border border-warning/30 shadow-sm text-xs focus:ring-2 focus:ring-warning outline-none"
+            class="ml-3 shrink-0 px-2 py-1 bg-warning/20 hover:bg-warning/30 text-warning font-medium rounded transition-colors border border-warning/30 shadow-sm text-sm focus:ring-2 focus:ring-warning outline-none"
           >
             强制展示
           </button>
@@ -462,37 +457,37 @@ const exportToCSV = () => {
             >
               <tr>
                 <th
-                  class="px-3 py-2 text-xs font-semibold text-text-muted uppercase tracking-wider"
+                  class="px-3 py-2 text-sm font-semibold text-text-muted uppercase tracking-wider"
                 >
                   序号 #
                 </th>
                 <th
-                  class="px-3 py-2 text-xs font-semibold text-text-muted uppercase tracking-wider"
+                  class="px-3 py-2 text-sm font-semibold text-text-muted uppercase tracking-wider"
                 >
                   网络号
                 </th>
                 <th
-                  class="px-3 py-2 text-xs font-semibold text-text-muted uppercase tracking-wider"
+                  class="px-3 py-2 text-sm font-semibold text-text-muted uppercase tracking-wider"
                 >
                   CIDR
                 </th>
                 <th
-                  class="px-3 py-2 text-xs font-semibold text-text-muted uppercase tracking-wider"
+                  class="px-3 py-2 text-sm font-semibold text-text-muted uppercase tracking-wider"
                 >
                   首个可用 IP
                 </th>
                 <th
-                  class="px-3 py-2 text-xs font-semibold text-text-muted uppercase tracking-wider"
+                  class="px-3 py-2 text-sm font-semibold text-text-muted uppercase tracking-wider"
                 >
                   最后可用 IP
                 </th>
                 <th
-                  class="px-3 py-2 text-xs font-semibold text-text-muted uppercase tracking-wider"
+                  class="px-3 py-2 text-sm font-semibold text-text-muted uppercase tracking-wider"
                 >
                   广播地址
                 </th>
                 <th
-                  class="px-3 py-2 text-xs font-semibold text-text-muted uppercase tracking-wider"
+                  class="px-3 py-2 text-sm font-semibold text-text-muted uppercase tracking-wider"
                 >
                   子网掩码
                 </th>
@@ -505,28 +500,28 @@ const exportToCSV = () => {
                 class="hover:bg-bg-hover transition-colors"
               >
                 <td
-                  class="px-3 py-1.5 text-xs text-text-secondary tabular-nums"
+                  class="px-3 py-1.5 text-sm text-text-secondary tabular-nums"
                 >
                   {{ item.index }}
                 </td>
                 <td
-                  class="px-3 py-1.5 text-xs text-text-primary font-mono font-medium"
+                  class="px-3 py-1.5 text-sm text-text-primary font-mono font-medium"
                 >
                   {{ item.network }}
                 </td>
-                <td class="px-3 py-1.5 text-xs text-text-primary font-mono">
+                <td class="px-3 py-1.5 text-sm text-text-primary font-mono">
                   {{ item.cidr }}
                 </td>
-                <td class="px-3 py-1.5 text-xs text-text-primary font-mono">
+                <td class="px-3 py-1.5 text-sm text-text-primary font-mono">
                   {{ item.firstUsable }}
                 </td>
-                <td class="px-3 py-1.5 text-xs text-text-primary font-mono">
+                <td class="px-3 py-1.5 text-sm text-text-primary font-mono">
                   {{ item.lastUsable }}
                 </td>
-                <td class="px-3 py-1.5 text-xs text-text-primary font-mono">
+                <td class="px-3 py-1.5 text-sm text-text-primary font-mono">
                   {{ item.broadcast }}
                 </td>
-                <td class="px-3 py-1.5 text-xs text-text-primary font-mono">
+                <td class="px-3 py-1.5 text-sm text-text-primary font-mono">
                   {{ item.mask }}
                 </td>
               </tr>
@@ -561,35 +556,23 @@ const exportToCSV = () => {
           </svg>
           计算结果
         </h2>
-        <div
-          class="overflow-x-auto rounded-lg border border-border bg-bg-tertiary"
-        >
-          <table class="w-full text-left border-collapse">
-            <tbody>
-              <tr
-                v-for="(record, idx) in evaluation.records"
-                :key="idx"
-                class="border-b border-border last:border-b-0 hover:bg-bg-hover transition-colors group"
-              >
-                <td
-                  class="px-3 py-2 text-xs font-medium text-text-secondary w-[30%] sm:w-1/3"
-                >
-                  {{ record.label }}
-                </td>
-                <td class="px-3 py-2 text-xs text-text-primary font-mono">
-                  {{ record.value }}
-                </td>
-                <td class="px-3 py-2 text-right w-16">
-                  <button
-                    @click="copyText(record.value)"
-                    class="text-xs text-accent hover:text-white hover:bg-accent border border-accent/30 px-2 py-0.5 rounded transition-all opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
-                  >
-                    复制
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div
+            v-for="(record, idx) in evaluation.records"
+            :key="idx"
+            class="flex items-center justify-between p-3 bg-bg-tertiary rounded-lg border border-border hover:border-accent/50 hover:shadow-sm transition-all group"
+          >
+            <div class="flex flex-col min-w-0 pr-2">
+              <span class="text-sm font-medium text-text-secondary mb-1">{{ record.label }}</span>
+              <span class="text-sm text-text-primary font-mono truncate" :title="record.value">{{ record.value }}</span>
+            </div>
+            <button
+              @click="copyText(record.value || '')"
+              class="shrink-0 text-sm text-accent hover:text-white hover:bg-accent border border-accent/30 px-3 py-1 rounded transition-all opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
+            >
+              复制
+            </button>
+          </div>
         </div>
       </section>
     </transition>

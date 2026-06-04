@@ -42,14 +42,18 @@
 
         <!-- 内容主体 -->
         <el-main class="p-6 overflow-auto scrollbar-custom relative">
-          <Suspense>
-            <template #default>
-              <router-view />
-            </template>
-            <template #fallback>
-              <RouteLoading />
-            </template>
-          </Suspense>
+          <router-view v-slot="{ Component }">
+            <Suspense>
+              <template #default>
+                <keep-alive include="NetworkCalc">
+                  <component :is="Component" />
+                </keep-alive>
+              </template>
+              <template #fallback>
+                <RouteLoading />
+              </template>
+            </Suspense>
+          </router-view>
         </el-main>
       </el-container>
     </el-container>

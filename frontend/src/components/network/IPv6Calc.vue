@@ -129,37 +129,32 @@ const copyText = (val: string) => {
         </svg>
         IPv6 参数输入
       </h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-text-secondary"
+          <label class="text-sm font-medium text-text-secondary"
             >IPv6 地址</label
           >
           <input
             type="text"
             v-model="ipv6Str"
             placeholder="例如: 2001:db8::1"
-            class="px-3 py-2 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
+            class="px-4 py-2.5 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
           />
         </div>
         <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-text-secondary"
+          <label class="text-sm font-medium text-text-secondary"
             >前缀长度 (/n)</label
           >
           <input
             type="text"
             v-model="prefixStr"
             placeholder="例如: 64"
-            class="px-3 py-2 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
+            class="px-4 py-2.5 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
           />
         </div>
-      </div>
-
-      <div
-        class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-border"
-      >
-        <div class="flex flex-col gap-1.5">
+      <div class="flex flex-col gap-1.5">
           <label
-            class="text-xs font-medium text-text-secondary flex items-center justify-between"
+            class="text-sm font-medium text-text-secondary flex items-center justify-between"
           >
             子网划分: 目标新前缀
           </label>
@@ -168,7 +163,7 @@ const copyText = (val: string) => {
               type="text"
               v-model="v6NewPrefixStr"
               placeholder="例如: 68"
-              class="px-3 py-2 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
+              class="px-4 py-2.5 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
             />
             <button
               v-if="v6NewPrefixStr"
@@ -190,14 +185,14 @@ const copyText = (val: string) => {
               </svg>
             </button>
           </div>
-          <p class="text-xs text-text-muted mt-1">
+          <p class="text-sm text-text-muted mt-1">
             注意: 出于性能考虑，单次计算最多允许分配 16 位深度
           </p>
         </div>
 
         <div class="flex flex-col gap-1.5">
           <label
-            class="text-xs font-medium text-text-secondary flex items-center justify-between"
+            class="text-sm font-medium text-text-secondary flex items-center justify-between"
           >
             地址包含关系检查 (可选)
           </label>
@@ -206,7 +201,7 @@ const copyText = (val: string) => {
               type="text"
               v-model="v6CheckIpStr"
               placeholder="在此输入待检查的 IPv6 地址"
-              class="px-3 py-2 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
+              class="px-4 py-2.5 bg-bg-tertiary/50 border border-border rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none transition-all w-full font-mono text-sm text-text-primary placeholder-text-muted"
             />
             <button
               v-if="v6CheckIpStr"
@@ -231,7 +226,7 @@ const copyText = (val: string) => {
           <p
             v-if="inclusionCheck"
             :class="[
-              'text-xs font-semibold mt-1',
+              'text-sm font-semibold mt-1',
               inclusionCheck.isIncluded ? 'text-success' : 'text-error',
             ]"
           >
@@ -297,7 +292,7 @@ const copyText = (val: string) => {
         <div
           class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2"
         >
-          <h2 class="text-sm font-semibold text-text-primary flex items-center">
+          <h2 class="text-base font-semibold text-text-primary flex items-center">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               class="h-5 w-5 mr-2 text-accent"
@@ -316,7 +311,7 @@ const copyText = (val: string) => {
           </h2>
           <div class="flex items-center gap-2">
             <span
-              class="text-xs font-medium text-text-secondary bg-bg-tertiary px-3 py-1 rounded-full border border-border"
+              class="text-sm font-medium text-text-secondary bg-bg-tertiary px-3 py-1 rounded-full border border-border"
             >
               共划分出
               <span class="text-accent font-bold mx-1">{{
@@ -329,7 +324,7 @@ const copyText = (val: string) => {
 
         <div
           v-if="v6SubnetEvaluation.warning"
-          class="bg-warning-bg text-warning border border-warning/30 p-3 rounded-lg flex shadow-sm mb-3 text-xs items-start justify-between"
+          class="bg-warning-bg text-warning border border-warning/30 p-3 rounded-lg flex shadow-sm mb-3 text-sm items-start justify-between"
         >
           <div class="flex items-start">
             <svg
@@ -353,72 +348,44 @@ const copyText = (val: string) => {
         </div>
 
         <div
-          class="overflow-x-auto rounded-lg border border-border bg-bg-tertiary max-h-[400px] overflow-y-auto scrollbar-custom"
+          class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto scrollbar-custom p-1 bg-transparent"
         >
-          <table class="w-full text-left border-collapse min-w-[500px]">
-            <thead
-              class="sticky top-0 bg-bg-tertiary backdrop-blur shadow-sm z-10 border-b border-border"
-            >
-              <tr>
-                <th
-                  class="px-3 py-2 text-xs font-semibold text-text-muted uppercase tracking-wider w-20"
-                >
-                  序号
-                </th>
-                <th
-                  class="px-3 py-2 text-xs font-semibold text-text-muted uppercase tracking-wider"
-                >
-                  IPv6 网络号
-                </th>
-                <th
-                  class="px-3 py-2 text-xs font-semibold text-text-muted uppercase tracking-wider w-20"
-                >
-                  CIDR
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border">
-              <tr
-                v-for="item in v6SubnetEvaluation.subnets"
-                :key="item.index"
+          <div
+            v-for="item in v6SubnetEvaluation.subnets"
+            :key="item.index"
+            :class="[
+              'flex items-center justify-between p-3 rounded-lg border transition-colors group',
+              item.isIncluded
+                ? 'bg-success-bg border-success/30 hover:border-success/50'
+                : 'bg-bg-tertiary border-border hover:border-accent/50 hover:shadow-sm'
+            ]"
+          >
+            <div class="flex items-center min-w-0 pr-2 w-full">
+              <span class="text-xs font-medium text-text-secondary shrink-0 w-8 flex items-center">
+                <span
+                  v-if="item.isIncluded"
+                  class="w-1.5 h-1.5 rounded-full bg-success mr-1.5"
+                  style="box-shadow: var(--shadow-success-glow);"
+                ></span>
+                #{{ item.index }}
+              </span>
+              <span 
                 :class="[
-                  'transition-colors',
-                  item.isIncluded
-                    ? 'bg-success-bg hover:bg-success-bg'
-                    : 'hover:bg-bg-hover',
-                ]"
+                  'text-sm font-mono truncate ml-2',
+                  item.isIncluded ? 'text-success font-semibold' : 'text-text-primary'
+                ]" 
+                :title="item.network"
               >
-                <td
-                  class="px-3 py-1.5 text-xs text-text-secondary tabular-nums"
-                >
-                  <div class="flex items-center">
-                    <span
-                      v-if="item.isIncluded"
-                      class="w-1.5 h-1.5 rounded-full bg-success mr-2"
-                      style="box-shadow: var(--shadow-success-glow);"
-                    ></span>
-                    {{ item.index }}
-                  </div>
-                </td>
-                <td
-                  :class="[
-                    'px-3 py-1.5 text-xs font-mono font-medium',
-                    item.isIncluded ? 'text-success' : 'text-text-primary',
-                  ]"
-                >
-                  {{ item.network }}
-                </td>
-                <td
-                  :class="[
-                    'px-3 py-1.5 text-xs font-mono',
-                    item.isIncluded ? 'text-success' : 'text-text-secondary',
-                  ]"
-                >
-                  /{{ item.cidr }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                {{ item.network }}<span :class="item.isIncluded ? 'text-success/80' : 'text-text-secondary'">/{{ item.cidr }}</span>
+              </span>
+            </div>
+            <button
+              @click="copyText(item.network + '/' + item.cidr)"
+              class="shrink-0 text-xs text-accent hover:text-white hover:bg-accent border border-accent/30 px-2 py-1 rounded transition-all opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 ml-2"
+            >
+              复制
+            </button>
+          </div>
         </div>
       </section>
     </transition>
@@ -448,37 +415,23 @@ const copyText = (val: string) => {
           </svg>
           分析结果
         </h2>
-        <div
-          class="overflow-x-auto rounded-lg border border-border bg-bg-tertiary"
-        >
-          <table class="w-full text-left border-collapse">
-            <tbody>
-              <tr
-                v-for="(record, idx) in evaluation.records"
-                :key="idx"
-                class="border-b border-border last:border-b-0 hover:bg-bg-hover transition-colors group"
-              >
-                <td
-                  class="px-3 py-2 text-xs font-medium text-text-secondary w-[30%] sm:w-1/3"
-                >
-                  {{ record.label }}
-                </td>
-                <td
-                  class="px-3 py-2 text-xs text-text-primary font-mono break-all"
-                >
-                  {{ record.value }}
-                </td>
-                <td class="px-3 py-2 text-right w-16">
-                  <button
-                    @click="copyText(record.value || '')"
-                    class="text-xs text-accent hover:text-white hover:bg-accent border border-accent/30 px-2 py-0.5 rounded transition-all opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
-                  >
-                    复制
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div
+            v-for="(record, idx) in evaluation.records"
+            :key="idx"
+            class="flex items-center justify-between p-3 bg-bg-tertiary rounded-lg border border-border hover:border-accent/50 hover:shadow-sm transition-all group"
+          >
+            <div class="flex flex-col min-w-0 pr-2">
+              <span class="text-sm font-medium text-text-secondary mb-1">{{ record.label }}</span>
+              <span class="text-sm text-text-primary font-mono truncate" :title="record.value">{{ record.value }}</span>
+            </div>
+            <button
+              @click="copyText(record.value || '')"
+              class="shrink-0 text-sm text-accent hover:text-white hover:bg-accent border border-accent/30 px-3 py-1 rounded transition-all opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
+            >
+              复制
+            </button>
+          </div>
         </div>
       </section>
     </transition>
