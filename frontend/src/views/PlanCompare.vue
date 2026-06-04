@@ -9,7 +9,12 @@
 
     <el-card shadow="never" class="flex-shrink-0">
       <template #header>
-        <div class="text-sm font-medium">1. 导入规划文件</div>
+        <div class="flex items-center justify-between">
+          <div class="text-sm font-medium">1. 导入规划文件</div>
+          <el-button size="small" type="primary" plain :icon="Download" @click="downloadTemplate">
+            下载导入模板
+          </el-button>
+        </div>
       </template>
       <div class="flex items-center gap-3">
         <el-input
@@ -152,6 +157,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { Download } from '@element-plus/icons-vue';
 import {
   PlanCompareAPI,
   type CompareResult,
@@ -227,6 +233,42 @@ async function importPlan() {
     await loadBaseData();
   } finally {
     importing.value = false;
+  }
+}
+
+async function downloadTemplate() {
+  const header = ['源设备IP', '源接口', '目标设备IP', '目标接口'];
+  const csvContent = "\uFEFF" + header.join(',') + '\n';
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const fileName = '规划导入模板.csv';
+
+  try {
+    if ('showSaveFilePicker' in window) {
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: fileName,
+        types: [{
+          description: 'CSV 文件',
+          accept: { 'text/csv': ['.csv'] },
+        }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+    } else {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+  } catch (err: any) {
+    if (err.name !== 'AbortError') {
+      console.error('下载模板失败:', err);
+    }
   }
 }
 

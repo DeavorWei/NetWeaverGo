@@ -667,21 +667,23 @@ func detectPlanHeader(header []string) (planColumnIndex, bool) {
 	}
 
 	result := planColumnIndex{
-		aName: find("本端设备名", "本端设备", "a设备", "a设备名"),
-		aIP:   find("本端管理ip", "本端ip", "a管理ip"),
-		aIf:   find("本端接口", "a接口"),
-		bName: find("对端设备名", "对端设备", "b设备", "b设备名"),
-		bIP:   find("对端管理ip", "对端ip", "b管理ip"),
-		bIf:   find("对端接口", "b接口"),
+		aName: find("本端设备名", "本端设备", "a设备", "a设备名", "源设备名称"),
+		aIP:   find("本端管理ip", "本端ip", "a管理ip", "源设备ip"),
+		aIf:   find("本端接口", "a接口", "源接口"),
+		bName: find("对端设备名", "对端设备", "b设备", "b设备名", "目标设备名称"),
+		bIP:   find("对端管理ip", "对端ip", "b管理ip", "目标设备ip"),
+		bIf:   find("对端接口", "b接口", "目标接口"),
 		typ:   find("链路类型", "类型"),
 		note:  find("备注"),
 	}
-	required := []int{result.aName, result.aIf, result.bName, result.bIf}
-	for _, v := range required {
-		if v < 0 {
-			return planColumnIndex{}, false
-		}
+	
+	if result.aIf < 0 || result.bIf < 0 {
+		return planColumnIndex{}, false
 	}
+	if (result.aName < 0 && result.aIP < 0) || (result.bName < 0 && result.bIP < 0) {
+		return planColumnIndex{}, false
+	}
+	
 	return result, true
 }
 
@@ -831,8 +833,11 @@ func normalizeEndpointID(mgmtIP, name string) string {
 }
 
 func makeUndirectedEndpointKey(aDevice, aIf, bDevice, bIf string) string {
-	left := strings.TrimSpace(aDevice) + ":" + strings.TrimSpace(aIf)
-	right := strings.TrimSpace(bDevice) + ":" + strings.TrimSpace(bIf)
+	clean := func(s string) string {
+		return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(s)), " ", "")
+	}
+	left := clean(aDevice) + ":" + clean(aIf)
+	right := clean(bDevice) + ":" + clean(bIf)
 	keys := []string{left, right}
 	sort.Strings(keys)
 	return keys[0] + "<->" + keys[1]
