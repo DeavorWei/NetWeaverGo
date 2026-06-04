@@ -60,6 +60,34 @@ func (s *Service) ListPlanFiles(limit int) ([]models.PlanUploadView, error) {
 	return result, nil
 }
 
+// DeletePlanFiles 批量删除规划文件。
+func (s *Service) DeletePlanFiles(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id IN ?", ids).Delete(&models.PlanFile{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("plan_file_id IN ?", ids).Delete(&models.PlannedLink{}).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// GetPlanFilePreview 获取规划文件的链路预览。
+func (s *Service) GetPlanFilePreview(planID string, limit int) ([]models.PlannedLink, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	var links []models.PlannedLink
+	if err := s.db.Where("plan_file_id = ?", planID).Limit(limit).Find(&links).Error; err != nil {
+		return nil, err
+	}
+	return links, nil
+}
+
 // ImportPlanCSV 导入固定模板 CSV 规划链路。
 func (s *Service) ImportPlanCSV(filePath string) (*models.PlanImportResult, error) {
 	filePath = strings.TrimSpace(filePath)
@@ -411,7 +439,7 @@ func (s *Service) GetCompareResult(reportID string) (*models.CompareResult, erro
 }
 
 // ExportDiffReport 导出差异报告（json/csv/excel/html）。
-func (s *Service) ExportDiffReport(reportID string, format string) (string, error) {
+func (s *Service) ExportDiffReport(reportID string, format string, targetPath string) (string, error) {
 	result, err := s.GetCompareResult(reportID)
 	if err != nil {
 		return "", err
@@ -427,7 +455,10 @@ func (s *Service) ExportDiffReport(reportID string, format string) (string, erro
 
 	switch format {
 	case "json":
-		outputPath := filepath.Join(s.pm.GetTopologyExportDir(), fmt.Sprintf("diff_%s.json", reportID))
+		outputPath := targetPath
+		if outputPath == "" {
+			outputPath = filepath.Join(s.pm.GetTopologyExportDir(), fmt.Sprintf("diff_%s.json", reportID))
+		}
 		data, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
 			return "", err
@@ -437,15 +468,21 @@ func (s *Service) ExportDiffReport(reportID string, format string) (string, erro
 		}
 		return outputPath, nil
 	case "csv":
-		outputPath := filepath.Join(s.pm.GetTopologyExportDir(), fmt.Sprintf("diff_%s.csv", reportID))
+		outputPath := targetPath
+		if outputPath == "" {
+			outputPath = filepath.Join(s.pm.GetTopologyExportDir(), fmt.Sprintf("diff_%s.csv", reportID))
+		}
 		file, err := os.Create(outputPath)
 		if err != nil {
 			return "", err
 		}
 		defer func() { _ = file.Close() }()
 
+		// 写入 UTF-8 BOM，防止 Excel 等软件打开时中文乱码
+		_, _ = file.Write([]byte{0xEF, 0xBB, 0xBF})
+
 		w := csv.NewWriter(file)
-		_ = w.Write([]string{"type", "a_device", "a_mgmt_ip", "a_if", "b_device", "b_mgmt_ip", "b_if", "expected_if", "actual_if", "reason"})
+		_ = w.Write([]string{"差异类型", "源设备IP", "源接口", "目的设备IP", "目的接口", "预期接口", "实际接口", "原因说明"})
 		writeItemsCSV(w, result.MissingLinks)
 		writeItemsCSV(w, result.UnexpectedLinks)
 		writeItemsCSV(w, result.InconsistentItems)
@@ -455,21 +492,43 @@ func (s *Service) ExportDiffReport(reportID string, format string) (string, erro
 		}
 		return outputPath, nil
 	case "html", "htm":
-		return s.exportDiffReportHTML(reportID, result)
+		return s.exportDiffReportHTML(reportID, result, targetPath)
 	default:
 		return "", fmt.Errorf("不支持的导出格式: %s", format)
 	}
+}
+
+func formatIPForExport(ip, name string) string {
+	val := ip
+	if val == "" {
+		val = name
+	}
+	val = strings.TrimRight(val, " .")
+	
+	if idx := strings.Index(val, ":"); idx > 0 {
+		prefix := val[:idx]
+		isAlpha := true
+		for i := 0; i < len(prefix); i++ {
+			c := prefix[i]
+			if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') {
+				isAlpha = false
+				break
+			}
+		}
+		if isAlpha {
+			val = val[idx+1:]
+		}
+	}
+	return val
 }
 
 func writeItemsCSV(w *csv.Writer, items []models.DiffItem) {
 	for _, item := range items {
 		_ = w.Write([]string{
 			item.DiffType,
-			item.ADeviceName,
-			item.AMgmtIP,
+			formatIPForExport(item.AMgmtIP, item.ADeviceName),
 			item.AIf,
-			item.BDeviceName,
-			item.BMgmtIP,
+			formatIPForExport(item.BMgmtIP, item.BDeviceName),
 			item.BIf,
 			item.ExpectedIf,
 			item.ActualIf,
@@ -486,32 +545,33 @@ func collectDiffItems(result *models.CompareResult) []models.DiffItem {
 	return items
 }
 
-func (s *Service) exportDiffReportHTML(reportID string, result *models.CompareResult) (string, error) {
-	outputPath := filepath.Join(s.pm.GetTopologyExportDir(), fmt.Sprintf("diff_%s.html", reportID))
+func (s *Service) exportDiffReportHTML(reportID string, result *models.CompareResult, targetPath string) (string, error) {
+	outputPath := targetPath
+	if outputPath == "" {
+		outputPath = filepath.Join(s.pm.GetTopologyExportDir(), fmt.Sprintf("diff_%s.html", reportID))
+	}
 	items := collectDiffItems(result)
 
 	var b strings.Builder
 	b.WriteString("<!doctype html><html><head><meta charset=\"utf-8\"><title>Diff Report</title>")
 	b.WriteString("<style>body{font-family:Segoe UI,Arial,sans-serif;padding:24px;background:#f6f8fa;color:#24292f}table{border-collapse:collapse;width:100%;background:#fff}th,td{border:1px solid #d0d7de;padding:8px 10px;font-size:12px;text-align:left}th{background:#f3f4f6}.card{background:#fff;border:1px solid #d0d7de;border-radius:8px;padding:12px;margin-bottom:16px}</style>")
 	b.WriteString("</head><body>")
-	b.WriteString("<h2>Topology Diff Report</h2>")
+	b.WriteString("<h2>规划比对差异报告</h2>")
 	b.WriteString("<div class=\"card\">")
-	b.WriteString(fmt.Sprintf("<div><strong>Report ID:</strong> %s</div>", html.EscapeString(result.ReportID)))
-	b.WriteString(fmt.Sprintf("<div><strong>Total Planned:</strong> %d</div>", result.TotalPlanned))
-	b.WriteString(fmt.Sprintf("<div><strong>Total Actual:</strong> %d</div>", result.TotalActual))
-	b.WriteString(fmt.Sprintf("<div><strong>Matched:</strong> %d</div>", result.Matched))
-	b.WriteString(fmt.Sprintf("<div><strong>Missing:</strong> %d | <strong>Unexpected:</strong> %d | <strong>Inconsistent:</strong> %d</div>", len(result.MissingLinks), len(result.UnexpectedLinks), len(result.InconsistentItems)))
+	b.WriteString(fmt.Sprintf("<div><strong>报告 ID:</strong> %s</div>", html.EscapeString(result.ReportID)))
+	b.WriteString(fmt.Sprintf("<div><strong>规划链路数:</strong> %d</div>", result.TotalPlanned))
+	b.WriteString(fmt.Sprintf("<div><strong>实际链路数:</strong> %d</div>", result.TotalActual))
+	b.WriteString(fmt.Sprintf("<div><strong>完全匹配:</strong> %d</div>", result.Matched))
+	b.WriteString(fmt.Sprintf("<div><strong>缺失链路:</strong> %d | <strong>额外链路:</strong> %d | <strong>不一致:</strong> %d</div>", len(result.MissingLinks), len(result.UnexpectedLinks), len(result.InconsistentItems)))
 	b.WriteString("</div>")
-	b.WriteString("<table><thead><tr><th>Type</th><th>A Device</th><th>A Mgmt IP</th><th>A IF</th><th>B Device</th><th>B Mgmt IP</th><th>B IF</th><th>Expected IF</th><th>Actual IF</th><th>Reason</th></tr></thead><tbody>")
+	b.WriteString("<table><thead><tr><th>差异类型</th><th>源设备IP</th><th>源接口</th><th>目的设备IP</th><th>目的接口</th><th>预期接口</th><th>实际接口</th><th>原因说明</th></tr></thead><tbody>")
 
 	for _, item := range items {
 		b.WriteString("<tr>")
 		b.WriteString("<td>" + html.EscapeString(item.DiffType) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(item.ADeviceName) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(item.AMgmtIP) + "</td>")
+		b.WriteString("<td>" + html.EscapeString(formatIPForExport(item.AMgmtIP, item.ADeviceName)) + "</td>")
 		b.WriteString("<td>" + html.EscapeString(item.AIf) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(item.BDeviceName) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(item.BMgmtIP) + "</td>")
+		b.WriteString("<td>" + html.EscapeString(formatIPForExport(item.BMgmtIP, item.BDeviceName)) + "</td>")
 		b.WriteString("<td>" + html.EscapeString(item.BIf) + "</td>")
 		b.WriteString("<td>" + html.EscapeString(item.ExpectedIf) + "</td>")
 		b.WriteString("<td>" + html.EscapeString(item.ActualIf) + "</td>")
@@ -576,6 +636,11 @@ type planColumnIndex struct {
 func parsePlanRows(rows [][]string) ([]models.PlannedLink, []string, error) {
 	if len(rows) == 0 {
 		return nil, nil, fmt.Errorf("CSV 为空")
+	}
+
+	// 移除可能存在的 UTF-8 BOM 头，防止第一个表头解析失败
+	if len(rows[0]) > 0 {
+		rows[0][0] = strings.TrimPrefix(rows[0][0], "\xef\xbb\xbf")
 	}
 
 	indices, hasHeader := detectPlanHeader(rows[0])

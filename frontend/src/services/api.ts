@@ -366,6 +366,10 @@ export const PlanCompareAPI = {
   getCompareResult: PlanCompareServiceBinding.GetCompareResult,
   /** 导出报告 */
   exportDiffReport: PlanCompareServiceBinding.ExportDiffReport,
+  /** 删除规划文件 */
+  deletePlanFiles: PlanCompareServiceBinding.DeletePlanFiles,
+  /** 获取规划文件预览 */
+  getPlanFilePreview: PlanCompareServiceBinding.GetPlanFilePreview,
 } as const
 
 // ==================== 类型导出 ====================

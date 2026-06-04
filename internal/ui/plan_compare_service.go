@@ -30,6 +30,16 @@ func (s *PlanCompareService) ListPlanFiles(ctx context.Context, limit int) ([]mo
 	return s.service.ListPlanFiles(limit)
 }
 
+// DeletePlanFiles 批量删除规划文件。
+func (s *PlanCompareService) DeletePlanFiles(ctx context.Context, ids []string) error {
+	return s.service.DeletePlanFiles(ids)
+}
+
+// GetPlanFilePreview 获取规划文件的数据预览。
+func (s *PlanCompareService) GetPlanFilePreview(ctx context.Context, planID string, limit int) ([]models.PlannedLink, error) {
+	return s.service.GetPlanFilePreview(planID, limit)
+}
+
 // Compare 执行规划比对（统一使用 runID）。
 func (s *PlanCompareService) Compare(ctx context.Context, runID string, planID string) (*models.CompareResult, error) {
 	return s.service.CompareByRunID(runID, planID)
@@ -46,6 +56,6 @@ func (s *PlanCompareService) GetCompareResult(ctx context.Context, reportID stri
 }
 
 // ExportDiffReport 导出差异报告（json/csv）。
-func (s *PlanCompareService) ExportDiffReport(ctx context.Context, reportID string, format string) (string, error) {
-	return s.service.ExportDiffReport(reportID, format)
+func (s *PlanCompareService) ExportDiffReport(ctx context.Context, reportID string, format string, targetPath string) (string, error) {
+	return s.service.ExportDiffReport(reportID, format, targetPath)
 }

@@ -154,7 +154,7 @@ func TestExportDiffReportHTML(t *testing.T) {
 	}
 
 	svc := NewService(db)
-	htmlPath, err := svc.ExportDiffReport(report.ID, "html")
+	htmlPath, err := svc.ExportDiffReport(report.ID, "html", "")
 	if err != nil {
 		t.Fatalf("export html failed: %v", err)
 	}

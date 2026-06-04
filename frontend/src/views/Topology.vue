@@ -17,7 +17,7 @@
           <el-option
             v-for="run in topologyRuns"
             :key="run.runId"
-            :label="`${run.taskName || run.runId} (${StatusNames[run.status] || run.status})`"
+            :label="`[${formatTime(run.startedAt)}] ${run.taskName || run.runId} (${StatusNames[run.status] || run.status})`"
             :value="run.runId"
           />
         </el-select>
@@ -349,6 +349,13 @@ import ExecutionHistoryDrawer from "../components/task/ExecutionHistoryDrawer.vu
 import { getLogger } from "@/utils/logger";
 
 const logger = getLogger();
+
+function formatTime(timeStr?: string) {
+  if (!timeStr) return "";
+  const d = new Date(timeStr);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
 
 // 阶段4: 统一执行框架 - 使用runId替代taskId
 const taskexecStore = useTaskexecStore();
