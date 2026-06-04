@@ -151,6 +151,12 @@ func (m *MIBManager) ImportMIBFile(ctx context.Context, filePath string, folderI
 	// 检查是否已存在同名模块
 	existing, _ := m.mibRepo.GetModuleByName(result.Module.Name)
 	if existing != nil {
+		if existing.IsBuiltIn {
+			logger.Info("SNMP-MIB", "-", "检测到同名模块为内置核心库，禁止覆盖跳过: 模块=%s", result.Module.Name)
+			_ = os.Remove(storedPath)
+			return nil, fmt.Errorf("禁止覆盖内置核心库: %s", result.Module.Name)
+		}
+
 		logger.Info("SNMP-MIB", "-", "检测到同名模块，将覆盖: 模块=%s, 旧ID=%d", result.Module.Name, existing.ID)
 		// 删除已存在的模块和文件
 		_ = os.Remove(existing.FilePath)
@@ -541,6 +547,11 @@ func (m *MIBManager) SaveNodesBatch(ctx context.Context, module *models.MIBModul
 	// 1. 检查是否已存在同名模块
 	existing, _ := m.mibRepo.GetModuleByName(module.Name)
 	if existing != nil {
+		if existing.IsBuiltIn {
+			logger.Info("SNMP-MIB", "-", "检测到同名模块为内置核心库，禁止覆盖跳过: 模块=%s", module.Name)
+			return fmt.Errorf("禁止覆盖内置核心库: %s", module.Name)
+		}
+
 		if overwrite {
 			logger.Info("SNMP-MIB", "-", "检测到同名模块，将覆盖: 模块=%s, 旧ID=%d", module.Name, existing.ID)
 			// 删除已存在的模块和文件
@@ -1238,12 +1249,27 @@ func (m *MIBManager) EnsureCoreMIBsLoaded(ctx context.Context) {
 		return
 	}
 
+	// 获取或创建“内置核心库”文件夹
+	folderName := "内置核心库"
+	folder, err := m.mibRepo.GetFolderByName(folderName)
+	if err != nil || folder == nil {
+		folder = &models.MIBFolder{
+			Name:        folderName,
+			Description: "系统内置的标准 MIB 核心库",
+		}
+		if err := m.mibRepo.SaveFolder(folder); err != nil {
+			logger.Error("SNMP-MIB", "-", "创建内置核心库文件夹失败: %v", err)
+			return
+		}
+	}
+
 	// 2. 批量导入
 	opts := MIBBatchImportOptions{
 		Concurrency:       4,
 		SkipErrors:        true,
 		OverwriteExisting: false, // 已经存在的就不覆盖了
 		DependencyDirs:    []string{tempDir},
+		FolderID:          &folder.ID,
 	}
 
 	result, err := m.ImportMIBFilesBatch(ctx, filePaths, opts, nil)
