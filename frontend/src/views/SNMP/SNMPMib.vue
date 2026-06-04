@@ -813,7 +813,7 @@ watch(importType, () => {
               </div>
               
               <!-- 文件夹操作按钮 -->
-              <div class="hidden group-hover:flex items-center gap-1">
+              <div class="hidden group-hover:flex items-center gap-1" v-if="folder.name !== '内置核心库'">
                 <button
                   @click.stop="renameFolder(folder)"
                   class="p-0.5 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded transition-colors cursor-pointer"
@@ -854,12 +854,15 @@ watch(importType, () => {
                 <div class="flex items-center justify-between min-w-0">
                   <span class="text-sm font-medium truncate flex-1" :title="module.name">{{ module.name }}</span>
                   <div class="flex items-center gap-1.5 shrink-0 ml-2">
-                    <span :class="['text-[10px] px-1 py-0.5 rounded bg-bg-primary font-normal', getStatusClass(module.status)]">
+                    <span v-if="module.isBuiltIn" class="text-[10px] px-1 py-0.5 rounded bg-info/20 text-info font-normal whitespace-nowrap">
+                      内置
+                    </span>
+                    <span v-else :class="['text-[10px] px-1 py-0.5 rounded bg-bg-primary font-normal whitespace-nowrap', getStatusClass(module.status)]">
                       {{ module.status }}
                     </span>
                     
                     <!-- 移动到/删除模块操作 -->
-                    <div class="hidden group-hover/module:flex items-center gap-0.5">
+                    <div class="hidden group-hover/module:flex items-center gap-0.5" v-if="!module.isBuiltIn">
                       <!-- 移动文件夹下拉菜单 -->
                       <el-dropdown trigger="click" @command="(cmd: any) => moveModule(module, cmd)">
                         <button
@@ -954,11 +957,14 @@ watch(importType, () => {
                 <div class="flex items-center justify-between min-w-0">
                   <span class="text-sm font-medium truncate flex-1" :title="module.name">{{ module.name }}</span>
                   <div class="flex items-center gap-1.5 shrink-0 ml-2">
-                    <span :class="['text-[10px] px-1 py-0.5 rounded bg-bg-primary font-normal', getStatusClass(module.status)]">
+                    <span v-if="module.isBuiltIn" class="text-[10px] px-1 py-0.5 rounded bg-info/20 text-info font-normal whitespace-nowrap">
+                      内置
+                    </span>
+                    <span v-else :class="['text-[10px] px-1 py-0.5 rounded bg-bg-primary font-normal whitespace-nowrap', getStatusClass(module.status)]">
                       {{ module.status }}
                     </span>
                     
-                    <div class="hidden group-hover/module:flex items-center gap-0.5">
+                    <div class="hidden group-hover/module:flex items-center gap-0.5" v-if="!module.isBuiltIn">
                       <!-- 移动到文件夹下拉菜单 -->
                       <el-dropdown trigger="click" @command="(cmd: any) => moveModule(module, cmd)">
                         <button

@@ -370,6 +370,10 @@ func (s *SNMPMIBService) DeleteMIBModule(ctx context.Context, moduleID uint) err
 		return fmt.Errorf("模块不存在: ID %d", moduleID)
 	}
 
+	if module.IsBuiltIn {
+		return fmt.Errorf("内置核心库模块禁止删除")
+	}
+
 	moduleName := module.Name
 
 	// 执行删除
@@ -466,6 +470,10 @@ func (s *SNMPMIBService) RenameMIBFolder(ctx context.Context, id uint, name stri
 		return fmt.Errorf("文件夹不存在: ID %d", id)
 	}
 
+	if folder.Name == "内置核心库" {
+		return fmt.Errorf("内置核心库文件夹禁止重命名")
+	}
+
 	if folder.Name == name {
 		return nil
 	}
@@ -499,6 +507,10 @@ func (s *SNMPMIBService) DeleteMIBFolder(ctx context.Context, id uint) error {
 		return fmt.Errorf("文件夹不存在: ID %d", id)
 	}
 
+	if folder.Name == "内置核心库" {
+		return fmt.Errorf("内置核心库文件夹禁止删除")
+	}
+
 	if err := s.repo.DeleteFolder(id); err != nil {
 		logger.Error("SNMP", "-", "删除 MIB 文件夹失败: ID=%d, %v", id, err)
 		return fmt.Errorf("删除 MIB 文件夹失败: %v", err)
@@ -519,6 +531,10 @@ func (s *SNMPMIBService) MoveMIBModuleToFolder(ctx context.Context, moduleID uin
 	}
 	if module == nil {
 		return fmt.Errorf("模块不存在: ID %d", moduleID)
+	}
+
+	if module.IsBuiltIn {
+		return fmt.Errorf("内置核心库模块禁止移动")
 	}
 
 	if folderID != nil {
@@ -785,6 +801,11 @@ func (s *SNMPMIBService) GetMIBNode(ctx context.Context, nodeID uint) (*MIBNodeV
 
 // CreateMIBNode 手动创建 MIB 节点
 func (s *SNMPMIBService) CreateMIBNode(ctx context.Context, req CreateMIBNodeRequest) error {
+	moduleInfo, err := s.repo.GetModuleByID(req.ModuleID)
+	if err == nil && moduleInfo != nil && moduleInfo.IsBuiltIn {
+		return fmt.Errorf("内置核心库模块禁止添加节点")
+	}
+
 	node := &models.MIBNode{
 		ModuleID:    &req.ModuleID,
 		OID:         req.OID,
@@ -809,6 +830,14 @@ func (s *SNMPMIBService) CreateMIBNode(ctx context.Context, req CreateMIBNodeReq
 
 // UpdateMIBNode 更新 MIB 节点
 func (s *SNMPMIBService) UpdateMIBNode(ctx context.Context, nodeID uint, req UpdateMIBNodeRequest) error {
+	nodeInfo, err := s.repo.GetNodeByID(nodeID)
+	if err == nil && nodeInfo != nil && nodeInfo.ModuleID != nil {
+		moduleInfo, err := s.repo.GetModuleByID(*nodeInfo.ModuleID)
+		if err == nil && moduleInfo != nil && moduleInfo.IsBuiltIn {
+			return fmt.Errorf("内置核心库模块节点禁止修改")
+		}
+	}
+
 	node := &models.MIBNode{
 		Name:        req.Name,
 		Description: req.Description,
@@ -829,6 +858,14 @@ func (s *SNMPMIBService) UpdateMIBNode(ctx context.Context, nodeID uint, req Upd
 
 // DeleteMIBNode 删除 MIB 节点
 func (s *SNMPMIBService) DeleteMIBNode(ctx context.Context, nodeID uint) error {
+	nodeInfo, err := s.repo.GetNodeByID(nodeID)
+	if err == nil && nodeInfo != nil && nodeInfo.ModuleID != nil {
+		moduleInfo, err := s.repo.GetModuleByID(*nodeInfo.ModuleID)
+		if err == nil && moduleInfo != nil && moduleInfo.IsBuiltIn {
+			return fmt.Errorf("内置核心库模块节点禁止删除")
+		}
+	}
+
 	if err := s.mibManager.DeleteNode(nodeID); err != nil {
 		logger.Error("SNMP", "-", "删除 MIB 节点失败: ID=%d, %v", nodeID, err)
 		return fmt.Errorf("删除节点失败: %v", err)

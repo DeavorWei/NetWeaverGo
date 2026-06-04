@@ -401,7 +401,7 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 		if po.err != nil {
 			errType := "parse"
 			if strings.Contains(po.err.Error(), "dependency") || strings.Contains(po.err.Error(), "依赖") {
-				errType = "dependency"
+				errType := "dependency"
 			}
 			result.Errors = append(result.Errors, FileImportError{
 				FileName:  fileName,
@@ -409,6 +409,7 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 				ErrorType: errType,
 			})
 			result.FailedCount++
+			_ = os.Remove(po.filePath) // 解析失败，清理已物理复制的文件
 			continue
 		}
 
@@ -462,9 +463,11 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 	for _, mn := range allModuleNodes {
 		// 查找对应的解析结果以获取模块信息
 		var moduleInfo *models.MIBModule
+		var copiedFilePath string
 		for _, po := range parseOutputs {
 			if po.result != nil && po.result.Module.Name == mn.moduleName {
 				moduleInfo = po.result.Module
+				copiedFilePath = po.filePath
 				break
 			}
 		}
@@ -473,7 +476,16 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 		}
 
 		// 批量保存节点
-		if err := m.SaveNodesBatch(ctx, moduleInfo, mn.nodes, opts.OverwriteExisting, opts.FolderID); err != nil {
+		err := m.SaveNodesBatch(ctx, moduleInfo, mn.nodes, opts.OverwriteExisting, opts.FolderID)
+		
+		// 新增：如果保存失败，或者因为不覆盖而跳过保存 (ID 仍为 0)，清理已物理复制的文件
+		if err != nil || moduleInfo.ID == 0 {
+			if copiedFilePath != "" {
+				_ = os.Remove(copiedFilePath)
+			}
+		}
+
+		if err != nil {
 			result.Errors = append(result.Errors, FileImportError{
 				FileName:  mn.moduleName,
 				Error:     err.Error(),
@@ -1231,6 +1243,15 @@ func (m *MIBManager) EnsureCoreMIBsLoaded(ctx context.Context) {
 			continue
 		}
 		fileName := entry.Name()
+
+		// 新增提前对比逻辑：推测模块名等于无后缀的文件名
+		moduleName := strings.TrimSuffix(fileName, ".mib")
+		existingMod, err := m.mibRepo.GetModuleByName(moduleName)
+		if err == nil && existingMod != nil && existingMod.IsBuiltIn {
+			// 如果数据库里已经有了这个内置库，直接跳过，连临时文件都不用释放，提高性能并避免产生冗余
+			continue
+		}
+
 		content, err := coreMIBsFS.ReadFile("mibs/" + fileName)
 		if err != nil {
 			logger.Warn("SNMP-MIB", "-", "读取内置文件失败 %s: %v", fileName, err)
@@ -1254,8 +1275,7 @@ func (m *MIBManager) EnsureCoreMIBsLoaded(ctx context.Context) {
 	folder, err := m.mibRepo.GetFolderByName(folderName)
 	if err != nil || folder == nil {
 		folder = &models.MIBFolder{
-			Name:        folderName,
-			Description: "系统内置的标准 MIB 核心库",
+			Name: folderName,
 		}
 		if err := m.mibRepo.SaveFolder(folder); err != nil {
 			logger.Error("SNMP-MIB", "-", "创建内置核心库文件夹失败: %v", err)
