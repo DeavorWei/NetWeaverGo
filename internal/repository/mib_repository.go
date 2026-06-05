@@ -251,3 +251,52 @@ func (r *GormMIBRepository) GetAllNodes() ([]models.MIBNode, error) {
 	err := r.db.Order("oid ASC").Find(&nodes).Error
 	return nodes, err
 }
+
+func (r *GormMIBRepository) GetNodesBatch(offset, limit int) ([]models.MIBNode, error) {
+	var nodes []models.MIBNode
+	err := r.db.Order("oid ASC").Offset(offset).Limit(limit).Find(&nodes).Error
+	return nodes, err
+}
+
+// ============================================================================
+// 批量查询与事务管理
+// ============================================================================
+
+func (r *GormMIBRepository) CountChildNodesBatch(parentOIDs []string) (map[string]int64, error) {
+	result := make(map[string]int64)
+	if len(parentOIDs) == 0 {
+		return result, nil
+	}
+
+	type Result struct {
+		ParentOID string
+		Count     int64
+	}
+	var counts []Result
+
+	err := r.db.Model(&models.MIBNode{}).
+		Select("parent_oid as parent_oid, count(id) as count").
+		Where("parent_oid IN ?", parentOIDs).
+		Group("parent_oid").
+		Scan(&counts).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, c := range counts {
+		result[c.ParentOID] = c.Count
+	}
+	return result, nil
+}
+
+func (r *GormMIBRepository) WithTx(tx *gorm.DB) MIBRepository {
+	if tx == nil {
+		return r
+	}
+	return &GormMIBRepository{db: tx}
+}
+
+func (r *GormMIBRepository) BeginTx() *gorm.DB {
+	return r.db.Begin()
+}

@@ -134,6 +134,14 @@ type MIBRepository interface {
 	SearchNodes(query string) ([]models.MIBNode, error)
 	SearchNodesInModule(moduleID uint, query string) ([]models.MIBNode, error)
 	GetAllNodes() ([]models.MIBNode, error)
+	GetNodesBatch(offset, limit int) ([]models.MIBNode, error)
+
+	// 批量查询
+	CountChildNodesBatch(parentOIDs []string) (map[string]int64, error)
+
+	// 事务支持
+	WithTx(tx *gorm.DB) MIBRepository
+	BeginTx() *gorm.DB
 }
 
 // ============================================================================
