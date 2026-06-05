@@ -5,6 +5,7 @@ package snmp
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"io"
 	"os"
