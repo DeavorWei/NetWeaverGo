@@ -52,7 +52,7 @@ const modulesLoading = ref(false)
 const folders = ref<MIBFolderVM[]>([])
 const foldersLoading = ref(false)
 const expandedFolders = ref<Record<string | number, boolean>>({
-  'uncategorized': true
+  'uncategorized': false
 })
 
 /** 导入目标文件夹 ID */
@@ -158,7 +158,7 @@ async function loadFolders() {
     folders.value = list
     list.forEach(f => {
       if (expandedFolders.value[f.id] === undefined) {
-        expandedFolders.value[f.id] = true
+        expandedFolders.value[f.id] = false
       }
     })
   } catch (error) {
