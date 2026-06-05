@@ -146,6 +146,14 @@ const groupedModules = computed(() => {
   return groups
 })
 
+/** 过滤掉内置核心库的可用文件夹列表 */
+const availableFolders = computed(() => folders.value.filter(f => f.name !== '内置核心库'))
+
+/** 获取可用于移动的日标文件夹 */
+function getMoveTargetFolders(currentFolderId: number | string | null) {
+  return availableFolders.value.filter(f => f.id !== currentFolderId)
+}
+
 // ==================== 方法 ====================
 
 /**
@@ -896,7 +904,7 @@ watch(importType, () => {
                           <el-dropdown-menu>
                             <el-dropdown-item :command="null">未分类</el-dropdown-item>
                             <el-dropdown-item 
-                              v-for="f in folders.filter(x => x.id !== folder.id && x.name !== '内置核心库')" 
+                              v-for="f in getMoveTargetFolders(folder.id)" 
                               :key="f.id" 
                               :command="f.id"
                             >
@@ -996,7 +1004,7 @@ watch(importType, () => {
                         </button>
                         <template #dropdown>
                           <el-dropdown-menu>
-                            <el-dropdown-item v-for="f in folders.filter(x => x.name !== '内置核心库')" :key="f.id" :command="f.id">
+                            <el-dropdown-item v-for="f in getMoveTargetFolders(null)" :key="f.id" :command="f.id">
                               {{ f.name }}
                             </el-dropdown-item>
                           </el-dropdown-menu>
