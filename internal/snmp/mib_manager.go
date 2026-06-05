@@ -688,9 +688,9 @@ func (m *MIBManager) saveNodesBatchInTx(ctx context.Context, repoTx repository.M
 		}
 
 		if overwrite {
-			logger.Info("SNMP-MIB", "-", "检测到同名模块，将覆盖: 模块=%s, 旧ID=%d", module.Name, existing.ID)
+			logger.Info("SNMP-MIB", "-", "去重合并: 检测到同名模块，将覆盖更新: 模块=%s, 旧ID=%d", module.Name, existing.ID)
 		} else {
-			logger.Info("SNMP-MIB", "-", "检测到同名模块，跳过: 模块=%s", module.Name)
+			logger.Info("SNMP-MIB", "-", "去重合并: 检测到同名模块，跳过导入: 模块=%s", module.Name)
 			return nil
 		}
 	}
