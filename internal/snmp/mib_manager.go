@@ -608,13 +608,20 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 		}
 
 		if err != nil {
+			if err == ErrEmptyModule || err == ErrSkipOverwrite {
+				result.SkippedCount++
+				if result.SuccessCount > 0 {
+					result.SuccessCount--
+				}
+				continue
+			}
+
 			result.Errors = append(result.Errors, FileImportError{
 				FileName:  mn.moduleName,
 				Error:     err.Error(),
 				ErrorType: "database",
 			})
 			result.FailedCount++
-			// [M3] 防止 SuccessCount 变为负数
 			if result.SuccessCount > 0 {
 				result.SuccessCount--
 			}
@@ -667,11 +674,20 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 	return result, nil
 }
 
+// ErrEmptyModule 节点数为空时的特化错误，用于统计跳过数
+var ErrEmptyModule = errors.New("MIB 模块无有效节点数据")
+
+// ErrSkipOverwrite 检测到同名模块且未开启覆盖时返回的特化错误
+var ErrSkipOverwrite = errors.New("跳过同名模块")
+
 // saveNodesBatchInTx 在已有事务内保存单个模块的节点（不开启新事务、不加锁）
 // 专供 ImportMIBFilesBatch 的全局事务调用，避免每个模块独立事务的 fsync 开销
 func (m *MIBManager) saveNodesBatchInTx(ctx context.Context, repoTx repository.MIBRepository, module *models.MIBModule, nodes []models.MIBNode, overwrite bool, folderID *uint) error {
 	if len(nodes) == 0 || module == nil {
-		return nil
+		if module != nil {
+			logger.Info("SNMP-MIB", "-", "检测到模块无节点数据，跳过导入: 模块=%s", module.Name)
+		}
+		return ErrEmptyModule
 	}
 
 	select {
@@ -691,7 +707,7 @@ func (m *MIBManager) saveNodesBatchInTx(ctx context.Context, repoTx repository.M
 			logger.Info("SNMP-MIB", "-", "去重合并: 检测到同名模块，将覆盖更新: 模块=%s, 旧ID=%d", module.Name, existing.ID)
 		} else {
 			logger.Info("SNMP-MIB", "-", "去重合并: 检测到同名模块，跳过导入: 模块=%s", module.Name)
-			return nil
+			return ErrSkipOverwrite
 		}
 	}
 
