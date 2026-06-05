@@ -426,8 +426,20 @@ async function executeImport() {
     showImportModal.value = false
   } catch (error: any) {
     logger.error(`SNMP: 导入 MIB 失败 - ${error}`)
-    const errorMsg = typeof error === 'string' ? error : (error.message || '导入 MIB 失败')
-    if (errorMsg.includes('导入失败')) {
+    
+    let errorMsg = '导入 MIB 失败'
+    if (typeof error === 'string') {
+      try {
+        const parsed = JSON.parse(error)
+        errorMsg = parsed.message || error
+      } catch (e) {
+        errorMsg = error
+      }
+    } else if (error && error.message) {
+      errorMsg = error.message
+    }
+
+    if (errorMsg.includes('导入失败') || errorMsg.includes('一致')) {
       ElMessage.warning(errorMsg)
       showImportModal.value = false
     } else {

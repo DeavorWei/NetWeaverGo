@@ -512,27 +512,20 @@ func (s *SNMPMIBService) DeleteMIBFolder(ctx context.Context, id uint) error {
 		return fmt.Errorf("内置核心库文件夹禁止删除")
 	}
 
-	// 1. 获取文件夹下的所有模块并调用 mibManager 删除 (这会删除物理文件和缓存)
-	modules, err := s.repo.GetModulesByFolder(id)
-	if err == nil {
-		for _, m := range modules {
-			_ = s.mibManager.DeleteModule(m.ID)
-		}
-	} else {
-		logger.Warn("SNMP", "-", "获取待删除文件夹中的模块失败: %v", err)
+	// 1. 获取物理文件夹目录并删除所有物理文件
+	folderDir := filepath.Join(s.mibManager.GetMIBStoreDir(), folder.Name)
+	if err := os.RemoveAll(folderDir); err != nil {
+		logger.Warn("SNMP", "-", "删除文件夹物理目录失败: %v", err)
 	}
 
-	// 2. 删除物理文件夹目录
-	folderDir := filepath.Join(s.mibManager.GetMIBStoreDir(), folder.Name)
-	_ = os.RemoveAll(folderDir)
-
-	// 3. 删除数据库记录
+	// 2. 批量删除数据库记录（会自动级联删除文件夹下的所有模块和节点）
 	if err := s.repo.DeleteFolder(id); err != nil {
 		logger.Error("SNMP", "-", "删除 MIB 文件夹失败: ID=%d, %v", id, err)
 		return fmt.Errorf("删除 MIB 文件夹失败: %v", err)
 	}
 
-	// 重建缓存以释放已删除节点
+	// 3. 重建核心缓存与解析器缓存以释放已删除节点
+	_ = s.mibManager.RebuildCache()
 	_ = s.oidResolver.RebuildCache()
 
 	logger.Info("SNMP", "-", "MIB 文件夹已删除: ID=%d, 名称=%s", id, folder.Name)
