@@ -118,6 +118,7 @@ type MIBRepository interface {
 	SaveFolder(folder *models.MIBFolder) error
 	DeleteFolder(id uint) error
 	MoveModuleToFolder(moduleID uint, folderID *uint) error
+	GetModulesByFolder(folderID uint) ([]models.MIBModule, error)
 
 	// 节点管理
 	GetNodeByID(id uint) (*models.MIBNode, error)

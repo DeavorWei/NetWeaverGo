@@ -414,25 +414,7 @@ const nodeByID = computed(() => {
   return map;
 });
 
-const roleOptions = computed(() => {
-  const values = new Set<string>();
-  for (const node of graph.value.nodes || []) {
-    if (node.role) {
-      values.add(node.role);
-    }
-  }
-  return Array.from(values).sort();
-});
 
-const siteOptions = computed(() => {
-  const values = new Set<string>();
-  for (const node of graph.value.nodes || []) {
-    if (node.site) {
-      values.add(node.site);
-    }
-  }
-  return Array.from(values).sort();
-});
 
 // 转换数据格式供图形组件使用
 const graphNodes = computed(() =>
@@ -569,9 +551,7 @@ const emptyGraphReasons = computed(() => {
   return reasons;
 });
 
-function countByStatus(status: string) {
-  return filteredEdges.value.filter((edge) => edge.status === status).length;
-}
+
 
 function displayNodeLabel(nodeID: string) {
   const node = nodeByID.value.get(nodeID);

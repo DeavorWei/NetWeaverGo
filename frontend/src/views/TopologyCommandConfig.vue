@@ -427,7 +427,7 @@ async function loadVendorConfig(vendor: string) {
     // 默认选择第一个字段
     if (normalized.length > 0) {
       if (!normalized.some(item => item.fieldKey === selectedFieldKey.value)) {
-        selectedFieldKey.value = normalized[0].fieldKey;
+        selectedFieldKey.value = normalized[0]?.fieldKey || "";
       }
     } else {
       selectedFieldKey.value = "";
@@ -489,7 +489,7 @@ async function resetVendor() {
     // 重置后确保选中有效字段
     if (normalized.length > 0) {
       if (!normalized.some(item => item.fieldKey === selectedFieldKey.value)) {
-        selectedFieldKey.value = normalized[0].fieldKey;
+        selectedFieldKey.value = normalized[0]?.fieldKey || "";
       }
     } else {
       selectedFieldKey.value = "";

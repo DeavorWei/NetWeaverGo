@@ -424,15 +424,21 @@ async function executeImport() {
     }
     ElMessage.success('MIB 导入成功')
     showImportModal.value = false
-    await loadFolders()
-    await loadModules()
-    await loadCacheStats()
-  } catch (error) {
+  } catch (error: any) {
     logger.error(`SNMP: 导入 MIB 失败 - ${error}`)
-    ElMessage.error('导入 MIB 失败')
+    const errorMsg = typeof error === 'string' ? error : (error.message || '导入 MIB 失败')
+    if (errorMsg.includes('导入失败')) {
+      ElMessage.warning(errorMsg)
+      showImportModal.value = false
+    } else {
+      ElMessage.error(errorMsg)
+    }
   } finally {
     importing.value = false
     importProgress.value = null
+    await loadFolders()
+    await loadModules()
+    await loadCacheStats()
   }
 }
 
@@ -878,7 +884,7 @@ watch(importType, () => {
                           <el-dropdown-menu>
                             <el-dropdown-item :command="null">未分类</el-dropdown-item>
                             <el-dropdown-item 
-                              v-for="f in folders.filter(x => x.id !== folder.id)" 
+                              v-for="f in folders.filter(x => x.id !== folder.id && x.name !== '内置核心库')" 
                               :key="f.id" 
                               :command="f.id"
                             >
@@ -978,7 +984,7 @@ watch(importType, () => {
                         </button>
                         <template #dropdown>
                           <el-dropdown-menu>
-                            <el-dropdown-item v-for="f in folders" :key="f.id" :command="f.id">
+                            <el-dropdown-item v-for="f in folders.filter(x => x.name !== '内置核心库')" :key="f.id" :command="f.id">
                               {{ f.name }}
                             </el-dropdown-item>
                           </el-dropdown-menu>
@@ -1278,6 +1284,7 @@ watch(importType, () => {
                 :key="folder.id"
                 :label="folder.name"
                 :value="folder.id"
+                :disabled="folder.name === '内置核心库'"
               />
             </el-select>
           </div>
@@ -1329,13 +1336,13 @@ watch(importType, () => {
               <div class="flex items-center justify-between text-sm">
                 <span class="text-text-muted">批量导入进度</span>
                 <span class="text-text-primary font-semibold">
-                  {{ importProgress.processedFiles ?? 0 }} / {{ importProgress.totalFiles }} 文件
+                  {{ importProgress.processedFiles ?? 0 }} / {{ importProgress.totalFiles }} 文件 ({{ (importProgress.progress ?? 0).toFixed(0) }}%)
                 </span>
               </div>
               <div class="h-2 bg-bg-primary rounded-full overflow-hidden">
                 <div
                   class="h-full bg-accent transition-all duration-300"
-                  :style="{ width: `${((importProgress.processedFiles ?? 0) / (importProgress.totalFiles ?? 1)) * 100}%` }"
+                  :style="{ width: `${importProgress.progress ?? 0}%` }"
                 ></div>
               </div>
               <div class="flex items-center justify-between text-xs text-text-muted">

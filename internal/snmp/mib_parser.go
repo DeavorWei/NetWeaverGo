@@ -141,7 +141,10 @@ func (p *MIBParser) ParseFileConcurrent(ctx context.Context, filePath string, de
 	logger.Debug("SNMP-Parser", "-", "MIB 并发加载完成: 耗时=%v", time.Since(loadStartTime))
 
 	// 4. 转换为内部数据结构（不设置 p.loadedMib，保持无状态）
-	result := p.parseMibData(loadedMib, filePath)
+	result, err := p.parseMibData(loadedMib, filePath, true)
+	if err != nil {
+		return nil, err
+	}
 
 	totalLatency := time.Since(parseStartTime)
 	logger.Info("SNMP-Parser", "-", "MIB 并发解析完成: 文件=%s, 模块=%s, 节点数=%d, 错误数=%d, 总耗时=%v",
@@ -227,7 +230,10 @@ func (p *MIBParser) parseFileLocked(ctx context.Context, filePath string, depend
 	p.loadedMib = loadedMib
 
 	// 6. 转换为内部数据结构
-	result := p.parseMibData(loadedMib, filePath)
+	result, err := p.parseMibData(loadedMib, filePath, true)
+	if err != nil {
+		return nil, err
+	}
 
 	totalLatency := time.Since(parseStartTime)
 	logger.Info("SNMP-Parser", "-", "MIB 解析完成: 文件=%s, 模块=%s, 节点数=%d, 错误数=%d, 总耗时=%v",
@@ -249,7 +255,7 @@ func (p *MIBParser) parseFileLocked(ctx context.Context, filePath string, depend
 }
 
 // parseMibData 从 gomib.Mib 提取所有节点
-func (p *MIBParser) parseMibData(loadedMib *mib.Mib, filePath string) *MIBImportResult {
+func (p *MIBParser) parseMibData(loadedMib *mib.Mib, filePath string, allowFallback bool) (*MIBImportResult, error) {
 	result := &MIBImportResult{
 		Errors: []MIBParseError{},
 	}
@@ -269,7 +275,7 @@ func (p *MIBParser) parseMibData(loadedMib *mib.Mib, filePath string) *MIBImport
 		result.Errors = append(result.Errors, MIBParseError{
 			Message: "未找到任何 MIB 模块",
 		})
-		return result
+		return result, nil
 	}
 
 	// 找出与当前解析的文件路径匹配的模块作为主模块
@@ -288,7 +294,11 @@ func (p *MIBParser) parseMibData(loadedMib *mib.Mib, filePath string) *MIBImport
 
 	// 如果未找到路径完全匹配的，则尝试回退到第一个模块
 	if primaryModule == nil {
-		primaryModule = modules[0]
+		if allowFallback {
+			primaryModule = modules[0]
+		} else {
+			return nil, fmt.Errorf("未能在解析结果中找到文件对应的模块: %s", filePath)
+		}
 	}
 
 	// 构建模块模型
@@ -331,7 +341,7 @@ func (p *MIBParser) parseMibData(loadedMib *mib.Mib, filePath string) *MIBImport
 	result.ErrorCount = len(parseErrors)
 	result.Errors = parseErrors
 
-	return result
+	return result, nil
 }
 
 // convertMibNodeToMIBNode 将 mib.Node 转换为 models.MIBNode
@@ -567,6 +577,67 @@ func (p *MIBParser) ClearModules() {
 	defer p.mu.Unlock()
 
 	p.loadedMib = nil
+}
+
+// ParseFilesBatchConcurrent 批量解析多个 MIB 文件，避免依赖重复解析
+func (p *MIBParser) ParseFilesBatchConcurrent(ctx context.Context, filePaths []string, depSource gomib.Source) (map[string]*MIBImportResult, error) {
+	// 检查上下文取消
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	parseStartTime := time.Now()
+	logger.Info("SNMP-Parser", "-", "开始全局批量解析 MIB 文件: 文件数=%d", len(filePaths))
+
+	// 1. 构建加载选项：批量文件源 + 共享依赖源
+	filesSrc, err := gomib.Files(filePaths...)
+	if err != nil {
+		logger.Error("SNMP-Parser", "-", "创建批量 MIB 文件源失败: %v", err)
+		return nil, fmt.Errorf("创建批量 MIB 文件源失败: %v", err)
+	}
+
+	opts := []gomib.LoadOption{
+		gomib.WithSource(filesSrc),
+		// 配置诊断级别：即使部分文件有错误也尽量返回（只在 Fatal 级别失败）
+		gomib.WithDiagnosticConfig(mib.DiagnosticConfig{FailAt: mib.SeverityFatal}),
+	}
+	if depSource != nil {
+		opts = append(opts, gomib.WithSource(depSource))
+		logger.Debug("SNMP-Parser", "-", "使用预构建依赖源进行批量解析")
+	}
+
+	// 2. 一次性加载所有 MIB 文件及其依赖
+	loadStartTime := time.Now()
+	loadedMib, err := gomib.Load(ctx, opts...)
+	if err != nil {
+		logger.Error("SNMP-Parser", "-", "批量加载 MIB 文件失败: 耗时=%v, 错误=%v",
+			time.Since(loadStartTime), err)
+		return nil, fmt.Errorf("批量解析 MIB 文件失败: %v", err)
+	}
+	logger.Debug("SNMP-Parser", "-", "MIB 批量加载完成: 耗时=%v", time.Since(loadStartTime))
+
+	// 3. 将全局加载结果拆分为各个文件的独立结果
+	results := make(map[string]*MIBImportResult)
+	
+	for _, fp := range filePaths {
+		// 调用现有的 parseMibData 提取单个文件的节点，不允许 fallback
+		res, err := p.parseMibData(loadedMib, fp, false)
+		if err != nil {
+			logger.Warn("SNMP-Parser", "-", "无法从批量结果中提取模块数据: 文件=%s, 错误=%v", fp, err)
+			continue
+		}
+		if res != nil && res.Module != nil {
+			results[fp] = res
+		}
+	}
+
+	totalLatency := time.Since(parseStartTime)
+	logger.Info("SNMP-Parser", "-", "MIB 批量解析全部完成: 成功提取文件数=%d, 总耗时=%v",
+		len(results), totalLatency)
+
+	return results, nil
 }
 
 // cleanDescription 过滤描述文本中多余的换行和连续空格，同时保留合法的段落换行

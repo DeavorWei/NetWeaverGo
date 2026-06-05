@@ -446,24 +446,52 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 	}
 
 	parseOutputs := make([]parseOutput, len(copiedPaths))
-	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(opts.Concurrency)
+	
+	// 尝试全局批量解析（优化路径）
+	batchStartTime := time.Now()
+	batchResults, batchErr := m.parser.ParseFilesBatchConcurrent(ctx, copiedPaths, depSource)
 
-	for i, fp := range copiedPaths {
-		i, fp := i, fp // 捕获循环变量
-		g.Go(func() error {
-			start := time.Now()
-			parseResult, err := m.parser.ParseFileConcurrent(gctx, fp, depSource)
-			parseOutputs[i] = parseOutput{
-				filePath: fp,
-				result:   parseResult,
-				err:      err,
-				duration: time.Since(start),
+	if batchErr == nil {
+		// 成功，将结果转为 parseOutputs 数组
+		for i, fp := range copiedPaths {
+			if res, ok := batchResults[fp]; ok {
+				parseOutputs[i] = parseOutput{
+					filePath: fp,
+					result:   res,
+					err:      nil,
+					duration: time.Since(batchStartTime), // 记录整体耗时即可
+				}
+			} else {
+				parseOutputs[i] = parseOutput{
+					filePath: fp,
+					result:   nil,
+					err:      fmt.Errorf("未在解析结果中找到模块信息"),
+					duration: time.Since(batchStartTime),
+				}
 			}
-			return nil // 不返回错误，让其他 goroutine 继续
-		})
+		}
+	} else {
+		logger.Warn("SNMP-MIB", "-", "批量解析失败(可能存在语法错误的坏文件), 降级回独立并发解析: %v", batchErr)
+		// 降级回独立并发解析
+		g, gctx := errgroup.WithContext(ctx)
+		g.SetLimit(opts.Concurrency)
+
+		for i, fp := range copiedPaths {
+			i, fp := i, fp // 捕获循环变量
+			g.Go(func() error {
+				start := time.Now()
+				parseResult, err := m.parser.ParseFileConcurrent(gctx, fp, depSource)
+				parseOutputs[i] = parseOutput{
+					filePath: fp,
+					result:   parseResult,
+					err:      err,
+					duration: time.Since(start),
+				}
+				return nil // 不返回错误，让其他 goroutine 继续
+			})
+		}
+		g.Wait() // 忽略 group 错误，我们通过 parseOutputs 收集结果
 	}
-	g.Wait() // 忽略 group 错误，我们通过 parseOutputs 收集结果
 
 	// 收集成功的解析结果
 	type moduleNodes struct {
@@ -523,7 +551,7 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 	logger.Info("SNMP-MIB", "-", "并发解析完成: 成功=%d, 失败=%d, 耗时=%v",
 		result.SuccessCount, result.FailedCount, time.Since(startTime))
 
-	// === 阶段三：批量保存节点（短锁） ===
+	// === 阶段三：批量保存节点（单事务优化） ===
 	if notifier != nil {
 		notifier.NotifyMIBImportProgress(MIBImportProgress{
 			BatchID:        batchID,
@@ -535,6 +563,23 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 			Message:        "正在批量保存 MIB 节点...",
 		})
 	}
+
+	// [性能优化] 使用单个全局事务包裹所有模块保存，将 N 次 fsync 降为 1 次
+	m.mu.Lock()
+	globalTx := m.mibRepo.BeginTx()
+	if globalTx.Error != nil {
+		m.mu.Unlock()
+		result.TotalDuration = time.Since(startTime).Milliseconds()
+		return result, fmt.Errorf("开启全局事务失败: %v", globalTx.Error)
+	}
+	globalRepoTx := m.mibRepo.WithTx(globalTx)
+	globalTxCommitted := false
+	defer func() {
+		if !globalTxCommitted {
+			globalTx.Rollback()
+		}
+		m.mu.Unlock()
+	}()
 
 	var allNodes []models.MIBNode
 	for _, mn := range allModuleNodes {
@@ -552,10 +597,10 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 			continue
 		}
 
-		// 批量保存节点
-		err := m.SaveNodesBatch(ctx, moduleInfo, mn.nodes, opts.OverwriteExisting, opts.FolderID)
-		
-		// 新增：如果保存失败，或者因为不覆盖而跳过保存 (ID 仍为 0)，清理已物理复制的文件
+		// [性能优化] 在全局事务内保存，避免每个模块独立事务开销
+		err := m.saveNodesBatchInTx(ctx, globalRepoTx, moduleInfo, mn.nodes, opts.OverwriteExisting, opts.FolderID)
+
+		// 如果保存失败，或者因为不覆盖而跳过保存 (ID 仍为 0)，清理已物理复制的文件
 		if err != nil || moduleInfo.ID == 0 {
 			if copiedFilePath != "" {
 				_ = os.Remove(copiedFilePath)
@@ -577,6 +622,13 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 		}
 		allNodes = append(allNodes, mn.nodes...)
 	}
+
+	// 统一提交全局事务
+	if err := globalTx.Commit().Error; err != nil {
+		result.TotalDuration = time.Since(startTime).Milliseconds()
+		return result, fmt.Errorf("提交全局事务失败: %v", err)
+	}
+	globalTxCommitted = true
 
 	// === 阶段四：缓存更新（独立锁） ===
 	if notifier != nil {
@@ -613,6 +665,94 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 	}
 
 	return result, nil
+}
+
+// saveNodesBatchInTx 在已有事务内保存单个模块的节点（不开启新事务、不加锁）
+// 专供 ImportMIBFilesBatch 的全局事务调用，避免每个模块独立事务的 fsync 开销
+func (m *MIBManager) saveNodesBatchInTx(ctx context.Context, repoTx repository.MIBRepository, module *models.MIBModule, nodes []models.MIBNode, overwrite bool, folderID *uint) error {
+	if len(nodes) == 0 || module == nil {
+		return nil
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	existing, _ := repoTx.GetModuleByName(module.Name)
+	if existing != nil {
+		if existing.IsBuiltIn {
+			logger.Info("SNMP-MIB", "-", "检测到同名模块为内置核心库，禁止覆盖跳过: 模块=%s", module.Name)
+			return fmt.Errorf("禁止覆盖内置核心库: %s", module.Name)
+		}
+
+		if overwrite {
+			logger.Info("SNMP-MIB", "-", "检测到同名模块，将覆盖: 模块=%s, 旧ID=%d", module.Name, existing.ID)
+		} else {
+			logger.Info("SNMP-MIB", "-", "检测到同名模块，跳过: 模块=%s", module.Name)
+			return nil
+		}
+	}
+
+	if existing != nil && overwrite {
+		if err := repoTx.DeleteNodesByModule(existing.ID); err != nil {
+			return fmt.Errorf("删除旧节点失败: %w", err)
+		}
+		if err := repoTx.DeleteModule(existing.ID); err != nil {
+			return fmt.Errorf("删除旧模块失败: %w", err)
+		}
+	}
+
+	// 设置文件夹 ID 并保存模块到数据库
+	module.ID = 0
+	module.FolderID = folderID
+	if folderID != nil {
+		logger.Debug("SNMP-MIB", "-", "SaveNodesBatch: 模块 %s 设置 FolderID=%d", module.Name, *folderID)
+	} else {
+		logger.Debug("SNMP-MIB", "-", "SaveNodesBatch: 模块 %s 设置 FolderID=nil", module.Name)
+	}
+	if err := repoTx.SaveModule(module); err != nil {
+		return fmt.Errorf("保存 MIB 模块失败: %w", err)
+	}
+	logger.Debug("SNMP-MIB", "-", "模块保存完成: ID=%d, 名称=%s, FolderID=%v", module.ID, module.Name, module.FolderID)
+
+	moduleID := module.ID
+	for i := range nodes {
+		nodes[i].ID = 0
+		nodes[i].ModuleID = &moduleID
+	}
+
+	virtualNodes, err := m.detectAndCreateVirtualParentNodes(ctx, repoTx, nodes)
+	if err != nil {
+		logger.Warn("SNMP-MIB", "-", "检测虚拟父节点失败: %v", err)
+	} else if len(virtualNodes) > 0 {
+		if err := repoTx.SaveNodes(virtualNodes); err != nil {
+			logger.Warn("SNMP-MIB", "-", "保存虚拟父节点失败: %v", err)
+		} else {
+			logger.Info("SNMP-MIB", "-", "虚拟父节点创建完成: 数量=%d", len(virtualNodes))
+		}
+	}
+
+	if err := m.mergeVirtualNodes(repoTx, nodes); err != nil {
+		return fmt.Errorf("合并虚拟节点遇到严重失败: %v", err)
+	}
+
+	newNodes := make([]models.MIBNode, 0, len(nodes))
+	for _, node := range nodes {
+		if node.ID == 0 {
+			newNodes = append(newNodes, node)
+		}
+	}
+
+	if len(newNodes) > 0 {
+		if err := repoTx.SaveNodes(newNodes); err != nil {
+			return fmt.Errorf("保存 MIB 节点失败: %w", err)
+		}
+		logger.Debug("SNMP-MIB", "-", "节点保存完成: 数量=%d", len(newNodes))
+	}
+
+	return nil
 }
 
 // SaveNodesBatch 批量保存节点
@@ -1181,6 +1321,7 @@ func (m *MIBManager) CacheStats() (nodeCacheLen, nameCacheLen int) {
 
 // detectAndCreateVirtualParentNodes 检测并创建缺失的父节点
 // 当导入的 MIB 节点引用了其他模块的父节点时，创建虚拟父节点以确保树结构完整
+// [性能优化] 使用批量查询替代逐条查询，大幅减少数据库 IO
 func (m *MIBManager) detectAndCreateVirtualParentNodes(ctx context.Context, repo repository.MIBRepository, nodes []models.MIBNode) ([]models.MIBNode, error) {
 	requiredParentOIDs := make(map[string]bool)
 
@@ -1192,20 +1333,38 @@ func (m *MIBManager) detectAndCreateVirtualParentNodes(ctx context.Context, repo
 	}
 
 	// 移除当前批次中已存在的 OID
+	nodeOIDSet := make(map[string]bool, len(nodes))
 	for _, node := range nodes {
-		delete(requiredParentOIDs, node.OID)
+		nodeOIDSet[node.OID] = true
+	}
+	for oid := range requiredParentOIDs {
+		if nodeOIDSet[oid] {
+			delete(requiredParentOIDs, oid)
+		}
 	}
 
-	// 检查数据库中是否存在，收集需要创建的虚拟节点
+	// [性能优化] 批量查询数据库中已存在的 OID
+	parentOIDList := make([]string, 0, len(requiredParentOIDs))
+	for oid := range requiredParentOIDs {
+		parentOIDList = append(parentOIDList, oid)
+	}
+
+	existingSet := make(map[string]bool)
+	if len(parentOIDList) > 0 {
+		existingNodes, err := repo.GetNodesByOIDs(parentOIDList)
+		if err != nil {
+			logger.Warn("SNMP-MIB", "-", "批量查询父节点失败: %v", err)
+		} else {
+			for _, n := range existingNodes {
+				existingSet[n.OID] = true
+			}
+		}
+	}
+
+	// 收集需要创建的虚拟节点
 	virtualNodes := []models.MIBNode{}
 	for oid := range requiredParentOIDs {
-		existing, err := repo.GetNodeByOID(oid)
-		if err != nil {
-			logger.Warn("SNMP-MIB", "-", "查询父节点失败: OID=%s, 错误=%v", oid, err)
-			continue
-		}
-		if existing == nil {
-			// 创建虚拟节点
+		if !existingSet[oid] {
 			virtualNode := models.MIBNode{
 				OID:         oid,
 				Name:        m.generateVirtualNodeName(oid),
@@ -1222,47 +1381,47 @@ func (m *MIBManager) detectAndCreateVirtualParentNodes(ctx context.Context, repo
 	// 递归处理虚拟节点的父节点
 	allVirtualNodes := []models.MIBNode{}
 	allVirtualNodes = append(allVirtualNodes, virtualNodes...)
+	allVirtualOIDSet := make(map[string]bool, len(virtualNodes))
+	for _, vn := range virtualNodes {
+		allVirtualOIDSet[vn.OID] = true
+	}
 
 	// 递归创建祖先虚拟节点
 	for len(virtualNodes) > 0 {
-		ancestorVirtualNodes := []models.MIBNode{}
+		// 收集所有需要检查的祖先 OID
+		ancestorOIDsToCheck := make(map[string]bool)
 		for _, vnode := range virtualNodes {
 			if vnode.ParentOID == "" {
-				continue // 已到达根节点
+				continue
 			}
+			if !nodeOIDSet[vnode.ParentOID] && !allVirtualOIDSet[vnode.ParentOID] && !existingSet[vnode.ParentOID] {
+				ancestorOIDsToCheck[vnode.ParentOID] = true
+			}
+		}
 
-			// 检查父节点是否存在
-			parentExists := false
-			// 检查当前批次节点
-			for _, n := range nodes {
-				if n.OID == vnode.ParentOID {
-					parentExists = true
-					break
-				}
-			}
-			// 检查已收集的虚拟节点
-			if !parentExists {
-				for _, vn := range allVirtualNodes {
-					if vn.OID == vnode.ParentOID {
-						parentExists = true
-						break
-					}
-				}
-			}
-			// 检查数据库
-			if !parentExists {
-				existing, err := repo.GetNodeByOID(vnode.ParentOID)
-				if err == nil && existing != nil {
-					parentExists = true
-				}
-			}
+		if len(ancestorOIDsToCheck) == 0 {
+			break
+		}
 
-			// 如果父节点不存在，创建祖先虚拟节点
-			if !parentExists {
+		// [性能优化] 批量查询祖先 OID
+		ancestorOIDList := make([]string, 0, len(ancestorOIDsToCheck))
+		for oid := range ancestorOIDsToCheck {
+			ancestorOIDList = append(ancestorOIDList, oid)
+		}
+		ancestorExisting, err := repo.GetNodesByOIDs(ancestorOIDList)
+		if err == nil {
+			for _, n := range ancestorExisting {
+				existingSet[n.OID] = true
+			}
+		}
+
+		ancestorVirtualNodes := []models.MIBNode{}
+		for oid := range ancestorOIDsToCheck {
+			if !existingSet[oid] {
 				ancestorNode := models.MIBNode{
-					OID:         vnode.ParentOID,
-					Name:        m.generateVirtualNodeName(vnode.ParentOID),
-					ParentOID:   m.calculateParentOID(vnode.ParentOID),
+					OID:         oid,
+					Name:        m.generateVirtualNodeName(oid),
+					ParentOID:   m.calculateParentOID(oid),
 					NodeType:    "node",
 					Source:      "virtual",
 					ModuleID:    nil,
@@ -1272,11 +1431,12 @@ func (m *MIBManager) detectAndCreateVirtualParentNodes(ctx context.Context, repo
 			}
 		}
 
-		// 添加祖先虚拟节点到总列表
 		if len(ancestorVirtualNodes) > 0 {
 			allVirtualNodes = append(allVirtualNodes, ancestorVirtualNodes...)
+			for _, vn := range ancestorVirtualNodes {
+				allVirtualOIDSet[vn.OID] = true
+			}
 		}
-		// 继续处理祖先的祖先
 		virtualNodes = ancestorVirtualNodes
 	}
 
@@ -1309,34 +1469,63 @@ func (m *MIBManager) calculateParentOID(oid string) string {
 
 // mergeVirtualNodes 合并虚拟节点与真实节点
 // 当导入真实节点时，如果存在对应的虚拟节点，则更新为真实节点
+// [性能优化] 使用批量查询替代逐条查询，将 N 次 SELECT 降为 1 次
 func (m *MIBManager) mergeVirtualNodes(repo repository.MIBRepository, nodes []models.MIBNode) error {
+	if len(nodes) == 0 {
+		return nil
+	}
+
+	// [性能优化] 收集所有 OID，一次性批量查询
+	oids := make([]string, len(nodes))
+	for i, n := range nodes {
+		oids[i] = n.OID
+	}
+
+	existingNodes, err := repo.GetNodesByOIDs(oids)
+	if err != nil {
+		logger.Warn("SNMP-MIB", "-", "批量查询已有节点失败: %v", err)
+		return nil // 查询失败时不阻断导入，仅跳过合并
+	}
+
+	// 构建 OID → 虚拟节点 映射（仅 source=virtual 的节点）
+	virtualMap := make(map[string]*models.MIBNode, len(existingNodes))
+	for i := range existingNodes {
+		if existingNodes[i].Source == "virtual" {
+			virtualMap[existingNodes[i].OID] = &existingNodes[i]
+		}
+	}
+
+	if len(virtualMap) == 0 {
+		return nil // 没有虚拟节点需要合并
+	}
+
+	// 在内存中匹配并合并
 	var mergeErrors []error
 	for i := range nodes {
-		existing, err := repo.GetNodeByOID(nodes[i].OID)
-		if err != nil {
+		existing, ok := virtualMap[nodes[i].OID]
+		if !ok {
 			continue
 		}
-		if existing != nil && existing.Source == "virtual" {
-			// 更新虚拟节点为真实节点
-			existing.Name = nodes[i].Name
-			existing.NodeType = nodes[i].NodeType
-			existing.Syntax = nodes[i].Syntax
-			existing.Access = nodes[i].Access
-			existing.Status = nodes[i].Status
-			existing.Description = nodes[i].Description
-			existing.Source = nodes[i].Source
-			existing.ModuleID = nodes[i].ModuleID
 
-			if err := repo.SaveNode(existing); err != nil {
-				logger.Warn("SNMP-MIB", "-", "合并虚拟节点失败: OID=%s, 错误=%v", nodes[i].OID, err)
-				mergeErrors = append(mergeErrors, fmt.Errorf("OID=%s 错误=%v", nodes[i].OID, err))
-				continue
-			}
+		// 更新虚拟节点为真实节点
+		existing.Name = nodes[i].Name
+		existing.NodeType = nodes[i].NodeType
+		existing.Syntax = nodes[i].Syntax
+		existing.Access = nodes[i].Access
+		existing.Status = nodes[i].Status
+		existing.Description = nodes[i].Description
+		existing.Source = nodes[i].Source
+		existing.ModuleID = nodes[i].ModuleID
 
-			// 更新节点引用，使用已存在的 ID
-			nodes[i].ID = existing.ID
-			logger.Info("SNMP-MIB", "-", "虚拟节点已合并: OID=%s, 名称=%s", nodes[i].OID, nodes[i].Name)
+		if err := repo.SaveNode(existing); err != nil {
+			logger.Warn("SNMP-MIB", "-", "合并虚拟节点失败: OID=%s, 错误=%v", nodes[i].OID, err)
+			mergeErrors = append(mergeErrors, fmt.Errorf("OID=%s 错误=%v", nodes[i].OID, err))
+			continue
 		}
+
+		// 更新节点引用，使用已存在的 ID
+		nodes[i].ID = existing.ID
+		logger.Info("SNMP-MIB", "-", "虚拟节点已合并: OID=%s, 名称=%s", nodes[i].OID, nodes[i].Name)
 	}
 	if len(mergeErrors) > 0 {
 		return fmt.Errorf("合并虚拟节点发生 %d 个错误，如: %v", len(mergeErrors), mergeErrors[0])
@@ -1376,7 +1565,18 @@ func (m *MIBManager) EnsureCoreMIBsLoaded(ctx context.Context) {
 		moduleName := strings.TrimSuffix(fileName, ".mib")
 		existingMod, err := m.mibRepo.GetModuleByName(moduleName)
 		if err == nil && existingMod != nil && existingMod.IsBuiltIn {
-			// 如果数据库里已经有了这个内置库，直接跳过，连临时文件都不用释放，提高性能并避免产生冗余
+			// 如果数据库里已经有了这个内置库，检查物理文件是否被手动删除
+			targetPath := filepath.Join(m.mibStoreDir, "core", fileName)
+			if _, err := os.Stat(targetPath); err == nil {
+				continue // 物理文件存在，跳过
+			}
+			// 物理文件丢失，从内置 FS 恢复
+			content, err := coreMIBsFS.ReadFile("mibs/" + fileName)
+			if err == nil {
+				os.MkdirAll(filepath.Join(m.mibStoreDir, "core"), 0755)
+				os.WriteFile(targetPath, content, 0644)
+				logger.Info("SNMP-MIB", "-", "恢复丢失的内置核心库物理文件: %s", fileName)
+			}
 			continue
 		}
 

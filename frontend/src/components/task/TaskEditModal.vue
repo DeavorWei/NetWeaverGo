@@ -693,7 +693,7 @@
                       <label class="text-xs font-medium text-text-primary block">采集超时 (秒)</label>
                       <el-input-number
                         :model-value="topologyTimeoutValue(currentOverrideField.fieldKey, currentOverrideField.timeoutSec)"
-                        @change="val => onTopologyTimeoutChange(currentOverrideField.fieldKey, val)"
+                        @change="(val: any) => onTopologyTimeoutChange(currentOverrideField!.fieldKey, val)"
                         :min="1"
                         :max="3600"
                         class="w-full"
@@ -708,7 +708,7 @@
                       <div class="flex items-center gap-2.5 py-0.5 px-2 bg-bg-panel border border-border/60 rounded h-[30px]">
                         <el-switch
                           :model-value="topologyEnabledValue(currentOverrideField.fieldKey, currentOverrideField.enabled)"
-                          @change="val => onTopologyEnabledChangeDirect(currentOverrideField.fieldKey, val)"
+                          @change="(val: any) => onTopologyEnabledChangeDirect(currentOverrideField!.fieldKey, val)"
                           size="small"
                         />
                         <span class="text-[11px] text-text-muted truncate">
@@ -878,7 +878,7 @@ function openTopologyOverrideDialog() {
   showTopologyOverrideDialog.value = true;
   if (topologyPreviewCommands.value.length > 0) {
     if (!topologyPreviewCommands.value.some(item => item.fieldKey === selectedOverrideFieldKey.value)) {
-      selectedOverrideFieldKey.value = topologyPreviewCommands.value[0].fieldKey;
+      selectedOverrideFieldKey.value = topologyPreviewCommands.value[0]?.fieldKey || "";
     }
   } else {
     selectedOverrideFieldKey.value = "";
@@ -1194,22 +1194,7 @@ function onTopologyCommandInput(fieldKey: string, event: Event) {
   markTopologyPreviewDirty();
 }
 
-function onTopologyTimeoutInput(fieldKey: string, event: Event) {
-  const target = event.target as HTMLInputElement | null;
-  const value = Number(target?.value || 0);
-  const override = ensureTopologyOverride(fieldKey);
-  override.timeoutSec = Number.isFinite(value) && value > 0 ? value : 0;
-  compactTopologyOverride(fieldKey);
-  markTopologyPreviewDirty();
-}
 
-function onTopologyEnabledChange(fieldKey: string, event: Event) {
-  const target = event.target as HTMLInputElement | null;
-  const override = ensureTopologyOverride(fieldKey);
-  override.enabled = Boolean(target?.checked);
-  compactTopologyOverride(fieldKey);
-  markTopologyPreviewDirty();
-}
 
 function resetTopologyOverride(fieldKey: string) {
   topologyOverrides.value = topologyOverrides.value.filter(

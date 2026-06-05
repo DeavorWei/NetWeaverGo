@@ -225,8 +225,9 @@ export const SNMPEvents = {
     callback: (progress: unknown) => void
   ): (() => void) => {
     const eventName = 'snmp:mib:import:progress'
-    Events.On(eventName, (data: unknown) => {
-      callback(data)
+    Events.On(eventName, (event: any) => {
+      const payload = event?.data && Array.isArray(event.data) ? event.data[0] : event
+      callback(payload)
     })
     return () => Events.Off(eventName)
   },

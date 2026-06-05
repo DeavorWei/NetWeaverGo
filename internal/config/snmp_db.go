@@ -22,7 +22,7 @@ const snmpDBVersion = 1
 // InitSNMPDB 初始化 SNMP 专用数据库
 // 与主库完全独立，使用相同的 SQLite 优化参数
 func InitSNMPDB(dbPath string) error {
-	dsn := dbPath + "?_journal=WAL&_busy_timeout=5000&_cache_size=10000&_foreign_keys=1&_synchronous=NORMAL"
+	dsn := dbPath + "?_journal=WAL&_busy_timeout=5000&_cache_size=-64000&_foreign_keys=1&_synchronous=NORMAL&_mmap_size=268435456&_temp_store=2"
 
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		Logger:                 gormlogger.Default.LogMode(gormlogger.Silent), // 静默GORM日志，避免输出到控制台

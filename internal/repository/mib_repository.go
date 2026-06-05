@@ -105,6 +105,12 @@ func (r *GormMIBRepository) SaveFolder(folder *models.MIBFolder) error {
 	return r.db.Save(folder).Error
 }
 
+func (r *GormMIBRepository) GetModulesByFolder(folderID uint) ([]models.MIBModule, error) {
+	var modules []models.MIBModule
+	err := r.db.Where("folder_id = ?", folderID).Find(&modules).Error
+	return modules, err
+}
+
 func (r *GormMIBRepository) DeleteFolder(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		// 1. 查询该文件夹下的所有模块
@@ -213,7 +219,7 @@ func (r *GormMIBRepository) SaveNodes(nodes []models.MIBNode) error {
 	return r.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "oid"}},
 		DoUpdates: clause.AssignmentColumns([]string{"name", "parent_oid", "node_type", "syntax", "access", "status", "description", "source", "updated_at"}),
-	}).CreateInBatches(nodes, 100).Error
+	}).CreateInBatches(nodes, 500).Error
 }
 
 func (r *GormMIBRepository) DeleteNode(id uint) error {

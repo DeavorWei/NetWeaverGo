@@ -335,7 +335,7 @@ function formatDeviceIP(ip?: string, name?: string) {
   // 移除可能存在的设备类型前缀 (如 endpoint:192.168.1.1 -> 192.168.1.1)
   const match = val.match(/^[a-zA-Z]+:(.*)$/);
   if (match) {
-    val = match[1];
+    val = match[1] || "";
   }
   return val;
 }

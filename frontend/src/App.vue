@@ -61,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, watch, onUnmounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import TitleBar from "@/components/common/TitleBar.vue";
 import RouteLoading from "@/components/common/RouteLoading.vue";
@@ -205,27 +205,6 @@ const menuItems = [
     </svg>`,
   },
 ];
-
-const titleMap: Record<string, string> = {
-  Devices: "设备资产清单",
-  Commands: "命令组管理",
-  Tasks: "任务创建",
-  TaskExecution: "任务执行大屏",
-  Topology: "拓扑图谱",
-  PlanCompare: "规划比对",
-  NetworkCalc: "子网计算器",
-  ProtocolRef: "端口速查",
-  ConfigForge: "配置生成",
-  BatchPing: "批量 Ping 检测",
-  Tracert: "Tracert 路径探测",
-  FileServers: "文件服务器",
-  SNMPMib: "SNMP MIB 管理",
-  SNMPTraps: "Trap 告警中心",
-  SNMPPolling: "SNMP 设备轮询",
-  Settings: "系统设置",
-};
-
-const currentTitle = computed(() => titleMap[activeKey.value] ?? "NetWeaverGo");
 
 watch(
   () => route.name,

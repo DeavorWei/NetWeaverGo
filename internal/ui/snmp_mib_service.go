@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -511,6 +512,21 @@ func (s *SNMPMIBService) DeleteMIBFolder(ctx context.Context, id uint) error {
 		return fmt.Errorf("内置核心库文件夹禁止删除")
 	}
 
+	// 1. 获取文件夹下的所有模块并调用 mibManager 删除 (这会删除物理文件和缓存)
+	modules, err := s.repo.GetModulesByFolder(id)
+	if err == nil {
+		for _, m := range modules {
+			_ = s.mibManager.DeleteModule(m.ID)
+		}
+	} else {
+		logger.Warn("SNMP", "-", "获取待删除文件夹中的模块失败: %v", err)
+	}
+
+	// 2. 删除物理文件夹目录
+	folderDir := filepath.Join(s.mibManager.GetMIBStoreDir(), folder.Name)
+	_ = os.RemoveAll(folderDir)
+
+	// 3. 删除数据库记录
 	if err := s.repo.DeleteFolder(id); err != nil {
 		logger.Error("SNMP", "-", "删除 MIB 文件夹失败: ID=%d, %v", id, err)
 		return fmt.Errorf("删除 MIB 文件夹失败: %v", err)

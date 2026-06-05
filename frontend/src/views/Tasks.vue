@@ -459,17 +459,7 @@ const baseTopologyOverrides = ref<TopologyTaskFieldOverride[]>([]);
 const topologyPreview = ref<TopologyCommandPreviewView | null>(null);
 const topologyPreviewLoading = ref(false);
 const topologyPreviewError = ref("");
-const topologyPreviewDirty = computed(() => {
-  if (topologyOverrides.value.length !== baseTopologyOverrides.value.length) return true;
-  for (const base of baseTopologyOverrides.value) {
-    const current = topologyOverrides.value.find(o => o.fieldKey === base.fieldKey);
-    if (!current) return true;
-    if (current.command !== base.command) return true;
-    if (current.timeoutSec !== base.timeoutSec) return true;
-    if (current.enabled !== base.enabled) return true;
-  }
-  return false;
-});
+
 
 const selectedDeviceIDsSignature = computed(() =>
   [...selectedDevices.value]
@@ -632,8 +622,8 @@ function cloneTopologyOverrides(
 ): TopologyTaskFieldOverride[] {
   return (overrides || []).map((item) => ({
     fieldKey: String(item.fieldKey || "").trim(),
-    command: item.command !== undefined ? String(item.command) : undefined,
-    timeoutSec: item.timeoutSec !== undefined ? Number(item.timeoutSec) : undefined,
+    command: item.command !== undefined ? String(item.command) : "",
+    timeoutSec: item.timeoutSec !== undefined ? Number(item.timeoutSec) : 0,
     enabled: typeof item.enabled === "boolean" ? item.enabled : undefined,
   }));
 }
@@ -656,11 +646,13 @@ function ensureTopologyOverride(fieldKey: string) {
   if (item) {
     return item;
   }
-  item = {
+  const newItem: TopologyTaskFieldOverride = {
     fieldKey: normalizedFieldKey,
+    command: "",
+    timeoutSec: 0,
   };
-  topologyOverrides.value = [...topologyOverrides.value, item];
-  return item;
+  topologyOverrides.value = [...topologyOverrides.value, newItem];
+  return newItem;
 }
 
 function compactTopologyOverride(fieldKey: string) {
@@ -719,7 +711,7 @@ function topologyEnabledValue(fieldKey: string, fallback: boolean) {
 
 function onTopologyCommandInput(fieldKey: string, value: string) {
   const override = ensureTopologyOverride(fieldKey);
-  override.command = value;
+  if (override) override.command = value;
   compactTopologyOverride(fieldKey);
   markTopologyPreviewDirty();
 }
@@ -727,14 +719,14 @@ function onTopologyCommandInput(fieldKey: string, value: string) {
 function onTopologyTimeoutInput(fieldKey: string, value: number | undefined) {
   const override = ensureTopologyOverride(fieldKey);
   const v = Number(value || 0);
-  override.timeoutSec = Number.isFinite(v) && v > 0 ? v : undefined;
+  if (override) override.timeoutSec = Number.isFinite(v) && v > 0 ? v : 0;
   compactTopologyOverride(fieldKey);
   markTopologyPreviewDirty();
 }
 
 function onTopologyEnabledChange(fieldKey: string, value: boolean) {
   const override = ensureTopologyOverride(fieldKey);
-  override.enabled = value;
+  if (override) override.enabled = value;
   compactTopologyOverride(fieldKey);
   markTopologyPreviewDirty();
 }
