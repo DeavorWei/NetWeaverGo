@@ -128,7 +128,7 @@ func (m *MIBManager) ImportMIBFile(ctx context.Context, filePath string, folderI
 
 	// 复制文件到 MIB 存储目录
 	copyStartTime := time.Now()
-	storedPath, err := m.copyMIBFile(filePath)
+	storedPath, err := m.copyMIBFile(filePath, folderID)
 	if err != nil {
 		logger.Error("SNMP-MIB", "-", "复制 MIB 文件失败: %s, %v", filePath, err)
 		return nil, fmt.Errorf("复制 MIB 文件失败: %v", err)
@@ -301,7 +301,7 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 	copyErrors := make([]FileImportError, 0)
 
 	for _, fp := range filePaths {
-		dstPath, err := m.copyMIBFile(fp)
+		dstPath, err := m.copyMIBFile(fp, opts.FolderID)
 		if err != nil {
 			copyErrors = append(copyErrors, FileImportError{
 				FileName:  filepath.Base(fp),
@@ -340,7 +340,18 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 
 	depDirs := opts.DependencyDirs
 	if len(depDirs) == 0 {
-		depDirs = []string{m.mibStoreDir}
+		targetDir := m.mibStoreDir
+		if opts.FolderID != nil {
+			folder, err := m.mibRepo.GetFolderByID(*opts.FolderID)
+			if err == nil && folder != nil {
+				dirName := folder.Name
+				if dirName == "内置核心库" {
+					dirName = "core"
+				}
+				targetDir = filepath.Join(m.mibStoreDir, dirName)
+			}
+		}
+		depDirs = []string{m.mibStoreDir, targetDir}
 	}
 	depSource, err := m.parser.BuildDependencySource(depDirs)
 	if err != nil {
@@ -401,7 +412,7 @@ func (m *MIBManager) ImportMIBFilesBatch(ctx context.Context, filePaths []string
 		if po.err != nil {
 			errType := "parse"
 			if strings.Contains(po.err.Error(), "dependency") || strings.Contains(po.err.Error(), "依赖") {
-				errType := "dependency"
+				errType = "dependency"
 			}
 			result.Errors = append(result.Errors, FileImportError{
 				FileName:  fileName,
@@ -665,14 +676,26 @@ func (m *MIBManager) UpdateCacheBatch(nodes []models.MIBNode) {
 }
 
 // copyMIBFile 复制 MIB 文件到存储目录
-func (m *MIBManager) copyMIBFile(srcPath string) (string, error) {
+func (m *MIBManager) copyMIBFile(srcPath string, folderID *uint) (string, error) {
+	targetDir := m.mibStoreDir
+	if folderID != nil {
+		folder, err := m.mibRepo.GetFolderByID(*folderID)
+		if err == nil && folder != nil {
+			dirName := folder.Name
+			if dirName == "内置核心库" {
+				dirName = "core"
+			}
+			targetDir = filepath.Join(m.mibStoreDir, dirName)
+		}
+	}
+
 	// 确保存储目录存在
-	if err := os.MkdirAll(m.mibStoreDir, 0755); err != nil {
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return "", fmt.Errorf("创建 MIB 存储目录失败: %v", err)
 	}
 
 	fileName := filepath.Base(srcPath)
-	dstPath := filepath.Join(m.mibStoreDir, fileName)
+	dstPath := filepath.Join(targetDir, fileName)
 
 	// 如果目标文件已存在，添加序号
 	counter := 1
@@ -682,7 +705,7 @@ func (m *MIBManager) copyMIBFile(srcPath string) (string, error) {
 		}
 		ext := filepath.Ext(fileName)
 		base := fileName[:len(fileName)-len(ext)]
-		dstPath = filepath.Join(m.mibStoreDir, fmt.Sprintf("%s_%d%s", base, counter, ext))
+		dstPath = filepath.Join(targetDir, fmt.Sprintf("%s_%d%s", base, counter, ext))
 		counter++
 	}
 
