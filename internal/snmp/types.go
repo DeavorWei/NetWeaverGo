@@ -5,6 +5,7 @@ package snmp
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/NetWeaverGo/core/internal/models"
 )
@@ -282,4 +283,83 @@ type MIBBatchImportOptions struct {
 	OverwriteExisting bool     `json:"overwriteExisting"`
 	DependencyDirs    []string `json:"dependencyDirs"`
 	FolderID          *uint    `json:"folderId,omitempty"` // 目标文件夹 ID
+}
+
+// ============================================================================
+// PollDispatcher 并发控制相关类型
+// ============================================================================
+
+// DispatcherConfig 分发器配置
+type DispatcherConfig struct {
+	// MaxConcurrentDevices 最大并发设备数
+	// 同一时刻最多有多少台设备在进行 SNMP 轮询
+	// 默认: 10
+	MaxConcurrentDevices int `json:"maxConcurrentDevices"`
+
+	// MaxOpsPerDevice 单设备最大并发操作数
+	// 同一台设备同时允许多少个 SNMP 操作（GET/WALK/BULK）
+	// 对于不支持并发的设备应设为 1
+	// 默认: 1
+	MaxOpsPerDevice int `json:"maxOpsPerDevice"`
+
+	// SkipIfBusy 如果设备繁忙是否跳过
+	// true: 设备正在轮询中时跳过本次触发（适用于 Cron 防重叠）
+	// false: 排队等待（适用于手动触发和批量轮询）
+	// 默认: true（Cron 场景）
+	SkipIfBusy bool `json:"skipIfBusy"`
+
+	// QueueTimeout 排队超时
+	// 等待信号量的最大时间，超时后放弃
+	// 默认: 30s
+	QueueTimeout time.Duration `json:"queueTimeout"`
+}
+
+// DefaultDispatcherConfig 默认分发器配置
+var DefaultDispatcherConfig = DispatcherConfig{
+	MaxConcurrentDevices: 10,
+	MaxOpsPerDevice:      1,
+	SkipIfBusy:           true,
+	QueueTimeout:         30 * time.Second,
+}
+
+// PollResult 轮询结果封装
+type PollResult struct {
+	Target    *PollTarget                 // 轮询目标
+	Results   []*models.SNMPPollingResult // 轮询数据结果
+	Error     error                       // 错误信息
+	Latency   time.Duration               // 执行耗时
+	Skipped   bool                        // 因设备繁忙而跳过
+	Cancelled bool                        // 因 Context 取消或排队超时
+	Queued    bool                        // 是否在队列中等待过
+}
+
+// DispatcherStatus 分发器运行状态
+type DispatcherStatus struct {
+	ActiveDevices   int                         `json:"activeDevices"`   // 当前活跃设备数
+	MaxDevices      int                         `json:"maxDevices"`      // 最大并发设备数
+	MaxOpsPerDevice int                         `json:"maxOpsPerDevice"` // 单设备最大并发操作数
+	WaitingTasks    int                         `json:"waitingTasks"`    // 排队等待信号量的任务数
+	SkippedTasks    int64                       `json:"skippedTasks"`    // 累计因繁忙跳过的任务数
+	DeviceStatus    map[string]*DeviceSemStatus `json:"deviceStatus"`    // 各设备信号量状态
+}
+
+// DeviceSemStatus 设备信号量状态
+type DeviceSemStatus struct {
+	ActiveOps  int `json:"activeOps"`  // 当前活跃操作数
+	MaxOps     int `json:"maxOps"`     // 最大并发操作数
+	WaitingOps int `json:"waitingOps"` // 等待中的操作数（暂为 0，后续可扩展）
+}
+
+// DispatchOption 函数选项模式
+type DispatchOption func(*dispatchOptions)
+
+type dispatchOptions struct {
+	skipIfBusy bool
+}
+
+// WithSkipIfBusy 设置是否在繁忙时跳过
+func WithSkipIfBusy(skip bool) DispatchOption {
+	return func(o *dispatchOptions) {
+		o.skipIfBusy = skip
+	}
 }

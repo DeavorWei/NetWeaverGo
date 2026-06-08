@@ -23,7 +23,10 @@ type SNMPServerConfig struct {
 	V3EngineID       string `json:"v3EngineID"`
 	MaxStorageDays   int    `json:"maxStorageDays"`       // 告警最大保留天数（0=永久）
 	PollingEnabled   bool   `json:"pollingEnabled"`       // 轮询调度总开关
-	MaxPollingWorkers int   `json:"maxPollingWorkers"`    // 最大并发轮询数（默认 10）
+	MaxPollingWorkers int   `json:"maxPollingWorkers"`    // 最大并发轮询数（默认 10）→ 映射到 Dispatcher.MaxConcurrentDevices
+	MaxOpsPerDevice   int   `json:"maxOpsPerDevice"    gorm:"default:1"`   // 单设备最大并发操作数（默认 1）
+	PollSkipIfBusy    bool  `json:"pollSkipIfBusy"     gorm:"default:true"` // 设备繁忙时跳过（默认 true，Cron 防重叠）
+	PollQueueTimeout  int   `json:"pollQueueTimeout"   gorm:"default:30"`  // 排队超时秒数（默认 30s）
 	PollingResultRetentionDays int `json:"pollingResultRetentionDays"` // 轮询数据保留天数（默认 7）
 	CreatedAt        time.Time `json:"createdAt"`
 	UpdatedAt        time.Time `json:"updatedAt"`

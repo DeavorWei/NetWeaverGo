@@ -200,11 +200,28 @@ type PollingResultFilterVM struct {
 
 // SchedulerStatusVM 调度器状态 View Model
 type SchedulerStatusVM struct {
-	IsRunning    bool   `json:"isRunning"`
-	TargetCount  int    `json:"targetCount"`
-	TotalPolls   int64  `json:"totalPolls"`
-	LastPollTime string `json:"lastPollTime"`
-	StartTime    string `json:"startTime"`
+	IsRunning        bool                `json:"isRunning"`
+	TargetCount      int                 `json:"targetCount"`
+	TotalPolls       int64               `json:"totalPolls"`
+	LastPollTime     string              `json:"lastPollTime"`
+	StartTime        string              `json:"startTime"`
+	DispatcherStatus *DispatcherStatusVM `json:"dispatcherStatus,omitempty"` // 分发器状态
+}
+
+// DispatcherStatusVM 分发器运行状态 View Model
+type DispatcherStatusVM struct {
+	ActiveDevices int32 `json:"activeDevices"` // 当前活跃设备数
+	MaxDevices    int   `json:"maxDevices"`    // 最大并发设备数
+	WaitingTasks  int32 `json:"waitingTasks"`  // 排队等待的任务数
+	SkippedTasks  int64 `json:"skippedTasks"`  // 累计跳过的任务数
+}
+
+// ConcurrencyConfigVM 并发配置 View Model
+type ConcurrencyConfigVM struct {
+	MaxDevices       int  `json:"maxDevices"`       // 最大并发设备数
+	MaxOpsPerDevice  int  `json:"maxOpsPerDevice"`  // 单设备最大并发操作数
+	SkipIfBusy       bool `json:"skipIfBusy"`       // 设备繁忙时是否跳过
+	QueueTimeoutSecs int  `json:"queueTimeoutSecs"` // 排队超时（秒）
 }
 
 // PollingStatsVM 轮询统计 View Model
@@ -276,7 +293,7 @@ func (s *SNMPPollingService) StopScheduler(ctx context.Context) error {
 	return nil
 }
 
-// GetSchedulerStatus 获取调度器状态
+// GetSchedulerStatus 获取调度器状态（含分发器状态）
 func (s *SNMPPollingService) GetSchedulerStatus(ctx context.Context) (*SchedulerStatusVM, error) {
 	if s.scheduler == nil {
 		return &SchedulerStatusVM{IsRunning: false}, nil
@@ -297,7 +314,94 @@ func (s *SNMPPollingService) GetSchedulerStatus(ctx context.Context) (*Scheduler
 		vm.StartTime = status.StartTime.Format(time.RFC3339)
 	}
 
+	// 附加分发器状态
+	if dispatcher := s.scheduler.GetDispatcher(); dispatcher != nil {
+		ds := dispatcher.GetStatus()
+		vm.DispatcherStatus = &DispatcherStatusVM{
+			ActiveDevices: int32(ds.ActiveDevices),
+			MaxDevices:    ds.MaxDevices,
+			WaitingTasks:  int32(ds.WaitingTasks),
+			SkippedTasks:  ds.SkippedTasks,
+		}
+	}
+
 	return vm, nil
+}
+
+// ============================================================================
+// 并发配置管理
+// ============================================================================
+
+// UpdateConcurrencyConfig 更新并发控制配置
+// 更新运行时分发器配置（SkipIfBusy 和 QueueTimeout 保留现有值）
+func (s *SNMPPollingService) UpdateConcurrencyConfig(ctx context.Context, maxDevices, maxOpsPerDevice int) error {
+	logger.Info("SNMP-PollingService", "-", "更新并发配置: maxDevices=%d, maxOpsPerDevice=%d", maxDevices, maxOpsPerDevice)
+
+	if s.scheduler == nil {
+		return fmt.Errorf("调度器未初始化")
+	}
+
+	dispatcher := s.scheduler.GetDispatcher()
+	if dispatcher == nil {
+		return fmt.Errorf("分发器未初始化")
+	}
+
+	// 参数校验
+	if maxDevices <= 0 {
+		maxDevices = snmp.DefaultDispatcherConfig.MaxConcurrentDevices
+	}
+	if maxOpsPerDevice <= 0 {
+		maxOpsPerDevice = snmp.DefaultDispatcherConfig.MaxOpsPerDevice
+	}
+
+	// 获取现有配置，保留 SkipIfBusy 和 QueueTimeout
+	existing := dispatcher.GetConfig()
+	newConfig := snmp.DispatcherConfig{
+		MaxConcurrentDevices: maxDevices,
+		MaxOpsPerDevice:      maxOpsPerDevice,
+		SkipIfBusy:           existing.SkipIfBusy,
+		QueueTimeout:         existing.QueueTimeout,
+	}
+
+	// 更新运行时分发器配置
+	if err := dispatcher.UpdateConfig(newConfig); err != nil {
+		logger.Error("SNMP-PollingService", "-", "更新分发器配置失败: %v", err)
+		return fmt.Errorf("更新分发器配置失败: %w", err)
+	}
+
+	logger.Info("SNMP-PollingService", "-", "并发配置已更新: maxDevices=%d, maxOpsPerDevice=%d", maxDevices, maxOpsPerDevice)
+	return nil
+}
+
+// GetConcurrencyConfig 获取当前并发配置
+func (s *SNMPPollingService) GetConcurrencyConfig(ctx context.Context) (*ConcurrencyConfigVM, error) {
+	if s.scheduler == nil {
+		return &ConcurrencyConfigVM{
+			MaxDevices:       snmp.DefaultDispatcherConfig.MaxConcurrentDevices,
+			MaxOpsPerDevice:  snmp.DefaultDispatcherConfig.MaxOpsPerDevice,
+			SkipIfBusy:       snmp.DefaultDispatcherConfig.SkipIfBusy,
+			QueueTimeoutSecs: int(snmp.DefaultDispatcherConfig.QueueTimeout.Seconds()),
+		}, nil
+	}
+
+	dispatcher := s.scheduler.GetDispatcher()
+	if dispatcher == nil {
+		return &ConcurrencyConfigVM{
+			MaxDevices:       snmp.DefaultDispatcherConfig.MaxConcurrentDevices,
+			MaxOpsPerDevice:  snmp.DefaultDispatcherConfig.MaxOpsPerDevice,
+			SkipIfBusy:       snmp.DefaultDispatcherConfig.SkipIfBusy,
+			QueueTimeoutSecs: int(snmp.DefaultDispatcherConfig.QueueTimeout.Seconds()),
+		}, nil
+	}
+
+	// 从分发器获取运行时配置
+	cfg := dispatcher.GetConfig()
+	return &ConcurrencyConfigVM{
+		MaxDevices:       cfg.MaxConcurrentDevices,
+		MaxOpsPerDevice:  cfg.MaxOpsPerDevice,
+		SkipIfBusy:       cfg.SkipIfBusy,
+		QueueTimeoutSecs: int(cfg.QueueTimeout.Seconds()),
+	}, nil
 }
 
 // ============================================================================

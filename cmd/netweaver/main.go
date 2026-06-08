@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
+	"time"
 
 	"github.com/NetWeaverGo/core"
 	"github.com/NetWeaverGo/core/internal/config"
@@ -121,7 +123,26 @@ func runGUI() {
 	snmpCrypto := snmp.GetCredentialCrypto()
 	pollingRepo := repository.NewGormPollingRepository(config.SNMPDB)
 	poller := snmp.NewPoller(oidResolver, snmpCrypto, snmpEventNotifier)
-	pollerScheduler := snmp.NewPollerScheduler(poller, pollingRepo, snmpEventNotifier)
+
+	// 从数据库读取 SNMP 服务器配置，用于初始化分发器
+	dispatcherConfig := snmp.DefaultDispatcherConfig
+	snmpCfg, snmpCfgErr := trapRepo.GetActiveServerConfig(context.Background())
+	if snmpCfgErr != nil {
+		logger.Warn("System", "-", "读取 SNMP 服务器配置失败，使用默认分发器配置: %v", snmpCfgErr)
+	} else if snmpCfg != nil {
+		if snmpCfg.MaxPollingWorkers > 0 {
+			dispatcherConfig.MaxConcurrentDevices = snmpCfg.MaxPollingWorkers
+		}
+		if snmpCfg.MaxOpsPerDevice > 0 {
+			dispatcherConfig.MaxOpsPerDevice = snmpCfg.MaxOpsPerDevice
+		}
+		dispatcherConfig.SkipIfBusy = snmpCfg.PollSkipIfBusy
+		if snmpCfg.PollQueueTimeout > 0 {
+			dispatcherConfig.QueueTimeout = time.Duration(snmpCfg.PollQueueTimeout) * time.Second
+		}
+	}
+	dispatcher := snmp.NewPollDispatcher(poller, dispatcherConfig)
+	pollerScheduler := snmp.NewPollerScheduler(dispatcher, pollingRepo, snmpEventNotifier)
 	pollingService := ui.NewSNMPPollingService(poller, pollerScheduler, pollingRepo, snmpEventNotifier, snmpCrypto)
 	logger.Info("System", "-", "SNMP Polling 服务已初始化")
 
@@ -203,8 +224,9 @@ func runGUI() {
 	// 绑定 SNMP 事件通知器到 Wails 应用
 	snmpEventNotifier.SetWailsApp(app)
 
-	// 应用关闭时停止 Trap 监听器、轮询调度器和数据清理任务
+	// 应用关闭时停止 Trap 监听器、轮询分发器、轮询调度器和数据清理任务
 	defer trapListener.Stop()
+	defer dispatcher.Stop()
 	defer pollerScheduler.Stop()
 	defer dataCleaner.Stop()
 

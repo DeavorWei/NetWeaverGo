@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"net"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -69,9 +68,6 @@ type Poller struct {
 	successCount int64
 	failCount    int64
 
-	// 并发控制
-	workerSem chan struct{}
-	mu        sync.RWMutex
 }
 
 // NewPoller 创建 SNMP 轮询器实例
@@ -99,11 +95,10 @@ func NewPoller(resolver *OIDResolver, crypto *CredentialCrypto, notifier EventNo
 	}
 
 	poller := &Poller{
-		resolver:  resolver,
-		crypto:    crypto,
-		notifier:  notifier,
-		config:    cfg,
-		workerSem: make(chan struct{}, cfg.MaxWorkers),
+		resolver: resolver,
+		crypto:   crypto,
+		notifier: notifier,
+		config:   cfg,
 	}
 
 	logger.Info("SNMP-Poller", "-", "SNMP 轮询器已初始化 (超时: %v, 协议重试: %d, 应用重试: %d, 并发: %d)",
@@ -321,118 +316,6 @@ func (p *Poller) PollSingle(ctx context.Context, target *PollTarget) ([]*models.
 		targetID, targetIP, len(results), latency)
 
 	return results, nil
-}
-
-// PollBatch 执行批量轮询
-// 使用并发控制，限制同时轮询的目标数量
-// 使用应用层重试机制提高成功率
-func (p *Poller) PollBatch(ctx context.Context, targets []*PollTarget) [][]*models.SNMPPollingResult {
-	if len(targets) == 0 {
-		return nil
-	}
-
-	batchStartTime := time.Now()
-	logger.Info("SNMP-Poller", "-", "开始批量轮询: 目标数=%d, 并发数=%d, 应用层重试启用",
-		len(targets), p.config.MaxWorkers)
-
-	results := make([][]*models.SNMPPollingResult, len(targets))
-	var wg sync.WaitGroup
-
-	// 并发控制统计
-	activeCount := int64(0)
-
-	for i, target := range targets {
-		// 获取信号量，限制并发数
-		p.workerSem <- struct{}{}
-		active := atomic.AddInt64(&activeCount, 1)
-		logger.Debug("SNMP-Poller", "-", "并发状态: 活跃=%d, 等待=%d", active, len(targets)-i-1)
-
-		wg.Add(1)
-		go func(idx int, t *PollTarget) {
-			defer wg.Done()
-			defer func() {
-				<-p.workerSem
-				atomic.AddInt64(&activeCount, -1)
-			}()
-
-			// 使用带重试的轮询方法
-			result, err := p.pollWithRetry(ctx, t)
-			if err != nil {
-				logger.Error("SNMP-Poller", "-", "批量轮询单目标失败: ID=%d, IP=%s, %v",
-					t.Target.ID, t.Target.TargetIP, err)
-				results[idx] = nil
-				return
-			}
-			results[idx] = result
-		}(i, target)
-	}
-
-	wg.Wait()
-
-	successCount := 0
-	totalOidCount := 0
-	for _, r := range results {
-		if r != nil {
-			successCount++
-			totalOidCount += len(r)
-		}
-	}
-
-	batchLatency := time.Since(batchStartTime)
-	logger.Info("SNMP-Poller", "-", "批量轮询完成: 成功=%d/%d, 总OID数=%d, 总耗时=%v, 平均耗时=%v/目标",
-		successCount, len(targets), totalOidCount, batchLatency, batchLatency/time.Duration(len(targets)))
-
-	return results
-}
-
-// PollBatchNoRetry 执行批量轮询（不带应用层重试）
-// 用于需要快速失败的场景
-func (p *Poller) PollBatchNoRetry(ctx context.Context, targets []*PollTarget) [][]*models.SNMPPollingResult {
-	if len(targets) == 0 {
-		return nil
-	}
-
-	batchStartTime := time.Now()
-	logger.Info("SNMP-Poller", "-", "开始批量轮询（无应用重试）: 目标数=%d, 并发数=%d",
-		len(targets), p.config.MaxWorkers)
-
-	results := make([][]*models.SNMPPollingResult, len(targets))
-	var wg sync.WaitGroup
-
-	for i, target := range targets {
-		// 获取信号量，限制并发数
-		p.workerSem <- struct{}{}
-
-		wg.Add(1)
-		go func(idx int, t *PollTarget) {
-			defer wg.Done()
-			defer func() { <-p.workerSem }()
-
-			result, err := p.PollSingle(ctx, t)
-			if err != nil {
-				logger.Error("SNMP-Poller", "-", "批量轮询单目标失败: ID=%d, IP=%s, %v",
-					t.Target.ID, t.Target.TargetIP, err)
-				results[idx] = nil
-				return
-			}
-			results[idx] = result
-		}(i, target)
-	}
-
-	wg.Wait()
-
-	successCount := 0
-	for _, r := range results {
-		if r != nil {
-			successCount++
-		}
-	}
-
-	batchLatency := time.Since(batchStartTime)
-	logger.Info("SNMP-Poller", "-", "批量轮询（无重试）完成: 成功=%d/%d, 总耗时=%v",
-		successCount, len(targets), batchLatency)
-
-	return results
 }
 
 // ============================================================================

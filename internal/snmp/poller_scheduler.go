@@ -49,10 +49,10 @@ type scheduledJob struct {
 // PollerScheduler 轮询调度器
 // 管理定时轮询任务，支持动态添加/移除目标
 type PollerScheduler struct {
-	poller    *Poller
-	repo      repository.PollingRepository
-	scheduler *cron.Cron
-	notifier  EventNotifier
+	dispatcher *PollDispatcher
+	repo       repository.PollingRepository
+	scheduler  *cron.Cron
+	notifier   EventNotifier
 
 	// P2-18: 可配置的轮询超时时间
 	pollTimeout time.Duration
@@ -73,8 +73,8 @@ type PollerScheduler struct {
 const DefaultPollTimeout = 30 * time.Second
 
 // NewPollerScheduler 创建轮询调度器实例
-// P2-18: 添加可选的超时配置参数
-func NewPollerScheduler(poller *Poller, repo repository.PollingRepository, notifier EventNotifier, timeout ...time.Duration) *PollerScheduler {
+// Phase 2: 接收 PollDispatcher 替代 Poller，统一通过 Dispatcher 控制并发
+func NewPollerScheduler(dispatcher *PollDispatcher, repo repository.PollingRepository, notifier EventNotifier, timeout ...time.Duration) *PollerScheduler {
 	// 创建 cron 调度器，支持秒级精度
 	scheduler := cron.New(cron.WithSeconds(), cron.WithLocation(time.Local))
 
@@ -84,7 +84,7 @@ func NewPollerScheduler(poller *Poller, repo repository.PollingRepository, notif
 	}
 
 	s := &PollerScheduler{
-		poller:      poller,
+		dispatcher:  dispatcher,
 		repo:        repo,
 		scheduler:   scheduler,
 		notifier:    notifier,
@@ -299,6 +299,7 @@ func (s *PollerScheduler) UpdateTarget(target *models.SNMPPollingTarget, templat
 // ============================================================================
 
 // RunNow 立即执行一次轮询
+// Phase 2: 通过 Dispatcher 提交，设备繁忙时排队等待（WithSkipIfBusy(false)）
 func (s *PollerScheduler) RunNow(ctx context.Context, targetID uint) ([]*models.SNMPPollingResult, error) {
 	pollStartTime := time.Now()
 	logger.Info("SNMP-Scheduler", "-", "立即轮询请求: TargetID=%d", targetID)
@@ -341,51 +342,59 @@ func (s *PollerScheduler) RunNow(ctx context.Context, targetID uint) ([]*models.
 		}
 	}
 
-	// 执行轮询
+	// 构建轮询目标
 	pollTarget := &PollTarget{
 		Target:   job.Target,
 		Template: job.Template,
 		Cred:     job.Cred,
 	}
 
-	results, err := s.poller.PollSingle(ctx, pollTarget)
+	// 用户手动触发，不跳过，排队等待设备可用
+	result := s.dispatcher.DispatchSync(ctx, pollTarget, WithSkipIfBusy(false))
 	pollLatency := time.Since(pollStartTime)
 
-	if err != nil {
+	if result.Skipped {
+		logger.Warn("SNMP-Scheduler", job.Target.TargetIP, "立即轮询被跳过: TargetID=%d", targetID)
+		return nil, fmt.Errorf("设备繁忙，轮询被跳过: ID=%d", targetID)
+	}
+
+	if result.Cancelled {
+		logger.Warn("SNMP-Scheduler", job.Target.TargetIP, "立即轮询被取消: TargetID=%d, %v", targetID, result.Error)
+		return nil, result.Error
+	}
+
+	if result.Error != nil {
 		logger.Error("SNMP-Scheduler", job.Target.TargetIP, "立即轮询失败: TargetID=%d, 耗时=%v, 错误=%v",
-			targetID, pollLatency, err)
-		s.updateTargetPollError(ctx, job.Target, err)
-		return nil, err
+			targetID, pollLatency, result.Error)
+		s.updateTargetPollError(ctx, job.Target, result.Error)
+		return nil, result.Error
 	}
 
 	logger.Info("SNMP-Scheduler", job.Target.TargetIP, "立即轮询成功: TargetID=%d, 结果数=%d, 耗时=%v",
-		targetID, len(results), pollLatency)
+		targetID, len(result.Results), pollLatency)
 
 	// 保存结果到数据库
-	if len(results) > 0 {
+	if len(result.Results) > 0 {
 		saveStartTime := time.Now()
-		resultPtrs := make([]*models.SNMPPollingResult, len(results))
-		for i := range results {
-			resultPtrs[i] = results[i]
-		}
-		if err := s.repo.CreatePollingResults(ctx, resultPtrs); err != nil {
+		if err := s.repo.CreatePollingResults(ctx, result.Results); err != nil {
 			logger.Error("SNMP-Scheduler", job.Target.TargetIP, "保存轮询结果失败: TargetID=%d, 耗时=%v, %v",
 				targetID, time.Since(saveStartTime), err)
 		} else {
 			logger.Debug("SNMP-Scheduler", job.Target.TargetIP, "轮询结果已保存: TargetID=%d, 结果数=%d, 耗时=%v",
-				targetID, len(results), time.Since(saveStartTime))
+				targetID, len(result.Results), time.Since(saveStartTime))
 		}
 	}
 
 	// 更新目标最后轮询状态
-	s.updateTargetPollStatus(ctx, job.Target, results)
+	s.updateTargetPollStatus(ctx, job.Target, result.Results)
 
 	atomic.AddInt64(&s.totalPolls, 1)
 
-	return results, nil
+	return result.Results, nil
 }
 
 // RunAllNow 立即执行所有目标轮询
+// Phase 2: 通过 Dispatcher.DispatchBatch 提交，两级并发控制由 Dispatcher 保证
 func (s *PollerScheduler) RunAllNow(ctx context.Context) [][]*models.SNMPPollingResult {
 	s.mu.RLock()
 	jobs := make([]*scheduledJob, 0, len(s.jobs))
@@ -411,33 +420,41 @@ func (s *PollerScheduler) RunAllNow(ctx context.Context) [][]*models.SNMPPolling
 		}
 	}
 
-	// 批量轮询
-	allResults := s.poller.PollBatch(ctx, pollTargets)
+	// 通过 Dispatcher 批量提交，内部受两级信号量控制
+	pollResults := s.dispatcher.DispatchBatch(ctx, pollTargets)
 
-	// 保存结果并更新状态
-	for i, results := range allResults {
-		if results == nil {
-			// 记录失败结果
+	// 转换结果并保存
+	allResults := make([][]*models.SNMPPollingResult, len(pollResults))
+	for i, pr := range pollResults {
+		if pr == nil {
 			s.updateTargetPollError(ctx, jobs[i].Target, fmt.Errorf("批量轮询发生错误"))
 			continue
 		}
 
-		if len(results) == 0 {
+		if pr.Error != nil {
+			logger.Error("SNMP-Scheduler", "-", "批量轮询目标失败: ID=%d, %v", jobs[i].TargetID, pr.Error)
+			s.updateTargetPollError(ctx, jobs[i].Target, pr.Error)
+			continue
+		}
+
+		if len(pr.Results) == 0 {
 			// 成功执行但没有数据
-			s.updateTargetPollStatus(ctx, jobs[i].Target, results)
+			s.updateTargetPollStatus(ctx, jobs[i].Target, pr.Results)
 			atomic.AddInt64(&s.totalPolls, 1)
+			allResults[i] = pr.Results
 			continue
 		}
 
 		// 保存结果
-		if err := s.repo.CreatePollingResults(ctx, results); err != nil {
+		if err := s.repo.CreatePollingResults(ctx, pr.Results); err != nil {
 			logger.Error("SNMP-Scheduler", "-", "保存轮询结果失败: ID=%d, %v", jobs[i].TargetID, err)
 		}
 
 		// 更新目标状态
-		s.updateTargetPollStatus(ctx, jobs[i].Target, results)
+		s.updateTargetPollStatus(ctx, jobs[i].Target, pr.Results)
 
 		atomic.AddInt64(&s.totalPolls, 1)
+		allResults[i] = pr.Results
 	}
 
 	return allResults
@@ -457,6 +474,12 @@ func (s *PollerScheduler) GetScheduledTargets() []uint {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+// GetDispatcher 获取分发器实例
+// 供 UI 服务层访问分发器状态和配置
+func (s *PollerScheduler) GetDispatcher() *PollDispatcher {
+	return s.dispatcher
 }
 
 // GetSchedulerStatus 获取调度器状态
@@ -542,7 +565,7 @@ func (s *PollerScheduler) removeJob(targetID uint) error {
 }
 
 // createPollFunc 创建轮询执行函数
-// P2-18: 使用可配置的超时时间
+// Phase 2: 通过 Dispatcher 提交，Cron 触发时设备繁忙则跳过（BUG-1 修复）
 func (s *PollerScheduler) createPollFunc(job *scheduledJob) func() {
 	return func() {
 		pollStartTime := time.Now()
@@ -558,35 +581,44 @@ func (s *PollerScheduler) createPollFunc(job *scheduledJob) func() {
 			Cred:     job.Cred,
 		}
 
-		results, err := s.poller.PollSingle(ctx, pollTarget)
+		// Cron 路径：设备繁忙时跳过本次轮询（防重叠）
+		result := s.dispatcher.DispatchSync(ctx, pollTarget, WithSkipIfBusy(true))
+
+		if result.Skipped {
+			logger.Info("SNMP-Scheduler", job.Target.TargetIP, "定时轮询跳过: ID=%d, 设备或系统繁忙", job.TargetID)
+			return
+		}
+		if result.Cancelled {
+			logger.Warn("SNMP-Scheduler", job.Target.TargetIP, "定时轮询取消: ID=%d, %v", job.TargetID, result.Error)
+			return
+		}
+
 		pollLatency := time.Since(pollStartTime)
 
-		if err != nil {
+		if result.Error != nil {
 			logger.Error("SNMP-Scheduler", job.Target.TargetIP, "定时轮询失败: ID=%d, 耗时=%v, 错误=%v",
-				job.TargetID, pollLatency, err)
-
-			// 更新目标状态为错误
-			s.updateTargetPollError(ctx, job.Target, err)
+				job.TargetID, pollLatency, result.Error)
+			s.updateTargetPollError(ctx, job.Target, result.Error)
 			return
 		}
 
 		logger.Info("SNMP-Scheduler", job.Target.TargetIP, "定时轮询完成: ID=%d, 结果数=%d, 耗时=%v",
-			job.TargetID, len(results), pollLatency)
+			job.TargetID, len(result.Results), pollLatency)
 
 		// 保存结果到数据库
-		if len(results) > 0 {
+		if len(result.Results) > 0 {
 			saveStartTime := time.Now()
-			if err := s.repo.CreatePollingResults(ctx, results); err != nil {
+			if err := s.repo.CreatePollingResults(ctx, result.Results); err != nil {
 				logger.Error("SNMP-Scheduler", job.Target.TargetIP, "保存轮询结果失败: ID=%d, 耗时=%v, 错误=%v",
 					job.TargetID, time.Since(saveStartTime), err)
 			} else {
 				logger.Debug("SNMP-Scheduler", job.Target.TargetIP, "轮询结果已保存: ID=%d, 结果数=%d, 耗时=%v",
-					job.TargetID, len(results), time.Since(saveStartTime))
+					job.TargetID, len(result.Results), time.Since(saveStartTime))
 			}
 		}
 
 		// 更新目标最后轮询状态
-		s.updateTargetPollStatus(ctx, job.Target, results)
+		s.updateTargetPollStatus(ctx, job.Target, result.Results)
 
 		atomic.AddInt64(&s.totalPolls, 1)
 	}
