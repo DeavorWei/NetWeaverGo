@@ -707,19 +707,7 @@ async function clearCache() {
   }
 }
 
-/**
- * 重建缓存
- */
-async function rebuildCache() {
-  try {
-    await SNMPMIBAPI.rebuildResolverCache()
-    ElMessage.success('缓存已重建')
-    await loadCacheStats()
-  } catch (error) {
-    logger.error(`SNMP: 重建缓存失败 - ${error}`)
-    ElMessage.error('重建缓存失败')
-  }
-}
+
 
 /**
  * 加载缓存统计
@@ -1033,9 +1021,6 @@ watch(importType, () => {
           <div class="flex gap-2">
             <button @click="clearCache" class="hover:text-text-primary transition-colors cursor-pointer">
               清除
-            </button>
-            <button @click="rebuildCache" class="hover:text-text-primary transition-colors cursor-pointer">
-              重建
             </button>
           </div>
         </div>

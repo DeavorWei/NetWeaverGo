@@ -416,7 +416,16 @@ func (s *PollerScheduler) RunAllNow(ctx context.Context) [][]*models.SNMPPolling
 
 	// 保存结果并更新状态
 	for i, results := range allResults {
-		if results == nil || len(results) == 0 {
+		if results == nil {
+			// 记录失败结果
+			s.updateTargetPollError(ctx, jobs[i].Target, fmt.Errorf("批量轮询发生错误"))
+			continue
+		}
+
+		if len(results) == 0 {
+			// 成功执行但没有数据
+			s.updateTargetPollStatus(ctx, jobs[i].Target, results)
+			atomic.AddInt64(&s.totalPolls, 1)
 			continue
 		}
 
@@ -604,6 +613,22 @@ func (s *PollerScheduler) updateTargetPollError(ctx context.Context, target *mod
 
 	if err := s.repo.UpdatePollingTarget(ctx, target); err != nil {
 		logger.Error("SNMP-Scheduler", "-", "更新目标轮询错误状态失败: ID=%d, %v", target.ID, err)
+	}
+
+	// 额外保存一条失败的轮询结果，使得前端列表可以展示失败记录
+	failResult := &models.SNMPPollingResult{
+		TargetID:  target.ID,
+		TargetIP:  target.TargetIP,
+		BatchID:   fmt.Sprintf("%d-%d", target.ID, now.Unix()),
+		OID:       "-",
+		OIDName:   "轮询失败",
+		Value:     pollErr.Error(),
+		ValueType: "error",
+		PollTime:  now,
+		CreatedAt: now,
+	}
+	if err := s.repo.CreatePollingResult(ctx, failResult); err != nil {
+		logger.Error("SNMP-Scheduler", "-", "保存失败的轮询结果记录失败: ID=%d, %v", target.ID, err)
 	}
 }
 

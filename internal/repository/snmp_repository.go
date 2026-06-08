@@ -735,19 +735,31 @@ func (r *GormTrapRepository) GetPollingStats(ctx context.Context, targetID uint)
 	var stats PollingStats
 	dbCtx := ctx
 
-	// 总轮询次数（通过结果数量间接统计）
+	// 1. 统计总轮询次数（按 batch_id 去重统计）
 	if err := r.db.WithContext(dbCtx).
 		Model(&models.SNMPPollingResult{}).
 		Where("target_id = ?", targetID).
+		Distinct("batch_id").
 		Count(&stats.TotalPolls).Error; err != nil {
 		return nil, err
 	}
 
-	// 获取目标的最后轮询状态来推算成功/失败次数
-	// 注意：这里使用简化的统计方式，基于结果记录存在即视为成功
-	stats.SuccessCount = stats.TotalPolls
+	// 2. 统计失败次数（存在 value_type = 'error' 的 batch_id 数量）
+	if err := r.db.WithContext(dbCtx).
+		Model(&models.SNMPPollingResult{}).
+		Where("target_id = ? AND value_type = ?", targetID, "error").
+		Distinct("batch_id").
+		Count(&stats.FailCount).Error; err != nil {
+		return nil, err
+	}
 
-	// 获取最后轮询时间
+	// 3. 计算成功次数
+	stats.SuccessCount = stats.TotalPolls - stats.FailCount
+	if stats.SuccessCount < 0 {
+		stats.SuccessCount = 0
+	}
+
+	// 4. 获取最后轮询时间
 	var lastResult models.SNMPPollingResult
 	err := r.db.WithContext(dbCtx).
 		Where("target_id = ?", targetID).
@@ -759,8 +771,7 @@ func (r *GormTrapRepository) GetPollingStats(ctx context.Context, targetID uint)
 		return nil, err
 	}
 
-	// 计算平均延迟（基于同一目标的轮询间隔推算，简化实现）
-	// 实际延迟由 Poller 在轮询时记录，此处提供基础统计
+	// 5. 计算平均延迟（暂时留 0，因为目前未保存单次请求的 Latency）
 	stats.AvgLatencyMs = 0
 
 	return &stats, nil
