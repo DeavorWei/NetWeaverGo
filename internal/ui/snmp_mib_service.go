@@ -619,33 +619,48 @@ func (s *SNMPMIBService) GetMIBTree(ctx context.Context, moduleID uint) ([]snmp.
 		}
 	}
 
-	// 第二遍：为所有缺失的父节点创建全局父节点
+	// 在内存中主动预热 OIDResolver 缓存，使得后续点击节点时实现 0 数据库查询
+	s.oidResolver.WarmUpCache(nodes, module.Name)
+
+	// 第二遍：收集所有缺失的父节点，采用批量查询彻底解决 N+1 缓存穿透瓶颈
+	missingOIDsMap := make(map[string]bool)
 	for i := range nodes {
 		node := &nodes[i]
 		if node.ParentOID != "" {
 			if _, ok := nodeMap[node.ParentOID]; !ok {
-				// 父节点不在当前模块 of nodeMap 中，尝试从全局查询（包括虚拟节点）
-				globalParent, err := s.repo.GetNodeByOID(node.ParentOID)
-				if err == nil && globalParent != nil {
-					// 将全局父节点加入 nodeMap
-					nodeMap[node.ParentOID] = &tempNode{
-						ID:          globalParent.ID,
-						OID:         globalParent.OID,
-						Name:        globalParent.Name,
-						NodeType:    globalParent.NodeType,
-						Syntax:      globalParent.Syntax,
-						Access:      globalParent.Access,
-						Status:      globalParent.Status,
-						Description: globalParent.Description,
-						Children:    []*tempNode{},
-					}
-					logger.Debug("SNMP", "-", "MIB 节点引用全局父节点: OID=%s, ParentOID=%s, Name=%s, ParentSource=%s",
-						node.OID, node.ParentOID, node.Name, globalParent.Source)
-				} else {
-					logger.Warn("SNMP", "-", "MIB 节点父节点缺失: OID=%s, ParentOID=%s, Name=%s",
-						node.OID, node.ParentOID, node.Name)
-				}
+				missingOIDsMap[node.ParentOID] = true
 			}
+		}
+	}
+
+	if len(missingOIDsMap) > 0 {
+		oidsToQuery := make([]string, 0, len(missingOIDsMap))
+		for oid := range missingOIDsMap {
+			oidsToQuery = append(oidsToQuery, oid)
+		}
+
+		// 批量从全局数据库查询缺失的父节点
+		globalParents, err := s.repo.GetNodesByOIDs(oidsToQuery)
+		if err == nil {
+			for i := range globalParents {
+				parent := &globalParents[i]
+				nodeMap[parent.OID] = &tempNode{
+					ID:          parent.ID,
+					OID:         parent.OID,
+					Name:        parent.Name,
+					NodeType:    parent.NodeType,
+					Syntax:      parent.Syntax,
+					Access:      parent.Access,
+					Status:      parent.Status,
+					Description: parent.Description,
+					Children:    []*tempNode{},
+				}
+				logger.Debug("SNMP", "-", "MIB 节点引用全局父节点(批量查询): OID=%s, Name=%s", parent.OID, parent.Name)
+			}
+		}
+		
+		if len(globalParents) < len(missingOIDsMap) {
+			logger.Debug("SNMP", "-", "MIB 树构建: 存在 %d 个完全缺失的全局父节点", len(missingOIDsMap)-len(globalParents))
 		}
 	}
 

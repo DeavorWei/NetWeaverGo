@@ -80,6 +80,15 @@ export function usePanelResize(
     return e.clientY - rect.top
   }
 
+  /** 获取所有面板元素（排除拖拽手柄） */
+  function getPanelElements(): HTMLElement[] {
+    if (!containerRef.value) return []
+    return Array.from(containerRef.value.children).filter(el => {
+      const className = typeof el.className === 'string' ? el.className : ''
+      return !className.includes('cursor-col-resize') && !className.includes('cursor-row-resize')
+    }) as HTMLElement[]
+  }
+
   /**
    * 开始拖拽
    * @param handleIndex 手柄索引（表示调整 handleIndex 和 handleIndex+1 之间的面板）
@@ -91,12 +100,24 @@ export function usePanelResize(
     isResizing.value = true
     activeHandleIndex.value = handleIndex
 
-    const startPos = getMousePosition(e)
-    const startSizes = [...sizes.value]
+    const startClientX = e.clientX
+    const startClientY = e.clientY
+    
+    // 获取实际的 DOM 尺寸以解决容器大小变化导致内部 state 不同步的问题
+    const panelElements = getPanelElements()
+    const actualSizes = [...sizes.value]
+    
+    if (panelElements.length === panels.length) {
+      for (let i = 0; i < panels.length; i++) {
+        const rect = panelElements[i].getBoundingClientRect()
+        actualSizes[i] = direction === 'horizontal' ? rect.width : rect.height
+      }
+    }
+
+    const startSizes = [...actualSizes]
 
     const onMouseMove = (ev: MouseEvent) => {
-      const currentPos = getMousePosition(ev)
-      const delta = currentPos - startPos
+      const delta = direction === 'horizontal' ? ev.clientX - startClientX : ev.clientY - startClientY
 
       const leftIndex = handleIndex
       const rightIndex = handleIndex + 1

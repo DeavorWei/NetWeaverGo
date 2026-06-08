@@ -11,6 +11,7 @@
  * - 实时导入进度显示
  */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useVirtualList } from '@vueuse/core'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import { SNMPMIBAPI, SNMPEvents } from '@/services/snmpApi'
@@ -146,6 +147,91 @@ const groupedModules = computed(() => {
   return groups
 })
 
+/** 扁平化虚拟列表项类型 */
+type FlatItem = {
+  key: string
+  type: 'folder' | 'module'
+  id: number | string
+  isExpanded: boolean
+  isLast: boolean
+  folder?: any
+  module?: any
+  moduleCount?: number
+}
+
+/** 扁平化后的 MIB 列表，用于虚拟滚动 */
+const flatList = computed<FlatItem[]>(() => {
+  const result: FlatItem[] = []
+  
+  // 遍历普通文件夹
+  folders.value.forEach(folder => {
+    const mods = groupedModules.value[folder.id] || []
+    const isExpanded = !!expandedFolders.value[folder.id]
+    
+    result.push({
+      key: `folder-${folder.id}`,
+      type: 'folder',
+      id: folder.id,
+      isExpanded,
+      folder,
+      moduleCount: mods.length,
+      isLast: !isExpanded || mods.length === 0
+    })
+    
+    if (isExpanded) {
+      mods.forEach((m, idx) => {
+        result.push({
+          key: `module-${m.id}`,
+          type: 'module',
+          id: m.id,
+          module: m,
+          isLast: idx === mods.length - 1
+        })
+      })
+    }
+  })
+  
+  // 遍历未分类
+  const uncategorizedMods = groupedModules.value['uncategorized'] || []
+  const uncateExpanded = !!expandedFolders.value['uncategorized']
+  
+  result.push({
+    key: `folder-uncategorized`,
+    type: 'folder',
+    id: 'uncategorized',
+    isExpanded: uncateExpanded,
+    folder: { name: '未分类', id: 'uncategorized' },
+    moduleCount: uncategorizedMods.length,
+    isLast: !uncateExpanded || uncategorizedMods.length === 0
+  })
+  
+  if (uncateExpanded) {
+    uncategorizedMods.forEach((m, idx) => {
+      result.push({
+        key: `module-${m.id}`,
+        type: 'module',
+        id: m.id,
+        module: m,
+        isLast: idx === uncategorizedMods.length - 1
+      })
+    })
+  }
+  
+  return result
+})
+
+/** 虚拟滚动逻辑 */
+const { list: virtualList, containerProps, wrapperProps } = useVirtualList(flatList, {
+  overscan: 20,
+  itemHeight: (idx) => {
+    const item = flatList.value[idx]
+    if (item.type === 'folder') {
+      return idx === 0 ? 44 : 52 // 非首个文件夹带8px间距
+    }
+    return item.isLast ? 64 : 56 // 每个模块项的高度
+  }
+})
+
 /** 过滤掉内置核心库的可用文件夹列表 */
 const availableFolders = computed(() => folders.value.filter(f => f.name !== '内置核心库'))
 
@@ -209,7 +295,8 @@ async function selectModule(moduleId: number | null) {
   treeLoading.value = true
   try {
     mibTreeData.value = await SNMPMIBAPI.getMIBTree(moduleId)
-    expandAll() // 默认全部展开
+    expandAll()
+    await loadCacheStats()
     logger.debug(`SNMP: MIB 树已加载 - ${mibTreeData.value.length} 个节点`)
   } catch (error) {
     logger.error(`SNMP: 加载 MIB 树失败 - ${error}`)
@@ -798,241 +885,144 @@ watch(importType, () => {
       </div>
 
       <!-- 模块列表 -->
-      <div class="flex-1 overflow-y-auto scrollbar-custom p-2 space-y-2">
-        <div v-if="modulesLoading || foldersLoading" class="p-4 text-center text-text-muted">
+      <div v-bind="containerProps" class="flex-1 overflow-y-auto scrollbar-custom p-2">
+        <div v-if="modulesLoading || foldersLoading" class="p-4 text-center text-text-muted h-full">
           加载中...
         </div>
-        <div v-else-if="modules.length === 0 && folders.length === 0" class="p-4 text-center text-text-muted">
+        <div v-else-if="modules.length === 0 && folders.length === 0" class="p-4 text-center text-text-muted h-full">
           暂无 MIB 模块和文件夹
         </div>
-        <div v-else class="space-y-2">
-          
-          <!-- 文件夹列表 -->
-          <div v-for="folder in folders" :key="folder.id" class="border border-border/40 rounded bg-bg-primary/20">
-            <!-- 文件夹 Header -->
-            <div 
-              @click="expandedFolders[folder.id] = !expandedFolders[folder.id]"
-              class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-bg-hover rounded select-none group"
-            >
-              <div class="flex items-center gap-2 min-w-0">
-                <!-- 展开/折叠箭头 -->
-                <svg 
-                  class="w-3.5 h-3.5 text-text-muted transition-transform duration-200 shrink-0"
-                  :class="{ 'rotate-90': expandedFolders[folder.id] }"
-                  fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"
-                >
-                  <path d="M9 5l7 7-7 7" />
-                </svg>
-                
-                <!-- 文件夹图标 -->
-                <svg class="w-4 h-4 text-accent shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                </svg>
-                
-                <!-- 文件夹名称 -->
-                <span class="text-sm font-semibold text-text-primary truncate" :title="folder.name">
-                  {{ folder.name }}
-                </span>
-                
-                <!-- 模块数量 -->
-                <span class="text-xs text-text-muted font-normal">({{ (groupedModules[folder.id] || []).length }})</span>
-              </div>
-              
-              <!-- 文件夹操作按钮 -->
-              <div class="hidden group-hover:flex items-center gap-1" v-if="folder.name !== '内置核心库'">
-                <button
-                  @click.stop="renameFolder(folder)"
-                  class="p-0.5 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded transition-colors cursor-pointer"
-                  title="重命名文件夹"
-                >
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+        <div v-else v-bind="wrapperProps" class="pb-2">
+          <template v-for="{ data: item, index } in virtualList" :key="item.key">
+            
+            <!-- 渲染文件夹 -->
+            <div v-if="item.type === 'folder'"
+                 class="bg-bg-primary/20 border-x border-border/40"
+                 :class="[
+                   'border-t rounded-t',
+                   item.isLast ? 'border-b rounded-b' : '',
+                   index > 0 ? 'mt-2' : ''
+                 ]">
+              <div 
+                @click="expandedFolders[item.id] = !expandedFolders[item.id]"
+                class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-bg-hover rounded select-none group"
+              >
+                <div class="flex items-center gap-2 min-w-0">
+                  <svg 
+                    class="w-3.5 h-3.5 text-text-muted transition-transform duration-200 shrink-0"
+                    :class="{ 'rotate-90': expandedFolders[item.id] }"
+                    fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"
+                  >
+                    <path d="M9 5l7 7-7 7" />
                   </svg>
-                </button>
-                <button
-                  @click.stop="deleteFolder(folder)"
-                  class="p-0.5 text-text-muted hover:text-red-400 hover:bg-bg-hover rounded transition-colors cursor-pointer"
-                  title="删除文件夹"
-                >
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  
+                  <svg v-if="item.id !== 'uncategorized'" class="w-4 h-4 text-accent shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
                   </svg>
-                </button>
+                  <svg v-else class="w-4 h-4 text-text-muted shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4l2 2h4a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm10.3 5.7a1 1 0 00-1.4-1.4L9 12.2l-1.9-1.9a1 1 0 00-1.4 1.4l2.6 2.6a1 1 0 001.4 0l3.6-3.6z" clip-rule="evenodd" />
+                  </svg>
+                  
+                  <span class="text-sm font-semibold text-text-primary truncate" :title="item.folder?.name">
+                    {{ item.folder?.name }}
+                  </span>
+                  <span class="text-xs text-text-muted font-normal">({{ item.moduleCount }})</span>
+                </div>
+                
+                <div class="hidden group-hover:flex items-center gap-1" v-if="item.id !== 'uncategorized' && item.folder?.name !== '内置核心库'">
+                  <button
+                    @click.stop="renameFolder(item.folder)"
+                    class="p-0.5 text-text-muted hover:text-text-primary hover:bg-bg-hover rounded transition-colors cursor-pointer"
+                    title="重命名文件夹"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                    </svg>
+                  </button>
+                  <button
+                    @click.stop="deleteFolder(item.folder)"
+                    class="p-0.5 text-text-muted hover:text-red-400 hover:bg-bg-hover rounded transition-colors cursor-pointer"
+                    title="删除文件夹"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
             
-            <!-- 文件夹下的 MIB 模块列表 -->
-            <ul v-if="expandedFolders[folder.id]" class="pl-4 pr-1 pb-1 space-y-0.5 border-t border-border/20 pt-1">
-              <li v-if="(groupedModules[folder.id] || []).length === 0" class="py-2 px-3 text-xs text-text-muted italic">
-                没有模块
-              </li>
-              <li
-                v-for="module in groupedModules[folder.id]"
-                :key="module.id"
-                @click="selectModule(module.id)"
-                :class="[
-                  'px-3 py-2 cursor-pointer transition-all rounded flex flex-col group/module relative',
-                  selectedModuleId === module.id
-                    ? 'bg-accent-bg border-l-2 border-accent text-accent'
-                    : 'hover:bg-bg-hover text-text-primary',
-                ]"
-              >
-                <div class="flex items-center justify-between min-w-0">
-                  <span class="text-sm font-medium truncate flex-1" :title="module.name">{{ module.name }}</span>
-                  <div class="flex items-center gap-1.5 shrink-0 ml-2">
-                    <span v-if="module.isBuiltIn" class="text-[10px] px-1 py-0.5 rounded bg-info/20 text-info font-normal whitespace-nowrap">
-                      内置
-                    </span>
-                    <span v-else :class="['text-[10px] px-1 py-0.5 rounded bg-bg-primary font-normal whitespace-nowrap', getStatusClass(module.status)]">
-                      {{ module.status }}
-                    </span>
-                    
-                    <!-- 移动到/删除模块操作 -->
-                    <div class="hidden group-hover/module:flex items-center gap-0.5" v-if="!module.isBuiltIn">
-                      <!-- 移动文件夹下拉菜单 -->
-                      <el-dropdown trigger="click" @command="(cmd: any) => moveModule(module, cmd)">
+            <!-- 渲染模块 -->
+            <div v-else-if="item.type === 'module'"
+                 class="bg-bg-primary/20 border-x border-border/40"
+                 :class="item.isLast ? 'border-b rounded-b pb-1' : ''">
+              <div class="pl-4 pr-1">
+                <div
+                  @click="selectModule(item.module.id)"
+                  :class="[
+                    'px-3 py-2 cursor-pointer transition-all rounded flex flex-col group/module relative mt-0.5',
+                    selectedModuleId === item.module.id
+                      ? 'bg-accent-bg border-l-2 border-accent text-accent'
+                      : 'hover:bg-bg-hover text-text-primary',
+                  ]"
+                >
+                  <div class="flex items-center justify-between min-w-0">
+                    <span class="text-sm font-medium truncate flex-1" :title="item.module.name">{{ item.module.name }}</span>
+                    <div class="flex items-center gap-1.5 shrink-0 ml-2">
+                      <span v-if="item.module.isBuiltIn" class="text-[10px] px-1 py-0.5 rounded bg-info/20 text-info font-normal whitespace-nowrap">
+                        内置
+                      </span>
+                      <span v-else :class="['text-[10px] px-1 py-0.5 rounded bg-bg-primary font-normal whitespace-nowrap', getStatusClass(item.module.status)]">
+                        {{ item.module.status }}
+                      </span>
+                      
+                      <div class="hidden group-hover/module:flex items-center gap-0.5" v-if="!item.module.isBuiltIn">
+                        <el-dropdown trigger="click" @command="(cmd: any) => moveModule(item.module, cmd)">
+                          <button
+                            @click.stop
+                            class="p-0.5 text-text-muted hover:text-text-primary rounded cursor-pointer"
+                            title="移动到文件夹"
+                          >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                              <path d="M9 13h6m-3-3v6m-9 1V4a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                            </svg>
+                          </button>
+                          <template #dropdown>
+                            <el-dropdown-menu>
+                              <el-dropdown-item :command="null">未分类</el-dropdown-item>
+                              <el-dropdown-item 
+                                v-for="f in getMoveTargetFolders(item.folderId === 'uncategorized' ? null : item.folderId)" 
+                                :key="f.id" 
+                                :command="f.id"
+                              >
+                                {{ f.name }}
+                              </el-dropdown-item>
+                            </el-dropdown-menu>
+                          </template>
+                        </el-dropdown>
+                        
                         <button
-                          @click.stop
-                          class="p-0.5 text-text-muted hover:text-text-primary rounded cursor-pointer"
-                          title="移动到文件夹"
+                          @click.stop="deleteModule(item.module)"
+                          class="p-0.5 text-text-muted hover:text-red-400 rounded cursor-pointer"
+                          title="删除模块"
                         >
-                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path d="M9 13h6m-3-3v6m-9 1V4a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
-                        <template #dropdown>
-                          <el-dropdown-menu>
-                            <el-dropdown-item :command="null">未分类</el-dropdown-item>
-                            <el-dropdown-item 
-                              v-for="f in getMoveTargetFolders(folder.id)" 
-                              :key="f.id" 
-                              :command="f.id"
-                            >
-                              {{ f.name }}
-                            </el-dropdown-item>
-                          </el-dropdown-menu>
-                        </template>
-                      </el-dropdown>
-                      
-                      <!-- 删除按钮 -->
-                      <button
-                        @click.stop="deleteModule(module)"
-                        class="p-0.5 text-text-muted hover:text-red-400 rounded cursor-pointer"
-                        title="删除模块"
-                      >
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                      </div>
                     </div>
                   </div>
+                  <div class="mt-0.5 flex items-center gap-1.5 text-[10px] text-text-muted">
+                    <span>{{ item.module.nodeCount }} 节点</span>
+                    <span>·</span>
+                    <span>{{ formatTime(item.module.importedAt) }}</span>
+                  </div>
                 </div>
-                <div class="mt-0.5 flex items-center gap-1.5 text-[10px] text-text-muted">
-                  <span>{{ module.nodeCount }} 节点</span>
-                  <span>·</span>
-                  <span>{{ formatTime(module.importedAt) }}</span>
-                </div>
-              </li>
-            </ul>
-          </div>
-          
-          <!-- 未分类部分 -->
-          <div class="border border-border/40 rounded bg-bg-primary/20">
-            <!-- 未分类 Header -->
-            <div 
-              @click="expandedFolders['uncategorized'] = !expandedFolders['uncategorized']"
-              class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-bg-hover rounded select-none group"
-            >
-              <div class="flex items-center gap-2 min-w-0">
-                <svg 
-                  class="w-3.5 h-3.5 text-text-muted transition-transform duration-200 shrink-0"
-                  :class="{ 'rotate-90': expandedFolders['uncategorized'] }"
-                  fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"
-                >
-                  <path d="M9 5l7 7-7 7" />
-                </svg>
-                
-                <svg class="w-4 h-4 text-text-muted shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4l2 2h4a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm10.3 5.7a1 1 0 00-1.4-1.4L9 12.2l-1.9-1.9a1 1 0 00-1.4 1.4l2.6 2.6a1 1 0 001.4 0l3.6-3.6z" clip-rule="evenodd" />
-                </svg>
-                
-                <span class="text-sm font-semibold text-text-primary truncate">
-                  未分类
-                </span>
-                
-                <span class="text-xs text-text-muted font-normal">({{ (groupedModules['uncategorized'] || []).length }})</span>
               </div>
             </div>
             
-            <!-- 未分类下的 MIB 模块列表 -->
-            <ul v-if="expandedFolders['uncategorized']" class="pl-4 pr-1 pb-1 space-y-0.5 border-t border-border/20 pt-1">
-              <li v-if="(groupedModules['uncategorized'] || []).length === 0" class="py-2 px-3 text-xs text-text-muted italic">
-                没有模块
-              </li>
-              <li
-                v-for="module in groupedModules['uncategorized']"
-                :key="module.id"
-                @click="selectModule(module.id)"
-                :class="[
-                  'px-3 py-2 cursor-pointer transition-all rounded flex flex-col group/module relative',
-                  selectedModuleId === module.id
-                    ? 'bg-accent-bg border-l-2 border-accent text-accent'
-                    : 'hover:bg-bg-hover text-text-primary',
-                ]"
-              >
-                <div class="flex items-center justify-between min-w-0">
-                  <span class="text-sm font-medium truncate flex-1" :title="module.name">{{ module.name }}</span>
-                  <div class="flex items-center gap-1.5 shrink-0 ml-2">
-                    <span v-if="module.isBuiltIn" class="text-[10px] px-1 py-0.5 rounded bg-info/20 text-info font-normal whitespace-nowrap">
-                      内置
-                    </span>
-                    <span v-else :class="['text-[10px] px-1 py-0.5 rounded bg-bg-primary font-normal whitespace-nowrap', getStatusClass(module.status)]">
-                      {{ module.status }}
-                    </span>
-                    
-                    <div class="hidden group-hover/module:flex items-center gap-0.5" v-if="!module.isBuiltIn">
-                      <!-- 移动到文件夹下拉菜单 -->
-                      <el-dropdown trigger="click" @command="(cmd: any) => moveModule(module, cmd)">
-                        <button
-                          @click.stop
-                          class="p-0.5 text-text-muted hover:text-text-primary rounded cursor-pointer"
-                          title="移动到文件夹"
-                        >
-                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path d="M9 13h6m-3-3v6m-9 1V4a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-                          </svg>
-                        </button>
-                        <template #dropdown>
-                          <el-dropdown-menu>
-                            <el-dropdown-item v-for="f in getMoveTargetFolders(null)" :key="f.id" :command="f.id">
-                              {{ f.name }}
-                            </el-dropdown-item>
-                          </el-dropdown-menu>
-                        </template>
-                      </el-dropdown>
-                      
-                      <!-- 删除按钮 -->
-                      <button
-                        @click.stop="deleteModule(module)"
-                        class="p-0.5 text-text-muted hover:text-red-400 rounded cursor-pointer"
-                        title="删除模块"
-                      >
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div class="mt-0.5 flex items-center gap-1.5 text-[10px] text-text-muted">
-                  <span>{{ module.nodeCount }} 节点</span>
-                  <span>·</span>
-                  <span>{{ formatTime(module.importedAt) }}</span>
-                </div>
-              </li>
-            </ul>
-          </div>
-          
+          </template>
         </div>
       </div>
 

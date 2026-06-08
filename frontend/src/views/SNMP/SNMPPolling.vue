@@ -776,8 +776,7 @@ onMounted(async () => {
         :style="horizontalResize.getPanelStyle(0)"
         :class="[
           'flex flex-col bg-bg-secondary border-r border-border/50',
-          horizontalResize.isResizing.value ? 'select-none' : '',
-          'transition-[width] duration-200 ease-in-out',
+          horizontalResize.isResizing.value ? 'select-none' : 'transition-[width] duration-200 ease-in-out',
         ]"
       >
         <template v-if="!horizontalResize.isCollapsed(0)">
@@ -962,9 +961,8 @@ onMounted(async () => {
       <!-- 中间面板：目标列表 + 轮询结果 -->
       <main
         ref="centerContainerRef"
-        :style="horizontalResize.getPanelStyle(1)"
         :class="[
-          'flex flex-col min-w-0 overflow-hidden',
+          'flex-1 flex flex-col min-w-0 overflow-hidden',
           horizontalResize.isResizing.value ? 'select-none' : '',
         ]"
       >
@@ -1130,8 +1128,7 @@ onMounted(async () => {
 
         <!-- 轮询结果区域 -->
         <div
-          :style="{ height: `${verticalResize.sizes.value[1]}px`, flexShrink: 0 }"
-          class="flex flex-col min-h-0 overflow-hidden"
+          class="flex-1 flex flex-col min-h-0 overflow-hidden"
         >
           <!-- 结果工具栏 -->
           <div class="flex items-center justify-between px-4 py-2 bg-bg-secondary/50 border-b border-border/30 flex-shrink-0">
@@ -1235,8 +1232,7 @@ onMounted(async () => {
         :style="horizontalResize.getPanelStyle(2)"
         :class="[
           'flex flex-col bg-bg-secondary border-l border-border/50 overflow-y-auto',
-          horizontalResize.isResizing.value ? 'select-none' : '',
-          'transition-[width] duration-200 ease-in-out',
+          horizontalResize.isResizing.value ? 'select-none' : 'transition-[width] duration-200 ease-in-out',
         ]"
       >
         <template v-if="!horizontalResize.isCollapsed(2)">

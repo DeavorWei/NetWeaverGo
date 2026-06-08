@@ -45,7 +45,7 @@
           <router-view v-slot="{ Component }">
             <Suspense>
               <template #default>
-                <keep-alive include="NetworkCalc">
+                <keep-alive :include="['NetworkCalc', 'SNMPMib']">
                   <component :is="Component" />
                 </keep-alive>
               </template>

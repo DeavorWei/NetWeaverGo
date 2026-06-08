@@ -337,6 +337,57 @@ func (r *OIDResolver) RebuildCache() error {
 	return nil
 }
 
+// WarmUpCache 预热缓存
+// 将一组节点批量转换并存入缓存，并附带模块名与子节点关系，实现 0 查询解析
+func (r *OIDResolver) WarmUpCache(nodes []models.MIBNode, moduleName string) {
+	if len(nodes) == 0 {
+		return
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// 提前在内存中计算所有的父子关系，避免每次查询数据库
+	childrenMap := make(map[string][]string)
+	for i := range nodes {
+		parentOID := nodes[i].ParentOID
+		if parentOID != "" {
+			childrenMap[parentOID] = append(childrenMap[parentOID], nodes[i].OID)
+		}
+	}
+
+	for i := range nodes {
+		node := &nodes[i]
+		
+		result := &ResolvedOID{
+			ID:          node.ID,
+			OID:         node.OID,
+			Name:        node.Name,
+			Description: node.Description,
+			Type:        node.Syntax,
+			Access:      node.Access,
+			Status:      node.Status,
+			ParentOID:   node.ParentOID,
+			Children:    childrenMap[node.OID],
+			Found:       true,
+		}
+
+		if node.ModuleID != nil {
+			result.ModuleID = *node.ModuleID
+			result.ModuleName = moduleName
+		}
+
+		if result.Children == nil {
+			result.Children = []string{}
+		}
+
+		r.oidCache.Add(node.OID, result)
+		r.nameCache.Add(node.Name, node.OID)
+	}
+
+	logger.Debug("SNMP", "-", "OID 解析器缓存预热完成: 模块=%s, 节点数=%d", moduleName, len(nodes))
+}
+
 // ============================================================================
 // 高级查询方法
 // ============================================================================
