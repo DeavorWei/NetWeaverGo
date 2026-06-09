@@ -515,11 +515,30 @@ func (s *SNMPPollingService) UpdateCredential(ctx context.Context, id uint, req 
 	// 加密敏感字段
 	if s.crypto != nil {
 		if req.Community != "" {
-			encrypted, err := s.crypto.EncryptCredential(req.Community)
-			if err != nil {
-				return fmt.Errorf("加密 community 失败: %w", err)
+			// 处理前端回传的脱敏 community 串
+			// 如果前端传入的 community 和原值解密后脱敏的结果一致，且确实包含 "*"，说明并未被用户修改过，应保持原加密数据不变
+			oldCommunity := ""
+			if cred.Community != "" {
+				if snmp.IsEncrypted(cred.Community) {
+					decrypted, err := s.crypto.DecryptCredential(cred.Community)
+					if err == nil {
+						oldCommunity = decrypted
+					}
+				} else {
+					oldCommunity = cred.Community
+				}
 			}
-			cred.Community = encrypted
+
+			if req.Community == maskString(oldCommunity) && strings.Contains(req.Community, "*") {
+				// 未修改，不做更新，保留原 cred.Community 的加密值
+			} else {
+				// 用户更改了 community，重新加密新值
+				encrypted, err := s.crypto.EncryptCredential(req.Community)
+				if err != nil {
+					return fmt.Errorf("加密 community 失败: %w", err)
+				}
+				cred.Community = encrypted
+			}
 		}
 		if req.AuthPassword != "" {
 			encrypted, err := s.crypto.EncryptCredential(req.AuthPassword)
