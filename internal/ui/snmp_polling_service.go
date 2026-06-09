@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -516,20 +515,8 @@ func (s *SNMPPollingService) UpdateCredential(ctx context.Context, id uint, req 
 	if s.crypto != nil {
 		if req.Community != "" {
 			// 处理前端回传的脱敏 community 串
-			// 如果前端传入的 community 和原值解密后脱敏的结果一致，且确实包含 "*"，说明并未被用户修改过，应保持原加密数据不变
-			oldCommunity := ""
-			if cred.Community != "" {
-				if snmp.IsEncrypted(cred.Community) {
-					decrypted, err := s.crypto.DecryptCredential(cred.Community)
-					if err == nil {
-						oldCommunity = decrypted
-					}
-				} else {
-					oldCommunity = cred.Community
-				}
-			}
-
-			if req.Community == maskString(oldCommunity) && strings.Contains(req.Community, "*") {
+			// 如果前端传入的 community 为固定的脱敏占位符 "******"，说明并未被用户修改过，应保持原加密数据不变
+			if req.Community == "******" {
 				// 未修改，不做更新，保留原 cred.Community 的加密值
 			} else {
 				// 用户更改了 community，重新加密新值
@@ -1156,12 +1143,12 @@ func (s *SNMPPollingService) credentialToVM(cred *models.SNMPCredential) Credent
 }
 
 // maskString 通用脱敏函数
-// P2-15: 保留首尾字符，中间用 * 替代
+// 统一返回 6 个 * 占位符，不暴露密码的实际长度
 func maskString(s string) string {
-	if len(s) <= 2 {
-		return "**"
+	if s == "" {
+		return ""
 	}
-	return s[:1] + strings.Repeat("*", len(s)-2) + s[len(s)-1:]
+	return "******"
 }
 
 // templateToVM 模板模型转 View Model

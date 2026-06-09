@@ -139,6 +139,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import {
   V3_AUTH_PROTOCOLS,
   V3_PRIV_PROTOCOLS,
@@ -302,6 +303,24 @@ async function handleSubmit() {
     if (!valid) return
   } catch {
     return
+  }
+
+  // 如果是在编辑状态下，且 community 是 "******"，说明用户没有修改密码
+  // 给用户弹窗提示确认是否是修改密码还是仅仅保留原密码
+  if (isEditing.value && (formData.version === 'v1' || formData.version === 'v2c') && formData.community === '******') {
+    try {
+      await ElMessageBox.confirm(
+        '当前 Community 为 "******"（代表保留原密码）。如果您需要修改密码，请取消并重新输入新密码；如果不需要修改密码，请点击确定继续保存。',
+        '保存提示',
+        {
+          confirmButtonText: '确定保存',
+          cancelButtonText: '去修改',
+          type: 'info',
+        }
+      )
+    } catch {
+      return // 用户点击取消，去修改
+    }
   }
 
   const baseData = {
