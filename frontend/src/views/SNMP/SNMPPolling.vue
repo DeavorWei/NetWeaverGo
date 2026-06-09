@@ -30,6 +30,7 @@ import type {
   UpdatePollingTemplateRequest,
   CreatePollingTargetRequest,
   UpdatePollingTargetRequest,
+  ConcurrencyConfigVM,
 } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 import { PollingResultFilterVM } from '@/bindings/github.com/NetWeaverGo/core/internal/ui/models'
 import type { PollingResultEvent } from '@/composables/useSNMPPolling'
@@ -171,6 +172,23 @@ const showCommunityMap = ref<Map<number, boolean>>(new Map())
 
 /** 左侧面板激活的标签页 */
 const leftActiveTab = ref<'credentials' | 'templates'>('credentials')
+
+// ==================== 并发控制配置 ====================
+
+/** 并发配置表单 */
+const concurrencyConfig = ref<ConcurrencyConfigVM>({
+  maxDevices: 10,
+  maxOpsPerDevice: 1,
+  skipIfBusy: true,
+  queueTimeoutSecs: 30,
+})
+
+/** 并发配置加载/保存状态 */
+const concurrencyLoading = ref(false)
+const concurrencySaving = ref(false)
+
+/** 并发控制设置弹窗显示状态 */
+const showConcurrencySettingsModal = ref(false)
 
 // ==================== 计算属性 ====================
 
@@ -685,11 +703,68 @@ function resetResultFilter() {
   loadPollingResults()
 }
 
+// ==================== 并发控制管理 ====================
+
+/** 并发配置默认值 */
+const DEFAULT_CONCURRENCY: ConcurrencyConfigVM = {
+  maxDevices: 10,
+  maxOpsPerDevice: 1,
+  skipIfBusy: true,
+  queueTimeoutSecs: 30,
+}
+
+/**
+ * 加载并发控制配置
+ */
+async function loadConcurrencyConfig() {
+  concurrencyLoading.value = true
+  try {
+    const config = await SNMPPollingAPI.getConcurrencyConfig()
+    if (config) {
+      concurrencyConfig.value = { ...config }
+    }
+  } catch (error) {
+    logger.error('SNMP-Polling', '加载并发配置失败', error)
+  } finally {
+    concurrencyLoading.value = false
+  }
+}
+
+/**
+ * 保存并发控制配置
+ */
+async function saveConcurrencyConfig() {
+  concurrencySaving.value = true
+  try {
+    await SNMPPollingAPI.updateConcurrencyConfig(
+      concurrencyConfig.value.maxDevices,
+      concurrencyConfig.value.maxOpsPerDevice
+    )
+    ElMessage.success('并发配置已保存')
+    await loadConcurrencyConfig()
+    logger.info('SNMP-Polling: 并发配置已保存')
+  } catch (error) {
+    logger.error('SNMP-Polling', '保存并发配置失败', error)
+    ElMessage.error('保存并发配置失败')
+  } finally {
+    concurrencySaving.value = false
+  }
+}
+
+/**
+ * 恢复默认并发配置
+ */
+async function resetConcurrencyConfig() {
+  concurrencyConfig.value = { ...DEFAULT_CONCURRENCY }
+  await saveConcurrencyConfig()
+}
+
 // ==================== 生命周期 ====================
 
 onMounted(async () => {
   await loadAll()
   await loadPollingResults()
+  await loadConcurrencyConfig()
 })
 
 </script>
@@ -719,6 +794,10 @@ onMounted(async () => {
           <span class="text-text-muted">启用: <span class="text-green-400 font-medium">{{ enabledTargetCount }}</span></span>
           <span class="text-text-muted">成功: <span class="text-green-400 font-medium">{{ successTargetCount }}</span></span>
           <span class="text-text-muted">总轮询: <span class="text-text-primary font-medium">{{ schedulerStatus?.totalPolls ?? 0 }}</span></span>
+          <template v-if="schedulerStatus?.dispatcherStatus">
+            <span class="text-text-muted">并发: <span class="text-blue-400 font-medium">{{ schedulerStatus.dispatcherStatus.activeDevices }}/{{ schedulerStatus.dispatcherStatus.maxDevices }}</span></span>
+            <span v-if="schedulerStatus.dispatcherStatus.waitingTasks > 0" class="text-text-muted">排队: <span class="text-yellow-400 font-medium">{{ schedulerStatus.dispatcherStatus.waitingTasks }}</span></span>
+          </template>
         </div>
 
         <!-- 启停按钮 -->
@@ -742,6 +821,18 @@ onMounted(async () => {
 
       <!-- 右侧：操作按钮 -->
       <div class="flex items-center gap-2">
+        <button
+          @click="showConcurrencySettingsModal = true"
+          class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-bg-tertiary hover:bg-bg-hover border border-border/50 text-text-secondary hover:text-text-primary transition-colors"
+          title="并发控制设置"
+        >
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+          </svg>
+          <span>设置</span>
+        </button>
+
         <button
           @click="handlePollAllNow"
           :disabled="pollingAll || targetCount === 0"
@@ -1236,6 +1327,39 @@ onMounted(async () => {
         ]"
       >
         <template v-if="!horizontalResize.isCollapsed(2)">
+          <!-- 当前分发器状态 -->
+          <div v-if="schedulerStatus?.dispatcherStatus" class="p-4 border-b border-border/30">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-sm font-medium text-text-primary">当前状态</h3>
+              <button
+                @click="showConcurrencySettingsModal = true"
+                class="p-1 rounded-md hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
+                title="并发控制设置"
+              >
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                </svg>
+              </button>
+            </div>
+            <div class="p-2.5 bg-bg-tertiary rounded-md border border-border/20">
+              <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                <span class="text-text-muted">活跃设备</span>
+                <span class="text-right text-text-primary font-medium">
+                  {{ schedulerStatus.dispatcherStatus.activeDevices }}/{{ schedulerStatus.dispatcherStatus.maxDevices }}
+                </span>
+                <span class="text-text-muted">排队任务</span>
+                <span class="text-right text-text-primary font-medium">
+                  {{ schedulerStatus.dispatcherStatus.waitingTasks }}
+                </span>
+                <span class="text-text-muted col-span-2">累计跳过</span>
+                <span class="text-right text-text-primary font-medium col-span-2 -mt-5">
+                  {{ schedulerStatus.dispatcherStatus.skippedTasks }}
+                </span>
+              </div>
+            </div>
+          </div>
+
           <!-- 目标详情 -->
           <div v-if="selectedTarget" class="p-4 border-b border-border/30">
             <h3 class="text-sm font-medium text-text-primary mb-3">目标详情</h3>
@@ -1783,6 +1907,117 @@ onMounted(async () => {
               class="px-4 py-2 text-sm bg-accent hover:bg-accent-dark text-white rounded-md transition-colors disabled:opacity-50"
             >
               保存
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ==================== 并发控制设置弹窗 ==================== -->
+    <Teleport to="body">
+      <div
+        v-if="showConcurrencySettingsModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        @click.self="showConcurrencySettingsModal = false"
+      >
+        <div class="bg-bg-secondary rounded-lg shadow-xl border border-border/50 w-[480px] max-h-[85vh] overflow-y-auto">
+          <!-- 标题头 -->
+          <div class="px-5 py-4 border-b border-border/30 flex items-center justify-between">
+            <h3 class="text-base font-medium text-text-primary">并发控制设置</h3>
+            <button
+              @click="showConcurrencySettingsModal = false"
+              class="p-1 rounded-md hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
+            >
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+          <!-- 表单体 -->
+          <div class="p-5 space-y-4">
+            <!-- 最大并发设备数 -->
+            <div>
+              <label class="block text-sm text-text-muted mb-1">最大并发设备数 (1-100)</label>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model.number="concurrencyConfig.maxDevices"
+                  type="number"
+                  min="1"
+                  max="100"
+                  :disabled="concurrencySaving"
+                  class="w-full px-3 py-2 text-sm bg-bg-tertiary border border-border/50 rounded-md text-text-primary focus:outline-none focus:border-accent disabled:opacity-50"
+                />
+                <span class="text-sm text-text-muted whitespace-nowrap">台</span>
+              </div>
+            </div>
+
+            <!-- 单设备并发操作数 -->
+            <div>
+              <label class="block text-sm text-text-muted mb-1">单设备并发操作数 (1-5)</label>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model.number="concurrencyConfig.maxOpsPerDevice"
+                  type="number"
+                  min="1"
+                  max="5"
+                  :disabled="concurrencySaving"
+                  class="w-full px-3 py-2 text-sm bg-bg-tertiary border border-border/50 rounded-md text-text-primary focus:outline-none focus:border-accent disabled:opacity-50"
+                />
+                <span class="text-sm text-text-muted whitespace-nowrap">个</span>
+              </div>
+            </div>
+
+            <!-- 设备繁忙时跳过 -->
+            <div class="flex items-center justify-between">
+              <label class="text-sm text-text-muted">设备繁忙时跳过</label>
+              <button
+                @click="concurrencyConfig.skipIfBusy = !concurrencyConfig.skipIfBusy"
+                :disabled="concurrencySaving"
+                :class="[
+                  'w-10 h-5 rounded-full transition-colors relative',
+                  concurrencyConfig.skipIfBusy ? 'bg-green-500' : 'bg-gray-600'
+                ]"
+              >
+                <span
+                  :class="[
+                    'absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform',
+                    concurrencyConfig.skipIfBusy ? 'left-5' : 'left-0.5'
+                  ]"
+                ></span>
+              </button>
+            </div>
+
+            <!-- 排队超时时间 -->
+            <div>
+              <label class="block text-sm text-text-muted mb-1">排队超时时间 (10-120)</label>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model.number="concurrencyConfig.queueTimeoutSecs"
+                  type="number"
+                  min="10"
+                  max="120"
+                  :disabled="concurrencySaving"
+                  class="w-full px-3 py-2 text-sm bg-bg-tertiary border border-border/50 rounded-md text-text-primary focus:outline-none focus:border-accent disabled:opacity-50"
+                />
+                <span class="text-sm text-text-muted whitespace-nowrap">秒</span>
+              </div>
+            </div>
+          </div>
+          <!-- 底部按钮 -->
+          <div class="px-5 py-3 border-t border-border/30 flex justify-end gap-2">
+            <button
+              @click="resetConcurrencyConfig"
+              :disabled="concurrencySaving"
+              class="px-4 py-2 text-sm rounded-md bg-bg-tertiary hover:bg-bg-hover border border-border/50 text-text-secondary transition-colors disabled:opacity-50"
+            >
+              恢复默认
+            </button>
+            <button
+              @click="saveConcurrencyConfig"
+              :disabled="concurrencySaving"
+              class="px-4 py-2 text-sm rounded-md bg-accent hover:bg-accent/90 text-white transition-colors disabled:opacity-50"
+            >
+              {{ concurrencySaving ? '保存中...' : '保存' }}
             </button>
           </div>
         </div>

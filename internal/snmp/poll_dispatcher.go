@@ -22,7 +22,8 @@ import (
 //   - Level 1 (taskSem): 控制全局并发设备数
 //   - Level 2 (deviceSems): 控制单设备并发操作数
 type PollDispatcher struct {
-	poller *Poller // 轮询执行器
+	poller   *Poller        // 轮询执行器
+	notifier EventNotifier  // 事件通知器（A-18: 超时等异常通知前端）
 
 	// Level 1: 任务级信号量（控制全局并发设备数）
 	taskSem chan struct{}
@@ -52,8 +53,9 @@ type PollDispatcher struct {
 }
 
 // NewPollDispatcher 创建轮询分发器
+// notifier 可以为 nil（此时超时等异常仅记录日志，不通知前端）
 // config 可选，不传时使用 DefaultDispatcherConfig
-func NewPollDispatcher(poller *Poller, config ...DispatcherConfig) *PollDispatcher {
+func NewPollDispatcher(poller *Poller, notifier EventNotifier, config ...DispatcherConfig) *PollDispatcher {
 	cfg := DefaultDispatcherConfig
 	if len(config) > 0 {
 		cfg = config[0]
@@ -72,6 +74,7 @@ func NewPollDispatcher(poller *Poller, config ...DispatcherConfig) *PollDispatch
 
 	d := &PollDispatcher{
 		poller:          poller,
+		notifier:        notifier,
 		taskSem:         make(chan struct{}, cfg.MaxConcurrentDevices),
 		deviceSems:      make(map[string]chan struct{}),
 		deviceLastUsed:  make(map[string]time.Time),
@@ -317,6 +320,10 @@ func (d *PollDispatcher) rebuildTaskSem(newCapacity, oldCapacity int) {
 			logger.Warn("Dispatcher", "-",
 				"等待活跃任务超时 (%v)，放弃重建 taskSem (仍有 %d 个活跃任务)，当前容量 %d 保持不变",
 				rebuildTimeout, active, oldCapacity)
+			// A-18: 超时后通知前端用户
+			if d.notifier != nil {
+				d.notifier.NotifyError(fmt.Errorf("变更任务并发数超时，容量保留为 %d", oldCapacity))
+			}
 			return
 		default:
 			logger.Debug("Dispatcher", "-", "等待活跃任务完成: 剩余 %d 个", active)

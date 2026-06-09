@@ -141,7 +141,7 @@ func runGUI() {
 			dispatcherConfig.QueueTimeout = time.Duration(snmpCfg.PollQueueTimeout) * time.Second
 		}
 	}
-	dispatcher := snmp.NewPollDispatcher(poller, dispatcherConfig)
+	dispatcher := snmp.NewPollDispatcher(poller, snmpEventNotifier, dispatcherConfig)
 	pollerScheduler := snmp.NewPollerScheduler(dispatcher, pollingRepo, snmpEventNotifier)
 	pollingService := ui.NewSNMPPollingService(poller, pollerScheduler, pollingRepo, snmpEventNotifier, snmpCrypto)
 	logger.Info("System", "-", "SNMP Polling 服务已初始化")

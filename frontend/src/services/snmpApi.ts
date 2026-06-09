@@ -62,6 +62,8 @@ export type {
   PollingHistoryVM,
   PollingTrendVM,
   SchedulerStatusVM,
+  ConcurrencyConfigVM,
+  DispatcherStatusVM,
   ImportMIBRequest,
   CreateMIBNodeRequest,
   UpdateMIBNodeRequest,
@@ -484,6 +486,16 @@ export const SNMPPollingAPI = {
     return SNMPPollingServiceBinding.GetSchedulerStatus()
   },
 
+  /** 获取当前并发控制配置 */
+  getConcurrencyConfig: async (): Promise<$models.ConcurrencyConfigVM | null> => {
+    return SNMPPollingServiceBinding.GetConcurrencyConfig()
+  },
+
+  /** 更新并发控制配置 */
+  updateConcurrencyConfig: async (maxDevices: number, maxOpsPerDevice: number): Promise<void> => {
+    return SNMPPollingServiceBinding.UpdateConcurrencyConfig(maxDevices, maxOpsPerDevice)
+  },
+
   // ==================== 凭据管理 ====================
 
   /** 获取所有凭据 */
@@ -715,3 +727,5 @@ export type CleanupConfig = $models.CleanupConfigVM
 export type CleanupResult = $models.CleanupResultVM
 export type V3User = $models.V3UserVM
 export type MIBFolder = $models.MIBFolderVM
+export type ConcurrencyConfig = $models.ConcurrencyConfigVM
+export type DispatcherStatus = $models.DispatcherStatusVM

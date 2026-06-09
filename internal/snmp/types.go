@@ -34,6 +34,9 @@ type EventNotifier interface {
 	NotifyMIBImported(module *models.MIBModule)
 	NotifyMIBDeleted(moduleID uint)
 	NotifyMIBImportProgress(progress MIBImportProgress)
+
+	// 通用错误通知（A-18: rebuildTaskSem 超时等非特定上下文的错误）
+	NotifyError(err error)
 }
 
 // ============================================================================

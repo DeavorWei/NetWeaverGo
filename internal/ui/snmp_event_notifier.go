@@ -250,3 +250,11 @@ func (n *SNMPEventNotifier) emitEvent(eventName string, data interface{}) {
 func (n *SNMPEventNotifier) EmitCustomEvent(eventName string, data interface{}) {
 	n.emitEvent(eventName, data)
 }
+
+// NotifyError 通知通用错误事件（A-18: rebuildTaskSem 超时等非特定上下文的错误）
+func (n *SNMPEventNotifier) NotifyError(err error) {
+	if n.wailsApp == nil || err == nil {
+		return
+	}
+	n.emitEvent("snmp:error", err.Error())
+}

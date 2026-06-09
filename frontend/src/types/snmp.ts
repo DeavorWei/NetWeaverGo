@@ -600,6 +600,17 @@ export interface PollingResultList {
 }
 
 /**
+ * 分发器状态视图模型
+ * @对应后端 DispatcherStatusVM (internal/ui/snmp_polling_service.go)
+ */
+export interface DispatcherStatusVM {
+  activeDevices: number   // 当前活跃设备数
+  maxDevices: number      // 最大并发设备数
+  waitingTasks: number    // 排队等待的任务数
+  skippedTasks: number    // 累计跳过的任务数
+}
+
+/**
  * 调度器状态视图模型
  * @对应后端 SchedulerStatusVM (internal/ui/snmp_polling_service.go)
  */
@@ -609,6 +620,18 @@ export interface SchedulerStatus {
   totalPolls: number
   lastPollTime: string
   startTime: string
+  dispatcherStatus?: DispatcherStatusVM | null  // 新增：分发器状态
+}
+
+/**
+ * 并发配置视图模型
+ * @对应后端 ConcurrencyConfigVM (internal/ui/snmp_polling_service.go)
+ */
+export interface ConcurrencyConfigVM {
+  maxDevices: number       // 最大并发设备数
+  maxOpsPerDevice: number  // 单设备最大并发操作数
+  skipIfBusy: boolean      // 设备繁忙时是否跳过
+  queueTimeoutSecs: number // 排队超时（秒）
 }
 
 /**

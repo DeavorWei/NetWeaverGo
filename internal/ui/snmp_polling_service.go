@@ -5,6 +5,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -1410,26 +1411,16 @@ func parseDuration(duration string) time.Time {
 
 // sortDataPointsByTime 按时间排序数据点（降序）
 func sortDataPointsByTime(points []PollingDataPoint) {
-	// 使用简单排序
-	for i := 0; i < len(points)-1; i++ {
-		for j := i + 1; j < len(points); j++ {
-			if points[i].Timestamp < points[j].Timestamp {
-				points[i], points[j] = points[j], points[i]
-			}
-		}
-	}
+	sort.Slice(points, func(i, j int) bool {
+		return points[i].Timestamp > points[j].Timestamp // 降序
+	})
 }
 
 // sortTrendDataPointsByTime 按时间排序趋势数据点（升序）
 func sortTrendDataPointsByTime(points []TrendDataPoint) {
-	// 使用简单排序
-	for i := 0; i < len(points)-1; i++ {
-		for j := i + 1; j < len(points); j++ {
-			if points[i].Timestamp > points[j].Timestamp {
-				points[i], points[j] = points[j], points[i]
-			}
-		}
-	}
+	sort.Slice(points, func(i, j int) bool {
+		return points[i].Timestamp < points[j].Timestamp // 升序
+	})
 }
 
 // isNumericValue 判断值是否为数值类型
