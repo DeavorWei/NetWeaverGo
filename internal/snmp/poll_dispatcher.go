@@ -200,7 +200,7 @@ func (d *PollDispatcher) DispatchSync(ctx context.Context, target *PollTarget, o
 	defer func() { <-deviceSem }()
 
 	// ━━━ 执行轮询 ━━━
-	result.Results, result.Error = d.poller.pollWithRetry(ctx, target)
+	result.Results, result.Error = d.poller.PollSingle(ctx, target)
 
 	return result
 }

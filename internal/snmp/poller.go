@@ -5,7 +5,6 @@ package snmp
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"net"
 	"strings"
 	"sync/atomic"
@@ -24,20 +23,14 @@ import (
 
 // PollerConfig 轮询器配置
 type PollerConfig struct {
-	Timeout     time.Duration // SNMP 请求超时时间（默认 5s）
-	Retries     int           // 协议层重试次数（默认 3，gosnmp 内置）
-	MaxWorkers  int           // 最大并发轮询数（默认 10）
-	MaxAppRetries int         // 应用层重试次数（默认 3，用于网络不稳定场景）
-	BaseRetryDelay time.Duration // 应用层重试基础延迟（默认 1s）
+	Timeout    time.Duration // SNMP 请求超时时间（默认 5s）
+	MaxWorkers int           // 最大并发轮询数（默认 10）
 }
 
 // DefaultPollerConfig 默认轮询器配置
 var DefaultPollerConfig = PollerConfig{
-	Timeout:        5 * time.Second,
-	Retries:        3,
-	MaxWorkers:     10,
-	MaxAppRetries:  3,
-	BaseRetryDelay: 1 * time.Second,
+	Timeout:    5 * time.Second,
+	MaxWorkers: 10,
 }
 
 // ============================================================================
@@ -81,17 +74,8 @@ func NewPoller(resolver *OIDResolver, crypto *CredentialCrypto, notifier EventNo
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = DefaultPollerConfig.Timeout
 	}
-	if cfg.Retries < 0 {
-		cfg.Retries = DefaultPollerConfig.Retries
-	}
 	if cfg.MaxWorkers <= 0 {
 		cfg.MaxWorkers = DefaultPollerConfig.MaxWorkers
-	}
-	if cfg.MaxAppRetries < 0 {
-		cfg.MaxAppRetries = DefaultPollerConfig.MaxAppRetries
-	}
-	if cfg.BaseRetryDelay <= 0 {
-		cfg.BaseRetryDelay = DefaultPollerConfig.BaseRetryDelay
 	}
 
 	poller := &Poller{
@@ -101,138 +85,10 @@ func NewPoller(resolver *OIDResolver, crypto *CredentialCrypto, notifier EventNo
 		config:   cfg,
 	}
 
-	logger.Info("SNMP-Poller", "-", "SNMP 轮询器已初始化 (超时: %v, 协议重试: %d, 应用重试: %d, 并发: %d)",
-		cfg.Timeout, cfg.Retries, cfg.MaxAppRetries, cfg.MaxWorkers)
+	logger.Info("SNMP-Poller", "-", "SNMP 轮询器已初始化 (超时: %v, 并发: %d)",
+		cfg.Timeout, cfg.MaxWorkers)
 
 	return poller
-}
-
-// ============================================================================
-// 核心轮询方法
-// ============================================================================
-
-// ============================================================================
-// 应用层重试方法
-// ============================================================================
-
-// pollWithRetry 带应用层重试的轮询方法
-// 用于网络不稳定场景，实现指数退避+抖动
-// 只对特定错误类型重试（超时、网络错误），不重试认证错误
-func (p *Poller) pollWithRetry(ctx context.Context, target *PollTarget) ([]*models.SNMPPollingResult, error) {
-	var lastErr error
-
-	for attempt := 0; attempt <= p.config.MaxAppRetries; attempt++ {
-		// 检查上下文是否已取消
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-
-		// 执行轮询
-		results, err := p.PollSingle(ctx, target)
-		if err == nil {
-			// 成功，返回结果
-			if attempt > 0 {
-				logger.Info("SNMP-Poller", "-", "应用层重试成功: 目标=%s, 重试次数=%d",
-					target.Target.TargetIP, attempt)
-			}
-			return results, nil
-		}
-
-		// 检查是否为可重试错误
-		if !isRetriableError(err) {
-			logger.Warn("SNMP-Poller", "-", "不可重试错误: 目标=%s, 错误=%v",
-				target.Target.TargetIP, err)
-			return nil, err
-		}
-
-		lastErr = err
-
-		// 非最后一次尝试，计算延迟并等待
-		if attempt < p.config.MaxAppRetries {
-			delay := p.calculateRetryDelay(attempt)
-			logger.Warn("SNMP-Poller", "-", "轮询失败，准备重试: 目标=%s, 尝试=%d/%d, 延迟=%v, 错误=%v",
-				target.Target.TargetIP, attempt+1, p.config.MaxAppRetries, delay, err)
-
-			// 等待延迟或上下文取消
-			select {
-			case <-time.After(delay):
-				// 继续重试
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		}
-	}
-
-	// 所有重试失败
-	logger.Error("SNMP-Poller", "-", "应用层重试耗尽: 目标=%s, 重试次数=%d, 最终错误=%v",
-		target.Target.TargetIP, p.config.MaxAppRetries, lastErr)
-	return nil, fmt.Errorf("应用层重试耗尽: %w", lastErr)
-}
-
-// calculateRetryDelay 计算重试延迟（指数退避+抖动）
-// 公式: delay = baseDelay * 2^attempt + jitter(0-500ms)
-func (p *Poller) calculateRetryDelay(attempt int) time.Duration {
-	// 指数退避基础
-	baseDelay := p.config.BaseRetryDelay * time.Duration(1<<uint(attempt))
-
-	// 抖动：随机 0-500ms，避免惊群效应
-	jitter := time.Duration(rand.Intn(500)) * time.Millisecond
-
-	return baseDelay + jitter
-}
-
-// isRetriableError 判断错误是否可重试
-// 只重试超时和网络错误，不重试认证错误
-func isRetriableError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	errStr := err.Error()
-
-	// 可重试的错误类型
-	retriablePatterns := []string{
-		"timeout",
-		"timed out",
-		"deadline exceeded",
-		"context deadline exceeded",
-		"connection refused",
-		"connection reset",
-		"network is unreachable",
-		"no route to host",
-		"temporary failure",
-		"resource temporarily unavailable",
-		"io: read/write on closed pipe",
-		"broken pipe",
-	}
-
-	for _, pattern := range retriablePatterns {
-		if strings.Contains(strings.ToLower(errStr), pattern) {
-			return true
-		}
-	}
-
-	// 不可重试的错误类型（认证、配置错误）
-	nonRetriablePatterns := []string{
-		"authentication",
-		"auth",
-		"credential",
-		"community",
-		"permission denied",
-		"access denied",
-		"invalid",
-		"unsupported",
-		"version",
-	}
-
-	for _, pattern := range nonRetriablePatterns {
-		if strings.Contains(strings.ToLower(errStr), pattern) {
-			return false
-		}
-	}
-
-	// 默认不重试未知错误
-	return false
 }
 
 // ============================================================================
@@ -635,20 +491,19 @@ func (p *Poller) createV1V2Client(target string, port uint16, community string, 
 		versionStr = "v1"
 	}
 
-	logger.Debug("SNMP-Poller", target, "创建 SNMP%s 客户端: 地址=%s:%d, 超时=%v, 重试=%d",
-		versionStr, target, port, p.config.Timeout, p.config.Retries)
+	logger.Debug("SNMP-Poller", target, "创建 SNMP%s 客户端: 地址=%s:%d, 超时=%v",
+		versionStr, target, port, p.config.Timeout)
 
 	client := &gosnmp.GoSNMP{
-		Target:             target,
-		Port:               port,
-		Transport:          "udp",
-		Community:          community,
-		Version:            version,
-		Timeout:            p.config.Timeout,
-		Retries:            p.config.Retries,
-		ExponentialTimeout: true,
-		MaxOids:            60,
-		MaxRepetitions:     50,
+		Target:         target,
+		Port:           port,
+		Transport:      "udp",
+		Community:      community,
+		Version:        version,
+		Timeout:        p.config.Timeout,
+		Retries:        0,
+		MaxOids:        60,
+		MaxRepetitions: 50,
 	}
 
 	err := client.Connect()
@@ -698,15 +553,14 @@ func (p *Poller) createV3Client(target string, port uint16, cred *models.SNMPCre
 	privProtocol := mapPrivProtocol(cred.PrivProtocol)
 
 	client := &gosnmp.GoSNMP{
-		Target:             target,
-		Port:               port,
-		Transport:          "udp",
-		Version:            gosnmp.Version3,
-		Timeout:            p.config.Timeout,
-		Retries:            p.config.Retries,
-		ExponentialTimeout: true,
-		MaxOids:            60,
-		MaxRepetitions:     50,
+		Target:         target,
+		Port:           port,
+		Transport:      "udp",
+		Version:        gosnmp.Version3,
+		Timeout:        p.config.Timeout,
+		Retries:        0,
+		MaxOids:        60,
+		MaxRepetitions: 50,
 		SecurityModel:      gosnmp.UserSecurityModel,
 		MsgFlags:          securityLevel,
 		SecurityParameters: &gosnmp.UsmSecurityParameters{
