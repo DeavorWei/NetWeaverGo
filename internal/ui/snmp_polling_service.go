@@ -4,8 +4,12 @@ package ui
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
+	"os"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -1454,4 +1458,87 @@ func isNumericValue(value string) bool {
 		return false
 	}
 	return true
+}
+
+// ExportPollingResultsCSV 导出轮询结果为 CSV 文件
+// 根据过滤条件查询所有匹配结果（不分页），生成 CSV 并写入指定文件路径
+func (s *SNMPPollingService) ExportPollingResultsCSV(ctx context.Context, filter PollingResultFilterVM, filePath string) error {
+	// 构建 repository 过滤条件
+	repoFilter := repository.PollingResultFilter{
+		TargetID: filter.TargetID,
+		OID:      filter.OID,
+		BatchID:  filter.BatchID,
+	}
+	if filter.StartTime != "" {
+		if t, err := time.Parse(time.RFC3339, filter.StartTime); err == nil {
+			repoFilter.StartTime = &t
+		}
+	}
+	if filter.EndTime != "" {
+		if t, err := time.Parse(time.RFC3339, filter.EndTime); err == nil {
+			repoFilter.EndTime = &t
+		}
+	}
+
+	// 先获取总数
+	_, total, err := s.repo.ListPollingResults(ctx, repoFilter, 1, 1)
+	if err != nil {
+		logger.Error("SNMP-PollingService", "-", "导出 CSV 查询总数失败: %v", err)
+		return fmt.Errorf("查询结果总数失败: %w", err)
+	}
+	if total == 0 {
+		return fmt.Errorf("没有可导出的数据")
+	}
+
+	// 一次性获取所有结果
+	results, _, err := s.repo.ListPollingResults(ctx, repoFilter, 1, int(total))
+	if err != nil {
+		logger.Error("SNMP-PollingService", "-", "导出 CSV 查询数据失败: %v", err)
+		return fmt.Errorf("查询结果数据失败: %w", err)
+	}
+
+	// 生成 CSV 内容
+	var buf strings.Builder
+	buf.WriteString("\xEF\xBB\xBF") // UTF-8 BOM，确保 Excel 正确识别中文
+
+	writer := csv.NewWriter(&buf)
+
+	// 写入表头
+	header := []string{"序号", "轮询时间", "目标IP", "OID", "OID名称", "值", "值类型", "批次ID", "目标ID"}
+	if err := writer.Write(header); err != nil {
+		return fmt.Errorf("写入 CSV 表头失败: %w", err)
+	}
+
+	// 写入数据行
+	for i, result := range results {
+		pollTime := result.PollTime.Format("2006-01-02 15:04:05")
+		row := []string{
+			strconv.Itoa(i + 1),
+			pollTime,
+			result.TargetIP,
+			result.OID,
+			result.OIDName,
+			result.Value,
+			result.ValueType,
+			result.BatchID,
+			strconv.Itoa(int(result.TargetID)),
+		}
+		if err := writer.Write(row); err != nil {
+			return fmt.Errorf("写入 CSV 数据行失败: %w", err)
+		}
+	}
+
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return fmt.Errorf("CSV 写入器刷新失败: %w", err)
+	}
+
+	// 写入文件
+	if err := os.WriteFile(filePath, []byte(buf.String()), 0644); err != nil {
+		logger.Error("SNMP-PollingService", "-", "导出 CSV 写入文件失败: %v", err)
+		return fmt.Errorf("写入文件失败: %w", err)
+	}
+
+	logger.Info("SNMP-PollingService", "-", "已导出 %d 条轮询结果到 %s", len(results), filePath)
+	return nil
 }

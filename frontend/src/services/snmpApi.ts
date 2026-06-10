@@ -623,6 +623,11 @@ export const SNMPPollingAPI = {
     return SNMPPollingServiceBinding.ClearPollingResults(before)
   },
 
+  /** 导出轮询结果为 CSV 文件 */
+  exportPollingResultsCSV: async (filter: $models.PollingResultFilterVM, filePath: string): Promise<void> => {
+    return SNMPPollingServiceBinding.ExportPollingResultsCSV(filter, filePath)
+  },
+
   /** 获取轮询统计信息 */
   getPollingStats: async (targetId: number): Promise<$models.PollingStatsVM | null> => {
     return SNMPPollingServiceBinding.GetPollingStats(targetId)

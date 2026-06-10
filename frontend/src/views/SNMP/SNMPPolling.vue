@@ -15,6 +15,7 @@
  */
 import { ref, computed, onMounted } from "vue";
 import { ElMessageBox, ElMessage } from "element-plus";
+import { Dialogs } from "@wailsio/runtime";
 import { SNMPPollingAPI } from "@/services/snmpApi";
 import { useSNMPPolling } from "@/composables/useSNMPPolling";
 import { usePanelResize } from "@/composables/usePanelResize";
@@ -721,6 +722,37 @@ function resetResultFilter() {
   resultFilter.value = new PollingResultFilterVM();
   currentPage.value = 1;
   loadPollingResults();
+}
+
+/**
+ * 导出轮询结果为 CSV 文件
+ * 通过系统文件保存对话框选择导出位置，然后调用后端生成 CSV 并写入文件
+ */
+async function exportPollingResults() {
+  try {
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:T]/g, "")
+      .slice(0, 15);
+    const savePath = await Dialogs.SaveFile({
+      Title: "导出轮询结果",
+      Filename: `轮询结果_${timestamp}.csv`,
+      Filters: [{ DisplayName: "CSV 文件", Pattern: "*.csv" }],
+    });
+
+    if (!savePath) return; // 用户取消
+
+    await SNMPPollingAPI.exportPollingResultsCSV(resultFilter.value, savePath);
+    ElMessage.success("轮询结果导出成功");
+    logger.info(`SNMP-Polling: 轮询结果已导出到 ${savePath}`);
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (errMsg === "cancel" || errMsg.includes("cancelled by user")) {
+      return; // 用户取消，不提示
+    }
+    logger.error(`SNMP-Polling: 导出结果失败 - ${error}`);
+    ElMessage.error(`导出失败: ${errMsg}`);
+  }
 }
 
 // ==================== 并发控制管理 ====================
@@ -1539,12 +1571,20 @@ onMounted(async () => {
                 </button>
               </span>
             </div>
-            <button
-              @click="clearOldResults"
-              class="px-2 py-1 text-xs bg-bg-tertiary hover:bg-bg-hover text-text-secondary rounded transition-colors"
-            >
-              清理结果
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                @click="clearOldResults"
+                class="px-2 py-1 text-xs bg-bg-tertiary hover:bg-bg-hover text-text-secondary rounded transition-colors"
+              >
+                清理结果
+              </button>
+              <button
+                @click="exportPollingResults"
+                class="px-2 py-1 text-xs bg-bg-tertiary hover:bg-bg-hover text-text-secondary rounded transition-colors"
+              >
+                导出
+              </button>
+            </div>
           </div>
 
           <!-- 结果表格 -->
