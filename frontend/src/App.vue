@@ -1,11 +1,16 @@
 <template>
-  <div class="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary text-text-primary font-sans">
+  <div
+    class="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary text-text-primary font-sans"
+  >
     <!-- 自定义标题栏 -->
     <TitleBar />
 
     <el-container class="flex-1 min-h-0">
       <!-- 侧边栏 -->
-      <el-aside :width="collapsed ? '64px' : '224px'" class="transition-all duration-300 ease-in-out bg-bg-secondary border-r border-border flex flex-col">
+      <el-aside
+        :width="collapsed ? '68px' : '150px'"
+        class="transition-all duration-300 ease-in-out bg-bg-secondary border-r border-border flex flex-col"
+      >
         <!-- 导航菜单 -->
         <el-menu
           :default-active="activeKey"
@@ -14,12 +19,17 @@
           class="border-r-0 flex-1 overflow-y-auto scrollbar-custom bg-transparent custom-menu"
           @select="handleNav"
         >
-          <el-menu-item 
-            v-for="item in menuItems" 
-            :key="item.key" 
+          <el-menu-item
+            v-for="item in menuItems"
+            :key="item.key"
             :index="item.key"
           >
-            <el-icon><span v-html="item.icon" class="w-5 h-5 flex items-center justify-center"></span></el-icon>
+            <el-icon
+              ><span
+                v-html="item.icon"
+                class="w-5 h-5 flex items-center justify-center"
+              ></span
+            ></el-icon>
             <template #title>
               <span class="font-medium">{{ item.label }}</span>
             </template>
@@ -27,9 +37,24 @@
         </el-menu>
 
         <!-- 折叠按钮 -->
-        <div class="p-3 flex justify-center cursor-pointer hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors border-t border-border" @click="collapsed = !collapsed" :title="collapsed ? '展开侧边栏' : '折叠侧边栏'">
-          <el-icon :size="18" class="transition-transform duration-300" :class="collapsed ? 'rotate-180' : ''">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div
+          class="p-3 flex justify-center cursor-pointer hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors border-t border-border"
+          @click="collapsed = !collapsed"
+          :title="collapsed ? '展开侧边栏' : '折叠侧边栏'"
+        >
+          <el-icon
+            :size="18"
+            class="transition-transform duration-300"
+            :class="collapsed ? 'rotate-180' : ''"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />
             </svg>
           </el-icon>
@@ -38,8 +63,6 @@
 
       <!-- 主内容区 -->
       <el-container class="flex-col bg-bg-primary min-w-0">
-
-
         <!-- 内容主体 -->
         <el-main class="p-6 overflow-auto scrollbar-custom relative">
           <router-view v-slot="{ Component }">
@@ -243,8 +266,12 @@ onUnmounted(() => {
   --el-menu-text-color: var(--color-text-secondary);
   --el-menu-hover-text-color: var(--color-text-primary);
   --el-menu-active-color: var(--color-accent);
+  --el-menu-collapse-width: 60px;
   padding: 8px;
   border-right: none;
+}
+.custom-menu.el-menu--collapse {
+  padding: 8px 0;
 }
 .custom-menu :deep(.el-menu-item) {
   border-radius: 8px;
