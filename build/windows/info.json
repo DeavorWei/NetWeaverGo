@@ -1,15 +1,15 @@
 {
-	"fixed": {
-		"file_version": "0.1.0"
-	},
-	"info": {
-		"0000": {
-			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "A temp_wails_app application",
-			"LegalCopyright": "© 2026, My Company",
-			"ProductName": "My Product",
-			"Comments": "This is a comment"
-		}
-	}
+  "fixed": {
+    "file_version": "1.0.0"
+  },
+  "info": {
+    "0000": {
+      "ProductVersion": "1.0.0",
+      "CompanyName": "DeavorWei个人工作室",
+      "FileDescription": "一个网络工程师的工具箱",
+      "LegalCopyright": "© 2026, DeavorWei工作室",
+      "ProductName": "NetWeaverGo",
+      "Comments": "https://deavorwei.com"
+    }
+  }
 }
