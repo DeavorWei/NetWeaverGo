@@ -50,6 +50,7 @@ function handlePollingResultEvent(_event: PollingResultEvent) {
   if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
   autoRefreshTimer = setTimeout(() => {
     loadPollingResults();
+    loadTargets();  // 同时刷新目标列表状态（lastPollAt、lastPollStatus 等）
   }, AUTO_REFRESH_DEBOUNCE);
 }
 

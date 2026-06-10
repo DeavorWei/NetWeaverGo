@@ -77,7 +77,7 @@ type TrapEvent struct {
 type PollingResultEvent struct {
 	TargetID  uint   `json:"targetId"`
 	TargetIP  string `json:"targetIP"`
-	Status    string `json:"status"`    // success/error/timeout
+	Status    string `json:"status"`    // success/failure/timeout
 	Error     string `json:"error"`     // 错误信息
 	PollTime  int64  `json:"pollTime"`  // Unix 毫秒时间戳
 	OIDCount  int    `json:"oidCount"`  // 采集的 OID 数量

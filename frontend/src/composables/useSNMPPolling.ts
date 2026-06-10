@@ -103,7 +103,7 @@ export function useSNMPPolling(onResultReceived?: (event: PollingResultEvent) =>
     let count = 0
     for (const target of targets.value) {
       const result = latestResults.value.get(target.id)
-      if (result?.status === 'success') count++
+      if (result?.status === 'success' && result.oidCount > 0) count++
     }
     return count
   })
@@ -232,6 +232,8 @@ export function useSNMPPolling(onResultReceived?: (event: PollingResultEvent) =>
       }
       // 添加高亮效果
       addHighlight(targetId)
+      // 刷新目标列表以获取最新状态（与 pollAllNow 行为一致）
+      await loadTargets()
       logger.debug(`SNMP-Polling: 目标 ${targetId} 轮询完成 - ${results.length} 条结果`)
       return results
     } catch (error) {
@@ -368,6 +370,20 @@ export function useSNMPPolling(onResultReceived?: (event: PollingResultEvent) =>
       // 监听轮询错误事件
       const unsubError = SNMPPollingEvents.onPollingError((error) => {
         logger.error('SNMP-Polling', `目标 ${error.targetId} 轮询错误`, error.error)
+        // 更新最新结果（构造失败事件）
+        const errorEvent: PollingResultEvent = {
+          targetId: error.targetId,
+          targetIP: '',
+          status: 'failure',
+          pollTime: Date.now(),
+          oidCount: 0,
+          batchId: '',
+          error: error.error,
+        }
+        latestResults.value.set(error.targetId, errorEvent)
+        addHighlight(error.targetId)
+        // 触发外部回调（用于自动刷新结果列表和目标列表）
+        onResultReceived?.(errorEvent)
       })
       unsubscribers.push(unsubError)
 

@@ -132,6 +132,7 @@ func (p *Poller) PollSingle(ctx context.Context, target *PollTarget) ([]*models.
 	results := make([]*models.SNMPPollingResult, 0)
 	batchID := uuid.New().String()
 	pollTime := time.Now()
+	var oidErrors []error
 
 	if target.Template != nil && len(target.Template.OIDItems) > 0 {
 		// 按模板 OID 列表轮询
@@ -139,6 +140,7 @@ func (p *Poller) PollSingle(ctx context.Context, target *PollTarget) ([]*models.
 			oidResults, err := p.pollOID(ctx, client, target.Target, oidItem, batchID, pollTime)
 			if err != nil {
 				logger.Warn("SNMP-Poller", "-", "轮询 OID 失败: %s, %v", oidItem.OID, err)
+				oidErrors = append(oidErrors, err)
 				continue
 			}
 			results = append(results, oidResults...)
@@ -154,14 +156,29 @@ func (p *Poller) PollSingle(ctx context.Context, target *PollTarget) ([]*models.
 			oidResults, err := p.pollOID(ctx, client, target.Target, oidItem, batchID, pollTime)
 			if err != nil {
 				logger.Warn("SNMP-Poller", "-", "轮询默认 OID 失败: %s, %v", oidItem.OID, err)
+				oidErrors = append(oidErrors, err)
 				continue
 			}
 			results = append(results, oidResults...)
 		}
 	}
 
-	// 更新统计
+	// 判断 OID 轮询结果
+	if len(oidErrors) > 0 && len(results) == 0 {
+		// 所有 OID 均失败，发送错误通知并返回错误
+		combinedErr := fmt.Errorf("所有 OID 轮询失败（共 %d 个错误）: %w", len(oidErrors), oidErrors[0])
+		p.notifyError(targetID, targetIP, combinedErr)
+		return nil, combinedErr
+	}
+
+	// 更新统计（无错误或部分成功）
 	atomic.AddInt64(&p.totalPolls, 1)
+
+	if len(oidErrors) > 0 {
+		// 部分 OID 失败，记录警告但继续返回已有结果
+		logger.Warn("SNMP-Poller", "-", "部分 OID 轮询失败: %d 个错误, 目标 IP=%s", len(oidErrors), targetIP)
+	}
+
 	atomic.AddInt64(&p.successCount, 1)
 
 	// 发送成功通知
@@ -695,7 +712,7 @@ func (p *Poller) notifyError(targetID uint, targetIP string, err error) {
 	p.notifier.NotifyPollingResult(PollingResultEvent{
 		TargetID:  targetID,
 		TargetIP:  targetIP,
-		Status:    "error",
+		Status:    "failure",
 		Error:     err.Error(),
 		PollTime:  time.Now().UnixMilli(),
 		OIDCount:  0,
