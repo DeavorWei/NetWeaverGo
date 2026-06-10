@@ -76,7 +76,7 @@ func NewTrapListener(handler *TrapHandler, config *models.SNMPServerConfig, noti
 	// 应用默认配置
 	if config == nil {
 		config = &models.SNMPServerConfig{
-			TrapPort:      1162, // 使用非特权端口
+			TrapPort:      162, // SNMP Trap 标准端口
 			TrapCommunity: "public",
 		}
 	}

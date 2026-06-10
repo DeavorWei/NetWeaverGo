@@ -304,7 +304,7 @@ func InitDefaultSNMPConfig() error {
 	// 创建默认配置
 	defaultConfig := models.SNMPServerConfig{
 		TrapEnabled:              false,
-		TrapPort:                 1162,
+		TrapPort:                 162,
 		TrapCommunity:            "",
 		MaxStorageDays:           30,
 		PollingEnabled:           false,

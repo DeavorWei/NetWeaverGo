@@ -74,7 +74,8 @@ const activeConfig = ref<ServerConfigVM | null>(null)
 const filterRules = ref<FilterRuleVM[]>([])
 
 /** 面板显示状态 */
-const showFilterPanel = ref(true)
+const showFilterModal = ref(false)
+const filterModalTab = ref<'filter' | 'rules' | 'v3users'>('filter')
 const showDetailPanel = ref(true)
 const showConfigModal = ref(false)
 const showRuleModal = ref(false)
@@ -97,7 +98,6 @@ const editingConfig = ref<ServerConfigVM | null>(null)
 const editingRule = ref<FilterRuleVM | null>(null)
 
 /** 面板宽度 */
-const leftPanelWidth = ref(280)
 const rightPanelWidth = ref(360)
 
 /** 操作加载状态 */
@@ -822,6 +822,16 @@ onMounted(async () => {
         </div>
 
         <button
+          @click="showFilterModal = true"
+          class="p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded-md transition-colors"
+          title="过滤"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+        </button>
+
+        <button
           @click="loadTrapRecords"
           class="p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded-md transition-colors"
           title="刷新"
@@ -862,176 +872,6 @@ onMounted(async () => {
 
     <!-- 主内容区域 -->
     <div class="flex flex-1 min-h-0 overflow-hidden">
-      <!-- 左侧面板：过滤规则 -->
-      <aside
-        v-if="showFilterPanel"
-        :style="{ width: `${leftPanelWidth}px` }"
-        class="flex flex-col bg-bg-secondary border-r border-border/50 flex-shrink-0"
-      >
-        <!-- 过滤条件 -->
-        <div class="p-3 border-b border-border/30">
-          <h3 class="text-sm font-medium text-text-primary mb-3">过滤条件</h3>
-
-          <div class="space-y-2">
-            <input
-              v-model="filter.searchQuery"
-              type="text"
-              placeholder="搜索 OID / IP / 名称..."
-              class="w-full px-3 py-2 text-sm bg-bg-tertiary border border-border/50 rounded-md text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
-              @keyup.enter="applyFilter"
-            />
-
-            <select
-              v-model="filter.severity"
-              class="w-full px-3 py-2 text-sm bg-bg-tertiary border border-border/50 rounded-md text-text-primary focus:outline-none focus:border-accent"
-            >
-              <option v-for="opt in severityOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
-
-            <select
-              v-model="filter.acknowledged"
-              class="w-full px-3 py-2 text-sm bg-bg-tertiary border border-border/50 rounded-md text-text-primary focus:outline-none focus:border-accent"
-            >
-              <option v-for="opt in acknowledgedOptions" :key="String(opt.value)" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
-
-            <div class="flex gap-2">
-              <button
-                @click="applyFilter"
-                class="flex-1 px-3 py-1.5 text-sm bg-accent hover:bg-accent-dark text-white rounded-md transition-colors"
-              >
-                应用
-              </button>
-              <button
-                @click="resetFilter"
-                class="px-3 py-1.5 text-sm bg-bg-tertiary hover:bg-bg-hover text-text-secondary rounded-md transition-colors"
-              >
-                重置
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 过滤规则列表 -->
-        <div class="flex-1 overflow-y-auto p-3">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-medium text-text-primary">过滤规则</h3>
-            <button
-              @click="openRuleModal(null)"
-              class="p-1 text-text-muted hover:text-accent transition-colors"
-              title="添加规则"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-              </svg>
-            </button>
-          </div>
-
-          <div class="space-y-2">
-            <div
-              v-for="rule in filterRules"
-              :key="rule.id"
-              class="p-2 bg-bg-tertiary rounded-md border border-border/30"
-            >
-              <div class="flex items-center justify-between">
-                <span class="text-sm text-text-primary truncate">{{ rule.name }}</span>
-                <div class="flex items-center gap-1">
-                  <button
-                    @click="toggleRuleEnabled(rule)"
-                    :class="[
-                      'w-8 h-4 rounded-full transition-colors relative',
-                      rule.enabled ? 'bg-green-500' : 'bg-gray-600'
-                    ]"
-                  >
-                    <span
-                      :class="[
-                        'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform',
-                        rule.enabled ? 'left-4' : 'left-0.5'
-                      ]"
-                    ></span>
-                  </button>
-                  <button
-                    @click="deleteRule(rule)"
-                    class="p-1 text-text-muted hover:text-red-400 transition-colors"
-                    title="删除规则"
-                  >
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div class="text-xs text-text-muted mt-1">
-                {{ rule.action }} | {{ rule.oidPattern || '所有 OID' }}
-              </div>
-            </div>
-
-            <div v-if="filterRules.length === 0" class="text-center text-text-muted text-sm py-4">
-              暂无过滤规则
-            </div>
-          </div>
-        </div>
-
-        <!-- v3 用户管理 -->
-        <div class="border-t border-border/30 p-3">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-medium text-text-primary">SNMPv3 用户</h3>
-            <button
-              @click="openV3UserModal(null)"
-              class="p-1 text-text-muted hover:text-accent transition-colors"
-              title="添加 v3 用户"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-              </svg>
-            </button>
-          </div>
-
-          <div class="space-y-2">
-            <div
-              v-for="user in v3Users"
-              :key="user.username"
-              class="p-2 bg-bg-tertiary rounded-md border border-border/30"
-            >
-              <div class="flex items-center justify-between">
-                <span class="text-sm text-text-primary truncate">{{ user.username }}</span>
-                <div class="flex items-center gap-1">
-                  <button
-                    @click="openV3UserModal(user)"
-                    class="p-1 text-text-muted hover:text-accent transition-colors"
-                    title="编辑用户"
-                  >
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button
-                    @click="deleteV3User(user.username)"
-                    class="p-1 text-text-muted hover:text-red-400 transition-colors"
-                    title="删除用户"
-                  >
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div class="text-xs text-text-muted mt-1">
-                {{ user.securityLevel }} | {{ user.authProtocol }}/{{ user.privProtocol }}
-              </div>
-            </div>
-
-            <div v-if="v3Users.length === 0" class="text-center text-text-muted text-sm py-4">
-              暂无 v3 用户
-            </div>
-          </div>
-        </div>
-      </aside>
-
       <!-- 中间面板：Trap 记录列表 -->
       <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
         <!-- 表格 -->
@@ -1682,6 +1522,215 @@ onMounted(async () => {
           >
             保存
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 过滤弹窗 -->
+    <div
+      v-if="showFilterModal"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      @click.self="showFilterModal = false"
+    >
+      <div class="bg-bg-secondary rounded-lg shadow-xl w-[600px] max-h-[75vh] overflow-hidden">
+        <!-- 弹窗标题栏 -->
+        <div class="flex items-center justify-between px-4 py-3 border-b border-border/50">
+          <h3 class="text-base font-medium text-text-primary">过滤</h3>
+          <button
+            @click="showFilterModal = false"
+            class="p-1 text-text-muted hover:text-text-primary transition-colors"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Tab 页签 -->
+        <div class="flex border-b border-border/50">
+          <button
+            v-for="tab in [
+              { key: 'filter', label: '过滤条件' },
+              { key: 'rules', label: '过滤规则' },
+              { key: 'v3users', label: 'SNMPv3 用户' },
+            ]"
+            :key="tab.key"
+            @click="filterModalTab = tab.key as 'filter' | 'rules' | 'v3users'"
+            :class="[
+              'px-4 py-2 text-sm font-medium transition-colors',
+              filterModalTab === tab.key
+                ? 'text-accent border-b-2 border-accent'
+                : 'text-text-muted hover:text-text-secondary'
+            ]"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+
+        <!-- Tab 内容区域 -->
+        <div class="overflow-y-auto" style="max-height: calc(75vh - 100px);">
+
+          <!-- Tab 1: 过滤条件 -->
+          <div v-if="filterModalTab === 'filter'" class="p-4 space-y-4">
+            <div class="space-y-3">
+              <input
+                v-model="filter.searchQuery"
+                type="text"
+                placeholder="搜索 OID / IP / 名称..."
+                class="w-full px-3 py-2 text-sm bg-bg-tertiary border border-border/50 rounded-md text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
+                @keyup.enter="applyFilter(); showFilterModal = false"
+              />
+
+              <select
+                v-model="filter.severity"
+                class="w-full px-3 py-2 text-sm bg-bg-tertiary border border-border/50 rounded-md text-text-primary focus:outline-none focus:border-accent"
+              >
+                <option v-for="opt in severityOptions" :key="opt.value" :value="opt.value">
+                  {{ opt.label }}
+                </option>
+              </select>
+
+              <select
+                v-model="filter.acknowledged"
+                class="w-full px-3 py-2 text-sm bg-bg-tertiary border border-border/50 rounded-md text-text-primary focus:outline-none focus:border-accent"
+              >
+                <option v-for="opt in acknowledgedOptions" :key="String(opt.value)" :value="opt.value">
+                  {{ opt.label }}
+                </option>
+              </select>
+
+              <div class="flex gap-2">
+                <button
+                  @click="applyFilter(); showFilterModal = false"
+                  class="flex-1 px-3 py-1.5 text-sm bg-accent hover:bg-accent-dark text-white rounded-md transition-colors"
+                >
+                  应用
+                </button>
+                <button
+                  @click="resetFilter(); showFilterModal = false"
+                  class="px-3 py-1.5 text-sm bg-bg-tertiary hover:bg-bg-hover text-text-secondary rounded-md transition-colors"
+                >
+                  重置
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 2: 过滤规则 -->
+          <div v-if="filterModalTab === 'rules'" class="p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-medium text-text-primary">过滤规则</h3>
+              <button
+                @click="openRuleModal(null)"
+                class="p-1 text-text-muted hover:text-accent transition-colors"
+                title="添加规则"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            </div>
+
+            <div class="space-y-2">
+              <div
+                v-for="rule in filterRules"
+                :key="rule.id"
+                class="p-2 bg-bg-tertiary rounded-md border border-border/30"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-text-primary truncate">{{ rule.name }}</span>
+                  <div class="flex items-center gap-1">
+                    <button
+                      @click="toggleRuleEnabled(rule)"
+                      :class="[
+                        'w-8 h-4 rounded-full transition-colors relative',
+                        rule.enabled ? 'bg-green-500' : 'bg-gray-600'
+                      ]"
+                    >
+                      <span
+                        :class="[
+                          'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform',
+                          rule.enabled ? 'left-4' : 'left-0.5'
+                        ]"
+                      ></span>
+                    </button>
+                    <button
+                      @click="deleteRule(rule)"
+                      class="p-1 text-text-muted hover:text-red-400 transition-colors"
+                      title="删除规则"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="text-xs text-text-muted mt-1">
+                  {{ rule.action }} | {{ rule.oidPattern || '所有 OID' }}
+                </div>
+              </div>
+
+              <div v-if="filterRules.length === 0" class="text-center text-text-muted text-sm py-4">
+                暂无过滤规则
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 3: SNMPv3 用户 -->
+          <div v-if="filterModalTab === 'v3users'" class="p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-medium text-text-primary">SNMPv3 用户</h3>
+              <button
+                @click="openV3UserModal(null)"
+                class="p-1 text-text-muted hover:text-accent transition-colors"
+                title="添加 v3 用户"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            </div>
+
+            <div class="space-y-2">
+              <div
+                v-for="user in v3Users"
+                :key="user.username"
+                class="p-2 bg-bg-tertiary rounded-md border border-border/30"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-sm text-text-primary truncate">{{ user.username }}</span>
+                  <div class="flex items-center gap-1">
+                    <button
+                      @click="openV3UserModal(user)"
+                      class="p-1 text-text-muted hover:text-accent transition-colors"
+                      title="编辑用户"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    <button
+                      @click="deleteV3User(user.username)"
+                      class="p-1 text-text-muted hover:text-red-400 transition-colors"
+                      title="删除用户"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="text-xs text-text-muted mt-1">
+                  {{ user.securityLevel }} | {{ user.authProtocol }}/{{ user.privProtocol }}
+                </div>
+              </div>
+
+              <div v-if="v3Users.length === 0" class="text-center text-text-muted text-sm py-4">
+                暂无 v3 用户
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>

@@ -346,7 +346,7 @@ func (r *GormTrapRepository) GetActiveServerConfig(ctx context.Context) (*models
 		// 如果不存在，创建默认配置
 		defaultConfig := &models.SNMPServerConfig{
 			TrapEnabled:      false,
-			TrapPort:         1162, // 使用非特权端口
+			TrapPort:         162, // SNMP Trap 标准端口
 			TrapCommunity:    "public",
 			V3Enabled:        false,
 			MaxStorageDays:  30,
