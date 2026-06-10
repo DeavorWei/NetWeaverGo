@@ -152,8 +152,9 @@ type FlatItem = {
   key: string
   type: 'folder' | 'module'
   id: number | string
-  isExpanded: boolean
+  isExpanded?: boolean
   isLast: boolean
+  folderId?: number | string
   folder?: any
   module?: any
   moduleCount?: number
@@ -173,6 +174,7 @@ const flatList = computed<FlatItem[]>(() => {
       type: 'folder',
       id: folder.id,
       isExpanded,
+      folderId: folder.id,
       folder,
       moduleCount: mods.length,
       isLast: !isExpanded || mods.length === 0
@@ -184,6 +186,7 @@ const flatList = computed<FlatItem[]>(() => {
           key: `module-${m.id}`,
           type: 'module',
           id: m.id,
+          folderId: folder.id,
           module: m,
           isLast: idx === mods.length - 1
         })
@@ -211,6 +214,7 @@ const flatList = computed<FlatItem[]>(() => {
         key: `module-${m.id}`,
         type: 'module',
         id: m.id,
+        folderId: 'uncategorized',
         module: m,
         isLast: idx === uncategorizedMods.length - 1
       })
@@ -225,6 +229,7 @@ const { list: virtualList, containerProps, wrapperProps } = useVirtualList(flatL
   overscan: 20,
   itemHeight: (idx) => {
     const item = flatList.value[idx]
+    if (!item) return 56
     if (item.type === 'folder') {
       return idx === 0 ? 44 : 52 // 非首个文件夹带8px间距
     }
@@ -979,7 +984,7 @@ watch(importType, () => {
                             <el-dropdown-menu>
                               <el-dropdown-item :command="null">未分类</el-dropdown-item>
                               <el-dropdown-item 
-                                v-for="f in getMoveTargetFolders(item.folderId === 'uncategorized' ? null : item.folderId)" 
+                                v-for="f in getMoveTargetFolders(item.folderId === 'uncategorized' ? null : (item.folderId ?? null))"
                                 :key="f.id" 
                                 :command="f.id"
                               >

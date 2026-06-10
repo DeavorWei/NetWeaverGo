@@ -70,16 +70,6 @@ export function usePanelResize(
     return panels[index]?.maxSize ?? Infinity
   }
 
-  /** 获取鼠标在容器中的位置（像素） */
-  function getMousePosition(e: MouseEvent): number {
-    if (!containerRef.value) return 0
-    const rect = containerRef.value.getBoundingClientRect()
-    if (direction === 'horizontal') {
-      return e.clientX - rect.left
-    }
-    return e.clientY - rect.top
-  }
-
   /** 获取所有面板元素（排除拖拽手柄） */
   function getPanelElements(): HTMLElement[] {
     if (!containerRef.value) return []
@@ -109,7 +99,7 @@ export function usePanelResize(
     
     if (panelElements.length === panels.length) {
       for (let i = 0; i < panels.length; i++) {
-        const rect = panelElements[i].getBoundingClientRect()
+        const rect = panelElements[i]!.getBoundingClientRect()
         actualSizes[i] = direction === 'horizontal' ? rect.width : rect.height
       }
     }
