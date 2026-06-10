@@ -1054,8 +1054,20 @@ func (s *SNMPPollingService) GetPollingResults(ctx context.Context, filter Polli
 }
 
 // ClearPollingResults 清理过期轮询结果
+// 当 before 为空字符串时，删除所有结果
 func (s *SNMPPollingService) ClearPollingResults(ctx context.Context, before string) (int64, error) {
-	beforeTime, err := time.Parse(time.RFC3339, before)
+	// 空字符串表示删除全部
+	if before == "" {
+		count, err := s.repo.DeleteAllPollingResults(ctx)
+		if err != nil {
+			logger.Error("SNMP-PollingService", "-", "删除所有结果失败: %v", err)
+			return 0, err
+		}
+		logger.Info("SNMP-PollingService", "-", "已删除所有轮询结果: %d 条", count)
+		return count, nil
+	}
+
+	beforeTime, err := time.Parse("2006-01-02", before)
 	if err != nil {
 		return 0, fmt.Errorf("时间格式无效: %w", err)
 	}

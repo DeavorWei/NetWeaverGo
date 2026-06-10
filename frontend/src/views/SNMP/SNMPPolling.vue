@@ -675,11 +675,12 @@ function formatLatency(ms: number): string {
 
 /**
  * 清理过期结果（使用 ElMessageBox.prompt 替代原生 prompt）
+ * 输入 0 天时删除所有结果
  */
 async function clearOldResults() {
   try {
     const { value: days } = await ElMessageBox.prompt(
-      "请输入要保留的天数（之前的记录将被删除）：",
+      "请输入要保留的天数（之前的记录将被删除）：\n输入 0 将删除所有结果",
       "清理过期结果",
       {
         confirmButtonText: "确定",
@@ -694,16 +695,22 @@ async function clearOldResults() {
     const daysNum = parseInt(days);
     if (isNaN(daysNum)) return;
 
-    const before = new Date();
-    before.setDate(before.getDate() - daysNum);
-    const beforeStr = before.toISOString().split("T")[0] || "";
+    let beforeStr = "";
+    if (daysNum > 0) {
+      const before = new Date();
+      before.setDate(before.getDate() - daysNum);
+      beforeStr = before.toISOString().split("T")[0] || "";
+    }
 
     const count = await SNMPPollingAPI.clearPollingResults(beforeStr);
     await loadPollingResults();
     ElMessage.success(`已清理 ${count} 条结果`);
     logger.info(`SNMP-Polling: 已清理 ${count} 条结果`);
-  } catch {
-    // 用户取消或输入无效
+  } catch (error: unknown) {
+    // ElMessageBox.prompt 取消时会抛出 "cancel" 字符串，无需处理
+    if (error === "cancel") return;
+    logger.error(`SNMP-Polling: 清理结果失败 - ${error}`);
+    ElMessage.error(`清理失败: ${error}`);
   }
 }
 

@@ -236,6 +236,7 @@ type PollingRepository interface {
 	GetPollingResult(ctx context.Context, id uint) (*models.SNMPPollingResult, error)
 	ListPollingResults(ctx context.Context, filter PollingResultFilter, page, pageSize int) ([]*models.SNMPPollingResult, int64, error)
 	DeletePollingResultsBefore(ctx context.Context, before time.Time) (int64, error)
+	DeleteAllPollingResults(ctx context.Context) (int64, error)
 
 	// 统计查询
 	GetPollingStats(ctx context.Context, targetID uint) (*PollingStats, error)
