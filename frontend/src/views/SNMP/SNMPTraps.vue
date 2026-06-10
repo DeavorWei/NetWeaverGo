@@ -112,10 +112,14 @@ const isListenerRunning = computed(() => listenerStatus.value?.isRunning ?? fals
 /** 严重级别选项 */
 const severityOptions = [
   { value: '', label: '全部' },
-  { value: 'critical', label: '严重' },
+  { value: 'critical', label: '紧急' },
   { value: 'major', label: '重要' },
   { value: 'minor', label: '次要' },
+  { value: 'warning', label: '警告' },
+  { value: 'cleared', label: '已清除' },
+  { value: 'indeterminate', label: '不确定' },
   { value: 'info', label: '信息' },
+  { value: 'unknown', label: '未知' },
 ]
 
 /** 确认状态选项 */
@@ -632,6 +636,34 @@ async function toggleRuleEnabled(rule: FilterRuleVM) {
 }
 
 /**
+ * 严重级别中文标签映射
+ */
+const severityLabels: Record<string, string> = {
+  critical: '紧急',
+  major: '重要',
+  minor: '次要',
+  warning: '警告',
+  cleared: '已清除',
+  indeterminate: '不确定',
+  info: '信息',
+  unknown: '未知',
+}
+
+/**
+ * 严重级别颜色映射（用于内联样式）
+ */
+const severityColors: Record<string, string> = {
+  critical: '#f56c6c',
+  major: '#e6a23c',
+  minor: '#f0c040',
+  warning: '#409eff',
+  cleared: '#67c23a',
+  indeterminate: '#909399',
+  info: '#409eff',
+  unknown: '#c0c4cc',
+}
+
+/**
  * 获取严重级别样式类
  */
 function getSeverityClass(severity: string): string {
@@ -642,6 +674,12 @@ function getSeverityClass(severity: string): string {
       return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
     case 'minor':
       return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+    case 'warning':
+      return 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+    case 'cleared':
+      return 'bg-green-500/20 text-green-400 border-green-500/30'
+    case 'indeterminate':
+      return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
     case 'info':
       return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
     default:
@@ -653,19 +691,44 @@ function getSeverityClass(severity: string): string {
  * 获取严重级别文本
  */
 function getSeverityText(severity: string): string {
-  switch (severity.toLowerCase()) {
-    case 'critical':
-      return '严重'
-    case 'major':
-      return '重要'
-    case 'minor':
-      return '次要'
-    case 'info':
-      return '信息'
-    default:
-      return '未知'
-  }
+  return severityLabels[severity.toLowerCase()] || '未知'
 }
+
+/**
+ * 协议标准 VarBind OID 列表
+ */
+const PROTOCOL_VARBIND_OIDS = new Set([
+  '1.3.6.1.2.1.1.3.0',
+  '1.3.6.1.6.3.1.1.4.1.0',
+])
+
+/**
+ * 判断 VarBind 是否为协议标准变量
+ */
+function isProtocolVarBind(oid: string): boolean {
+  const normalized = oid.replace(/^\./, '')
+  return PROTOCOL_VARBIND_OIDS.has(normalized)
+}
+
+/**
+ * 将 VarBind 列表分为协议变量和告警数据变量
+ */
+function splitVarBinds(variables: string): { protocol: TrapVarBind[]; data: TrapVarBind[] } {
+  const all = parseVariables(variables)
+  const protocol: TrapVarBind[] = []
+  const data: TrapVarBind[] = []
+  for (const vb of all) {
+    if (isProtocolVarBind(vb.oid)) {
+      protocol.push(vb)
+    } else {
+      data.push(vb)
+    }
+  }
+  return { protocol, data }
+}
+
+/** 协议变量折叠状态 */
+const showProtocolVarBinds = ref(false)
 
 /**
  * 格式化时间
@@ -988,6 +1051,7 @@ onMounted(async () => {
                 <th class="px-3 py-2 text-left text-text-muted font-medium">源 IP</th>
                 <th class="px-3 py-2 text-left text-text-muted font-medium">Trap OID</th>
                 <th class="px-3 py-2 text-left text-text-muted font-medium">名称</th>
+                <th class="px-3 py-2 text-left text-text-muted font-medium">管理对象</th>
                 <th class="px-3 py-2 text-left text-text-muted font-medium">级别</th>
                 <th class="px-3 py-2 text-left text-text-muted font-medium">状态</th>
                 <th class="px-3 py-2 text-left text-text-muted font-medium">操作</th>
@@ -1018,19 +1082,33 @@ onMounted(async () => {
                 <td class="px-3 py-2 text-text-primary font-mono">
                   {{ trap.sourceIP }}:{{ trap.sourcePort }}
                 </td>
-                <td class="px-3 py-2 text-text-secondary font-mono text-xs truncate max-w-[200px]">
-                  {{ trap.trapOID }}
+                <td class="px-3 py-2 font-mono text-xs truncate max-w-[200px]">
+                  <span
+                    v-if="trap.trapName"
+                    :title="trap.trapOID"
+                    class="text-text-primary cursor-help border-b border-dashed border-text-muted"
+                  >
+                    {{ trap.trapName }}
+                  </span>
+                  <span v-else class="text-text-secondary">{{ trap.trapOID }}</span>
                 </td>
                 <td class="px-3 py-2 text-text-primary truncate max-w-[150px]">
                   {{ trap.trapName || '-' }}
                 </td>
+                <td class="px-3 py-2 text-text-secondary truncate max-w-[120px]">
+                  {{ trap.managedObject || '-' }}
+                </td>
                 <td class="px-3 py-2">
                   <span
                     :class="[
-                      'inline-flex px-2 py-0.5 text-xs rounded border',
+                      'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded border',
                       getSeverityClass(trap.severity)
                     ]"
                   >
+                    <span
+                      class="w-2 h-2 rounded-full flex-shrink-0"
+                      :style="{ backgroundColor: severityColors[trap.severity.toLowerCase()] || '#c0c4cc' }"
+                    ></span>
                     {{ getSeverityText(trap.severity) }}
                   </span>
                 </td>
@@ -1070,13 +1148,13 @@ onMounted(async () => {
               </tr>
 
               <tr v-if="trapRecords.length === 0 && !recordsLoading">
-                <td colspan="8" class="px-3 py-8 text-center text-text-muted">
+                <td colspan="9" class="px-3 py-8 text-center text-text-muted">
                   暂无 Trap 记录
                 </td>
               </tr>
 
               <tr v-if="recordsLoading">
-                <td colspan="8" class="px-3 py-8 text-center text-text-muted">
+                <td colspan="9" class="px-3 py-8 text-center text-text-muted">
                   加载中...
                 </td>
               </tr>
@@ -1146,69 +1224,149 @@ onMounted(async () => {
 
         <div class="flex-1 overflow-y-auto p-4 space-y-4">
           <!-- 基本信息 -->
-          <div class="space-y-2">
-            <div class="flex justify-between text-sm">
-              <span class="text-text-muted">接收时间</span>
-              <span class="text-text-primary">{{ selectedTrap.receivedAt }}</span>
-            </div>
-            <div class="flex justify-between text-sm">
-              <span class="text-text-muted">源地址</span>
-              <span class="text-text-primary font-mono">{{ selectedTrap.sourceIP }}:{{ selectedTrap.sourcePort }}</span>
-            </div>
-            <div class="flex justify-between text-sm">
-              <span class="text-text-muted">SNMP 版本</span>
-              <span class="text-text-primary">{{ selectedTrap.version }}</span>
-            </div>
-            <div class="flex justify-between text-sm">
-              <span class="text-text-muted">Community</span>
-              <span class="text-text-primary">{{ selectedTrap.community }}</span>
-            </div>
-            <div class="flex justify-between text-sm">
-              <span class="text-text-muted">Trap OID</span>
-              <span class="text-text-primary font-mono text-xs break-all">{{ selectedTrap.trapOID }}</span>
-            </div>
-            <div class="flex justify-between text-sm">
-              <span class="text-text-muted">Trap 名称</span>
-              <span class="text-text-primary">{{ selectedTrap.trapName || '-' }}</span>
-            </div>
-            <div class="flex justify-between text-sm">
-              <span class="text-text-muted">严重级别</span>
-              <span
-                :class="[
-                  'inline-flex px-2 py-0.5 text-xs rounded border',
-                  getSeverityClass(selectedTrap.severity)
-                ]"
-              >
-                {{ getSeverityText(selectedTrap.severity) }}
-              </span>
-            </div>
-            <div class="flex justify-between text-sm">
-              <span class="text-text-muted">确认状态</span>
-              <span :class="selectedTrap.acknowledged ? 'text-green-400' : 'text-yellow-400'">
-                {{ selectedTrap.acknowledged ? '已确认' : '未确认' }}
-              </span>
-            </div>
-            <div v-if="selectedTrap.acknowledgedAt" class="flex justify-between text-sm">
-              <span class="text-text-muted">确认时间</span>
-              <span class="text-text-primary">{{ selectedTrap.acknowledgedAt }}</span>
+          <div>
+            <h4 class="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">基本信息</h4>
+            <div class="space-y-2">
+              <div class="flex justify-between text-sm">
+                <span class="text-text-muted">接收时间</span>
+                <span class="text-text-primary">{{ selectedTrap.receivedAt }}</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-text-muted">源地址</span>
+                <span class="text-text-primary font-mono">{{ selectedTrap.sourceIP }}:{{ selectedTrap.sourcePort }}</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-text-muted">SNMP 版本</span>
+                <span class="text-text-primary">{{ selectedTrap.version }}</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-text-muted">Community/User</span>
+                <span class="text-text-primary">{{ selectedTrap.community || '-' }}</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-text-muted">Trap OID</span>
+                <span class="text-text-primary font-mono text-xs break-all">{{ selectedTrap.trapOID }}</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-text-muted">Trap 名称</span>
+                <span class="text-text-primary">{{ selectedTrap.trapName || '-' }}</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-text-muted">严重级别</span>
+                <span
+                  :class="[
+                    'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded border',
+                    getSeverityClass(selectedTrap.severity)
+                  ]"
+                >
+                  <span
+                    class="w-2 h-2 rounded-full flex-shrink-0"
+                    :style="{ backgroundColor: severityColors[selectedTrap.severity.toLowerCase()] || '#c0c4cc' }"
+                  ></span>
+                  {{ getSeverityText(selectedTrap.severity) }}
+                </span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-text-muted">确认状态</span>
+                <span :class="selectedTrap.acknowledged ? 'text-green-400' : 'text-yellow-400'">
+                  {{ selectedTrap.acknowledged ? '已确认' : '未确认' }}
+                </span>
+              </div>
+              <div v-if="selectedTrap.acknowledgedAt" class="flex justify-between text-sm">
+                <span class="text-text-muted">确认时间</span>
+                <span class="text-text-primary">{{ selectedTrap.acknowledgedAt }}</span>
+              </div>
             </div>
           </div>
 
-          <!-- VarBinds -->
+          <!-- 告警元数据 -->
+          <div v-if="selectedTrap.alarmId || selectedTrap.trapSequenceNum || selectedTrap.trapCategory || selectedTrap.managedObject || selectedTrap.trapEventTime">
+            <h4 class="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">告警元数据</h4>
+            <div class="space-y-2 p-3 bg-bg-tertiary/50 rounded-md border border-border/20">
+              <div v-if="selectedTrap.alarmId" class="flex justify-between text-sm">
+                <span class="text-text-muted">告警 ID</span>
+                <span class="text-text-primary font-mono">{{ selectedTrap.alarmId }}</span>
+              </div>
+              <div v-if="selectedTrap.trapSequenceNum" class="flex justify-between text-sm">
+                <span class="text-text-muted">告警序列号</span>
+                <span class="text-text-primary font-mono">{{ selectedTrap.trapSequenceNum }}</span>
+              </div>
+              <div v-if="selectedTrap.trapCategory" class="flex justify-between text-sm">
+                <span class="text-text-muted">告警分类</span>
+                <span class="text-text-primary">{{ selectedTrap.trapCategory }}</span>
+              </div>
+              <div v-if="selectedTrap.managedObject" class="flex justify-between text-sm">
+                <span class="text-text-muted">管理对象</span>
+                <span class="text-text-primary font-mono">{{ selectedTrap.managedObject }}</span>
+              </div>
+              <div v-if="selectedTrap.trapEventTime" class="flex justify-between text-sm">
+                <span class="text-text-muted">设备端告警时间</span>
+                <span class="text-text-primary">{{ selectedTrap.trapEventTime }}</span>
+              </div>
+              <div v-if="selectedTrap.trapAlarmSeverity" class="flex justify-between text-sm">
+                <span class="text-text-muted">原始严重级别值</span>
+                <span class="text-text-primary font-mono">{{ selectedTrap.trapAlarmSeverity }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 告警数据变量 -->
           <div>
-            <h4 class="text-sm font-medium text-text-primary mb-2">变量绑定</h4>
+            <h4 class="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">
+              告警数据变量
+              <span class="text-text-muted font-normal">({{ splitVarBinds(selectedTrap.variables).data.length }}项)</span>
+            </h4>
             <div class="space-y-2">
               <div
-                v-for="(vb, idx) in parseVariables(selectedTrap.variables)"
-                :key="idx"
+                v-for="(vb, idx) in splitVarBinds(selectedTrap.variables).data"
+                :key="'data-' + idx"
                 class="p-2 bg-bg-tertiary rounded text-xs"
               >
-                <div class="font-mono text-text-secondary break-all">{{ vb.oid }}</div>
-                  <div v-if="vb.oidName" class="text-xs text-text-muted mt-0.5">{{ vb.oidName }}</div>
-                  <div class="text-text-primary mt-1">{{ vb.value }}</div>
+                <div v-if="vb.oidName" class="font-medium text-text-primary">
+                  {{ vb.oidName }}
+                  <span class="font-mono text-text-muted ml-1">({{ vb.oid }})</span>
+                </div>
+                <div v-else class="font-mono text-text-secondary break-all">{{ vb.oid }}</div>
+                <div v-if="vb.type" class="text-text-muted mt-0.5">
+                  <span class="inline-flex px-1.5 py-0 text-[10px] rounded bg-bg-secondary border border-border/30 text-text-muted">
+                    {{ vb.type }}
+                  </span>
+                </div>
+                <div class="text-text-primary mt-1">{{ vb.value }}</div>
               </div>
-              <div v-if="parseVariables(selectedTrap.variables).length === 0" class="text-text-muted text-xs">
-                无变量绑定数据
+              <div v-if="splitVarBinds(selectedTrap.variables).data.length === 0" class="text-text-muted text-xs">
+                无告警数据变量
+              </div>
+            </div>
+          </div>
+
+          <!-- 协议标准变量（折叠） -->
+          <div v-if="splitVarBinds(selectedTrap.variables).protocol.length > 0">
+            <button
+              @click="showProtocolVarBinds = !showProtocolVarBinds"
+              class="flex items-center gap-1 text-xs font-medium text-text-muted hover:text-text-secondary transition-colors w-full"
+            >
+              <svg
+                :class="['w-3 h-3 transition-transform', showProtocolVarBinds ? 'rotate-90' : '']"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+              协议信息
+              <span class="text-text-muted">({{ splitVarBinds(selectedTrap.variables).protocol.length }}项)</span>
+            </button>
+            <div v-if="showProtocolVarBinds" class="mt-2 space-y-2">
+              <div
+                v-for="(vb, idx) in splitVarBinds(selectedTrap.variables).protocol"
+                :key="'proto-' + idx"
+                class="p-2 bg-bg-secondary/50 rounded text-xs border border-border/20"
+              >
+                <div v-if="vb.oidName" class="text-text-muted">
+                  {{ vb.oidName }}
+                  <span class="font-mono ml-1">({{ vb.oid }})</span>
+                </div>
+                <div v-else class="font-mono text-text-muted break-all">{{ vb.oid }}</div>
+                <div class="text-text-secondary mt-1">{{ vb.value }}</div>
               </div>
             </div>
           </div>

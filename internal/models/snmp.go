@@ -57,6 +57,14 @@ type SNMPTrapRecord struct {
 	AcknowledgedAt *time.Time `json:"acknowledgedAt" gorm:"column:acknowledged_at"`
 	ReceivedAt     time.Time  `json:"receivedAt" gorm:"column:received_at;index"`
 	CreatedAt      time.Time  `json:"createdAt" gorm:"column:created_at"`
+
+	// 告警元数据（从 VarBind 提取）
+	TrapAlarmSeverity  int    `json:"trapAlarmSeverity" gorm:"column:trap_alarm_severity;default:0"`   // 从VarBind提取的原始严重级别数值
+	TrapCategory       int    `json:"trapCategory" gorm:"column:trap_category;default:0"`              // 告警分类
+	ManagedObject      string `json:"managedObject" gorm:"column:managed_object"`                      // 管理对象实例
+	AlarmID            string `json:"alarmId" gorm:"column:alarm_id"`                                  // 告警ID
+	TrapEventTime      string `json:"trapEventTime" gorm:"column:trap_event_time"`                     // 设备端告警时间戳
+	TrapSequenceNum    int    `json:"trapSequenceNum" gorm:"column:trap_sequence_num;default:0"`       // 告警序列号
 }
 
 func (SNMPTrapRecord) TableName() string { return "snmp_trap_records" }

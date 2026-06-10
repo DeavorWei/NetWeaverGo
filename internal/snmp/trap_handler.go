@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -185,14 +186,18 @@ func (h *TrapHandler) HandleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) e
 	// NotifyNewTrap 内部也会发射同一事件名，会导致前端收到重复通知
 	if h.notifier != nil {
 		h.notifier.NotifyTrapReceived(TrapEvent{
-			SourceIP:   trap.SourceIP,
-			SourcePort: trap.SourcePort,
-			TrapOID:    trap.TrapOID,
-			TrapName:   trap.TrapName,
-			Severity:   trap.Severity,
-			Community:  trap.Community,
-			Version:    trap.Version,
-			ReceivedAt: trap.ReceivedAt.UnixMilli(),
+			SourceIP:          trap.SourceIP,
+			SourcePort:        trap.SourcePort,
+			TrapOID:           trap.TrapOID,
+			TrapName:          trap.TrapName,
+			Severity:          trap.Severity,
+			Community:         trap.Community,
+			Version:           trap.Version,
+			ReceivedAt:        trap.ReceivedAt.UnixMilli(),
+			TrapAlarmSeverity: trap.TrapAlarmSeverity,
+			ManagedObject:     trap.ManagedObject,
+			AlarmID:           trap.AlarmID,
+			TrapEventTime:     trap.TrapEventTime,
 		})
 	}
 
@@ -236,6 +241,9 @@ func (h *TrapHandler) parseTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) (*
 	trap.Variables = vars
 	trap.RawHex = rawHex
 
+	// 从 VarBind 中提取告警元数据（在推断严重级别之前，以便华为严重级别能优先使用）
+	h.extractTrapMetadata(trap)
+
 	// 推断严重级别（如果未设置）
 	if trap.Severity == "" {
 		trap.Severity = h.inferSeverity(trap)
@@ -262,7 +270,7 @@ func (h *TrapHandler) parseV2cTrap(packet *gosnmp.SnmpPacket, trap *models.SNMPT
 	// SNMPv2c Trap 中 Trap OID 在 VarBinds 的第一个变量中
 	// snmpTrapOID (1.3.6.1.6.3.1.1.4.1.0)
 	for _, pdu := range packet.Variables {
-		if pdu.Name == "1.3.6.1.6.3.1.1.4.1.0" {
+		if normalizeOID(pdu.Name) == "1.3.6.1.6.3.1.1.4.1.0" {
 			switch pdu.Type {
 			case gosnmp.ObjectIdentifier:
 				if oid, ok := pdu.Value.(string); ok {
@@ -285,11 +293,11 @@ func (h *TrapHandler) parseV3Trap(packet *gosnmp.SnmpPacket, trap *models.SNMPTr
 	// SNMPv3 Trap 中 Trap OID 在 VarBinds 的第一个变量中
 	// snmpTrapOID (1.3.6.1.6.3.1.1.4.1.0)
 	for _, pdu := range packet.Variables {
-		if pdu.Name == "1.3.6.1.6.3.1.1.4.1.0" {
+		if normalizeOID(pdu.Name) == "1.3.6.1.6.3.1.1.4.1.0" {
 			switch pdu.Type {
 			case gosnmp.ObjectIdentifier:
 				if oid, ok := pdu.Value.(string); ok {
-					trap.TrapOID = oid
+					trap.TrapOID = normalizeOID(oid)
 				}
 			}
 			break
@@ -416,12 +424,126 @@ func (h *TrapHandler) resolveVarBinds(trap *models.SNMPTrapRecord) {
 }
 
 // ============================================================================
+// VarBind 分类与华为元数据
+// ============================================================================
+
+// VarBindCategory 表示 VarBind 的分类
+type VarBindCategory int
+
+const (
+	VarBindCategoryProtocol  VarBindCategory = iota // 协议标准 VarBind（sysUpTime, snmpTrapOID）
+	VarBindCategoryEnterprise                        // 企业私有 VarBind
+	VarBindCategoryGeneric                           // 通用数据 VarBind
+)
+
+// 标准协议 VarBind OID 前缀
+var protocolOIDPrefixes = []string{
+	"1.3.6.1.2.1.1.3.0",     // sysUpTime
+	"1.3.6.1.6.3.1.1.4.1.0", // snmpTrapOID
+}
+
+// classifyVarBind 分类 VarBind
+func classifyVarBind(oid string) VarBindCategory {
+	normalized := normalizeOID(oid)
+	for _, proto := range protocolOIDPrefixes {
+		if normalized == proto {
+			return VarBindCategoryProtocol
+		}
+	}
+	// 企业 OID 以 1.3.6.1.4.1 开头
+	if strings.HasPrefix(normalized, "1.3.6.1.4.1.") {
+		return VarBindCategoryEnterprise
+	}
+	return VarBindCategoryGeneric
+}
+
+// 华为 hwTrapSeverity 值映射
+var huaweiSeverityMap = map[int]string{
+	1: "cleared",
+	2: "indeterminate",
+	3: "critical",
+	4: "major",
+	5: "minor",
+	6: "warning",
+}
+
+// 华为企业 Trap 元数据 OID
+const (
+	huaweiTrapSequenceNum   = "1.3.6.1.4.1.2011.6.10.1.1.7.1.2"
+	huaweiTrapSeverity      = "1.3.6.1.4.1.2011.6.10.1.1.7.1.3"
+	huaweiTrapCategory      = "1.3.6.1.4.1.2011.6.10.1.1.7.1.4"
+	huaweiTrapProbableCause = "1.3.6.1.4.1.2011.6.10.1.1.7.1.5"
+	huaweiTrapManagedObject = "1.3.6.1.4.1.2011.6.10.1.1.7.1.7"
+	huaweiTrapAlarmID       = "1.3.6.1.4.1.2011.6.10.1.1.7.1.15"
+	huaweiTrapTimeStamp     = "1.3.6.1.4.1.2011.6.10.1.1.7.1.16"
+)
+
+// extractTrapMetadata 从 VarBinds 中提取告警元数据
+func (h *TrapHandler) extractTrapMetadata(trap *models.SNMPTrapRecord) {
+	// 解析 VarBinds JSON
+	type VarBind struct {
+		OID     string      `json:"oid"`
+		OIDName string      `json:"oidName,omitempty"`
+		Type    string      `json:"type"`
+		Value   interface{} `json:"value"`
+	}
+
+	var varBinds []VarBind
+	if err := json.Unmarshal([]byte(trap.Variables), &varBinds); err != nil {
+		return
+	}
+
+	for _, vb := range varBinds {
+		oid := normalizeOID(vb.OID)
+		valStr := fmt.Sprintf("%v", vb.Value)
+
+		// 提取华为企业元数据
+		if strings.HasPrefix(oid, huaweiTrapSequenceNum+".") && trap.TrapSequenceNum == 0 {
+			if seq, err := strconv.Atoi(valStr); err == nil {
+				trap.TrapSequenceNum = seq
+			}
+		}
+		if strings.HasPrefix(oid, huaweiTrapSeverity+".") && trap.TrapAlarmSeverity == 0 {
+			if sev, err := strconv.Atoi(valStr); err == nil {
+				trap.TrapAlarmSeverity = sev
+			}
+		}
+		if strings.HasPrefix(oid, huaweiTrapCategory+".") && trap.TrapCategory == 0 {
+			if cat, err := strconv.Atoi(valStr); err == nil {
+				trap.TrapCategory = cat
+			}
+		}
+		if strings.HasPrefix(oid, huaweiTrapManagedObject+".") && trap.ManagedObject == "" {
+			trap.ManagedObject = valStr
+		}
+		if strings.HasPrefix(oid, huaweiTrapAlarmID+".") && trap.AlarmID == "" {
+			trap.AlarmID = valStr
+		}
+		if strings.HasPrefix(oid, huaweiTrapTimeStamp+".") && trap.TrapEventTime == "" {
+			trap.TrapEventTime = valStr
+		}
+	}
+
+	// 如果从华为 VarBind 提取到了严重级别，应用到 trap.Severity
+	if trap.TrapAlarmSeverity > 0 {
+		if mapped, ok := huaweiSeverityMap[trap.TrapAlarmSeverity]; ok {
+			trap.Severity = mapped
+		}
+	}
+}
+
+// ============================================================================
 // 辅助方法
 // ============================================================================
 
 // inferSeverity 推断 Trap 严重级别
 func (h *TrapHandler) inferSeverity(trap *models.SNMPTrapRecord) string {
-	// 基于 Trap OID 推断严重级别
+	// 优先级1: 已经从华为 VarBind 提取了严重级别
+	if trap.Severity != "" && trap.Severity != "unknown" {
+		return trap.Severity
+	}
+
+	// 优先级2: 基于 Trap OID 模式匹配
 	trapOID := normalizeOID(trap.TrapOID)
 
 	// 已知的关键 Trap OID 模式
@@ -459,6 +581,11 @@ func (h *TrapHandler) inferSeverity(trap *models.SNMPTrapRecord) string {
 		if strings.HasPrefix(trapOID, p) {
 			return "info"
 		}
+	}
+
+	// 优先级3: 基于 enterprise OID 前缀
+	if strings.HasPrefix(trapOID, "1.3.6.1.4.1.") {
+		return "minor" // 企业私有 Trap 默认为 minor
 	}
 
 	return "unknown"

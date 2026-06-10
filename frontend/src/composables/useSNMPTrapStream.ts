@@ -46,6 +46,10 @@ export interface TrapEvent {
   community: string
   version: string
   receivedAt: string
+  // 告警元数据
+  alarmCategory?: string
+  managedObject?: string
+  alarmID?: string
 }
 
 /**

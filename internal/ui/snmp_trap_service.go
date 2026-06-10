@@ -473,6 +473,14 @@ func (s *SNMPTrapService) convertTrapToVM(trap *models.SNMPTrapRecord) TrapRecor
 		Variables:    trap.Variables,
 		Acknowledged: trap.Acknowledged,
 		ReceivedAt:   trap.ReceivedAt.Format("2006-01-02 15:04:05"),
+
+		// 告警元数据
+		TrapAlarmSeverity: trap.TrapAlarmSeverity,
+		TrapCategory:      trap.TrapCategory,
+		ManagedObject:     trap.ManagedObject,
+		AlarmID:           trap.AlarmID,
+		TrapEventTime:     trap.TrapEventTime,
+		TrapSequenceNum:   trap.TrapSequenceNum,
 	}
 
 	if trap.AcknowledgedAt != nil {
@@ -531,6 +539,14 @@ type TrapRecordVM struct {
 	Acknowledged bool   `json:"acknowledged"`
 	AcknowledgedAt string `json:"acknowledgedAt"`
 	ReceivedAt   string `json:"receivedAt"`
+
+	// 告警元数据
+	TrapAlarmSeverity  int    `json:"trapAlarmSeverity"`
+	TrapCategory       int    `json:"trapCategory"`
+	ManagedObject      string `json:"managedObject"`
+	AlarmID            string `json:"alarmId"`
+	TrapEventTime      string `json:"trapEventTime"`
+	TrapSequenceNum    int    `json:"trapSequenceNum"`
 }
 
 // TrapRecordListVM Trap 记录列表 View Model

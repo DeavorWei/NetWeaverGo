@@ -271,6 +271,15 @@ export interface TrapRecord {
   acknowledged: boolean
   acknowledgedAt: string
   receivedAt: string
+
+  // 告警元数据（从 VarBind 提取）
+  trapAlarmSeverity?: number
+  trapCategory?: number
+  managedObject?: string
+  alarmId?: string
+  trapEventTime?: string
+  trapSequenceNum?: number
+
   /** UI 状态：正在确认中 */
   _acknowledging?: boolean
   /** UI 状态：正在删除中 */

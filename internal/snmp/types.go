@@ -63,14 +63,18 @@ type MIBImportProgress struct {
 
 // TrapEvent Trap 接收事件（轻量级，用于实时推送）
 type TrapEvent struct {
-	SourceIP   string `json:"sourceIP"`
-	SourcePort int    `json:"sourcePort"`
-	TrapOID    string `json:"trapOID"`
-	TrapName   string `json:"trapName"`
-	Severity   string `json:"severity"`
-	Community  string `json:"community"`
-	Version    string `json:"version"`
-	ReceivedAt int64  `json:"receivedAt"` // Unix 毫秒时间戳
+	SourceIP           string `json:"sourceIP"`
+	SourcePort         int    `json:"sourcePort"`
+	TrapOID            string `json:"trapOID"`
+	TrapName           string `json:"trapName"`
+	Severity           string `json:"severity"`
+	Community          string `json:"community"`
+	Version            string `json:"version"`
+	ReceivedAt         int64  `json:"receivedAt"` // Unix 毫秒时间戳
+	TrapAlarmSeverity  int    `json:"trapAlarmSeverity"`
+	ManagedObject      string `json:"managedObject"`
+	AlarmID            string `json:"alarmId"`
+	TrapEventTime      string `json:"trapEventTime"`
 }
 
 // PollingResultEvent 轮询结果事件（轻量级，用于实时推送）
