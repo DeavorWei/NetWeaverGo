@@ -728,7 +728,7 @@ func (r *GormTrapRepository) DeletePollingResultsBefore(ctx context.Context, bef
 
 // DeleteAllPollingResults 删除所有轮询结果
 func (r *GormTrapRepository) DeleteAllPollingResults(ctx context.Context) (int64, error) {
-	result := r.db.WithContext(ctx).Delete(&models.SNMPPollingResult{})
+	result := r.db.WithContext(ctx).Where("1 = 1").Delete(&models.SNMPPollingResult{})
 	if result.Error != nil {
 		logger.Error("SNMP-Repo", "-", "删除所有轮询结果失败: %v", result.Error)
 		return 0, result.Error
