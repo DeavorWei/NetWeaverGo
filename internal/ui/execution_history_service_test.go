@@ -322,6 +322,8 @@ func TestDeleteAllRunRecords_Success(t *testing.T) {
 	// 设置 mock 期望
 	mockRepo.On("ListRunningRuns", context.Background()).Return([]taskexec.TaskRun{}, nil)
 	mockRepo.On("ListRuns", context.Background(), 0).Return(runs, nil)
+	mockRepo.On("GetArtifactsByRun", context.Background(), "run-1").Return([]taskexec.TaskArtifact{}, nil)
+	mockRepo.On("GetUnitsByRun", context.Background(), "run-1").Return([]taskexec.TaskRunUnit{}, nil)
 	mockRepo.On("DeleteAllRunsBatch", context.Background()).Return(nil)
 
 	// 执行测试
@@ -375,6 +377,8 @@ func TestDeleteAllRunRecords_WithTaskGroupID(t *testing.T) {
 	// 设置 mock 期望
 	mockRepo.On("ListRunningRuns", context.Background()).Return([]taskexec.TaskRun{}, nil)
 	mockRepo.On("ListRunsFiltered", context.Background(), 0, uint(100), "", "").Return(runs, nil)
+	mockRepo.On("GetArtifactsByRun", context.Background(), "run-1").Return([]taskexec.TaskArtifact{}, nil)
+	mockRepo.On("GetUnitsByRun", context.Background(), "run-1").Return([]taskexec.TaskRunUnit{}, nil)
 	mockRepo.On("DeleteRunsByTaskGroup", context.Background(), uint(100)).Return(nil)
 
 	// 执行测试 - 指定 taskGroupId

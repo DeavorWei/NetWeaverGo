@@ -82,6 +82,13 @@ func (b *TaskExecutionEventBridge) handleEvent(event *taskexec.TaskEvent) {
 		b.emitToFrontend("task:stage_updated", frontendEvent)
 	case taskexec.EventTypeUnitStarted, taskexec.EventTypeUnitFinished, taskexec.EventTypeUnitProgress:
 		b.emitToFrontend("task:unit_updated", frontendEvent)
+	case taskexec.EventTypeScheduleTriggered, taskexec.EventTypeScheduleSkipped, taskexec.EventTypeScheduleFailed:
+		b.emitToFrontend("task:schedule_event", frontendEvent)
+	}
+
+	// 调度事件无 RunID，无需获取快照增量
+	if event.RunID == "" {
+		return
 	}
 
 	if b.snapshotDeltaGetter == nil {
@@ -144,6 +151,9 @@ func (b *TaskExecutionEventBridge) UnsubscribeRun(runID string) {
 }
 
 func (b *TaskExecutionEventBridge) shouldEmit(runID string) bool {
+	if runID == "" {
+		return true // 调度等无 RunID 事件始终广播
+	}
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	if len(b.runIDs) == 0 {

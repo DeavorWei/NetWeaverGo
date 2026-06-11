@@ -105,6 +105,11 @@ func createIndexes(db *gorm.DB) {
 		"CREATE INDEX IF NOT EXISTS idx_runtime_category ON runtime_settings(category)",
 		"CREATE INDEX IF NOT EXISTS idx_runtime_key ON runtime_settings(key)",
 		"CREATE UNIQUE INDEX IF NOT EXISTS idx_topology_vendor_field ON topology_vendor_field_commands(vendor, field_key)",
+		// 调度相关索引
+		"CREATE INDEX IF NOT EXISTS idx_task_schedule_logs_group_id ON task_schedule_logs(task_group_id)",
+		"CREATE INDEX IF NOT EXISTS idx_task_schedule_logs_triggered_at ON task_schedule_logs(triggered_at)",
+		"CREATE INDEX IF NOT EXISTS idx_task_schedule_logs_status ON task_schedule_logs(status)",
+		"CREATE INDEX IF NOT EXISTS idx_task_groups_schedule_enabled ON task_groups(schedule_enabled)",
 		// 规划比对相关索引
 		"CREATE INDEX IF NOT EXISTS idx_plan_files_imported_at ON plan_files(imported_at)",
 		"CREATE INDEX IF NOT EXISTS idx_planned_links_plan_edge_key ON planned_links(plan_file_id, edge_key)",

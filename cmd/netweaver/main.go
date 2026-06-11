@@ -83,6 +83,12 @@ func runGUI() {
 	taskExecutionService.Start()
 	logger.Info("System", "-", "统一任务执行服务已启动")
 
+	// 创建任务调度服务
+	taskLaunchService := taskexec.NewTaskLaunchService(taskExecutionService)
+	taskScheduler := taskexec.NewTaskScheduler(taskLaunchService, taskExecutionService.GetEventBus(), config.DB)
+	scheduleUIService := ui.NewScheduleUIService(taskScheduler)
+	logger.Info("System", "-", "任务调度服务已创建")
+
 	// 创建各独立服务实例
 	deviceService := ui.NewDeviceService()
 	commandGroupService := ui.NewCommandGroupService()
@@ -197,6 +203,7 @@ func runGUI() {
 			application.NewService(fileServerService),      // 文件服务器服务
 			application.NewService(frontendLogService),     // 前端日志服务
 			application.NewService(taskExecutionUIService), // 统一任务执行UI服务（阶段1）
+			application.NewService(scheduleUIService),      // 任务调度配置服务
 			application.NewService(mibService),             // SNMP MIB 管理服务
 			application.NewService(trapService),            // SNMP Trap 管理服务
 			application.NewService(pollingService),         // SNMP Polling 管理服务
@@ -223,6 +230,12 @@ func runGUI() {
 
 	// 绑定 SNMP 事件通知器到 Wails 应用
 	snmpEventNotifier.SetWailsApp(app)
+
+	// 启动任务调度器
+	if err := taskScheduler.Start(); err != nil {
+		logger.Error("System", "-", "任务调度器启动失败，定时调度功能将不可用: %v", err)
+	}
+	defer taskScheduler.Stop()
 
 	// 应用关闭时停止 Trap 监听器、轮询分发器、轮询调度器和数据清理任务
 	defer trapListener.Stop()

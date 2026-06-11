@@ -91,13 +91,24 @@ func NewTaskLaunchService(service *TaskExecutionService) *TaskLaunchService {
 	}
 }
 
+// StartTaskGroup 启动任务组（手动触发）
 func (s *TaskLaunchService) StartTaskGroup(ctx context.Context, taskGroupID uint) (string, error) {
+	return s.startTaskGroupInternal(ctx, taskGroupID, "manual")
+}
+
+// StartTaskGroupWithSource 启动任务组并指定触发来源
+func (s *TaskLaunchService) StartTaskGroupWithSource(ctx context.Context, taskGroupID uint, triggerSource string) (string, error) {
+	return s.startTaskGroupInternal(ctx, taskGroupID, triggerSource)
+}
+
+// startTaskGroupInternal 启动任务组的核心逻辑（内部方法）
+func (s *TaskLaunchService) startTaskGroupInternal(ctx context.Context, taskGroupID uint, triggerSource string) (string, error) {
 	if s == nil || s.taskexec == nil {
 		logger.Error("TaskLaunchService", "-", "启动任务组失败: service 未初始化, taskGroupID=%d", taskGroupID)
 		return "", fmt.Errorf("task launch service not initialized")
 	}
 
-	logger.Debug("TaskLaunchService", "-", "开始启动任务组: taskGroupID=%d", taskGroupID)
+	logger.Debug("TaskLaunchService", "-", "开始启动任务组: taskGroupID=%d, triggerSource=%s", taskGroupID, triggerSource)
 	taskGroup, err := config.GetTaskGroup(taskGroupID)
 	if err != nil {
 		logger.Error("TaskLaunchService", "-", "加载任务组失败: taskGroupID=%d, err=%v", taskGroupID, err)
@@ -133,12 +144,13 @@ func (s *TaskLaunchService) StartTaskGroup(ctx context.Context, taskGroupID uint
 		TaskGroupID:      taskGroupID,
 		TaskNameSnapshot: spec.TaskNameSnapshot,
 		LaunchSpecJSON:   launchSpecJSON,
+		TriggerSource:    triggerSource,
 	})
 	if err != nil {
 		logger.Error("TaskLaunchService", "-", "启动任务组失败: taskGroupID=%d, err=%v", taskGroupID, err)
 		return "", err
 	}
-	logger.Info("TaskLaunchService", "-", "任务组启动成功: taskGroupID=%d, runID=%s", taskGroupID, runID)
+	logger.Info("TaskLaunchService", "-", "任务组启动成功: taskGroupID=%d, runID=%s, triggerSource=%s", taskGroupID, runID, triggerSource)
 	return runID, nil
 }
 

@@ -134,6 +134,7 @@ type RunSummary struct {
 	TaskName         string    `json:"taskName"`
 	TaskNameSnapshot string    `json:"taskNameSnapshot"`
 	RunKind          string    `json:"runKind"`
+	TriggerSource    string    `json:"triggerSource"`
 	Status           string    `json:"status"`
 	Progress         int       `json:"progress"`
 	TotalStages      int       `json:"totalStages"`
@@ -453,6 +454,7 @@ func (b *SnapshotBuilder) BuildSummary(run *TaskRun, stages []TaskRunStage) *Run
 		TaskName:         run.Name,
 		TaskNameSnapshot: run.TaskNameSnapshot,
 		RunKind:          run.RunKind,
+		TriggerSource:    run.TriggerSource,
 		Status:           run.Status,
 		Progress:         run.Progress,
 		TotalStages:      len(stages),

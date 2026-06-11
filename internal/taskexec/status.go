@@ -176,6 +176,12 @@ const (
 	EventTypeWarning EventType = "warning"
 	// EventTypeError 错误
 	EventTypeError EventType = "error"
+	// EventTypeScheduleTriggered 调度已触发
+	EventTypeScheduleTriggered EventType = "schedule_triggered"
+	// EventTypeScheduleSkipped 调度被跳过
+	EventTypeScheduleSkipped EventType = "schedule_skipped"
+	// EventTypeScheduleFailed 调度执行失败
+	EventTypeScheduleFailed EventType = "schedule_failed"
 	// EventTypeRunAborted Run中止
 	EventTypeRunAborted EventType = "run_aborted"
 	// EventTypeStageSkipped Stage跳过

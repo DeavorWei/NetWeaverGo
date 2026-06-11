@@ -185,10 +185,13 @@ type TaskGroupListView struct {
 	LatestRunFinishedAt string            `json:"latestRunFinishedAt"`
 	ActiveRunCount      int               `json:"activeRunCount"`
 	CanEdit             bool              `json:"canEdit"`
-	Tags                []string          `json:"tags"`
-	EnableRawLog        bool              `json:"enableRawLog"`
-	CreatedAt           string            `json:"createdAt"`
-	UpdatedAt           string            `json:"updatedAt"`
+	Tags                 []string          `json:"tags"`
+	EnableRawLog         bool              `json:"enableRawLog"`
+	ScheduleEnabled      bool              `json:"scheduleEnabled"`
+	ScheduleDescription  string            `json:"scheduleDescription,omitempty"`
+	NextRunAt            string            `json:"nextRunAt,omitempty"`
+	CreatedAt            string            `json:"createdAt"`
+	UpdatedAt            string            `json:"updatedAt"`
 }
 
 // ================== 任务详情视图模型 ==================

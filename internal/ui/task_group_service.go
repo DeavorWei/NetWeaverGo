@@ -108,6 +108,9 @@ func (s *TaskGroupService) ListTaskGroups() ([]TaskGroupListView, error) {
 			CanEdit:             activeCount == 0,
 			Tags:                append([]string(nil), group.Tags...),
 			EnableRawLog:        group.EnableRawLog,
+			ScheduleEnabled:     group.ScheduleEnabled,
+			ScheduleDescription: buildScheduleDescription(group),
+			NextRunAt:           formatTimePtr(group.NextRunAt),
 			CreatedAt:           group.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:           group.UpdatedAt.Format(time.RFC3339),
 		})
@@ -435,6 +438,34 @@ func collectUniqueDeviceIDs(items []models.TaskItem) []uint {
 		return ids[i] < ids[j]
 	})
 	return ids
+}
+
+func buildScheduleDescription(group models.TaskGroup) string {
+	if !group.ScheduleEnabled {
+		return ""
+	}
+	validator := taskexec.NewScheduleValidator()
+	switch group.ScheduleType {
+	case "cron":
+		if strings.TrimSpace(group.CronExpression) != "" {
+			return validator.DescribeCronExpression(group.CronExpression)
+		}
+		return "未配置"
+	case "once":
+		if group.OnceScheduledAt != nil {
+			return fmt.Sprintf("一次性: %s", group.OnceScheduledAt.Format("2006-01-02 15:04"))
+		}
+		return "一次性执行"
+	default:
+		return ""
+	}
+}
+
+func formatTimePtr(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.Format(time.RFC3339)
 }
 
 func normalizeTaskType(taskType string) string {

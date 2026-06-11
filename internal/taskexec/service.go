@@ -79,6 +79,7 @@ type RunMetadata struct {
 	TaskGroupID      uint
 	TaskNameSnapshot string
 	LaunchSpecJSON   []byte
+	TriggerSource    string // "manual" | "schedule"
 }
 
 // CreateNormalTask 创建普通任务定义

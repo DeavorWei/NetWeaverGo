@@ -364,11 +364,15 @@ func (m *RuntimeManager) CreateRun(definitionID, name, runKind string, metadata 
 	launchSpecJSON := ""
 	taskGroupID := uint(0)
 	taskNameSnapshot := name
+	triggerSource := "manual"
 	if metadata != nil {
 		launchSpecJSON = string(metadata.LaunchSpecJSON)
 		taskGroupID = metadata.TaskGroupID
 		if metadata.TaskNameSnapshot != "" {
 			taskNameSnapshot = metadata.TaskNameSnapshot
+		}
+		if metadata.TriggerSource != "" {
+			triggerSource = metadata.TriggerSource
 		}
 	}
 
@@ -378,6 +382,7 @@ func (m *RuntimeManager) CreateRun(definitionID, name, runKind string, metadata 
 		TaskGroupID:      taskGroupID,
 		TaskNameSnapshot: taskNameSnapshot,
 		LaunchSpecJSON:   launchSpecJSON,
+		TriggerSource:    triggerSource,
 		Name:             name,
 		RunKind:          runKind,
 		Status:           string(RunStatusPending),

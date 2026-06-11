@@ -184,6 +184,15 @@ type TaskGroup struct {
 	BackupFileNamePattern  string                      `json:"backupFileNamePattern"`
 	BackupStartupCommand   string                      `json:"backupStartupCommand"`
 	BackupSftpTimeoutSec   int                         `json:"backupSftpTimeoutSec"` // SFTP下载独立超时(秒)，0时使用命令超时的2倍
+	// ===== 调度相关字段 =====
+	ScheduleEnabled    bool       `json:"scheduleEnabled"`
+	CronExpression     string     `json:"cronExpression"`
+	ScheduleType       string     `json:"scheduleType"`
+	OnceScheduledAt    *time.Time `json:"onceScheduledAt,omitempty"`
+	NextRunAt          *time.Time `json:"nextRunAt,omitempty"`
+	LastScheduledRunID string     `json:"lastScheduledRunId,omitempty"`
+	LastScheduledAt    *time.Time `json:"lastScheduledAt,omitempty"`
+	ScheduleError      string     `json:"scheduleError,omitempty"`
 	CreatedAt              time.Time                   `json:"createdAt"`
 	UpdatedAt              time.Time                   `json:"updatedAt"`
 }

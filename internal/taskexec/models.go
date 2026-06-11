@@ -79,6 +79,7 @@ type TaskRun struct {
 	TaskGroupID      uint           `gorm:"index" json:"taskGroupId"`
 	TaskNameSnapshot string         `json:"taskNameSnapshot"`
 	LaunchSpecJSON   string         `gorm:"type:text" json:"launchSpecJson"`
+	TriggerSource    string         `json:"triggerSource"` // "manual" | "schedule"
 	Name             string         `json:"name"`
 	RunKind          string         `json:"runKind"` // normal / topology
 	Status           string         `json:"status"`  // pending / running / completed / partial / failed / cancelled / aborted
