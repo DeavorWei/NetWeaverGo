@@ -33,11 +33,12 @@ func NewConfigBuilder() *ConfigBuilder {
 
 // Build 执行配置构建
 // 核心逻辑：
-// 1. 解析变量值（逗号/换行分隔）
-// 2. 展开语法糖（1-10 -> 1,2,3,...,10）
-// 3. 推断等差数列补全
-// 4. 精确变量替换
-// 5. 返回构建结果
+//  1. 解析变量值（逗号/换行分隔）
+//  2. 展开语法糖（1-10 -> 1,2,3,...,10）
+//  3. 推断等差数列补全
+//  4. 按变量名长度降序排列，防止短变量误匹配长变量内部子串（如 [A] 匹配 [AB]）
+//  5. 使用 strings.NewReplacer 预编译所有替换对，单次遍历完成全部替换
+//  6. 返回构建结果
 func (b *ConfigBuilder) Build(req *BuildRequest) (*BuildResult, error) {
 	result := &BuildResult{
 		Blocks:   []string{},
@@ -81,24 +82,25 @@ func (b *ConfigBuilder) Build(req *BuildRequest) (*BuildResult, error) {
 	}
 
 	// 5. 按变量名长度降序排列，防止短变量优先匹配导致覆盖
+	//    例如 [A] 和 [AB] 两个变量，[AB] 必须先替换，否则 [A] 会错误匹配 [AB] 中的 A
 	sortedVars := SortVariablesByLength(activeVars)
 
-	// 6. 精确替换循环
+	// 6. 精确替换循环（使用 strings.NewReplacer 单次遍历优化）
 	blocks := make([]string, 0, maxLen)
 	for i := 0; i < maxLen; i++ {
-		currentBlock := req.Template
-
+		// 为当前批次预编译所有变量替换对
+		replArgs := make([]string, 0, len(sortedVars)*2)
 		for _, v := range sortedVars {
-			// 如果当前变量的值数量不足，取最后一个值循环补齐
 			valIndex := i
 			if valIndex >= len(v.Values) {
 				valIndex = len(v.Values) - 1
 			}
-			val := v.Values[valIndex]
-
-			// 精确替换，直接匹配带括号的变量名进行替换
-			currentBlock = strings.ReplaceAll(currentBlock, v.Name, val)
+			replArgs = append(replArgs, v.Name, v.Values[valIndex])
 		}
+		replacer := strings.NewReplacer(replArgs...)
+
+		// 单次遍历完成全部变量替换
+		currentBlock := replacer.Replace(req.Template)
 
 		// 清除头部及尾部可能导致多余空行的空白字符
 		blocks = append(blocks, strings.TrimSpace(currentBlock))

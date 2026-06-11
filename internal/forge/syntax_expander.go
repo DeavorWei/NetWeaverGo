@@ -303,8 +303,11 @@ func ParseVariables(variables []Variable) ([]Variable, error) {
 	return result, nil
 }
 
-// SortVariablesByLength 按变量名长度降序排列
-// 防止短变量优先匹配导致覆盖（如 [A] 误替换 [AA] 内部的 [A]）
+// SortVariablesByLength 按变量名长度降序排列。
+// 这是变量名冲突防护的关键步骤：当模板中同时存在 [A] 和 [AB] 两个变量时，
+// 必须先替换 [AB] 再替换 [A]，否则 [A] 会错误匹配 [AB] 中的 A 部分，
+// 导致 [AB] 无法被正确替换。
+// 通过长度降序排列确保长变量名优先匹配，从根本上避免此类冲突。
 func SortVariablesByLength(variables []Variable) []Variable {
 	sorted := make([]Variable, len(variables))
 	copy(sorted, variables)
