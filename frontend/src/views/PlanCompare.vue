@@ -377,8 +377,12 @@ async function importPlan() {
     const result = await PlanCompareAPI.importPlanCSV(importPath.value);
     if (result?.planFileId) {
       selectedPlanID.value = result.planFileId;
+      ElMessage.success(`导入成功，共 ${result.totalLinks} 条链路`);
     }
     await loadBaseData();
+  } catch (error: any) {
+    console.error('导入规划文件失败:', error);
+    ElMessage.error(error?.message || '导入失败，请检查文件路径和格式');
   } finally {
     importing.value = false;
   }
@@ -427,7 +431,11 @@ async function compareNow() {
     const result = await PlanCompareAPI.compare(selectedRunId.value, selectedPlanID.value);
     if (result) {
       compareResult.value = result;
+      ElMessage.success(`比对完成，匹配 ${result.matched} 条链路`);
     }
+  } catch (error: any) {
+    console.error('比对失败:', error);
+    ElMessage.error(error?.message || '比对失败，请重试');
   } finally {
     comparing.value = false;
   }
