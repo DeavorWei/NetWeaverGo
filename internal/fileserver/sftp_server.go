@@ -331,6 +331,7 @@ func (s *SFTPServer) handleSession(channel ssh.Channel, requests <-chan *ssh.Req
 					homeDir:  homeDir,
 					clientIP: clientIP,
 					manager:  s.manager,
+					config:   s.config,
 				}
 
 				handlers := sftp.Handlers{
@@ -484,11 +485,26 @@ type sftpHandler struct {
 	homeDir  string
 	clientIP string
 	manager  *ServerManager
+	config   *models.FileServerConfig // 权限配置
 }
 
 // Fileread 打开文件用于读取
 func (h *sftpHandler) Fileread(r *sftp.Request) (io.ReaderAt, error) {
 	logger.Verbose("FileServer:SFTP", h.clientIP, "Fileread: %s", r.Filepath)
+
+	// 检查下载权限
+	if !h.config.AllowGet {
+		logger.Warn("FileServer:SFTP", h.clientIP, "拒绝读取文件 %s: 不允许下载", r.Filepath)
+		h.manager.emitLog(LogEvent{
+			Level:    LogLevelWarn,
+			Protocol: ProtocolSFTP,
+			ClientIP: h.clientIP,
+			Action:   ActionError,
+			Message:  fmt.Sprintf("拒绝读取文件 %s: 权限不足", r.Filepath),
+			File:     r.Filepath,
+		})
+		return nil, sftp.ErrSSHFxPermissionDenied
+	}
 
 	safePath, err := h.safePath(r.Filepath)
 	if err != nil {
@@ -518,6 +534,20 @@ func (h *sftpHandler) Fileread(r *sftp.Request) (io.ReaderAt, error) {
 // Filewrite 打开文件用于写入
 func (h *sftpHandler) Filewrite(r *sftp.Request) (io.WriterAt, error) {
 	logger.Verbose("FileServer:SFTP", h.clientIP, "Filewrite: %s", r.Filepath)
+
+	// 检查上传权限
+	if !h.config.AllowPut {
+		logger.Warn("FileServer:SFTP", h.clientIP, "拒绝写入文件 %s: 不允许上传", r.Filepath)
+		h.manager.emitLog(LogEvent{
+			Level:    LogLevelWarn,
+			Protocol: ProtocolSFTP,
+			ClientIP: h.clientIP,
+			Action:   ActionError,
+			Message:  fmt.Sprintf("拒绝写入文件 %s: 权限不足", r.Filepath),
+			File:     r.Filepath,
+		})
+		return nil, sftp.ErrSSHFxPermissionDenied
+	}
 
 	safePath, err := h.safePath(r.Filepath)
 	if err != nil {
@@ -565,6 +595,19 @@ func (h *sftpHandler) Filecmd(r *sftp.Request) error {
 		logger.Verbose("FileServer:SFTP", h.clientIP, "Setstat: %s (忽略)", r.Filepath)
 		return nil
 	case "Rename":
+		// 检查重命名权限
+		if !h.config.AllowRename {
+			logger.Warn("FileServer:SFTP", h.clientIP, "拒绝重命名 %s: 权限不足", r.Filepath)
+			h.manager.emitLog(LogEvent{
+				Level:    LogLevelWarn,
+				Protocol: ProtocolSFTP,
+				ClientIP: h.clientIP,
+				Action:   ActionError,
+				Message:  fmt.Sprintf("拒绝重命名 %s: 权限不足", r.Filepath),
+				File:     r.Filepath,
+			})
+			return sftp.ErrSSHFxPermissionDenied
+		}
 		safeTarget, err := h.safePath(r.Target)
 		if err != nil {
 			logger.Warn("FileServer:SFTP", h.clientIP, "Rename 目标路径安全检查失败: %s, err: %v", r.Target, err)
@@ -584,6 +627,19 @@ func (h *sftpHandler) Filecmd(r *sftp.Request) error {
 			File:     r.Filepath,
 		})
 	case "Rmdir":
+		// 检查删除权限
+		if !h.config.AllowDel {
+			logger.Warn("FileServer:SFTP", h.clientIP, "拒绝删除目录 %s: 权限不足", r.Filepath)
+			h.manager.emitLog(LogEvent{
+				Level:    LogLevelWarn,
+				Protocol: ProtocolSFTP,
+				ClientIP: h.clientIP,
+				Action:   ActionError,
+				Message:  fmt.Sprintf("拒绝删除目录 %s: 权限不足", r.Filepath),
+				File:     r.Filepath,
+			})
+			return sftp.ErrSSHFxPermissionDenied
+		}
 		if err := os.Remove(safePath); err != nil {
 			logger.Error("FileServer:SFTP", h.clientIP, "Rmdir 失败: %s, err: %v", r.Filepath, err)
 			return sftp.ErrSSHFxFailure
@@ -598,6 +654,19 @@ func (h *sftpHandler) Filecmd(r *sftp.Request) error {
 			File:     r.Filepath,
 		})
 	case "Remove":
+		// 检查删除权限
+		if !h.config.AllowDel {
+			logger.Warn("FileServer:SFTP", h.clientIP, "拒绝删除文件 %s: 权限不足", r.Filepath)
+			h.manager.emitLog(LogEvent{
+				Level:    LogLevelWarn,
+				Protocol: ProtocolSFTP,
+				ClientIP: h.clientIP,
+				Action:   ActionError,
+				Message:  fmt.Sprintf("拒绝删除文件 %s: 权限不足", r.Filepath),
+				File:     r.Filepath,
+			})
+			return sftp.ErrSSHFxPermissionDenied
+		}
 		if err := os.Remove(safePath); err != nil {
 			logger.Error("FileServer:SFTP", h.clientIP, "Remove 失败: %s, err: %v", r.Filepath, err)
 			return sftp.ErrSSHFxFailure
@@ -612,6 +681,19 @@ func (h *sftpHandler) Filecmd(r *sftp.Request) error {
 			File:     r.Filepath,
 		})
 	case "Mkdir":
+		// 检查上传权限（创建目录属于写操作）
+		if !h.config.AllowPut {
+			logger.Warn("FileServer:SFTP", h.clientIP, "拒绝创建目录 %s: 权限不足", r.Filepath)
+			h.manager.emitLog(LogEvent{
+				Level:    LogLevelWarn,
+				Protocol: ProtocolSFTP,
+				ClientIP: h.clientIP,
+				Action:   ActionError,
+				Message:  fmt.Sprintf("拒绝创建目录 %s: 权限不足", r.Filepath),
+				File:     r.Filepath,
+			})
+			return sftp.ErrSSHFxPermissionDenied
+		}
 		if err := os.MkdirAll(safePath, 0755); err != nil {
 			logger.Error("FileServer:SFTP", h.clientIP, "Mkdir 失败: %s, err: %v", r.Filepath, err)
 			return sftp.ErrSSHFxFailure
@@ -644,6 +726,20 @@ func (h *sftpHandler) Filecmd(r *sftp.Request) error {
 // PosixRename POSIX 重命名
 func (h *sftpHandler) PosixRename(r *sftp.Request) error {
 	logger.Verbose("FileServer:SFTP", h.clientIP, "PosixRename: %s -> %s", r.Filepath, r.Target)
+
+	// 检查重命名权限
+	if !h.config.AllowRename {
+		logger.Warn("FileServer:SFTP", h.clientIP, "拒绝重命名 %s: 权限不足", r.Filepath)
+		h.manager.emitLog(LogEvent{
+			Level:    LogLevelWarn,
+			Protocol: ProtocolSFTP,
+			ClientIP: h.clientIP,
+			Action:   ActionError,
+			Message:  fmt.Sprintf("拒绝重命名 %s: 权限不足", r.Filepath),
+			File:     r.Filepath,
+		})
+		return sftp.ErrSSHFxPermissionDenied
+	}
 
 	safePath, err := h.safePath(r.Filepath)
 	if err != nil {

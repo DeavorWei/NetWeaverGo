@@ -1,12 +1,14 @@
 // Package fileserver 提供内置的轻量级文件服务器功能
-// 支持 SFTP、FTP、TFTP 三种协议
+// 支持 SFTP、FTP、TFTP、HTTP 四种协议
 package fileserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -160,16 +162,17 @@ func safeGo(name string, fn func()) {
 }
 
 // globalManager 全局服务器管理器引用，用于panic恢复时发送事件
-var globalManager *ServerManager
+// 使用 atomic.Pointer 保护并发访问安全
+var globalManager atomic.Pointer[ServerManager]
 
 // getGlobalManager 获取全局管理器
 func getGlobalManager() *ServerManager {
-	return globalManager
+	return globalManager.Load()
 }
 
 // SetGlobalManager 设置全局管理器
 func SetGlobalManager(m *ServerManager) {
-	globalManager = m
+	globalManager.Store(m)
 }
 
 // StartServer 启动指定协议的服务器
@@ -284,12 +287,12 @@ func (m *ServerManager) StopAll() error {
 
 	logger.Info("FileServer", "-", "正在停止所有文件服务器 (共 %d 个)", len(m.servers))
 
-	var lastErr error
+	var errs []error
 	for protocol, server := range m.servers {
 		if server.IsRunning() {
 			logger.Verbose("FileServer", "-", "正在停止 %s 服务器...", protocol)
 			if err := server.Stop(); err != nil {
-				lastErr = err
+				errs = append(errs, fmt.Errorf("停止 %s 服务器失败: %w", protocol, err))
 				logger.Error("FileServer", "-", "停止 %s 服务器失败: %v", protocol, err)
 			} else {
 				logger.Info("FileServer", "-", "%s 服务器已停止", protocol)
@@ -302,7 +305,7 @@ func (m *ServerManager) StopAll() error {
 			}
 		}
 	}
-	return lastErr
+	return errors.Join(errs...)
 }
 
 // createServer 创建指定协议的服务器实例
@@ -350,7 +353,7 @@ func (m *ServerManager) Shutdown(ctx context.Context) error {
 		}
 		return err
 	case <-ctx.Done():
-		logger.Error("FileServer", "-", "关闭文件服务器超时")
+		logger.Warn("FileServer", "-", "关闭文件服务器超时，StopAll goroutine 仍在后台运行")
 		return fmt.Errorf("关闭服务器超时")
 	}
 }

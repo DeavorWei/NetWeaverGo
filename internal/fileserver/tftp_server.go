@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
@@ -19,6 +20,7 @@ type TFTPServer struct {
 	mu      sync.RWMutex
 	config  *models.FileServerConfig
 	server  *tftp.Server
+	conn    net.PacketConn // 底层 UDP 连接，Stop 时关闭以使 Serve 退出
 	running bool
 	manager *ServerManager
 	connMap sync.Map // 存储活动连接
@@ -59,42 +61,33 @@ func (s *TFTPServer) Start(config *models.FileServerConfig) error {
 	logger.Verbose("FileServer:TFTP", "-", "正在创建 TFTP 服务器实例...")
 	s.server = tftp.NewServer(s.handleRead, s.handleWrite)
 
-	// 启动服务器（在 goroutine 中）
+	// 在启动 goroutine 前先监听 UDP 端口，确保 Start() 返回时端口已绑定
 	addr := fmt.Sprintf(":%d", config.Port)
 	logger.Info("FileServer:TFTP", "-", "正在启动 TFTP 服务器，监听端口 %d...", config.Port)
 
+	logger.Verbose("FileServer:TFTP", "-", "正在监听 UDP 端口: %s", addr)
+	conn, err := net.ListenPacket("udp", addr)
+	if err != nil {
+		logger.Error("FileServer:TFTP", "-", "TFTP 服务器启动失败，无法监听端口 %d: %v", config.Port, err)
+		return fmt.Errorf("TFTP 服务器启动失败: %v", err)
+	}
+
+	// 存储连接引用，Stop() 时通过关闭此连接使 Serve() 退出
+	s.conn = conn
 	s.running = true
 
 	safeGo("TFTP-Serve", func() {
-		// 监听 UDP 端口
-		logger.Verbose("FileServer:TFTP", "-", "正在监听 UDP 端口: %s", addr)
-		conn, err := net.ListenPacket("udp", addr)
-		if err != nil {
-			s.mu.Lock()
-			s.running = false
-			s.mu.Unlock()
-			logger.Error("FileServer:TFTP", "-", "TFTP 服务器启动失败，无法监听端口 %d: %v", config.Port, err)
-			s.manager.emitLog(LogEvent{
-				Level:    LogLevelError,
-				Protocol: ProtocolTFTP,
-				Action:   ActionError,
-				Message:  fmt.Sprintf("TFTP 服务器启动失败: %v", err),
-			})
-			return
-		}
-
-		logger.Info("FileServer:TFTP", "-", "TFTP 服务器已成功启动，监听端口 %d", config.Port)
-		s.manager.emitLog(LogEvent{
-			Level:    LogLevelSuccess,
-			Protocol: ProtocolTFTP,
-			Action:   ActionConnect,
-			Message:  fmt.Sprintf("TFTP 服务器已启动，监听端口 %d", config.Port),
-		})
-
-		// 服务器会阻塞直到停止
 		logger.Verbose("FileServer:TFTP", "-", "TFTP 服务器开始处理请求...")
 		s.server.Serve(conn)
 		logger.Info("FileServer:TFTP", "-", "TFTP 服务器 Serve 已退出")
+	})
+
+	logger.Info("FileServer:TFTP", "-", "TFTP 服务器已成功启动，监听端口 %d", config.Port)
+	s.manager.emitLog(LogEvent{
+		Level:    LogLevelSuccess,
+		Protocol: ProtocolTFTP,
+		Action:   ActionConnect,
+		Message:  fmt.Sprintf("TFTP 服务器已启动，监听端口 %d", config.Port),
 	})
 
 	return nil
@@ -112,12 +105,29 @@ func (s *TFTPServer) Stop() error {
 		return nil
 	}
 
-	// TFTP 服务器没有直接的 Stop 方法，需要关闭底层连接
-	// 通过设置 running = false 来阻止新的请求处理
 	s.running = false
 
+	// 关闭底层 UDP 连接，使 Serve() 循环退出
+	if s.conn != nil {
+		logger.Verbose("FileServer:TFTP", "-", "正在关闭 UDP 连接...")
+		s.conn.Close()
+		s.conn = nil
+	}
+
+	// 等待所有连接处理完成（带超时防止无限阻塞）
 	logger.Verbose("FileServer:TFTP", "-", "等待所有连接处理完成...")
-	s.connWg.Wait()
+	waitDone := make(chan struct{})
+	go func() {
+		s.connWg.Wait()
+		close(waitDone)
+	}()
+
+	select {
+	case <-waitDone:
+		logger.Verbose("FileServer:TFTP", "-", "所有连接已处理完成")
+	case <-time.After(5 * time.Second):
+		logger.Warn("FileServer:TFTP", "-", "等待连接处理超时（5秒），强制停止")
+	}
 
 	logger.Info("FileServer:TFTP", "-", "TFTP 服务器已停止")
 

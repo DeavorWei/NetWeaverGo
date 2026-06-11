@@ -5,7 +5,9 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -63,18 +65,25 @@ func (s *WebServer) Start(config *models.FileServerConfig) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleRequest)
 
+	// 先监听端口，确保 Start() 返回时端口已绑定
+	addr := fmt.Sprintf(":%d", config.Port)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		logger.Error("FileServer:HTTP", "-", "HTTP 服务器启动失败，无法监听端口 %d: %v", config.Port, err)
+		return fmt.Errorf("HTTP 服务器启动失败: %v", err)
+	}
+
 	// 创建 HTTP 服务器
 	s.httpServer = &http.Server{
-		Addr:    fmt.Sprintf(":%d", config.Port),
 		Handler: s.authMiddleware(mux),
 	}
 
 	s.running = true
 
-	// 使用 safeGo 启动服务器
-	safeGo("HTTP-ListenAndServe", func() {
-		logger.Info("FileServer:HTTP", "-", "HTTP 服务器 goroutine 已启动，开始监听端口 %d...", config.Port)
-		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	// 使用 safeGo 启动服务器，传入已绑定的 listener
+	safeGo("HTTP-Serve", func() {
+		logger.Info("FileServer:HTTP", "-", "HTTP 服务器 goroutine 已启动，开始处理请求...")
+		if err := s.httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 			s.mu.Lock()
 			s.running = false
 			s.mu.Unlock()
@@ -88,9 +97,6 @@ func (s *WebServer) Start(config *models.FileServerConfig) error {
 		}
 		logger.Info("FileServer:HTTP", "-", "HTTP 服务器 goroutine 已退出")
 	})
-
-	// 等待一小段时间确认服务器启动
-	time.Sleep(100 * time.Millisecond)
 
 	logger.Info("FileServer:HTTP", "-", "HTTP 服务器已成功启动，监听端口 %d", config.Port)
 
@@ -435,7 +441,7 @@ func (s *WebServer) buildBreadcrumb(urlPath string) string {
 		}
 		currentPath += part + "/"
 		result.WriteString(`<span>/</span>`)
-		result.WriteString(`<a href="` + currentPath + `">` + part + `</a>`)
+		result.WriteString(`<a href="` + escapeHTML(currentPath) + `">` + escapeHTML(part) + `</a>`)
 	}
 
 	return result.String()
@@ -448,8 +454,8 @@ func (s *WebServer) renderDirectoryListing(w http.ResponseWriter, urlPath string
 		urlPath += "/"
 	}
 
-	// 构建页面标题
-	title := "目录浏览: " + urlPath
+	// 构建页面标题（对用户可控的 urlPath 进行 HTML 转义）
+	title := "目录浏览: " + escapeHTML(urlPath)
 	if urlPath == "/" {
 		title = "根目录"
 	}
@@ -764,16 +770,19 @@ func (s *WebServer) renderDirectoryListing(w http.ResponseWriter, urlPath string
 		return t.Format("2006-01-02 15:04")
 	}
 
-	// 先添加目录，再添加文件
+	// 先添加目录，再添加文件（对文件名和路径进行 HTML 转义防止 XSS）
 	for _, f := range files {
 		if f.IsDir {
+			safeName := escapeHTML(f.Name)
 			dirPath := urlPath + f.Name + "/"
+			safeDirPath := escapeHTML(dirPath)
+			jsDirPath := escapeJS(dirPath)
 			deleteBtn := ""
 			if canDelete {
-				deleteBtn = `<button class="btn btn-delete" onclick="deleteItem('` + dirPath + `', true)" title="删除">删除</button>`
+				deleteBtn = `<button class="btn btn-delete" onclick="deleteItem('` + jsDirPath + `', true)" title="删除">删除</button>`
 			}
 			html += `                <tr>
-	                   <td><a href="` + dirPath + `" class="file-link"><span class="icon">📁</span> ` + f.Name + `/</a></td>
+	                   <td><a href="` + safeDirPath + `" class="file-link"><span class="icon">📁</span> ` + safeName + `/</a></td>
 	                   <td class="size">-</td>
 	                   <td class="modified">` + formatTime(f.ModTime) + `</td>
 	                   <td class="actions">` + deleteBtn + `</td>
@@ -784,20 +793,23 @@ func (s *WebServer) renderDirectoryListing(w http.ResponseWriter, urlPath string
 
 	for _, f := range files {
 		if !f.IsDir {
+			safeName := escapeHTML(f.Name)
 			filePath := urlPath + f.Name
+			safeFilePath := escapeHTML(filePath)
+			jsFilePath := escapeJS(filePath)
 			// 构建操作按钮
 			var actionBtns string
 			if canDownload {
-				actionBtns += `<a href="` + filePath + `" download class="btn btn-download" title="下载">下载</a>`
+				actionBtns += `<a href="` + safeFilePath + `" download class="btn btn-download" title="下载">下载</a>`
 			}
 			if canDelete {
-				actionBtns += ` <button class="btn btn-delete" onclick="deleteItem('` + filePath + `', false)" title="删除">删除</button>`
+				actionBtns += ` <button class="btn btn-delete" onclick="deleteItem('` + jsFilePath + `', false)" title="删除">删除</button>`
 			}
 			if actionBtns == "" {
 				actionBtns = "-"
 			}
 			html += `                <tr>
-	                   <td><a href="` + filePath + `" class="file-link"><span class="icon">📄</span> ` + f.Name + `</a></td>
+	                   <td><a href="` + safeFilePath + `" class="file-link"><span class="icon">📄</span> ` + safeName + `</a></td>
 	                   <td class="size">` + formatSize(f.Size) + `</td>
 	                   <td class="modified">` + formatTime(f.ModTime) + `</td>
 	                   <td class="actions">` + actionBtns + `</td>
@@ -1116,8 +1128,13 @@ func (s *WebServer) safePath(homeDir, requestedPath string) (string, error) {
 	// 确保解析后的路径仍在 homeDir 内
 	resolvedPath, err := filepath.EvalSymlinks(fullPath)
 	if err != nil {
-		// 如果文件不存在，检查其父目录
-		resolvedPath = fullPath
+		// 文件不存在时，对父目录进行符号链接解析而非直接回退
+		parentDir := filepath.Dir(fullPath)
+		resolvedParent, parentErr := filepath.EvalSymlinks(parentDir)
+		if parentErr != nil {
+			return "", fmt.Errorf("无法解析父目录: %v", parentErr)
+		}
+		resolvedPath = filepath.Join(resolvedParent, filepath.Base(fullPath))
 	}
 
 	// 添加路径分隔符以确保前缀匹配正确
@@ -1137,6 +1154,21 @@ func (s *WebServer) safePath(homeDir, requestedPath string) (string, error) {
 	}
 
 	return resolvedAbs, nil
+}
+
+// escapeHTML 转义 HTML 特殊字符，防止 XSS 攻击
+func escapeHTML(s string) string {
+	return html.EscapeString(s)
+}
+
+// escapeJS 转义 JavaScript 字符串中的特殊字符，防止 onclick 注入
+func escapeJS(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `'`, `\'`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	return s
 }
 
 // getClientIP 获取客户端 IP 地址

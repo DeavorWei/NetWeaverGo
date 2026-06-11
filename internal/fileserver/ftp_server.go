@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"os"
 	"sync"
 	"time"
@@ -28,9 +29,10 @@ type FTPServer struct {
 
 // ftpDriver FTP 服务器驱动
 type ftpDriver struct {
-	config  *models.FileServerConfig
-	manager *ServerManager
-	fs      afero.Fs
+	config      *models.FileServerConfig
+	manager     *ServerManager
+	connections *sync.Map // 引用 FTPServer 的连接表
+	fs          afero.Fs
 }
 
 // ftpClientDriver 客户端驱动
@@ -73,9 +75,10 @@ func (s *FTPServer) Start(config *models.FileServerConfig) error {
 	// 创建驱动
 	logger.Verbose("FileServer:FTP", "-", "正在创建 FTP 驱动...")
 	s.driver = &ftpDriver{
-		config:  config,
-		manager: s.manager,
-		fs:      afero.NewBasePathFs(afero.NewOsFs(), config.HomeDir),
+		config:      config,
+		manager:     s.manager,
+		connections: &s.connections,
+		fs:          afero.NewBasePathFs(afero.NewOsFs(), config.HomeDir),
 	}
 
 	// 创建 FTP 服务器
@@ -104,8 +107,15 @@ func (s *FTPServer) Start(config *models.FileServerConfig) error {
 		logger.Info("FileServer:FTP", "-", "FTP 服务器 goroutine 已退出")
 	})
 
-	// 等待一小段时间确认服务器启动
-	time.Sleep(100 * time.Millisecond)
+	// 通过 TCP 连接探测确认服务器已就绪
+	addr := fmt.Sprintf(":%d", config.Port)
+	if err := waitForPort(addr, 2*time.Second); err != nil {
+		s.mu.Lock()
+		s.running = false
+		s.mu.Unlock()
+		logger.Error("FileServer:FTP", "-", "FTP 服务器启动超时: %v", err)
+		return fmt.Errorf("FTP 服务器启动超时: %v", err)
+	}
 
 	logger.Info("FileServer:FTP", "-", "FTP 服务器已成功启动，监听端口 %d", config.Port)
 
@@ -162,24 +172,73 @@ func (s *FTPServer) IsRunning() bool {
 }
 
 // DisconnectAll 断开所有客户端连接
+// 由于 ftpserverlib 不支持单独断开连接，通过重启服务器实现
 func (s *FTPServer) DisconnectAll() error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	logger.Debug("FileServer:FTP", "-", "DisconnectAll 方法被调用")
 
-	if s.server == nil {
-		logger.Verbose("FileServer:FTP", "-", "服务器实例为空，无需断开连接")
+	if s.server == nil || !s.running {
+		logger.Verbose("FileServer:FTP", "-", "FTP 服务器未运行，无需断开连接")
 		return nil
 	}
 
-	logger.Info("FileServer:FTP", "-", "已断开所有 FTP 连接")
+	// 统计当前连接数
+	connCount := 0
+	s.connections.Range(func(key, value interface{}) bool {
+		connCount++
+		return true
+	})
+
+	logger.Info("FileServer:FTP", "-", "正在断开所有 FTP 连接 (共 %d 个)...", connCount)
+
+	// 停止当前服务器（会断开所有连接）
+	if err := s.server.Stop(); err != nil {
+		logger.Error("FileServer:FTP", "-", "停止 FTP 服务器失败: %v", err)
+		return fmt.Errorf("断开连接失败: %v", err)
+	}
+
+	// 清理连接记录
+	s.connections.Range(func(key, value interface{}) bool {
+		s.connections.Delete(key)
+		return true
+	})
+
+	// 重新创建并启动服务器
+	s.driver = &ftpDriver{
+		config:      s.config,
+		manager:     s.manager,
+		connections: &s.connections,
+		fs:          afero.NewBasePathFs(afero.NewOsFs(), s.config.HomeDir),
+	}
+	s.server = ftpserverlib.NewFtpServer(s.driver)
+
+	safeGo("FTP-ListenAndServe-Restart", func() {
+		logger.Info("FileServer:FTP", "-", "FTP 服务器重启 goroutine 已启动...")
+		if err := s.server.ListenAndServe(); err != nil {
+			s.mu.Lock()
+			s.running = false
+			s.mu.Unlock()
+			logger.Error("FileServer:FTP", "-", "FTP 服务器重启失败: %v", err)
+		}
+	})
+
+	// 等待重启完成
+	addr := fmt.Sprintf(":%d", s.config.Port)
+	if err := waitForPort(addr, 2*time.Second); err != nil {
+		s.running = false
+		logger.Error("FileServer:FTP", "-", "FTP 服务器重启超时: %v", err)
+		return fmt.Errorf("服务器重启超时: %v", err)
+	}
+
+	logger.Info("FileServer:FTP", "-", "已断开所有 FTP 连接并重启服务器")
 
 	s.manager.emitLog(LogEvent{
 		Level:    LogLevelInfo,
 		Protocol: ProtocolFTP,
 		Action:   ActionDisconnect,
-		Message:  "所有 FTP 连接已断开",
+		Message:  fmt.Sprintf("已断开所有 FTP 连接 (共 %d 个) 并重启服务器", connCount),
 	})
 
 	return nil
@@ -239,7 +298,11 @@ func (d *ftpDriver) ClientConnected(cc ftpserverlib.ClientContext) (string, erro
 
 	logger.Verbose("FileServer:FTP", clientIP, "客户端连接 (Session: %s)", sessionID)
 
-	// 记录连接
+	// 记录连接到连接表
+	if d.connections != nil {
+		d.connections.Store(clientIP, cc)
+	}
+
 	d.manager.emitLog(LogEvent{
 		Level:    LogLevelInfo,
 		Protocol: ProtocolFTP,
@@ -256,6 +319,11 @@ func (d *ftpDriver) ClientDisconnected(cc ftpserverlib.ClientContext) {
 	clientIP := cc.RemoteAddr().String()
 
 	logger.Verbose("FileServer:FTP", clientIP, "客户端断开连接")
+
+	// 从连接表中移除
+	if d.connections != nil {
+		d.connections.Delete(clientIP)
+	}
 
 	d.manager.emitLog(LogEvent{
 		Level:    LogLevelInfo,
@@ -583,4 +651,18 @@ func generateSessionID() string {
 	b := make([]byte, 4)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// waitForPort 等待指定端口可连接（用于确认服务器已就绪）
+func waitForPort(addr string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return fmt.Errorf("端口 %s 在 %v 内未就绪", addr, timeout)
 }
