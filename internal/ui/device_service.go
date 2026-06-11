@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/NetWeaverGo/core/internal/sshutil"
@@ -71,16 +72,18 @@ func (s *DeviceService) ResetDeviceSSHHostKey(id uint) error {
 
 	device, err := s.repo.FindByID(id)
 	if err != nil {
-		return fmt.Errorf("未找到设备: %d", id)
+		logger.Error("DeviceService", "-", "重置 SSH 主机密钥失败，设备不存在: id=%d, err=%v", id, err)
+		return fmt.Errorf("设备不存在")
 	}
 
 	knownHostsPath := config.GetPathManager().GetSSHKnownHostsPath()
 	removed, err := sshutil.RemoveKnownHost(knownHostsPath, device.IP)
 	if err != nil {
-		return fmt.Errorf("重置设备 %s 的 SSH 主机密钥失败: %w", device.IP, err)
+		logger.Error("DeviceService", "-", "重置设备 %s 的 SSH 主机密钥失败: %v", device.IP, err)
+		return fmt.Errorf("重置 SSH 主机密钥失败")
 	}
 	if !removed {
-		return fmt.Errorf("设备 %s 未找到可清理的 SSH 主机密钥记录", device.IP)
+		return fmt.Errorf("未找到可清理的 SSH 主机密钥记录")
 	}
 	return nil
 }
@@ -101,7 +104,8 @@ func (s *DeviceService) AddDevice(device models.DeviceAsset) error {
 		return err
 	}
 	if exists {
-		return fmt.Errorf("IP 地址 %s 已存在", device.IP)
+		logger.Warn("DeviceService", "-", "新增设备失败，IP 已存在: %s", device.IP)
+		return fmt.Errorf("IP 地址已存在")
 	}
 
 	return s.repo.Create(&device)
@@ -164,7 +168,8 @@ func (s *DeviceService) AddDevices(devices []models.DeviceAsset) error {
 		return err
 	}
 	if len(existing) > 0 {
-		return fmt.Errorf("IP 地址 %s 已存在", existing[0].IP)
+		logger.Warn("DeviceService", "-", "批量新增设备失败，IP 已存在: %s", existing[0].IP)
+		return fmt.Errorf("IP 地址已存在")
 	}
 
 	return s.repo.CreateBatch(expandedDevices)
@@ -179,7 +184,8 @@ func (s *DeviceService) UpdateDevice(id uint, device models.DeviceAsset) error {
 	// 获取现有设备
 	existing, err := s.repo.FindByID(id)
 	if err != nil {
-		return fmt.Errorf("未找到设备: %d", id)
+		logger.Error("DeviceService", "-", "更新设备失败，设备不存在: id=%d, err=%v", id, err)
+		return fmt.Errorf("设备不存在")
 	}
 
 	// 字段合并：非零值覆盖，零值保留原值
@@ -232,47 +238,99 @@ func (s *DeviceService) UpdateDevice(id uint, device models.DeviceAsset) error {
 	if device.IP != "" {
 		conflict, err := s.repo.FindByIP(device.IP)
 		if err == nil && conflict.ID != id {
-			return fmt.Errorf("IP 地址 %s 已被其他设备使用", device.IP)
+			logger.Warn("DeviceService", "-", "更新设备失败，IP 冲突: %s (设备 %d 与 %d)", device.IP, id, conflict.ID)
+			return fmt.Errorf("IP 地址已被其他设备使用")
 		}
 	}
 
 	return s.repo.Update(existing)
 }
 
-// UpdateDevices 批量更新设备
+// mergeDeviceFields 字段合并：非零值覆盖，零值保留原值（供批量更新使用）
+func mergeDeviceFields(existing *models.DeviceAsset, incoming models.DeviceAsset) {
+	if incoming.IP != "" {
+		existing.IP = incoming.IP
+	}
+	if incoming.Protocol != "" {
+		existing.Protocol = incoming.Protocol
+	}
+	if incoming.Port != 0 {
+		existing.Port = incoming.Port
+	}
+	if incoming.Username != "" {
+		existing.Username = incoming.Username
+	}
+	// Password: 使用统一密码合并规则
+	pwdResult := config.MergePassword(existing.Password, incoming.Password)
+	existing.Password = pwdResult.Password
+	if incoming.Group != "" {
+		existing.Group = incoming.Group
+	}
+	if incoming.DisplayName != "" {
+		existing.DisplayName = incoming.DisplayName
+	}
+	if incoming.Vendor != "" {
+		existing.Vendor = incoming.Vendor
+	}
+	if incoming.Role != "" {
+		existing.Role = incoming.Role
+	}
+	if incoming.Site != "" {
+		existing.Site = incoming.Site
+	}
+	if incoming.Description != "" {
+		existing.Description = incoming.Description
+	}
+	if len(incoming.Tags) > 0 {
+		existing.Tags = incoming.Tags
+	}
+}
+
+// UpdateDevices 批量更新设备（支持部分字段更新）
 func (s *DeviceService) UpdateDevices(devices []models.DeviceAsset) error {
 	if len(devices) == 0 {
 		return nil
 	}
 
-	// 校验
+	// 校验阶段
+	ids := make([]uint, 0, len(devices))
 	for i := range devices {
 		config.NormalizeDevice(&devices[i])
-		if err := config.ValidateDevice(&devices[i]); err != nil {
-			return fmt.Errorf("第 %d 台设备: %v", i+1, err)
-		}
 		if devices[i].ID == 0 {
 			return fmt.Errorf("批量更新时存在无效设备 ID")
 		}
+		ids = append(ids, devices[i].ID)
 	}
 
-	// 获取现有设备
-	ids := make([]uint, 0, len(devices))
-	for _, d := range devices {
-		ids = append(ids, d.ID)
+	// 单次批量查询现有设备
+	existingDevices, err := s.repo.FindByIDs(ids)
+	if err != nil {
+		logger.Error("DeviceService", "-", "批量查询设备失败: %v", err)
+		return fmt.Errorf("查询设备失败")
 	}
 
-	// 处理密码合并
+	// 构建 ID -> Device 映射
+	existingMap := make(map[uint]*models.DeviceAsset, len(existingDevices))
+	for i := range existingDevices {
+		existingMap[existingDevices[i].ID] = &existingDevices[i]
+	}
+
+	// 字段合并 + 校验
+	merged := make([]models.DeviceAsset, 0, len(devices))
 	for i := range devices {
-		existing, err := s.repo.FindByID(devices[i].ID)
-		if err != nil {
-			return fmt.Errorf("未找到设备: %d", devices[i].ID)
+		existing, ok := existingMap[devices[i].ID]
+		if !ok {
+			logger.Error("DeviceService", "-", "批量更新失败，设备不存在: id=%d", devices[i].ID)
+			return fmt.Errorf("设备不存在 (ID: %d)", devices[i].ID)
 		}
-		pwdResult := config.MergePassword(existing.Password, devices[i].Password)
-		devices[i].Password = pwdResult.Password
+		mergeDeviceFields(existing, devices[i])
+		if err := config.ValidateDevice(existing); err != nil {
+			return fmt.Errorf("第 %d 台设备校验失败: %v", i+1, err)
+		}
+		merged = append(merged, *existing)
 	}
 
-	return s.repo.UpdateBatch(devices)
+	return s.repo.UpdateBatch(merged)
 }
 
 // DeleteDevice 删除设备

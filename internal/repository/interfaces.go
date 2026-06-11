@@ -20,6 +20,7 @@ type DeviceRepository interface {
 	// 查询操作
 	FindAll() ([]models.DeviceAsset, error)
 	FindByID(id uint) (*models.DeviceAsset, error)
+	FindByIDs(ids []uint) ([]models.DeviceAsset, error)
 	FindByIPs(ips []string) ([]models.DeviceAsset, error)
 	FindByIP(ip string) (*models.DeviceAsset, error)
 	Count() (int64, error)

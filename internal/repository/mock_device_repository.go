@@ -61,6 +61,26 @@ func (m *MockDeviceRepository) FindByID(id uint) (*models.DeviceAsset, error) {
 	return &device, nil
 }
 
+func (m *MockDeviceRepository) FindByIDs(ids []uint) ([]models.DeviceAsset, error) {
+	if m.QueryError != nil {
+		return nil, m.QueryError
+	}
+
+	idSet := make(map[uint]bool)
+	for _, id := range ids {
+		idSet[id] = true
+	}
+
+	devices := make([]models.DeviceAsset, 0, len(ids))
+	for _, d := range m.Devices {
+		if idSet[d.ID] {
+			devices = append(devices, d)
+		}
+	}
+
+	return devices, nil
+}
+
 func (m *MockDeviceRepository) FindByIPs(ips []string) ([]models.DeviceAsset, error) {
 	if m.QueryError != nil {
 		return nil, m.QueryError

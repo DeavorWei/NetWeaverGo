@@ -57,6 +57,21 @@ func (r *deviceRepository) FindByID(id uint) (*models.DeviceAsset, error) {
 	return &device, nil
 }
 
+func (r *deviceRepository) FindByIDs(ids []uint) ([]models.DeviceAsset, error) {
+	if r.db == nil {
+		return nil, fmt.Errorf("数据库未初始化")
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	var devices []models.DeviceAsset
+	if err := r.db.Where("id IN ?", ids).Find(&devices).Error; err != nil {
+		return nil, err
+	}
+	return devices, nil
+}
+
 func (r *deviceRepository) FindByIPs(ips []string) ([]models.DeviceAsset, error) {
 	if r.db == nil {
 		return nil, fmt.Errorf("数据库未初始化")

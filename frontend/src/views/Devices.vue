@@ -60,7 +60,7 @@
 import { ref, onMounted, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { QueryAPI, DeviceAPI } from "@/services/api";
-import type { DeviceAsset } from "@/services/api";
+import { DeviceAsset } from "@/bindings/github.com/NetWeaverGo/core/internal/models/models";
 import { getLogger } from "@/utils/logger";
 import { parseErrorMessage } from "@/utils/errorHandler";
 
@@ -267,40 +267,27 @@ async function saveDevice(deviceData: DeviceFormData) {
   editModalRef.value?.setSaving(true);
   editModalRef.value?.setError("");
 
+  const payload = new DeviceAsset({
+    ip: deviceData.ip,
+    port: deviceData.port,
+    protocol: deviceData.protocol,
+    username: deviceData.username,
+    password: deviceData.password,
+    group: deviceData.group,
+    tags: deviceData.tags,
+    vendor: deviceData.vendor,
+    role: deviceData.role,
+    site: deviceData.site,
+    displayName: deviceData.displayName,
+    description: deviceData.description,
+  });
+
   try {
     if (isEditing.value && editingDeviceId.value) {
-      await DeviceAPI.updateDevice(editingDeviceId.value, {
-        ip: deviceData.ip,
-        port: deviceData.port,
-        protocol: deviceData.protocol,
-        username: deviceData.username,
-        password: deviceData.password,
-        group: deviceData.group,
-        tags: deviceData.tags,
-        vendor: deviceData.vendor,
-        role: deviceData.role,
-        site: deviceData.site,
-        displayName: deviceData.displayName,
-        description: deviceData.description,
-      } as unknown as DeviceAsset);
+      await DeviceAPI.updateDevice(editingDeviceId.value, payload);
       ElMessage.success("设备更新成功");
     } else {
-      await DeviceAPI.addDevices([
-        {
-          ip: deviceData.ip,
-          port: deviceData.port,
-          protocol: deviceData.protocol,
-          username: deviceData.username,
-          password: deviceData.password,
-          group: deviceData.group,
-          tags: deviceData.tags,
-          vendor: deviceData.vendor,
-          role: deviceData.role,
-          site: deviceData.site,
-          displayName: deviceData.displayName,
-          description: deviceData.description,
-        } as unknown as DeviceAsset,
-      ]);
+      await DeviceAPI.addDevices([payload]);
       ElMessage.success("设备添加成功");
     }
 
@@ -391,24 +378,20 @@ async function saveBatchEdit(field: BatchField, value: string | number) {
   try {
     const ids = Array.from(selectedIds.value);
 
+    const fieldPayload: Record<string, string | number | string[]> = {};
     if (field === "tag") {
-      const tags = (value as string)
+      fieldPayload.tags = (value as string)
         .split(/[,，]/)
         .map((t) => t.trim())
         .filter((t) => t);
-
-      for (const id of ids) {
-        await DeviceAPI.updateDevice(id, {
-          tags,
-        } as unknown as DeviceAsset);
-      }
     } else {
-      for (const id of ids) {
-        await DeviceAPI.updateDevice(id, {
-          [field]: value,
-        } as unknown as DeviceAsset);
-      }
+      fieldPayload[field] = value;
     }
+
+    const updates = ids.map(
+      (id) => new DeviceAsset({ id, ...fieldPayload }),
+    );
+    await DeviceAPI.updateDevices(updates);
 
     ElMessage.success(
       `成功修改 ${ids.length} 台设备的${field === "tag" ? "标签" : field}`,
