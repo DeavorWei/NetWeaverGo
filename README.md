@@ -2,7 +2,9 @@
 
 # 🕸️ NetWeaverGo
 
-**面向网络工程师的桌面级网络自动化编排工具**
+**面向网络工程师的桌面级网络自动化编排与配置集散引擎**
+
+基于 Go + Vue 3 + Wails v3 构建，支持批量管理网络设备（交换机/路由器），提供大规模并发命令执行、配置备份、配置生成、拓扑发现、SNMP 监控以及智能异常干预功能。
 
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
 [![Vue.js](https://img.shields.io/badge/Vue.js-3-4FC08D?style=flat-square&logo=vue.js&logoColor=white)](https://vuejs.org/)
@@ -12,7 +14,7 @@
 [![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](#许可证)
 
-[功能特性](#核心特性) • [快速开始](#快速开始) • [架构概览](#架构概览) • [开发指南](#开发指南) • [贡献指南](#贡献指南)
+[核心特性](#核心特性) • [快速开始](#快速开始) • [架构概览](#架构概览) • [项目结构](#项目结构) • [文档](#文档) • [贡献指南](#贡献指南)
 
 </div>
 
@@ -20,20 +22,21 @@
 
 ## 📖 项目简介
 
-**NetWeaverGo** 是一款基于 Go 语言开发的高性能网络自动化编排与配置集散工具。专为网络工程师设计，支持批量管理网络设备（交换机、路由器），提供大规模并发命令执行、配置备份、配置生成、拓扑发现以及智能异常干预功能。
+**NetWeaverGo** 是一款基于 Go + Vue 3 开发的桌面级网络自动化编排与配置集散引擎，专为网络工程师设计。采用 Wails v3 框架实现前后端一体化桌面应用，支持批量管理网络设备（交换机/路由器），提供大规模并发命令执行、配置备份、配置生成、拓扑发现、SNMP 监控以及智能异常干预功能。
 
 ### 🎯 目标用户
 
-- 网络工程师 - 日常设备管理与配置
-- 网络运维团队 - 批量设备维护与巡检
-- 网络架构师 - 网络拓扑发现与规划
+- **网络工程师** — 日常设备管理与配置
+- **网络运维团队** — 批量设备维护与巡检
+- **网络架构师** — 网络拓扑发现与规划
 
 ### 💡 核心价值
 
-- **高效并发** - Worker Pool 模型 + 令牌桶限流，轻松管理数百台设备
-- **智能交互** - 全自动终端交互、智能翻页检测、提示符识别
-- **可视化拓扑** - 基于 LLDP/接口信息的网络拓扑自动构建与展示
-- **跨平台** - 基于 Wails v3 的现代化桌面应用，支持 Windows/macOS/Linux
+- **高效并发** — Worker Pool 模型 + 令牌桶限流，轻松管理数百台设备
+- **智能交互** — 全自动终端交互、智能翻页检测、提示符识别
+- **可视化拓扑** — 基于 LLDP/ARP/FDB 多源融合的网络拓扑自动构建与展示
+- **SNMP 监控** — 完整的 MIB 管理、轮询引擎、Trap 监听功能
+- **跨平台** — 基于 Wails v3 的现代化桌面应用
 
 ---
 
@@ -44,79 +47,69 @@
 <td width="50%">
 
 ### 🖥️ 设备管理
-- 设备资产 CRUD 操作
-- 设备分组管理
-- 设备画像配置（厂商定制）
-- 批量导入/导出
+- 设备资产 CRUD（支持批量导入/导出）
+- 设备画像系统（厂商级 PTY 配置、提示符模式、分页模式、初始化命令）
+- 支持 SSH 和 Telnet 双协议连接
 
 </td>
 <td width="50%">
 
-### ⚡ 并发执行
-- Worker Pool 并发模型
-- 令牌桶限流控制
-- 可配置并发数（默认 10）
-- 连接抖动控制
+### ⚡ 任务编排与执行（核心引擎）
+- 五层架构：任务定义 → 计划编译 → 统一运行时 → 阶段执行器 → 数据持久化
+- 三种编译器：Normal（常规命令执行）、Topology（拓扑发现）、Backup（配置备份）
+- 并发设备执行、状态机管理（pending→running→completed/failed/cancelled）
+- EventBus 事件系统 + SnapshotHub 实时快照
 
 </td>
 </tr>
 <tr>
 <td>
 
-### 📝 命令编排
-- 命令组定义与管理
-- 标签分类系统
-- 命令序列配置
-- 任务组灵活绑定
+### 📝 命令组管理
+- 命令模板的创建、编辑、组织
+- 支持多行命令、分隔符配置
 
 </td>
 <td>
 
-### 🔌 智能终端
-- 自动翻页检测
-- 提示符智能识别
-- ANSI 转义序列处理
-- 多厂商适配
+### 🗺️ 网络拓扑发现与可视化
+- 多源融合：LLDP 邻居 → ARP 表 → FDB 表 → 接口信息
+- 融合策略：确认边 → 半确认边 → 推断边 → 冲突边
+- Cytoscape.js 可视化引擎
 
 </td>
 </tr>
 <tr>
 <td>
 
-### 🗺️ 拓扑发现
-- 基于 LLDP 自动发现
-- 接口信息解析
-- 拓扑图可视化（Cytoscape.js）
-- 离线重放模式
+### 📋 配置生成器 (ConfigForge)
+- 模板引擎：模板 + 变量 → 范围展开 → 等差数列推断 → 精确变量替换
+- 批量配置块生成
 
 </td>
 <td>
 
-### 📋 配置生成
-- ConfigForge 模板引擎
-- 变量展开与语法糖
-- 范围展开（1-10 → 1,2,3,...,10）
-- 批量配置生成
+### 📊 配置比对 (Plan Compare)
+- 导入 CSV 规划文件 → 解析规划链路 → 与实际拓扑匹配
+- 差异报告：missing_link / unexpected_link / interface_mismatch
 
 </td>
 </tr>
 <tr>
 <td>
 
-### 📊 规划比对
-- 差异报告生成
-- HTML/Excel 导出
-- 配置变更追踪
-- 历史记录对比
+### 📡 SNMP 功能栈
+- MIB 管理：导入/删除/LRU 缓存/OID 树构建（嵌入 12 个核心 MIB 文件）
+- 轮询引擎：v1/v2c/v3 GET/WALK，指数退避重试，Cron 调度
+- Trap 监听：UDP v1/v2c/v3，过滤引擎（OID 前缀/CIDR/正则匹配）
+- 凭据加密：AES-256-GCM
 
 </td>
 <td>
 
 ### 📁 文件服务器
-- 内置 SFTP 服务器
-- 内置 FTP 服务器
-- 内置 TFTP 服务器
-- 内置 HTTP 服务器
+- 统一管理 4 种协议：SFTP、FTP、TFTP、HTTP（Web 文件浏览）
+- 实时日志事件推送
 
 </td>
 </tr>
@@ -124,23 +117,69 @@
 <td>
 
 ### 🔧 网络工具
-- 批量 Ping 探测
-- 网络计算器
+- 批量 Ping 探测（可配置并发数、超时、数据包大小）
+- 路由追踪 (Tracert) + GeoIP 地理解析
+- IPv4/IPv6 网络地址计算器
 - 协议参考手册
-- 执行历史追溯
 
 </td>
 <td>
 
-### 🛡️ 异常处理
-- 单设备级挂起机制
-- 用户决策（Continue/Abort）
-- 超时自动处理
-- 完整错误日志
+### 🛡️ 安全与异常处理
+- SSH 主机密钥校验（strict/accept_new/insecure）
+- SNMP 凭据 AES-256-GCM 加密
+- 日志脱敏 + 多级日志系统
+- 单设备级挂起机制与用户决策
 
 </td>
 </tr>
 </table>
+
+---
+
+## 🛠️ 技术栈
+
+### 后端
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| [Go](https://go.dev/) | 1.26 | 主要编程语言 |
+| [Wails](https://wails.io/) | v3 (alpha.95) | 桌面应用框架（Go ↔ WebView 桥接） |
+| [GORM](https://gorm.io/) | v1.31.1 | ORM 框架 |
+| [SQLite (glebarez/sqlite)](https://www.sqlite.org/) | v1.11.0 | 嵌入式数据库（主库 + SNMP 独立库） |
+| [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) | v0.52.0 | SSH/SFTP 客户端实现 |
+| [github.com/pkg/sftp](https://github.com/pkg/sftp) | v1.13.10 | SFTP 文件传输 |
+| [github.com/gosnmp/gosnmp](https://github.com/gosnmp/gosnmp) | v1.43.2 | SNMP v1/v2c/v3 协议 |
+| [github.com/golangsnmp/gomib](https://github.com/golangsnmp/gomib) | v0.11.0 | MIB 文件解析 |
+| [github.com/hashicorp/golang-lru/v2](https://github.com/hashicorp/golang-lru) | v2.0.7 | LRU 缓存 |
+| [github.com/robfig/cron/v3](https://github.com/robfig/cron) | v3.0.1 | Cron 调度器（SNMP 轮询） |
+| [github.com/fclairamb/ftpserverlib](https://github.com/fclairamb/ftpserverlib) | v0.30.0 | FTP 服务器 |
+| [github.com/pin/tftp/v3](https://github.com/pin/tftp) | v3.2.0 | TFTP 服务器 |
+| [github.com/spf13/afero](https://github.com/spf13/afero) | v1.15.0 | 文件系统抽象 |
+| [golang.org/x/sync](https://pkg.go.dev/golang.org/x/sync) | v0.20.0 | 并发控制 |
+| [golang.org/x/time](https://pkg.go.dev/golang.org/x/time) | v0.15.0 | 令牌桶限流 |
+
+### 前端
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| [Vue.js](https://vuejs.org/) | 3.5 | 前端框架（Composition API） |
+| [TypeScript](https://www.typescriptlang.org/) | 5.9 | 类型安全 |
+| [Vite](https://vitejs.dev/) | 7.3 | 构建工具 |
+| [Tailwind CSS](https://tailwindcss.com/) | 4.2 | 原子化 CSS 框架 |
+| [Pinia](https://pinia.vuejs.org/) | 3.0 | 状态管理 |
+| [Vue Router](https://router.vuejs.org/) | 4.6 | 路由管理 |
+| [Cytoscape.js](https://js.cytoscape.org/) | 3.33 | 拓扑图可视化引擎 |
+
+---
+
+## 📡 厂商支持
+
+| 厂商 | 设备画像 | CLI 解析模板 | 支持的解析命令 |
+|------|----------|-------------|---------------|
+| **华为 (Huawei)** | ✅ | `huawei.json` | version, interface, lldp, mac, arp, eth-trunk, esn, device info |
+| **华三 (H3C)** | ✅ | `h3c.json` | version, interface, lldp, mac, arp, eth-trunk |
+| **思科 (Cisco)** | ✅ | `cisco.json` | version, interface, lldp, mac, arp, eth-trunk |
 
 ---
 
@@ -173,49 +212,110 @@ go install github.com/wailsapp/wails/v3/cmd/wails@latest
 3. **安装前端依赖**
 
 ```bash
-cd frontend
-npm install
-cd ..
+cd frontend && npm install && cd ..
 ```
 
-4. **构建项目**
-
-```bash
-# Windows
-build.bat
-
-# 或手动构建
-cd frontend && npm run build && cd ..
-wails build
-```
-
-### 运行方法
+4. **构建与运行**
 
 ```bash
 # 开发模式（热重载）
-wails dev
+task dev
 
-# 生产模式
-./build/bin/netWeaverGo.exe
+# 生产构建
+task build
+
+# 打包
+task package
+
+# 运行
+task run
+```
+
+### 其他构建命令
+
+```bash
+# 开发模式调试（Delve）
+task dev:debug
+
+# 清理开发产物
+task dev:clean
+
+# 完整重置开发环境
+task dev:reset
+
+# Server 模式构建（无 GUI，HTTP 服务）
+task build:server
+
+# Docker 构建与运行
+task build:docker
+task run:docker
+```
+
+### 运行时数据目录
+
+应用运行后会在项目目录下生成 `netWeaverGoData/` 数据目录：
+
+```
+netWeaverGoData/
+├── db/                     # 数据库（netweaver.db + snmp.db）
+├── logs/                   # 日志（app.log + frontend.log）
+├── execution/              # 执行报告和实时日志
+├── backup/configs/         # 配置备份
+├── ssh/known_hosts         # SSH 主机密钥
+├── topology/               # 拓扑数据（原始/导出/规划导入）
+└── snmp/mibs/              # MIB 文件存储
 ```
 
 ---
 
-## 📸 项目截图
+## 📂 项目结构
 
-> 🚧 截图即将添加...
-
-<div align="center">
-
-| 仪表盘 | 设备管理 |
-|:------:|:--------:|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Devices](docs/screenshots/devices.png) |
-
-| 任务执行 | 拓扑发现 |
-|:--------:|:--------:|
-| ![TaskExecution](docs/screenshots/task-execution.png) | ![Topology](docs/screenshots/topology.png) |
-
-</div>
+```
+NetWeaverGo/
+├── cmd/netweaver/          # 应用入口
+├── internal/
+│   ├── config/             # 配置管理、路径管理、数据库初始化、设备画像
+│   ├── connutil/           # 连接抽象层（SSH/Telnet 统一接口）
+│   ├── executor/           # 设备级命令执行引擎（StreamEngine + SessionReducer）
+│   ├── fileserver/         # 文件服务器（SFTP/FTP/TFTP/HTTP）
+│   ├── forge/              # 配置生成器（ConfigForge 模板引擎）
+│   ├── icmp/               # ICMP 引擎（批量 Ping + Traceroute）
+│   ├── logger/             # 日志系统（多级 + 脱敏 + 前端写入）
+│   ├── matcher/            # 流匹配器（提示符检测、分页检测、错误检测）
+│   ├── models/             # 数据模型（GORM 实体定义）
+│   ├── normalize/          # 数据规范化（接口名标准化）
+│   ├── parser/             # CLI 输出解析引擎（模板驱动，支持华为/华三/思科）
+│   ├── plancompare/        # 配置比对服务
+│   ├── report/             # 执行报告系统（摘要/详细/原始/流水日志）
+│   ├── repository/         # 数据访问层（Repository 模式）
+│   ├── snmp/               # SNMP 功能栈（MIB/轮询/Trap/加密）
+│   ├── sshutil/            # SSH 客户端封装
+│   ├── sftputil/           # SFTP 文件传输
+│   ├── taskexec/           # 统一任务执行运行时（核心引擎）
+│   ├── telnetutil/         # Telnet 协议客户端
+│   ├── terminal/           # 终端仿真（ANSI 解析、行缓冲、重放器）
+│   ├── ui/                 # UI 服务层（22+ Wails 服务）
+│   └── utils/              # 工具函数
+├── frontend/               # Vue 3 前端
+│   └── src/
+│       ├── components/     # 组件（common/device/task/topology/forge/snmp）
+│       ├── composables/    # 组合式函数（12 个）
+│       ├── views/          # 页面视图（16 个路由）
+│       ├── stores/         # Pinia 状态管理
+│       ├── router/         # Vue Router 路由
+│       ├── styles/         # 分层 CSS（tokens/themes/utilities）
+│       └── bindings/       # Wails 自动生成的 TypeScript 绑定
+├── docs/                   # 项目文档
+│   ├── 项目架构说明书.md
+│   ├── 未来功能扩展路线图.md
+│   └── 功能模块说明书/     # 16 份功能模块文档
+├── build/                  # 构建配置
+├── testdata/               # 测试数据
+├── config.yml              # Wails 应用配置
+├── Taskfile.yml            # 任务运行器配置
+├── go.mod                  # Go 模块定义
+└── README.md
+```
 
 ---
 
@@ -252,8 +352,7 @@ graph TB
     end
 
     subgraph Infra["基础设施层"]
-        SSH[SSH Client]
-        SFTP[SFTP Client]
+        Conn[SSH/Telnet]
         DB[(SQLite)]
         Logger[Logger]
     end
@@ -265,184 +364,43 @@ graph TB
     EventBus --> UI
 ```
 
-### 数据流向
+### 关键架构设计
 
-```mermaid
-sequenceDiagram
-    participant User as 用户
-    participant UI as 前端
-    participant Svc as UI Service
-    participant Exec as 执行引擎
-    participant Device as 网络设备
-
-    User->>UI: 创建任务
-    UI->>Svc: 调用服务
-    Svc->>Exec: 编译 & 执行
-    Exec->>Device: SSH 连接 & 命令执行
-    Device-->>Exec: 返回结果
-    Exec-->>UI: 事件推送
-    UI-->>User: 实时更新
-```
-
-### 模块说明
-
-| 模块 | 路径 | 职责 |
-|------|------|------|
-| **入口模块** | `cmd/netweaver/` | 应用程序入口，初始化子系统 |
-| **UI 服务层** | `internal/ui/` | Wails 服务，处理前端请求 |
-| **任务执行** | `internal/taskexec/` | 统一任务编排与执行引擎 |
-| **设备执行** | `internal/executor/` | SSH 会话管理与命令执行 |
-| **通信模块** | `internal/sshutil/` | SSH/SFTP 连接管理 |
-| **流匹配器** | `internal/matcher/` | 提示符/分页符检测 |
-| **终端处理** | `internal/terminal/` | ANSI 解析与终端重放 |
-| **解析服务** | `internal/parser/` | 命令输出解析（正则/聚合） |
-| **配置生成** | `internal/forge/` | ConfigForge 模板引擎 |
-| **数据模型** | `internal/models/` | 领域模型定义 |
-| **数据访问** | `internal/repository/` | 数据库操作层 |
-| **配置管理** | `internal/config/` | 应用配置与数据库 |
-| **前端应用** | `frontend/` | Vue 3 单页应用 |
+| 设计要点 | 说明 |
+|----------|------|
+| **前后端通信** | Wails 桥接，前端通过自动生成的 TypeScript 绑定直接调用 Go 方法；Go 通过 Wails Events 向前端推送实时事件 |
+| **双事件系统** | TaskEvent EventBus（任务执行事件）+ SNMP EventNotifier（SNMP 事件） |
+| **双数据库** | 主库（任务、设备、设置等）+ SNMP 独立数据库 |
+| **连接协议抽象** | `connutil.DeviceConnection` 统一接口抽象 SSH/Telnet |
+| **日志系统** | 多级日志（Error/Warn/Info/Debug/Verbose）+ 日志脱敏 + 前端日志写入 |
+| **安全设计** | SSH 主机密钥校验、SNMP 凭据 AES-256-GCM 加密、日志脱敏 |
 
 ---
 
-## 🛠️ 技术栈
+## 📚 文档
 
-### 后端
+项目提供详细的文档体系：
 
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| [Go](https://go.dev/) | 1.26 | 主要编程语言 |
-| [Wails](https://wails.io/) | v3 | 桌面应用框架 |
-| [GORM](https://gorm.io/) | v1.31 | ORM 框架 |
-| [SQLite](https://www.sqlite.org/) | - | 嵌入式数据库 |
-| [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) | v0.50 | SSH/SFTP 实现 |
-| [excelize](https://xuri.me/excelize/) | v2.9 | Excel 文件生成 |
-
-### 前端
-
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| [Vue.js](https://vuejs.org/) | 3.5 | 前端框架 |
-| [TypeScript](https://www.typescriptlang.org/) | 5.9 | 类型安全 |
-| [Vite](https://vitejs.dev/) | 7.3 | 构建工具 |
-| [Tailwind CSS](https://tailwindcss.com/) | 4.2 | 样式框架 |
-| [Pinia](https://pinia.vuejs.org/) | 3.0 | 状态管理 |
-| [Vue Router](https://router.vuejs.org/) | 4.6 | 路由管理 |
-| [Cytoscape.js](https://js.cytoscape.org/) | 3.33 | 拓扑图渲染 |
+- [`docs/项目架构说明书.md`](docs/项目架构说明书.md) — 整体架构设计说明
+- [`docs/未来功能扩展路线图.md`](docs/未来功能扩展路线图.md) — 功能路线图
+- [`docs/功能模块说明书/`](docs/功能模块说明书/) — 16 份功能模块详细文档，涵盖设备管理、任务执行、拓扑发现、SNMP、配置生成等所有模块
 
 ---
 
-## 📡 支持的设备
+## 🧪 测试
 
-### 厂商支持
+项目采用多层次测试策略：
 
-| 厂商 | 品牌 | 支持状态 |
-|------|------|----------|
-| **华为** | Huawei | ✅ 完全支持 |
-| **华三** | H3C | ✅ 完全支持 |
-| **思科** | Cisco | ✅ 完全支持 |
-
-### 支持的命令解析
-
-| 命令 | Huawei | H3C | Cisco |
-|------|:------:|:---:|:-----:|
-| `display version` | ✅ | ✅ | ✅ |
-| `display interface brief` | ✅ | ✅ | ✅ |
-| `display interface` | ✅ | ❌ | ✅ |
-| `display lldp neighbor` | ✅ | ✅ | ✅ |
-| `display mac-address` | ✅ | ✅ | ✅ |
-| `display eth-trunk` | ✅ | ✅ | ✅ |
-| `display arp` | ✅ | ✅ | ✅ |
-| `display esn` | ✅ | ❌ | ❌ |
-| `display device info` | ✅ | ❌ | ❌ |
-
----
-
-## 👨‍💻 开发指南
-
-### 项目结构
-
-```
-NetWeaverGo/
-├── cmd/
-│   └── netweaver/
-│       └── main.go              # 应用入口
-├── internal/
-│   ├── config/                  # 配置管理
-│   ├── executor/                # 设备执行器
-│   ├── fileserver/              # 文件服务器
-│   ├── forge/                   # 配置生成
-│   ├── icmp/                    # ICMP 探测
-│   ├── logger/                  # 日志系统
-│   ├── matcher/                 # 流匹配器
-│   ├── models/                  # 数据模型
-│   ├── normalize/               # 数据规范化
-│   ├── repository/              # 数据访问层
-│   ├── terminal/                # 终端处理
-│   ├── ui/                      # UI 服务层
-│   └── utils/                   # 工具函数
-├── frontend/
-│   ├── src/
-│   │   ├── components/          # Vue 组件
-│   │   ├── composables/         # 组合式函数
-│   │   ├── router/              # 路由配置
-│   │   ├── services/            # API 服务
-│   │   ├── styles/              # 样式文件
-│   │   ├── types/               # TypeScript 类型
-│   │   ├── utils/               # 工具函数
-│   │   └── views/               # 页面视图
-│   ├── package.json
-│   └── vite.config.ts
-├── testdata/                    # 测试数据
-├── build.bat                    # 构建脚本
-├── go.mod
-└── README.md
-```
-
-### 构建命令
+| 测试类型 | 覆盖范围 |
+|----------|----------|
+| **单元测试** | `*_test.go` 分布在 executor, parser, forge, terminal, telnetutil, taskexec, ui, config 等模块 |
+| **Golden 测试** | `testdata/regression/vendor_golden/` 覆盖 h3c/huawei 厂商解析输出 |
+| **回归测试** | `testdata/regression/bug_fixes/` 记录特定 bug 修复验证 |
+| **集成测试** | `taskexec/integration_test.go` 验证完整任务执行流程 |
 
 ```bash
-# 完整构建（推荐）
-build.bat
-
-# 仅构建前端
-cd frontend && npm run build
-
-# 仅构建后端
-wails build
-
-# 开发模式
-wails dev
-
-# 运行测试
+# 运行所有测试
 go test ./...
-```
-
-### 开发规范
-
-#### Go 代码规范
-
-- **包名**: 全小写，简短有意义
-- **接口名**: 动词+名词，如 `StageExecutor`
-- **结构体**: 名词，首字母大写
-- **方法名**: 动词开头，如 `ExecutePlan`
-- **错误处理**: 使用自定义错误类型，包含上下文信息
-
-#### 前端代码规范
-
-- **组件**: PascalCase 命名，如 `TopologyGraph.vue`
-- **Composables**: `use` 前缀，如 `useDeviceForm.ts`
-- **类型定义**: 集中在 `types/` 目录
-- **样式**: 使用 Tailwind CSS，遵循设计系统
-
-#### Git 提交规范
-
-```
-<type>(<scope>): <subject>
-
-# 示例
-feat(device): 添加设备批量导入功能
-fix(executor): 修复 SSH 连接超时问题
-docs(readme): 更新项目文档
 ```
 
 ---
@@ -466,10 +424,10 @@ docs(readme): 更新项目文档
 git clone https://github.com/your-username/NetWeaverGo.git
 
 # 2. 安装依赖
-cd NetWeaverGo/frontend && npm install
+cd NetWeaverGo/frontend && npm install && cd ..
 
 # 3. 启动开发服务器
-cd .. && wails dev
+task dev
 
 # 4. 运行测试
 go test ./...
@@ -479,7 +437,7 @@ go test ./...
 
 - 使用 [GitHub Issues](https://github.com/your-username/NetWeaverGo/issues) 报告问题
 - 提供详细的复现步骤和环境信息
-- 包含相关的日志和截图
+- 包含相关的日志信息
 
 ---
 
@@ -489,26 +447,13 @@ go test ./...
 
 ---
 
-## 📝 版本历史
-
-| 版本 | 日期 | 主要变更 |
-|------|------|----------|
-| **v1.0** | 2026-03 | 🎉 初始版本发布 |
-| | | - 基础命令执行功能 |
-| | | - 拓扑发现与可视化 |
-| | | - 设备管理与分组 |
-| | | - 任务编排与执行 |
-| | | - ConfigForge 配置生成 |
-| | | - 内置文件服务器 |
-
----
-
 ## 🙏 致谢
 
-- [Wails](https://wails.io/) - 优秀的 Go 桌面应用框架
-- [Vue.js](https://vuejs.org/) - 渐进式 JavaScript 框架
-- [Cytoscape.js](https://js.cytoscape.org/) - 强大的图形可视化库
-- [Tailwind CSS](https://tailwindcss.com/) - 实用优先的 CSS 框架
+- [Wails](https://wails.io/) — 优秀的 Go 桌面应用框架
+- [Vue.js](https://vuejs.org/) — 渐进式 JavaScript 框架
+- [Cytoscape.js](https://js.cytoscape.org/) — 强大的图形可视化库
+- [Tailwind CSS](https://tailwindcss.com/) — 实用优先的 CSS 框架
+- [gosnmp](https://github.com/gosnmp/gosnmp) — Go 语言 SNMP 协议库
 
 ---
 
