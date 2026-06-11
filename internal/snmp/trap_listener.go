@@ -89,7 +89,7 @@ func NewTrapListener(handler *TrapHandler, config *models.SNMPServerConfig, noti
 		configChan: make(chan *models.SNMPServerConfig, 8),
 		v3Users:    make(map[string]*V3UserConfig),
 		stats: ListenerStats{
-			ListenAddr: fmt.Sprintf("0.0.0.0:%d", config.TrapPort),
+			ListenAddr: fmt.Sprintf("%s:%d", config.BindAddress, config.TrapPort),
 		},
 	}
 
@@ -97,8 +97,8 @@ func NewTrapListener(handler *TrapHandler, config *models.SNMPServerConfig, noti
 	l.configWg.Add(1)
 	go l.configLoop()
 
-	logger.Info("SNMP-Listener", "-", "Trap 监听器已创建: 端口=%d, Community=%s, V3Enabled=%v",
-		config.TrapPort, config.TrapCommunity, config.V3Enabled)
+	logger.Info("SNMP-Listener", "-", "Trap 监听器已创建: 端口=%d, 绑定地址=%s, Community=%s, V3Enabled=%v",
+		config.TrapPort, config.BindAddress, maskString(config.TrapCommunity), config.V3Enabled)
 
 	return l
 }
@@ -173,7 +173,11 @@ func (l *TrapListener) Start() error {
 	}
 
 	// 创建 gosnmp Trap 监听器
-	listenAddr := fmt.Sprintf("0.0.0.0:%d", l.config.TrapPort)
+	bindAddr := l.config.BindAddress
+	if bindAddr == "" {
+		bindAddr = "0.0.0.0"
+	}
+	listenAddr := fmt.Sprintf("%s:%d", bindAddr, l.config.TrapPort)
 
 	// 创建监听器
 	trapListener := gosnmp.NewTrapListener()
@@ -338,7 +342,11 @@ func (l *TrapListener) applyConfig(config *models.SNMPServerConfig) {
 	l.mu.Lock()
 	wasRunning := l.running
 	l.config = config
-	l.stats.ListenAddr = fmt.Sprintf("0.0.0.0:%d", config.TrapPort)
+	bindAddr := config.BindAddress
+	if bindAddr == "" {
+		bindAddr = "0.0.0.0"
+	}
+	l.stats.ListenAddr = fmt.Sprintf("%s:%d", bindAddr, config.TrapPort)
 	l.mu.Unlock()
 
 	// 如果正在运行，先停止再重启（Stop/Start 各自管理锁，不会死锁）

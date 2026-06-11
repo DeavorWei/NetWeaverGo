@@ -58,6 +58,8 @@ type MIBManager struct {
 	mu           sync.RWMutex         // 主锁：保护 mibRepo 访问和整体操作
 	cacheMu      sync.Mutex           // 缓存专用锁：保护 LRU cache 写操作
 	inFlight     sync.Map             // 防重入映射：保护同一个 MIB 文件不被并发重复导入
+	initDone     chan struct{}         // 关闭时表示异步初始化完成 [I3]
+	initErr      error                // 异步初始化过程中的错误 [I3]
 }
 
 // NewMIBManager 创建 MIB 管理器实例
@@ -81,15 +83,30 @@ func NewMIBManager(mibRepo repository.MIBRepository, mibStoreDir string) *MIBMan
 		nodeCache:    nodeCache,
 		nameCache:    nameCache,
 		maxCacheSize: DefaultLRUCacheSize,
+		initDone:     make(chan struct{}),
 	}
 
 	// 初始化 gosmi 库
 	mgr.parser.Init()
 
-	// 异步确保内置核心 MIB 已加载
-	go mgr.EnsureCoreMIBsLoaded(context.Background())
+	// [I3] 异步确保内置核心 MIB 已加载，初始化完成后关闭 initDone 通道
+	go func() {
+		defer close(mgr.initDone)
+		mgr.initErr = mgr.ensureCoreMIBsLoaded(context.Background())
+	}()
 
 	return mgr
+}
+
+// WaitReady 等待异步初始化完成并返回初始化错误（如果有的话）
+// [I3] 让调用方能够感知内置 MIB 加载状态和错误
+func (m *MIBManager) WaitReady(ctx context.Context) error {
+	select {
+	case <-m.initDone:
+		return m.initErr
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Close 清理 MIB 管理器资源
@@ -1553,21 +1570,22 @@ func (m *MIBManager) mergeVirtualNodes(repo repository.MIBRepository, nodes []mo
 // 内置核心库加载
 // ============================================================================
 
-// EnsureCoreMIBsLoaded 确保内置核心 MIB 库已加载
+// ensureCoreMIBsLoaded 确保内置核心 MIB 库已加载
 // 遍历 embed 目录中的 mibs，如果发现未导入则自动导入并打上 IsBuiltIn 标记
-func (m *MIBManager) EnsureCoreMIBsLoaded(ctx context.Context) {
+// [I3] 改为返回 error，由构造函数的 goroutine 捕获并存储到 initErr 字段
+func (m *MIBManager) ensureCoreMIBsLoaded(ctx context.Context) error {
 	logger.Info("SNMP-MIB", "-", "开始检查内置核心 MIB 库...")
 	entries, err := coreMIBsFS.ReadDir("mibs")
 	if err != nil {
 		logger.Error("SNMP-MIB", "-", "读取内置 MIB 目录失败: %v", err)
-		return
+		return fmt.Errorf("读取内置 MIB 目录失败: %w", err)
 	}
 
 	// 1. 创建临时目录释放内嵌文件，以便解析器能使用依赖源
 	tempDir, err := os.MkdirTemp("", "core-mibs-*")
 	if err != nil {
 		logger.Error("SNMP-MIB", "-", "创建内置库临时解压目录失败: %v", err)
-		return
+		return fmt.Errorf("创建内置库临时解压目录失败: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
 
@@ -1612,10 +1630,10 @@ func (m *MIBManager) EnsureCoreMIBsLoaded(ctx context.Context) {
 	}
 
 	if len(filePaths) == 0 {
-		return
+		return nil
 	}
 
-	// 获取或创建“内置核心库”文件夹
+	// 获取或创建"内置核心库"文件夹
 	folderName := "内置核心库"
 	folder, err := m.mibRepo.GetFolderByName(folderName)
 	if err != nil || folder == nil {
@@ -1624,7 +1642,7 @@ func (m *MIBManager) EnsureCoreMIBsLoaded(ctx context.Context) {
 		}
 		if err := m.mibRepo.SaveFolder(folder); err != nil {
 			logger.Error("SNMP-MIB", "-", "创建内置核心库文件夹失败: %v", err)
-			return
+			return fmt.Errorf("创建内置核心库文件夹失败: %w", err)
 		}
 	}
 
@@ -1640,7 +1658,7 @@ func (m *MIBManager) EnsureCoreMIBsLoaded(ctx context.Context) {
 	result, err := m.ImportMIBFilesBatch(ctx, filePaths, opts, nil)
 	if err != nil {
 		logger.Error("SNMP-MIB", "-", "内置核心 MIB 库导入失败: %v", err)
-		return
+		return fmt.Errorf("内置核心 MIB 库导入失败: %w", err)
 	}
 
 	// 3. 将相关模块标记为内置库
@@ -1658,4 +1676,5 @@ func (m *MIBManager) EnsureCoreMIBsLoaded(ctx context.Context) {
 
 	logger.Info("SNMP-MIB", "-", "内置核心 MIB 库检查完成: 成功=%d, 失败=%d, 跳过=%d",
 		result.SuccessCount, result.FailedCount, result.SkippedCount)
+	return nil
 }

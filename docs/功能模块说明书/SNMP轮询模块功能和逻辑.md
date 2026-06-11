@@ -759,3 +759,46 @@ sequenceDiagram
 | `snmp_polling_templates` | 轮询模板 | ID, Name, Category, OIDItems(JSON) |
 | `snmp_polling_targets` | 轮询目标 | ID, TargetIP, CredentialID, TemplateID, PollInterval |
 | `snmp_polling_results` | 轮询结果 | ID, TargetID, BatchID, OID, Value, PollTime |
+
+---
+
+## 6. 安全建议 [I1]
+
+### 6.1 SNMP v1/v2c 明文传输风险
+
+SNMP v1 和 v2c 协议使用 **Community String** 进行身份验证，且所有数据均以 **明文** 传输，存在以下安全风险：
+
+| 风险类型 | 说明 |
+|----------|------|
+| **网络嗅探** | 攻击者可通过抓包获取 Community String 和所有轮询数据 |
+| **中间人攻击** | 明文传输允许攻击者篡改轮询请求和响应数据 |
+| **凭据泄露** | Community String 一旦被截获，攻击者可伪装合法身份访问所有 SNMP 设备 |
+
+### 6.2 推荐使用 SNMPv3
+
+**强烈建议在生产环境中优先使用 SNMPv3**，其提供以下安全特性：
+
+| 特性 | 说明 | 对应配置 |
+|------|------|----------|
+| **认证（Authentication）** | 使用 HMAC-MD5/SHA 验证消息来源和完整性 | AuthProtocol + AuthPassword |
+| **加密（Privacy）** | 使用 AES/DES 加密传输数据，防止嗅探 | PrivProtocol + PrivPassword |
+| **用户级访问控制** | 基于用户名的细粒度权限管理 | SecurityName |
+
+本系统完整支持 SNMPv3 的 **认证 + 加密** 模式（authPriv），可在创建凭据时选择 SNMPv3 版本并配置相关参数。
+
+### 6.3 存储层安全措施
+
+对于仍需使用 SNMP v1/v2c 的场景，本系统已实施以下缓解措施：
+
+- **凭据加密存储**：所有 SNMP 凭据（Community String、AuthPassword、PrivPassword）均使用 **AES-256-GCM** 加密后存储于本地 SQLite 数据库，即使数据库文件泄露也无法直接读取明文凭据
+- **凭据脱敏展示**：前端界面中凭据字段以密码掩码显示，防止肩窥泄露
+- **操作审计日志**：所有凭据的创建、修改、删除操作均记录审计日志
+
+### 6.4 网络层安全建议
+
+| 建议 | 说明 |
+|------|------|
+| 使用 VPN 或专用管理网络 | 将 SNMP 流量限制在受信任的网络段内 |
+| 配置防火墙规则 | 仅允许授权管理站访问设备的 SNMP 端口（UDP 161） |
+| 避免公网暴露 | 切勿将 SNMP 服务暴露于互联网 |
+| 定期轮换凭据 | 定期更新 Community String 和 SNMPv3 密码 |

@@ -305,6 +305,7 @@ func InitDefaultSNMPConfig() error {
 	defaultConfig := models.SNMPServerConfig{
 		TrapEnabled:              false,
 		TrapPort:                 162,
+		BindAddress:              "0.0.0.0",
 		TrapCommunity:            "",
 		MaxStorageDays:           30,
 		PollingEnabled:           false,

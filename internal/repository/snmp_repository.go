@@ -347,6 +347,7 @@ func (r *GormTrapRepository) GetActiveServerConfig(ctx context.Context) (*models
 		defaultConfig := &models.SNMPServerConfig{
 			TrapEnabled:      false,
 			TrapPort:         162, // SNMP Trap 标准端口
+			BindAddress:      "0.0.0.0",
 			TrapCommunity:    "public",
 			V3Enabled:        false,
 			MaxStorageDays:  30,
@@ -409,7 +410,7 @@ func (r *GormTrapRepository) applyTrapFilter(query *gorm.DB, filter TrapFilter) 
 		query = query.Where("source_ip = ?", filter.SourceIP)
 	}
 	if filter.TrapOID != "" {
-		query = query.Where("trap_oid LIKE ?", filter.TrapOID+"%")
+		query = query.Where("trap_oid LIKE ? ESCAPE '\\'", escapeLikePattern(filter.TrapOID)+"%") // [L5]
 	}
 	if filter.Severity != "" {
 		query = query.Where("severity = ?", filter.Severity)
@@ -424,12 +425,13 @@ func (r *GormTrapRepository) applyTrapFilter(query *gorm.DB, filter TrapFilter) 
 		query = query.Where("acknowledged = ?", *filter.Acknowledged)
 	}
 	if filter.SearchQuery != "" {
-		searchPattern := "%" + filter.SearchQuery + "%"
+		escaped := escapeLikePattern(filter.SearchQuery) // [L5]
+		searchPattern := "%" + escaped + "%"
 		query = query.Where(
-			query.Where("source_ip LIKE ?", searchPattern).
-				Or("trap_oid LIKE ?", searchPattern).
-				Or("trap_name LIKE ?", searchPattern).
-				Or("community LIKE ?", searchPattern),
+			query.Where("source_ip LIKE ? ESCAPE '\\'", searchPattern).
+				Or("trap_oid LIKE ? ESCAPE '\\'", searchPattern).
+				Or("trap_name LIKE ? ESCAPE '\\'", searchPattern).
+				Or("community LIKE ? ESCAPE '\\'", searchPattern),
 		)
 	}
 	return query
@@ -801,8 +803,9 @@ func (r *GormTrapRepository) applyPollingTargetFilter(query *gorm.DB, filter Pol
 		query = query.Where("enabled = ?", *filter.Enabled)
 	}
 	if filter.SearchIP != "" {
-		searchPattern := "%" + filter.SearchIP + "%"
-		query = query.Where("target_ip LIKE ?", searchPattern)
+		escaped := escapeLikePattern(filter.SearchIP) // [L5]
+		searchPattern := "%" + escaped + "%"
+		query = query.Where("target_ip LIKE ? ESCAPE '\\'", searchPattern)
 	}
 	return query
 }

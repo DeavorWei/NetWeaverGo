@@ -56,12 +56,22 @@ func NewSNMPTrapService(
 
 // StartListener 启动 Trap 监听器
 func (s *SNMPTrapService) StartListener(ctx context.Context, config ServerConfigVM) error {
-	logger.Info("SNMP-TrapService", "-", "启动 Trap 监听器请求: 端口=%d", config.TrapPort)
+	// L3: 验证端口范围
+	if config.TrapPort < 1 || config.TrapPort > 65535 {
+		return fmt.Errorf("trap 监听端口无效: %d, 有效范围为 1-65535", config.TrapPort)
+	}
+
+	logger.Info("SNMP-TrapService", "-", "启动 Trap 监听器请求: 端口=%d, 绑定地址=%s", config.TrapPort, config.BindAddress)
 
 	// 转换 View Model 到模型
+	bindAddress := config.BindAddress
+	if bindAddress == "" {
+		bindAddress = "0.0.0.0"
+	}
 	modelConfig := &models.SNMPServerConfig{
 		TrapEnabled:      true,
 		TrapPort:         config.TrapPort,
+		BindAddress:      bindAddress,
 		TrapCommunity:    config.TrapCommunity,
 		MaxStorageDays:   config.MaxStorageDays,
 	}
@@ -383,6 +393,7 @@ func (s *SNMPTrapService) GetServerConfigs(ctx context.Context) ([]ServerConfigV
 			ID:            config.ID,
 			TrapEnabled:   config.TrapEnabled,
 			TrapPort:      config.TrapPort,
+			BindAddress:   config.BindAddress,
 			TrapCommunity: config.TrapCommunity,
 			MaxStorageDays: config.MaxStorageDays,
 		})
@@ -399,9 +410,10 @@ func (s *SNMPTrapService) GetActiveServerConfig(ctx context.Context) (*ServerCon
 	}
 
 	return &ServerConfigVM{
-		ID:        config.ID,
-		TrapEnabled: config.TrapEnabled,
-		TrapPort:  config.TrapPort,
+		ID:            config.ID,
+		TrapEnabled:   config.TrapEnabled,
+		TrapPort:      config.TrapPort,
+		BindAddress:   config.BindAddress,
 		TrapCommunity: config.TrapCommunity,
 		MaxStorageDays: config.MaxStorageDays,
 	}, nil
@@ -420,6 +432,7 @@ func (s *SNMPTrapService) UpdateServerConfig(ctx context.Context, id uint, req U
 	// 更新字段
 	config.TrapEnabled = req.TrapEnabled
 	config.TrapPort = req.TrapPort
+	config.BindAddress = req.BindAddress
 	config.TrapCommunity = req.TrapCommunity
 	config.MaxStorageDays = req.MaxStorageDays
 
@@ -440,6 +453,7 @@ func (s *SNMPTrapService) CreateServerConfig(ctx context.Context, req CreateServ
 	config := &models.SNMPServerConfig{
 		TrapEnabled:    req.TrapEnabled,
 		TrapPort:       req.TrapPort,
+		BindAddress:    req.BindAddress,
 		TrapCommunity:  req.TrapCommunity,
 		MaxStorageDays: req.MaxStorageDays,
 	}
@@ -499,6 +513,7 @@ type ServerConfigVM struct {
 	ID             uint   `json:"id"`
 	TrapEnabled    bool   `json:"trapEnabled"`
 	TrapPort       int    `json:"trapPort"`
+	BindAddress    string `json:"bindAddress"`
 	TrapCommunity  string `json:"trapCommunity"`
 	MaxStorageDays int    `json:"maxStorageDays"`
 }
@@ -627,6 +642,7 @@ type UpdateFilterRuleRequest struct {
 type CreateServerConfigRequest struct {
 	TrapEnabled    bool   `json:"trapEnabled"`
 	TrapPort       int    `json:"trapPort"`
+	BindAddress    string `json:"bindAddress"`
 	TrapCommunity  string `json:"trapCommunity"`
 	MaxStorageDays int    `json:"maxStorageDays"`
 }
@@ -635,6 +651,7 @@ type CreateServerConfigRequest struct {
 type UpdateServerConfigRequest struct {
 	TrapEnabled    bool   `json:"trapEnabled"`
 	TrapPort       int    `json:"trapPort"`
+	BindAddress    string `json:"bindAddress"`
 	TrapCommunity  string `json:"trapCommunity"`
 	MaxStorageDays int    `json:"maxStorageDays"`
 }

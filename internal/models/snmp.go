@@ -13,6 +13,7 @@ type SNMPServerConfig struct {
 	ID   uint      `json:"id" gorm:"primaryKey"`
 	TrapEnabled      bool   `json:"trapEnabled"`          // Trap 监听开关
 	TrapPort         int    `json:"trapPort"`             // Trap 监听端口（默认 162）
+	BindAddress      string `json:"bindAddress"`          // Trap 监听绑定地址（默认 0.0.0.0）
 	TrapCommunity    string `json:"trapCommunity"`        // v1/v2c Community 过滤（空=接受所有）
 	V3Enabled        bool   `json:"v3Enabled"`            // SNMPv3 开关（阶段4实现）
 	V3Username       string `json:"v3Username"`

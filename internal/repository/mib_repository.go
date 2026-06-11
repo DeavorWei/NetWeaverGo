@@ -3,11 +3,22 @@
 package repository
 
 import (
+	"strings"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/NetWeaverGo/core/internal/models"
 )
+
+// escapeLikePattern 转义 LIKE 查询中的通配符 [L5]
+// 转义 \、% 和 _，防止用户输入中的通配符产生意外匹配
+func escapeLikePattern(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
+}
 
 // GormMIBRepository MIB Repository 的 GORM 实现
 type GormMIBRepository struct {
@@ -231,10 +242,12 @@ func (r *GormMIBRepository) DeleteNodesByModule(moduleID uint) error {
 }
 
 func (r *GormMIBRepository) SearchNodes(query string) ([]models.MIBNode, error) {
+	escaped := escapeLikePattern(query) // [L5] 转义 LIKE 通配符
+	pattern := "%" + escaped + "%"
 	var nodes []models.MIBNode
 	err := r.db.Joins("LEFT JOIN mib_modules ON mib_nodes.module_id = mib_modules.id").
-		Where("mib_nodes.name LIKE ? OR mib_nodes.oid LIKE ? OR mib_nodes.description LIKE ? OR mib_modules.name LIKE ?",
-			"%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%").
+		Where("mib_nodes.name LIKE ? ESCAPE '\\' OR mib_nodes.oid LIKE ? ESCAPE '\\' OR mib_nodes.description LIKE ? ESCAPE '\\' OR mib_modules.name LIKE ? ESCAPE '\\'",
+			pattern, pattern, pattern, pattern).
 		Order("mib_nodes.oid ASC").
 		Limit(100).
 		Find(&nodes).Error
@@ -242,9 +255,11 @@ func (r *GormMIBRepository) SearchNodes(query string) ([]models.MIBNode, error) 
 }
 
 func (r *GormMIBRepository) SearchNodesInModule(moduleID uint, query string) ([]models.MIBNode, error) {
+	escaped := escapeLikePattern(query) // [L5] 转义 LIKE 通配符
+	pattern := "%" + escaped + "%"
 	var nodes []models.MIBNode
-	err := r.db.Where("module_id = ? AND (name LIKE ? OR oid LIKE ? OR description LIKE ?)",
-		moduleID, "%"+query+"%", "%"+query+"%", "%"+query+"%").
+	err := r.db.Where("module_id = ? AND (name LIKE ? ESCAPE '\\' OR oid LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')",
+		moduleID, pattern, pattern, pattern).
 		Order("oid ASC").
 		Limit(100).
 		Find(&nodes).Error

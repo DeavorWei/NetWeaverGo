@@ -6,7 +6,9 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"net"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +18,20 @@ import (
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/NetWeaverGo/core/internal/snmp"
+)
+
+// ============================================================================
+// 包级验证常量与正则
+// ============================================================================
+
+// oidPattern OID 格式正则：可选前导点 + 由点分隔的纯数字序列
+var oidPattern = regexp.MustCompile(`^\.?(\d+\.)*\d+$`)
+
+const (
+	// MinPollIntervalMs 最小轮询间隔（毫秒），1 秒
+	MinPollIntervalMs = 1000
+	// MaxPollIntervalMs 最大轮询间隔（毫秒），86400 秒（1 天）
+	MaxPollIntervalMs = 86400000
 )
 
 // ============================================================================
@@ -480,11 +496,8 @@ func (s *SNMPPollingService) CreateCredential(ctx context.Context, req CreateCre
 			cred.PrivPassword = encrypted
 		}
 	} else {
-		// 未配置加密器，明文存储（不推荐）
-		cred.Community = req.Community
-		cred.AuthPassword = req.AuthPassword
-		cred.PrivPassword = req.PrivPassword
-		logger.Warn("SNMP-PollingService", "-", "⚠️ 凭据未加密存储，建议配置加密器")
+		// 加密器未初始化，拒绝以明文存储凭据
+		return fmt.Errorf("credential crypto not initialized, refusing to store credentials in plaintext")
 	}
 
 	if err := s.repo.CreateCredential(ctx, cred); err != nil {
@@ -546,9 +559,8 @@ func (s *SNMPPollingService) UpdateCredential(ctx context.Context, id uint, req 
 			cred.PrivPassword = encrypted
 		}
 	} else {
-		cred.Community = req.Community
-		cred.AuthPassword = req.AuthPassword
-		cred.PrivPassword = req.PrivPassword
+		// 加密器未初始化，拒绝以明文存储凭据
+		return fmt.Errorf("credential crypto not initialized, refusing to store credentials in plaintext")
 	}
 
 	if err := s.repo.UpdateCredential(ctx, cred); err != nil {
@@ -629,8 +641,11 @@ func (s *SNMPPollingService) CreatePollingTemplate(ctx context.Context, req Crea
 		Category:    req.Category,
 	}
 
-	// 转换 OID 项
-	for _, item := range req.OIDItems {
+	// 转换并验证 OID 项
+	for i, item := range req.OIDItems {
+		if !oidPattern.MatchString(item.OID) {
+			return fmt.Errorf("OID 格式无效 (第 %d 项): %q, 期望格式如 1.3.6.1.2.1.1.1.0", i+1, item.OID)
+		}
 		template.OIDItems = append(template.OIDItems, models.SNMPOIDItem{
 			OID:         item.OID,
 			Name:        item.Name,
@@ -664,7 +679,10 @@ func (s *SNMPPollingService) UpdatePollingTemplate(ctx context.Context, id uint,
 	template.Category = req.Category
 	template.OIDItems = make([]models.SNMPOIDItem, 0)
 
-	for _, item := range req.OIDItems {
+	for i, item := range req.OIDItems {
+		if !oidPattern.MatchString(item.OID) {
+			return fmt.Errorf("OID 格式无效 (第 %d 项): %q, 期望格式如 1.3.6.1.2.1.1.1.0", i+1, item.OID)
+		}
 		template.OIDItems = append(template.OIDItems, models.SNMPOIDItem{
 			OID:         item.OID,
 			Name:        item.Name,
@@ -777,6 +795,11 @@ func (s *SNMPPollingService) GetPollingTarget(ctx context.Context, id uint) (*Po
 
 // CreatePollingTarget 创建轮询目标
 func (s *SNMPPollingService) CreatePollingTarget(ctx context.Context, req CreatePollingTargetRequest) error {
+	// L1: 验证 IP 地址格式
+	if net.ParseIP(req.TargetIP) == nil {
+		return fmt.Errorf("目标 IP 地址格式无效: %q, 请提供合法的 IPv4 或 IPv6 地址", req.TargetIP)
+	}
+
 	target := &models.SNMPPollingTarget{
 		TargetIP:     req.TargetIP,
 		TargetPort:   req.TargetPort,
@@ -790,8 +813,13 @@ func (s *SNMPPollingService) CreatePollingTarget(ctx context.Context, req Create
 	if target.TargetPort == 0 {
 		target.TargetPort = 161
 	}
-	if target.PollInterval == 0 {
-		target.PollInterval = 300 // 默认 5 分钟
+
+	// L2: 轮询间隔边界验证
+	if target.PollInterval < MinPollIntervalMs {
+		target.PollInterval = MinPollIntervalMs
+	}
+	if target.PollInterval > MaxPollIntervalMs {
+		target.PollInterval = MaxPollIntervalMs
 	}
 
 	if err := s.repo.CreatePollingTarget(ctx, target); err != nil {
@@ -830,6 +858,11 @@ func (s *SNMPPollingService) UpdatePollingTarget(ctx context.Context, id uint, r
 		return fmt.Errorf("目标不存在: ID=%d", id)
 	}
 
+	// L1: 验证 IP 地址格式
+	if net.ParseIP(req.TargetIP) == nil {
+		return fmt.Errorf("目标 IP 地址格式无效: %q, 请提供合法的 IPv4 或 IPv6 地址", req.TargetIP)
+	}
+
 	target.TargetIP = req.TargetIP
 	target.TargetPort = req.TargetPort
 	target.DisplayName = req.DisplayName
@@ -841,8 +874,13 @@ func (s *SNMPPollingService) UpdatePollingTarget(ctx context.Context, id uint, r
 	if target.TargetPort == 0 {
 		target.TargetPort = 161
 	}
-	if target.PollInterval == 0 {
-		target.PollInterval = 300
+
+	// L2: 轮询间隔边界验证
+	if target.PollInterval < MinPollIntervalMs {
+		target.PollInterval = MinPollIntervalMs
+	}
+	if target.PollInterval > MaxPollIntervalMs {
+		target.PollInterval = MaxPollIntervalMs
 	}
 
 	if err := s.repo.UpdatePollingTarget(ctx, target); err != nil {

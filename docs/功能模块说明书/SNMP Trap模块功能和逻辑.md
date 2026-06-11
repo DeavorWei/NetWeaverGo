@@ -1113,3 +1113,47 @@ function handleTrapReceived(trap: TrapEvent) {
 | **通知方式** | 前端实时推送、声音提示 | 邮件、短信、Webhook通知 |
 | **数据存储** | SQLite独立数据库 | 支持MySQL、PostgreSQL |
 | **高可用** | 单实例监听 | 集群部署、负载均衡 |
+
+---
+
+## 7. 安全建议 [I1]
+
+### 7.1 SNMP v1/v2c 明文传输风险
+
+SNMP v1 和 v2c 协议的 Trap 消息使用 **Community String** 进行身份验证，且所有数据均以 **明文** 传输，存在以下安全风险：
+
+| 风险类型 | 说明 |
+|----------|------|
+| **网络嗅探** | 攻击者可通过抓包获取 Community String 和 Trap 消息内容 |
+| **伪造 Trap** | 攻击者可利用截获的 Community String 伪造 Trap 消息，干扰告警系统 |
+| **信息泄露** | Trap 消息中可能包含设备状态、接口信息等敏感数据 |
+
+### 7.2 推荐使用 SNMPv3
+
+**强烈建议在生产环境中优先使用 SNMPv3**，其提供以下安全特性：
+
+| 特性 | 说明 | 对应配置 |
+|------|------|----------|
+| **认证（Authentication）** | 使用 HMAC-MD5/SHA 验证 Trap 消息来源和完整性 | AuthProtocol + AuthPassword |
+| **加密（Privacy）** | 使用 AES/DES 加密传输数据，防止嗅探 | PrivProtocol + PrivPassword |
+| **用户级访问控制** | 基于用户名的细粒度权限管理 | SecurityName |
+
+本系统完整支持 SNMPv3 的 **认证 + 加密** 模式（authPriv），可在创建凭据时选择 SNMPv3 版本并配置相关参数。
+
+### 7.3 存储层安全措施
+
+对于仍需使用 SNMP v1/v2c 的场景，本系统已实施以下缓解措施：
+
+- **凭据加密存储**：所有 SNMP 凭据（Community String、AuthPassword、PrivPassword）均使用 **AES-256-GCM** 加密后存储于本地 SQLite 数据库，即使数据库文件泄露也无法直接读取明文凭据
+- **凭据脱敏展示**：前端界面中凭据字段以密码掩码显示，防止肩窥泄露
+- **操作审计日志**：所有凭据的创建、修改、删除操作均记录审计日志
+
+### 7.4 Trap 接收安全建议
+
+| 建议 | 说明 |
+|------|------|
+| 限制监听地址 | 生产环境中建议将 Trap 监听绑定到特定管理网络接口，而非默认的 `0.0.0.0` |
+| 配置防火墙规则 | 仅允许授权设备发送 Trap 到本机 UDP 162 端口 |
+| 启用过滤规则 | 使用 OID 前缀、IP CIDR、Community 等过滤规则，丢弃未知来源的 Trap |
+| 定期轮换凭据 | 定期更新 Community String 和 SNMPv3 密码 |
+| 监控异常流量 | 关注 Trap 接收频率异常，及时发现伪造或攻击行为 |

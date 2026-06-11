@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gosnmp/gosnmp"
 
@@ -38,6 +39,17 @@ type HandlerStats struct {
 
 // DefaultTrapTimeout Trap 处理默认超时时间
 const DefaultTrapTimeout = 30 * time.Second
+
+// maskString 对敏感字符串进行脱敏处理
+// 仅显示前 2 个字符 + ***，不足 2 个字符时直接替换为 ***
+func maskString(s string) string {
+	runeCount := utf8.RuneCountInString(s)
+	if runeCount <= 2 {
+		return "***"
+	}
+	runes := []rune(s)
+	return string(runes[:2]) + "***"
+}
 
 // TrapHandler Trap 处理器
 // 负责解析 gosnmp.SnmpPacket 为 TrapRecord 模型，
@@ -102,7 +114,7 @@ func (h *TrapHandler) HandleTrap(packet *gosnmp.SnmpPacket, addr *net.UDPAddr) e
 	}
 
 	logger.Debug("SNMP-Handler", addr.IP.String(), "收到 Trap: 版本=%s, Community=%s, PDU类型=%s",
-		packet.Version.String(), string(packet.Community), packet.PDUType.String())
+		packet.Version.String(), maskString(string(packet.Community)), packet.PDUType.String())
 
 	// 1. 解析 Trap 数据包
 	parseStartTime := time.Now()

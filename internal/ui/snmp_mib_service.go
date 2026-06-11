@@ -201,6 +201,32 @@ func (s *SNMPMIBService) GetMIBModule(ctx context.Context, moduleID uint) (*MIBM
 
 // ImportMIB 导入 MIB 文件
 func (s *SNMPMIBService) ImportMIB(ctx context.Context, req ImportMIBRequest) error {
+	// [M3] 路径安全验证：清理并校验源文件路径
+	cleanPath := filepath.Clean(req.FilePath)
+	if cleanPath == "" || cleanPath == "." {
+		return fmt.Errorf("无效的文件路径")
+	}
+
+	// 审计日志：记录导入操作的源路径和目标 MIB 存储目录
+	mibStoreDir := s.mibManager.GetMIBStoreDir()
+	logger.Info("SNMP-Audit", "-",
+		"MIB 导入操作: 源文件=%s, 目标存储目录=%s", cleanPath, mibStoreDir)
+
+	// 验证源文件存在且为常规文件（非目录、非符号链接）
+	fileInfo, err := os.Lstat(cleanPath)
+	if err != nil {
+		return fmt.Errorf("源文件不存在或无法访问: %s, %v", cleanPath, err)
+	}
+	if fileInfo.IsDir() {
+		return fmt.Errorf("源路径是目录而非文件: %s", cleanPath)
+	}
+	if fileInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("不支持导入符号链接文件: %s", cleanPath)
+	}
+
+	// 更新请求中的路径为清理后的路径
+	req.FilePath = cleanPath
+
 	// 发送导入开始事件
 	s.eventNotifier.NotifyMIBImportProgress(snmp.MIBImportProgress{
 		FileName: req.FilePath,
@@ -513,7 +539,13 @@ func (s *SNMPMIBService) DeleteMIBFolder(ctx context.Context, id uint) error {
 	}
 
 	// 1. 获取物理文件夹目录并删除所有物理文件
-	folderDir := filepath.Join(s.mibManager.GetMIBStoreDir(), folder.Name)
+	// [M4] 路径安全验证：防止路径遍历攻击
+	mibDir := filepath.Clean(s.mibManager.GetMIBStoreDir())
+	folderDir := filepath.Clean(filepath.Join(mibDir, folder.Name))
+	if !strings.HasPrefix(folderDir, mibDir+string(os.PathSeparator)) && folderDir != mibDir {
+		logger.Error("SNMP-Audit", "-", "检测到非法文件夹路径: folder.Name=%s, 解析后路径=%s", folder.Name, folderDir)
+		return fmt.Errorf("非法文件夹路径: %s", folder.Name)
+	}
 	if err := os.RemoveAll(folderDir); err != nil {
 		logger.Warn("SNMP", "-", "删除文件夹物理目录失败: %v", err)
 	}

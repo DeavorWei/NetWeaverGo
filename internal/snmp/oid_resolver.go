@@ -53,7 +53,8 @@ type OIDResolver struct {
 	oidCache  *lru.Cache[string, *ResolvedOID] // OID -> 解析结果
 	nameCache *lru.Cache[string, string]       // Name -> OID
 
-	// 并发控制
+	// 并发控制：协调缓存读写与 ClearCache/RebuildCache 操作
+	// 注意：LRU 缓存自身已线程安全，此互斥锁用于协调整体操作的原子性
 	mu sync.RWMutex
 }
 
@@ -89,23 +90,24 @@ func NewOIDResolver(mibManager *MIBManager, repo repository.MIBRepository) *OIDR
 
 // ResolveOID 解析 OID 到名称和信息
 // 如果未找到对应 MIB 节点，返回优雅降级结果（Found=false）
+// 采用 double-check locking 模式：先查缓存→释放锁→查数据库→再加锁写缓存，
+// 避免在持有读锁期间执行数据库查询导致写操作饥饿。
 func (r *OIDResolver) ResolveOID(oid string) (*ResolvedOID, error) {
 	resolveStartTime := time.Now()
 	oid = normalizeOID(oid)
 
-	// 统一在锁内完成缓存读取和写入，避免 TOCTOU 竞态
+	// Step 1: 先加读锁查缓存，命中则直接返回
 	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	// 先查缓存
 	if cached, ok := r.oidCache.Get(oid); ok {
+		r.mu.RUnlock()
 		logger.Verbose("SNMP-Resolver", "-", "OID 缓存命中: %s -> %s (命中=%v)", oid, cached.Name, cached.Found)
 		return cached, nil
 	}
+	r.mu.RUnlock()
 
 	logger.Verbose("SNMP-Resolver", "-", "OID 缓存未命中: %s, 查询数据库", oid)
 
-	// 查询数据库
+	// Step 2: 无锁状态下执行数据库查询
 	dbStartTime := time.Now()
 	node, err := r.repo.GetNodeByOID(oid)
 	if err != nil {
@@ -113,53 +115,83 @@ func (r *OIDResolver) ResolveOID(oid string) (*ResolvedOID, error) {
 		return nil, fmt.Errorf("查询 OID 节点失败: %v", err)
 	}
 
-	// 未找到节点
+	// 在锁外构建完整解析结果（buildResolvedOID 可能触发额外 DB 查询）
+	var result *ResolvedOID
 	if node == nil {
-		result := &ResolvedOID{
+		result = &ResolvedOID{
 			OID:   oid,
 			Name:  oid,
 			Found: false,
 		}
-		// 缓存未找到的结果（避免重复查询）
-		r.oidCache.Add(oid, result)
-		logger.Debug("SNMP-Resolver", "-", "OID 未找到: %s, 耗时=%v", oid, time.Since(resolveStartTime))
-		return result, nil
+	} else {
+		result = r.buildResolvedOID(node)
+		result.Found = true
 	}
 
-	// 构建解析结果
-	result := r.buildResolvedOID(node)
-	result.Found = true
+	// Step 3: 加写锁，double-check 缓存，写入结果
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	// 缓存结果
+	// 再次检查缓存（防止并发写入导致重复查询）
+	if cached, ok := r.oidCache.Get(oid); ok {
+		logger.Verbose("SNMP-Resolver", "-", "OID 缓存命中(double-check): %s -> %s", oid, cached.Name)
+		return cached, nil
+	}
+
+	// 写入缓存
 	r.oidCache.Add(oid, result)
-	r.nameCache.Add(node.Name, oid)
+	if node != nil {
+		r.nameCache.Add(node.Name, oid)
+	}
 
 	resolveLatency := time.Since(resolveStartTime)
-	logger.Debug("SNMP-Resolver", "-", "OID 解析成功: %s -> %s (模块: %s), 耗时=%v",
-		oid, result.Name, result.ModuleName, resolveLatency)
+	if node != nil {
+		logger.Debug("SNMP-Resolver", "-", "OID 解析成功: %s -> %s (模块: %s), 耗时=%v",
+			oid, result.Name, result.ModuleName, resolveLatency)
+	} else {
+		logger.Debug("SNMP-Resolver", "-", "OID 未找到: %s, 耗时=%v", oid, resolveLatency)
+	}
 
 	return result, nil
 }
 
 // ResolveNameToOID 将名称解析为 OID
 // 如果未找到，返回空字符串和 nil 错误（优雅降级）
+// 采用 double-check locking 模式，避免在持有读锁期间执行数据库查询。
 func (r *OIDResolver) ResolveNameToOID(name string) (string, error) {
 	if name == "" {
 		return "", nil
 	}
 
-	// 先查缓存
+	// Step 1: 先加读锁查缓存
+	r.mu.RLock()
 	if cached, ok := r.nameCache.Get(name); ok {
+		r.mu.RUnlock()
 		return cached, nil
 	}
+	r.mu.RUnlock()
 
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	// 查询数据库
+	// Step 2: 无锁状态下执行数据库查询
 	node, err := r.repo.GetNodeByName(name)
 	if err != nil {
 		return "", fmt.Errorf("查询名称节点失败: %v", err)
+	}
+
+	// 在锁外构建解析结果
+	var resolved *ResolvedOID
+	oid := ""
+	if node != nil {
+		oid = node.OID
+		resolved = r.buildResolvedOID(node)
+	}
+
+	// Step 3: 加写锁，double-check，写缓存
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Double-check
+	if cached, ok := r.nameCache.Get(name); ok {
+		return cached, nil
 	}
 
 	if node == nil {
@@ -169,10 +201,10 @@ func (r *OIDResolver) ResolveNameToOID(name string) (string, error) {
 	}
 
 	// 缓存结果
-	r.nameCache.Add(name, node.OID)
-	r.oidCache.Add(node.OID, r.buildResolvedOID(node))
+	r.nameCache.Add(name, oid)
+	r.oidCache.Add(oid, resolved)
 
-	return node.OID, nil
+	return oid, nil
 }
 
 // ResolveBatch 批量解析 OID
@@ -204,13 +236,11 @@ func (r *OIDResolver) ResolveBatch(oids []string) ([]*ResolvedOID, error) {
 
 // GetSubtree 获取 OID 子树
 // 返回指定 OID 及其所有子节点的解析结果
+// 采用无锁查询 + 写锁批量缓存模式，避免在持有锁期间执行数据库查询。
 func (r *OIDResolver) GetSubtree(oid string) ([]*ResolvedOID, error) {
 	oid = normalizeOID(oid)
 
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	// 获取子节点列表
+	// 无锁查询子节点
 	children, err := r.repo.GetChildNodes(oid)
 	if err != nil {
 		return nil, fmt.Errorf("查询子节点失败: %v", err)
@@ -218,23 +248,29 @@ func (r *OIDResolver) GetSubtree(oid string) ([]*ResolvedOID, error) {
 
 	results := make([]*ResolvedOID, 0, len(children)+1)
 
-	// 添加根节点
+	// 解析根节点（ResolveOID 内部处理缓存和锁的协调）
 	rootResult, err := r.ResolveOID(oid)
 	if err != nil {
 		return nil, err
 	}
 	results = append(results, rootResult)
 
-	// 递归获取子节点
-	for _, child := range children {
-		childResult := r.buildResolvedOID(&child)
+	// 在锁外构建所有子节点解析结果（buildResolvedOID 可能触发 DB 查询）
+	childResults := make([]*ResolvedOID, 0, len(children))
+	for i := range children {
+		childResult := r.buildResolvedOID(&children[i])
 		childResult.Found = true
-		results = append(results, childResult)
-
-		// 缓存子节点
-		r.oidCache.Add(child.OID, childResult)
-		r.nameCache.Add(child.Name, child.OID)
+		childResults = append(childResults, childResult)
 	}
+
+	// 加写锁，缓存子节点
+	r.mu.Lock()
+	for i, childResult := range childResults {
+		// 缓存子节点（LRU 自身线程安全，此处写锁用于与 RebuildCache 协调）
+		r.oidCache.Add(children[i].OID, childResult)
+		r.nameCache.Add(children[i].Name, children[i].OID)
+	}
+	r.mu.Unlock()
 
 	return results, nil
 }
@@ -244,6 +280,7 @@ func (r *OIDResolver) GetSubtree(oid string) ([]*ResolvedOID, error) {
 // ============================================================================
 
 // buildResolvedOID 从 MIBNode 构建解析结果
+// 注意：此方法会执行额外的数据库查询（获取模块名和子节点列表），调用方应确保不持有锁
 func (r *OIDResolver) buildResolvedOID(node *models.MIBNode) *ResolvedOID {
 	result := &ResolvedOID{
 		ID:          node.ID,
@@ -310,29 +347,52 @@ func (r *OIDResolver) CacheStats() (oidCacheLen, nameCacheLen int) {
 }
 
 // RebuildCache 重建缓存（从数据库重新加载）
+// 采用分页加载模式，避免一次性加载所有节点导致内存峰值过高和启动延迟。
+// 每批在锁外构建解析结果，加锁后写入缓存，最小化锁持有时间。
 func (r *OIDResolver) RebuildCache() error {
+	// 加写锁清空缓存
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	// 清空现有缓存
 	r.oidCache.Purge()
 	r.nameCache.Purge()
+	r.mu.Unlock()
 
-	// 从数据库加载所有节点
-	nodes, err := r.repo.GetAllNodes()
-	if err != nil {
-		return fmt.Errorf("加载节点失败: %v", err)
+	// 分页加载节点，每批构建结果后写入缓存
+	batchSize := 1000
+	offset := 0
+	totalNodes := 0
+
+	for {
+		// 无锁状态下执行数据库查询
+		nodes, err := r.repo.GetNodesBatch(offset, batchSize)
+		if err != nil {
+			return fmt.Errorf("分页加载节点失败: %v", err)
+		}
+
+		if len(nodes) == 0 {
+			break
+		}
+
+		// 在锁外构建解析结果（buildResolvedOID 可能触发额外 DB 查询）
+		results := make([]*ResolvedOID, len(nodes))
+		for i := range nodes {
+			result := r.buildResolvedOID(&nodes[i])
+			result.Found = true
+			results[i] = result
+		}
+
+		// 加写锁写入缓存
+		r.mu.Lock()
+		for i := range nodes {
+			r.oidCache.Add(nodes[i].OID, results[i])
+			r.nameCache.Add(nodes[i].Name, nodes[i].OID)
+		}
+		r.mu.Unlock()
+
+		totalNodes += len(nodes)
+		offset += batchSize
 	}
 
-	// 填充缓存
-	for i := range nodes {
-		result := r.buildResolvedOID(&nodes[i])
-		result.Found = true
-		r.oidCache.Add(nodes[i].OID, result)
-		r.nameCache.Add(nodes[i].Name, nodes[i].OID)
-	}
-
-	logger.Info("SNMP", "-", "OID 解析器缓存重建完成: %d 节点", len(nodes))
+	logger.Info("SNMP", "-", "OID 解析器缓存重建完成: %d 节点", totalNodes)
 
 	return nil
 }
@@ -393,38 +453,40 @@ func (r *OIDResolver) WarmUpCache(nodes []models.MIBNode, moduleName string) {
 // ============================================================================
 
 // SearchNodes 搜索 MIB 节点（按名称或 OID 模糊匹配）
+// 采用无锁查询 + 写锁缓存模式，避免在持有锁期间执行数据库查询。
 func (r *OIDResolver) SearchNodes(query string) ([]*ResolvedOID, error) {
 	if query == "" {
 		return []*ResolvedOID{}, nil
 	}
 
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
+	// 无锁查询数据库
 	nodes, err := r.repo.SearchNodes(query)
 	if err != nil {
 		return nil, fmt.Errorf("搜索节点失败: %v", err)
 	}
 
+	// 在锁外构建解析结果
 	results := make([]*ResolvedOID, 0, len(nodes))
 	for i := range nodes {
 		result := r.buildResolvedOID(&nodes[i])
 		result.Found = true
 		results = append(results, result)
+	}
 
-		// 缓存搜索结果
+	// 加写锁缓存搜索结果
+	r.mu.Lock()
+	for i, result := range results {
 		r.oidCache.Add(nodes[i].OID, result)
 		r.nameCache.Add(nodes[i].Name, nodes[i].OID)
 	}
+	r.mu.Unlock()
 
 	return results, nil
 }
 
 // GetNodeByID 通过节点 ID 获取解析结果
 func (r *OIDResolver) GetNodeByID(id uint) (*ResolvedOID, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
+	// 无锁查询数据库
 	node, err := r.repo.GetNodeByID(id)
 	if err != nil {
 		return nil, fmt.Errorf("查询节点失败: %v", err)
@@ -442,9 +504,7 @@ func (r *OIDResolver) GetNodeByID(id uint) (*ResolvedOID, error) {
 
 // GetModuleNodes 获取指定模块的所有节点
 func (r *OIDResolver) GetModuleNodes(moduleID uint) ([]*ResolvedOID, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
+	// 无锁查询数据库
 	nodes, err := r.repo.GetNodesByModule(moduleID)
 	if err != nil {
 		return nil, fmt.Errorf("查询模块节点失败: %v", err)

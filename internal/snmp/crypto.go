@@ -26,10 +26,6 @@ import (
 // 密钥文件名（存储在 SNMP 数据目录下）
 const keyFileName = "snmp_key.bin"
 
-// 旧版硬编码密钥（仅用于迁移旧数据，不再用于新加密）
-// 迁移完成后此常量将被移除
-var legacyHardcodedKey = []byte("netweaver-snmp-default-key-32b!")
-
 // ============================================================================
 // 全局加密管理器
 // ============================================================================
@@ -168,56 +164,6 @@ func NewCredentialCrypto(key []byte) *CredentialCrypto {
 	}
 
 	return &CredentialCrypto{key: key}
-}
-
-// TryDecryptWithLegacyKey 尝试使用旧版硬编码密钥解密数据
-// 用于迁移旧密钥加密的凭据数据
-// 返回：解密成功返回明文和 true，解密失败返回空字符串和 false
-func (c *CredentialCrypto) TryDecryptWithLegacyKey(ciphertext string) (string, bool) {
-	if ciphertext == "" {
-		return "", false
-	}
-
-	// 创建旧版密钥的加密器
-	legacyCrypto := &CredentialCrypto{key: legacyHardcodedKey}
-
-	// 尝试解密
-	plaintext, err := legacyCrypto.DecryptCredential(ciphertext)
-	if err != nil {
-		return "", false
-	}
-
-	return plaintext, true
-}
-
-// MigrateCredential 迁移单个凭据字段
-// 如果数据是用旧密钥加密的，解密后用新密钥重新加密
-func (c *CredentialCrypto) MigrateCredential(ciphertext string) (string, bool, error) {
-	if ciphertext == "" {
-		return "", false, nil // 空字符串无需迁移
-	}
-
-	// 先尝试用当前密钥解密（判断是否已是新密钥加密）
-	_, err := c.DecryptCredential(ciphertext)
-	if err == nil {
-		// 当前密钥可以解密，说明已是新密钥加密或未加密，无需迁移
-		return ciphertext, false, nil
-	}
-
-	// 当前密钥无法解密，尝试用旧版密钥解密
-	plaintext, ok := c.TryDecryptWithLegacyKey(ciphertext)
-	if !ok {
-		// 两种密钥都无法解密，数据可能损坏或使用了其他密钥
-		return ciphertext, false, fmt.Errorf("凭据数据无法解密（密钥不匹配或数据损坏）")
-	}
-
-	// 使用新密钥重新加密
-	newCiphertext, err := c.EncryptCredential(plaintext)
-	if err != nil {
-		return ciphertext, false, fmt.Errorf("重新加密凭据失败: %w", err)
-	}
-
-	return newCiphertext, true, nil
 }
 
 // EncryptedPrefix 加密数据前缀标记，用于可靠识别加密数据
