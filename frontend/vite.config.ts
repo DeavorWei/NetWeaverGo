@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [vue()],
   resolve: {
     alias: {
@@ -25,7 +25,7 @@ export default defineConfig({
     }
   },
   build: {
-    sourcemap: true, // 生成 source map 便于调试
+    sourcemap: mode !== 'production', // 仅在开发模式下生成 source map
     rollupOptions: {
       external: ['/wails/runtime.js'],
       output: {
@@ -45,4 +45,4 @@ export default defineConfig({
     // chunk 大小警告阈值
     chunkSizeWarningLimit: 500
   }
-})
+}))
