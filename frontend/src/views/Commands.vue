@@ -210,6 +210,27 @@ import { getLogger } from '@/utils/logger'
 
 const logger = getLogger()
 
+// 提取错误消息的辅助函数（修复问题08：前端错误处理不完整）
+function extractErrorMessage(err: any): string {
+  if (!err) return '未知错误'
+  
+  // 标准 Error 对象
+  if (err instanceof Error) return err.message
+  
+  // 带 message 属性的对象
+  if (typeof err === 'object' && err.message) return String(err.message)
+  
+  // 字符串
+  if (typeof err === 'string') return err
+  
+  // 其他情况：尝试 JSON 序列化
+  try {
+    return JSON.stringify(err)
+  } catch {
+    return '未知错误'
+  }
+}
+
 const loading = ref(true)
 const groups = ref<CommandGroup[]>([])
 const searchKeyword = ref('')
@@ -335,12 +356,33 @@ function closeEditModal() {
   editModal.value.show = false
 }
 
-// 添加标签
+// 添加标签（修复问题12：前端标签验证不完整）
 function addTag() {
   const tag = newTag.value.trim()
-  if (tag && !editModal.value.form.tags.includes(tag)) {
-    editModal.value.form.tags.push(tag)
+  
+  // 验证标签
+  if (!tag) return
+  
+  // 长度验证
+  if (tag.length > 20) {
+    ElMessage.warning('标签长度不能超过20个字符')
+    return
   }
+  
+  // 字符集验证（中文、英文、数字、下划线、短横线）
+  const validPattern = /^[\u4e00-\u9fa5a-zA-Z0-9_-]+$/
+  if (!validPattern.test(tag)) {
+    ElMessage.warning('标签只能包含中文、英文、数字、下划线和短横线')
+    return
+  }
+  
+  // 去重验证
+  if (editModal.value.form.tags.includes(tag)) {
+    ElMessage.warning('标签已存在')
+    return
+  }
+  
+  editModal.value.form.tags.push(tag)
   newTag.value = ''
 }
 
@@ -392,7 +434,7 @@ async function saveGroup() {
     await loadGroups()
   } catch (err: any) {
     logger.error('保存命令组失败', 'Commands', err)
-    ElMessage.error('保存失败: ' + (err.message || err))
+    ElMessage.error('保存失败: ' + extractErrorMessage(err))
   } finally {
     editModal.value.saving = false
   }
@@ -406,7 +448,7 @@ async function duplicateGroup(id: number) {
     await loadGroups()
   } catch (err: any) {
     logger.error('复制命令组失败', 'Commands', err)
-    ElMessage.error('复制失败: ' + (err.message || err))
+    ElMessage.error('复制失败: ' + extractErrorMessage(err))
   }
 }
 
@@ -428,7 +470,7 @@ function confirmDelete(group: CommandGroup) {
       await loadGroups()
     } catch (err: any) {
       logger.error('删除命令组失败', 'Commands', err)
-      ElMessage.error('删除失败: ' + (err.message || err))
+      ElMessage.error('删除失败: ' + extractErrorMessage(err))
     }
   }).catch(() => {})
 }

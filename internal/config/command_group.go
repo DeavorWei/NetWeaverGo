@@ -26,6 +26,54 @@ func generateID() string {
 	return uuid.New().String()
 }
 
+// isDuplicateKeyError 检测是否为唯一约束冲突错误
+func isDuplicateKeyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "UNIQUE constraint failed") ||
+		strings.Contains(errMsg, "Duplicate entry") ||
+		strings.Contains(errMsg, "duplicate key")
+}
+
+// handleDuplicateError 处理唯一约束冲突，返回友好错误信息
+func handleDuplicateError(err error, name string) error {
+	if isDuplicateKeyError(err) {
+		return fmt.Errorf("命令组名称已存在: %s", name)
+	}
+	return err
+}
+
+// generateUniqueName 生成唯一名称（单次查询，避免N+1问题）
+func generateUniqueName(baseName string) (string, error) {
+	var existing []models.CommandGroup
+	// 单次查询所有相关名称
+	if err := DB.Where("name LIKE ?", baseName+"%").Find(&existing).Error; err != nil {
+		return "", err
+	}
+
+	// 构建已存在名称的集合
+	nameSet := make(map[string]bool)
+	for _, g := range existing {
+		nameSet[g.Name] = true
+	}
+
+	// 尝试生成唯一名称（最多尝试100次）
+	if !nameSet[baseName] {
+		return baseName, nil
+	}
+
+	for i := 1; i <= 100; i++ {
+		candidate := fmt.Sprintf("%s (%d)", baseName, i)
+		if !nameSet[candidate] {
+			return candidate, nil
+		}
+	}
+
+	return "", fmt.Errorf("无法生成唯一名称，已存在过多同名命令组")
+}
+
 // ========== 命令组管理 API ==========
 
 // ListCommandGroups 获取所有命令组列表
@@ -63,14 +111,9 @@ func CreateCommandGroup(group models.CommandGroup) (*models.CommandGroup, error)
 		return nil, fmt.Errorf("命令组名称不能为空")
 	}
 
-	var count int64
-	DB.Model(&models.CommandGroup{}).Where("name = ?", group.Name).Count(&count)
-	if count > 0 {
-		return nil, fmt.Errorf("命令组名称已存在: %s", group.Name)
-	}
-
+	// 移除手动检查，直接创建，让数据库唯一约束处理（修复问题05竞态条件）
 	if err := DB.Create(&group).Error; err != nil {
-		return nil, err
+		return nil, handleDuplicateError(err, group.Name)
 	}
 
 	logger.Info("Config", "-", "成功创建命令组: %s", group.Name)
@@ -89,19 +132,16 @@ func UpdateCommandGroup(id uint, group models.CommandGroup) (*models.CommandGrou
 	}
 
 	group.ID = id
+	// 保留原有创建时间（修复问题11：更新操作未保留创建时间）
+	group.CreatedAt = existing.CreatedAt
 	group.Name = strings.TrimSpace(group.Name)
 	if group.Name == "" {
 		return nil, fmt.Errorf("命令组名称不能为空")
 	}
 
-	var count int64
-	DB.Model(&models.CommandGroup{}).Where("name = ? AND id != ?", group.Name, id).Count(&count)
-	if count > 0 {
-		return nil, fmt.Errorf("命令组名称已存在: %s", group.Name)
-	}
-
+	// 移除手动检查，直接保存，让数据库唯一约束处理（修复问题05竞态条件）
 	if err := DB.Save(&group).Error; err != nil {
-		return nil, err
+		return nil, handleDuplicateError(err, group.Name)
 	}
 
 	logger.Info("Config", "-", "成功更新命令组: %s", group.Name)
@@ -128,33 +168,49 @@ func DuplicateCommandGroup(id uint) (*models.CommandGroup, error) {
 		return nil, fmt.Errorf("数据库未初始化")
 	}
 
-	var source models.CommandGroup
-	if err := DB.First(&source, id).Error; err != nil {
+	var original models.CommandGroup
+	if err := DB.First(&original, id).Error; err != nil {
 		return nil, fmt.Errorf("未找到命令组: %d", id)
 	}
 
-	newGroup := source
-	newGroup.ID = 0
-	newGroup.Name = source.Name + " - 副本"
-
-	baseName := newGroup.Name
-	counter := 1
-	for {
-		var count int64
-		DB.Model(&models.CommandGroup{}).Where("name = ?", newGroup.Name).Count(&count)
-		if count == 0 {
-			break
-		}
-		counter++
-		newGroup.Name = fmt.Sprintf("%s (%d)", baseName, counter)
+	newGroup := models.CommandGroup{
+		Name:        original.Name,
+		Commands:    make([]string, len(original.Commands)),
+		Tags:        make([]string, len(original.Tags)),
+		Description: original.Description,
 	}
+	copy(newGroup.Commands, original.Commands)
+	copy(newGroup.Tags, original.Tags)
+	newGroup.ID = 0
 
-	if err := DB.Create(&newGroup).Error; err != nil {
+	// 使用 generateUniqueName 生成唯一名称（修复问题06循环查询）
+	uniqueName, err := generateUniqueName(original.Name)
+	if err != nil {
 		return nil, err
 	}
+	newGroup.Name = uniqueName
 
-	logger.Info("Config", "-", "成功复制命令组: %s -> %s", source.Name, newGroup.Name)
-	return &newGroup, nil
+	// 尝试创建，如果仍然冲突则重试（处理并发场景）
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if err := DB.Create(&newGroup).Error; err != nil {
+			if isDuplicateKeyError(err) && attempt < maxRetries-1 {
+				// 重试：重新生成名称
+				uniqueName, err = generateUniqueName(original.Name + " 副本")
+				if err != nil {
+					return nil, err
+				}
+				newGroup.Name = uniqueName
+				newGroup.ID = 0 // 重置ID
+				continue
+			}
+			return nil, handleDuplicateError(err, newGroup.Name)
+		}
+		logger.Info("Config", "-", "成功复制命令组: %s -> %s", original.Name, newGroup.Name)
+		return &newGroup, nil
+	}
+
+	return nil, fmt.Errorf("复制失败，请重试")
 }
 
 // ImportCommandGroup 从 JSON 文件导入命令组
@@ -173,29 +229,43 @@ func ImportCommandGroup(filePath string) (*models.CommandGroup, error) {
 		return nil, fmt.Errorf("解析导入文件失败: %v", err)
 	}
 
+	// 清除ID和时间戳字段（修复问题10：导入时ID字段未清除）
+	group.ID = 0
+	group.CreatedAt = time.Time{}
+	group.UpdatedAt = time.Time{}
+
 	group.Name = strings.TrimSpace(group.Name)
 	if group.Name == "" {
 		return nil, fmt.Errorf("命令组名称不能为空")
 	}
 
-	baseName := group.Name
-	counter := 1
-	for {
-		var count int64
-		DB.Model(&models.CommandGroup{}).Where("name = ?", group.Name).Count(&count)
-		if count == 0 {
-			break
-		}
-		counter++
-		group.Name = fmt.Sprintf("%s (%d)", baseName, counter)
-	}
-
-	if err := DB.Create(&group).Error; err != nil {
+	// 使用 generateUniqueName 生成唯一名称（修复问题09循环查询）
+	uniqueName, err := generateUniqueName(group.Name)
+	if err != nil {
 		return nil, err
 	}
+	group.Name = uniqueName
 
-	logger.Info("Config", "-", "成功导入命令组: %s", group.Name)
-	return &group, nil
+	// 尝试创建，如果仍然冲突则重试（处理并发场景）
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if err := DB.Create(&group).Error; err != nil {
+			if isDuplicateKeyError(err) && attempt < maxRetries-1 {
+				uniqueName, err = generateUniqueName(group.Name + " 导入")
+				if err != nil {
+					return nil, err
+				}
+				group.Name = uniqueName
+				group.ID = 0
+				continue
+			}
+			return nil, handleDuplicateError(err, group.Name)
+		}
+		logger.Info("Config", "-", "成功导入命令组: %s", group.Name)
+		return &group, nil
+	}
+
+	return nil, fmt.Errorf("导入失败，请重试")
 }
 
 // ExportCommandGroup 导出命令组到 JSON 文件
