@@ -90,14 +90,6 @@ type DeviceProfile struct {
 	Commands []CommandSpec `json:"commands"` // 命令列表
 }
 
-// ProfileProvider 画像提供者接口
-type ProfileProvider interface {
-	// GetByVendor 根据厂商标识获取设备画像
-	GetByVendor(vendor string) (*DeviceProfile, bool)
-	// DetectFallback 当厂商未知时，根据提示符和 banner 探测厂商
-	DetectFallback(prompt string, banner string) string
-}
-
 // deviceProfileRegistry 设备画像注册表
 type deviceProfileRegistry struct {
 	profiles map[string]*DeviceProfile
@@ -259,63 +251,3 @@ func GetAllDeviceProfiles() []*DeviceProfile {
 	return profiles
 }
 
-// DetectVendorFromOutput 根据输出特征探测厂商
-// 这是一个轻量级探测，只作为 Vendor 缺失时的 fallback
-func DetectVendorFromOutput(prompt string, banner string) string {
-	// 根据提示符特征探测
-	promptLower := prompt
-	bannerLower := banner
-
-	// Huawei 特征
-	if containsAny(promptLower, []string{"<", "Huawei", "HUAWEI"}) ||
-		containsAny(bannerLower, []string{"Huawei", "HUAWEI", "VRP", "Versatile Routing Platform"}) {
-		return "huawei"
-	}
-
-	// H3C 特征
-	if containsAny(promptLower, []string{"H3C", "h3c"}) ||
-		containsAny(bannerLower, []string{"H3C", "H3C Comware", "Comware Software"}) {
-		return "h3c"
-	}
-
-	// Cisco 特征
-	if containsAny(promptLower, []string{"Cisco", "cisco"}) ||
-		containsAny(bannerLower, []string{"Cisco", "CISCO", "Cisco IOS"}) {
-		return "cisco"
-	}
-
-	// 无法识别，返回默认
-	return "huawei"
-}
-
-// containsAny 检查字符串是否包含任意子串
-func containsAny(s string, substrs []string) bool {
-	for _, substr := range substrs {
-		if len(s) >= len(substr) {
-			for i := 0; i <= len(s)-len(substr); i++ {
-				if s[i:i+len(substr)] == substr {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-// GlobalProfileProvider 全局画像提供者实现
-type GlobalProfileProvider struct{}
-
-// GetByVendor 实现 ProfileProvider 接口
-func (p *GlobalProfileProvider) GetByVendor(vendor string) (*DeviceProfile, bool) {
-	return GetDeviceProfileByVendor(vendor)
-}
-
-// DetectFallback 实现 ProfileProvider 接口
-func (p *GlobalProfileProvider) DetectFallback(prompt string, banner string) string {
-	return DetectVendorFromOutput(prompt, banner)
-}
-
-// NewProfileProvider 创建画像提供者
-func NewProfileProvider() ProfileProvider {
-	return &GlobalProfileProvider{}
-}

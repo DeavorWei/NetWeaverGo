@@ -207,7 +207,7 @@
             <el-form label-position="top" class="grid grid-cols-1 md:grid-cols-2 gap-4 flex-shrink-0">
               <el-form-item label="目标厂商" class="mb-0">
                 <el-select v-model="topologyVendor" class="w-full">
-                  <el-option label="自动识别" value="" />
+                  <el-option label="按设备资产（默认华为）" value="" />
                   <el-option v-for="vendor in supportedVendors" :key="vendor" :label="vendor" :value="vendor" />
                 </el-select>
               </el-form-item>
@@ -368,7 +368,7 @@
                 {{
                   selectedTaskType === "normal"
                     ? selectedCommandGroup?.name || "未选择命令组"
-                    : topologyVendor || "自动识别厂商"
+                    : topologyVendor || "按设备资产（默认华为）"
                 }}
               </el-tag>
               <el-icon class="text-text-muted"><Right /></el-icon>

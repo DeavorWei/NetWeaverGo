@@ -2,6 +2,7 @@ package taskexec
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -329,7 +330,7 @@ func MapCommandOutput(mapper parser.ResultMapper, commandKey string, rows []map[
 
 // NormalizeIdentity 标准化设备身份信息
 func NormalizeIdentity(identity *parser.DeviceIdentity) {
-	identity.Vendor = normalize.NormalizeVendor(identity.Vendor)
+	identity.Vendor = strings.ToLower(strings.TrimSpace(identity.Vendor))
 	identity.Hostname = normalize.NormalizeDeviceName(identity.Hostname)
 }
 

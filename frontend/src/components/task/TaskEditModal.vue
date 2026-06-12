@@ -137,7 +137,7 @@
                           v-model="topologyForm.vendor"
                           class="w-full px-3 py-2 rounded-lg bg-bg-card border border-border text-sm text-text-primary focus:outline-none focus:border-accent/50"
                         >
-                          <option value="">自动识别</option>
+                          <option value="">按设备资产（默认华为）</option>
                           <option v-for="vendor in topologyVendorOptions" :key="vendor" :value="vendor">
                             {{ vendor }}
                           </option>

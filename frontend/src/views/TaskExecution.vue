@@ -1269,7 +1269,7 @@ function isTopologyTask(task: TaskGroupListView | TaskGroup) {
 
 function topologyVendorLabel(task: TaskGroupListView | TaskGroup) {
   const vendor = ((task as any).topologyVendor || "").trim();
-  return vendor === "" ? "自动识别" : vendor;
+  return vendor === "" ? "按设备资产（默认华为）" : vendor;
 }
 
 function topologyDeviceCount(task: TaskGroupListView | TaskGroup) {

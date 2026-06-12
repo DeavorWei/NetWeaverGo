@@ -36,24 +36,6 @@ func TestTopologyCommandResolverResolveVendorPriority_Inventory(t *testing.T) {
 	assert.Equal(t, TopologyVendorSourceInventory, resolution.VendorSource)
 }
 
-func TestTopologyCommandResolverResolveVendorPriority_Detect(t *testing.T) {
-	setupTopologyResolverConfigDB(t)
-
-	resolver := NewTopologyCommandResolver()
-	device := &models.DeviceAsset{
-		Vendor:      "unknown-vendor",
-		DisplayName: "Cisco core switch",
-		Description: "distribution layer",
-	}
-
-	resolution, err := resolver.Resolve("", device, nil)
-	require.NoError(t, err)
-	require.NotNil(t, resolution)
-
-	assert.Equal(t, "cisco", resolution.ResolvedVendor)
-	assert.Equal(t, TopologyVendorSourceDetect, resolution.VendorSource)
-}
-
 func TestTopologyCommandResolverResolveVendorPriority_Fallback(t *testing.T) {
 	setupTopologyResolverConfigDB(t)
 
