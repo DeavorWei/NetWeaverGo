@@ -112,6 +112,9 @@ const executeSend = async () => {
       status: "",
       createdAt: "",
       updatedAt: "",
+      scheduleEnabled: false,
+      cronExpression: "",
+      scheduleType: "",
     };
 
     await TaskGroupAPI.createTaskGroup(taskGroup);

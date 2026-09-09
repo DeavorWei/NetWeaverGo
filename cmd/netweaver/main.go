@@ -1,11 +1,9 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io/fs"
 	"os"
-	"time"
 
 	"github.com/NetWeaverGo/core"
 	"github.com/NetWeaverGo/core/internal/config"
@@ -108,57 +106,12 @@ func runGUI() {
 	// 创建统一任务执行UI服务（Wails暴露层）
 	taskExecutionUIService := ui.NewTaskExecutionUIService(taskExecutionService)
 
-	// 初始化 SNMP 组件
-	mibRepo := repository.NewGormMIBRepository(config.SNMPDB)
-	mibManager := snmp.NewMIBManager(mibRepo, config.GetPathManager().GetSNMPMIBStoreDir())
-	defer mibManager.Close() // 确保资源清理
-	oidResolver := snmp.NewOIDResolver(mibManager, mibRepo)
-	snmpEventNotifier := ui.NewSNMPEventNotifier()
-	mibService := ui.NewSNMPMIBService(mibManager, oidResolver, mibRepo, snmpEventNotifier)
-	logger.Info("System", "-", "SNMP MIB 服务已初始化")
-
-	// 初始化 SNMP Trap 组件
-	trapRepo := repository.NewGormTrapRepository(config.SNMPDB)
-	trapFilterEngine := snmp.NewTrapFilterEngine(nil)
-	trapHandler := snmp.NewTrapHandler(trapRepo, trapFilterEngine, oidResolver, snmpEventNotifier)
-	trapListener := snmp.NewTrapListener(trapHandler, nil, snmpEventNotifier)
-	trapService := ui.NewSNMPTrapService(trapRepo, trapListener, trapHandler, trapFilterEngine, oidResolver, snmpEventNotifier)
-	logger.Info("System", "-", "SNMP Trap 服务已初始化")
-
-	// 初始化 SNMP Polling 组件
+	// 初始化 SNMP 查询组件（即时查询，无后台任务与周期性调度）
 	snmpCrypto := snmp.GetCredentialCrypto()
-	pollingRepo := repository.NewGormPollingRepository(config.SNMPDB)
-	poller := snmp.NewPoller(oidResolver, snmpCrypto, snmpEventNotifier)
-
-	// 从数据库读取 SNMP 服务器配置，用于初始化分发器
-	dispatcherConfig := snmp.DefaultDispatcherConfig
-	snmpCfg, snmpCfgErr := trapRepo.GetActiveServerConfig(context.Background())
-	if snmpCfgErr != nil {
-		logger.Warn("System", "-", "读取 SNMP 服务器配置失败，使用默认分发器配置: %v", snmpCfgErr)
-	} else if snmpCfg != nil {
-		if snmpCfg.MaxPollingWorkers > 0 {
-			dispatcherConfig.MaxConcurrentDevices = snmpCfg.MaxPollingWorkers
-		}
-		if snmpCfg.MaxOpsPerDevice > 0 {
-			dispatcherConfig.MaxOpsPerDevice = snmpCfg.MaxOpsPerDevice
-		}
-		dispatcherConfig.SkipIfBusy = snmpCfg.PollSkipIfBusy
-		if snmpCfg.PollQueueTimeout > 0 {
-			dispatcherConfig.QueueTimeout = time.Duration(snmpCfg.PollQueueTimeout) * time.Second
-		}
-	}
-	dispatcher := snmp.NewPollDispatcher(poller, snmpEventNotifier, dispatcherConfig)
-	pollerScheduler := snmp.NewPollerScheduler(dispatcher, pollingRepo, snmpEventNotifier)
-	pollingService := ui.NewSNMPPollingService(poller, pollerScheduler, pollingRepo, snmpEventNotifier, snmpCrypto)
-	logger.Info("System", "-", "SNMP Polling 服务已初始化")
-
-	// 初始化 SNMP 数据清理任务
-	dataCleaner := snmp.NewDataCleaner(trapRepo, pollingRepo, snmp.DefaultCleanupConfig())
-	if err := dataCleaner.Start(); err != nil {
-		logger.Error("System", "-", "启动数据清理任务失败: %v", err)
-	} else {
-		logger.Info("System", "-", "SNMP 数据清理任务已启动")
-	}
+	credRepo := repository.NewGormCredentialRepository(config.SNMPDB)
+	snmpQuerier := snmp.NewQuerier(snmpCrypto)
+	snmpQueryService := ui.NewSNMPQueryService(snmpQuerier, credRepo, snmpCrypto)
+	logger.Info("System", "-", "SNMP 查询服务已初始化")
 
 	// 修正：修正嵌入文件系统的路径级联问题
 	// core.FrontendAssets 包含了 "frontend/dist" 这一层，我们需要提取其子 FS
@@ -204,9 +157,7 @@ func runGUI() {
 			application.NewService(frontendLogService),     // 前端日志服务
 			application.NewService(taskExecutionUIService), // 统一任务执行UI服务（阶段1）
 			application.NewService(scheduleUIService),      // 任务调度配置服务
-			application.NewService(mibService),             // SNMP MIB 管理服务
-			application.NewService(trapService),            // SNMP Trap 管理服务
-			application.NewService(pollingService),         // SNMP Polling 管理服务
+			application.NewService(snmpQueryService),       // SNMP 即时查询服务
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assetsFS),
@@ -228,20 +179,11 @@ func runGUI() {
 		MinHeight:        768,
 	})
 
-	// 绑定 SNMP 事件通知器到 Wails 应用
-	snmpEventNotifier.SetWailsApp(app)
-
 	// 启动任务调度器
 	if err := taskScheduler.Start(); err != nil {
 		logger.Error("System", "-", "任务调度器启动失败，定时调度功能将不可用: %v", err)
 	}
 	defer taskScheduler.Stop()
-
-	// 应用关闭时停止 Trap 监听器、轮询分发器、轮询调度器和数据清理任务
-	defer trapListener.Stop()
-	defer dispatcher.Stop()
-	defer pollerScheduler.Stop()
-	defer dataCleaner.Stop()
 
 	logger.Info("System", "-", "正在启动 Wails 应用主循环...")
 	if err := app.Run(); err != nil {

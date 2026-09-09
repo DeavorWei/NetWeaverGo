@@ -4,7 +4,7 @@
 
 **面向网络工程师的桌面级网络自动化编排与配置集散引擎**
 
-基于 Go + Vue 3 + Wails v3 构建，支持批量管理网络设备（交换机/路由器），提供大规模并发命令执行、配置备份、配置生成、拓扑发现、SNMP 监控以及智能异常干预功能。
+基于 Go + Vue 3 + Wails v3 构建，支持批量管理网络设备（交换机/路由器），提供大规模并发命令执行、配置备份、配置生成、拓扑发现、SNMP 即时查询以及智能异常干预功能。
 
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
 [![Vue.js](https://img.shields.io/badge/Vue.js-3-4FC08D?style=flat-square&logo=vue.js&logoColor=white)](https://vuejs.org/)
@@ -22,7 +22,7 @@
 
 ## 📖 项目简介
 
-**NetWeaverGo** 是一款基于 Go + Vue 3 开发的桌面级网络自动化编排与配置集散引擎，专为网络工程师设计。采用 Wails v3 框架实现前后端一体化桌面应用，支持批量管理网络设备（交换机/路由器），提供大规模并发命令执行、配置备份、配置生成、拓扑发现、SNMP 监控以及智能异常干预功能。
+**NetWeaverGo** 是一款基于 Go + Vue 3 开发的桌面级网络自动化编排与配置集散引擎，专为网络工程师设计。采用 Wails v3 框架实现前后端一体化桌面应用，支持批量管理网络设备（交换机/路由器），提供大规模并发命令执行、配置备份、配置生成、拓扑发现、SNMP 即时查询以及智能异常干预功能。
 
 ### 🎯 目标用户
 
@@ -35,7 +35,7 @@
 - **高效并发** — Worker Pool 模型 + 令牌桶限流，轻松管理数百台设备
 - **智能交互** — 全自动终端交互、智能翻页检测、提示符识别
 - **可视化拓扑** — 基于 LLDP/ARP/FDB 多源融合的网络拓扑自动构建与展示
-- **SNMP 监控** — 完整的 MIB 管理、轮询引擎、Trap 监听功能
+- **SNMP 即时查询** — 设备上线确认、资产信息采集（型号/版本），支持 v1/v2c/v3
 - **跨平台** — 基于 Wails v3 的现代化桌面应用
 
 ---
@@ -98,11 +98,11 @@
 <tr>
 <td>
 
-### 📡 SNMP 功能栈
-- MIB 管理：导入/删除/LRU 缓存/OID 树构建（嵌入 12 个核心 MIB 文件）
-- 轮询引擎：v1/v2c/v3 GET/WALK，指数退避重试，Cron 调度
-- Trap 监听：UDP v1/v2c/v3，过滤引擎（OID 前缀/CIDR/正则匹配）
-- 凭据加密：AES-256-GCM
+### 📡 SNMP 即时查询
+- 即时采集：v1/v2c/v3 GET / WALK，随查随走，无后台常驻任务
+- 设备上线确认：批量并发采集 sysDescr / sysUpTime / sysName
+- 资产信息核对：比 CLI 解析更可靠的型号与版本来源
+- 凭据管理：已保存凭据 + 一次性临时凭据，敏感字段 AES-256-GCM 加密
 
 </td>
 <td>
@@ -146,13 +146,11 @@
 | [Go](https://go.dev/) | 1.26 | 主要编程语言 |
 | [Wails](https://wails.io/) | v3 (alpha.95) | 桌面应用框架（Go ↔ WebView 桥接） |
 | [GORM](https://gorm.io/) | v1.31.1 | ORM 框架 |
-| [SQLite (glebarez/sqlite)](https://www.sqlite.org/) | v1.11.0 | 嵌入式数据库（主库 + SNMP 独立库） |
+| [SQLite (glebarez/sqlite)](https://www.sqlite.org/) | v1.11.0 | 嵌入式数据库（主库 + SNMP 凭据库） |
 | [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) | v0.52.0 | SSH/SFTP 客户端实现 |
 | [github.com/pkg/sftp](https://github.com/pkg/sftp) | v1.13.10 | SFTP 文件传输 |
 | [github.com/gosnmp/gosnmp](https://github.com/gosnmp/gosnmp) | v1.43.2 | SNMP v1/v2c/v3 协议 |
-| [github.com/golangsnmp/gomib](https://github.com/golangsnmp/gomib) | v0.11.0 | MIB 文件解析 |
-| [github.com/hashicorp/golang-lru/v2](https://github.com/hashicorp/golang-lru) | v2.0.7 | LRU 缓存 |
-| [github.com/robfig/cron/v3](https://github.com/robfig/cron) | v3.0.1 | Cron 调度器（SNMP 轮询） |
+| [github.com/robfig/cron/v3](https://github.com/robfig/cron) | v3.0.1 | Cron 调度器（任务定时执行） |
 | [github.com/fclairamb/ftpserverlib](https://github.com/fclairamb/ftpserverlib) | v0.30.0 | FTP 服务器 |
 | [github.com/pin/tftp/v3](https://github.com/pin/tftp) | v3.2.0 | TFTP 服务器 |
 | [github.com/spf13/afero](https://github.com/spf13/afero) | v1.15.0 | 文件系统抽象 |
@@ -262,8 +260,7 @@ netWeaverGoData/
 ├── execution/              # 执行报告和实时日志
 ├── backup/configs/         # 配置备份
 ├── ssh/known_hosts         # SSH 主机密钥
-├── topology/               # 拓扑数据（原始/导出/规划导入）
-└── snmp/mibs/              # MIB 文件存储
+└── topology/               # 拓扑数据（原始/导出/规划导入）
 ```
 
 ---
@@ -288,7 +285,7 @@ NetWeaverGo/
 │   ├── plancompare/        # 配置比对服务
 │   ├── report/             # 执行报告系统（摘要/详细/原始/流水日志）
 │   ├── repository/         # 数据访问层（Repository 模式）
-│   ├── snmp/               # SNMP 功能栈（MIB/轮询/Trap/加密）
+│   ├── snmp/               # SNMP 即时查询（GET/WALK/凭据加密）
 │   ├── sshutil/            # SSH 客户端封装
 │   ├── sftputil/           # SFTP 文件传输
 │   ├── taskexec/           # 统一任务执行运行时（核心引擎）
@@ -298,9 +295,9 @@ NetWeaverGo/
 │   └── utils/              # 工具函数
 ├── frontend/               # Vue 3 前端
 │   └── src/
-│       ├── components/     # 组件（common/device/task/topology/forge/snmp）
-│       ├── composables/    # 组合式函数（12 个）
-│       ├── views/          # 页面视图（16 个路由）
+│       ├── components/     # 组件（common/device/task/topology/forge/tools）
+│       ├── composables/    # 组合式函数（9 个）
+│       ├── views/          # 页面视图（14 个路由）
 │       ├── stores/         # Pinia 状态管理
 │       ├── router/         # Vue Router 路由
 │       ├── styles/         # 分层 CSS（tokens/themes/utilities）
@@ -308,7 +305,7 @@ NetWeaverGo/
 ├── docs/                   # 项目文档
 │   ├── 项目架构说明书.md
 │   ├── 未来功能扩展路线图.md
-│   └── 功能模块说明书/     # 16 份功能模块文档
+│   └── 功能模块说明书/     # 13 份功能模块文档
 ├── build/                  # 构建配置
 ├── testdata/               # 测试数据
 ├── config.yml              # Wails 应用配置
@@ -369,8 +366,8 @@ graph TB
 | 设计要点 | 说明 |
 |----------|------|
 | **前后端通信** | Wails 桥接，前端通过自动生成的 TypeScript 绑定直接调用 Go 方法；Go 通过 Wails Events 向前端推送实时事件 |
-| **双事件系统** | TaskEvent EventBus（任务执行事件）+ SNMP EventNotifier（SNMP 事件） |
-| **双数据库** | 主库（任务、设备、设置等）+ SNMP 独立数据库 |
+| **事件系统** | TaskEvent EventBus（任务执行事件），通过 Wails Events 向前端推送实时状态 |
+| **双数据库** | 主库（任务、设备、设置等）+ SNMP 凭据库（仅存储 SNMP 查询凭据） |
 | **连接协议抽象** | `connutil.DeviceConnection` 统一接口抽象 SSH/Telnet |
 | **日志系统** | 多级日志（Error/Warn/Info/Debug/Verbose）+ 日志脱敏 + 前端日志写入 |
 | **安全设计** | SSH 主机密钥校验、SNMP 凭据 AES-256-GCM 加密、日志脱敏 |
@@ -383,7 +380,7 @@ graph TB
 
 - [`docs/项目架构说明书.md`](docs/项目架构说明书.md) — 整体架构设计说明
 - [`docs/未来功能扩展路线图.md`](docs/未来功能扩展路线图.md) — 功能路线图
-- [`docs/功能模块说明书/`](docs/功能模块说明书/) — 16 份功能模块详细文档，涵盖设备管理、任务执行、拓扑发现、SNMP、配置生成等所有模块
+- [`docs/功能模块说明书/`](docs/功能模块说明书/) — 13 份功能模块详细文档，涵盖设备管理、任务执行、拓扑发现、SNMP 查询、配置生成等所有模块
 
 ---
 

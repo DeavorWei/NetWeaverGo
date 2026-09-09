@@ -1369,6 +1369,9 @@ function submit() {
     status: "",
     createdAt: props.task.createdAt,
     updatedAt: props.task.updatedAt,
+    scheduleEnabled: props.task.scheduleEnabled,
+    cronExpression: props.task.cronExpression,
+    scheduleType: props.task.scheduleType,
   };
   emit("save", payload);
 }
