@@ -13,7 +13,7 @@ SNMP 查询模块面向**交付现场的一次性采集场景**：设备上架�
   → frontend/src/services/snmpApi.ts
   → Wails 绑定 internal/ui/snmp_query_service.go (SNMPQueryService)
       → internal/snmp.Querier.Get / Walk / GetDeviceInfo / BatchGetDeviceInfo
-          → createSNMPClient（v1/v2c/v3）
+          → Querier.connect() 分发 connectV1V2 / connectV3
           → gosnmp.Get / Walk
       → internal/repository.CredentialRepository（凭据 CRUD，凭据库 snmp.db）
 ```
@@ -92,7 +92,7 @@ type BatchQueryResult struct {
   → SNMPQueryService.Query(req)
       → resolveCredential()     凭据 ID 优先，其次临时凭据，都没有则为 nil（默认 public）
       → context.WithTimeout(30s)
-      → Querier.connect()       getCommunity 解密 → createV1V2Client / createV3Client
+      → Querier.connect()       getCommunity 解密 → connectV1V2 / connectV3
       → 按 operation 分派：
             device_info → GetDeviceInfo()
             get         → Get()

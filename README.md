@@ -154,8 +154,9 @@
 | [github.com/fclairamb/ftpserverlib](https://github.com/fclairamb/ftpserverlib) | v0.30.0 | FTP 服务器 |
 | [github.com/pin/tftp/v3](https://github.com/pin/tftp) | v3.2.0 | TFTP 服务器 |
 | [github.com/spf13/afero](https://github.com/spf13/afero) | v1.15.0 | 文件系统抽象 |
-| [golang.org/x/sync](https://pkg.go.dev/golang.org/x/sync) | v0.20.0 | 并发控制 |
+| [golang.org/x/net](https://pkg.go.dev/golang.org/x/net) | v0.55.0 | 网络协议基础库 |
 | [golang.org/x/time](https://pkg.go.dev/golang.org/x/time) | v0.15.0 | 令牌桶限流 |
+| [github.com/google/uuid](https://github.com/google/uuid) | v1.6.0 | UUID 生成 |
 
 ### 前端
 
@@ -291,21 +292,21 @@ NetWeaverGo/
 │   ├── taskexec/           # 统一任务执行运行时（核心引擎）
 │   ├── telnetutil/         # Telnet 协议客户端
 │   ├── terminal/           # 终端仿真（ANSI 解析、行缓冲、重放器）
-│   ├── ui/                 # UI 服务层（22+ Wails 服务）
+│   ├── ui/                 # UI 服务层（16 个 Wails 服务）
 │   └── utils/              # 工具函数
 ├── frontend/               # Vue 3 前端
 │   └── src/
-│       ├── components/     # 组件（common/device/task/topology/forge/tools）
+│       ├── components/     # 组件（common/device/task/topology/forge/network/tools/settings）
 │       ├── composables/    # 组合式函数（9 个）
-│       ├── views/          # 页面视图（14 个路由）
+│       ├── views/          # 页面视图（15 个路由视图）
 │       ├── stores/         # Pinia 状态管理
+│       ├── services/       # API 服务层（api.ts / snmpApi.ts）
 │       ├── router/         # Vue Router 路由
 │       ├── styles/         # 分层 CSS（tokens/themes/utilities）
 │       └── bindings/       # Wails 自动生成的 TypeScript 绑定
 ├── docs/                   # 项目文档
 │   ├── 项目架构说明书.md
-│   ├── 未来功能扩展路线图.md
-│   └── 功能模块说明书/     # 13 份功能模块文档
+│   └── 功能模块说明书/     # 15 份功能模块文档
 ├── build/                  # 构建配置
 ├── testdata/               # 测试数据
 ├── config.yml              # Wails 应用配置
@@ -379,8 +380,7 @@ graph TB
 项目提供详细的文档体系：
 
 - [`docs/项目架构说明书.md`](docs/项目架构说明书.md) — 整体架构设计说明
-- [`docs/未来功能扩展路线图.md`](docs/未来功能扩展路线图.md) — 功能路线图
-- [`docs/功能模块说明书/`](docs/功能模块说明书/) — 13 份功能模块详细文档，涵盖设备管理、任务执行、拓扑发现、SNMP 查询、配置生成等所有模块
+- [`docs/功能模块说明书/`](docs/功能模块说明书/) — 15 份功能模块详细文档，涵盖设备管理、任务执行、拓扑发现、SNMP 查询、配置生成、拓扑命令配置等所有模块
 
 ---
 
