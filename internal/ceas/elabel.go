@@ -15,8 +15,8 @@ type blockHandler struct {
 }
 
 var (
-	// 块切分正则：匹配所有已知块头标志
-	reBlockSplit = regexp.MustCompile(`(?m)^\[(?:BackPlane|Slot|Unit|FanSlot|FanFrame|FAN|PowerFrame|PWR|Main_Board|Mother_Board|Daughter_Board|OfcCard|Port)[^\]\r\n]*\]`)
+	// 块切分正则：匹配所有已知块头标志（支持 Sub_Board 与 Card）
+	reBlockSplit = regexp.MustCompile(`(?m)^\[(?:BackPlane|Slot|Unit|FanSlot|FanFrame|FAN|PowerFrame|PWR|Main_Board|Mother_Board|Daughter_Board|Sub_Board|OfcCard|Port|Card)[^\]\r\n]*\]`)
 
 	// 块头有序识别总表（严格按优先级排序，共 10 类）
 	blockHandlers = []blockHandler{
@@ -30,14 +30,14 @@ var (
 		{nodeType: "mainboard", regex: regexp.MustCompile(`(?i)^\[Main_Board[^\d\r\n]*(\d*)\]`), level: 3},
 		// 5. motherboard (Mother_Board)
 		{nodeType: "motherboard", regex: regexp.MustCompile(`(?i)^\[Mother_Board[^\d\r\n]*(\d*)\]`), level: 3},
-		// 6. daughterboard (Daughter_Board_X)
-		{nodeType: "daughterboard", regex: regexp.MustCompile(`(?i)^\[(Daughter_Board_[^\]]+)\]`), level: 3},
+		// 6. daughterboard (Daughter_Board_X, Sub_Board_X)
+		{nodeType: "daughterboard", regex: regexp.MustCompile(`(?i)^\[((?:Daughter_Board|Sub_Board)_[^\]]+)\]`), level: 3},
 		// 7. ofccard (OfcCard_X)
 		{nodeType: "ofccard", regex: regexp.MustCompile(`(?i)^\[(OfcCard_[^\]]+)\]`), level: 3},
 		// 8. port (Port_X)
 		{nodeType: "port", regex: regexp.MustCompile(`(?i)^\[(Port_\S+)\]`), level: 3},
-		// 9. card (Slot_X Card_Y, Card_X)
-		{nodeType: "card", regex: regexp.MustCompile(`(?i)^\[Slot_?\d\S*\s*Card_?(?:\S*\d+/)?(\d+)\]`), level: 3},
+		// 9. card (Slot_X Card_Y, Card_X) —— 提取槽号与卡号两个捕获组
+		{nodeType: "card", regex: regexp.MustCompile(`(?i)^\[(?:Slot_?(\d+)\S*\s*)?Card_?(?:\S*\d+/)?(\d+)\]`), level: 3},
 		// 10. slot (Slot_X, Unit_X)
 		{nodeType: "slot", regex: regexp.MustCompile(`(?i)^\[(?:Slot_|Unit_)(\S+)\]`), level: 2},
 	}
@@ -66,7 +66,7 @@ func SplitBlocks(rawText string) []RawBlock {
 		line := scanner.Text()
 		trimmed := strings.TrimSpace(line)
 
-		if reBlockSplit.MatchString(trimmed) {
+		if reBlockSplit.MatchString(trimmed) && !rePropHeader.MatchString(trimmed) {
 			if currentBlock != nil {
 				blocks = append(blocks, *currentBlock)
 			}
@@ -119,6 +119,12 @@ func ParseELabel(rawElabel string) *HardwareTree {
 			continue
 		}
 
+		// 遇到机框重置槽位上下文，避免跨机框污染
+		if nodeType == "frame" {
+			lastSlot = ""
+			lastSlotNode = nil
+		}
+
 		// 归一化 slot
 		if matchedSlot != "" {
 			lastSlot = NormalizeSlot(matchedSlot)
@@ -144,6 +150,8 @@ func ParseELabel(rawElabel string) *HardwareTree {
 				sec := subSections[i]
 				subAttrs := parseAttributes(sec.lines)
 				subName := sec.header
+				subName = strings.TrimSuffix(subName, " Properties")
+				subName = strings.TrimSuffix(subName, " Property")
 				if subName == "" {
 					subName = fmt.Sprintf("Sub_Board_%d", i)
 				}
@@ -253,28 +261,44 @@ type subSection struct {
 
 // splitSubSections 实现 handle_extra_properties，切分多段属性
 func splitSubSections(lines []string) []subSection {
-	var sections []subSection
-	var currentSec *subSection
+	var propIndices []int
+	var propHeaders []string
 
-	for _, line := range lines {
+	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if rePropHeader.MatchString(trimmed) {
-			if currentSec != nil && len(currentSec.lines) > 0 {
-				sections = append(sections, *currentSec)
-			}
-			currentSec = &subSection{
-				header: strings.Trim(trimmed, "[]"),
-				lines:  []string{line},
-			}
-		} else {
-			if currentSec == nil {
-				currentSec = &subSection{lines: []string{}}
-			}
-			currentSec.lines = append(currentSec.lines, line)
+			propIndices = append(propIndices, i)
+			propHeaders = append(propHeaders, strings.Trim(trimmed, "[]"))
 		}
 	}
-	if currentSec != nil && len(currentSec.lines) > 0 {
-		sections = append(sections, *currentSec)
+
+	// 如果属性段只有 0 个或 1 个，直接作为一个整体
+	if len(propIndices) <= 1 {
+		return []subSection{
+			{header: "", lines: lines},
+		}
+	}
+
+	// 如果有 >= 2 个属性段（如 [Board Properties] 和 [Sub_Board_1 Properties]）
+	var sections []subSection
+	for i := 0; i < len(propIndices); i++ {
+		start := propIndices[i]
+		end := len(lines)
+		if i+1 < len(propIndices) {
+			end = propIndices[i+1]
+		}
+		// 对第一个属性段，将块头前置行也包含进去
+		if i == 0 {
+			sections = append(sections, subSection{
+				header: propHeaders[i],
+				lines:  lines[:end],
+			})
+		} else {
+			sections = append(sections, subSection{
+				header: propHeaders[i],
+				lines:  lines[start:end],
+			})
+		}
 	}
 	return sections
 }

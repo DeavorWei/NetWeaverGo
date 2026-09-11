@@ -16,6 +16,7 @@ const Topology = () => import('../views/Topology.vue')
 const PlanCompare = () => import('../views/PlanCompare.vue')
 const SNMPQuery = () => import('../views/SNMP/SNMPQuery.vue')
 const ParseTemplates = () => import('../views/ParseTemplates.vue')
+const HardwareInventory = () => import('../views/HardwareInventory.vue')
 
 const routes = [
   {
@@ -26,6 +27,11 @@ const routes = [
     path: '/devices',
     name: 'Devices',
     component: Devices
+  },
+  {
+    path: '/hardware-inventory',
+    name: 'HardwareInventory',
+    component: HardwareInventory
   },
   {
     path: '/commands',

@@ -87,6 +87,10 @@ func runGUI() {
 	taskExecutionService.Start()
 	logger.Info("System", "-", "统一任务执行服务已启动")
 
+	// 创建 CEAS 硬件清单与批次预警管理服务（P3）
+	hardwareInventoryService := ui.NewHardwareInventoryService(config.DB, taskExecutionService)
+	logger.Info("System", "-", "CEAS 硬件清单与批次预警服务已创建")
+
 	// 创建任务调度服务
 	taskLaunchService := taskexec.NewTaskLaunchService(taskExecutionService)
 	taskScheduler := taskexec.NewTaskScheduler(taskLaunchService, taskExecutionService.GetEventBus(), config.DB)
@@ -165,6 +169,7 @@ func runGUI() {
 			application.NewService(scheduleUIService),      // 任务调度配置服务
 			application.NewService(snmpQueryService),       // SNMP 即时查询服务
 			application.NewService(parseTemplateService),  // 解析模板管理服务（断头路 #3 接通）
+			application.NewService(hardwareInventoryService), // 硬件清单与批次预警服务（P3）
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assetsFS),

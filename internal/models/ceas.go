@@ -21,6 +21,7 @@ type TaskCEASNode struct {
 	Description  string    `json:"description" gorm:"column:description;size:256"`       // 物料描述
 	Manufactured string    `json:"manufactured" gorm:"column:manufactured;size:64"`      // 生产日期
 	VendorName   string    `json:"vendorName" gorm:"column:vendor_name;size:64"`         // 厂商名称
+	BoardType    string    `json:"boardType" gorm:"column:board_type;size:128"`          // 单板/型号类型
 	AttrsJSON    string    `json:"attrsJson" gorm:"column:attrs_json;type:text"`         // 原始提取的所有扩展属性键值对 JSON
 	CreatedAt    time.Time `json:"createdAt" gorm:"column:created_at"`
 }

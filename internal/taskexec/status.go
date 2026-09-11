@@ -223,9 +223,9 @@ const (
 	// ArtifactTypeCEASData CEAS硬件树数据产物
 	ArtifactTypeCEASData ArtifactType = "ceas_data"
 	// ArtifactTypeCEASBaseInfo CEAS基础信息产物
-	ArtifactTypeCEASBaseInfo ArtifactType = "ceas_base_info"
+	ArtifactTypeCEASBaseInfo ArtifactType = "ceas_baseinfo"
 	// ArtifactTypeCEASCmdEcho CEAS原始回显产物
-	ArtifactTypeCEASCmdEcho ArtifactType = "ceas_cmd_echo"
+	ArtifactTypeCEASCmdEcho ArtifactType = "ceas_cmdecho"
 	// ArtifactTypeCEASAlerts CEAS批次预警产物
 	ArtifactTypeCEASAlerts ArtifactType = "ceas_alerts"
 )

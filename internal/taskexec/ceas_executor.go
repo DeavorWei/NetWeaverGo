@@ -201,11 +201,22 @@ func (e *CEASExecutor) executeCEASUnit(ctx RuntimeContext, stageID string, unit 
 	elabelCmd := "display elabel"
 	elabelOutput, err := exec.ExecuteCommandSync(ctx.Context(), elabelCmd, cmdTimeout)
 	if err != nil || strings.Contains(elabelOutput, "Unrecognized command") || strings.Contains(elabelOutput, "Wrong parameter") {
-		// 尝试 fallback: display device elabel
+		// 尝试 fallback 1: display device elabel
 		if fallbackOutput, fallbackErr := exec.ExecuteCommandSync(ctx.Context(), "display device elabel", cmdTimeout); fallbackErr == nil && !strings.Contains(fallbackOutput, "Unrecognized command") {
 			elabelOutput = fallbackOutput
 			elabelCmd = "display device elabel"
 			err = nil
+		} else {
+			// 尝试 fallback 2: 提权至 diagnose 视图执行 (对应 eDeskPro viewname=diagnose)
+			_, _ = exec.ExecuteCommandSync(ctx.Context(), "system-view", 10*time.Second)
+			_, _ = exec.ExecuteCommandSync(ctx.Context(), "diagnose", 10*time.Second)
+			if diagOutput, diagErr := exec.ExecuteCommandSync(ctx.Context(), "display elabel", cmdTimeout); diagErr == nil && !strings.Contains(diagOutput, "Unrecognized command") && len(diagOutput) > 30 {
+				elabelOutput = diagOutput
+				elabelCmd = "diagnose:display elabel"
+				err = nil
+			}
+			_, _ = exec.ExecuteCommandSync(ctx.Context(), "quit", 5*time.Second)
+			_, _ = exec.ExecuteCommandSync(ctx.Context(), "return", 5*time.Second)
 		}
 	}
 	if err != nil {
@@ -238,17 +249,48 @@ func (e *CEASExecutor) executeCEASUnit(ctx RuntimeContext, stageID string, unit 
 	tree := ceas.ParseELabel(elabelOutput)
 	tree.DeviceIP = deviceIP
 	esn := ceas.ExtractESN(device.Vendor, device.Model, elabelOutput, esnOutput)
-	tree.ChassisESN = esn
+	if esn != "" {
+		tree.ChassisESN = esn
+	} else {
+		esn = tree.ChassisESN
+	}
 
-	// 5. 写入 task_ceas_nodes 数据库表
+	// 4.1 产物持久化：ceas_data (硬件树 JSON) 与 ceas_baseinfo (设备基础信息)
+	treeJSON, errTree := json.Marshal(tree)
+	if errTree == nil {
+		dataPath := e.pathManager.GetCEASRawFilePath(taskID, deviceIP, "ceas_data")
+		if err := os.MkdirAll(filepath.Dir(dataPath), 0755); err == nil {
+			_ = os.WriteFile(dataPath, treeJSON, 0644)
+		}
+		_ = e.createArtifactWithResult(taskID, stageID, unit.ID, string(ArtifactTypeCEASData), fmt.Sprintf("%s:ceas_data", deviceIP), dataPath)
+	}
+
+	baseInfo := map[string]interface{}{
+		"device_ip":    deviceIP,
+		"vendor":       device.Vendor,
+		"model":        device.Model,
+		"model_series": device.ModelSeries,
+		"esn":          esn,
+		"chassis_esn":  tree.ChassisESN,
+		"node_count":   len(tree.AllNodes),
+		"collected_at": time.Now().Format(time.RFC3339),
+	}
+	baseInfoJSON, errBase := json.Marshal(baseInfo)
+	if errBase == nil {
+		baseInfoPath := e.pathManager.GetCEASRawFilePath(taskID, deviceIP, "ceas_baseinfo")
+		if err := os.MkdirAll(filepath.Dir(baseInfoPath), 0755); err == nil {
+			_ = os.WriteFile(baseInfoPath, baseInfoJSON, 0644)
+		}
+		_ = e.createArtifactWithResult(taskID, stageID, unit.ID, string(ArtifactTypeCEASBaseInfo), fmt.Sprintf("%s:ceas_baseinfo", deviceIP), baseInfoPath)
+	}
+
+	// 5. 写入 task_ceas_nodes 数据库表（事务隔离，按设备IP清理历史，避免多轮采集节点膨胀）
 	if e.db != nil {
-		e.db.Where("task_id = ? AND device_ip = ?", taskID, deviceIP).Delete(&models.TaskCEASNode{})
-
 		dbNodes := make([]models.TaskCEASNode, 0, len(tree.AllNodes))
 		for _, n := range tree.AllNodes {
 			attrsJSON, _ := json.Marshal(n.Attrs)
 			dbNodes = append(dbNodes, models.TaskCEASNode{
-				TaskID:       taskID,
+				TaskRunID:    taskID,
 				DeviceIP:     deviceIP,
 				NodeID:       n.ID,
 				ParentID:     n.ParentID,
@@ -266,10 +308,20 @@ func (e *CEASExecutor) executeCEASUnit(ctx RuntimeContext, stageID string, unit 
 				AttrsJSON:    string(attrsJSON),
 			})
 		}
-		if len(dbNodes) > 0 {
-			if err := e.db.CreateInBatches(dbNodes, 100).Error; err != nil {
-				logger.Error("CEASExecutor", taskID, "写入 TaskCEASNode 数据库失败: %v", err)
+
+		errTx := e.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("device_ip = ?", deviceIP).Delete(&models.TaskCEASNode{}).Error; err != nil {
+				return err
 			}
+			if len(dbNodes) > 0 {
+				if err := tx.CreateInBatches(dbNodes, 100).Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if errTx != nil {
+			logger.Error("CEASExecutor", taskID, "写入 TaskCEASNode 数据库事务失败: %v", errTx)
 		}
 
 		// 回写资产与运行设备 ESN
