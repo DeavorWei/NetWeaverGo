@@ -88,6 +88,10 @@ func (r *GormRepository) GetRun(ctx context.Context, runID string) (*TaskRun, er
 // UpdateRun 更新Run
 func (r *GormRepository) UpdateRun(ctx context.Context, runID string, patch *RunPatch) error {
 	updates := make(map[string]interface{})
+	// 运行指标：必须显式映射到字段字典，否则 GORM 会静默忽略（方案 §10.2 闭环要求）
+	if patch.MetricsJSON != nil {
+		updates["metrics_json"] = *patch.MetricsJSON
+	}
 	if patch.Status != nil {
 		updates["status"] = *patch.Status
 	}

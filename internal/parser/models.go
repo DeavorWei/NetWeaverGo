@@ -157,6 +157,19 @@ const (
 	EngineModeTreeOnly   EngineMode = "tree_only"   // 强制优先使用 tree 引擎
 )
 
+// ParseOutcome 单次解析的元信息（方案 §10.2：供持有 RunID 的调用点按运行维度打点）
+type ParseOutcome struct {
+	Engine     string `json:"engine"`     // 实际生效的引擎：regex / aggregate / tree
+	Fallback   bool   `json:"fallback"`   // 是否走了 legacy 应急降级
+	DurationMs int64  `json:"durationMs"` // 解析耗时（毫秒）
+}
+
+// DetailedParser 可选接口：在解析结果之外返回元信息。
+// taskexec 调用点通过类型断言判断是否支持，未实现时退化为仅记录成功/失败。
+type DetailedParser interface {
+	ParseDetail(commandKey, rawText string) ([]map[string]string, ParseOutcome, error)
+}
+
 // ParserMetrics 解析器运行指标（方案 §10.2）
 type ParserMetrics struct {
 	TotalParsed     uint64 `json:"totalParsed"`

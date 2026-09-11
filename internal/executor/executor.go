@@ -40,6 +40,7 @@ type ExecutorOptions struct {
 	DeviceProfile     *config.DeviceProfile
 	Protocol          string                    // 连接协议: "ssh"（默认）或 "telnet"
 	ConnectionFactory connutil.ConnectionFactory // 可选的连接工厂，nil 则使用默认工厂
+	RunID             string                    // 所属运行 ID（可观测性按运行维度打点用）
 }
 
 // DeviceExecutor 封装特定设备的连接数据流及命令步进下发生命周期
@@ -69,6 +70,9 @@ type DeviceExecutor struct {
 
 	// vendor 设备厂商（来自 ExecutorOptions，作为视图反解 vendor 的兜底来源）
 	vendor string
+
+	// runID 所属运行 ID，用于按运行维度上报指标（方案 §10.2）
+	runID string
 
 	// Terminal Replayer - 实验性集成
 	// 用于将 SSH 字节流正确转换为规范化逻辑文本
@@ -115,6 +119,7 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 		Password:          pass,
 		Protocol:          opts.Protocol,
 		vendor:            strings.TrimSpace(opts.Vendor),
+		runID:             strings.TrimSpace(opts.RunID),
 		Matcher:           streamMatcher,
 		connectionFactory: factory,
 		EventBus:          opts.EventBus,

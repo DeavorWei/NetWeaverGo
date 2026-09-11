@@ -14,6 +14,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/metrics"
 	"github.com/NetWeaverGo/core/internal/report"
 )
 
@@ -536,6 +537,9 @@ func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *Tas
 	finalStatus := m.calculateFinalStatus(runtimeCtx, run.ID)
 	finishRunWithStatus(handler, runtimeCtx, finalStatus, "写入运行终态")
 
+	// 运行指标聚合落库（方案 §10.2）：终态写入后、结束事件前完成
+	m.persistRunMetrics(runtimeCtx, run.ID)
+
 	// 终态时强制刷新并发送全量快照，确保前端状态一致性
 	m.emitTerminalSnapshot(runtimeCtx, finalStatus)
 
@@ -548,7 +552,26 @@ func (m *RuntimeManager) executePlan(runtimeCtx *defaultRuntimeContext, run *Tas
 	emitProjectedRunEvent(runtimeCtx, EventTypeRunFinished, EventLevelInfo, fmt.Sprintf("任务完成，状态: %s", finalStatus))
 }
 
+// persistRunMetrics 将本次运行的指标快照写入 task_runs.metrics_json（方案 §10.2）
+func (m *RuntimeManager) persistRunMetrics(runtimeCtx *defaultRuntimeContext, runID string) {
+	if runtimeCtx == nil {
+		return
+	}
+	snapshot := metrics.Default.Snapshot(runID)
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		logger.Warn("TaskExec", runID, "序列化运行指标失败: %v", err)
+		return
+	}
+	metricsText := string(data)
+	handler := NewErrorHandler(runID)
+	handler.UpdateRunBestEffort(runtimeCtx, &RunPatch{MetricsJSON: &metricsText}, "写入运行指标")
+	logger.Info("TaskExec", runID, "运行指标: %s", metricsText)
+}
+
 func (m *RuntimeManager) finalizeRunResources(runID string, fallbackCtx *defaultRuntimeContext) {
+	// 释放本次运行的指标分桶，防止内存泄漏（方案 §10.2）
+	metrics.Default.Release(runID)
 	var runtimeCtx *defaultRuntimeContext
 	var store *report.ExecutionLogStore
 

@@ -48,9 +48,16 @@ func (p *CompositeParser) SetMetricsRecorder(mr MetricsRecorder) {
 	p.metricsRecorder = mr
 }
 
-// Parse 实现 CliParser 接口
-// 严格按照 EngineMode (auto/legacy_only/tree_only) 执行路由分派，并自动记录指标
+// Parse 实现 CliParser 接口，等价于丢弃元信息的 ParseDetail
 func (p *CompositeParser) Parse(commandKey string, rawText string) ([]map[string]string, error) {
+	rows, _, err := p.ParseDetail(commandKey, rawText)
+	return rows, err
+}
+
+// ParseDetail 在 Parse 基础上返回解析元信息（引擎、是否降级、耗时）。
+// 供 taskexec 在持有 RunID 的调用点按运行维度打点（方案 §10.2），
+// 避免在 ParserManager 全局单例上取区间差值导致多任务指标串扰。
+func (p *CompositeParser) ParseDetail(commandKey, rawText string) ([]map[string]string, ParseOutcome, error) {
 	start := time.Now()
 	var (
 		results    []map[string]string
@@ -67,7 +74,14 @@ func (p *CompositeParser) Parse(commandKey string, rawText string) ([]map[string
 	tpl, ok := p.templates[commandKey]
 	if !ok {
 		err = fmt.Errorf("未找到模板: vendor=%s commandKey=%s: %w", p.vendor, commandKey, ErrTemplateNotFound)
-		return nil, err
+		return nil, ParseOutcome{}, err
+	}
+	buildOutcome := func() ParseOutcome {
+		return ParseOutcome{
+			Engine:     string(tpl.Engine),
+			Fallback:   isFallback,
+			DurationMs: time.Since(start).Milliseconds(),
+		}
 	}
 
 	mode := EngineModeAuto
@@ -87,7 +101,7 @@ func (p *CompositeParser) Parse(commandKey string, rawText string) ([]map[string
 				results, err = p.aggregate.ParseWithTemplate(tpl, rawText)
 			} else {
 				err = fmt.Errorf("EngineMode 为 legacy_only，但模板 %s 仅提供 tree 引擎且无 legacy 降级规则: %w", commandKey, ErrUnsupportedEngine)
-				return nil, err
+				return nil, buildOutcome(), err
 			}
 		} else if tpl.Engine == EngineRegex {
 			results, err = p.regex.ParseWithTemplate(tpl, rawText)
@@ -95,7 +109,7 @@ func (p *CompositeParser) Parse(commandKey string, rawText string) ([]map[string
 			results, err = p.aggregate.ParseWithTemplate(tpl, rawText)
 		} else {
 			err = fmt.Errorf("不支持的模板引擎: %s: %w", tpl.Engine, ErrUnsupportedEngine)
-			return nil, err
+			return nil, buildOutcome(), err
 		}
 
 	case EngineModeTreeOnly:
@@ -104,7 +118,7 @@ func (p *CompositeParser) Parse(commandKey string, rawText string) ([]map[string
 			results, err = p.tree.ParseWithTemplate(tpl, rawText)
 		} else {
 			err = fmt.Errorf("EngineMode 为 tree_only，但模板 %s 的声明引擎为 %s: %w", commandKey, tpl.Engine, ErrUnsupportedEngine)
-			return nil, err
+			return nil, buildOutcome(), err
 		}
 
 	default: // EngineModeAuto 默认自适应模式
@@ -135,11 +149,11 @@ func (p *CompositeParser) Parse(commandKey string, rawText string) ([]map[string
 			}
 		default:
 			err = fmt.Errorf("不支持的模板引擎: %s: %w", tpl.Engine, ErrUnsupportedEngine)
-			return nil, err
+			return nil, buildOutcome(), err
 		}
 	}
 
-	return results, err
+	return results, buildOutcome(), err
 }
 
 // GetTemplate 获取指定命令的已编译模板

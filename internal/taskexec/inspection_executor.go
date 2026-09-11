@@ -13,6 +13,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/inspection"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/metrics"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/NetWeaverGo/core/internal/repository"
@@ -160,6 +161,7 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 		Vendor:     device.Vendor,
 		Protocol:   device.Protocol,
 		LogSession: logSession,
+		RunID:      ctx.RunID(),
 	}
 	exec := executor.NewDeviceExecutor(
 		device.IP,
@@ -267,7 +269,7 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 			}
 			cliParser, pErr := e.parserProvider.GetParserForDevice(vendor, device.Model, device.Version)
 			if pErr == nil && cliParser != nil {
-				if rows, parseErr := cliParser.Parse(cmd, echo); parseErr == nil && len(rows) > 0 {
+				if rows, parseErr := parseWithMetrics(taskID, cliParser, cmd, echo); parseErr == nil && len(rows) > 0 {
 					parsedRows := make([]map[string]interface{}, len(rows))
 					for idx, r := range rows {
 						m := make(map[string]interface{}, len(r))
@@ -298,6 +300,8 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 		}
 		evalRes := inspection.EvaluateItem(input)
 		results = append(results, evalRes)
+		// 巡检结果码分布（方案 §10.2）
+		metrics.Default.LabelInc(taskID, "inspection.result_code", string(evalRes.Status))
 
 		switch evalRes.Status {
 		case string(inspection.ResultPass):

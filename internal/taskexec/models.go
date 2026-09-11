@@ -88,6 +88,7 @@ type TaskRun struct {
 	LastRunSeq       uint64         `gorm:"default:0" json:"lastRunSeq"`
 	StartedAt        *time.Time     `json:"startedAt"`
 	FinishedAt       *time.Time     `json:"finishedAt"`
+	MetricsJSON      string         `gorm:"type:text" json:"metricsJson"` // 运行指标快照（方案 §10.2，可空）
 	CreatedAt        time.Time      `json:"createdAt"`
 	UpdatedAt        time.Time      `json:"updatedAt"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
@@ -200,6 +201,7 @@ type RunPatch struct {
 	LastRunSeq   *uint64    `json:"lastRunSeq,omitempty"`
 	StartedAt    *time.Time `json:"startedAt,omitempty"`
 	FinishedAt   *time.Time `json:"finishedAt,omitempty"`
+	MetricsJSON  *string    `json:"metricsJson,omitempty"`
 }
 
 // StagePatch Stage更新补丁

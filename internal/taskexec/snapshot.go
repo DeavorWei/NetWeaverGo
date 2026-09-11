@@ -21,6 +21,7 @@ type ExecutionSnapshot struct {
 	FinishedAt           *time.Time        `json:"finishedAt"`
 	Events               []EventSnapshot   `json:"events"` // 最近事件
 	LastSessionSeqByUnit map[string]uint64 `json:"lastSessionSeqByUnit,omitempty"`
+	MetricsJSON          string            `json:"metricsJson,omitempty"` // 本次运行指标快照（方案 §10.2）
 }
 
 // StageSnapshot Stage快照
@@ -96,6 +97,7 @@ type SnapshotDeltaOp struct {
 	Progress     *int       `json:"progress,omitempty"`
 	StartedAt    *time.Time `json:"startedAt,omitempty"`
 	FinishedAt   *time.Time `json:"finishedAt,omitempty"`
+	MetricsJSON  *string    `json:"metricsJson,omitempty"`
 
 	// stage/unit/event
 	Stage *StageSnapshot `json:"stage,omitempty"`

@@ -226,6 +226,7 @@ func identifyHuawei(verText, patchText, devText string) (*Identity, error) {
 		if m := fwModelRe.FindStringSubmatch(searchTarget); len(m) > 1 {
 			id.DetailType = m[1]
 			id.Model = handleFinalModel(m[1])
+			id.Handler = "HuaweiFirewallPriority"
 			id.Evidence = append(id.Evidence, fmt.Sprintf("从安全特征提取款型: %s", id.Model))
 		}
 	}
@@ -237,6 +238,7 @@ func identifyHuawei(verText, patchText, devText string) (*Identity, error) {
 				model, detail := handler.extract(m, verText)
 				id.Model = handleFinalModel(model)
 				id.DetailType = detail
+				id.Handler = handler.name
 				id.Evidence = append(id.Evidence, fmt.Sprintf("命中 _REG2HANDLER: %s (pattern=%s)", handler.name, handler.pattern.String()))
 				break
 			}
@@ -250,6 +252,7 @@ func identifyHuawei(verText, patchText, devText string) (*Identity, error) {
 				rawFound := strings.TrimSpace(m[1])
 				id.DetailType = rawFound
 				id.Model = handleFinalModel(rawFound)
+				id.Handler = "HuaweiElseFallback"
 				id.Evidence = append(id.Evidence, fmt.Sprintf("命中 handle_else: %s", rawFound))
 				break
 			}

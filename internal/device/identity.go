@@ -17,6 +17,7 @@ type Identity struct {
 	Patch      string            `json:"patch,omitempty"`      // 补丁版本 (PATCH_VERSION: 如 V200R019SPH005)
 	VRBD       string            `json:"vrbd,omitempty"`       // V/R/B/D 版本格式 (DEV_VRBD: 如 V200R019B010)
 	Series     string            `json:"series"`               // 归一化系列 (SERIES: 如 S5700, CE6800)
+	Handler    string            `json:"handler,omitempty"`    // 命中的形态处理器名（可观测性 device.handler 指标来源）
 	SysName    string            `json:"sysName,omitempty"`    // 主机名/设备名
 	Evidence   []string          `json:"evidence,omitempty"`   // 命中的判定证据（支持可解释与审计）
 	Raws       map[string]string `json:"-"`                    // 原始输入缓存，供增量多命令合并判定

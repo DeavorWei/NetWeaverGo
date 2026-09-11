@@ -25,6 +25,7 @@
     "version": "V200R019C00SPC500",
     "vrbd": "V200R019C00SPC500",
     "series": "AC6000",
+    "handler": "HuaweiElseFallback",
     "evidence": [
       "命中 handle_else: AC6005-8"
     ]
@@ -36,6 +37,7 @@
     "version": "V200R019C00SPC500",
     "vrbd": "V200R019C00SPC500",
     "series": "AirEngine9700",
+    "handler": "HuaweiElseFallback",
     "evidence": [
       "命中 handle_else: AirEngine9700-M"
     ]
@@ -47,6 +49,7 @@
     "version": "V300R019C11SPC200",
     "vrbd": "V300R019C11SPC200",
     "series": "AR6000",
+    "handler": "VRP-R-AR-SRG",
     "evidence": [
       "命中 _REG2HANDLER: VRP-R-AR-SRG (pattern=(?mi)VRP\\s+\\(R\\)\\s+software,\\s+Version\\s+\\d\\.\\d+\\s*\\((SRG|AR|NE16EX)(\\S*)\\s+)"
     ]
@@ -58,6 +61,7 @@
     "version": "V200R005C20SPC800",
     "vrbd": "V200R005C20SPC800",
     "series": "CE16800",
+    "handler": "HuaweiElseFallback",
     "evidence": [
       "命中 handle_else: CE16804"
     ]
@@ -69,6 +73,7 @@
     "version": "V200R005C10SPC800",
     "vrbd": "V200R005C10SPC800",
     "series": "CE6800",
+    "handler": "HuaweiElseFallback",
     "evidence": [
       "命中 handle_else: CE6866-48S8CQ-EI"
     ]
@@ -80,6 +85,7 @@
     "version": "V800R011C00SPC600",
     "vrbd": "V800R011C00SPC600",
     "series": "NE40E",
+    "handler": "NE40E/CX600",
     "evidence": [
       "命中 _REG2HANDLER: NE40E/CX600 (pattern=(?mi)\\(*\\((NE40E\u002680E|NE40E|NE80E|CX600|NE20[E]|NE05E|CX66\\S*)(?:-[A-Za-z0-9]+)?\\)?\\s+(\\S+)\\))"
     ]
@@ -92,6 +98,7 @@
     "patch": "V200R019SPH005",
     "vrbd": "V200R019C00SPC500",
     "series": "S5700",
+    "handler": "HuaweiElseFallback",
     "evidence": [
       "命中 handle_else: S5720-36C-EI-AC"
     ]
@@ -103,6 +110,7 @@
     "version": "V200R019C00SPC500",
     "vrbd": "V200R019C00SPC500",
     "series": "S5700",
+    "handler": "HuaweiElseFallback",
     "evidence": [
       "命中 handle_else: S5735-L24P4S-A1"
     ]
@@ -114,6 +122,7 @@
     "version": "V500R005C20SPC200",
     "vrbd": "V500R005C20SPC200",
     "series": "USG6000",
+    "handler": "HuaweiFirewallPriority",
     "evidence": [
       "从安全特征提取款型: USG6650",
       "命中防火墙优先特征 (fw_priority)"

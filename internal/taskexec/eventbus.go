@@ -584,6 +584,12 @@ func (h *SnapshotHub) ApplyRunPatch(runID string, patch *RunPatch) bool {
 		op.FinishedAt = cloneTimePtr(snapshot.FinishedAt)
 		changed = true
 	}
+	// 运行指标（方案 §10.2）：与状态同步推送，保证前端执行详情可实时展示
+	if patch.MetricsJSON != nil && snapshot.MetricsJSON != *patch.MetricsJSON {
+		snapshot.MetricsJSON = *patch.MetricsJSON
+		op.MetricsJSON = cloneStringPtr(snapshot.MetricsJSON)
+		changed = true
+	}
 	if changed {
 		baseSeq := snapshot.LastRunSeq
 		h.touchSnapshotLocked(runID, snapshot)

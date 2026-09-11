@@ -11,6 +11,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/connutil"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/matcher"
+	"github.com/NetWeaverGo/core/internal/metrics"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/terminal"
@@ -61,6 +62,14 @@ func (e *StreamEngine) currentCacheKey(command string) string {
 		return string(matcher.ViewUnknown) + "|" + command
 	}
 	return string(e.adapter.CurrentView()) + "|" + command
+}
+
+// runID 返回本次执行所属的运行 ID（未注入时为空，指标自动忽略）
+func (e *StreamEngine) runID() string {
+	if e.executor == nil {
+		return ""
+	}
+	return e.executor.runID
 }
 
 // NewStreamEngine 创建新的流处理引擎
@@ -385,6 +394,7 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 			}
 			riskRule, riskAction := GetGlobalRiskValidator().Validate(act.Command, vendor)
 			if riskRule != nil {
+				metrics.Default.LabelInc(e.runID(), "risk.hit", string(riskAction))
 				// 安全收敛：命中任何风险规则，临时强制将交互确认策略收紧为 ask_user，杜绝 auto_yes 自动放行
 				if e.savedConfirmPolicy == "" {
 					e.savedConfirmPolicy = e.adapter.ConfirmPolicy()
@@ -523,6 +533,8 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 				batch := e.adapter.ReduceEventBatch(EvCommandPromptSeen{Prompt: "cache-hit"})
 				return e.executeBatch(batch, currentTimeout, defaultTimeout, timer)
 			}
+			// 缓存开启但未命中（不重复统计未启用缓存的场景）
+			metrics.Default.Inc(e.runID(), "cache.miss", 1)
 		}
 
 		// 发送命令
@@ -605,6 +617,7 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 		}
 
 	case ActAnswerConfirm:
+		metrics.Default.LabelInc(e.runID(), "confirm.triggered", "auto")
 		logger.Info("StreamEngine", "-", ">>> [应答确认提示]: %q", string(act.AnswerBytes))
 		if err := e.conn.SendRawBytes(act.AnswerBytes); err != nil {
 			return fmt.Errorf("发送确认应答失败: %w", err)
@@ -614,6 +627,7 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 		}
 
 	case ActRequestConfirmDecision:
+		metrics.Default.LabelInc(e.runID(), "confirm.triggered", "ask_user")
 		if e.suspendHandler != nil {
 			logger.Info("StreamEngine", "-", "触发交互确认挂起: prompt=%s, cmd=%s", act.Prompt, act.Command)
 			userAction := e.suspendHandler(context.Background(), e.executor.IP, "需要确认: "+act.Prompt, act.Command)
@@ -808,6 +822,9 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 			if len(results) > 0 {
 				lastResult := results[len(results)-1]
 				if lastResult != nil && lastResult.Command == act.Command && !lastResult.Cached {
+					if lastResult.Truncated {
+						metrics.Default.Inc(e.runID(), "echo.truncated", 1)
+					}
 					e.executor.commandCache.Put(e.currentCacheKey(act.Command), lastResult)
 					logger.Debug("StreamEngine", "-", "已将命令结果写入缓存: %s (size=%d)", act.Command, lastResult.RawSize)
 				}

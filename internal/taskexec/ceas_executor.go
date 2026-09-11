@@ -13,6 +13,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/metrics"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"gorm.io/gorm"
@@ -156,6 +157,7 @@ func (e *CEASExecutor) executeCEASUnit(ctx RuntimeContext, stageID string, unit 
 		Vendor:     device.Vendor,
 		Protocol:   device.Protocol,
 		LogSession: logSession,
+		RunID:      ctx.RunID(),
 	}
 	exec := executor.NewDeviceExecutor(
 		device.IP,
@@ -251,6 +253,11 @@ func (e *CEASExecutor) executeCEASUnit(ctx RuntimeContext, stageID string, unit 
 	modelToUse := device.ModelSeries
 	if modelToUse == "" {
 		modelToUse = device.Model
+	}
+	// 硬件树规模与解析失败统计（方案 §10.2）
+	metrics.Default.Inc(taskID, "ceas.node_count", int64(len(tree.AllNodes)))
+	if len(tree.AllNodes) == 0 {
+		metrics.Default.Inc(taskID, "ceas.parse_fail", 1)
 	}
 	esn := ceas.ExtractESN(device.Vendor, modelToUse, elabelOutput, esnOutput)
 	if esn != "" {

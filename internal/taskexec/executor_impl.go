@@ -14,6 +14,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/device"
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/metrics"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/NetWeaverGo/core/internal/repository"
@@ -207,6 +208,7 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		LogSession:     logSession,
 		Protocol:       device.Protocol,
 		SuspendHandler: BuildDefaultSuspendHandler(ctx.RunID(), errorMode),
+		RunID:          ctx.RunID(),
 	}
 
 	// Create device executor
@@ -559,6 +561,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 		DeviceProfile: profile,
 		LogSession:    logSession,
 		Protocol:      device.Protocol,
+		RunID:         ctx.RunID(),
 	}
 
 	// Create device executor
@@ -1137,8 +1140,11 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 			prescanModel = id.Model
 			prescanVersion = id.Version
 			prescanIdentity = id
+			// 设备形态处理器命中分布（方案 §10.2）
+			metrics.Default.LabelInc(runID, "device.handler", id.Handler)
 			// 解析真实画像匹配路径
 			_, prescanMatchPath = config.ResolveProfile(id.Vendor, id.Model, id.Version)
+			metrics.Default.LabelInc(runID, "profile.match_path", matchPathLevel(prescanMatchPath))
 			logger.Verbose("TaskExec", runID, "预扫描识别设备形态成功: device=%s, model=%s, series=%s, version=%s, patch=%s, matchPath=%s",
 				deviceIP, id.Model, id.Series, id.Version, id.Patch, prescanMatchPath)
 		}
@@ -1203,7 +1209,7 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 		if ctx.IsCancelled() {
 			return ctx.Context().Err()
 		}
-		rows, err := parserEngine.Parse(output.CommandKey, string(rawText))
+		rows, err := parseWithMetrics(runID, parserEngine, output.CommandKey, string(rawText))
 		if err != nil {
 			handler.LogDBErrorWithContext("更新 parse_status 为 parse_failed", e.db.Model(&TaskRawOutput{}).Where("id = ?", output.ID).
 				Updates(map[string]interface{}{"parse_status": "parse_failed", "parse_error": err.Error()}).Error,
