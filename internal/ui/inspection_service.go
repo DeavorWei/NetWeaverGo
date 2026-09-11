@@ -9,6 +9,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/inspection"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/taskexec"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -386,7 +387,15 @@ func (s *InspectionService) ExportInspectionCSV(runID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return inspection.ExportInspectionResultsCSV(results)
+	csvText, err := inspection.ExportInspectionResultsCSV(results)
+	if err != nil {
+		return "", err
+	}
+	// 导出前脱敏自检：命中未脱敏敏感内容则阻断导出（规划方案 §5.2 P1-6）
+	if err := report.ValidateExportContent(csvText); err != nil {
+		return "", err
+	}
+	return csvText, nil
 }
 
 // ExportInspectionJSON 导出巡检报告为结构化 JSON 文本
@@ -395,5 +404,13 @@ func (s *InspectionService) ExportInspectionJSON(runID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return inspection.ExportInspectionResultsJSON(results)
+	jsonText, err := inspection.ExportInspectionResultsJSON(results)
+	if err != nil {
+		return "", err
+	}
+	// 导出前脱敏自检：命中未脱敏敏感内容则阻断导出（规划方案 §5.2 P1-6）
+	if err := report.ValidateExportContent(jsonText); err != nil {
+		return "", err
+	}
+	return jsonText, nil
 }

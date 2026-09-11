@@ -60,6 +60,20 @@ var reg2HandlerList = []regHandler{
 		},
 	},
 	{
+		pattern: regexp.MustCompile(`(?mi)(LE1D2FW00S01)\s+uptime`),
+		name:    "LE1D2FW00S01",
+		extract: func(m []string, verText string) (string, string) {
+			return m[1], m[1]
+		},
+	},
+	{
+		pattern: regexp.MustCompile(`(?mi)VRP.* Software,\s+Version\s+\d\.\d+,\s+(?:Release|Feature|RELEASE)\s+(\S+)`),
+		name:    "VRP-Release",
+		extract: func(m []string, verText string) (string, string) {
+			return m[1], m[1]
+		},
+	},
+	{
 		pattern: regexp.MustCompile(`(?mi)(CE-(?:FW|IPS)A)\s+uptime`),
 		name:    "CE-FW/IPS",
 		extract: func(m []string, verText string) (string, string) {
@@ -287,12 +301,21 @@ func handleFinalModel(raw string) string {
 		m = strings.TrimSpace(m[:idx])
 	}
 
-	// 5. 去除机框后缀（例如 NE40E-X8 -> NE40E）
+	// 5. 剥离 WLAN AP 的 -(FIT|CLOUD) 形态后缀
+	fitCloudRe := regexp.MustCompile(`(?i)-(FIT|CLOUD)$`)
+	m = fitCloudRe.ReplaceAllString(m, "")
+
+	// 6. 去除机框后缀（例如 NE40E-X8 -> NE40E）
 	chassisRe := regexp.MustCompile(`(?i)-X\d+.*$`)
 	m = chassisRe.ReplaceAllString(m, "")
 
-	// 6. 提取基础型号（例如 S5735-L24P4S-A2 -> S5735, CE16804 -> CE16804）
-	// 注意：\d{5} 必须置于 \d{4} 之前，避免 CE16804 错误截断为 CE1680
+	// 7. CE16804/08/16 -> CE16800 款型收敛（规划方案 §6.2 P2-1 要求）
+	if strings.HasPrefix(m, "CE168") {
+		return "CE16800"
+	}
+
+	// 8. 提取基础型号（例如 S5735-L24P4S-A2 -> S5735）
+	// 注意：\d{5} 必须置于 \d{4} 之前，避免 5 位数字型号被错误截断
 	subRe := regexp.MustCompile(`^([A-Za-z]+(?:\d{5}|\d{4}|\d{3}))`)
 	if sm := subRe.FindStringSubmatch(m); len(sm) > 1 {
 		return sm[1]

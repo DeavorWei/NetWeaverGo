@@ -36,6 +36,9 @@ func DefaultSettings() models.GlobalSettings {
 		ConfirmPolicy:       "ask_user",
 		CommandCacheEnabled: false,
 		RawBufferLimitMB:    8,
+
+		// §10.3 解析引擎灰度模式（默认 auto 自适应，支持 tree_only 与 legacy_only 应急回退）
+		ParserEngineMode: "auto",
 	}
 }
 

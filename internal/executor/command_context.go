@@ -160,11 +160,6 @@ func (c *CommandContext) IncrementPagination() {
 	c.PaginationCount++
 }
 
-// ConsumeEcho 消费 echo 行
-func (c *CommandContext) ConsumeEcho() {
-	c.EchoConsumed = true
-}
-
 // Duration 返回命令执行时长
 func (c *CommandContext) Duration() time.Duration {
 	if c.CompletedAt.IsZero() {

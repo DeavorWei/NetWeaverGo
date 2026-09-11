@@ -278,10 +278,12 @@ func (s *ParseTemplateService) UpdateTemplate(id uint, req models.SaveParseTempl
 	t.Aggregation = aggregationJSON
 	t.ParseRules = parseRulesJSON
 	t.FieldMapping = fieldMappingJSON
-	if req.AppliesTo != nil {
-		if data, err := json.Marshal(req.AppliesTo); err == nil {
-			t.AppliesTo = string(data)
-		}
+	// 适用范围采用"全量显式"语义：未提供(nil)或条件为空均视为清空，
+	// 保证用户可把模板还原为"全款型/全版本通用"，避免一旦设置就无法清除。
+	if req.AppliesTo == nil || (len(req.AppliesTo.Models) == 0 && len(req.AppliesTo.Versions) == 0) {
+		t.AppliesTo = ""
+	} else if data, err := json.Marshal(req.AppliesTo); err == nil {
+		t.AppliesTo = string(data)
 	}
 	t.Description = req.Description
 	t.Enabled = req.Enabled

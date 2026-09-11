@@ -84,6 +84,11 @@ func InitDB() error {
 		logger.Warn("Config", "-", "初始化巡检模板与检查项种子失败: %v", err)
 	}
 
+	// 加载 DB 设备画像覆盖记录（规划方案 §6.2：内置 JSON 兜底 + DB 覆盖表）
+	if err := LoadDeviceProfileOverrides(db); err != nil {
+		logger.Warn("Config", "-", "加载设备画像 DB 覆盖记录失败: %v", err)
+	}
+
 	// 创建索引优化查询性能
 	createIndexes(db)
 
@@ -103,6 +108,7 @@ func autoMigrateAll(db *gorm.DB) error {
 		&models.TopologyVendorFieldCommand{},
 		&models.RiskCommand{},
 		&models.UserParseTemplate{},
+		&models.DeviceProfileRecord{},
 		// 规划比对相关表
 		&models.PlanFile{},
 		&models.PlannedLink{},

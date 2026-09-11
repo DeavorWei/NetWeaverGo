@@ -38,8 +38,8 @@ var (
 		{nodeType: "port", regex: regexp.MustCompile(`(?i)^\[(Port_\S+)\]`), level: 3},
 		// 9. card (Slot_X Card_Y, Card_X) —— 提取槽号与卡号两个捕获组
 		{nodeType: "card", regex: regexp.MustCompile(`(?i)^\[(?:Slot_?(\d+)\S*\s*)?Card_?(?:\S*\d+/)?(\d+)\]`), level: 3},
-		// 10. slot (Slot_X, Unit_X)
-		{nodeType: "slot", regex: regexp.MustCompile(`(?i)^\[(?:Slot_|Unit_)(\S+)\]`), level: 2},
+		// 10. slot (Slot_X, SlotX, Unit_X)
+		{nodeType: "slot", regex: regexp.MustCompile(`(?i)^\[(?:Slot_?|Unit_)(\S+)\]`), level: 2},
 	}
 
 	// 属性段标志正则（用于 handle_extra_properties 切分）

@@ -1,3 +1,4 @@
+import { Call } from '@wailsio/runtime';
 import * as HardwareInventoryService from "@/bindings/github.com/NetWeaverGo/core/internal/ui/hardwareinventoryservice";
 import type { CEASDeviceOverviewVO } from "@/bindings/github.com/NetWeaverGo/core/internal/ui/models";
 import type { HardwareTreeVO, NodeVO, BOMAlertVO } from "@/bindings/github.com/NetWeaverGo/core/internal/ceas/models";
@@ -18,6 +19,13 @@ export const HardwareInventoryAPI = {
    */
   async getHardwareTree(deviceIP: string): Promise<HardwareTreeVO | null> {
     return HardwareInventoryService.GetHardwareTree(deviceIP);
+  },
+
+  /**
+   * 获取指定设备的硬件树，并按 Item / BarCode 白名单过滤（规划方案 §7.2 P3-1）
+   */
+  async getHardwareTreeFiltered(deviceIP: string, itemWhitelist: string[], barcodeWhitelist: string[]): Promise<HardwareTreeVO | null> {
+    return Call.ByName('ui.HardwareInventoryService.GetHardwareTreeFiltered', deviceIP, itemWhitelist, barcodeWhitelist);
   },
 
   /**

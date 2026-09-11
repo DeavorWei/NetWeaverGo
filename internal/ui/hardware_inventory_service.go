@@ -13,6 +13,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/ceas"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/taskexec"
 	"gorm.io/gorm"
 )
@@ -135,44 +136,34 @@ func (s *HardwareInventoryService) ListCEASDevices() ([]CEASDeviceOverviewVO, er
 	return result, nil
 }
 
-// GetHardwareTree 获取指定设备的完整硬件树拓扑（带层级与属性）
-func (s *HardwareInventoryService) GetHardwareTree(deviceIP string) (*ceas.HardwareTreeVO, error) {
+// loadDeviceCEASNodes 加载指定设备最近一次采集的硬件节点（领域模型）与 ESN
+func (s *HardwareInventoryService) loadDeviceCEASNodes(deviceIP string) ([]*ceas.Node, string, error) {
 	if s.db == nil {
-		return nil, fmt.Errorf("数据库未初始化")
+		return nil, "", fmt.Errorf("数据库未初始化")
 	}
 
 	var dbNodes []models.TaskCEASNode
 	var latestRunNode models.TaskCEASNode
 	if err := s.db.Where("device_ip = ?", deviceIP).Order("created_at desc").First(&latestRunNode).Error; err == nil && latestRunNode.TaskRunID != "" {
 		if err := s.db.Where("device_ip = ? AND task_run_id = ?", deviceIP, latestRunNode.TaskRunID).Order("level asc, id asc").Find(&dbNodes).Error; err != nil {
-			return nil, fmt.Errorf("查询设备硬件节点失败: %w", err)
+			return nil, "", fmt.Errorf("查询设备硬件节点失败: %w", err)
 		}
 	} else {
 		if err := s.db.Where("device_ip = ?", deviceIP).Order("level asc, id asc").Find(&dbNodes).Error; err != nil {
-			return nil, fmt.Errorf("查询设备硬件节点失败: %w", err)
+			return nil, "", fmt.Errorf("查询设备硬件节点失败: %w", err)
 		}
 	}
 
 	var device models.DeviceAsset
 	_ = s.db.Where("ip = ?", deviceIP).First(&device).Error
 
-	if len(dbNodes) == 0 {
-		return &ceas.HardwareTreeVO{
-			DeviceIP:   deviceIP,
-			ChassisESN: device.ESN,
-			TotalNodes: 0,
-			Roots:      []*ceas.NodeVO{},
-		}, nil
-	}
-
-	// 转换为 NodeVO 并建立快速索引
-	nodeMap := make(map[string]*ceas.NodeVO, len(dbNodes))
+	nodes := make([]*ceas.Node, 0, len(dbNodes))
 	for _, dn := range dbNodes {
 		var attrs map[string]string
 		if dn.AttrsJSON != "" {
 			_ = json.Unmarshal([]byte(dn.AttrsJSON), &attrs)
 		}
-		vo := &ceas.NodeVO{
+		nodes = append(nodes, &ceas.Node{
 			ID:           dn.NodeID,
 			ParentID:     dn.ParentID,
 			Level:        dn.Level,
@@ -187,31 +178,49 @@ func (s *HardwareInventoryService) GetHardwareTree(deviceIP string) (*ceas.Hardw
 			VendorName:   dn.VendorName,
 			BoardType:    dn.BoardType,
 			Attrs:        attrs,
-			Children:     make([]*ceas.NodeVO, 0),
-		}
-		nodeMap[dn.NodeID] = vo
+			Children:     make([]*ceas.Node, 0),
+		})
 	}
+	return nodes, device.ESN, nil
+}
 
-	// 组装树形父子关联
-	var roots []*ceas.NodeVO
-	for _, dn := range dbNodes {
-		vo := nodeMap[dn.NodeID]
-		if dn.ParentID == "" {
-			roots = append(roots, vo)
-		} else if parent, ok := nodeMap[dn.ParentID]; ok {
-			parent.Children = append(parent.Children, vo)
-		} else {
-			// 未找到父节点时作为顶级根节点呈现，保证不丢失
-			roots = append(roots, vo)
-		}
-	}
-
+// emptyHardwareTreeVO 构造空硬件树视图
+func emptyHardwareTreeVO(deviceIP, esn string) *ceas.HardwareTreeVO {
 	return &ceas.HardwareTreeVO{
 		DeviceIP:   deviceIP,
-		ChassisESN: device.ESN,
-		TotalNodes: len(dbNodes),
-		Roots:      roots,
-	}, nil
+		ChassisESN: esn,
+		TotalNodes: 0,
+		Roots:      []*ceas.NodeVO{},
+	}
+}
+
+// GetHardwareTree 获取指定设备的完整硬件树拓扑（带层级与属性）
+func (s *HardwareInventoryService) GetHardwareTree(deviceIP string) (*ceas.HardwareTreeVO, error) {
+	nodes, esn, err := s.loadDeviceCEASNodes(deviceIP)
+	if err != nil {
+		return nil, err
+	}
+	if len(nodes) == 0 {
+		return emptyHardwareTreeVO(deviceIP, esn), nil
+	}
+	return ceas.ConvertTreeToVO(ceas.BuildHardwareTree(deviceIP, esn, nodes)), nil
+}
+
+// GetHardwareTreeFiltered 获取硬件树并按 Item / BarCode 白名单过滤（规划方案 §7.2 P3-1）。
+// 白名单为空时等价于 GetHardwareTree。
+func (s *HardwareInventoryService) GetHardwareTreeFiltered(deviceIP string, itemWhitelist, barcodeWhitelist []string) (*ceas.HardwareTreeVO, error) {
+	if len(itemWhitelist) == 0 && len(barcodeWhitelist) == 0 {
+		return s.GetHardwareTree(deviceIP)
+	}
+	nodes, esn, err := s.loadDeviceCEASNodes(deviceIP)
+	if err != nil {
+		return nil, err
+	}
+	if len(nodes) == 0 {
+		return emptyHardwareTreeVO(deviceIP, esn), nil
+	}
+	filtered := ceas.FilterTreeByWhitelist(ceas.BuildHardwareTree(deviceIP, esn, nodes), itemWhitelist, barcodeWhitelist)
+	return ceas.ConvertTreeToVO(filtered), nil
 }
 
 // GetHardwareNodeChildren 获取指定父节点下的直接子节点（用于按需懒加载）
@@ -420,7 +429,15 @@ func (s *HardwareInventoryService) ExportBOMAlertsCSV(deviceIP string, severity 
 			BatchNo:     a.BatchNo,
 		})
 	}
-	return ceas.ExportBOMAlertsToCSV(items)
+	csvText, err := ceas.ExportBOMAlertsToCSV(items)
+	if err != nil {
+		return "", err
+	}
+	// 导出前脱敏自检：命中未脱敏敏感内容则阻断导出（规划方案 §5.2 P1-6）
+	if err := report.ValidateExportContent(csvText); err != nil {
+		return "", err
+	}
+	return csvText, nil
 }
 
 // ExportHardwareInventoryCSV 导出指定设备的硬件清单为 CSV 文本
@@ -470,7 +487,12 @@ func (s *HardwareInventoryService) ExportHardwareInventoryCSV(deviceIP string) (
 		}
 	}
 	writer.Flush()
-	return buf.String(), nil
+	csvText := buf.String()
+	// 导出前脱敏自检：命中未脱敏敏感内容则阻断导出（规划方案 §5.2 P1-6）
+	if err := report.ValidateExportContent(csvText); err != nil {
+		return "", err
+	}
+	return csvText, nil
 }
 
 // TriggerCEASCollect 触发 CEAS 硬件清单采集任务

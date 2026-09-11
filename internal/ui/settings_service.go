@@ -8,6 +8,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"golang.org/x/crypto/ssh"
@@ -15,8 +16,14 @@ import (
 
 // SettingsService 设置管理服务 - 负责全局配置的加载和保存
 type SettingsService struct {
-	wailsApp *application.App
-	repo     repository.DeviceRepository
+	wailsApp      *application.App
+	repo          repository.DeviceRepository
+	parserManager *parser.ParserManager
+}
+
+// SetParserManager 关联解析器管理器，用于配置保存时热更新引擎模式
+func (s *SettingsService) SetParserManager(pm *parser.ParserManager) {
+	s.parserManager = pm
 }
 
 // SSHAlgorithmOption SSH 算法候选项
@@ -84,6 +91,11 @@ func (s *SettingsService) SaveSettings(settings models.GlobalSettings) error {
 	if err != nil {
 		logger.Error("SettingsService", "-", "SaveSettings 处理失败: %v", err)
 		return err
+	}
+
+	if s.parserManager != nil && settings.ParserEngineMode != "" {
+		s.parserManager.SetEngineMode(parser.EngineMode(settings.ParserEngineMode))
+		logger.Info("SettingsService", "-", "已同步更新解析引擎模式: %s", settings.ParserEngineMode)
 	}
 
 	logger.Debug("SettingsService", "-", "SaveSettings 处理成功完成")
@@ -417,6 +429,27 @@ func (s *SettingsService) DeleteRiskCommand(id uint) error {
 	err := db.Where("id = ? AND builtin = ?", id, false).Delete(&models.RiskCommand{}).Error
 	if err != nil {
 		return err
+	}
+	// 热重载到全局内存校验器
+	if rules, qErr := s.GetRiskCommands(); qErr == nil {
+		executor.GetGlobalRiskValidator().ReloadRules(rules)
+	}
+	return nil
+}
+
+// ResetRiskCommandRules 重置内置风险命令规则：清空全部内置记录并重新写入默认种子，随后热重载校验器
+func (s *SettingsService) ResetRiskCommandRules() error {
+	db := config.GetDB()
+	if db == nil {
+		return nil
+	}
+	if err := db.Where("builtin = ?", true).Delete(&models.RiskCommand{}).Error; err != nil {
+		return err
+	}
+	for _, seed := range models.DefaultRiskCommandSeeds() {
+		if err := db.Create(&seed).Error; err != nil {
+			return err
+		}
 	}
 	// 热重载到全局内存校验器
 	if rules, qErr := s.GetRiskCommands(); qErr == nil {

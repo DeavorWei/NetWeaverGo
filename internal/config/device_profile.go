@@ -8,6 +8,8 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/device"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
+	"gorm.io/gorm"
 )
 
 //go:embed profiles/*.json
@@ -204,6 +206,24 @@ func (s *ProfileSelector) Match(model, version string) bool {
 		}
 	}
 	return matched && hasCondition
+}
+
+// Specificity 计算选择器的具体度权重（条件字段越多权重越高，用于多命中仲裁）
+func (s *ProfileSelector) Specificity() int {
+	if s == nil {
+		return 0
+	}
+	score := 0
+	if s.ModelPattern != "" {
+		score++
+	}
+	if s.VersionPattern != "" {
+		score++
+	}
+	if s.Series != "" {
+		score++
+	}
+	return score
 }
 
 // DeviceProfile 设备画像 - 统一的厂商/款型配置
@@ -509,6 +529,107 @@ func loadEmbeddedProfiles() {
 	}
 }
 
+// LoadDeviceProfileOverrides 从 DB 覆盖表 device_profiles 加载用户自定义画像并注册到全局注册表。
+// 落实规划方案 §6.2 "内置 JSON（兜底）+ DB 覆盖表" 的数据来源设计。
+// 同名 vendor+selector 的覆盖记录由 register 前插，配合 ResolveProfile 的"更具体优先"仲裁生效。
+func LoadDeviceProfileOverrides(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+
+	var records []models.DeviceProfileRecord
+	if err := db.Where("enabled = ?", true).Find(&records).Error; err != nil {
+		return err
+	}
+	if len(records) == 0 {
+		return nil
+	}
+
+	loaded := 0
+	for i := range records {
+		p := buildProfileFromRecord(&records[i])
+		if p == nil {
+			continue
+		}
+		globalRegistry.register(p)
+		loaded++
+	}
+
+	logger.Info("DeviceProfile", "", "已从 DB 覆盖表加载 %d 条设备画像（共查询 %d 条启用记录）", loaded, len(records))
+	return nil
+}
+
+// buildProfileFromRecord 将 DB 覆盖记录转换为 DeviceProfile（含 Selector 组装）
+func buildProfileFromRecord(rec *models.DeviceProfileRecord) *DeviceProfile {
+	if rec == nil {
+		return nil
+	}
+
+	var p DeviceProfile
+	if strings.TrimSpace(rec.ProfileJSON) != "" {
+		if err := json.Unmarshal([]byte(rec.ProfileJSON), &p); err != nil {
+			logger.Warn("DeviceProfile", "", "解析画像覆盖记录 ProfileJSON 失败 (id=%d): %v", rec.ID, err)
+			return nil
+		}
+	}
+	if p.Vendor == "" {
+		p.Vendor = rec.Vendor
+	}
+	if strings.TrimSpace(p.Vendor) == "" {
+		logger.Warn("DeviceProfile", "", "画像覆盖记录缺少 vendor，已跳过 (id=%d)", rec.ID)
+		return nil
+	}
+
+	var modelsList, versionsList []string
+	if strings.TrimSpace(rec.ModelsJSON) != "" {
+		_ = json.Unmarshal([]byte(rec.ModelsJSON), &modelsList)
+	}
+	if strings.TrimSpace(rec.VersionsJSON) != "" {
+		_ = json.Unmarshal([]byte(rec.VersionsJSON), &versionsList)
+	}
+
+	if rec.Series != "" || len(modelsList) > 0 || len(versionsList) > 0 {
+		sel := p.Selector
+		if sel == nil {
+			sel = &ProfileSelector{}
+		}
+		if sel.Series == "" {
+			sel.Series = rec.Series
+		}
+		if sel.ModelPattern == "" && len(modelsList) > 0 {
+			sel.ModelPattern = buildGlobAlternation(modelsList)
+		}
+		if sel.VersionPattern == "" && len(versionsList) > 0 {
+			sel.VersionPattern = buildGlobAlternation(versionsList)
+		}
+		p.Selector = sel
+	}
+
+	return &p
+}
+
+// buildGlobAlternation 将款型/版本匹配列表（支持 * 通配）转换为锚定正则表达式。
+// 无通配符的条目按前缀匹配（如 S5700 -> ^(?:S5700.*)$）。
+func buildGlobAlternation(patterns []string) string {
+	parts := make([]string, 0, len(patterns))
+	for _, raw := range patterns {
+		p := strings.TrimSpace(raw)
+		if p == "" || p == "*" {
+			continue
+		}
+		hasWildcard := strings.Contains(p, "*")
+		expr := strings.ReplaceAll(regexp.QuoteMeta(p), `\*`, `.*`)
+		if !hasWildcard {
+			expr += ".*"
+		}
+		parts = append(parts, expr)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "^(?:" + strings.Join(parts, "|") + ")$"
+}
+
 // ResetProfilesForTest 仅用于单测备份并重置画像注册表，返回恢复函数
 func ResetProfilesForTest() func() {
 	snapshot := make(map[string][]*DeviceProfile, len(globalRegistry.profiles))
@@ -534,15 +655,24 @@ func ResolveProfile(vendor, model, version string) (*DeviceProfile, string) {
 	v := strings.ToLower(strings.TrimSpace(vendor))
 	list := globalRegistry.profiles[v]
 
-	// 1. 精确匹配 (Selector 中的 ModelPattern 或 VersionPattern)
+	// 1. 精确匹配 (Selector 中的 ModelPattern 或 VersionPattern，多命中时条件字段最多者优先)
 	if (model != "" || version != "") && len(list) > 0 {
+		var bestProfile *DeviceProfile
+		bestScore := -1
 		for _, p := range list {
 			if p.Selector == nil {
 				continue
 			}
 			if p.Selector.Match(model, version) {
-				return p, "exact:" + model
+				score := p.Selector.Specificity()
+				if score > bestScore {
+					bestScore = score
+					bestProfile = p
+				}
 			}
+		}
+		if bestProfile != nil {
+			return bestProfile, "exact:" + model
 		}
 	}
 

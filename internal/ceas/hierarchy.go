@@ -199,3 +199,90 @@ func convertNodeToVO(n *Node) *NodeVO {
 	}
 	return vo
 }
+
+// FilterTreeByWhitelist 根据 Item / BarCode 白名单过滤硬件树节点（规划方案 §7.2 P3-1 要求）
+// 当 itemWhitelist 或 barcodeWhitelist 非空时，仅保留命中白名单或其祖先路径上的节点
+func FilterTreeByWhitelist(tree *HardwareTree, itemWhitelist, barcodeWhitelist []string) *HardwareTree {
+	if tree == nil || (len(itemWhitelist) == 0 && len(barcodeWhitelist) == 0) {
+		return tree
+	}
+
+	itemSet := make(map[string]bool, len(itemWhitelist))
+	for _, it := range itemWhitelist {
+		trimmed := strings.TrimSpace(it)
+		if trimmed != "" {
+			itemSet[strings.ToUpper(trimmed)] = true
+		}
+	}
+
+	barcodeSet := make(map[string]bool, len(barcodeWhitelist))
+	for _, bc := range barcodeWhitelist {
+		trimmed := strings.TrimSpace(bc)
+		if trimmed != "" {
+			barcodeSet[strings.ToUpper(trimmed)] = true
+		}
+	}
+
+	isHit := func(n *Node) bool {
+		if n == nil {
+			return false
+		}
+		if len(itemSet) > 0 && n.Item != "" {
+			if itemSet[strings.ToUpper(n.Item)] {
+				return true
+			}
+		}
+		if len(barcodeSet) > 0 && n.BarCode != "" {
+			if barcodeSet[strings.ToUpper(n.BarCode)] {
+				return true
+			}
+		}
+		return false
+	}
+
+	var filterNode func(n *Node) *Node
+	filterNode = func(n *Node) *Node {
+		if n == nil {
+			return nil
+		}
+		var keptChildren []*Node
+		for _, child := range n.Children {
+			if filteredChild := filterNode(child); filteredChild != nil {
+				keptChildren = append(keptChildren, filteredChild)
+			}
+		}
+
+		if isHit(n) || len(keptChildren) > 0 {
+			copyNode := *n
+			copyNode.Children = keptChildren
+			return &copyNode
+		}
+		return nil
+	}
+
+	var filteredRoots []*Node
+	for _, root := range tree.Roots {
+		if filtered := filterNode(root); filtered != nil {
+			filteredRoots = append(filteredRoots, filtered)
+		}
+	}
+
+	var allNodes []*Node
+	var collectNodes func(n *Node)
+	collectNodes = func(n *Node) {
+		allNodes = append(allNodes, n)
+		for _, c := range n.Children {
+			collectNodes(c)
+		}
+	}
+	for _, r := range filteredRoots {
+		collectNodes(r)
+	}
+
+	return &HardwareTree{
+		DeviceIP:   tree.DeviceIP,
+		ChassisESN: tree.ChassisESN,
+		Roots:      filteredRoots,
+		AllNodes:   allNodes,
+	}
+}

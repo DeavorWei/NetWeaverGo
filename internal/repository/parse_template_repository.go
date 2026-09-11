@@ -37,6 +37,7 @@ func (r *ParseTemplateRepository) ListEnabled(vendor string) ([]parser.StoredTem
 			Multiline:    rec.Multiline,
 			Aggregation:  rec.Aggregation,
 			ParseRules:   rec.ParseRules,
+			AppliesTo:    rec.AppliesTo,
 			FieldMapping: rec.FieldMapping,
 			Enabled:      rec.Enabled,
 		})

@@ -132,6 +132,53 @@ func TestParseTemplateService_TestTemplate_WithFieldMapping(t *testing.T) {
 	assert.Equal(t, "Core-Switch-01", res.Results[0]["hostname"], "FieldMapping 应成功将字段重命名为 hostname")
 }
 
+// 验证适用范围清空契约：设置 AppliesTo 后可通过传 nil 或空条件还原为"全款型通用"
+func TestParseTemplateService_UpdateTemplate_ClearAppliesTo(t *testing.T) {
+	db := setupTestDB(t)
+	reloader := &mockReloader{}
+	svc := NewParseTemplateService(db, reloader)
+
+	// 1. 创建带适用范围的模板
+	createReq := models.SaveParseTemplateRequest{
+		Vendor:      "huawei",
+		CommandKey:  "display_interface",
+		Engine:      "tree",
+		ParseRules:  map[string]interface{}{"rules": []interface{}{map[string]interface{}{"parseItem": "port", "parseRegex": "interface (\\S+)", "groupIndex": 1}}},
+		AppliesTo:   &models.TemplateAppliesTo{Models: []string{"S57*"}, Versions: []string{"V200R019*"}},
+		Description: "带适用范围",
+		Enabled:     true,
+	}
+	require.NoError(t, svc.CreateTemplate(createReq))
+
+	list, err := svc.ListTemplates("huawei")
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	tplID := list[0].ID
+	require.NotNil(t, list[0].AppliesTo)
+	require.Equal(t, []string{"S57*"}, list[0].AppliesTo.Models)
+
+	// 2. 传 nil 清空适用范围（模拟前端清空输入后 req.appliesTo = undefined）
+	clearReq := createReq
+	clearReq.AppliesTo = nil
+	require.NoError(t, svc.UpdateTemplate(tplID, clearReq))
+
+	updated, err := svc.GetTemplate(tplID)
+	require.NoError(t, err)
+	assert.Nil(t, updated.AppliesTo, "AppliesTo 应被清空为 nil")
+
+	// 3. 传空条件对象同样视为清空
+	require.NoError(t, svc.UpdateTemplate(tplID, models.SaveParseTemplateRequest{
+		Vendor:    "huawei",
+		Engine:    "tree",
+		ParseRules: createReq.ParseRules,
+		AppliesTo: &models.TemplateAppliesTo{},
+		Enabled:   true,
+	}))
+	updated, err = svc.GetTemplate(tplID)
+	require.NoError(t, err)
+	assert.Nil(t, updated.AppliesTo, "空条件对象也应被视为清空")
+}
+
 // 验证 H2 回滚：若 ReloadVendor 失败，CreateTemplate 应当撤回 DB 写入
 func TestParseTemplateService_CreateTemplate_RollbackOnReloadFailure(t *testing.T) {
 	db := setupTestDB(t)

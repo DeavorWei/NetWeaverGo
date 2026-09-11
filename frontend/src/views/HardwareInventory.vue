@@ -142,14 +142,19 @@
                 <div v-if="currentTree && currentTree.roots && currentTree.roots.length > 0" class="flex-1 flex min-h-0 divide-x divide-border">
                   <!-- 树组件区域 -->
                   <div class="w-1/2 p-4 flex flex-col h-full overflow-hidden">
-                    <div class="mb-3">
+                    <div class="mb-3 flex items-center gap-3">
                       <el-input
                         v-model="treeFilterText"
                         placeholder="过滤节点 (名称 / BOM / 槽位 / 端口)..."
                         :prefix-icon="Search"
                         clearable
                         size="small"
+                        class="flex-1"
                       />
+                      <div class="flex items-center gap-1.5 flex-shrink-0" title="仅显示命中 BOM 观察清单的物料及其祖先路径">
+                        <el-switch v-model="onlyWatchlist" size="small" />
+                        <span class="text-xs text-text-muted whitespace-nowrap">仅看 BOM 预警物料</span>
+                      </div>
                     </div>
                     <div class="flex-1 overflow-auto scrollbar-custom border border-border/70 rounded-lg p-2 bg-bg-panel/40">
                       <el-tree
@@ -618,6 +623,7 @@ const selectedDeviceIP = ref('');
 const currentTree = ref<HardwareTreeVO | null>(null);
 const selectedNode = ref<NodeVO | null>(null);
 const treeFilterText = ref('');
+const onlyWatchlist = ref(false);
 const treeRef = ref();
 
 // 搜索与过滤
@@ -765,12 +771,26 @@ async function loadAlerts() {
   }
 }
 
-async function selectDevice(ip: string) {
-  selectedDeviceIP.value = ip;
+async function loadCurrentTree(ip: string) {
   selectedNode.value = null;
-  treeFilterText.value = '';
+  if (!ip) {
+    currentTree.value = null;
+    return;
+  }
   try {
-    currentTree.value = await HardwareInventoryAPI.getHardwareTree(ip);
+    if (onlyWatchlist.value) {
+      // 按启用的 BOM 观察清单 Items 过滤硬件树（规划方案 §7.2 P3-1）
+      const list = await HardwareInventoryAPI.listBOMWatchlist();
+      const items = Array.from(new Set(
+        (list || [])
+          .filter((w: BOMWatchlistItem) => w.enabled)
+          .map((w: BOMWatchlistItem) => (w.item || '').trim())
+          .filter(Boolean)
+      ));
+      currentTree.value = await HardwareInventoryAPI.getHardwareTreeFiltered(ip, items, []);
+    } else {
+      currentTree.value = await HardwareInventoryAPI.getHardwareTree(ip);
+    }
     if (currentTree.value && currentTree.value.roots && currentTree.value.roots.length > 0) {
       selectedNode.value = (currentTree.value.roots[0] || null) as NodeVO | null;
     }
@@ -778,6 +798,16 @@ async function selectDevice(ip: string) {
     ElMessage.error(`加载设备硬件树失败: ${err.message || err}`);
   }
 }
+
+async function selectDevice(ip: string) {
+  selectedDeviceIP.value = ip;
+  treeFilterText.value = '';
+  await loadCurrentTree(ip);
+}
+
+watch(onlyWatchlist, async () => {
+  await loadCurrentTree(selectedDeviceIP.value);
+});
 
 function handleNodeClick(data: NodeVO) {
   selectedNode.value = data;

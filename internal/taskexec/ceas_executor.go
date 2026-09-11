@@ -248,7 +248,11 @@ func (e *CEASExecutor) executeCEASUnit(ctx RuntimeContext, stageID string, unit 
 	// 4. 解析 elabel 与提取 ESN
 	tree := ceas.ParseELabel(elabelOutput)
 	tree.DeviceIP = deviceIP
-	esn := ceas.ExtractESN(device.Vendor, device.Model, elabelOutput, esnOutput)
+	modelToUse := device.ModelSeries
+	if modelToUse == "" {
+		modelToUse = device.Model
+	}
+	esn := ceas.ExtractESN(device.Vendor, modelToUse, elabelOutput, esnOutput)
 	if esn != "" {
 		tree.ChassisESN = esn
 	} else {

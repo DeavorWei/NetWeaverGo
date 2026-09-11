@@ -168,14 +168,25 @@ func (m *ParserManager) GetParserForDevice(vendor, model, version string) (CliPa
 		return baseParser, nil
 	}
 
-	// 检索是否有适用的针对款型或版本的覆盖模板
+	// 检索是否有适用的针对款型或版本的覆盖模板（多命中时更具体优先仲裁）
 	var matchedOverrides map[string]*CompiledTemplate
+	matchedSpecificity := make(map[string]int)
 	for _, st := range scoped {
 		if matchesAppliesTo(&st.appliesTo, model, version) {
+			spec := 0
+			if len(st.appliesTo.Models) > 0 {
+				spec++
+			}
+			if len(st.appliesTo.Versions) > 0 {
+				spec++
+			}
 			if matchedOverrides == nil {
 				matchedOverrides = make(map[string]*CompiledTemplate)
 			}
-			matchedOverrides[st.commandKey] = st.compiled
+			if spec >= matchedSpecificity[st.commandKey] {
+				matchedOverrides[st.commandKey] = st.compiled
+				matchedSpecificity[st.commandKey] = spec
+			}
 		}
 	}
 

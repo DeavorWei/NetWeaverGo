@@ -43,25 +43,6 @@ func NewStreamMatcher() *StreamMatcher {
 	}
 }
 
-// NewStreamMatcherWithConfig 使用配置创建匹配器
-func NewStreamMatcherWithConfig(prompts []string, paginationPrompts []string, promptPatterns []string) *StreamMatcher {
-	m := &StreamMatcher{
-		Rules:             DefaultRules,
-		Prompts:           prompts,
-		PaginationPrompts: paginationPrompts,
-		PromptPatterns:    make([]*regexp.Regexp, 0, len(promptPatterns)),
-	}
-
-	// 编译正则模式
-	for _, pattern := range promptPatterns {
-		if re, err := regexp.Compile(pattern); err == nil {
-			m.PromptPatterns = append(m.PromptPatterns, re)
-		}
-	}
-
-	return m
-}
-
 // SetPrompts 设置提示符后缀
 func (m *StreamMatcher) SetPrompts(prompts []string) {
 	m.mu.Lock()

@@ -45,7 +45,7 @@ VRP (R) software, Version 8.200 (CE16804 V200R019C10SPC800)
 HUAWEI CE16804 uptime is 20 days
 `,
 			},
-			expectedModel:  "CE16804",
+			expectedModel:  "CE16800",
 			expectedSeries: "CE16800",
 			expectedVer:    "V200R019C10SPC800",
 		},
@@ -122,6 +122,18 @@ HUAWEI AirEngine 5760-10 uptime is 15 days
 			},
 			expectedModel:  "AirEngine5760",
 			expectedSeries: "AirEngine5700",
+			expectedVer:    "V200R019C00SPC500",
+		},
+		{
+			name: "AP6050DN Cloud AP Suffix Strip",
+			raws: map[string]string{
+				"display version": `Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.170 (AP6050DN-CLOUD V200R019C00SPC500)
+HUAWEI AP6050DN-CLOUD uptime is 5 days
+`,
+			},
+			expectedModel:  "AP6050",
+			expectedSeries: "AP6000",
 			expectedVer:    "V200R019C00SPC500",
 		},
 		{
@@ -259,5 +271,19 @@ HUAWEI S5720-LI uptime is 10 days
 	}
 	if idMulti.Patch != "V200R019SPH005" {
 		t.Errorf("多键识别 Patch = %q, want V200R019SPH005", idMulti.Patch)
+	}
+
+	// 4. 包含 BIOS 文本但非 Cisco IOS 的设备，不应被误判为 Cisco
+	biosRaw := map[string]string{
+		"version": `Server BIOS Version 2.1.0, Build Date: 2023-01-01
+Manufacturer: Generic Server
+`,
+	}
+	idBios, err := Identify("generic", biosRaw)
+	if err != nil {
+		t.Fatalf("识别失败: %v", err)
+	}
+	if idBios.Vendor == "cisco" {
+		t.Errorf("BIOS 文本不应误判为 Cisco, 实际得到 vendor: %s", idBios.Vendor)
 	}
 }

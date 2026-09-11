@@ -183,6 +183,16 @@ func DefaultRiskCommandSeeds() []RiskCommand {
 			Builtin:  true,
 		},
 
+		{
+			Vendor:   "huawei",
+			Category: "firewall",
+			Pattern:  `(?i)^\s*packet-capture\s+all-packet\b`,
+			Action:   RiskActionConfirm,
+			Reason:   "全包捕获命令会消耗大量 CPU 与存储资源，需人工审批确认",
+			Enabled:  true,
+			Builtin:  true,
+		},
+
 		// 4. 敏感告警 (Warn)
 		{
 			Vendor:   "*",
@@ -190,6 +200,15 @@ func DefaultRiskCommandSeeds() []RiskCommand {
 			Pattern:  `(?i)^\s*(debugging|terminal\s+monitor)\b`,
 			Action:   RiskActionWarn,
 			Reason:   "开启全局调试打印可能消耗设备 CPU 并冲刷终端日志",
+			Enabled:  true,
+			Builtin:  true,
+		},
+		{
+			Vendor:   "huawei",
+			Category: "wlan",
+			Pattern:  `(?i)^\s*display\s+diagnostic-information\b`,
+			Action:   RiskActionWarn,
+			Reason:   "全量诊断信息回显极长且耗时，建议改用定向查询命令",
 			Enabled:  true,
 			Builtin:  true,
 		},

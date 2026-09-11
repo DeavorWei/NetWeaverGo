@@ -212,6 +212,10 @@ func (r *SessionReducer) handleConfirmSeen(e EvConfirmSeen) []SessionEffect {
 		logger.Info("SessionReducer", "-", "[交互确认] 策略 auto_no，自动回复 N: %s", e.Prompt)
 		return []SessionEffect{ActAnswerConfirm{AnswerBytes: []byte("N\n")}}
 
+	case "off":
+		logger.Info("SessionReducer", "-", "[交互确认] 策略 off，忽略交互确认提示符: %s", e.Prompt)
+		return nil
+
 	case "ask_user":
 		fallthrough
 	default:

@@ -76,6 +76,13 @@ func runGUI() {
 		logger.Error("System", "-", "解析器管理器初始化失败: %v", err)
 		os.Exit(1)
 	}
+
+	// §10.3 解析引擎灰度模式设置接通（支持 auto / tree_only / legacy_only 应急回退）
+	if globalSettings := config.GetGlobalSettings(); globalSettings != nil && globalSettings.ParserEngineMode != "" {
+		parserManager.SetEngineMode(parser.EngineMode(globalSettings.ParserEngineMode))
+		logger.Info("System", "-", "解析器引擎模式已配置为: %s", globalSettings.ParserEngineMode)
+	}
+
 	logger.Info("System", "-", "解析器管理器已启动")
 
 	// 创建解析模板服务（打通断头路 #3）
@@ -105,6 +112,7 @@ func runGUI() {
 	deviceService := ui.NewDeviceService()
 	commandGroupService := ui.NewCommandGroupService()
 	settingsService := ui.NewSettingsService()
+	settingsService.SetParserManager(parserManager)
 	queryService := ui.NewQueryService()
 	forgeService := ui.NewForgeService()
 	executionHistoryService := ui.NewExecutionHistoryService(taskExecutionService.GetRepository())

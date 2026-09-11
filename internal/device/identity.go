@@ -1,8 +1,11 @@
 package device
 
 import (
+	"regexp"
 	"strings"
 )
+
+var reCiscoIOS = regexp.MustCompile(`(?i)\b(Cisco|IOS|IOS-XE|NX-OS)\b`)
 
 // Identity 设备形态认知身份模型
 // 独立于拓扑链路，作为纯识别领域的标准化输出模型
@@ -75,7 +78,7 @@ func Identify(vendor string, raws map[string]string) (*Identity, error) {
 			result, err = identifyHuawei(verText, patchText, devText)
 		} else if strings.Contains(verText, "H3C") || strings.Contains(verText, "Comware") {
 			result, err = identifyH3C(verText, patchText, devText)
-		} else if strings.Contains(verText, "Cisco") || strings.Contains(verText, "IOS") {
+		} else if reCiscoIOS.MatchString(verText) {
 			result, err = identifyCisco(verText, patchText, devText)
 		} else {
 			result, err = identifyGeneric(v, verText)

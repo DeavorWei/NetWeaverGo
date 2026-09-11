@@ -246,6 +246,14 @@ func (a *SessionAdapter) SetContinueOnCmdError(continueOnError bool) {
 	a.reducer.Context().SetContinueOnCmdError(continueOnError)
 }
 
+// ConfirmPolicy 获取当前交互确认策略
+func (a *SessionAdapter) ConfirmPolicy() string {
+	if a.newContext != nil {
+		return a.newContext.ConfirmPolicy
+	}
+	return "ask_user"
+}
+
 // SetConfirmPolicy 设置交互确认策略
 func (a *SessionAdapter) SetConfirmPolicy(policy string) {
 	a.newContext.SetConfirmPolicy(policy)

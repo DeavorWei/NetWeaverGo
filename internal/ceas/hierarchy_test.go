@@ -142,3 +142,25 @@ func TestBuildHardwareTree_And_ConvertVO(t *testing.T) {
 	assert.Equal(t, 1, len(vo.Roots))
 	assert.Equal(t, 1, len(vo.Roots[0].Children))
 }
+
+func TestFilterTreeByWhitelist(t *testing.T) {
+	nodes := []*Node{
+		{ID: "0", Type: "frame", Name: "Frame"},
+		{ID: "0_1", ParentID: "0", Type: "slot", Name: "Slot_1", Slot: "1"},
+		{ID: "0_1_1", ParentID: "0_1", Type: "card", Name: "Card_1", Item: "03030303"},
+		{ID: "0_2", ParentID: "0", Type: "slot", Name: "Slot_2", Slot: "2"},
+		{ID: "0_2_1", ParentID: "0_2", Type: "card", Name: "Card_2", Item: "99999999"},
+	}
+	tree := BuildHardwareTree("10.0.0.1", "ESN123", nodes)
+
+	// 仅保留 Item 为 03030303 的卡及其祖先路径
+	filtered := FilterTreeByWhitelist(tree, []string{"03030303"}, nil)
+	assert.NotNil(t, filtered)
+	assert.Equal(t, 1, len(filtered.Roots))
+	assert.Equal(t, "Frame", filtered.Roots[0].Name)
+	assert.Equal(t, 1, len(filtered.Roots[0].Children))
+	assert.Equal(t, "Slot_1", filtered.Roots[0].Children[0].Name)
+	assert.Equal(t, 1, len(filtered.Roots[0].Children[0].Children))
+	assert.Equal(t, "Card_1", filtered.Roots[0].Children[0].Children[0].Name)
+	assert.Equal(t, 3, len(filtered.AllNodes))
+}

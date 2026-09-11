@@ -114,6 +114,25 @@ func TestConfirmPrompt_ReducerPolicy(t *testing.T) {
 			t.Fatalf("期望产生 ActRequestConfirmDecision，得到 %T", batch.Effects[0])
 		}
 	}
+
+	// 场景 4: off 策略忽略提示符，不挂起也不应答
+	{
+		reducer := NewSessionReducer([]string{"reset saved-configuration"}, m)
+		reducer.ctx.SetConfirmPolicy("off")
+		reducer.state = NewStateRunning
+		reducer.ctx.AdvanceCommand()
+
+		batch := reducer.ReduceBatch(EvConfirmSeen{
+			Prompt: "Continue? [Y/N]:",
+		})
+
+		if reducer.State() != NewStateRunning {
+			t.Errorf("期望状态维持 NewStateRunning，实际为 %s", reducer.State())
+		}
+		if len(batch.Effects) != 0 {
+			t.Errorf("期望产生 0 个动作，实际产生 %d", len(batch.Effects))
+		}
+	}
 }
 
 func TestConfirmPrompt_Deduplication(t *testing.T) {

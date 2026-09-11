@@ -49,8 +49,9 @@ type StreamEngine struct {
 	suspendHandler SuspendHandler
 
 	// eventCallback 执行事件回调（命令开始/完成）
-	eventCallback func(event ExecutionEvent)
-	sessionSeq    uint64
+	eventCallback      func(event ExecutionEvent)
+	sessionSeq         uint64
+	savedConfirmPolicy string // 风险命令临时收紧前保存的原交互确认策略
 }
 
 // NewStreamEngine 创建新的流处理引擎
@@ -375,7 +376,10 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 			}
 			riskRule, riskAction := GetGlobalRiskValidator().Validate(act.Command, vendor)
 			if riskRule != nil {
-				// 安全收敛：命中任何风险规则，强制将交互确认策略收紧为 ask_user，杜绝 auto_yes 自动放行
+				// 安全收敛：命中任何风险规则，临时强制将交互确认策略收紧为 ask_user，杜绝 auto_yes 自动放行
+				if e.savedConfirmPolicy == "" {
+					e.savedConfirmPolicy = e.adapter.ConfirmPolicy()
+				}
 				e.adapter.SetConfirmPolicy("ask_user")
 
 				if riskMode == "warn" {
@@ -462,7 +466,14 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 				case models.RiskActionWarn:
 					logger.Warn("StreamEngine", "-", "[高危警告] 命令 %q 命中风险规则: %s", act.Command, riskRule.Reason)
 				}
+			} else if e.savedConfirmPolicy != "" {
+				// 未命中风险规则，恢复原本的会话交互确认策略
+				e.adapter.SetConfirmPolicy(e.savedConfirmPolicy)
+				e.savedConfirmPolicy = ""
 			}
+		} else if e.savedConfirmPolicy != "" {
+			e.adapter.SetConfirmPolicy(e.savedConfirmPolicy)
+			e.savedConfirmPolicy = ""
 		}
 	}
 
