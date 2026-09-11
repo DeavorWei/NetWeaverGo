@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/inspection"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
@@ -81,7 +82,21 @@ func (c *InspectionTaskCompiler) Compile(ctx context.Context, def *TaskDefinitio
 		timeoutSec = 60
 	}
 
-	// 3. 构建 Unit 与 Steps
+	// 3. 计算并发度
+	concurrency := config.Concurrency
+	if concurrency <= 0 {
+		concurrency = c.options.DefaultConcurrency
+	}
+	if concurrency <= 0 {
+		concurrency = 10
+	}
+
+	// 4. 依据编排模式产出执行计划（方案 §5.3.1：single 为默认灰度档）
+	if useThreeStagePipeline() {
+		return c.compileThreeStage(def.Name, deviceIPs, items, templateID, concurrency, timeoutSec)
+	}
+
+	// 单阶段模式：采集 + 解析 + 判定内联在 inspection_check 内
 	units := make([]UnitPlan, 0, len(deviceIPs))
 	for i, deviceIP := range deviceIPs {
 		steps := make([]StepPlan, 0, len(items))
@@ -108,14 +123,6 @@ func (c *InspectionTaskCompiler) Compile(ctx context.Context, def *TaskDefinitio
 		})
 	}
 
-	concurrency := config.Concurrency
-	if concurrency <= 0 {
-		concurrency = c.options.DefaultConcurrency
-	}
-	if concurrency <= 0 {
-		concurrency = 10
-	}
-
 	stage := StagePlan{
 		ID:          newStageID(),
 		Kind:        string(StageKindInspectionCheck),
@@ -129,6 +136,134 @@ func (c *InspectionTaskCompiler) Compile(ctx context.Context, def *TaskDefinitio
 		RunKind: string(RunKindInspection),
 		Name:    def.Name,
 		Stages:  []StagePlan{stage},
+	}, nil
+}
+
+// useThreeStagePipeline 读取全局设置判断是否启用巡检三阶段编排
+func useThreeStagePipeline() bool {
+	if st := config.GetGlobalSettings(); st != nil {
+		return strings.TrimSpace(st.InspectionPipelineMode) == "three_stage"
+	}
+	return false
+}
+
+// compileThreeStage 产出 inspection_collect → inspection_parse → inspection_check 三阶段计划。
+// 命令按检查项顺序去重（IsPreCollect 已在 resolveItems 中前置排序），
+// 中间产物经内存快照传递，不写入任何中间实体表。
+func (c *InspectionTaskCompiler) compileThreeStage(
+	name string,
+	deviceIPs []string,
+	items []models.InspectionItem,
+	templateID string,
+	concurrency int,
+	timeoutSec int,
+) (*ExecutionPlan, error) {
+	// 命令去重（保持顺序）
+	commands := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, it := range items {
+		cmd := strings.TrimSpace(it.CommandKey)
+		if cmd == "" {
+			continue
+		}
+		if _, ok := seen[cmd]; ok {
+			continue
+		}
+		seen[cmd] = struct{}{}
+		commands = append(commands, cmd)
+	}
+	if len(commands) == 0 {
+		return nil, fmt.Errorf("巡检检查项未绑定任何采集命令，无法编排三阶段")
+	}
+
+	timeout := time.Duration(timeoutSec) * time.Second
+	buildUnits := func(stepsBuilder func() []StepPlan) []UnitPlan {
+		units := make([]UnitPlan, 0, len(deviceIPs))
+		for i, deviceIP := range deviceIPs {
+			units = append(units, UnitPlan{
+				ID:      fmt.Sprintf("unit-%d", i),
+				Kind:    string(UnitKindDevice),
+				Target:  TargetRef{Type: "device_ip", Key: deviceIP},
+				Timeout: timeout,
+				Steps:   stepsBuilder(),
+			})
+		}
+		return units
+	}
+
+	collectSteps := func() []StepPlan {
+		steps := make([]StepPlan, 0, len(commands))
+		for idx, cmd := range commands {
+			steps = append(steps, StepPlan{
+				ID:      fmt.Sprintf("cmd-%d", idx),
+				Kind:    "command",
+				Name:    cmd,
+				Command: cmd,
+				Params:  map[string]string{"templateId": templateID},
+			})
+		}
+		return steps
+	}
+	parseSteps := func() []StepPlan {
+		steps := make([]StepPlan, 0, len(commands))
+		for idx, cmd := range commands {
+			steps = append(steps, StepPlan{
+				ID:      fmt.Sprintf("parse-%d", idx),
+				Kind:    "parse",
+				Name:    cmd,
+				Command: cmd,
+				Params:  map[string]string{"templateId": templateID},
+			})
+		}
+		return steps
+	}
+	checkSteps := func() []StepPlan {
+		steps := make([]StepPlan, 0, len(items))
+		for idx, item := range items {
+			steps = append(steps, StepPlan{
+				ID:      fmt.Sprintf("step-%d", idx),
+				Kind:    "inspection_item",
+				Name:    item.Name,
+				Command: item.CommandKey,
+				Params: map[string]string{
+					"itemCode":     item.Code,
+					"isPreCollect": fmt.Sprintf("%t", item.IsPreCollect),
+					"templateId":   templateID,
+				},
+			})
+		}
+		return steps
+	}
+
+	return &ExecutionPlan{
+		RunKind: string(RunKindInspection),
+		Name:    name,
+		Stages: []StagePlan{
+			{
+				ID:          newStageID(),
+				Kind:        string(StageKindInspectionCollect),
+				Name:        "设备指标采集",
+				Order:       1,
+				Concurrency: concurrency,
+				Units:       buildUnits(collectSteps),
+			},
+			{
+				ID:          newStageID(),
+				Kind:        string(StageKindInspectionParse),
+				Name:        "回显结构化解析",
+				Order:       2,
+				Concurrency: concurrency,
+				Units:       buildUnits(parseSteps),
+			},
+			{
+				ID:          newStageID(),
+				Kind:        string(StageKindInspectionCheck),
+				Name:        "巡检规则判定",
+				Order:       3,
+				Concurrency: concurrency,
+				Units:       buildUnits(checkSteps),
+			},
+		},
 	}, nil
 }
 

@@ -9,6 +9,21 @@ import (
 )
 
 func evaluateStageDependencyPolicy(runKind string, stage StagePlan, results map[string]error) (bool, string) {
+	// 巡检：阶段级依赖仅在"前置阶段全量失败"时触发（设备级失败交由 Unit 状态隔离）
+	if runKind == string(RunKindInspection) {
+		switch StageKind(stage.Kind) {
+		case StageKindInspectionParse:
+			if err, ok := results[string(StageKindInspectionCollect)]; ok && err != nil {
+				return true, "巡检采集阶段全量失败"
+			}
+		case StageKindInspectionCheck:
+			if err, ok := results[string(StageKindInspectionParse)]; ok && err != nil {
+				return true, "巡检解析阶段全量失败"
+			}
+		}
+		return false, ""
+	}
+
 	if runKind != string(RunKindTopology) {
 		return false, ""
 	}

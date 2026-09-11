@@ -48,6 +48,9 @@ func NewTaskExecutionService(db *gorm.DB, parserProvider parser.ParserProvider) 
 	runtime.RegisterExecutor(NewBackupExecutor(repository.NewDeviceRepository(), db))
 	runtime.RegisterExecutor(NewCEASExecutor(repository.NewDeviceRepository(), db))
 	runtime.RegisterExecutor(NewInspectionCheckExecutor(repository.NewDeviceRepository(), db, parserProvider))
+	// 巡检三阶段编排执行器（仅在 InspectionPipelineMode=three_stage 时由编译器产出对应 Stage）
+	runtime.RegisterExecutor(NewInspectionCollectExecutor(repository.NewDeviceRepository()))
+	runtime.RegisterExecutor(NewInspectionParseExecutor(db, repository.NewDeviceRepository(), parserProvider))
 
 	service := &TaskExecutionService{
 		runtime:        runtime,

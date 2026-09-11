@@ -128,6 +128,88 @@ loop:
 	return firstErr
 }
 
+// executeCheckOnly 三阶段编排下的纯判定路径：消费采集/解析阶段产出的内存快照，不连接设备。
+// 该路径保证"采集完成后连接即释放"，且单台设备采集失败不会阻断其他设备判定。
+func (e *InspectionCheckExecutor) executeCheckOnly(
+	ctx RuntimeContext,
+	stageID string,
+	unit *UnitPlan,
+	deviceIP string,
+	holder RunDataHolder,
+	handler *ErrorHandler,
+) error {
+	taskID := ctx.RunID()
+
+	templateID := ""
+	for _, st := range unit.Steps {
+		if st.Params != nil && st.Params["templateId"] != "" {
+			templateID = st.Params["templateId"]
+			break
+		}
+	}
+	if templateID == "" {
+		templateID = "tpl-huawei-general"
+	}
+
+	items := e.loadInspectionItems(templateID)
+	if len(items) == 0 {
+		errMsg := fmt.Sprintf("模板 [%s] 下无启用的检查项", templateID)
+		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "写入无检查项状态", nil)
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	if !holder.HasDeviceEchoes(deviceIP) {
+		errMsg := "前置采集无数据（该设备在采集阶段失败）"
+		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "写入巡检Unit失败状态", nil)
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	results := make([]models.InspectionResult, 0, len(items))
+	for _, it := range items {
+		cmd := strings.TrimSpace(it.CommandKey)
+		itemCopy := it
+
+		rows, _ := holder.GetParsedRows(deviceIP, cmd)
+		parsedRows := make([]map[string]interface{}, 0, len(rows))
+		for _, r := range rows {
+			m := make(map[string]interface{}, len(r))
+			for k, v := range r {
+				m[k] = v
+			}
+			parsedRows = append(parsedRows, m)
+		}
+		echo, _ := holder.GetCommandEcho(deviceIP, cmd)
+
+		evalRes := inspection.EvaluateItem(&inspection.EvaluateInput{
+			RunID:      taskID,
+			DeviceIP:   deviceIP,
+			Item:       &itemCopy,
+			RawEcho:    echo,
+			ParsedRows: parsedRows,
+		})
+		results = append(results, evalRes)
+		metrics.Default.LabelInc(taskID, "inspection.result_code", string(evalRes.Status))
+	}
+
+	// 结果持久化（与单阶段路径一致的幂等清理 + 批量插入）
+	if e.db != nil {
+		errTx := e.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("run_id = ? AND device_ip = ?", taskID, deviceIP).Delete(&models.InspectionResult{}).Error; err != nil {
+				return err
+			}
+			if len(results) > 0 {
+				return tx.CreateInBatches(results, 100).Error
+			}
+			return nil
+		})
+		if errTx != nil {
+			logger.Error("InspectionCheckExecutor", taskID, "写入 InspectionResult 数据库事务失败: %v", errTx)
+		}
+	}
+
+	return completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), len(results), "巡检判定完成", deviceIP)
+}
+
 // executeInspectionUnit 执行单台设备的指标采集与规则判定
 func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stageID string, unit *UnitPlan) error {
 	handler := NewErrorHandler(ctx.RunID())
@@ -154,6 +236,12 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "写入巡检设备不存在状态", nil)
 		projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordDeviceMissing, fmt.Sprintf("巡检设备不存在: %v", err), 0, 0)
 		return fmt.Errorf("device not found: %w", err)
+	}
+
+	// 三阶段编排：若采集/解析阶段已产出内存快照，则本阶段只做判定，不再建立设备连接
+	checkHolder := GetRunData(ctx.RunID())
+	if checkHolder.HasAnyData() {
+		return e.executeCheckOnly(ctx, stageID, unit, deviceIP, checkHolder, handler)
 	}
 
 	// 1. 建立设备连接

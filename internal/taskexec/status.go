@@ -114,6 +114,10 @@ const (
 	StageKindBackupCollect StageKind = "backup_collect"
 	// StageKindCEASCollect CEAS硬件采集阶段
 	StageKindCEASCollect StageKind = "ceas_collect"
+	// StageKindInspectionCollect 巡检采集阶段（设备连接在此阶段结束即释放）
+	StageKindInspectionCollect StageKind = "inspection_collect"
+	// StageKindInspectionParse 巡检解析阶段（离线解析，不占用设备连接）
+	StageKindInspectionParse StageKind = "inspection_parse"
 	// StageKindInspectionCheck 巡检规则判定阶段
 	StageKindInspectionCheck StageKind = "inspection_check"
 )

@@ -1,6 +1,9 @@
 package models
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -12,13 +15,74 @@ type InspectionTemplate struct {
 	Category    string    `gorm:"index;size:64;default:'general'" json:"category"` // ce / s / ar / fw / route / wlan / general
 	Description string    `gorm:"size:256" json:"description"`
 	Enabled     bool      `gorm:"default:true" json:"enabled"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	// Groups 检查项分组树（规划方案 §8.2 P4-1：Category 等价物，支持嵌套）。
+	// 可空列，旧记录读取为 nil，前端按扁平列表展示。
+	Groups    InspectionGroups `gorm:"serializer:json" json:"groups,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
 // TableName 指定表名
 func (InspectionTemplate) TableName() string {
 	return "inspection_templates"
+}
+
+// InspectionGroup 巡检检查项分组节点（支持嵌套形成分组树）
+type InspectionGroup struct {
+	Code      string            `json:"code"`
+	Name      string            `json:"name"`
+	Children  []InspectionGroup `json:"children,omitempty"`
+	ItemCodes []string          `json:"itemCodes,omitempty"`
+}
+
+// InspectionGroups 分组树切片，实现 Scanner/Valuer 以便序列化为 JSON 列
+type InspectionGroups []InspectionGroup
+
+// Scan 实现 sql.Scanner（反序列化）
+func (g *InspectionGroups) Scan(value interface{}) error {
+	if value == nil {
+		*g = nil
+		return nil
+	}
+	var raw []byte
+	switch v := value.(type) {
+	case []byte:
+		raw = v
+	case string:
+		raw = []byte(v)
+	default:
+		return fmt.Errorf("不支持的 groups 类型: %T", value)
+	}
+	if len(raw) == 0 {
+		*g = nil
+		return nil
+	}
+	return json.Unmarshal(raw, g)
+}
+
+// Value 实现 driver.Valuer（序列化）
+func (g InspectionGroups) Value() (driver.Value, error) {
+	if len(g) == 0 {
+		return nil, nil
+	}
+	return json.Marshal(g)
+}
+
+// InspectionItemText 巡检检查项多语言文案（定位：报表级多语言，方案 §5.3.6）
+type InspectionItemText struct {
+	ID          uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	Key         string    `gorm:"index:idx_item_text_key_locale,unique;size:128;not null" json:"key"` // 对应 InspectionItem.Code
+	Locale      string    `gorm:"index:idx_item_text_key_locale,unique;size:16;not null" json:"locale"`
+	Name        string    `gorm:"size:256" json:"name"`
+	Description string    `gorm:"type:text" json:"description"`
+	Advice      string    `gorm:"type:text" json:"advice"` // 处置建议（源自 eDeskPro _DESCRIPTION）
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// TableName 指定表名
+func (InspectionItemText) TableName() string {
+	return "inspection_item_texts"
 }
 
 // InspectionItem 巡检检查项

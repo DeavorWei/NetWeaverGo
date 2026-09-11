@@ -570,8 +570,9 @@ func (m *RuntimeManager) persistRunMetrics(runtimeCtx *defaultRuntimeContext, ru
 }
 
 func (m *RuntimeManager) finalizeRunResources(runID string, fallbackCtx *defaultRuntimeContext) {
-	// 释放本次运行的指标分桶，防止内存泄漏（方案 §10.2）
+	// 释放本次运行的指标分桶与内存数据快照，防止内存泄漏（方案 §10.2 / §5.3.3）
 	metrics.Default.Release(runID)
+	ReleaseRunData(runID)
 	var runtimeCtx *defaultRuntimeContext
 	var store *report.ExecutionLogStore
 

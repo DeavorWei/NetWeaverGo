@@ -291,6 +291,63 @@ var DefaultItems = []models.InspectionItem{
 }
 
 // EnsureInspectionSeeds 初始化巡检模板与检查项内置种子数据（幂等保证）
+// textSeedOnce 多语言文案种子的幂等控制（与 EnsureInspectionSeeds 独立）
+var textSeedOnce sync.Once
+
+// EnsureInspectionItemTextSeeds 初始化巡检多语言文案种子。
+//
+// 定位（方案 §5.3.6）：服务于海外/涉外局点的**英文巡检报告导出**，
+// 不铺开前端 UI 国际化。种子精简，仅覆盖内置的少量关键检查项。
+func EnsureInspectionItemTextSeeds(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	var err error
+	textSeedOnce.Do(func() {
+		now := time.Now()
+		texts := make([]models.InspectionItemText, len(DefaultItemTexts))
+		for i, t := range DefaultItemTexts {
+			texts[i] = t
+			texts[i].CreatedAt = now
+			texts[i].UpdatedAt = now
+		}
+		if txErr := db.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "key"}, {Name: "locale"}},
+			DoUpdates: clause.AssignmentColumns([]string{"name", "description", "advice", "updated_at"}),
+		}).Create(&texts).Error; txErr != nil {
+			logger.Warn("Inspection", "-", "初始化巡检多语言文案种子失败: %v", txErr)
+			err = txErr
+			return
+		}
+	})
+	return err
+}
+
+// DefaultItemTexts 内置多语言文案（精简版，可按需增量补充）
+var DefaultItemTexts = []models.InspectionItemText{
+	{
+		Key:         "PRE_CHECK_CPU_USAGE",
+		Locale:      "en-US",
+		Name:        "CPU usage check",
+		Description: "Check whether the device CPU usage exceeds the threshold.",
+		Advice:      "Identify top CPU-consuming processes with display cpu-usage and optimize or schedule heavy tasks off-peak.",
+	},
+	{
+		Key:         "PRE_CHECK_MEMORY_USAGE",
+		Locale:      "en-US",
+		Name:        "Memory usage check",
+		Description: "Check whether the device memory usage exceeds the threshold.",
+		Advice:      "Run display memory to locate memory hogs; consider restarting abnormal processes or upgrading memory.",
+	},
+	{
+		Key:         "PRE_CHECK_TEMPERATURE",
+		Locale:      "en-US",
+		Name:        "Temperature check",
+		Description: "Check whether the device temperature is within the normal range.",
+		Advice:      "Verify fans and air ducts with display environment; clean dust or replace faulty fan modules.",
+	},
+}
+
 func EnsureInspectionSeeds(db *gorm.DB) error {
 	var err error
 	seedOnce.Do(func() {

@@ -39,6 +39,9 @@ func DefaultSettings() models.GlobalSettings {
 
 		// §10.3 解析引擎灰度模式（默认 auto 自适应，支持 tree_only 与 legacy_only 应急回退）
 		ParserEngineMode: "auto",
+
+		// 巡检编排模式：默认 single（对齐红线 6：自动/新编排默认最保守档）
+		InspectionPipelineMode: "single",
 	}
 }
 
