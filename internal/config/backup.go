@@ -63,9 +63,8 @@ func EnsurePreUpgradeBackup(db *gorm.DB, dbPath string, isExistingDB bool) (bool
 
 	target := buildPreUpgradeBackupPath()
 	start := time.Now()
-	// MirrorDatabaseToPath 内部依赖包级 DB 做 WAL checkpoint，
-	// 因此调用前必须已执行 DB = db（InitDB 中 DB 赋值早于本函数调用）。
-	if err := MirrorDatabaseToPath(dbPath, target); err != nil {
+	// 显式传入当前连接，wal_checkpoint 必定作用于被镜像的这个库（A2 解耦）
+	if err := MirrorDatabaseToPath(db, dbPath, target); err != nil {
 		return false, fmt.Errorf("复制主库失败: %w", err)
 	}
 

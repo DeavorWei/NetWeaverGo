@@ -197,7 +197,7 @@ func SaveSettings(settings models.GlobalSettings) error {
 		}
 
 		newDBPath := pm.GetDBPath()
-		if err := MirrorDatabaseToPath(currentDBPath, newDBPath); err != nil {
+		if err := MirrorDatabaseToPath(DB, currentDBPath, newDBPath); err != nil {
 			return fmt.Errorf("迁移数据库到新存储目录失败: %w", err)
 		}
 		logger.Info("Config", "-", "存储根目录已更新: %s", settings.StorageRoot)

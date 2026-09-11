@@ -67,7 +67,7 @@ func InitDB() error {
 	DB = db
 
 	// 升级前自动备份：必须在任何表迁移之前执行，且必须在 DB = db 之后
-	// （MirrorDatabaseToPath 依赖包级 DB 做 WAL checkpoint）。
+	// （需保证连接已就绪，备份内部显式传入 db 执行 wal_checkpoint）。
 	// 版本标记的回写刻意滞后到 main.go 全部迁移成功之后，避免迁移失败时漏备。
 	if _, backupErr := EnsurePreUpgradeBackup(db, dbPath, isExistingDB); backupErr != nil {
 		logger.Warn("Config", "-", "升级前自动备份未完成（不阻断启动）: %v", backupErr)
@@ -175,15 +175,17 @@ func createIndexes(db *gorm.DB) {
 	logger.Verbose("Config", "-", "数据库索引创建完成")
 }
 
-// MirrorDatabaseToPath 将当前数据库文件镜像到目标路径，供切换 storageRoot 后下次启动继续使用
-func MirrorDatabaseToPath(sourceDBPath, targetDBPath string) error {
+// MirrorDatabaseToPath 将数据库文件镜像到目标路径，供切换 storageRoot 后下次启动继续使用。
+// 显式接收 *gorm.DB：解除对包级全局 DB 的隐式时序依赖（A2），
+// 保证 wal_checkpoint 一定作用在被镜像的那个连接上。
+func MirrorDatabaseToPath(db *gorm.DB, sourceDBPath, targetDBPath string) error {
 	if sourceDBPath == "" || targetDBPath == "" || sourceDBPath == targetDBPath {
 		return nil
 	}
 
-	if DB != nil {
+	if db != nil {
 		// 先触发 checkpoint，尽量减少 WAL 未落盘造成的快照不一致
-		_ = DB.Exec("PRAGMA wal_checkpoint(FULL)").Error
+		_ = db.Exec("PRAGMA wal_checkpoint(FULL)").Error
 	}
 
 	if err := os.MkdirAll(filepath.Dir(targetDBPath), 0755); err != nil {
