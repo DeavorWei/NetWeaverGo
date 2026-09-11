@@ -1,0 +1,3 @@
+<Switch>reset saved-configuration
+Warning: The action will delete the saved configuration in the device.
+The configuration will be erased to reconfigure. Continue? [Y/N]:

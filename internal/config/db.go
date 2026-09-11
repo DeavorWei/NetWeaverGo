@@ -67,6 +67,11 @@ func InitDB() error {
 		return fmt.Errorf("自动迁移表结构失败: %v", err)
 	}
 
+	// 填充风险命令内置种子规则
+	if err := models.EnsureRiskCommandSeeds(db); err != nil {
+		logger.Warn("Config", "-", "初始化风险命令种子规则失败: %v", err)
+	}
+
 	// 创建索引优化查询性能
 	createIndexes(db)
 
@@ -84,6 +89,7 @@ func autoMigrateAll(db *gorm.DB) error {
 		&models.TaskGroup{},
 		&models.RuntimeSetting{},
 		&models.TopologyVendorFieldCommand{},
+		&models.RiskCommand{},
 		// 规划比对相关表
 		&models.PlanFile{},
 		&models.PlannedLink{},

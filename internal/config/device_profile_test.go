@@ -92,6 +92,24 @@ func TestGetDeviceProfile(t *testing.T) {
 		t.Errorf("Vendor = %q, want %q", cisco.Vendor, "cisco")
 	}
 
+	// 测试获取 Linux 画像
+	linux := GetDeviceProfile("linux")
+	if linux == nil {
+		t.Fatal("linux profile should not be nil")
+	}
+	if linux.Vendor != "linux" {
+		t.Errorf("Vendor = %q, want %q", linux.Vendor, "linux")
+	}
+
+	// 测试获取 Generic 通用画像
+	generic := GetDeviceProfile("generic")
+	if generic == nil {
+		t.Fatal("generic profile should not be nil")
+	}
+	if generic.Vendor != "generic" {
+		t.Errorf("Vendor = %q, want %q", generic.Vendor, "generic")
+	}
+
 	// 测试未知厂商返回默认
 	unknown := GetDeviceProfile("unknown")
 	if unknown == nil {

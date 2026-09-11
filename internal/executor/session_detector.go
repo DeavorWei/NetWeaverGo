@@ -58,7 +58,8 @@ func (d *SessionDetector) Detect(lines []string, activeLine string) []SessionEve
 	events := make([]SessionEvent, 0)
 
 	// 1. 处理已提交的行
-	for _, line := range lines {
+	lastLineIndex := len(lines) - 1
+	for i, line := range lines {
 		// 检测分页符（优先级最高）
 		if d.matcher.IsPaginationPrompt(line) {
 			//logger.Debug("SessionDetector", "-", "检测到分页符: %s", truncateDebug(line, 50))
@@ -76,23 +77,33 @@ func (d *SessionDetector) Detect(lines []string, activeLine string) []SessionEve
 			continue
 		}
 
-		// 检测提示符
-		if d.matcher.IsPromptStrict(line) {
-			//logger.Debug("SessionDetector", "-", "检测到提示符(已提交行): %s", truncateDebug(line, 50))
-			events = append(events, EvCommittedLine{Line: line})
-			continue
+		// 交互确认检测收敛：仅当无活动行且为已提交的末尾行时才判定确认提示符，避免历史行误报
+		if activeLine == "" && i == lastLineIndex {
+			if matched, prompt := d.matcher.CheckConfirmPrompt(line); matched {
+				events = append(events, EvConfirmSeen{
+					Prompt:        prompt,
+					DefaultAction: "Y",
+				})
+				continue
+			}
 		}
 
-		// 普通行
+		// 普通行或已提交行提示符
 		events = append(events, EvCommittedLine{Line: line})
 	}
 
-	// 2. 处理活动行
+	// 2. 处理活动行（若存在活动行，优先以活动行为会话末端检测分页、确认与提示符）
 	if activeLine != "" {
 		// 检测分页符
 		if d.matcher.IsPaginationPrompt(activeLine) {
 			//logger.Debug("SessionDetector", "-", "检测到分页符(活动行): %s", truncateDebug(activeLine, 50))
 			events = append(events, EvPagerSeen{Line: activeLine})
+		} else if matched, prompt := d.matcher.CheckConfirmPrompt(activeLine); matched {
+			// 检测确认提示符（末尾活动行）
+			events = append(events, EvConfirmSeen{
+				Prompt:        prompt,
+				DefaultAction: "Y",
+			})
 		} else if d.matcher.IsPromptStrict(activeLine) {
 			// 检测提示符
 			//logger.Debug("SessionDetector", "-", "检测到提示符(活动行): %s", truncateDebug(activeLine, 50))

@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/repository"
@@ -367,4 +368,59 @@ func (s *SettingsService) LogWarn(category, ip, message string) {
 // LogError 记录错误日志（前端调用）
 func (s *SettingsService) LogError(category, ip, message string) {
 	logger.Error(category, ip, "%s", message)
+}
+
+// GetRiskCommands 获取所有风险命令规则
+func (s *SettingsService) GetRiskCommands() ([]models.RiskCommand, error) {
+	db := config.GetDB()
+	if db == nil {
+		return models.DefaultRiskCommandSeeds(), nil
+	}
+	var rules []models.RiskCommand
+	if err := db.Order("id ASC").Find(&rules).Error; err != nil {
+		return nil, err
+	}
+	if len(rules) == 0 {
+		rules = models.DefaultRiskCommandSeeds()
+	}
+	return rules, nil
+}
+
+// SaveRiskCommand 保存或更新风险命令规则
+func (s *SettingsService) SaveRiskCommand(cmd models.RiskCommand) error {
+	db := config.GetDB()
+	if db == nil {
+		return nil
+	}
+	var err error
+	if cmd.ID == 0 {
+		err = db.Create(&cmd).Error
+	} else {
+		err = db.Save(&cmd).Error
+	}
+	if err != nil {
+		return err
+	}
+	// 热重载到全局内存校验器
+	if rules, qErr := s.GetRiskCommands(); qErr == nil {
+		executor.GetGlobalRiskValidator().ReloadRules(rules)
+	}
+	return nil
+}
+
+// DeleteRiskCommand 删除自定义风险命令规则
+func (s *SettingsService) DeleteRiskCommand(id uint) error {
+	db := config.GetDB()
+	if db == nil {
+		return nil
+	}
+	err := db.Where("id = ? AND builtin = ?", id, false).Delete(&models.RiskCommand{}).Error
+	if err != nil {
+		return err
+	}
+	// 热重载到全局内存校验器
+	if rules, qErr := s.GetRiskCommands(); qErr == nil {
+		executor.GetGlobalRiskValidator().ReloadRules(rules)
+	}
+	return nil
 }

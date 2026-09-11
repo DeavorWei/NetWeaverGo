@@ -2,7 +2,9 @@ package ui
 
 import (
 	"context"
+	"strings"
 
+	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/NetWeaverGo/core/internal/taskexec"
@@ -111,4 +113,19 @@ func (s *TaskExecutionUIService) GetTopologyEdgeExplain(runID string, edgeID str
 // GetTopologyDecisionTracesByRun 获取运行的所有决策轨迹
 func (s *TaskExecutionUIService) GetTopologyDecisionTracesByRun(runID string) ([]models.TopologyDecisionTraceView, error) {
 	return s.service.GetTopologyDecisionTracesByRun(runID)
+}
+
+// SubmitSuspendDecision 提交挂起设备的用户决策（继续或中止）
+func (s *TaskExecutionUIService) SubmitSuspendDecision(requestID string, action string) bool {
+	mgr := taskexec.GetGlobalSuspendManager()
+	act := executor.ActionAbort
+	if strings.ToLower(strings.TrimSpace(action)) == "continue" {
+		act = executor.ActionContinue
+	}
+	return mgr.Resolve(requestID, act)
+}
+
+// ListPendingSuspendRequests 获取所有待处理的挂起请求列表
+func (s *TaskExecutionUIService) ListPendingSuspendRequests() []*taskexec.SuspendRequest {
+	return taskexec.GetGlobalSuspendManager().ListPending()
 }

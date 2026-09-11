@@ -28,6 +28,7 @@ type StreamMatcher struct {
 	Prompts           []string
 	PaginationPrompts []string
 	PromptPatterns    []*regexp.Regexp // 正则模式（可选）
+	ConfirmPatterns   []*regexp.Regexp // 交互确认提示符模式（如 [Y/N]）
 	mu                sync.RWMutex
 }
 
@@ -38,6 +39,7 @@ func NewStreamMatcher() *StreamMatcher {
 		Prompts:           DefaultPrompts,
 		PaginationPrompts: DefaultPaginationPrompts,
 		PromptPatterns:    nil,
+		ConfirmPatterns:   CompileConfirmPatterns(DefaultConfirmPatterns),
 	}
 }
 
@@ -86,8 +88,22 @@ func (m *StreamMatcher) SetPromptPatterns(patterns []string) {
 	}
 }
 
+// SetConfirmPatterns 设置交互确认提示符正则模式
+func (m *StreamMatcher) SetConfirmPatterns(patterns []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.ConfirmPatterns = CompileConfirmPatterns(patterns)
+}
+
+// CheckConfirmPrompt 检查流末尾是否命中交互确认提示符（如 [Y/N]）
+func (m *StreamMatcher) CheckConfirmPrompt(text string) (bool, string) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return CheckConfirmPrompt(text, m.ConfirmPatterns)
+}
+
 // ConfigureFromProfile 从设备画像配置匹配器
-func (m *StreamMatcher) ConfigureFromProfile(promptSuffixes []string, promptPatterns []string, paginationPatterns []string) {
+func (m *StreamMatcher) ConfigureFromProfile(promptSuffixes []string, promptPatterns []string, paginationPatterns []string, confirmPatterns ...[]string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -104,6 +120,9 @@ func (m *StreamMatcher) ConfigureFromProfile(promptSuffixes []string, promptPatt
 				m.PromptPatterns = append(m.PromptPatterns, re)
 			}
 		}
+	}
+	if len(confirmPatterns) > 0 && len(confirmPatterns[0]) > 0 {
+		m.ConfirmPatterns = CompileConfirmPatterns(confirmPatterns[0])
 	}
 }
 

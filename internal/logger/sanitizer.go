@@ -35,8 +35,9 @@ var defaultSensitiveKeywords = []string{
 var defaultRules = []SanitizeRule{
 	// 配置命令中的密码（网络设备常见格式）- 更具体的规则优先
 	// 注意：password_cipher 和 password_plain 必须在 cipher_value 之前
-	{Name: "password_cipher", Pattern: regexp.MustCompile(`(?i)(password\s+\S+\s+cipher\s+)(\S+)`), Replacement: "${1}****", Enabled: true},
-	{Name: "password_plain", Pattern: regexp.MustCompile(`(?i)(password\s+\S+\s+plain\s+)(\S+)`), Replacement: "${1}****", Enabled: true},
+	{Name: "password_cipher", Pattern: regexp.MustCompile(`(?i)(password\s+(?:\S+\s+)?cipher\s+)(\S+)`), Replacement: "${1}****", Enabled: true},
+	{Name: "password_simple", Pattern: regexp.MustCompile(`(?i)(password\s+(?:\S+\s+)?simple\s+)(\S+)`), Replacement: "${1}****", Enabled: true},
+	{Name: "password_plain", Pattern: regexp.MustCompile(`(?i)(password\s+(?:\S+\s+)?plain\s+)(\S+)`), Replacement: "${1}****", Enabled: true},
 
 	// 密钥和凭证
 	{Name: "cipher_value", Pattern: regexp.MustCompile(`(?i)(cipher\s+)(\S+)`), Replacement: "${1}****", Enabled: true},
@@ -173,5 +174,10 @@ func SetGlobalSanitizerEnabled(enabled bool) {
 
 // Sanitize 使用全局脱敏器进行脱敏（便捷函数）
 func Sanitize(msg string) string {
+	return globalSanitizer.Sanitize(msg)
+}
+
+// SanitizeText 使用全局脱敏器对文本进行脱敏（语义化别名）
+func SanitizeText(msg string) string {
 	return globalSanitizer.Sanitize(msg)
 }

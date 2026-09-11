@@ -246,6 +246,18 @@ func (a *SessionAdapter) SetContinueOnCmdError(continueOnError bool) {
 	a.reducer.Context().SetContinueOnCmdError(continueOnError)
 }
 
+// SetConfirmPolicy 设置交互确认策略
+func (a *SessionAdapter) SetConfirmPolicy(policy string) {
+	a.newContext.SetConfirmPolicy(policy)
+	a.reducer.Context().SetConfirmPolicy(policy)
+}
+
+// SetRawBufferLimitBytes 设置单命令内存上限（字节）
+func (a *SessionAdapter) SetRawBufferLimitBytes(bytes int) {
+	a.newContext.SetRawBufferLimitBytes(bytes)
+	a.reducer.Context().SetRawBufferLimitBytes(bytes)
+}
+
 // GetCommandKey 获取指定索引的命令标识
 func (a *SessionAdapter) GetCommandKey(index int) string {
 	return a.newContext.GetCommandKey(index)

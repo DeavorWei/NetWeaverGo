@@ -178,6 +178,12 @@ export const TaskExecutionAPI = {
   getTopologyEdgeExplain: TaskExecutionUIServiceBinding.GetTopologyEdgeExplain,
   /** 获取运行的所有决策轨迹 */
   getTopologyDecisionTracesByRun: TaskExecutionUIServiceBinding.GetTopologyDecisionTracesByRun,
+
+  // 挂起审批流
+  /** 获取待处理的挂起请求列表 */
+  listPendingSuspendRequests: TaskExecutionUIServiceBinding.ListPendingSuspendRequests,
+  /** 提交挂起设备的用户决策（continue 或 abort） */
+  submitSuspendDecision: TaskExecutionUIServiceBinding.SubmitSuspendDecision,
 } as const
 
 // ==================== 拓扑命令 API ====================

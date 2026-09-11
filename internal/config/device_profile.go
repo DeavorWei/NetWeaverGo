@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 // PTYConfig PTY 终端配置
 type PTYConfig struct {
 	TermType string `json:"termType"` // 终端类型：vt100, xterm 等
@@ -24,15 +26,19 @@ func DefaultPTYConfig() PTYConfig {
 
 // PromptConfig 提示符配置
 type PromptConfig struct {
-	Suffixes []string `json:"suffixes"` // 提示符后缀：>, #, ]
-	Patterns []string `json:"patterns"` // 正则模式（可选）
+	Suffixes        []string `json:"suffixes"`        // 提示符后缀：>, #, ]
+	Patterns        []string `json:"patterns"`        // 正则模式（可选）
+	ConfirmPatterns []string `json:"confirmPatterns"` // 交互确认正则模式（如 [Y/N]）
+	ConfirmPolicy   string   `json:"confirmPolicy"`   // 确认策略: auto_yes / auto_no / ask_user / off
 }
 
 // DefaultPromptConfig 返回默认提示符配置
 func DefaultPromptConfig() PromptConfig {
 	return PromptConfig{
-		Suffixes: []string{">", "#", "]"},
-		Patterns: []string{},
+		Suffixes:        []string{">", "#", "]"},
+		Patterns:        []string{},
+		ConfirmPatterns: []string{},
+		ConfirmPolicy:   "ask_user", // 默认触发工程师挂起确认，保证安全
 	}
 }
 
@@ -225,14 +231,85 @@ func registerVendorProfiles() {
 			{Command: "show mac address-table", CommandKey: "mac_address", TimeoutSec: 60},
 		},
 	}
+
+	// Linux 画像
+	globalRegistry.profiles["linux"] = &DeviceProfile{
+		Vendor: "linux",
+		Name:   "Linux主机",
+		PTY: PTYConfig{
+			TermType: "xterm",
+			Width:    256,
+			Height:   200,
+			EchoMode: 0,
+			ISpeed:   14400,
+			OSpeed:   14400,
+		},
+		Prompt: PromptConfig{
+			Suffixes: []string{"$", "#"},
+			Patterns: []string{`[\w\-]+@[\w\-]+:[^#$]*[#$]`, `[#$]`},
+		},
+		Pager: PagerConfig{
+			Patterns: []string{
+				"--More--",
+				"(END)",
+			},
+			ContinueBytes: []byte{' '},
+		},
+		Init: InitConfig{
+			DisablePagerCommands: []string{"export PAGER=cat"},
+			ExtraCommands:        []string{},
+			PromptTimeoutSec:     15,
+		},
+		Commands: []CommandSpec{
+			{Command: "uname -a", CommandKey: "version", TimeoutSec: 15},
+			{Command: "cat /etc/os-release", CommandKey: "os_release", TimeoutSec: 15},
+			{Command: "hostname", CommandKey: "sysname", TimeoutSec: 10},
+			{Command: "ip addr", CommandKey: "interface_brief", TimeoutSec: 20},
+			{Command: "ip route", CommandKey: "route_table", TimeoutSec: 20},
+		},
+	}
+
+	// Generic 通用画像（未知设备兜底）
+	globalRegistry.profiles["generic"] = &DeviceProfile{
+		Vendor: "generic",
+		Name:   "通用设备",
+		PTY: PTYConfig{
+			TermType: "vt100",
+			Width:    256,
+			Height:   200,
+			EchoMode: 0,
+			ISpeed:   14400,
+			OSpeed:   14400,
+		},
+		Prompt: PromptConfig{
+			Suffixes: []string{">", "#", "$", "]"},
+			Patterns: []string{`[A-Za-z0-9_\-\.()\[\]<>]+\s*[>#$\]]`},
+		},
+		Pager: PagerConfig{
+			Patterns: []string{
+				"---- More ----",
+				"--More--",
+				"---- More",
+				"More:",
+			},
+			ContinueBytes: []byte{' '},
+		},
+		Init: InitConfig{
+			DisablePagerCommands: []string{},
+			ExtraCommands:        []string{},
+			PromptTimeoutSec:     30,
+		},
+		Commands: []CommandSpec{},
+	}
 }
 
 // GetDeviceProfile 根据厂商获取设备画像
 func GetDeviceProfile(vendor string) *DeviceProfile {
-	if profile, ok := globalRegistry.profiles[vendor]; ok {
+	v := strings.ToLower(strings.TrimSpace(vendor))
+	if profile, ok := globalRegistry.profiles[v]; ok {
 		return profile
 	}
-	// 返回默认画像（华为）
+	// 默认画像回退（华为）
 	return globalRegistry.profiles["huawei"]
 }
 

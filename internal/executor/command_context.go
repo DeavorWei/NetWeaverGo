@@ -1,8 +1,12 @@
 package executor
 
 import (
+	"strings"
 	"time"
 )
+
+// MaxRawBufferSize 单条命令原始回显内存缓冲区上限 (8MB)，超限截断并打标保全系统内存
+const MaxRawBufferSize = 8 * 1024 * 1024
 
 // CommandContext 每条命令执行过程的独立上下文
 type CommandContext struct {
@@ -24,11 +28,24 @@ type CommandContext struct {
 	// RawBuffer 当前命令范围内的原始数据
 	RawBuffer []byte
 
+	// Truncated 是否因回显超过内存上限而截断
+	Truncated bool
+
+	// MaxBufferSize 单命令内存缓冲区上限（字节，默认 8MB）
+	MaxBufferSize int
+
 	// NormalizedLines 由 terminal.Replayer 产出的规范化逻辑行
 	NormalizedLines []string
+	normalizedBytes int
+
+	// ConfirmHandled 标记当前命令是否已处理过交互确认提示，防止重复回复
+	ConfirmHandled bool
+
+	// Cached 标记当前命令结果是否命中缓存
+	Cached bool
 
 	// EchoConsumed 是否已消费 echo 行
-	// 第一版采用保守策略：如果首个逻辑行明显等于命令文本，则消费
+	// 若首个逻辑行等于发送的命令文本，则标记消费并在后续有效行中剥离
 	EchoConsumed bool
 
 	// PaginationCount 分页次数
@@ -55,6 +72,14 @@ func NewCommandContext(index int, rawCommand string) *CommandContext {
 		StartedAt:       time.Now(),
 		RawBuffer:       make([]byte, 0, 4096),
 		NormalizedLines: make([]string, 0),
+		MaxBufferSize:   MaxRawBufferSize,
+	}
+}
+
+// SetMaxBufferSize 设置单命令最大内存缓冲区（字节）
+func (c *CommandContext) SetMaxBufferSize(size int) {
+	if size > 0 {
+		c.MaxBufferSize = size
 	}
 }
 
@@ -68,13 +93,44 @@ func (c *CommandContext) SetCustomTimeout(timeout time.Duration) {
 	c.CustomTimeout = timeout
 }
 
-// AppendRawData 追加原始数据
+// AppendRawData 追加原始数据（单命令超出 MaxBufferSize 驻留内存时打标截断）
 func (c *CommandContext) AppendRawData(data []byte) {
+	if c.Truncated {
+		return
+	}
+	limit := c.MaxBufferSize
+	if limit <= 0 {
+		limit = MaxRawBufferSize
+	}
+	if len(c.RawBuffer)+len(data) > limit {
+		remaining := limit - len(c.RawBuffer)
+		if remaining > 0 {
+			c.RawBuffer = append(c.RawBuffer, data[:remaining]...)
+		}
+		c.Truncated = true
+		return
+	}
 	c.RawBuffer = append(c.RawBuffer, data...)
 }
 
-// AddNormalizedLine 添加规范化行
+// AddNormalizedLine 添加规范化行（若首行与命令匹配则触发 EchoConsumed，超出 MaxBufferSize 则打标截断）
 func (c *CommandContext) AddNormalizedLine(line string) {
+	if !c.EchoConsumed && len(c.NormalizedLines) == 0 && c.Command != "" {
+		cleanLine := strings.TrimSpace(line)
+		cleanCmd := strings.TrimSpace(c.Command)
+		if cleanLine == cleanCmd {
+			c.EchoConsumed = true
+		}
+	}
+	limit := c.MaxBufferSize
+	if limit <= 0 {
+		limit = MaxRawBufferSize
+	}
+	if c.Truncated || c.normalizedBytes+len(line) > limit {
+		c.Truncated = true
+		return
+	}
+	c.normalizedBytes += len(line) + 1
 	c.NormalizedLines = append(c.NormalizedLines, line)
 }
 
@@ -117,10 +173,23 @@ func (c *CommandContext) Duration() time.Duration {
 	return c.CompletedAt.Sub(c.StartedAt)
 }
 
-// NormalizedText 返回规范化文本（所有行合并）
+// EffectiveLines 返回去除首行 Echo 后的有效逻辑行
+func (c *CommandContext) EffectiveLines() []string {
+	if c.EchoConsumed && len(c.NormalizedLines) > 0 {
+		cleanFirst := strings.TrimSpace(c.NormalizedLines[0])
+		cleanCmd := strings.TrimSpace(c.Command)
+		if cleanFirst == cleanCmd {
+			return c.NormalizedLines[1:]
+		}
+	}
+	return c.NormalizedLines
+}
+
+// NormalizedText 返回规范化文本（若 EchoConsumed 生效则自动剥离首行命令行）
 func (c *CommandContext) NormalizedText() string {
+	lines := c.EffectiveLines()
 	result := ""
-	for i, line := range c.NormalizedLines {
+	for i, line := range lines {
 		if i > 0 {
 			result += "\n"
 		}
@@ -160,13 +229,19 @@ type CommandResult struct {
 	// RawSize 原始输出大小（字节）
 	RawSize int64
 
-	// NormalizedText 规范化输出文本（由 terminal.Replayer 产出）
+	// Truncated 是否因回显超过 8MB 而在内存中截断
+	Truncated bool
+
+	// Cached 是否命中文档/命令缓存
+	Cached bool
+
+	// NormalizedText 规范化输出文本（由 terminal.Replayer 产出，已去除首行 Echo）
 	NormalizedText string
 
 	// NormalizedSize 规范化输出大小（字节）
 	NormalizedSize int64
 
-	// NormalizedLines 规范化输出行
+	// NormalizedLines 规范化输出行（已去除首行 Echo）
 	NormalizedLines []string
 
 	// PromptMatched 是否匹配到提示符
@@ -211,6 +286,7 @@ func (r *CommandResult) LineCount() int {
 
 // ToResult 将 CommandContext 转换为 CommandResult
 func (c *CommandContext) ToResult() *CommandResult {
+	effectiveLines := c.EffectiveLines()
 	normalizedText := c.NormalizedText()
 	rawText := string(c.RawBuffer)
 
@@ -219,9 +295,11 @@ func (c *CommandContext) ToResult() *CommandResult {
 		Command:         c.Command,
 		RawText:         rawText,
 		RawSize:         int64(len(c.RawBuffer)),
+		Truncated:       c.Truncated,
+		Cached:          c.Cached,
 		NormalizedText:  normalizedText,
 		NormalizedSize:  int64(len(normalizedText)),
-		NormalizedLines: c.NormalizedLines,
+		NormalizedLines: effectiveLines,
 		PromptMatched:   c.PromptMatched,
 		PaginationCount: c.PaginationCount,
 		EchoConsumed:    c.EchoConsumed,

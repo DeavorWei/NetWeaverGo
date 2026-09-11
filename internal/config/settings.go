@@ -3,10 +3,16 @@ package config
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"gorm.io/gorm"
+)
+
+var (
+	settingsMu     sync.RWMutex
+	cachedSettings *models.GlobalSettings
 )
 
 // DefaultSettings 返回默认配置
@@ -24,6 +30,12 @@ func DefaultSettings() models.GlobalSettings {
 			PresetMode: "secure", // 默认使用安全模式
 		},
 		Theme: "system", // 默认跟随系统主题
+
+		// P1 可靠性加固默认配置（符合红线6：默认warn，最保守安全模式）
+		RiskCommandMode:     "warn",
+		ConfirmPolicy:       "ask_user",
+		CommandCacheEnabled: false,
+		RawBufferLimitMB:    8,
 	}
 }
 
@@ -48,8 +60,8 @@ func GetDefaultSSHAlgorithms(presetMode string) *models.SSHAlgorithmSettings {
 	}
 }
 
-// LoadSettings 从数据库读取设置，如果不存在则自动创建默认模板
-func LoadSettings() (*models.GlobalSettings, bool, error) {
+// loadSettingsFromDB 从数据库无锁读取设置，并应用默认值。不操作 settingsMu。
+func loadSettingsFromDB() (*models.GlobalSettings, bool, error) {
 	logger.Verbose("Config", "-", "开始从数据库加载系统全局运行参数..")
 	if DB == nil {
 		return nil, false, fmt.Errorf("数据库未初始化")
@@ -83,12 +95,34 @@ func LoadSettings() (*models.GlobalSettings, bool, error) {
 	if strings.TrimSpace(st.Theme) == "" {
 		st.Theme = "system" // 兼容旧数据库：Theme 字段为空时默认跟随系统
 	}
+	if strings.TrimSpace(st.RiskCommandMode) == "" {
+		st.RiskCommandMode = "warn"
+	}
+	if strings.TrimSpace(st.ConfirmPolicy) == "" {
+		st.ConfirmPolicy = "ask_user"
+	}
+	if st.RawBufferLimitMB <= 0 {
+		st.RawBufferLimitMB = 8
+	}
 
 	// 应用数据库中的调试设置
 	ApplyDebugSettings(st.Debug, st.Verbose)
+	return &st, false, nil
+}
+
+// LoadSettings 从数据库读取设置，如果不存在则自动创建默认模板
+func LoadSettings() (*models.GlobalSettings, bool, error) {
+	st, isNew, err := loadSettingsFromDB()
+	if err != nil {
+		return nil, isNew, err
+	}
+
+	settingsMu.Lock()
+	cachedSettings = st
+	settingsMu.Unlock()
 
 	logger.Verbose("Config", "-", "成功将现有全局设置从数据库载入内存")
-	return &st, false, nil
+	return st, isNew, nil
 }
 
 // ApplyDebugSettings 应用调试日志设置到 logger 包
@@ -168,8 +202,50 @@ func SaveSettings(settings models.GlobalSettings) error {
 
 	// 保存后立即应用调试设置
 	ApplyDebugSettings(settings.Debug, settings.Verbose)
+
+	settingsMu.Lock()
+	cachedSettings = &settings
+	settingsMu.Unlock()
+
 	logger.Verbose("Config", "-", "全局参数保存落库完毕，ID=%d", settings.ID)
 	return nil
+}
+
+// GetGlobalSettings 获取当前全局设置（线程安全，优先内存缓存）
+func GetGlobalSettings() *models.GlobalSettings {
+	settingsMu.RLock()
+	if cachedSettings != nil {
+		s := *cachedSettings
+		settingsMu.RUnlock()
+		return &s
+	}
+	settingsMu.RUnlock()
+
+	settingsMu.Lock()
+	defer settingsMu.Unlock()
+	if cachedSettings != nil {
+		s := *cachedSettings
+		return &s
+	}
+
+	st, _, err := loadSettingsFromDB()
+	if err == nil && st != nil {
+		cachedSettings = st
+		s := *st
+		return &s
+	}
+
+	def := DefaultSettings()
+	cachedSettings = &def
+	s := def
+	return &s
+}
+
+// SetGlobalSettings 显式更新内存中的全局设置（供配置变更即时生效及单测模拟）
+func SetGlobalSettings(s models.GlobalSettings) {
+	settingsMu.Lock()
+	defer settingsMu.Unlock()
+	cachedSettings = &s
 }
 
 // ResolveSSHHostKeyPolicy 解析 SSH 主机密钥校验策略与 known_hosts 路径。

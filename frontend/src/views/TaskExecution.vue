@@ -89,6 +89,37 @@
             </template>
           </el-alert>
 
+          <!-- 挂起审批提示条 (交互确认 / 风险命令审批) -->
+          <el-alert
+            v-if="pendingSuspendRequests.length > 0"
+            type="warning"
+            show-icon
+            :closable="false"
+            class="shrink-0 border border-amber-400 bg-amber-50/90 dark:bg-amber-950/40"
+          >
+            <template #title>
+              <div class="flex items-center justify-between w-full flex-wrap gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="font-semibold text-amber-800 dark:text-amber-200">
+                    存在 {{ pendingSuspendRequests.length }} 个设备挂起审批待处理
+                  </span>
+                  <span class="text-xs text-amber-700 dark:text-amber-300">
+                    （遇到交互确认或风险命令拦截，设备暂停等待工程师审批决策）
+                  </span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <el-button
+                    type="primary"
+                    size="small"
+                    @click="suspendDialog.show = true"
+                  >
+                    处理审批 ({{ pendingSuspendRequests.length }})
+                  </el-button>
+                </div>
+              </div>
+            </template>
+          </el-alert>
+
           <el-card shadow="never" :body-style="{ padding: '16px' }">
             <div class="flex items-start justify-between gap-4">
               <div class="space-y-2">
@@ -342,6 +373,79 @@
       </template>
     </el-dialog>
 
+    <!-- 设备挂起审批弹窗 -->
+    <el-dialog
+      v-model="suspendDialog.show"
+      title="设备交互挂起与风险审批"
+      width="680px"
+      :close-on-click-modal="false"
+      class="rounded-xl overflow-hidden"
+    >
+      <div class="space-y-4">
+        <el-alert
+          type="info"
+          show-icon
+          :closable="false"
+          title="以下设备在执行过程中遇到交互确认提示或命中高危风险策略，已局部挂起等待处理。单机等待决策超时默认为 5 分钟。"
+        />
+        <div class="space-y-3 max-h-96 overflow-y-auto scrollbar-custom">
+          <div
+            v-for="req in pendingSuspendRequests"
+            :key="req.id"
+            class="p-3 border border-border rounded-lg bg-bg-panel space-y-2"
+          >
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-sm text-text-primary">{{ req.deviceIp }}</span>
+                <el-tag size="small" type="warning">等待决策</el-tag>
+              </div>
+              <div class="flex items-center gap-2">
+                <el-button
+                  size="small"
+                  type="success"
+                  :loading="suspendDialog.submittingId === req.id"
+                  @click="handleResolveSuspend(req.id, 'continue')"
+                >
+                  批准放行 (Continue)
+                </el-button>
+                <el-button
+                  size="small"
+                  type="danger"
+                  plain
+                  :loading="suspendDialog.submittingId === req.id"
+                  @click="handleResolveSuspend(req.id, 'abort')"
+                >
+                  终止执行 (Abort)
+                </el-button>
+              </div>
+            </div>
+            <div v-if="req.command" class="text-xs bg-bg-card p-2 rounded font-mono text-text-secondary">
+              <span class="text-text-muted">待执行命令: </span>{{ req.command }}
+            </div>
+            <div v-if="req.prompt" class="text-xs text-text-muted bg-bg-card/50 p-2 rounded">
+              <span class="text-text-muted">挂起原因/提示: </span>{{ req.prompt }}
+            </div>
+          </div>
+          <div v-if="pendingSuspendRequests.length === 0" class="text-center py-6 text-sm text-text-muted">
+            暂无挂起等待中的审批
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-3 mt-4">
+          <el-button @click="suspendDialog.show = false">关闭</el-button>
+          <el-button
+            v-if="pendingSuspendRequests.length > 0"
+            type="primary"
+            plain
+            @click="fetchPendingSuspendRequests"
+          >
+            刷新列表
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- 执行历史抽屉 -->
     <ExecutionHistoryDrawer
       v-model="historyDrawer.show"
@@ -466,6 +570,13 @@ const hideSshMismatchBanner = ref(false);
 const sshMismatchModal = ref({
   show: false,
   processing: false
+});
+
+// 交互挂起与风险审批状态
+const pendingSuspendRequests = ref<any[]>([]);
+const suspendDialog = ref({
+  show: false,
+  submittingId: "",
 });
 
 function triggerToast(msg: string, type: "success" | "error" = "success") {
@@ -964,6 +1075,7 @@ async function loadTasks(reason: string = "manual") {
 
 async function syncExecutionView() {
   try {
+    void fetchPendingSuspendRequests();
     const running = await TaskExecutionAPI.listRunningTasks();
     logger.debug(`同步执行视图: running=${running.length}`, 'TaskExecution');
 
@@ -1239,6 +1351,43 @@ async function handleResetSSHAndRetry(retry: boolean) {
     triggerToast(`处理失败: ${msg}`, "error");
   } finally {
     sshMismatchModal.value.processing = false;
+  }
+}
+
+// ================== 挂起审批处理 ==================
+async function fetchPendingSuspendRequests() {
+  try {
+    const list = await TaskExecutionAPI.listPendingSuspendRequests();
+    const valid = (list || []).filter(Boolean);
+    const curRun = executionView.value.runId || taskexecStore.currentRunId;
+    if (curRun) {
+      pendingSuspendRequests.value = valid.filter((r: any) => !r.runId || r.runId === curRun);
+    } else {
+      pendingSuspendRequests.value = valid;
+    }
+  } catch (err) {
+    logger.error('获取挂起请求失败', 'TaskExecution', err);
+  }
+}
+
+async function handleResolveSuspend(requestId: string, action: "continue" | "abort") {
+  try {
+    suspendDialog.value.submittingId = requestId;
+    const ok = await TaskExecutionAPI.submitSuspendDecision(requestId, action);
+    if (ok) {
+      triggerToast(action === "continue" ? "已批准设备继续执行" : "已终止该设备执行");
+      await fetchPendingSuspendRequests();
+      if (pendingSuspendRequests.value.length === 0) {
+        suspendDialog.value.show = false;
+      }
+    } else {
+      triggerToast("决议提交未生效，请求可能已超时或已决议", "error");
+      await fetchPendingSuspendRequests();
+    }
+  } catch (err: any) {
+    triggerToast("提交决议失败: " + (err?.message || err), "error");
+  } finally {
+    suspendDialog.value.submittingId = "";
   }
 }
 

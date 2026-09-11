@@ -38,6 +38,10 @@ func (m *MockMatcherForDetector) MatchErrorRule(line string) (bool, *matcher.Err
 	return ok, rule
 }
 
+func (m *MockMatcherForDetector) CheckConfirmPrompt(data string) (bool, string) {
+	return false, ""
+}
+
 // TestDetectorDetectPrompt 测试检测提示符
 func TestDetectorDetectPrompt(t *testing.T) {
 	mockMatcher := NewMockMatcherForDetector()

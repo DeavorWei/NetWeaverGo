@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 // JournalLogger 记录结构化执行事件，作为投影与排障的事实源。
@@ -35,7 +37,7 @@ func NewJournalLogger(filePath string) (*JournalLogger, error) {
 	}, nil
 }
 
-// WriteRecord 以 JSON Lines 形式写入单条结构化事件。
+// WriteRecord 以 JSON Lines 形式写入单条结构化事件（经过脱敏处理）。
 func (l *JournalLogger) WriteRecord(record interface{}) error {
 	if l == nil {
 		return nil
@@ -46,10 +48,12 @@ func (l *JournalLogger) WriteRecord(record interface{}) error {
 		return err
 	}
 
+	sanitized := logger.SanitizeText(string(data))
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if _, err := l.writer.Write(data); err != nil {
+	if _, err := l.writer.WriteString(sanitized); err != nil {
 		return err
 	}
 	if _, err := l.writer.WriteString("\n"); err != nil {

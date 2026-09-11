@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/NetWeaverGo/core/internal/config"
 )
 
 // scriptReader 按顺序返回预设的字符串块，模拟设备输出流。
@@ -195,3 +197,203 @@ func TestStreamEngineRunPlaybook_EmitsCommandCompletionBeforeNextDispatch(t *tes
 		}
 	}
 }
+
+func TestStreamEngine_RiskCommandMode_WarnDefault(t *testing.T) {
+	// 设置全局模式为 warn（默认灰度放行）
+	st := *config.GetGlobalSettings()
+	oldMode := st.RiskCommandMode
+	st.RiskCommandMode = "warn"
+	config.SetGlobalSettings(st)
+	defer func() {
+		st.RiskCommandMode = oldMode
+		config.SetGlobalSettings(st)
+	}()
+
+	reader := &scriptReader{
+		chunks: []string{
+			"login ok\r\n<S1>",
+			"\r\n<S1>",
+			"format flash:\r\nformating...\r\n<S1>",
+		},
+	}
+	writer := &writeBuffer{}
+	conn := &mockDeviceConnection{reader: reader, writer: writer}
+
+	engine := NewStreamEngine(nil, conn, []string{"format flash:"}, 80)
+	results, err := engine.RunPlaybook(context.Background(), 2*time.Second)
+	if err != nil {
+		t.Fatalf("warn 灰度模式下高危命令应被放行执行，实际报错: %v", err)
+	}
+	if len(results) != 1 || results[0].Command != "format flash:" {
+		t.Fatalf("未正确产生执行结果: %+v", results)
+	}
+	if !strings.Contains(writer.String(), "format flash:\n") {
+		t.Errorf("设备连接应当收到下发的命令，实际写入: %q", writer.String())
+	}
+}
+
+func TestStreamEngine_RiskCommandMode_EnforceBlock_ContinueOnError(t *testing.T) {
+	// 设置严格拦截模式
+	st := *config.GetGlobalSettings()
+	oldMode := st.RiskCommandMode
+	st.RiskCommandMode = "enforce"
+	config.SetGlobalSettings(st)
+	defer func() {
+		st.RiskCommandMode = oldMode
+		config.SetGlobalSettings(st)
+	}()
+
+	reader := &scriptReader{
+		chunks: []string{
+			"login ok\r\n<S1>",
+			"\r\n<S1>",
+			"display version\r\nVersion 1.0\r\n<S1>",
+		},
+	}
+	writer := &writeBuffer{}
+	conn := &mockDeviceConnection{reader: reader, writer: writer}
+
+	// 命令队列：第一条高危阻断，第二条正常查询
+	engine := NewStreamEngine(nil, conn, []string{"format flash:", "display version"}, 80)
+	// 启用单命令错误继续推进
+	engine.adapter.SetContinueOnCmdError(true)
+
+	results, err := engine.RunPlaybook(context.Background(), 2*time.Second)
+	if err != nil {
+		t.Fatalf("ContinueOnCmdError 开启时阻断不应中止整机 Run，但返回错误: %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Fatalf("应当产生 2 条命令的结果（包含失败的第一条），实际产生 %d", len(results))
+	}
+
+	// 验证第一条阻断降级为单命令失败
+	if results[0].Success {
+		t.Errorf("命中 block 的第一条命令应该标记失败")
+	}
+	if !strings.Contains(results[0].ErrorMessage, "风险命令阻断") {
+		t.Errorf("第一条命令未记录阻断错误信息: %q", results[0].ErrorMessage)
+	}
+
+	// 验证第二条命令成功执行
+	if !results[1].Success || results[1].Command != "display version" {
+		t.Errorf("第二条命令应当正常完成: %+v", results[1])
+	}
+
+	// 验证高危命令没有被物理下发到设备
+	if strings.Contains(writer.String(), "format flash:") {
+		t.Errorf("高危阻断命令绝不应物理下发到设备连接，实际写入: %q", writer.String())
+	}
+}
+
+func TestStreamEngine_CommandCache_ReadHit(t *testing.T) {
+	st := *config.GetGlobalSettings()
+	oldCache := st.CommandCacheEnabled
+	st.CommandCacheEnabled = true
+	config.SetGlobalSettings(st)
+	defer func() {
+		st.CommandCacheEnabled = oldCache
+		config.SetGlobalSettings(st)
+	}()
+
+	reader := &scriptReader{
+		chunks: []string{
+			"login ok\r\n<S1>",
+			"\r\n<S1>",
+			"display version\r\nVersion 5.20\r\n<S1>",
+		},
+	}
+	writer := &writeBuffer{}
+	conn := &mockDeviceConnection{reader: reader, writer: writer}
+
+	// 模拟带执行器与缓存的 DeviceExecutor
+	executor := &DeviceExecutor{
+		IP:           "192.168.1.1",
+		commandCache: DefaultCommandCache(),
+	}
+
+	// 先在缓存中预填一条命令回显
+	executor.commandCache.Put("display version", &CommandResult{
+		Command:         "display version",
+		RawText:         "display version\r\nVersion 5.20 (Pre-cached)\r\n<S1>",
+		NormalizedText:  "Version 5.20 (Pre-cached)",
+		NormalizedLines: []string{"Version 5.20 (Pre-cached)"},
+		Success:         true,
+	})
+
+	engine := NewStreamEngine(executor, conn, []string{"display version"}, 80)
+	results, err := engine.RunPlaybook(context.Background(), 2*time.Second)
+	if err != nil {
+		t.Fatalf("缓存命中执行失败: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("应返回 1 条结果，实际 %d", len(results))
+	}
+	if !results[0].Cached {
+		t.Errorf("命中文档/命令缓存后，结果对象中 Cached 标志必须为 true")
+	}
+	if !strings.Contains(results[0].NormalizedText, "Pre-cached") {
+		t.Errorf("未正确复用缓存内容: %q", results[0].NormalizedText)
+	}
+
+	// 验证命令未向设备物理下发（writeBuffer 中不含 display version\n）
+	if strings.Contains(writer.String(), "display version\n") {
+		t.Errorf("命中缓存后不应向设备网络连接发送命令，实际发送了: %q", writer.String())
+	}
+}
+
+func TestStreamEngine_CommandKeyTimeoutMatching(t *testing.T) {
+	reader := &scriptReader{
+		chunks: []string{
+			"login ok\r\n<S1>",
+			"\r\n<S1>",
+			"disp ver\r\nVersion 1.0\r\n<S1>",
+		},
+	}
+	writer := &writeBuffer{}
+	conn := &mockDeviceConnection{reader: reader, writer: writer}
+
+	profile := &config.DeviceProfile{
+		Vendor: "huawei",
+		Commands: []config.CommandSpec{
+			{
+				Command:    "display version",
+				CommandKey: "version",
+				TimeoutSec: 75,
+			},
+		},
+	}
+
+	executor := &DeviceExecutor{
+		IP:            "192.168.1.1",
+		deviceProfile: profile,
+	}
+
+	engine := NewStreamEngine(executor, conn, []string{"disp ver"}, 80)
+	// 设置命令对应的 key 为 "version"
+	engine.adapter.SetCommandKeys([]string{"version"})
+	engine.adapter.newContext.AdvanceCommand()
+
+	var currentTimeout time.Duration
+	defaultTimeout := 10 * time.Second
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+
+	// 模拟执行 ActSendCommand 副作用
+	err := engine.executeSessionEffect(ActSendCommand{
+		Index:   0,
+		Command: "disp ver",
+	}, &currentTimeout, defaultTimeout, timer)
+
+	if err != nil {
+		t.Fatalf("执行 ActSendCommand 失败: %v", err)
+	}
+
+	// 期望匹配到 CommandKey="version" 的画像超时设置 75s
+	if currentTimeout != 75*time.Second {
+		t.Errorf("期望通过 CommandKey 匹配到 75s 超时，实际为 %v", currentTimeout)
+	}
+}
+
+

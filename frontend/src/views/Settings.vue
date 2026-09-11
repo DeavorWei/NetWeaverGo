@@ -262,6 +262,9 @@
         <el-tab-pane label="拓扑命令配置" name="topologyCmd">
           <TopologyCommandConfig />
         </el-tab-pane>
+        <el-tab-pane label="风险命令拦截" name="riskCmd">
+          <RiskCommandPanel />
+        </el-tab-pane>
       </el-tabs>
     </div>
 
@@ -354,6 +357,7 @@ import type { GlobalSettings as BackendSettings } from '../services/api'
 import RuntimeConfigPanel from '../components/settings/RuntimeConfigPanel.vue'
 import HelpTip from '../components/common/HelpTip.vue'
 import TopologyCommandConfig from './TopologyCommandConfig.vue'
+import RiskCommandPanel from '../components/settings/RiskCommandPanel.vue'
 import { ElMessage } from 'element-plus'
 import { getLogger } from '@/utils/logger'
 

@@ -172,6 +172,15 @@ type EvCommandPromptSeen struct {
 
 func (e EvCommandPromptSeen) EventType() string { return "CommandPromptSeen" }
 
+// EvConfirmSeen 检测到设备交互确认提示符事件（如 [Y/N]）
+type EvConfirmSeen struct {
+	Prompt        string
+	Pattern       string
+	DefaultAction string
+}
+
+func (e EvConfirmSeen) EventType() string { return "ConfirmSeen" }
+
 // ============================================================================
 // 动作类型 (Action Types)
 // ============================================================================
@@ -226,9 +235,27 @@ type ActSendCommand struct {
 func (a ActSendCommand) EffectType() string { return "SendCommand" }
 
 // ActSendPagerContinue 发送分页续页动作。
-type ActSendPagerContinue struct{}
+type ActSendPagerContinue struct {
+	ContinueBytes []byte
+}
 
 func (a ActSendPagerContinue) EffectType() string { return "SendPagerContinue" }
+
+// ActAnswerConfirm 发送确认应答动作（如 "Y\n" 或 "N\n"）
+type ActAnswerConfirm struct {
+	AnswerBytes []byte
+}
+
+func (a ActAnswerConfirm) EffectType() string { return "AnswerConfirm" }
+
+// ActRequestConfirmDecision 请求交互确认决策动作
+type ActRequestConfirmDecision struct {
+	Prompt   string
+	Command  string
+	CmdIndex int
+}
+
+func (a ActRequestConfirmDecision) EffectType() string { return "RequestConfirmDecision" }
 
 // ActEmitCommandStart 发送命令开始事件动作。
 type ActEmitCommandStart struct {
@@ -331,17 +358,25 @@ type SessionContext struct {
 
 	// ContinueOnCmdError 命令错误时是否继续执行
 	ContinueOnCmdError bool
+
+	// ConfirmPolicy 交互确认策略: auto_yes / auto_no / ask_user
+	ConfirmPolicy string
+
+	// RawBufferLimitBytes 单命令内存上限（字节，0表示使用默认8MB）
+	RawBufferLimitBytes int
 }
 
 // NewSessionContext 创建新的会话上下文
 func NewSessionContext(commands []string) *SessionContext {
 	return &SessionContext{
-		Queue:              commands,
-		CommandKeys:        make([]string, len(commands)),
-		NextIndex:          0,
-		PendingLines:       make([]string, 0),
-		Results:            make([]*CommandResult, 0),
-		MaxPaginationCount: DefaultMaxPaginationCount,
+		Queue:               commands,
+		CommandKeys:         make([]string, len(commands)),
+		NextIndex:           0,
+		PendingLines:        make([]string, 0),
+		Results:             make([]*CommandResult, 0),
+		MaxPaginationCount:  DefaultMaxPaginationCount,
+		ConfirmPolicy:       "ask_user",
+		RawBufferLimitBytes: 8 * 1024 * 1024,
 	}
 }
 
@@ -375,10 +410,16 @@ func (c *SessionContext) AdvanceCommand() *CommandContext {
 
 	rawCmd := c.Queue[c.NextIndex]
 	ctx := NewCommandContext(c.NextIndex, rawCmd)
+	if c.RawBufferLimitBytes > 0 {
+		ctx.SetMaxBufferSize(c.RawBufferLimitBytes)
+	}
 
-	// 解析命令文本（去除内联注释等）
-	cmdToSend, _ := parseInlineCommand(rawCmd)
+	// 解析命令文本（去除内联注释等并提取内联超时）
+	cmdToSend, customTimeout := parseInlineCommand(rawCmd)
 	ctx.SetCommand(cmdToSend)
+	if customTimeout > 0 {
+		ctx.SetCustomTimeout(customTimeout)
+	}
 
 	// 注意：CommandKey 不在此处设置，由 executor 在结果映射阶段回填
 	// 保持 ctx.Command 为实际命令文本，确保日志和输出正确
@@ -400,12 +441,29 @@ func (c *SessionContext) SetContinueOnCmdError(continueOnError bool) {
 	c.ContinueOnCmdError = continueOnError
 }
 
+// SetConfirmPolicy 设置交互确认策略
+func (c *SessionContext) SetConfirmPolicy(policy string) {
+	if policy != "" {
+		c.ConfirmPolicy = policy
+	}
+}
+
 // GetCommandKey 获取指定索引的命令标识
 func (c *SessionContext) GetCommandKey(index int) string {
 	if index >= 0 && index < len(c.CommandKeys) {
 		return c.CommandKeys[index]
 	}
 	return ""
+}
+
+// SetRawBufferLimitBytes 设置单命令内存上限（字节）
+func (c *SessionContext) SetRawBufferLimitBytes(bytes int) {
+	if bytes > 0 {
+		c.RawBufferLimitBytes = bytes
+		if c.Current != nil {
+			c.Current.SetMaxBufferSize(bytes)
+		}
+	}
 }
 
 // AddPendingLine 添加待处理行

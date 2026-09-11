@@ -62,6 +62,10 @@ func (m *MockMatcher) MatchErrorRule(line string) (bool, *matcher.ErrorRule) {
 	return ok, rule
 }
 
+func (m *MockMatcher) CheckConfirmPrompt(data string) (bool, string) {
+	return false, ""
+}
+
 func (m *MockMatcher) AddErrorLine(line string, rule *matcher.ErrorRule) {
 	m.errorLines[line] = rule
 }

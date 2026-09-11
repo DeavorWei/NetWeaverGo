@@ -26,6 +26,7 @@ type MatcherInterface interface {
 	IsPromptStrict(line string) bool
 	IsPaginationPrompt(line string) bool
 	MatchErrorRule(line string) (bool, *matcher.ErrorRule)
+	CheckConfirmPrompt(data string) (bool, string)
 }
 
 // NewSessionReducer 创建新的 Reducer
@@ -71,6 +72,9 @@ func (r *SessionReducer) ReduceBatch(event SessionEvent) *TransitionBatch {
 
 	case EvPagerSeen:
 		effects = r.handlePagerSeen(e)
+
+	case EvConfirmSeen:
+		effects = r.handleConfirmSeen(e)
 
 	case EvActivePromptSeen:
 		effects = r.handleActivePromptSeen(e)
@@ -177,6 +181,50 @@ func (r *SessionReducer) handlePagerSeen(e EvPagerSeen) []SessionEffect {
 	}
 
 	return nil
+}
+
+// handleConfirmSeen 处理交互确认提示符事件
+func (r *SessionReducer) handleConfirmSeen(e EvConfirmSeen) []SessionEffect {
+	if r.state != NewStateRunning {
+		return nil
+	}
+
+	// 单命令生命周期去重防重入：同一条命令只处理一次确认应答
+	if r.ctx.Current != nil && r.ctx.Current.ConfirmHandled {
+		logger.Debug("SessionReducer", "-", "[交互确认] 当前命令已处理过确认提示，跳过重复处理: %s", e.Prompt)
+		return nil
+	}
+	if r.ctx.Current != nil {
+		r.ctx.Current.ConfirmHandled = true
+	}
+
+	policy := r.ctx.ConfirmPolicy
+	if policy == "" {
+		policy = "ask_user"
+	}
+
+	switch policy {
+	case "auto_yes":
+		logger.Info("SessionReducer", "-", "[交互确认] 策略 auto_yes，自动回复 Y: %s", e.Prompt)
+		return []SessionEffect{ActAnswerConfirm{AnswerBytes: []byte("Y\n")}}
+
+	case "auto_no":
+		logger.Info("SessionReducer", "-", "[交互确认] 策略 auto_no，自动回复 N: %s", e.Prompt)
+		return []SessionEffect{ActAnswerConfirm{AnswerBytes: []byte("N\n")}}
+
+	case "ask_user":
+		fallthrough
+	default:
+		r.state = NewStateSuspended
+		cmd := r.ctx.CurrentCommand()
+		idx := r.ctx.NextIndex - 1
+		logger.Info("SessionReducer", "-", "[交互确认] 策略 ask_user，挂起等待用户决策: %s", e.Prompt)
+		return []SessionEffect{ActRequestConfirmDecision{
+			Prompt:   e.Prompt,
+			Command:  cmd,
+			CmdIndex: idx,
+		}}
+	}
 }
 
 // handleActivePromptSeen 处理活动行提示符检测事件
@@ -349,9 +397,12 @@ func (r *SessionReducer) trySendCommand() []SessionEffect {
 		return nil
 	}
 
-	// 解析命令（设置 Command 字段）
-	cmdToSend, _ := parseInlineCommand(ctx.RawCommand)
+	// 解析命令（设置 Command 字段并提取内联超时）
+	cmdToSend, customTimeout := parseInlineCommand(ctx.RawCommand)
 	ctx.SetCommand(cmdToSend)
+	if customTimeout > 0 {
+		ctx.SetCustomTimeout(customTimeout)
+	}
 
 	r.state = NewStateRunning
 	logger.Debug("SessionReducer", "-", "准备发送命令 [%d]: %s", ctx.Index, ctx.Command)

@@ -130,6 +130,12 @@ type GlobalSettings struct {
 
 	// UI 主题设置
 	Theme string `json:"theme"` // 主题设置: "light" | "dark" | "system"
+
+	// P1 阶段可靠性与灰度控制开关
+	RiskCommandMode     string `json:"riskCommandMode"`     // "warn"（默认，仅告警） | "enforce"（强制阻断/审批） | "off"（关闭）
+	ConfirmPolicy       string `json:"confirmPolicy"`       // "ask_user"（默认） | "auto_yes" | "auto_no"
+	CommandCacheEnabled bool   `json:"commandCacheEnabled"` // 任务级命令缓存开关，默认 false
+	RawBufferLimitMB    int    `json:"rawBufferLimitMB"`    // 单命令缓冲区内存上限（MB），默认 8
 }
 
 // TableName 指定表名

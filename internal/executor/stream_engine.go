@@ -11,6 +11,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/connutil"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/matcher"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/terminal"
 )
@@ -361,10 +362,151 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 	logger.Verbose("StreamEngine", "-", "执行副作用: type=%s", effect.EffectType())
 	switch act := effect.(type) {
 	case ActSendCommand:
+		// 风险命令安全门禁校验（读取灰度模式：warn / enforce / off，默认 warn）
+		riskMode := "warn"
+		if settings := config.GetGlobalSettings(); settings != nil && settings.RiskCommandMode != "" {
+			riskMode = strings.ToLower(strings.TrimSpace(settings.RiskCommandMode))
+		}
+
+		if riskMode != "off" {
+			vendor := ""
+			if e.executor != nil && e.executor.deviceProfile != nil {
+				vendor = e.executor.deviceProfile.Vendor
+			}
+			riskRule, riskAction := GetGlobalRiskValidator().Validate(act.Command, vendor)
+			if riskRule != nil {
+				// 安全收敛：命中任何风险规则，强制将交互确认策略收紧为 ask_user，杜绝 auto_yes 自动放行
+				e.adapter.SetConfirmPolicy("ask_user")
+
+				if riskMode == "warn" {
+					// 灰度放行模式：仅审计记录 Warn 日志，不阻断生产命令
+					logger.Warn("StreamEngine", "-", "[高危灰度放行] 命令 %q 命中规则 [%s: %s], 原始策略: %s",
+						act.Command, riskRule.Pattern, riskRule.Reason, riskAction)
+				} else if riskMode == "enforce" {
+					// 严格生效模式
+				switch riskAction {
+				case models.RiskActionBlock:
+					errMsg := fmt.Sprintf("风险命令阻断: 命令 %q 命中高危规则 [%s: %s]", act.Command, riskRule.Pattern, riskRule.Reason)
+					logger.Error("StreamEngine", "-", "%s", errMsg)
+					if e.executor != nil && e.executor.EventBus != nil {
+						e.executor.EventBus <- report.ExecutorEvent{
+							IP:       e.executor.IP,
+							Type:     report.EventDeviceError,
+							Message:  errMsg,
+							CmdIndex: act.Index + 1,
+							TotalCmd: e.adapter.TotalCommands(),
+						}
+					}
+					// 阻断降级为单命令失败，遵循 ContinueOnCmdError 不终止整机 Run
+					if e.adapter.newContext.ContinueOnCmdError {
+						e.adapter.newContext.FailCurrentCommand(errMsg)
+						e.emitExecutionEvent(ExecutionEvent{
+							Type:         EventError,
+							Kind:         RecordCommandFailed,
+							Command:      act.Command,
+							Index:        act.Index,
+							ErrorMessage: errMsg,
+							Timestamp:    time.Now(),
+						})
+						// 调度推进下一条命令
+						followups := e.adapter.reducer.trySendCommand()
+						return e.executeBatch(NewTransitionBatch(followups...), currentTimeout, defaultTimeout, timer)
+					}
+					e.adapter.MarkFailed(errMsg)
+					return fmt.Errorf("%s", errMsg)
+
+				case models.RiskActionConfirm:
+					logger.Warn("StreamEngine", "-", "风险命令挂起审批: 命令 %q 命中规则 [%s: %s]", act.Command, riskRule.Pattern, riskRule.Reason)
+					if e.suspendHandler != nil {
+						userAction := e.suspendHandler(context.Background(), e.executor.IP, "高危命令人工审批: "+riskRule.Reason, act.Command)
+						if userAction != ActionContinue {
+							errMsg := fmt.Sprintf("风险命令被用户拒绝或取消: %q", act.Command)
+							logger.Warn("StreamEngine", "-", "%s", errMsg)
+							if e.adapter.newContext.ContinueOnCmdError {
+								e.adapter.newContext.FailCurrentCommand(errMsg)
+								e.emitExecutionEvent(ExecutionEvent{
+									Type:         EventError,
+									Kind:         RecordCommandFailed,
+									Command:      act.Command,
+									Index:        act.Index,
+									ErrorMessage: errMsg,
+									Timestamp:    time.Now(),
+								})
+								followups := e.adapter.reducer.trySendCommand()
+								return e.executeBatch(NewTransitionBatch(followups...), currentTimeout, defaultTimeout, timer)
+							}
+							e.adapter.MarkFailed(errMsg)
+							return fmt.Errorf("%s", errMsg)
+						}
+						logger.Info("StreamEngine", "-", "工程师确认执行高危命令: %q", act.Command)
+					} else {
+						errMsg := fmt.Sprintf("无挂起处理器，高危命令被默认阻断: %q", act.Command)
+						logger.Warn("StreamEngine", "-", "%s", errMsg)
+						if e.adapter.newContext.ContinueOnCmdError {
+							e.adapter.newContext.FailCurrentCommand(errMsg)
+							e.emitExecutionEvent(ExecutionEvent{
+								Type:         EventError,
+								Kind:         RecordCommandFailed,
+								Command:      act.Command,
+								Index:        act.Index,
+								ErrorMessage: errMsg,
+								Timestamp:    time.Now(),
+							})
+							followups := e.adapter.reducer.trySendCommand()
+							return e.executeBatch(NewTransitionBatch(followups...), currentTimeout, defaultTimeout, timer)
+						}
+						e.adapter.MarkFailed(errMsg)
+						return fmt.Errorf("%s", errMsg)
+					}
+
+				case models.RiskActionWarn:
+					logger.Warn("StreamEngine", "-", "[高危警告] 命令 %q 命中风险规则: %s", act.Command, riskRule.Reason)
+				}
+			}
+		}
+	}
+
+		// 命令缓存读路径检查
+		useCache := false
+		if settings := config.GetGlobalSettings(); settings != nil && settings.CommandCacheEnabled {
+			useCache = true
+		}
+		if useCache && e.executor != nil && e.executor.commandCache != nil {
+			if cachedResult, found := e.executor.commandCache.Get(act.Command); found && cachedResult != nil {
+				logger.Info("StreamEngine", "-", ">>> [命中文档/命令缓存]: %s (复用回显跳过物理下发)", act.Command)
+				// 写入详细日志标记
+				if e.executor != nil {
+					_ = e.executor.writeDetailCommand(act.Command + " (cached)")
+					if len(cachedResult.NormalizedLines) > 0 && e.executor.logSession != nil {
+						_ = e.executor.logSession.Detail.WriteNormalizedLines(cachedResult.NormalizedLines)
+					}
+				}
+				// 填充当前命令上下文
+				if current := e.adapter.newContext.Current; current != nil {
+					current.RawBuffer = []byte(cachedResult.RawText)
+					current.NormalizedLines = cachedResult.NormalizedLines
+					current.Truncated = cachedResult.Truncated
+					current.Cached = true
+					current.PromptMatched = true
+					current.MarkCompleted()
+				}
+				// 广播事件
+				e.emitExecutionEvent(ExecutionEvent{
+					Type:      EventCmdStart,
+					Kind:      RecordCommandDispatched,
+					Command:   act.Command,
+					Index:     act.Index,
+					Timestamp: time.Now(),
+				})
+				// 注入完成事件推进状态机完成并调度下一条
+				batch := e.adapter.ReduceEventBatch(EvCommandPromptSeen{Prompt: "cache-hit"})
+				return e.executeBatch(batch, currentTimeout, defaultTimeout, timer)
+			}
+		}
+
 		// 发送命令
 		logger.Info("StreamEngine", "-", ">>> [发送命令]: %s", act.Command)
 
-		// 发送命令
 		if _, err := e.conn.SendCommand(act.Command); err != nil {
 			return fmt.Errorf("发送命令失败: %w", err)
 		}
@@ -384,12 +526,21 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 			Timestamp: time.Now(),
 		})
 
-		// 设置超时
-		if cmd := e.adapter.CurrentCommand(); cmd != nil && cmd.CustomTimeout > 0 {
-			*currentTimeout = cmd.CustomTimeout
-		} else {
-			*currentTimeout = defaultTimeout
+		// 设置超时（三级优先级：内联 > 画像 > 默认）
+		cmdTimeout := defaultTimeout
+		cmd := e.adapter.CurrentCommand()
+		if cmd != nil && cmd.CustomTimeout > 0 {
+			cmdTimeout = cmd.CustomTimeout
+		} else if cmd != nil && e.executor != nil && e.executor.deviceProfile != nil {
+			cmdKey := e.adapter.GetCommandKey(cmd.Index)
+			for _, spec := range e.executor.deviceProfile.Commands {
+				if spec.TimeoutSec > 0 && (spec.Command == cmd.Command || (cmdKey != "" && spec.CommandKey == cmdKey)) {
+					cmdTimeout = time.Duration(spec.TimeoutSec) * time.Second
+					break
+				}
+			}
 		}
+		*currentTimeout = cmdTimeout
 
 		// 重置计时器
 		if !timer.Stop() {
@@ -415,15 +566,56 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 		}
 
 	case ActSendPagerContinue:
-		// 发送空格（分页）
-		logger.Debug("StreamEngine", "-", "[自动翻页] 发送空格继续...")
-		if err := e.conn.SendRawBytes([]byte(" ")); err != nil {
-			return fmt.Errorf("发送空格失败: %w", err)
+		// 发送续页字节（优先动作指定，次之画像配置，默认空格）
+		logger.Debug("StreamEngine", "-", "[自动翻页] 发送续页字节继续...")
+		continueBytes := []byte(" ")
+		if len(act.ContinueBytes) > 0 {
+			continueBytes = act.ContinueBytes
+		} else if e.executor != nil && e.executor.deviceProfile != nil && len(e.executor.deviceProfile.Pager.ContinueBytes) > 0 {
+			continueBytes = e.executor.deviceProfile.Pager.ContinueBytes
+		}
+		if err := e.conn.SendRawBytes(continueBytes); err != nil {
+			return fmt.Errorf("发送翻页字节失败: %w", err)
 		}
 
 		// 刷新详细日志
 		if e.executor != nil {
 			_ = e.executor.flushDetailLog()
+		}
+
+	case ActAnswerConfirm:
+		logger.Info("StreamEngine", "-", ">>> [应答确认提示]: %q", string(act.AnswerBytes))
+		if err := e.conn.SendRawBytes(act.AnswerBytes); err != nil {
+			return fmt.Errorf("发送确认应答失败: %w", err)
+		}
+		if e.executor != nil {
+			_ = e.executor.flushDetailLog()
+		}
+
+	case ActRequestConfirmDecision:
+		if e.suspendHandler != nil {
+			logger.Info("StreamEngine", "-", "触发交互确认挂起: prompt=%s, cmd=%s", act.Prompt, act.Command)
+			userAction := e.suspendHandler(context.Background(), e.executor.IP, "需要确认: "+act.Prompt, act.Command)
+			if userAction == ActionContinue {
+				logger.Info("StreamEngine", "-", "用户确认放行并发送 Y: %s", act.Prompt)
+				if err := e.conn.SendRawBytes([]byte("Y\n")); err != nil {
+					return fmt.Errorf("发送确认应答失败: %w", err)
+				}
+				e.adapter.reducer.state = NewStateRunning
+				e.adapter.newState = NewStateRunning
+				if e.executor != nil {
+					_ = e.executor.flushDetailLog()
+				}
+			} else {
+				logger.Warn("StreamEngine", "-", "用户取消或拒绝确认: %s", act.Prompt)
+				_ = e.conn.SendRawBytes([]byte("N\n"))
+				e.adapter.MarkFailed("用户拒绝确认")
+				return fmt.Errorf("设备 %s 的确认提示被用户取消", e.executor.IP)
+			}
+		} else {
+			logger.Warn("StreamEngine", "-", "遇到确认提示但无挂起处理器，默认回复 N: %s", act.Prompt)
+			_ = e.conn.SendRawBytes([]byte("N\n"))
+			return fmt.Errorf("设备 %s 遇到确认提示但无挂起处理器: %s", e.executor.IP, act.Prompt)
 		}
 
 	case ActSendWarmup:
@@ -584,6 +776,22 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 			ErrorMessage: act.ErrorMessage,
 			Timestamp:    time.Now(),
 		})
+
+		// 若开启命令缓存且执行成功，写入缓存以供后续命令或任务复用
+		cacheEnabled := false
+		if settings := config.GetGlobalSettings(); settings != nil && settings.CommandCacheEnabled {
+			cacheEnabled = true
+		}
+		if cacheEnabled && act.Success && e.executor != nil && e.executor.commandCache != nil {
+			results := e.adapter.Results()
+			if len(results) > 0 {
+				lastResult := results[len(results)-1]
+				if lastResult != nil && lastResult.Command == act.Command && !lastResult.Cached {
+					e.executor.commandCache.Put(act.Command, lastResult)
+					logger.Debug("StreamEngine", "-", "已将命令结果写入缓存: %s (size=%d)", act.Command, lastResult.RawSize)
+				}
+			}
+		}
 
 	case ActEmitDeviceError:
 		if e.executor != nil && e.executor.EventBus != nil {

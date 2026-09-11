@@ -197,10 +197,15 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 
 	// Create device executor options
 	execCtx := ctx.Context()
+	errorMode := "pause"
+	if e.settings != nil && e.settings.ErrorMode != "" {
+		errorMode = e.settings.ErrorMode
+	}
 	opts := executor.ExecutorOptions{
-		Vendor:     device.Vendor,
-		LogSession: logSession,
-		Protocol:   device.Protocol,
+		Vendor:         device.Vendor,
+		LogSession:     logSession,
+		Protocol:       device.Protocol,
+		SuspendHandler: BuildDefaultSuspendHandler(ctx.RunID(), errorMode),
 	}
 
 	// Create device executor

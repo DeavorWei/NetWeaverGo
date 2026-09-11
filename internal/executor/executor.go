@@ -70,6 +70,9 @@ type DeviceExecutor struct {
 	// Terminal Replayer - 实验性集成
 	// 用于将 SSH 字节流正确转换为规范化逻辑文本
 	replayer *terminal.Replayer
+
+	// commandCache 任务级单设备命令缓存 (100条 / 512KB / 32MB LRU)
+	commandCache *CommandCache
 }
 
 // NewDeviceExecutor 初始化执行器
@@ -92,13 +95,23 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 		terminalWidth = profile.PTY.Width
 	}
 
+	streamMatcher := matcher.NewStreamMatcher()
+	if profile != nil {
+		streamMatcher.ConfigureFromProfile(
+			profile.Prompt.Suffixes,
+			profile.Prompt.Patterns,
+			profile.Pager.Patterns,
+			profile.Prompt.ConfirmPatterns,
+		)
+	}
+
 	return &DeviceExecutor{
 		IP:                ip,
 		Port:              port,
 		Username:          user,
 		Password:          pass,
 		Protocol:          opts.Protocol,
-		Matcher:           matcher.NewStreamMatcher(),
+		Matcher:           streamMatcher,
 		connectionFactory: factory,
 		EventBus:          opts.EventBus,
 		OnSuspend:         opts.SuspendHandler,
@@ -106,7 +119,16 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 		logSession:        opts.LogSession,
 		deviceProfile:     profile,
 		replayer:          terminal.NewReplayer(terminalWidth),
+		commandCache:      DefaultCommandCache(),
 	}
+}
+
+// GetCommandCache 获取当前设备的命令缓存
+func (e *DeviceExecutor) GetCommandCache() *CommandCache {
+	if e == nil {
+		return nil
+	}
+	return e.commandCache
 }
 
 // Connect 创建设备连接并初始化日志审计。
@@ -341,6 +363,23 @@ func (e *DeviceExecutor) executeInternal(
 	// 设置命令错误时是否继续执行
 	engine.adapter.SetContinueOnCmdError(plan.ContinueOnCmdError)
 
+	// 设置单命令缓冲区上限（全局配置 > 默认 8MB）
+	rawBufferLimitMB := 8
+	if gs := config.GetGlobalSettings(); gs != nil && gs.RawBufferLimitMB > 0 {
+		rawBufferLimitMB = gs.RawBufferLimitMB
+	}
+	engine.adapter.SetRawBufferLimitBytes(rawBufferLimitMB * 1024 * 1024)
+
+	// 设置交互确认策略（画像配置 > 全局配置 > 默认 ask_user）
+	confirmPolicy := "ask_user"
+	if gs := config.GetGlobalSettings(); gs != nil && gs.ConfirmPolicy != "" {
+		confirmPolicy = gs.ConfirmPolicy
+	}
+	if e.deviceProfile != nil && e.deviceProfile.Prompt.ConfirmPolicy != "" {
+		confirmPolicy = e.deviceProfile.Prompt.ConfirmPolicy
+	}
+	engine.adapter.SetConfirmPolicy(confirmPolicy)
+
 	// 设置挂起处理器
 	if e.OnSuspend != nil {
 		engine.SetSuspendHandler(e.OnSuspend)
@@ -369,7 +408,7 @@ func (e *DeviceExecutor) executeInternal(
 	bizCommandKeys := e.dropInitKeys(commandKeys, initCmdCount)
 	report.Results = e.processResultsWithKeys(bizResults, bizCommandKeys, plan.Commands)
 
-	// 更新统计
+	// 更新统计（命令缓存已在 stream_engine 中按配置由 ActEmitCmdFinished 单点写入）
 	for _, result := range report.Results {
 		if result != nil {
 			report.TotalBytesRead += result.RawSize
