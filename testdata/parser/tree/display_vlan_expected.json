@@ -1,0 +1,26 @@
+[
+  {
+    "vlanId": "10",
+    "description": "Office_Network",
+    "portName": "GigabitEthernet0/0/1",
+    "linkType": "access"
+  },
+  {
+    "vlanId": "10",
+    "description": "Office_Network",
+    "portName": "GigabitEthernet0/0/2",
+    "linkType": "trunk"
+  },
+  {
+    "vlanId": "20",
+    "description": "Server_Farm",
+    "portName": "GigabitEthernet0/0/3",
+    "linkType": "access"
+  },
+  {
+    "vlanId": "30",
+    "description": "N/A",
+    "portName": "GigabitEthernet0/0/4",
+    "linkType": "hybrid"
+  }
+]

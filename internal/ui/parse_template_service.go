@@ -65,15 +65,66 @@ func (s *ParseTemplateService) GetTemplate(id uint) (*models.UserParseTemplateVO
 // CreateTemplate 创建模板
 func (s *ParseTemplateService) CreateTemplate(req models.SaveParseTemplateRequest) error {
 	// 校验引擎类型
-	if req.Engine != "regex" && req.Engine != "aggregate" {
+	if req.Engine != "regex" && req.Engine != "aggregate" && req.Engine != "tree" {
 		return fmt.Errorf("不支持的引擎类型: %s", req.Engine)
 	}
 
-	// 校验正则模式
-	if req.Engine == "regex" && req.Pattern != "" {
-		if _, err := regexp.Compile(req.Pattern); err != nil {
-			return fmt.Errorf("正则模式编译失败: %w", err)
+	tpl := &parser.RegexTemplate{
+		Vendor:     req.Vendor,
+		CommandKey: req.CommandKey,
+		Engine:     parser.TemplateEngine(req.Engine),
+		Pattern:    req.Pattern,
+		Multiline:  req.Multiline,
+	}
+
+	var aggregationJSON, parseRulesJSON, fieldMappingJSON string
+
+	switch req.Engine {
+	case "regex":
+		if req.Pattern != "" {
+			if _, err := regexp.Compile(req.Pattern); err != nil {
+				return fmt.Errorf("正则模式编译失败: %w", err)
+			}
 		}
+		if req.FieldMapping != nil {
+			data, err := json.Marshal(req.FieldMapping)
+			if err != nil {
+				return fmt.Errorf("序列化字段映射失败: %w", err)
+			}
+			fieldMappingJSON = string(data)
+			tpl.FieldMapping = req.FieldMapping
+		}
+	case "aggregate":
+		if req.Aggregation != nil {
+			aggConfig, err := s.parseAggregationConfig(req.Aggregation)
+			if err != nil {
+				return fmt.Errorf("聚合配置解析失败: %w", err)
+			}
+			tpl.Aggregation = aggConfig
+			data, err := json.Marshal(req.Aggregation)
+			if err != nil {
+				return fmt.Errorf("序列化聚合配置失败: %w", err)
+			}
+			aggregationJSON = string(data)
+		}
+	case "tree":
+		if req.ParseRules != nil {
+			treeConfig, err := s.parseTreeConfig(req.ParseRules)
+			if err != nil {
+				return fmt.Errorf("规则树配置解析失败: %w", err)
+			}
+			tpl.TreeConfig = treeConfig
+			data, err := json.Marshal(req.ParseRules)
+			if err != nil {
+				return fmt.Errorf("序列化规则树配置失败: %w", err)
+			}
+			parseRulesJSON = string(data)
+		}
+	}
+
+	// 编译预检
+	if _, err := s.compileTemplate(tpl); err != nil {
+		return fmt.Errorf("模板预编译校验失败: %w", err)
 	}
 
 	// 检查唯一键冲突
@@ -85,24 +136,15 @@ func (s *ParseTemplateService) CreateTemplate(req models.SaveParseTemplateReques
 		return fmt.Errorf("模板已存在: vendor=%s commandKey=%s", req.Vendor, req.CommandKey)
 	}
 
-	// 序列化 JSON 字段
-	aggregationJSON, err := json.Marshal(req.Aggregation)
-	if err != nil {
-		return fmt.Errorf("序列化聚合配置失败: %w", err)
-	}
-	fieldMappingJSON, err := json.Marshal(req.FieldMapping)
-	if err != nil {
-		return fmt.Errorf("序列化字段映射失败: %w", err)
-	}
-
 	t := models.UserParseTemplate{
 		Vendor:       req.Vendor,
 		CommandKey:   req.CommandKey,
 		Engine:       req.Engine,
 		Pattern:      req.Pattern,
 		Multiline:    req.Multiline,
-		Aggregation:  string(aggregationJSON),
-		FieldMapping: string(fieldMappingJSON),
+		Aggregation:  aggregationJSON,
+		ParseRules:   parseRulesJSON,
+		FieldMapping: fieldMappingJSON,
 		Description:  req.Description,
 		Enabled:      req.Enabled,
 		Revision:     1,
@@ -112,9 +154,10 @@ func (s *ParseTemplateService) CreateTemplate(req models.SaveParseTemplateReques
 		return fmt.Errorf("创建模板失败: %w", err)
 	}
 
-	// 刷新解析器快照
+	// 刷新解析器快照，若失败则撤销创建回滚 DB，防止脏数据
 	if err := s.reloader.ReloadVendor(req.Vendor); err != nil {
-		return fmt.Errorf("刷新解析器失败: %w", err)
+		_ = s.db.Delete(&t).Error
+		return fmt.Errorf("刷新解析器失败，已撤销模板创建: %w", err)
 	}
 
 	return nil
@@ -131,33 +174,102 @@ func (s *ParseTemplateService) UpdateTemplate(id uint, req models.SaveParseTempl
 	}
 
 	// 校验引擎类型
-	if req.Engine != "regex" && req.Engine != "aggregate" {
+	if req.Engine != "regex" && req.Engine != "aggregate" && req.Engine != "tree" {
 		return fmt.Errorf("不支持的引擎类型: %s", req.Engine)
 	}
 
-	// 校验正则模式
-	if req.Engine == "regex" && req.Pattern != "" {
-		if _, err := regexp.Compile(req.Pattern); err != nil {
-			return fmt.Errorf("正则模式编译失败: %w", err)
+	// 构造预编译模板
+	tpl := &parser.RegexTemplate{
+		Vendor:     t.Vendor,
+		CommandKey: t.CommandKey,
+		Engine:     parser.TemplateEngine(req.Engine),
+		Pattern:    req.Pattern,
+		Multiline:  req.Multiline,
+	}
+
+	// 更新规则配置，未提供则保留原配置，绝不写入 "null"（解决 H1）
+	aggregationJSON := t.Aggregation
+	parseRulesJSON := t.ParseRules
+	fieldMappingJSON := t.FieldMapping
+
+	switch req.Engine {
+	case "regex":
+		if req.Pattern != "" {
+			if _, err := regexp.Compile(req.Pattern); err != nil {
+				return fmt.Errorf("正则模式编译失败: %w", err)
+			}
+		}
+		if req.FieldMapping != nil {
+			data, err := json.Marshal(req.FieldMapping)
+			if err != nil {
+				return fmt.Errorf("序列化字段映射失败: %w", err)
+			}
+			fieldMappingJSON = string(data)
+			tpl.FieldMapping = req.FieldMapping
+		} else if t.FieldMapping != "" {
+			_ = json.Unmarshal([]byte(t.FieldMapping), &tpl.FieldMapping)
+		}
+	case "aggregate":
+		if req.Aggregation != nil {
+			if len(req.Aggregation) == 0 {
+				// 显式清空聚合配置
+				tpl.Aggregation = nil
+				aggregationJSON = ""
+			} else {
+				aggConfig, err := s.parseAggregationConfig(req.Aggregation)
+				if err != nil {
+					return fmt.Errorf("聚合配置解析失败: %w", err)
+				}
+				tpl.Aggregation = aggConfig
+				data, err := json.Marshal(req.Aggregation)
+				if err != nil {
+					return fmt.Errorf("序列化聚合配置失败: %w", err)
+				}
+				aggregationJSON = string(data)
+			}
+		} else if t.Aggregation != "" {
+			var rawMap map[string]interface{}
+			if err := json.Unmarshal([]byte(t.Aggregation), &rawMap); err == nil {
+				aggConfig, _ := s.parseAggregationConfig(rawMap)
+				tpl.Aggregation = aggConfig
+			}
+		}
+	case "tree":
+		if req.ParseRules != nil {
+			treeConfig, err := s.parseTreeConfig(req.ParseRules)
+			if err != nil {
+				return fmt.Errorf("规则树配置解析失败: %w", err)
+			}
+			tpl.TreeConfig = treeConfig
+			data, err := json.Marshal(req.ParseRules)
+			if err != nil {
+				return fmt.Errorf("序列化规则树配置失败: %w", err)
+			}
+			parseRulesJSON = string(data)
+		} else if t.ParseRules != "" {
+			var rawMap map[string]interface{}
+			if err := json.Unmarshal([]byte(t.ParseRules), &rawMap); err == nil {
+				treeConfig, _ := s.parseTreeConfig(rawMap)
+				tpl.TreeConfig = treeConfig
+			}
 		}
 	}
 
-	// 序列化 JSON 字段
-	aggregationJSON, err := json.Marshal(req.Aggregation)
-	if err != nil {
-		return fmt.Errorf("序列化聚合配置失败: %w", err)
-	}
-	fieldMappingJSON, err := json.Marshal(req.FieldMapping)
-	if err != nil {
-		return fmt.Errorf("序列化字段映射失败: %w", err)
+	// 编译校验
+	if _, err := s.compileTemplate(tpl); err != nil {
+		return fmt.Errorf("更新模板预编译校验失败: %w", err)
 	}
 
-	// 更新字段
+	// 记录旧状态
+	oldT := t
+
+	// 更新字段（锁定 vendor 与 commandKey 禁止篡改，解决 M5）
 	t.Engine = req.Engine
 	t.Pattern = req.Pattern
 	t.Multiline = req.Multiline
-	t.Aggregation = string(aggregationJSON)
-	t.FieldMapping = string(fieldMappingJSON)
+	t.Aggregation = aggregationJSON
+	t.ParseRules = parseRulesJSON
+	t.FieldMapping = fieldMappingJSON
 	t.Description = req.Description
 	t.Enabled = req.Enabled
 	t.Revision++
@@ -166,9 +278,10 @@ func (s *ParseTemplateService) UpdateTemplate(id uint, req models.SaveParseTempl
 		return fmt.Errorf("更新模板失败: %w", err)
 	}
 
-	// 刷新解析器快照
+	// 刷新快照，若失败回滚 DB
 	if err := s.reloader.ReloadVendor(t.Vendor); err != nil {
-		return fmt.Errorf("刷新解析器失败: %w", err)
+		_ = s.db.Save(&oldT).Error
+		return fmt.Errorf("刷新解析器失败，已回滚更新: %w", err)
 	}
 
 	return nil
@@ -221,6 +334,19 @@ func (s *ParseTemplateService) TestTemplate(req models.TestParseTemplateRequest)
 		tpl.Aggregation = aggConfig
 	}
 
+	// 解析树形配置
+	if req.Engine == "tree" && req.ParseRules != nil {
+		treeConfig, err := s.parseTreeConfig(req.ParseRules)
+		if err != nil {
+			result.Error = fmt.Sprintf("解析规则树配置失败: %v", err)
+			return result
+		}
+		tpl.TreeConfig = treeConfig
+	}
+
+	// 字段映射（解决 M3）
+	tpl.FieldMapping = req.FieldMapping
+
 	// 编译模板
 	compiled, err := s.compileTemplate(tpl)
 	if err != nil {
@@ -237,6 +363,9 @@ func (s *ParseTemplateService) TestTemplate(req models.TestParseTemplateRequest)
 	case parser.EngineAggregate:
 		engine := parser.NewAggregateEngine()
 		rows, err = engine.ParseWithTemplate(compiled, req.RawText)
+	case parser.EngineTree:
+		engine := parser.NewTreeEngine()
+		rows, err = engine.ParseWithTemplate(compiled, req.RawText)
 	default:
 		result.Error = fmt.Sprintf("不支持的引擎类型: %s", tpl.Engine)
 		return result
@@ -245,6 +374,21 @@ func (s *ParseTemplateService) TestTemplate(req models.TestParseTemplateRequest)
 	if err != nil {
 		result.Error = fmt.Sprintf("解析失败: %v", err)
 		return result
+	}
+
+	// 应用字段映射
+	if len(compiled.FieldMapping) > 0 {
+		for i, row := range rows {
+			mappedRow := make(map[string]string, len(row))
+			for k, v := range row {
+				if targetKey, ok := compiled.FieldMapping[k]; ok && targetKey != "" {
+					mappedRow[targetKey] = v
+				} else {
+					mappedRow[k] = v
+				}
+			}
+			rows[i] = mappedRow
+		}
 	}
 
 	result.Success = true
@@ -275,6 +419,11 @@ func (s *ParseTemplateService) toVO(t models.UserParseTemplate) (models.UserPars
 			return vo, fmt.Errorf("解析聚合配置失败: %w", err)
 		}
 	}
+	if t.ParseRules != "" {
+		if err := json.Unmarshal([]byte(t.ParseRules), &vo.ParseRules); err != nil {
+			return vo, fmt.Errorf("解析规则树配置失败: %w", err)
+		}
+	}
 	if t.FieldMapping != "" {
 		if err := json.Unmarshal([]byte(t.FieldMapping), &vo.FieldMapping); err != nil {
 			return vo, fmt.Errorf("解析字段映射失败: %w", err)
@@ -282,6 +431,23 @@ func (s *ParseTemplateService) toVO(t models.UserParseTemplate) (models.UserPars
 	}
 
 	return vo, nil
+}
+
+// parseTreeConfig 解析规则树配置
+func (s *ParseTemplateService) parseTreeConfig(data map[string]interface{}) (*parser.TreeTemplate, error) {
+	if data == nil {
+		return nil, fmt.Errorf("规则树配置为空")
+	}
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("序列化规则树配置失败: %w", err)
+	}
+
+	var treeConfig parser.TreeTemplate
+	if err := json.Unmarshal(bytes, &treeConfig); err != nil {
+		return nil, fmt.Errorf("反序列化规则树配置失败: %w", err)
+	}
+	return &treeConfig, nil
 }
 
 // parseAggregationConfig 解析聚合配置
@@ -371,6 +537,16 @@ func (s *ParseTemplateService) compileTemplate(tpl *parser.RegexTemplate) (*pars
 					OriginalPattern: rule.Pattern,
 				})
 			}
+		}
+
+	case parser.EngineTree:
+		if tpl.TreeConfig != nil && len(tpl.TreeConfig.Rules) > 0 {
+			compiledRules, rootRules, err := parser.CompileTreeRules(tpl.TreeConfig.Rules)
+			if err != nil {
+				return nil, fmt.Errorf("编译规则树失败: %w", err)
+			}
+			compiled.CompiledTreeRules = compiledRules
+			compiled.TreeRootRules = rootRules
 		}
 	}
 

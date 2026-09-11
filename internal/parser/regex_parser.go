@@ -2,6 +2,7 @@ package parser
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -71,8 +72,11 @@ func (p *RegexParser) extractNamedGroups(re *regexp.Regexp, match []string) map[
 	subexpNames := re.SubexpNames()
 
 	for i, name := range subexpNames {
-		if i == 0 || name == "" {
-			continue // 跳过整个匹配和未命名组
+		if i == 0 {
+			continue // 跳过整个匹配
+		}
+		if name == "" {
+			name = strconv.Itoa(i)
 		}
 		if i < len(match) {
 			row[name] = strings.TrimSpace(match[i])

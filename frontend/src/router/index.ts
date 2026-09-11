@@ -15,6 +15,7 @@ const Settings = () => import('../views/Settings.vue')
 const Topology = () => import('../views/Topology.vue')
 const PlanCompare = () => import('../views/PlanCompare.vue')
 const SNMPQuery = () => import('../views/SNMP/SNMPQuery.vue')
+const ParseTemplates = () => import('../views/ParseTemplates.vue')
 
 const routes = [
   {
@@ -30,6 +31,11 @@ const routes = [
     path: '/commands',
     name: 'Commands',
     component: Commands
+  },
+  {
+    path: '/parse-templates',
+    name: 'ParseTemplates',
+    component: ParseTemplates
   },
   {
     path: '/tasks',

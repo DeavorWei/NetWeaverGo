@@ -1,0 +1,30 @@
+[
+  {
+    "interface": "GigabitEthernet0/0/1",
+    "phy": "up",
+    "protocol": "up",
+    "inErrors": "0",
+    "outErrors": "0"
+  },
+  {
+    "interface": "GigabitEthernet0/0/2",
+    "phy": "down",
+    "protocol": "down",
+    "inErrors": "0",
+    "outErrors": "0"
+  },
+  {
+    "interface": "GigabitEthernet0/0/3",
+    "phy": "*down",
+    "protocol": "down",
+    "inErrors": "0",
+    "outErrors": "0"
+  },
+  {
+    "interface": "XGigabitEthernet0/0/1",
+    "phy": "up",
+    "protocol": "up",
+    "inErrors": "0",
+    "outErrors": "0"
+  }
+]

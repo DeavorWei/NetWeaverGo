@@ -135,7 +135,27 @@ const (
 	EngineRegex TemplateEngine = "regex"
 	// EngineAggregate 多行聚合引擎
 	EngineAggregate TemplateEngine = "aggregate"
+	// EngineTree 规则树引擎（二维/层级结构）
+	EngineTree TemplateEngine = "tree"
 )
+
+// EngineMode 解析引擎灰度模式（方案 §10.3）
+type EngineMode string
+
+const (
+	EngineModeAuto       EngineMode = "auto"        // 自动（默认，使用模板声明的引擎）
+	EngineModeLegacyOnly EngineMode = "legacy_only" // 强制回退到 legacy (regex/aggregate)
+	EngineModeTreeOnly   EngineMode = "tree_only"   // 强制优先使用 tree 引擎
+)
+
+// ParserMetrics 解析器运行指标（方案 §10.2）
+type ParserMetrics struct {
+	TotalParsed     uint64 `json:"totalParsed"`
+	SuccessCount    uint64 `json:"successCount"`
+	FailureCount    uint64 `json:"failureCount"`
+	FallbackCount   uint64 `json:"fallbackCount"`
+	TotalDurationMs int64  `json:"totalDurationMs"`
+}
 
 // RegexTemplate 统一模板定义
 type RegexTemplate struct {
@@ -145,6 +165,7 @@ type RegexTemplate struct {
 	Pattern      string             `json:"pattern,omitempty"`
 	Multiline    bool               `json:"multiline,omitempty"`
 	Aggregation  *AggregationConfig `json:"aggregation,omitempty"`
+	TreeConfig   *TreeTemplate      `json:"treeConfig,omitempty"`
 	FieldMapping map[string]string  `json:"fieldMapping,omitempty"`
 	Description  string             `json:"description,omitempty"`
 }
@@ -178,6 +199,10 @@ type CompiledTemplate struct {
 	CompiledRecordStart []*regexp.Regexp
 	// CompiledCaptureRules 已编译的捕获规则
 	CompiledCaptureRules []CompiledCaptureRule
+	// CompiledTreeRules 规则树扁平集合
+	CompiledTreeRules []*CompiledTreeRule
+	// TreeRootRules 规则树根节点列表
+	TreeRootRules []*CompiledTreeRule
 }
 
 // CompiledCaptureRule 已编译的捕获规则
@@ -210,4 +235,8 @@ var (
 	ErrUnsupportedEngine = errors.New("不支持的模板引擎")
 	// ErrInvalidAggregationConfig 无效的聚合配置
 	ErrInvalidAggregationConfig = errors.New("无效的聚合配置")
+	// ErrInvalidTreeRule 无效的树形规则
+	ErrInvalidTreeRule = errors.New("无效的树形规则")
+	// ErrCyclicTreeRule 规则树依赖成环
+	ErrCyclicTreeRule = errors.New("规则树依赖成环")
 )

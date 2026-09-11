@@ -434,16 +434,16 @@ func (s *Service) ExportDiffReport(reportID string, format string, targetPath st
 	if err != nil {
 		return "", err
 	}
-	if targetPath == "" {
-		return "", fmt.Errorf("targetPath 不能为空")
-	}
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-		return "", err
-	}
-
 	format = strings.ToLower(strings.TrimSpace(format))
 	if format == "" {
 		format = "json"
+	}
+	if targetPath == "" {
+		ext := "." + format
+		targetPath = filepath.Join(os.TempDir(), fmt.Sprintf("diff_report_%s%s", reportID, ext))
+	}
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		return "", err
 	}
 
 	switch format {

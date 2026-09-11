@@ -932,8 +932,16 @@ func TestTracertGeoResolver_FullIntegration(t *testing.T) {
 	ctx := context.Background()
 	resolver.ResolveAsync(ctx, testIPs)
 
-	// 等待所有请求完成
-	time.Sleep(500 * time.Millisecond)
+	// 等待所有请求完成（最多等待 3 秒）
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if resolver.GetCachedResult("1.1.1.1") != nil &&
+			resolver.GetCachedResult("4.4.4.4") != nil &&
+			resolver.GetCachedResult("9.10.11.12") != nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 
 	// 验证结果
 	// 保留 IP

@@ -120,7 +120,11 @@ func (b *rawSocketBackend) pingOneRaw(ip net.IP, timeout uint32, dataSize uint16
 	deadline := sendTime.Add(time.Duration(timeout) * time.Millisecond)
 	conn.SetReadDeadline(deadline)
 
-	rb := make([]byte, maxMessageSize)
+	bufSize := dataSize + 256
+	if bufSize < 1500 {
+		bufSize = 1500
+	}
+	rb := make([]byte, bufSize)
 	for {
 		n, peer, err := conn.ReadFrom(rb)
 		if err != nil {

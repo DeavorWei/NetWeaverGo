@@ -68,13 +68,19 @@ func main() {
 func runGUI() {
 	logger.Info("System", "-", "正在初始化 Wails GUI 环境...")
 
-	// 初始化解析器管理器
+	// 初始化解析器管理器并挂载用户模板持久化数据源（打通断头路 #2）
 	parserManager := parser.NewParserManager()
+	parseTemplateRepo := repository.NewParseTemplateRepository(config.DB)
+	parserManager.SetUserTemplateSource(parseTemplateRepo)
 	if err := parserManager.Bootstrap(); err != nil {
 		logger.Error("System", "-", "解析器管理器初始化失败: %v", err)
 		os.Exit(1)
 	}
 	logger.Info("System", "-", "解析器管理器已启动")
+
+	// 创建解析模板服务（打通断头路 #3）
+	parseTemplateService := ui.NewParseTemplateService(config.DB, parserManager)
+	logger.Info("System", "-", "解析模板管理服务已创建")
 
 	// 创建应用级共享的统一任务执行服务（阶段1：统一运行时服务化）
 	taskExecutionService := taskexec.NewTaskExecutionService(config.DB, parserManager)
@@ -158,6 +164,7 @@ func runGUI() {
 			application.NewService(taskExecutionUIService), // 统一任务执行UI服务（阶段1）
 			application.NewService(scheduleUIService),      // 任务调度配置服务
 			application.NewService(snmpQueryService),       // SNMP 即时查询服务
+			application.NewService(parseTemplateService),  // 解析模板管理服务（断头路 #3 接通）
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assetsFS),

@@ -1,0 +1,16 @@
+vlan 10
+ description Office_Network
+ port GigabitEthernet0/0/1
+  port link-type access
+ port GigabitEthernet0/0/2
+  port link-type trunk
+#
+vlan 20
+ description Server_Farm
+ port GigabitEthernet0/0/3
+  port link-type access
+#
+vlan 30
+ port GigabitEthernet0/0/4
+  port link-type hybrid
+#

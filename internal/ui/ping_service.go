@@ -701,7 +701,7 @@ func (s *PingService) mergeWithDefaultPingConfig(config icmp.PingConfig) icmp.Pi
 		config.DataSize = defaults.DataSize
 	}
 	if config.Count == 0 {
-		config.Count = defaults.Count
+		config.Count = 3 // UI 交互层默认 ping 3 次，提供重试容错
 	}
 	// Concurrency == 0 means "auto", will be set dynamically in StartBatchPing
 	// Do NOT fill with default value here

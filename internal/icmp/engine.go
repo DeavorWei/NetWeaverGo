@@ -111,11 +111,18 @@ func (e *BatchPingEngine) RunWithOptions(ctx context.Context, ips []string, opts
 	}
 
 	// Semaphore for concurrency control
-	sem := make(chan struct{}, e.config.Concurrency)
+	concurrency := e.config.Concurrency
+	if concurrency <= 0 {
+		concurrency = len(ips)
+	}
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 	var progressMu sync.Mutex
 
-	logger.Debug("BatchPing", "-", "并发控制初始化: concurrency=%d", e.config.Concurrency)
+	logger.Debug("BatchPing", "-", "并发控制初始化: concurrency=%d", concurrency)
 
 	for i, ipStr := range ips {
 		// Check for cancellation

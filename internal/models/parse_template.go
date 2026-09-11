@@ -14,6 +14,7 @@ type UserParseTemplate struct {
 	Multiline    bool      `gorm:"column:multiline;default:true" json:"multiline"`
 	Aggregation  string    `gorm:"column:aggregation;type:text" json:"aggregation"`
 	FieldMapping string    `gorm:"column:field_mapping;type:text" json:"fieldMapping"`
+	ParseRules   string    `gorm:"column:parse_rules;type:text" json:"parseRules"`
 	Description  string    `gorm:"column:description" json:"description"`
 	Enabled      bool      `gorm:"column:enabled;default:true" json:"enabled"`
 	Revision     uint      `gorm:"column:revision;default:1" json:"revision"`
@@ -34,6 +35,7 @@ type SaveParseTemplateRequest struct {
 	Pattern      string                 `json:"pattern"`
 	Multiline    bool                   `json:"multiline"`
 	Aggregation  map[string]interface{} `json:"aggregation"`
+	ParseRules   map[string]interface{} `json:"parseRules"`
 	FieldMapping map[string]string      `json:"fieldMapping"`
 	Description  string                 `json:"description"`
 	Enabled      bool                   `json:"enabled"`
@@ -47,6 +49,7 @@ type TestParseTemplateRequest struct {
 	Pattern      string                 `json:"pattern"`
 	Multiline    bool                   `json:"multiline"`
 	Aggregation  map[string]interface{} `json:"aggregation"`
+	ParseRules   map[string]interface{} `json:"parseRules"`
 	FieldMapping map[string]string      `json:"fieldMapping"`
 	RawText      string                 `json:"rawText"`
 }
@@ -68,6 +71,7 @@ type UserParseTemplateVO struct {
 	Pattern      string                 `json:"pattern"`
 	Multiline    bool                   `json:"multiline"`
 	Aggregation  map[string]interface{} `json:"aggregation"`
+	ParseRules   map[string]interface{} `json:"parseRules"`
 	FieldMapping map[string]string      `json:"fieldMapping"`
 	Description  string                 `json:"description"`
 	Enabled      bool                   `json:"enabled"`

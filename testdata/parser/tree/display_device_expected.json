@@ -1,0 +1,30 @@
+[
+  {
+    "slot": "1",
+    "sub": "-",
+    "type": "S5735-L24P4S",
+    "status": "Normal",
+    "role": "Master"
+  },
+  {
+    "slot": "1",
+    "sub": "PWR1",
+    "type": "POWER",
+    "status": "Normal",
+    "role": "NA"
+  },
+  {
+    "slot": "2",
+    "sub": "-",
+    "type": "S5735-L24P4S",
+    "status": "Normal",
+    "role": "Standby"
+  },
+  {
+    "slot": "2",
+    "sub": "PWR1",
+    "type": "POWER",
+    "status": "Normal",
+    "role": "NA"
+  }
+]
