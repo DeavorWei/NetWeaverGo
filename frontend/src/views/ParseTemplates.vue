@@ -25,172 +25,26 @@
 
     <!-- 主工作区：左侧模板列表，右侧在线实时测试工作台 -->
     <div class="flex-1 grid grid-cols-12 gap-4 min-h-0">
-      <!-- 模板列表 -->
-      <div class="col-span-5 bg-bg-secondary rounded-lg border border-border p-4 flex flex-col min-h-0">
-        <div class="flex items-center justify-between pb-3 border-b border-border">
-          <span class="font-medium text-sm text-text-primary">模板列表 ({{ templates.length }})</span>
-          <el-button size="small" link @click="loadTemplates">刷新</el-button>
-        </div>
-        <div class="flex-1 overflow-y-auto mt-2 space-y-2 pr-1">
-          <div
-            v-for="tpl in templates"
-            :key="tpl.id"
-            @click="selectTemplate(tpl)"
-            :class="[
-              'p-3 rounded border cursor-pointer transition-colors',
-              selectedTpl?.id === tpl.id
-                ? 'bg-blue-500/10 border-blue-500/50'
-                : 'bg-bg-primary/50 border-border hover:border-text-muted/40'
-            ]"
-          >
-            <div class="flex items-center justify-between">
-              <span class="font-medium text-sm text-text-primary font-mono">{{ tpl.commandKey }}</span>
-              <div class="flex items-center gap-1.5">
-                <span class="text-xs px-1.5 py-0.5 rounded font-mono" :class="getEngineBadgeClass(tpl.engine)">
-                  {{ tpl.engine }}
-                </span>
-                <span v-if="tpl.enabled" class="text-xs text-emerald-400">● 启用</span>
-                <span v-else class="text-xs text-text-muted">○ 停用</span>
-              </div>
-            </div>
-            <div class="text-xs text-text-muted mt-1 truncate">
-              {{ tpl.description || '无描述' }}
-            </div>
-            <div v-if="getAppliesToText(tpl.appliesTo)" class="text-[11px] text-cyan-400 font-mono mt-1 truncate">
-              <span class="px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20">
-                🎯 {{ getAppliesToText(tpl.appliesTo) }}
-              </span>
-            </div>
-            <div class="flex justify-between items-center mt-2 pt-2 border-t border-border/50 text-xs">
-              <span class="text-text-muted/60 font-mono text-[11px]">rev.{{ tpl.revision }}</span>
-              <div class="flex gap-2">
-                <el-button size="small" link type="primary" @click.stop="openEditDialog(tpl)">编辑</el-button>
-                <el-button size="small" link type="danger" @click.stop="handleDelete(tpl)">删除</el-button>
-              </div>
-            </div>
-          </div>
-          <div v-if="templates.length === 0" class="text-center py-12 text-text-muted text-xs">
-            当前厂商暂无自定义模板，采集时将采用系统内置模板。
-          </div>
-        </div>
-      </div>
+      <!-- 模板列表（组件化，方案 §4.3.6） -->
+      <TemplateList
+        :templates="templates"
+        :selected-id="selectedTpl?.id"
+        @refresh="loadTemplates"
+        @select="selectTemplate"
+        @edit="openEditDialog"
+        @delete="handleDelete"
+      />
 
-      <!-- 右侧在线测试台 -->
-      <div class="col-span-7 bg-bg-secondary rounded-lg border border-border p-4 flex flex-col min-h-0">
-        <div class="flex items-center justify-between pb-3 border-b border-border">
-          <div class="flex items-center gap-2">
-            <span class="font-medium text-sm text-text-primary">回显测试面板 (Echo Test Pane)</span>
-            <span v-if="selectedTpl" class="text-xs text-text-muted">
-              当前载入: <span class="font-mono text-blue-400">{{ selectedTpl.commandKey }}</span>
-              ({{ selectedTpl.engine }})
-            </span>
-          </div>
-          <div class="flex items-center gap-2">
-            <el-button type="success" size="small" :loading="testing" @click="runTest">
-              ▶ 运行解析测试
-            </el-button>
-          </div>
-        </div>
-
-        <div class="grid grid-rows-2 gap-3 flex-1 min-h-0 mt-3">
-          <!-- 原始回显输入区 -->
-          <div class="flex flex-col min-h-0">
-            <div class="text-xs text-text-muted mb-1 flex justify-between items-center">
-              <span>原始 CLI 回显文本 (Raw Echo)</span>
-              <span class="text-text-muted/60 text-[11px]">粘贴设备真实回显进行验证</span>
-            </div>
-            <textarea
-              v-model="rawEchoInput"
-              class="flex-1 w-full bg-bg-primary text-text-primary p-2.5 rounded border border-border font-mono text-xs focus:outline-none focus:border-blue-500 resize-none"
-              placeholder="在此粘贴设备的命令原始回显文本，例如 display device、display interface 等..."
-            ></textarea>
-          </div>
-
-          <!-- 解析结果多视图预览区 (表格 / 树状 / JSON 格式化) -->
-          <div class="flex flex-col min-h-0 border border-border rounded bg-bg-primary p-3">
-            <div class="flex items-center justify-between pb-2 border-b border-border/50 text-xs">
-              <div class="flex items-center gap-3">
-                <span class="font-medium text-text-primary">
-                  解析结果
-                  <span v-if="testResult && testResult.success" class="text-blue-400 font-mono">
-                    ({{ testResult.count }} 行)
-                  </span>
-                </span>
-                <el-radio-group v-model="resultViewMode" size="small">
-                  <el-radio-button label="table">📊 表格视图</el-radio-button>
-                  <el-radio-button label="tree">🌲 树状视图</el-radio-button>
-                  <el-radio-button label="json">📄 JSON 格式化</el-radio-button>
-                </el-radio-group>
-              </div>
-              <span v-if="testResult?.error" class="text-rose-400 truncate max-w-sm text-xs" :title="testResult.error">
-                ⚠ {{ testResult.error }}
-              </span>
-            </div>
-
-            <div class="flex-1 overflow-auto mt-2">
-              <!-- 表格视图 -->
-              <table v-if="resultViewMode === 'table' && testResult && testResult.results.length > 0" class="w-full text-xs text-left border-collapse">
-                <thead>
-                  <tr class="bg-bg-secondary/60 text-text-muted border-b border-border font-mono">
-                    <th class="p-1.5 w-10 text-center">#</th>
-                    <th v-for="col in resultColumns" :key="col" class="p-1.5 font-medium">
-                      {{ col }}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="(row, idx) in testResult.results"
-                    :key="idx"
-                    class="border-b border-border/30 hover:bg-bg-hover/50 font-mono"
-                  >
-                    <td class="p-1.5 text-center text-text-muted/60">{{ idx + 1 }}</td>
-                    <td v-for="col in resultColumns" :key="col" class="p-1.5 text-text-primary">
-                      {{ row[col] !== undefined && row[col] !== '' ? row[col] : '-' }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <!-- 树状折叠视图 (真正的 Tree View) -->
-              <div v-else-if="resultViewMode === 'tree' && testResult && testResult.results.length > 0" class="space-y-2 p-1">
-                <el-collapse>
-                  <el-collapse-item
-                    v-for="(row, idx) in testResult.results"
-                    :key="idx"
-                    :name="idx"
-                  >
-                    <template #title>
-                      <div class="flex items-center gap-2 font-mono text-xs">
-                        <span class="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-bold">#{{ idx + 1 }}</span>
-                        <span class="text-text-primary font-medium">{{ getRowPrimarySummary(row) }}</span>
-                        <span class="text-text-muted text-[11px]">({{ Object.keys(row).length }} 字段)</span>
-                      </div>
-                    </template>
-                    <div class="grid grid-cols-2 gap-2 p-2 bg-bg-secondary/40 rounded text-xs font-mono">
-                      <div v-for="(val, key) in row" :key="key" class="flex items-center justify-between border-b border-border/20 py-1">
-                        <span class="text-text-muted">{{ key }}:</span>
-                        <span class="text-emerald-400 font-semibold">{{ val || '-' }}</span>
-                      </div>
-                    </div>
-                  </el-collapse-item>
-                </el-collapse>
-              </div>
-
-              <!-- JSON 格式化视图 -->
-              <pre
-                v-else-if="resultViewMode === 'json' && testResult && testResult.results.length > 0"
-                class="h-full bg-bg-secondary/60 p-3 rounded text-xs font-mono overflow-auto text-emerald-400 select-text"
-              >{{ JSON.stringify(testResult.results, null, 2) }}</pre>
-
-              <!-- 空状态 -->
-              <div v-else-if="!testing && (!testResult || testResult.results.length === 0)" class="h-full flex items-center justify-center text-xs text-text-muted">
-                点击上方"运行解析测试"查看解析结果。
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- 右侧在线测试台（组件化，方案 §4.3.6） -->
+      <EchoTestPane
+        v-model:raw="rawEchoInput"
+        v-model:view-mode="resultViewMode"
+        :selected-tpl="selectedTpl"
+        :result="testResult"
+        :testing="testing"
+        :columns="resultColumns"
+        @run="runTest"
+      />
     </div>
 
     <!-- 模板新增/编辑弹窗 (支持 groupIndex 编辑、清空 aggregate、M5 锁定、边改边测) -->
@@ -268,113 +122,22 @@
           </el-col>
         </el-row>
 
-        <!-- Tree 规则树配置区 (含 groupIndex 编辑) -->
-        <div v-if="formData.engine === 'tree'" class="border border-border rounded p-3 bg-bg-secondary/40 mb-3">
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex items-center gap-3">
-              <span class="font-medium text-xs text-text-primary">规则树规则定义 (Tree Rules)</span>
-              <div class="flex items-center gap-1.5">
-                <span class="text-xs text-text-muted">拍平最大深度 (MaxLevel):</span>
-                <el-input-number
-                  v-model="maxOutputLevel"
-                  :min="0"
-                  :max="10"
-                  size="small"
-                  controls-position="right"
-                  class="w-20"
-                />
-                <span class="text-[11px] text-text-muted">(0 为不限深度)</span>
-              </div>
-            </div>
-            <el-button type="primary" size="small" link @click="addTreeRule">+ 添加规则项</el-button>
-          </div>
-
-          <el-table :data="treeRules" size="small" border class="w-full" max-height="260">
-            <el-table-column label="字段名" min-width="95">
-              <template #default="{ row }">
-                <el-input v-model="row.parseItem" size="small" placeholder="如 slot" />
-              </template>
-            </el-table-column>
-            <el-table-column label="父字段" min-width="85">
-              <template #default="{ row }">
-                <el-input v-model="row.parentItem" size="small" placeholder="空为根" />
-              </template>
-            </el-table-column>
-            <el-table-column label="列表?" width="55" align="center">
-              <template #default="{ row }">
-                <el-checkbox v-model="row.isList" />
-              </template>
-            </el-table-column>
-            <el-table-column label="分块正则 (SplitRegex)" min-width="135">
-              <template #default="{ row }">
-                <el-input v-model="row.splitRegex" size="small" placeholder="如 (?m)^Slot\s+(\d+):" />
-                <div v-if="checkUnsupportedRegex(row.splitRegex)" class="text-[10px] text-amber-400">
-                  ⚠ 包含不支持的前瞻/后顾
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="取值正则 (ParseRegex)" min-width="135">
-              <template #default="{ row }">
-                <el-input v-model="row.parseRegex" size="small" placeholder="如 Type:\s*(\S+)" />
-                <div v-if="checkUnsupportedRegex(row.parseRegex)" class="text-[10px] text-amber-400">
-                  ⚠ 包含不支持的前瞻/后顾
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="组号" width="60" align="center">
-              <template #default="{ row }">
-                <el-input-number
-                  v-model="row.groupIndex"
-                  :min="1"
-                  :max="9"
-                  size="small"
-                  controls-position="right"
-                  class="w-full"
-                />
-              </template>
-            </el-table-column>
-            <el-table-column label="输出?" width="55" align="center">
-              <template #default="{ row }">
-                <el-checkbox v-model="row.isOutput" />
-              </template>
-            </el-table-column>
-            <el-table-column label="默认值" min-width="70">
-              <template #default="{ row }">
-                <el-input v-model="row.defaultValue" size="small" placeholder="空或N/A" />
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="50" align="center">
-              <template #default="{ $index }">
-                <el-button type="danger" link size="small" @click="removeTreeRule($index)">删</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-
-          <div class="text-[11px] text-text-muted mt-2">
-            💡 规则说明：分块正则 (SplitRegex) 匹配各块头；取值正则 (ParseRegex) 匹配属性；组号指定抽取第几捕获组（缺省 1）；Go RE2 建议使用 <code class="text-amber-300">(?m)</code> 开启多行，不支持正向/负向预查。
-          </div>
+        <!-- Tree 规则树配置区（组件化，方案 §4.3.6） -->
+        <div v-if="formData.engine === 'tree'" class="mb-3">
+          <RuleTableEditor
+            v-model:max-level="maxOutputLevel"
+            :rules="treeRules"
+            @add="addTreeRule"
+            @remove="removeTreeRule"
+          />
         </div>
 
-        <!-- Regex 正则配置区 -->
-        <div v-if="formData.engine === 'regex'" class="border border-border rounded p-3 bg-bg-secondary/40 mb-3 space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="font-medium text-xs text-text-primary">单条正则匹配定义</span>
-            <el-checkbox v-model="formData.multiline">启用多行匹配 (Multiline)</el-checkbox>
-          </div>
-          <el-form-item label="正则模式" class="!mb-0">
-            <el-input
-              v-model="formData.pattern"
-              type="textarea"
-              :rows="3"
-              placeholder="如 (?m)^(?P<interface>\S+)\s+(?P<status>UP|DOWN)\s+(?P<protocol>UP|DOWN)"
-            />
-          </el-form-item>
-          <div v-if="checkUnsupportedRegex(formData.pattern)" class="text-[11px] text-amber-400">
-            ⚠ 检测到模式中包含 Go RE2 不支持的前瞻 (?= 或后顾 (?<= 语法，请改写为捕获组。
-          </div>
-          <div class="text-[11px] text-text-muted">
-            💡 支持 Go 语法命名捕获组 <code class="text-amber-300">(?P&lt;name&gt;...)</code> 或顺序捕获组（无命名组将按 "1", "2" 数字键输出）。
-          </div>
+        <!-- Regex 正则配置区（组件化） -->
+        <div v-if="formData.engine === 'regex'" class="mb-3">
+          <RegexPlayground
+            v-model:pattern="formData.pattern"
+            v-model:multiline="formData.multiline"
+          />
         </div>
 
         <!-- Aggregate 聚合配置区 -->
@@ -468,6 +231,11 @@ import {
   type TestParseTemplateResult,
   type TreeRule
 } from '@/services/parseTemplateApi';
+// 解析模板工作台子组件（方案 §4.3.6 组件化）
+import TemplateList from '@/components/parsetpl/TemplateList.vue';
+import EchoTestPane from '@/components/parsetpl/EchoTestPane.vue';
+import RuleTableEditor from '@/components/parsetpl/RuleTableEditor.vue';
+import RegexPlayground from '@/components/parsetpl/RegexPlayground.vue';
 
 const selectedVendor = ref('huawei');
 const templates = ref<UserParseTemplateVO[]>([]);
@@ -476,7 +244,7 @@ const selectedTpl = ref<UserParseTemplateVO | null>(null);
 const rawEchoInput = ref('');
 const testing = ref(false);
 const testResult = ref<TestParseTemplateResult | null>(null);
-const resultViewMode = ref<'table' | 'tree' | 'json'>('table');
+const resultViewMode = ref<'table' | 'tree' | 'json' | 'highlight'>('table');
 
 const dialogVisible = ref(false);
 const isEdit = ref(false);
@@ -505,18 +273,6 @@ const fieldMappingList = ref<{ src: string; dest: string }[]>([]);
 const appliesToModelsInput = ref('');
 const appliesToVersionsInput = ref('');
 
-function getAppliesToText(appliesTo?: { models?: string[]; versions?: string[] } | null): string {
-  if (!appliesTo) return '';
-  const parts: string[] = [];
-  if (appliesTo.models && appliesTo.models.length > 0) {
-    parts.push(`款型: ${appliesTo.models.join(', ')}`);
-  }
-  if (appliesTo.versions && appliesTo.versions.length > 0) {
-    parts.push(`版本: ${appliesTo.versions.join(', ')}`);
-  }
-  return parts.join(' | ');
-}
-
 // 边改边测状态
 const liveTestInput = ref('');
 const liveTesting = ref(false);
@@ -530,19 +286,6 @@ const resultColumns = computed(() => {
   });
   return Array.from(keys);
 });
-
-function getRowPrimarySummary(row: Record<string, any>): string {
-  const keys = Object.keys(row);
-  if (keys.length === 0) return '空数据行';
-  const firstKey = keys[0];
-  if (!firstKey) return '空数据行';
-  return `${firstKey} = ${row[firstKey] || '-'}`;
-}
-
-function checkUnsupportedRegex(pat?: string): boolean {
-  if (!pat) return false;
-  return pat.includes('(?=') || pat.includes('(?!') || pat.includes('(?<=') || pat.includes('(?<!');
-}
 
 async function loadTemplates() {
   try {
@@ -560,17 +303,6 @@ async function loadTemplates() {
 
 function selectTemplate(tpl: UserParseTemplateVO) {
   selectedTpl.value = tpl;
-}
-
-function getEngineBadgeClass(engine: string) {
-  switch (engine) {
-    case 'tree':
-      return 'bg-purple-500/10 text-purple-400 border border-purple-500/20';
-    case 'aggregate':
-      return 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
-    default:
-      return 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
-  }
 }
 
 function openCreateDialog() {

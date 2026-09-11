@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
+	"strings"
 
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/parser"
@@ -35,15 +37,77 @@ func (s *ParseTemplateService) ListTemplates(vendor string) ([]models.UserParseT
 		return nil, fmt.Errorf("查询模板失败: %w", err)
 	}
 
-	vos := make([]models.UserParseTemplateVO, 0, len(templates))
+	// 内置快照键集合：用于判定用户模板是否为"覆盖内置"
+	builtinKeySet := s.builtinCommandKeySet(vendor)
+
+	vos := make([]models.UserParseTemplateVO, 0, len(templates)+len(builtinKeySet))
+	userKeySet := make(map[string]struct{}, len(templates))
 	for _, t := range templates {
 		vo, err := s.toVO(t)
 		if err != nil {
 			return nil, err
 		}
+		if _, ok := builtinKeySet[t.CommandKey]; ok {
+			vo.Source = "override"
+		} else {
+			vo.Source = "user"
+		}
+		userKeySet[t.CommandKey] = struct{}{}
+		vos = append(vos, vo)
+	}
+
+	// 汇聚内置模板（用户未覆盖的部分），供前端展示"内置"徽标
+	for _, vo := range s.builtinTemplateVOs(vendor) {
+		if _, ok := userKeySet[vo.CommandKey]; ok {
+			continue
+		}
 		vos = append(vos, vo)
 	}
 	return vos, nil
+}
+
+// parserSnapshotProvider 可选的解析器快照提供能力（main.go 注入的是 *parser.ParserManager）
+type parserSnapshotProvider interface {
+	GetSnapshot(vendor string) (*parser.CompositeParser, error)
+}
+
+// builtinCommandKeySet 返回指定厂商内置模板的 commandKey 集合
+func (s *ParseTemplateService) builtinCommandKeySet(vendor string) map[string]struct{} {
+	set := make(map[string]struct{})
+	vos := s.builtinTemplateVOs(vendor)
+	for _, vo := range vos {
+		set[vo.CommandKey] = struct{}{}
+	}
+	return set
+}
+
+// builtinTemplateVOs 从解析器快照读取内置模板并转换为 VO（Source=builtin）
+func (s *ParseTemplateService) builtinTemplateVOs(vendor string) []models.UserParseTemplateVO {
+	provider, ok := s.reloader.(parserSnapshotProvider)
+	if !ok || provider == nil || strings.TrimSpace(vendor) == "" {
+		return nil
+	}
+	snapshot, err := provider.GetSnapshot(vendor)
+	if err != nil || snapshot == nil {
+		return nil
+	}
+
+	result := make([]models.UserParseTemplateVO, 0, len(snapshot.ListCommandKeys()))
+	for _, key := range snapshot.ListCommandKeys() {
+		tpl, ok := snapshot.GetTemplate(key)
+		if !ok || tpl == nil {
+			continue
+		}
+		result = append(result, models.UserParseTemplateVO{
+			Vendor:     vendor,
+			CommandKey: key,
+			Engine:     string(tpl.Engine),
+			Source:     "builtin",
+			Enabled:    true,
+		})
+	}
+	sort.SliceStable(result, func(i, j int) bool { return result[i].CommandKey < result[j].CommandKey })
+	return result
 }
 
 // GetTemplate 获取单个模板
@@ -391,6 +455,9 @@ func (s *ParseTemplateService) TestTemplate(req models.TestParseTemplateRequest)
 		return result
 	}
 
+	// 收集命中区间（仅测试/调试路径，生产解析不采集，方案 §6.3.2）
+	result.Matches = collectParseMatches(compiled, req.RawText)
+
 	// 应用字段映射
 	if len(compiled.FieldMapping) > 0 {
 		for i, row := range rows {
@@ -410,6 +477,90 @@ func (s *ParseTemplateService) TestTemplate(req models.TestParseTemplateRequest)
 	result.Results = rows
 	result.Count = len(rows)
 	return result
+}
+
+// collectParseMatches 基于已编译模板生成命中区间，供前端"匹配高亮"视图使用。
+//
+// 覆盖范围与说明：
+//   - regex 引擎：主正则的全部命中；
+//   - tree 引擎：根规则（ParentItem 为空）的 SplitRegex / ParseRegex 全部命中；
+//   - aggregate 引擎：记录起始模式的全部命中。
+//
+// 所有偏移均为针对根 rawText 的字符绝对偏移；递归分块的子规则命中不在本版本范围内
+// （更高精度需透传 baseOffset 改造 TreeEngine，见方案 §6.3.2 备注）。
+func collectParseMatches(compiled *parser.CompiledTemplate, rawText string) []models.ParseMatch {
+	if compiled == nil || rawText == "" {
+		return nil
+	}
+	var matches []models.ParseMatch
+
+	appendAll := func(rule string, re *regexp.Regexp) {
+		if re == nil {
+			return
+		}
+		for _, loc := range re.FindAllStringIndex(rawText, -1) {
+			matches = append(matches, models.ParseMatch{
+				Rule:  rule,
+				Start: loc[0],
+				End:   loc[1],
+				Text:  rawText[loc[0]:loc[1]],
+			})
+		}
+	}
+
+	switch compiled.Engine {
+	case parser.EngineRegex:
+		appendAll(compiled.CommandKey, compiled.CompiledPattern)
+	case parser.EngineTree:
+		if compiled.TreeConfig != nil {
+			for _, r := range compiled.TreeConfig.Rules {
+				if strings.TrimSpace(r.ParentItem) != "" {
+					continue
+				}
+				if r.SplitRegex != "" {
+					if re, err := regexp.Compile(applyRegexFlags(r.SplitRegex, r.SplitFlags)); err == nil {
+						appendAll(r.ParseItem, re)
+					}
+				}
+				if r.ParseRegex != "" {
+					if re, err := regexp.Compile(applyRegexFlags(r.ParseRegex, r.ParseFlags)); err == nil {
+						appendAll(r.ParseItem, re)
+					}
+				}
+			}
+		}
+	case parser.EngineAggregate:
+		for _, re := range compiled.CompiledRecordStart {
+			appendAll(compiled.CommandKey, re)
+		}
+	}
+
+	if len(matches) == 0 {
+		return nil
+	}
+	// 按起始位置排序，保证前端高亮渲染顺序稳定
+	sort.SliceStable(matches, func(i, j int) bool {
+		if matches[i].Start != matches[j].Start {
+			return matches[i].Start < matches[j].Start
+		}
+		return matches[i].End < matches[j].End
+	})
+	return matches
+}
+
+// applyRegexFlags 将 m/i/s 标志转换为 Go 内联标志前缀 (?mis)
+func applyRegexFlags(pattern, flags string) string {
+	clean := strings.ToLower(strings.TrimSpace(flags))
+	valid := ""
+	for _, c := range clean {
+		if (c == 'm' || c == 'i' || c == 's') && !strings.ContainsRune(valid, c) {
+			valid += string(c)
+		}
+	}
+	if valid != "" && !strings.HasPrefix(pattern, "(?") {
+		return "(?" + valid + ")" + pattern
+	}
+	return pattern
 }
 
 // toVO 转换为视图对象

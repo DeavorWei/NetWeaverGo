@@ -63,11 +63,21 @@ type TestParseTemplateRequest struct {
 	RawText      string                 `json:"rawText"`
 }
 
+// ParseMatch 解析命中区间（用于前端"匹配高亮"视图，方案 §6.3.2）。
+// Start/End 为针对根 rawText 的**绝对字符偏移**，避免递归分块下的相对偏移漂移。
+type ParseMatch struct {
+	Rule  string `json:"rule"`
+	Start int    `json:"start"`
+	End   int    `json:"end"`
+	Text  string `json:"text"`
+}
+
 // TestParseTemplateResult 测试模板结果
 type TestParseTemplateResult struct {
 	Success bool                `json:"success"`
 	Results []map[string]string `json:"results"`
 	Count   int                 `json:"count"`
+	Matches []ParseMatch        `json:"matches,omitempty"`
 	Error   string              `json:"error,omitempty"`
 }
 
@@ -77,6 +87,9 @@ type UserParseTemplateVO struct {
 	Vendor       string                 `json:"vendor"`
 	CommandKey   string                 `json:"commandKey"`
 	Engine       string                 `json:"engine"`
+	// Source 模板来源：builtin（内置快照） / user（用户自定义） / override（用户覆盖内置）
+	// 由后端在列表汇聚时精准回填，前端无需猜测（方案 §6.3.1）。
+	Source       string                 `json:"source,omitempty"`
 	Pattern      string                 `json:"pattern"`
 	Multiline    bool                   `json:"multiline"`
 	Aggregation  map[string]interface{} `json:"aggregation"`
