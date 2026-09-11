@@ -38,6 +38,7 @@ func NewTaskExecutionService(db *gorm.DB, parserProvider parser.ParserProvider) 
 	compilerReg.Register(string(RunKindTopology), NewTopologyTaskCompiler(nil))
 	compilerReg.Register(string(RunKindBackup), NewBackupTaskCompiler(nil))
 	compilerReg.Register(string(RunKindCEAS), NewCEASTaskCompiler(nil))
+	compilerReg.Register(string(RunKindInspection), NewInspectionTaskCompiler(nil, db))
 
 	// Register stage executors
 	runtime.RegisterExecutor(NewDeviceCommandExecutor(repository.NewDeviceRepository()))
@@ -46,6 +47,7 @@ func NewTaskExecutionService(db *gorm.DB, parserProvider parser.ParserProvider) 
 	runtime.RegisterExecutor(NewTopologyBuildExecutor(db))
 	runtime.RegisterExecutor(NewBackupExecutor(repository.NewDeviceRepository(), db))
 	runtime.RegisterExecutor(NewCEASExecutor(repository.NewDeviceRepository(), db))
+	runtime.RegisterExecutor(NewInspectionCheckExecutor(repository.NewDeviceRepository(), db, parserProvider))
 
 	service := &TaskExecutionService{
 		runtime:        runtime,
@@ -130,6 +132,23 @@ func (s *TaskExecutionService) CreateCEASTask(name string, config *ceas.CEASTask
 		ID:     newDefinitionID(),
 		Name:   name,
 		Kind:   string(RunKindCEAS),
+		Config: configJSON,
+	}
+
+	return def, nil
+}
+
+// CreateInspectionTask 创建巡检任务定义
+func (s *TaskExecutionService) CreateInspectionTask(name string, config *InspectionTaskConfig) (*TaskDefinition, error) {
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("fail to marshal config: %w", err)
+	}
+
+	def := &TaskDefinition{
+		ID:     newDefinitionID(),
+		Name:   name,
+		Kind:   string(RunKindInspection),
 		Config: configJSON,
 	}
 

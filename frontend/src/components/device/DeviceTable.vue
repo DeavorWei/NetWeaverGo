@@ -170,9 +170,10 @@
         </template>
       </el-table-column>
       
-      <el-table-column label="操作" width="140" align="center" fixed="right">
+      <el-table-column label="操作" width="170" align="center" fixed="right">
         <template #default="{ row }">
           <div class="flex items-center justify-center gap-2">
+            <el-button link type="warning" :icon="DocumentChecked" @click="goToInspection(row.ip)" title="发起巡检" />
             <el-button link type="success" :icon="Cpu" @click="goToHardware(row.ip)" title="查看硬件清单" />
             <el-button link type="primary" :icon="Edit" @click="$emit('edit', row)" title="编辑" />
             <el-button link type="danger" :icon="Delete" @click="$emit('delete', row)" title="删除" />
@@ -203,13 +204,16 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Edit, Delete, Select, Cpu } from '@element-plus/icons-vue'
+import { Edit, Delete, Select, Cpu, DocumentChecked } from '@element-plus/icons-vue'
 import type { DeviceAsset } from "@/services/api"
 import type { TableInstance } from 'element-plus'
 
 const router = useRouter()
 function goToHardware(ip: string) {
   router.push(`/hardware-inventory?ip=${ip}`)
+}
+function goToInspection(ip: string) {
+  router.push(`/inspection?ip=${ip}`)
 }
 
 interface Props {

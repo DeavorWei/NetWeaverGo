@@ -522,7 +522,7 @@ const executionView = ref({
   taskId: 0 as number,
   runId: "" as string, // 统一运行时runId
   taskName: "",
-  taskType: "normal" as "normal" | "topology",
+  taskType: "normal" as "normal" | "topology" | "inspection" | "ceas",
 });
 const awaitingSnapshot = ref(false);
 let snapshotTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1135,7 +1135,7 @@ async function syncExecutionView() {
     executionView.value.runId = snapshot.runId;
     executionView.value.taskName = snapshot.taskName || "任务执行";
     executionView.value.taskType =
-      snapshot.runKind === "topology" ? "topology" : "normal";
+      snapshot.runKind === "topology" ? "topology" : (snapshot.runKind === "inspection" ? "inspection" : (snapshot.runKind === "ceas" ? "ceas" : "normal"));
     logger.debug(
       `已切换到执行视图，runId=${snapshot.runId}, taskName=${snapshot.taskName}, runKind=${snapshot.runKind}`,
       'TaskExecution',
@@ -1263,7 +1263,8 @@ watch(executionSnapshot, (snapshot) => {
     clearSnapshotTimeout();
     executionView.value.active = true;
     executionView.value.runId = snapshot.runId;
-    const newTaskType = snapshot.runKind === "topology" ? "topology" : "normal";
+    const newTaskType =
+      snapshot.runKind === "topology" ? "topology" : (snapshot.runKind === "inspection" ? "inspection" : (snapshot.runKind === "ceas" ? "ceas" : "normal"));
     log.debug(`[executionSnapshot watch] Setting taskType=${newTaskType} (was: ${executionView.value.taskType})`);
     executionView.value.taskType = newTaskType;
     if (snapshot.taskName) {
@@ -1509,6 +1510,7 @@ async function editFromDetail() {
   detailModal.value.show = false;
   await openTaskEdit({
     ...currentTask,
+    nextRunAt: currentTask.nextRunAt ?? undefined,
     status: detailModal.value.detail?.latestRunStatus || "pending",
     latestRunId: detailModal.value.detail?.latestRunId || "",
     latestRunStatus: detailModal.value.detail?.latestRunStatus || "pending",

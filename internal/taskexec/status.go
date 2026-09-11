@@ -114,6 +114,8 @@ const (
 	StageKindBackupCollect StageKind = "backup_collect"
 	// StageKindCEASCollect CEAS硬件采集阶段
 	StageKindCEASCollect StageKind = "ceas_collect"
+	// StageKindInspectionCheck 巡检规则判定阶段
+	StageKindInspectionCheck StageKind = "inspection_check"
 )
 
 // UnitKind Unit类型
@@ -140,6 +142,8 @@ const (
 	RunKindBackup RunKind = "backup"
 	// RunKindCEAS CEAS硬件清单与预警任务
 	RunKindCEAS RunKind = "ceas"
+	// RunKindInspection 设备巡检任务
+	RunKindInspection RunKind = "inspection"
 )
 
 // EventType 事件类型
@@ -228,4 +232,6 @@ const (
 	ArtifactTypeCEASCmdEcho ArtifactType = "ceas_cmdecho"
 	// ArtifactTypeCEASAlerts CEAS批次预警产物
 	ArtifactTypeCEASAlerts ArtifactType = "ceas_alerts"
+	// ArtifactTypeInspectionReport 巡检综合报告产物
+	ArtifactTypeInspectionReport ArtifactType = "inspection_report"
 )

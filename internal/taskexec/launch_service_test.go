@@ -151,3 +151,53 @@ func TestNormalizeTaskGroup_PropagatesTopologyOverrides(t *testing.T) {
 	require.NotNil(t, spec.Topology.FieldOverrides[0].Enabled)
 	assert.True(t, *spec.Topology.FieldOverrides[0].Enabled)
 }
+
+func TestNormalizeAndBuildInspectionTask(t *testing.T) {
+	mockRepo := repository.NewMockDeviceRepository()
+	mockRepo.Devices[1] = models.DeviceAsset{ID: 1, IP: "10.0.0.1", Vendor: "huawei"}
+	mockRepo.Devices[2] = models.DeviceAsset{ID: 2, IP: "10.0.0.2", Vendor: "huawei"}
+
+	normalizer := &LaunchNormalizer{deviceRepo: mockRepo}
+	taskGroup := &models.TaskGroup{
+		ID:           3001,
+		Name:         "华为交换机健康巡检",
+		TaskType:     string(RunKindInspection),
+		CommandGroup: "tpl-huawei-ce",
+		MaxWorkers:   5,
+		Timeout:      90,
+		Items: []models.TaskItem{
+			{DeviceIDs: []uint{2, 1}},
+		},
+	}
+
+	spec, err := normalizer.NormalizeTaskGroup(taskGroup)
+	require.NoError(t, err)
+	require.NotNil(t, spec)
+	assert.Equal(t, string(RunKindInspection), spec.RunKind)
+	require.NotNil(t, spec.Inspection)
+	assert.Equal(t, "tpl-huawei-ce", spec.Inspection.TemplateID)
+	assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, spec.Inspection.DeviceIPs)
+
+	// 校验 specTargetIPs
+	targetIPs := specTargetIPs(spec)
+	assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, targetIPs)
+
+	// 验证验证器
+	validator := &LaunchValidator{repo: nil, deviceRepo: mockRepo}
+	// 不含冲突检查（repo=nil 时传 context 需轻量）
+	require.NoError(t, validator.ValidateLaunchSpec(nil, spec))
+
+	// 创建 TaskDefinition
+	svc := &TaskExecutionService{}
+	def, err := svc.CreateTaskDefinitionFromLaunchSpec(spec)
+	require.NoError(t, err)
+	require.NotNil(t, def)
+	assert.Equal(t, string(RunKindInspection), def.Kind)
+
+	var cfg InspectionTaskConfig
+	require.NoError(t, json.Unmarshal(def.Config, &cfg))
+	assert.Equal(t, "tpl-huawei-ce", cfg.TemplateID)
+	assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, cfg.DeviceIPs)
+	assert.Equal(t, 5, cfg.Concurrency)
+	assert.Equal(t, 90, cfg.TimeoutSec)
+}

@@ -43,7 +43,14 @@ type CanonicalLaunchSpec struct {
 	Normal            *CanonicalNormal   `json:"normal,omitempty"`
 	Topology          *CanonicalTopology `json:"topology,omitempty"`
 	Backup            *CanonicalBackup   `json:"backup,omitempty"`
-	CEAS              *CanonicalCEAS     `json:"ceas,omitempty"`
+	CEAS              *CanonicalCEAS       `json:"ceas,omitempty"`
+	Inspection        *CanonicalInspection `json:"inspection,omitempty"`
+}
+
+type CanonicalInspection struct {
+	DeviceIDs  []uint   `json:"deviceIDs"`
+	DeviceIPs  []string `json:"deviceIPs"`
+	TemplateID string   `json:"templateId"`
 }
 
 type CanonicalCEAS struct {
@@ -198,6 +205,12 @@ func (n *LaunchNormalizer) NormalizeTaskGroup(taskGroup *models.TaskGroup) (*Can
 			return nil, err
 		}
 		spec.CEAS = ceasSpec
+	case string(RunKindInspection):
+		insp, err := n.normalizeInspection(taskGroup)
+		if err != nil {
+			return nil, err
+		}
+		spec.Inspection = insp
 	default:
 		normal, err := n.normalizeNormal(taskGroup)
 		if err != nil {
@@ -329,6 +342,28 @@ func (n *LaunchNormalizer) normalizeCEAS(taskGroup *models.TaskGroup) (*Canonica
 	return ceasSpec, nil
 }
 
+func (n *LaunchNormalizer) normalizeInspection(taskGroup *models.TaskGroup) (*CanonicalInspection, error) {
+	deviceIDs := make([]uint, 0)
+	for _, item := range taskGroup.Items {
+		deviceIDs = append(deviceIDs, item.DeviceIDs...)
+	}
+	resolvedIPs, failedIDs := n.lookupDeviceIPs(deviceIDs)
+	if len(failedIDs) > 0 {
+		logger.Warn("TaskLaunchService", "-", "巡检任务存在设备解析失败: taskGroupID=%d, failedDeviceIDs=%v, failedCount=%d", taskGroup.ID, failedIDs, len(failedIDs))
+	}
+	templateID := strings.TrimSpace(taskGroup.CommandGroup)
+	if templateID == "" {
+		templateID = "tpl-huawei-general"
+	}
+	inspSpec := &CanonicalInspection{
+		DeviceIDs:  uniqueSortedUint(deviceIDs),
+		DeviceIPs:  uniqueSortedStrings(resolvedIPs),
+		TemplateID: templateID,
+	}
+	logger.Verbose("TaskLaunchService", "-", "巡检任务归一化完成: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d, templateID=%s, failedDeviceIDs=%d", taskGroup.ID, len(inspSpec.DeviceIDs), len(inspSpec.DeviceIPs), inspSpec.TemplateID, len(failedIDs))
+	return inspSpec, nil
+}
+
 func (n *LaunchNormalizer) resolveTaskItemCommands(item models.TaskItem) ([]string, string, error) {
 	if commands := normalizeCommands(item.Commands); len(commands) > 0 {
 		return commands, "", nil
@@ -399,6 +434,10 @@ func (v *LaunchValidator) ValidateLaunchSpec(ctx context.Context, spec *Canonica
 		if spec.CEAS == nil || len(spec.CEAS.DeviceIPs) == 0 {
 			return fmt.Errorf("CEAS硬件清单任务至少需要一台设备")
 		}
+	case string(RunKindInspection):
+		if spec.Inspection == nil || len(spec.Inspection.DeviceIPs) == 0 {
+			return fmt.Errorf("巡检任务至少需要一台设备")
+		}
 	default:
 		if spec.Normal == nil {
 			return fmt.Errorf("普通任务缺少规范化配置")
@@ -436,6 +475,9 @@ func (v *LaunchValidator) ValidateLaunchSpec(ctx context.Context, spec *Canonica
 }
 
 func (v *LaunchValidator) findConflictingActiveRunTargets(ctx context.Context, spec *CanonicalLaunchSpec) ([]string, error) {
+	if v.repo == nil {
+		return nil, nil
+	}
 	runs, err := v.repo.ListRunningRuns(ctx)
 	if err != nil {
 		return nil, err
@@ -533,6 +575,29 @@ func (s *TaskExecutionService) CreateTaskDefinitionFromLaunchSpec(spec *Canonica
 			TimeoutSec:  spec.TimeoutSec,
 		})
 		logger.Debug("TaskLaunchService", "-", "创建CEAS任务定义: taskGroupID=%d, deviceIPs=%d", spec.TaskGroupID, len(spec.CEAS.DeviceIPs))
+	case string(RunKindInspection):
+		if spec.Inspection == nil {
+			return nil, fmt.Errorf("inspection launch spec is nil")
+		}
+		templateID := strings.TrimSpace(spec.Inspection.TemplateID)
+		if templateID == "" {
+			templateID = "tpl-huawei-general"
+		}
+		concurrency := spec.Concurrency
+		if concurrency <= 0 {
+			concurrency = 10
+		}
+		timeoutSec := spec.TimeoutSec
+		if timeoutSec <= 0 {
+			timeoutSec = 60
+		}
+		configJSON, err = json.Marshal(&InspectionTaskConfig{
+			DeviceIPs:   append([]string(nil), spec.Inspection.DeviceIPs...),
+			TemplateID:  templateID,
+			Concurrency: concurrency,
+			TimeoutSec:  timeoutSec,
+		})
+		logger.Debug("TaskLaunchService", "-", "创建巡检任务定义: taskGroupID=%d, deviceIPs=%d, templateID=%s", spec.TaskGroupID, len(spec.Inspection.DeviceIPs), templateID)
 	default:
 		if spec.Normal == nil {
 			return nil, fmt.Errorf("normal launch spec is nil")
@@ -596,6 +661,9 @@ func normalizeRunKind(taskType string) string {
 	}
 	if value == string(RunKindCEAS) {
 		return string(RunKindCEAS)
+	}
+	if value == string(RunKindInspection) {
+		return string(RunKindInspection)
 	}
 	return string(RunKindNormal)
 }
@@ -679,6 +747,9 @@ func specTargetIPs(spec *CanonicalLaunchSpec) []string {
 	}
 	if spec.CEAS != nil {
 		result = append(result, spec.CEAS.DeviceIPs...)
+	}
+	if spec.Inspection != nil {
+		result = append(result, spec.Inspection.DeviceIPs...)
 	}
 	return uniqueSortedStrings(result)
 }

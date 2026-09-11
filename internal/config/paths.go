@@ -383,6 +383,15 @@ func (pm *PathManager) GetCEASRawFilePath(taskID, deviceIP, commandKey string) s
 	return filepath.Join(pm.StorageRoot, "ceas", taskID, deviceIP, commandKey+".txt")
 }
 
+// GetInspectionRawFilePath 获取巡检任务原始命令输出与报告文件路径
+// 格式: <StorageRoot>/inspection/<taskID>/<deviceIP>/<filename>
+func (pm *PathManager) GetInspectionRawFilePath(taskID, deviceIP, filename string) string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	cleanFilename := strings.ReplaceAll(filename, " ", "_")
+	return filepath.Join(pm.StorageRoot, "inspection", taskID, deviceIP, cleanFilename)
+}
+
 // GetAllPaths 获取全部路径（调试用）
 func (pm *PathManager) GetAllPaths() map[string]string {
 	pm.mu.RLock()

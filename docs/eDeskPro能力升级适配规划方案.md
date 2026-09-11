@@ -747,12 +747,12 @@ type InspectionResult struct {
 
 ### 8.3 交付物清单
 
-- [ ] `internal/models/inspection.go`、`internal/inspection/`（engine.go / compiler.go / executor.go / seeds.go）
-- [ ] `taskexec`：`RunKindInspection`、`StageKindInspectionCheck`、`ArtifactTypeInspectionReport`
-- [ ] `inspection_results` / `inspection_templates` / `inspection_items` 表 + 种子
-- [ ] 前端 `views/Inspection.vue`：模板编辑、执行入口、结果矩阵、明细抽屉
-- [ ] 导出：CSV / JSON（HTML 汇总交给 A3 报告体系）
-- [ ] 文档：`docs/功能模块说明书/巡检模块功能和逻辑.md`
+- [x] `internal/models/inspection.go`、`internal/inspection/`（engine.go / compiler.go / executor.go / seeds.go）
+- [x] `taskexec`：`RunKindInspection`、`StageKindInspectionCheck`、`ArtifactTypeInspectionReport`
+- [x] `inspection_results` / `inspection_templates` / `inspection_items` 表 + 种子
+- [x] 前端 `views/Inspection.vue`：模板编辑、执行入口、结果矩阵、明细抽屉
+- [x] 导出：CSV / JSON（HTML 汇总交给 A3 报告体系）
+- [x] 文档：`docs/功能模块说明书/巡检模块功能和逻辑.md`
 
 ---
 

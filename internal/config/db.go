@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/ceas"
+	"github.com/NetWeaverGo/core/internal/inspection"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/glebarez/sqlite"
@@ -78,6 +79,11 @@ func InitDB() error {
 		logger.Warn("Config", "-", "初始化 BOM 观察清单种子失败: %v", err)
 	}
 
+	// 填充巡检内置模板与检查项种子
+	if err := inspection.EnsureInspectionSeeds(db); err != nil {
+		logger.Warn("Config", "-", "初始化巡检模板与检查项种子失败: %v", err)
+	}
+
 	// 创建索引优化查询性能
 	createIndexes(db)
 
@@ -107,6 +113,10 @@ func autoMigrateAll(db *gorm.DB) error {
 		// CEAS 硬件清单与预警相关表
 		&models.TaskCEASNode{},
 		&models.BOMWatchlistItem{},
+		// 巡检应用层相关表
+		&models.InspectionTemplate{},
+		&models.InspectionItem{},
+		&models.InspectionResult{},
 	)
 }
 
@@ -131,6 +141,12 @@ func createIndexes(db *gorm.DB) {
 		"CREATE INDEX IF NOT EXISTS idx_planned_links_plan_edge_key ON planned_links(plan_file_id, edge_key)",
 		"CREATE INDEX IF NOT EXISTS idx_diff_reports_task_plan ON diff_reports(task_id, plan_file_id)",
 		"CREATE INDEX IF NOT EXISTS idx_diff_items_report_type ON diff_items(report_id, diff_type)",
+		// 巡检相关索引
+		"CREATE INDEX IF NOT EXISTS idx_inspection_items_tpl ON inspection_items(template_id)",
+		"CREATE INDEX IF NOT EXISTS idx_inspection_items_code ON inspection_items(code)",
+		"CREATE INDEX IF NOT EXISTS idx_inspection_results_run ON inspection_results(run_id)",
+		"CREATE INDEX IF NOT EXISTS idx_inspection_results_device ON inspection_results(device_ip)",
+		"CREATE INDEX IF NOT EXISTS idx_inspection_results_status ON inspection_results(status)",
 	}
 
 	for _, sql := range indexes {
