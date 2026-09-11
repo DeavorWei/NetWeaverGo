@@ -1,0 +1,50 @@
+[Slot_0]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=S5735-L24P4S-A1
+BarCode=2102352BBR10K5000001
+Item=02352BBR
+Description=S5735-L24P4S-A1 Switch
+Manufactured=2022-03-10
+VendorName=Huawei
+[Sub_Board_1 Properties]
+BoardType=ES5D21X08S00
+BarCode=2102353HJJ10K5000002
+Item=02353HJJ
+Description=8-Port 10GE SFP+ Card
+Manufactured=2022-03-12
+VendorName=Huawei
+
+[Slot_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=S5720-36C-EI-AC
+BarCode=2102351XGA10K5000003
+Item=02351XGA
+Description=S5720-36C-EI-AC Switch
+Manufactured=2022-04-05
+VendorName=Huawei
+
+[PWR_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=PWR-150W-AC
+BarCode=2102310PWR10K5000004
+Item=02310PWR
+Description=150W Power Supply
+Manufactured=2022-02-15
+VendorName=Huawei
+
+[FAN_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=FAN-BOX
+BarCode=2102310FAN10K5000005
+Item=02310FAN
+Description=System Fan Unit
+Manufactured=2022-02-16
+VendorName=Huawei

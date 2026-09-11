@@ -28,6 +28,7 @@ type TaskRunDevice struct {
 	PatchVersion     string          `json:"patchVersion"`     // 补丁版本
 	ProfileMatchPath string          `json:"profileMatchPath"` // 画像匹配路径（如 exact:... / series:... / vendor:... / global:default）
 	IdentityEvidence string          `json:"identityEvidence"` // 形态识别证据（如 命中 _REG2HANDLER: ...）
+	ESN              string          `json:"esn" gorm:"column:esn"` // 设备序列号 (ESN)
 	MgmtIP           string          `json:"mgmtIp"`
 	NormalizedName string          `json:"normalizedName"`
 	ChassisID      string          `json:"chassisId"`

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/NetWeaverGo/core/internal/ceas"
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
@@ -42,6 +43,12 @@ type CanonicalLaunchSpec struct {
 	Normal            *CanonicalNormal   `json:"normal,omitempty"`
 	Topology          *CanonicalTopology `json:"topology,omitempty"`
 	Backup            *CanonicalBackup   `json:"backup,omitempty"`
+	CEAS              *CanonicalCEAS     `json:"ceas,omitempty"`
+}
+
+type CanonicalCEAS struct {
+	DeviceIDs []uint   `json:"deviceIDs"`
+	DeviceIPs []string `json:"deviceIPs"`
 }
 
 type CanonicalBackup struct {
@@ -185,6 +192,12 @@ func (n *LaunchNormalizer) NormalizeTaskGroup(taskGroup *models.TaskGroup) (*Can
 			return nil, err
 		}
 		spec.Backup = backup
+	case string(RunKindCEAS):
+		ceasSpec, err := n.normalizeCEAS(taskGroup)
+		if err != nil {
+			return nil, err
+		}
+		spec.CEAS = ceasSpec
 	default:
 		normal, err := n.normalizeNormal(taskGroup)
 		if err != nil {
@@ -299,6 +312,23 @@ func (n *LaunchNormalizer) normalizeBackup(taskGroup *models.TaskGroup) (*Canoni
 	return backup, nil
 }
 
+func (n *LaunchNormalizer) normalizeCEAS(taskGroup *models.TaskGroup) (*CanonicalCEAS, error) {
+	deviceIDs := make([]uint, 0)
+	for _, item := range taskGroup.Items {
+		deviceIDs = append(deviceIDs, item.DeviceIDs...)
+	}
+	resolvedIPs, failedIDs := n.lookupDeviceIPs(deviceIDs)
+	if len(failedIDs) > 0 {
+		logger.Warn("TaskLaunchService", "-", "CEAS任务存在设备解析失败: taskGroupID=%d, failedDeviceIDs=%v, failedCount=%d", taskGroup.ID, failedIDs, len(failedIDs))
+	}
+	ceasSpec := &CanonicalCEAS{
+		DeviceIDs: uniqueSortedUint(deviceIDs),
+		DeviceIPs: uniqueSortedStrings(resolvedIPs),
+	}
+	logger.Verbose("TaskLaunchService", "-", "CEAS任务归一化完成: taskGroupID=%d, deviceIDs=%d, deviceIPs=%d, failedDeviceIDs=%d", taskGroup.ID, len(ceasSpec.DeviceIDs), len(ceasSpec.DeviceIPs), len(failedIDs))
+	return ceasSpec, nil
+}
+
 func (n *LaunchNormalizer) resolveTaskItemCommands(item models.TaskItem) ([]string, string, error) {
 	if commands := normalizeCommands(item.Commands); len(commands) > 0 {
 		return commands, "", nil
@@ -364,6 +394,10 @@ func (v *LaunchValidator) ValidateLaunchSpec(ctx context.Context, spec *Canonica
 		}
 		if strings.TrimSpace(spec.Backup.DirNamePattern) == "" {
 			return fmt.Errorf("备份任务缺少目录名模式")
+		}
+	case string(RunKindCEAS):
+		if spec.CEAS == nil || len(spec.CEAS.DeviceIPs) == 0 {
+			return fmt.Errorf("CEAS硬件清单任务至少需要一台设备")
 		}
 	default:
 		if spec.Normal == nil {
@@ -489,6 +523,16 @@ func (s *TaskExecutionService) CreateTaskDefinitionFromLaunchSpec(spec *Canonica
 			EnableRawLog:    spec.EnableRawLog,
 		})
 		logger.Debug("TaskLaunchService", "-", "创建备份任务定义: taskGroupID=%d, deviceIPs=%d", spec.TaskGroupID, len(spec.Backup.DeviceIPs))
+	case string(RunKindCEAS):
+		if spec.CEAS == nil {
+			return nil, fmt.Errorf("ceas launch spec is nil")
+		}
+		configJSON, err = json.Marshal(&ceas.CEASTaskConfig{
+			DeviceIPs:   append([]string(nil), spec.CEAS.DeviceIPs...),
+			Concurrency: spec.Concurrency,
+			TimeoutSec:  spec.TimeoutSec,
+		})
+		logger.Debug("TaskLaunchService", "-", "创建CEAS任务定义: taskGroupID=%d, deviceIPs=%d", spec.TaskGroupID, len(spec.CEAS.DeviceIPs))
 	default:
 		if spec.Normal == nil {
 			return nil, fmt.Errorf("normal launch spec is nil")
@@ -549,6 +593,9 @@ func normalizeRunKind(taskType string) string {
 	}
 	if value == string(RunKindBackup) {
 		return string(RunKindBackup)
+	}
+	if value == string(RunKindCEAS) {
+		return string(RunKindCEAS)
 	}
 	return string(RunKindNormal)
 }
@@ -629,6 +676,9 @@ func specTargetIPs(spec *CanonicalLaunchSpec) []string {
 	}
 	if spec.Backup != nil {
 		result = append(result, spec.Backup.DeviceIPs...)
+	}
+	if spec.CEAS != nil {
+		result = append(result, spec.CEAS.DeviceIPs...)
 	}
 	return uniqueSortedStrings(result)
 }

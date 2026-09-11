@@ -1,0 +1,43 @@
+[BackPlane_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=AR6280
+BarCode=2102311KLT10L3000001
+Item=02311KLT
+Description=AR6280 Integrated Router
+Manufactured=2023-01-10
+VendorName=Huawei
+
+[Mother_Board]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=SRU-100
+BarCode=2102311SRU10L3000002
+Item=02311SRU
+Description=Main Processing Unit
+Manufactured=2023-01-11
+VendorName=Huawei
+
+[Daughter_Board_1/1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=1E1T1-M
+BarCode=2102312HQQ10L3000003
+Item=02312HQQ
+Description=1-Port Channelized E1/T1 Card
+Manufactured=2023-01-15
+VendorName=Huawei
+
+[PowerFrame_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=PWR-350W-AC
+BarCode=2102311PWR10L3000004
+Item=02311PWR
+Description=350W AC Power Supply
+Manufactured=2022-11-20
+VendorName=Huawei

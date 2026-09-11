@@ -1,0 +1,62 @@
+[BackPlane_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=CE6866-48S8CQ-EI
+BarCode=2102352BBR10J8000001
+Item=02312DWR
+Description=CE6866-48S8CQ-EI Switch
+Manufactured=2021-08-15
+VendorName=Huawei
+
+[Slot_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=CE-MPU-D
+BarCode=2102311VHB10J8000002
+Item=02311VHB
+Description=CE MPU Board
+Manufactured=2021-08-16
+VendorName=Huawei
+
+[Daughter_Board_1/1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=CE-SUB-8CQ
+BarCode=2102311UHE10J8000003
+Item=02311UHE
+Description=8-Port 100GE Sub-Card
+Manufactured=2021-08-18
+VendorName=Huawei
+
+[Port_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Port Properties]
+BarCode=2102311UHE10J8000004
+Item=02311UHE-P1
+Description=100GE Port
+
+[PowerFrame_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=PAC-600WA-F
+BarCode=2102312NVE10J8000005
+Item=02312NVE
+Description=600W AC Power Module
+Manufactured=2021-07-20
+VendorName=Huawei
+
+[FanSlot_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=FAN-40B-F
+BarCode=2102312FAN10J8000006
+Item=02312FAN
+Description=Fan Box
+Manufactured=2021-07-21
+VendorName=Huawei

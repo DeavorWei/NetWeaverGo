@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/ceas"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/glebarez/sqlite"
@@ -72,6 +73,11 @@ func InitDB() error {
 		logger.Warn("Config", "-", "初始化风险命令种子规则失败: %v", err)
 	}
 
+	// 填充 BOM 观察清单内置预警种子
+	if err := ceas.EnsureBOMWatchlistSeeds(db); err != nil {
+		logger.Warn("Config", "-", "初始化 BOM 观察清单种子失败: %v", err)
+	}
+
 	// 创建索引优化查询性能
 	createIndexes(db)
 
@@ -98,6 +104,9 @@ func autoMigrateAll(db *gorm.DB) error {
 		&models.DiffItem{},
 		// 文件服务器配置表
 		&models.FileServerConfig{},
+		// CEAS 硬件清单与预警相关表
+		&models.TaskCEASNode{},
+		&models.BOMWatchlistItem{},
 	)
 }
 

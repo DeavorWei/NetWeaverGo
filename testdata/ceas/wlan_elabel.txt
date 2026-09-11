@@ -1,0 +1,29 @@
+[Unit_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=AirEngine9700-M
+BarCode=2102353WLAN10M1000001
+Item=02353WLAN
+Description=AirEngine Wireless Access Controller
+Manufactured=2023-05-18
+VendorName=Huawei
+
+[Main_Board]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=AC-MAIN-BD
+BarCode=2102353WLAN10M1000002
+Item=02353WMB
+Description=AC Main Control Unit
+Manufactured=2023-05-19
+VendorName=Huawei
+
+[Port_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Port Properties]
+BarCode=2102353WLAN10M1000003
+Item=02353WPT
+Description=10GE SFP+ Port

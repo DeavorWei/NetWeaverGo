@@ -536,6 +536,9 @@ func AutoMigrate(db *gorm.DB) error {
 		&TopologyFactSnapshot{},
 		&TaskScheduleLog{},
 		&models.UserParseTemplate{},
+		// CEAS 硬件清单与预警相关表
+		&models.TaskCEASNode{},
+		&models.BOMWatchlistItem{},
 	)
 }
 

@@ -1,0 +1,43 @@
+[BackPlane_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=USG6650E
+BarCode=2102354FW10N2000001
+Item=02354FW1
+Description=USG6650E Enterprise Firewall
+Manufactured=2022-09-01
+VendorName=Huawei
+
+[Slot_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=SPU-100
+BarCode=2102354FW10N2000002
+Item=02354FW2
+Description=Security Processing Unit
+Manufactured=2022-09-02
+VendorName=Huawei
+
+[PWR_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=PWR-600W-DC
+BarCode=2102354PWR10N2000003
+Item=02354PWR
+Description=600W DC Power Module
+Manufactured=2022-08-15
+VendorName=Huawei
+
+[FAN_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=FAN-USG-60
+BarCode=2102354FAN10N2000004
+Item=02354FAN
+Description=Firewall Fan Module
+Manufactured=2022-08-16
+VendorName=Huawei

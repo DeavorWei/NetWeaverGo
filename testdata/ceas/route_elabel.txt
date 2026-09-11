@@ -1,0 +1,76 @@
+[BackPlane_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=NE40E-X8
+BarCode=2103031AAA10P7000001
+Item=03031AAA
+Description=NE40E-X8 Chassis
+Manufactured=2021-12-05
+VendorName=Huawei
+
+[Slot_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=CR52-MPU
+BarCode=2103033CCC10P7000002
+Item=03033CCC
+Description=Main Processing Unit
+Manufactured=2021-12-06
+VendorName=Huawei
+
+[Slot_2]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=LPUF-240
+BarCode=2103032BBB10P7000003
+Item=03032BBB
+Description=Line Processing Unit 240G
+Manufactured=2021-12-08
+VendorName=Huawei
+
+[Slot_2 Card_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=CR52-P10-FP
+BarCode=2103032CR510P7000004
+Item=03032CR5
+Description=Flexible PIC 10x10GE
+Manufactured=2021-12-10
+VendorName=Huawei
+
+[OfcCard_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=OFC-10G
+BarCode=2103032OFC10P7000005
+Item=03032OFC
+Description=Optical Interface Card
+Manufactured=2021-12-11
+VendorName=Huawei
+
+[FanSlot_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=FAN-NE40E
+BarCode=2103032FAN10P7000006
+Item=03032FAN
+Description=NE40E Fan Box
+Manufactured=2021-11-25
+VendorName=Huawei
+
+[PowerFrame_1]
+/$[ArchivesInfo Version]
+/$ArchivesInfoVersion=3.0
+[Board Properties]
+BoardType=PWR-NE40E-DC
+BarCode=2103032PWR10P7000007
+Item=03032PWR
+Description=NE40E DC Power Supply
+Manufactured=2021-11-26
+VendorName=Huawei

@@ -375,6 +375,14 @@ func (pm *PathManager) GetDiscoveryNormalizedFilePath(taskID, deviceIP, commandK
 	return filepath.Join(normalizedDir, taskID, deviceIP, commandKey+".txt")
 }
 
+// GetCEASRawFilePath 获取 CEAS 硬件清单任务原始命令输出文件路径
+// 格式: <StorageRoot>/ceas/<taskID>/<deviceIP>/<commandKey>.txt
+func (pm *PathManager) GetCEASRawFilePath(taskID, deviceIP, commandKey string) string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return filepath.Join(pm.StorageRoot, "ceas", taskID, deviceIP, commandKey+".txt")
+}
+
 // GetAllPaths 获取全部路径（调试用）
 func (pm *PathManager) GetAllPaths() map[string]string {
 	pm.mu.RLock()

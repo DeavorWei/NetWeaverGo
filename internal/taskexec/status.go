@@ -112,6 +112,8 @@ const (
 	StageKindTopologyBuild StageKind = "topology_build"
 	// StageKindBackupCollect 备份采集阶段
 	StageKindBackupCollect StageKind = "backup_collect"
+	// StageKindCEASCollect CEAS硬件采集阶段
+	StageKindCEASCollect StageKind = "ceas_collect"
 )
 
 // UnitKind Unit类型
@@ -136,6 +138,8 @@ const (
 	RunKindTopology RunKind = "topology"
 	// RunKindBackup 备份任务
 	RunKindBackup RunKind = "backup"
+	// RunKindCEAS CEAS硬件清单与预警任务
+	RunKindCEAS RunKind = "ceas"
 )
 
 // EventType 事件类型
@@ -216,4 +220,12 @@ const (
 	ArtifactTypeReport ArtifactType = "report"
 	// ArtifactTypeBackupConfig 备份配置产物
 	ArtifactTypeBackupConfig ArtifactType = "backup_config"
+	// ArtifactTypeCEASData CEAS硬件树数据产物
+	ArtifactTypeCEASData ArtifactType = "ceas_data"
+	// ArtifactTypeCEASBaseInfo CEAS基础信息产物
+	ArtifactTypeCEASBaseInfo ArtifactType = "ceas_base_info"
+	// ArtifactTypeCEASCmdEcho CEAS原始回显产物
+	ArtifactTypeCEASCmdEcho ArtifactType = "ceas_cmd_echo"
+	// ArtifactTypeCEASAlerts CEAS批次预警产物
+	ArtifactTypeCEASAlerts ArtifactType = "ceas_alerts"
 )

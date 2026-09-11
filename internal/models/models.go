@@ -27,6 +27,7 @@ type DeviceAsset struct {
 	ModelSeries  string    `json:"modelSeries"`                 // 归一化系列（如 S5700、CE6800）
 	Version      string    `json:"version"`                     // 软件版本
 	PatchVersion string    `json:"patchVersion"`                // 补丁版本
+	ESN          string    `json:"esn" gorm:"column:esn"`       // 设备序列号 (ESN)
 	LastSeen     time.Time `json:"lastSeen"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
@@ -52,6 +53,7 @@ type DeviceAssetListItem struct {
 	ModelSeries  string    `json:"modelSeries"`
 	Version      string    `json:"version"`
 	PatchVersion string    `json:"patchVersion"`
+	ESN          string    `json:"esn"`
 	LastSeen     time.Time `json:"lastSeen"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
@@ -77,6 +79,7 @@ func (d *DeviceAsset) ToListItem() DeviceAssetListItem {
 		ModelSeries:  d.ModelSeries,
 		Version:      d.Version,
 		PatchVersion: d.PatchVersion,
+		ESN:          d.ESN,
 		LastSeen:     d.LastSeen,
 		CreatedAt:    d.CreatedAt,
 		UpdatedAt:    d.UpdatedAt,

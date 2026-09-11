@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/ceas"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/NetWeaverGo/core/internal/repository"
@@ -36,6 +37,7 @@ func NewTaskExecutionService(db *gorm.DB, parserProvider parser.ParserProvider) 
 	compilerReg.Register(string(RunKindNormal), NewNormalTaskCompiler(nil))
 	compilerReg.Register(string(RunKindTopology), NewTopologyTaskCompiler(nil))
 	compilerReg.Register(string(RunKindBackup), NewBackupTaskCompiler(nil))
+	compilerReg.Register(string(RunKindCEAS), NewCEASTaskCompiler(nil))
 
 	// Register stage executors
 	runtime.RegisterExecutor(NewDeviceCommandExecutor(repository.NewDeviceRepository()))
@@ -43,6 +45,7 @@ func NewTaskExecutionService(db *gorm.DB, parserProvider parser.ParserProvider) 
 	runtime.RegisterExecutor(NewParseExecutor(db, parserProvider))
 	runtime.RegisterExecutor(NewTopologyBuildExecutor(db))
 	runtime.RegisterExecutor(NewBackupExecutor(repository.NewDeviceRepository(), db))
+	runtime.RegisterExecutor(NewCEASExecutor(repository.NewDeviceRepository(), db))
 
 	service := &TaskExecutionService{
 		runtime:        runtime,
@@ -110,6 +113,23 @@ func (s *TaskExecutionService) CreateTopologyTask(name string, config *TopologyT
 		ID:     newDefinitionID(),
 		Name:   name,
 		Kind:   string(RunKindTopology),
+		Config: configJSON,
+	}
+
+	return def, nil
+}
+
+// CreateCEASTask 创建CEAS硬件清单任务定义
+func (s *TaskExecutionService) CreateCEASTask(name string, config *ceas.CEASTaskConfig) (*TaskDefinition, error) {
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("fail to marshal config: %w", err)
+	}
+
+	def := &TaskDefinition{
+		ID:     newDefinitionID(),
+		Name:   name,
+		Kind:   string(RunKindCEAS),
 		Config: configJSON,
 	}
 
