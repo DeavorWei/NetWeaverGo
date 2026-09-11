@@ -15,6 +15,7 @@ type TopologyFieldSpec struct {
 
 var defaultTopologyFieldCatalog = []TopologyFieldSpec{
 	{FieldKey: "version", Name: "系统版本", Phase: "collect", Required: true, ParserBinding: "version", DefaultEnabled: true, Description: "采集设备版本与系统镜像信息。"},
+	{FieldKey: "patch_info", Name: "补丁信息", Phase: "collect", Required: false, ParserBinding: "patch_info", DefaultEnabled: true, Description: "采集设备补丁版本信息（如 display patch-information）。"},
 	{FieldKey: "sysname", Name: "设备名称", Phase: "collect", Required: true, ParserBinding: "sysname", DefaultEnabled: true, Description: "采集设备 sysname 或 hostname。"},
 	{FieldKey: "interface_brief", Name: "接口概要", Phase: "collect", Required: true, ParserBinding: "interface_brief", DefaultEnabled: true, Description: "采集接口 up/down 与基础摘要。"},
 	{FieldKey: "lldp_neighbor", Name: "LLDP 邻居", Phase: "collect", Required: true, ParserBinding: "lldp_neighbor", DefaultEnabled: true, Description: "采集 LLDP 邻居发现结果。"},

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/NetWeaverGo/core/internal/models"
 	"gorm.io/gorm"
 )
 
@@ -534,6 +535,7 @@ func AutoMigrate(db *gorm.DB) error {
 		// 离线重放模式新增表
 		&TopologyFactSnapshot{},
 		&TaskScheduleLog{},
+		&models.UserParseTemplate{},
 	)
 }
 

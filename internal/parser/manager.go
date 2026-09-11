@@ -8,6 +8,10 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/NetWeaverGo/core/internal/device"
+	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 )
 
 //go:embed templates/builtin/*.json
@@ -22,6 +26,7 @@ type StoredTemplate struct {
 	Multiline    bool
 	Aggregation  string
 	ParseRules   string
+	AppliesTo    string
 	FieldMapping string
 	Enabled      bool
 }
@@ -31,14 +36,22 @@ type UserTemplateSource interface {
 	ListEnabled(vendor string) ([]StoredTemplate, error)
 }
 
+// scopedCompiledTemplate 绑定适用范围的编译模板
+type scopedCompiledTemplate struct {
+	commandKey string
+	compiled   *CompiledTemplate
+	appliesTo  models.TemplateAppliesTo
+}
+
 // ParserManager 模板管理器
-// 负责模板装载、覆盖、重载、快照发布
+// 负责模板装载、覆盖、重载、快照发布与特定设备选配
 type ParserManager struct {
-	mu         sync.RWMutex
-	snapshots  map[string]*CompositeParser
-	userSource UserTemplateSource
-	engineMode EngineMode
-	metrics    ParserMetrics
+	mu              sync.RWMutex
+	snapshots       map[string]*CompositeParser
+	scopedTemplates map[string][]scopedCompiledTemplate
+	userSource      UserTemplateSource
+	engineMode      EngineMode
+	metrics         ParserMetrics
 }
 
 // 确保 ParserManager 实现 ParserProvider 和 ParserReloader 接口
@@ -48,8 +61,9 @@ var _ ParserReloader = (*ParserManager)(nil)
 // NewParserManager 创建模板管理器
 func NewParserManager() *ParserManager {
 	return &ParserManager{
-		snapshots:  make(map[string]*CompositeParser),
-		engineMode: EngineModeAuto,
+		snapshots:       make(map[string]*CompositeParser),
+		scopedTemplates: make(map[string][]scopedCompiledTemplate),
+		engineMode:      EngineModeAuto,
 	}
 }
 
@@ -111,9 +125,9 @@ func (m *ParserManager) ResetMetrics() {
 	atomic.StoreInt64(&m.metrics.TotalDurationMs, 0)
 }
 
-// Bootstrap 启动引导，加载所有厂商的内置模板
+// Bootstrap 启动引导，加载所有厂商及默认内置模板
 func (m *ParserManager) Bootstrap() error {
-	for _, vendor := range []string{"huawei", "h3c", "cisco"} {
+	for _, vendor := range []string{"huawei", "h3c", "cisco", "default"} {
 		if err := m.ReloadVendor(vendor); err != nil {
 			return fmt.Errorf("加载厂商 %s 模板失败: %w", vendor, err)
 		}
@@ -122,15 +136,130 @@ func (m *ParserManager) Bootstrap() error {
 }
 
 // GetParser 获取指定厂商的解析器（实现 ParserProvider 接口）
+// 若指定厂商未注册或无可用快照，回退 default 通用保守解析器，杜绝 ErrVendorNotLoaded 崩溃
 func (m *ParserManager) GetParser(vendor string) (CliParser, error) {
+	v := strings.ToLower(strings.TrimSpace(vendor))
 	m.mu.RLock()
-	parser := m.snapshots[vendor]
+	parser := m.snapshots[v]
+	if parser == nil {
+		parser = m.snapshots["default"]
+	}
 	m.mu.RUnlock()
 
 	if parser == nil {
 		return nil, fmt.Errorf("未加载厂商解析器: %s: %w", vendor, ErrVendorNotLoaded)
 	}
 	return parser, nil
+}
+
+// GetParserForDevice 获取针对特定设备形态（Model、Version）选配的复合解析器
+func (m *ParserManager) GetParserForDevice(vendor, model, version string) (CliParser, error) {
+	baseParser, err := m.GetParser(vendor)
+	if err != nil {
+		return nil, err
+	}
+
+	v := strings.ToLower(strings.TrimSpace(vendor))
+	m.mu.RLock()
+	scoped := m.scopedTemplates[v]
+	m.mu.RUnlock()
+
+	if len(scoped) == 0 || (model == "" && version == "") {
+		return baseParser, nil
+	}
+
+	// 检索是否有适用的针对款型或版本的覆盖模板
+	var matchedOverrides map[string]*CompiledTemplate
+	for _, st := range scoped {
+		if matchesAppliesTo(&st.appliesTo, model, version) {
+			if matchedOverrides == nil {
+				matchedOverrides = make(map[string]*CompiledTemplate)
+			}
+			matchedOverrides[st.commandKey] = st.compiled
+		}
+	}
+
+	if len(matchedOverrides) == 0 {
+		return baseParser, nil
+	}
+
+	composite, ok := baseParser.(*CompositeParser)
+	if !ok {
+		return baseParser, nil
+	}
+
+	// 合并生成设备专用快照（只读安全）
+	newTemplates := make(map[string]*CompiledTemplate, len(composite.templates)+len(matchedOverrides))
+	for k, t := range composite.templates {
+		newTemplates[k] = t
+	}
+	for k, t := range matchedOverrides {
+		newTemplates[k] = t
+	}
+
+	deviceParser := NewCompositeParser(v, newTemplates)
+	deviceParser.SetModeProvider(m.GetEngineMode)
+	deviceParser.SetMetricsRecorder(m.RecordParse)
+	return deviceParser, nil
+}
+
+// matchesAppliesTo 检查 model 和 version 是否符合 AppliesTo 约束
+func matchesAppliesTo(applies *models.TemplateAppliesTo, model, version string) bool {
+	if applies == nil {
+		return true
+	}
+
+	// 1. 款型匹配检查（支持通配符或归一化系列）
+	if len(applies.Models) > 0 {
+		matchedModel := false
+		for _, pattern := range applies.Models {
+			pattern = strings.TrimSpace(pattern)
+			if pattern == "" || pattern == "*" {
+				matchedModel = true
+				break
+			}
+			if strings.HasSuffix(pattern, "*") {
+				prefix := strings.TrimSuffix(pattern, "*")
+				if strings.HasPrefix(strings.ToLower(model), strings.ToLower(prefix)) {
+					matchedModel = true
+					break
+				}
+			} else if strings.EqualFold(pattern, model) || strings.EqualFold(pattern, device.ConvertSeries(model)) {
+				matchedModel = true
+				break
+			}
+		}
+		if !matchedModel {
+			return false
+		}
+	}
+
+	// 2. 版本匹配检查（支持前缀匹配）
+	if len(applies.Versions) > 0 {
+		matchedVersion := false
+		for _, pattern := range applies.Versions {
+			pattern = strings.TrimSpace(pattern)
+			if pattern == "" || pattern == "*" {
+				matchedVersion = true
+				break
+			}
+			if strings.HasSuffix(pattern, "*") {
+				prefix := strings.TrimSuffix(pattern, "*")
+				if strings.HasPrefix(strings.ToLower(version), strings.ToLower(prefix)) {
+					matchedVersion = true
+					break
+				}
+			} else if strings.EqualFold(pattern, version) {
+				matchedVersion = true
+				break
+			}
+		}
+		if !matchedVersion {
+			return false
+		}
+	}
+
+	return true
 }
 
 // ReloadVendor 重载指定厂商的解析器快照（实现 ParserReloader 接口）
@@ -147,7 +276,8 @@ func (m *ParserManager) ReloadVendor(vendor string) error {
 		mergedTemplates[k] = v
 	}
 
-	// 2. 合并用户持久化模板（断头路 #2 修复）
+	// 2. 合并用户持久化模板（断头路 #2 修复，支持 AppliesTo 细分选配）
+	var newScoped []scopedCompiledTemplate
 	m.mu.RLock()
 	src := m.userSource
 	m.mu.RUnlock()
@@ -155,44 +285,66 @@ func (m *ParserManager) ReloadVendor(vendor string) error {
 	if src != nil {
 		userList, err := src.ListEnabled(vendor)
 		if err != nil {
-			return fmt.Errorf("加载厂商 %s 用户模板失败: %w", vendor, err)
-		}
+			logger.Warn("ParserManager", "", "加载厂商 %s 用户模板失败，降级跳过: %v", vendor, err)
+		} else {
+			for _, ut := range userList {
+				if !ut.Enabled {
+					continue
+				}
+				t := RegexTemplate{
+					Vendor:      ut.Vendor,
+					CommandKey:  ut.CommandKey,
+					Engine:      TemplateEngine(ut.Engine),
+					Pattern:     ut.Pattern,
+					Multiline:   ut.Multiline,
+					Description: "User Template",
+				}
 
-		for _, ut := range userList {
-			if !ut.Enabled {
-				continue
-			}
-			t := RegexTemplate{
-				Vendor:      ut.Vendor,
-				CommandKey:  ut.CommandKey,
-				Engine:      TemplateEngine(ut.Engine),
-				Pattern:     ut.Pattern,
-				Multiline:   ut.Multiline,
-				Description: "User Template",
-			}
+				if ut.FieldMapping != "" {
+					var fm map[string]string
+					if err := json.Unmarshal([]byte(ut.FieldMapping), &fm); err == nil {
+						t.FieldMapping = fm
+					}
+				}
 
-			if ut.FieldMapping != "" {
-				var fm map[string]string
-				if err := json.Unmarshal([]byte(ut.FieldMapping), &fm); err == nil {
-					t.FieldMapping = fm
+				if ut.Aggregation != "" && t.Engine == EngineAggregate {
+					var agg AggregationConfig
+					if err := json.Unmarshal([]byte(ut.Aggregation), &agg); err == nil {
+						t.Aggregation = &agg
+					}
+				}
+
+				if ut.ParseRules != "" && t.Engine == EngineTree {
+					var treeConfig TreeTemplate
+					if err := json.Unmarshal([]byte(ut.ParseRules), &treeConfig); err == nil {
+						t.TreeConfig = &treeConfig
+					}
+				}
+
+				// 检查是否限定适用范围 (AppliesTo)
+				var applies models.TemplateAppliesTo
+				hasAppliesTo := false
+				if ut.AppliesTo != "" {
+					if err := json.Unmarshal([]byte(ut.AppliesTo), &applies); err == nil {
+						if len(applies.Models) > 0 || len(applies.Versions) > 0 {
+							hasAppliesTo = true
+						}
+					}
+				}
+
+				if hasAppliesTo {
+					compiled, err := m.compileTemplate(&t)
+					if err == nil {
+						newScoped = append(newScoped, scopedCompiledTemplate{
+							commandKey: ut.CommandKey,
+							compiled:   compiled,
+							appliesTo:  applies,
+						})
+					}
+				} else {
+					mergedTemplates[ut.CommandKey] = t
 				}
 			}
-
-			if ut.Aggregation != "" && t.Engine == EngineAggregate {
-				var agg AggregationConfig
-				if err := json.Unmarshal([]byte(ut.Aggregation), &agg); err == nil {
-					t.Aggregation = &agg
-				}
-			}
-
-			if ut.ParseRules != "" && t.Engine == EngineTree {
-				var treeConfig TreeTemplate
-				if err := json.Unmarshal([]byte(ut.ParseRules), &treeConfig); err == nil {
-					t.TreeConfig = &treeConfig
-				}
-			}
-
-			mergedTemplates[ut.CommandKey] = t
 		}
 	}
 
@@ -214,6 +366,7 @@ func (m *ParserManager) ReloadVendor(vendor string) error {
 	// 5. 原子替换快照
 	m.mu.Lock()
 	m.snapshots[vendor] = newParser
+	m.scopedTemplates[vendor] = newScoped
 	m.mu.Unlock()
 
 	return nil

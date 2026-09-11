@@ -1,0 +1,46 @@
+{
+  "vendor": "huawei",
+  "name": "华为 S 系列园区交换机画像",
+  "topologyEnabled": true,
+  "selector": {
+    "series": "S5700"
+  },
+  "pty": {
+    "termType": "vt100",
+    "width": 256,
+    "height": 200,
+    "echoMode": 0,
+    "iSpeed": 14400,
+    "oSpeed": 14400
+  },
+  "prompt": {
+    "suffixes": [">", "#", "]"],
+    "patterns": ["<[^>]+>[#>\\x5D]", "\\[[^\\]]+\\][#>\\x5D]"],
+    "confirmPatterns": ["\\[Y/N\\]", "\\(y/n\\)"],
+    "confirmPolicy": "ask_user"
+  },
+  "pager": {
+    "patterns": [
+      "---- More ----",
+      "--More--",
+      "---- More"
+    ],
+    "continueBytes": [32]
+  },
+  "init": {
+    "disablePagerCommands": ["screen-length 0 temporary"],
+    "extraCommands": [],
+    "promptTimeoutSec": 30
+  },
+  "commands": [
+    { "command": "display version", "commandKey": "version", "timeoutSec": 30 },
+    { "command": "display patch-information", "commandKey": "patch_info", "timeoutSec": 20 },
+    { "command": "display current-configuration | include sysname", "commandKey": "sysname", "timeoutSec": 20 },
+    { "command": "display lldp neighbor", "commandKey": "lldp_neighbor", "timeoutSec": 60 },
+    { "command": "display interface brief", "commandKey": "interface_brief", "timeoutSec": 30 },
+    { "command": "display interface", "commandKey": "interface_detail", "timeoutSec": 60 },
+    { "command": "display eth-trunk", "commandKey": "eth_trunk", "timeoutSec": 30 },
+    { "command": "display arp", "commandKey": "arp_all", "timeoutSec": 60 },
+    { "command": "display mac-address", "commandKey": "mac_address", "timeoutSec": 60 }
+  ]
+}

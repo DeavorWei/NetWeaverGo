@@ -1,0 +1,26 @@
+{
+  "vendor": "default",
+  "templates": {
+    "version": {
+      "commandKey": "version",
+      "engine": "regex",
+      "pattern": "(?i)(?:Version|release|software)\\s*[:= ]*\\s*(?P<version>[A-Za-z0-9\\.\\-_]+)|^<(?P<hostname>[^>]+)>|^(?P<hostname>[A-Za-z0-9\\-_]+)[#>]",
+      "multiline": true,
+      "description": "通用设备版本与主机名兜底解析"
+    },
+    "sysname": {
+      "commandKey": "sysname",
+      "engine": "regex",
+      "pattern": "(?i)^(?:sysname|hostname)\\s+(?P<sysname>\\S+)",
+      "multiline": false,
+      "description": "通用主机名解析"
+    },
+    "interface_brief": {
+      "commandKey": "interface_brief",
+      "engine": "regex",
+      "pattern": "^\\s*(?P<interface>\\S+)\\s+(?P<phy_status>up|down|administratively\\s+down)\\s+(?P<protocol>up|down)",
+      "multiline": true,
+      "description": "通用接口状态解析"
+    }
+  }
+}

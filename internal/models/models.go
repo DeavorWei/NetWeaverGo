@@ -22,52 +22,64 @@ type DeviceAsset struct {
 	Role        string    `json:"role"`
 	Site        string    `json:"site"`
 	Description string    `json:"description"`
-	Tags        []string  `json:"tags" gorm:"serializer:json"` // 标签列表
-	LastSeen    time.Time `json:"lastSeen"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	Tags         []string  `json:"tags" gorm:"serializer:json"` // 标签列表
+	Model        string    `json:"model"`                       // 设备具体型号
+	ModelSeries  string    `json:"modelSeries"`                 // 归一化系列（如 S5700、CE6800）
+	Version      string    `json:"version"`                     // 软件版本
+	PatchVersion string    `json:"patchVersion"`                // 补丁版本
+	LastSeen     time.Time `json:"lastSeen"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 // DeviceAssetListItem 设备列表项（不含敏感信息）
 // 用于列表和分页查询接口返回，密码字段始终为空
 type DeviceAssetListItem struct {
-	ID          uint      `json:"id"`
-	IP          string    `json:"ip"`
-	Port        int       `json:"port"`
-	Username    string    `json:"username"`
-	Password    string    `json:"password"` // 列表场景始终为空字符串
-	Protocol    string    `json:"protocol"`
-	Group       string    `json:"group"`
-	DisplayName string    `json:"displayName"`
-	Vendor      string    `json:"vendor"`
-	Role        string    `json:"role"`
-	Site        string    `json:"site"`
-	Description string    `json:"description"`
-	Tags        []string  `json:"tags"`
-	LastSeen    time.Time `json:"lastSeen"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID           uint      `json:"id"`
+	IP           string    `json:"ip"`
+	Port         int       `json:"port"`
+	Username     string    `json:"username"`
+	Password     string    `json:"password"` // 列表场景始终为空字符串
+	Protocol     string    `json:"protocol"`
+	Group        string    `json:"group"`
+	DisplayName  string    `json:"displayName"`
+	Vendor       string    `json:"vendor"`
+	Role         string    `json:"role"`
+	Site         string    `json:"site"`
+	Description  string    `json:"description"`
+	Tags         []string  `json:"tags"`
+	Model        string    `json:"model"`
+	ModelSeries  string    `json:"modelSeries"`
+	Version      string    `json:"version"`
+	PatchVersion string    `json:"patchVersion"`
+	LastSeen     time.Time `json:"lastSeen"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 // ToListItem 将 DeviceAsset 转换为列表项（清除密码）
 func (d *DeviceAsset) ToListItem() DeviceAssetListItem {
 	return DeviceAssetListItem{
-		ID:          d.ID,
-		IP:          d.IP,
-		Port:        d.Port,
-		Username:    d.Username,
-		Password:    "", // 显式清空密码，不在列表中暴露
-		Protocol:    d.Protocol,
-		Group:       d.Group,
-		DisplayName: d.DisplayName,
-		Vendor:      d.Vendor,
-		Role:        d.Role,
-		Site:        d.Site,
-		Description: d.Description,
-		Tags:        d.Tags,
-		LastSeen:    d.LastSeen,
-		CreatedAt:   d.CreatedAt,
-		UpdatedAt:   d.UpdatedAt,
+		ID:           d.ID,
+		IP:           d.IP,
+		Port:         d.Port,
+		Username:     d.Username,
+		Password:     "", // 显式清空密码，不在列表中暴露
+		Protocol:     d.Protocol,
+		Group:        d.Group,
+		DisplayName:  d.DisplayName,
+		Vendor:       d.Vendor,
+		Role:         d.Role,
+		Site:         d.Site,
+		Description:  d.Description,
+		Tags:         d.Tags,
+		Model:        d.Model,
+		ModelSeries:  d.ModelSeries,
+		Version:      d.Version,
+		PatchVersion: d.PatchVersion,
+		LastSeen:     d.LastSeen,
+		CreatedAt:    d.CreatedAt,
+		UpdatedAt:    d.UpdatedAt,
 	}
 }
 

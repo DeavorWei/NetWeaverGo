@@ -90,6 +90,7 @@ func autoMigrateAll(db *gorm.DB) error {
 		&models.RuntimeSetting{},
 		&models.TopologyVendorFieldCommand{},
 		&models.RiskCommand{},
+		&models.UserParseTemplate{},
 		// 规划比对相关表
 		&models.PlanFile{},
 		&models.PlannedLink{},

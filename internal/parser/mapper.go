@@ -516,9 +516,67 @@ func normalizeCiscoStatus(status string) string {
 	}
 }
 
+// DefaultMapper 通用/未知厂商结果映射器（保留原始传入的 vendor，不篡改为 huawei）
+type DefaultMapper struct {
+	vendor string
+}
+
+// NewDefaultMapper 创建通用映射器
+func NewDefaultMapper(vendor string) *DefaultMapper {
+	return &DefaultMapper{vendor: vendor}
+}
+
+// ToDeviceInfo 将 version 解析结果映射为设备身份信息
+func (m *DefaultMapper) ToDeviceInfo(rows []map[string]string) (*DeviceIdentity, error) {
+	if len(rows) == 0 {
+		return &DeviceIdentity{Vendor: m.vendor}, nil
+	}
+	data := make(map[string]string)
+	for _, row := range rows {
+		for k, v := range row {
+			if v != "" {
+				data[k] = v
+			}
+		}
+	}
+	identity := &DeviceIdentity{
+		Vendor:   m.vendor,
+		Model:    data["model"],
+		Version:  data["version"],
+		Hostname: data["hostname"],
+	}
+	return identity, nil
+}
+
+// ToInterfaces 映射接口
+func (m *DefaultMapper) ToInterfaces(rows []map[string]string) ([]InterfaceFact, error) {
+	return NewHuaweiMapper().ToInterfaces(rows)
+}
+
+// ToLLDP 映射LLDP
+func (m *DefaultMapper) ToLLDP(rows []map[string]string) ([]LLDPFact, error) {
+	return NewHuaweiMapper().ToLLDP(rows)
+}
+
+// ToARP 映射ARP
+func (m *DefaultMapper) ToARP(rows []map[string]string) ([]ARPFact, error) {
+	return NewHuaweiMapper().ToARP(rows)
+}
+
+// ToFDB 映射FDB
+func (m *DefaultMapper) ToFDB(rows []map[string]string) ([]FDBFact, error) {
+	return NewHuaweiMapper().ToFDB(rows)
+}
+
+// ToAggregate 映射聚合
+func (m *DefaultMapper) ToAggregate(rows []map[string]string) ([]AggregateFact, error) {
+	return NewHuaweiMapper().ToAggregate(rows)
+}
+
 // GetMapper 根据厂商获取对应的映射器
 func GetMapper(vendor string) ResultMapper {
-	switch vendor {
+	v := strings.ToLower(strings.TrimSpace(vendor))
+	switch v {
 	case "h3c":
 		return NewH3CMapper()
 	case "cisco":
@@ -526,6 +584,6 @@ func GetMapper(vendor string) ResultMapper {
 	case "huawei":
 		return NewHuaweiMapper()
 	default:
-		return NewHuaweiMapper()
+		return NewDefaultMapper(vendor)
 	}
 }

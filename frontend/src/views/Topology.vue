@@ -282,10 +282,19 @@
             </div>
             <template v-else>
               <div class="text-text-muted">
-                厂商: {{ deviceDetail.identity?.vendor || "-" }}
+                厂商: <span class="capitalize text-text-primary">{{ deviceDetail.identity?.vendor || "-" }}</span>
               </div>
               <div class="text-text-muted">
-                型号: {{ deviceDetail.identity?.model || "-" }}
+                型号: <span class="text-text-primary">{{ deviceDetail.identity?.model || "-" }}</span>
+                <span v-if="deviceDetail.identity?.modelSeries || deviceDetail.identity?.deviceRef?.series" class="ml-1 text-accent">
+                  ({{ deviceDetail.identity?.modelSeries || deviceDetail.identity?.deviceRef?.series }})
+                </span>
+              </div>
+              <div v-if="deviceDetail.identity?.patchVersion || deviceDetail.identity?.deviceRef?.patch" class="text-text-muted">
+                补丁: <span class="text-text-primary font-mono">{{ deviceDetail.identity?.patchVersion || deviceDetail.identity?.deviceRef?.patch }}</span>
+              </div>
+              <div v-if="deviceDetail.identity?.profileMatchPath" class="text-text-muted">
+                画像: <span class="font-mono text-accent text-[11px]">{{ deviceDetail.identity?.profileMatchPath }}</span>
               </div>
               <div class="text-text-muted">
                 主机名: {{ deviceDetail.identity?.hostname || "-" }}

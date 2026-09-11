@@ -56,6 +56,11 @@
             <div class="text-xs text-text-muted mt-1 truncate">
               {{ tpl.description || '无描述' }}
             </div>
+            <div v-if="getAppliesToText(tpl.appliesTo)" class="text-[11px] text-cyan-400 font-mono mt-1 truncate">
+              <span class="px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20">
+                🎯 {{ getAppliesToText(tpl.appliesTo) }}
+              </span>
+            </div>
             <div class="flex justify-between items-center mt-2 pt-2 border-t border-border/50 text-xs">
               <span class="text-text-muted/60 font-mono text-[11px]">rev.{{ tpl.revision }}</span>
               <div class="flex gap-2">
@@ -241,6 +246,27 @@
         <el-form-item label="描述说明">
           <el-input v-model="formData.description" placeholder="模板用途或版本说明" />
         </el-form-item>
+
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="适用款型 (Models)">
+              <el-input
+                v-model="appliesToModelsInput"
+                placeholder="如 S57*, CE68*, NE40E (逗号分隔，留空适用全款型)"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="适用版本 (Versions)">
+              <el-input
+                v-model="appliesToVersionsInput"
+                placeholder="如 V200*, V300R019* (逗号分隔，留空适用全版本)"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <!-- Tree 规则树配置区 (含 groupIndex 编辑) -->
         <div v-if="formData.engine === 'tree'" class="border border-border rounded p-3 bg-bg-secondary/40 mb-3">
@@ -476,6 +502,20 @@ const maxOutputLevel = ref<number>(0);
 const treeRules = ref<TreeRule[]>([]);
 const aggregateJsonStr = ref('');
 const fieldMappingList = ref<{ src: string; dest: string }[]>([]);
+const appliesToModelsInput = ref('');
+const appliesToVersionsInput = ref('');
+
+function getAppliesToText(appliesTo?: { models?: string[]; versions?: string[] } | null): string {
+  if (!appliesTo) return '';
+  const parts: string[] = [];
+  if (appliesTo.models && appliesTo.models.length > 0) {
+    parts.push(`款型: ${appliesTo.models.join(', ')}`);
+  }
+  if (appliesTo.versions && appliesTo.versions.length > 0) {
+    parts.push(`版本: ${appliesTo.versions.join(', ')}`);
+  }
+  return parts.join(' | ');
+}
 
 // 边改边测状态
 const liveTestInput = ref('');
@@ -548,6 +588,8 @@ function openCreateDialog() {
     parseRules: {},
     fieldMapping: {},
   };
+  appliesToModelsInput.value = '';
+  appliesToVersionsInput.value = '';
   maxOutputLevel.value = 0;
   treeRules.value = [
     { parseItem: 'slot', parentItem: '', isList: true, splitRegex: '(?m)^Slot\\s+(\\d+):', groupIndex: 1, isOutput: true, order: 1 },
@@ -575,6 +617,8 @@ function openEditDialog(tpl: UserParseTemplateVO) {
     parseRules: tpl.parseRules || {},
     fieldMapping: tpl.fieldMapping || {},
   };
+  appliesToModelsInput.value = tpl.appliesTo?.models ? tpl.appliesTo.models.join(', ') : '';
+  appliesToVersionsInput.value = tpl.appliesTo?.versions ? tpl.appliesTo.versions.join(', ') : '';
 
   // 回填 tree 规则 (含 groupIndex)
   if (tpl.parseRules?.rules) {
@@ -684,6 +728,21 @@ function buildRequestPayload(): SaveParseTemplateRequest {
   }
   req.fieldMapping = mappingMap;
 
+  // 转换 appliesTo
+  const models = appliesToModelsInput.value
+    .split(/[,，\s]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+  const versions = appliesToVersionsInput.value
+    .split(/[,，\s]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+  if (models.length > 0 || versions.length > 0) {
+    req.appliesTo = { models, versions };
+  } else {
+    req.appliesTo = undefined;
+  }
+
   return req;
 }
 
@@ -748,6 +807,7 @@ async function runTest() {
       multiline: selectedTpl.value.multiline,
       parseRules: selectedTpl.value.parseRules,
       aggregation: selectedTpl.value.aggregation,
+      appliesTo: selectedTpl.value.appliesTo,
       fieldMapping: selectedTpl.value.fieldMapping,
       rawText: rawEchoInput.value,
     });
@@ -782,6 +842,7 @@ async function runLiveTest() {
       multiline: req.multiline,
       parseRules: req.parseRules,
       aggregation: req.aggregation,
+      appliesTo: req.appliesTo,
       fieldMapping: req.fieldMapping,
       rawText: liveTestInput.value,
     });

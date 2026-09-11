@@ -3,6 +3,7 @@ package parser
 import (
 	"testing"
 
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -162,4 +163,104 @@ func TestParserManager_EngineModeAndMetrics(t *testing.T) {
 	m = mgr.GetMetrics()
 	assert.Equal(t, uint64(0), m.TotalParsed)
 	assert.Equal(t, uint64(0), m.SuccessCount)
+}
+
+func TestParserManager_GetParserForDevice_AppliesTo(t *testing.T) {
+	mgr := NewParserManager()
+	require.NoError(t, mgr.Bootstrap())
+
+	// 模拟针对 CE 系列特定定制的 version 模板
+	mockSource := &mockUserTemplateSource{
+		templates: []StoredTemplate{
+			{
+				Vendor:     "huawei",
+				CommandKey: "version",
+				Engine:     "regex",
+				Pattern:    `(?m)CloudEngine\s+(?P<model>\S+)\s+Version\s+(?P<version>\S+)`,
+				AppliesTo:  `{"models": ["CE*"]}`,
+				Enabled:    true,
+			},
+		},
+	}
+	mgr.SetUserTemplateSource(mockSource)
+	require.NoError(t, mgr.ReloadVendor("huawei"))
+
+	// 1. 对于 CE 设备，选配到 CE 定制模板
+	ceParser, err := mgr.GetParserForDevice("huawei", "CE6866", "V200R005")
+	require.NoError(t, err)
+	ceEcho := "CloudEngine CE6866 Version V200R005C10SPC600"
+	ceRows, err := ceParser.Parse("version", ceEcho)
+	require.NoError(t, err)
+	require.Len(t, ceRows, 1)
+	assert.Equal(t, "CE6866", ceRows[0]["model"])
+
+	// 2. 对于 S5735 设备，不满足 CE* 约束，回退默认基础模板
+	sParser, err := mgr.GetParserForDevice("huawei", "S5735", "V200R019")
+	require.NoError(t, err)
+	sEcho := "Huawei Versatile Routing Platform Software\nVRP (R) software, Version 5.170 (S5735 V200R019C00SPC500)"
+	sRows, err := sParser.Parse("version", sEcho)
+	require.NoError(t, err)
+	require.NotEmpty(t, sRows)
+}
+
+func TestParserManager_DefaultFallback(t *testing.T) {
+	mgr := NewParserManager()
+	require.NoError(t, mgr.Bootstrap())
+
+	// 未知厂商获取解析器，优雅回退到 default.json 保守解析器，杜绝 ErrVendorNotLoaded 崩溃
+	unknownParser, err := mgr.GetParser("unknown_switch_brand")
+	require.NoError(t, err)
+	require.NotNil(t, unknownParser)
+
+	echo := "Switch Software, Version 1.2.3\n<Switch-01> uptime is 1 day\n"
+	rows, err := unknownParser.Parse("version", echo)
+	require.NoError(t, err)
+	require.NotEmpty(t, rows)
+	assert.Equal(t, "1.2.3", rows[0]["version"])
+}
+
+func TestMatchesAppliesTo_WildcardAndSeries(t *testing.T) {
+	// 1. nil appliesTo
+	assert.True(t, matchesAppliesTo(nil, "S5735", "V200R019"))
+
+	// 2. 空 AppliesTo
+	assert.True(t, matchesAppliesTo(&models.TemplateAppliesTo{}, "S5735", "V200R019"))
+
+	// 3. 通配符 *
+	assert.True(t, matchesAppliesTo(&models.TemplateAppliesTo{
+		Models:   []string{"*"},
+		Versions: []string{"*"},
+	}, "S5735", "V200R019"))
+
+	// 4. 款型前缀通配符 S57*
+	prefixApplies := &models.TemplateAppliesTo{
+		Models: []string{"S57*"},
+	}
+	assert.True(t, matchesAppliesTo(prefixApplies, "S5735-L24P4S-A2", "V200R019"))
+	assert.False(t, matchesAppliesTo(prefixApplies, "CE6866", "V200R019"))
+
+	// 5. 系列归一化匹配 S5700
+	seriesApplies := &models.TemplateAppliesTo{
+		Models: []string{"S5700"},
+	}
+	assert.True(t, matchesAppliesTo(seriesApplies, "S5735-S", "V200R019"))
+	assert.True(t, matchesAppliesTo(seriesApplies, "S5700", "V200R019"))
+	assert.False(t, matchesAppliesTo(seriesApplies, "AR6280", "V200R019"))
+
+	// 6. 版本前缀通配符 V200*
+	verApplies := &models.TemplateAppliesTo{
+		Versions: []string{"V200*"},
+	}
+	assert.True(t, matchesAppliesTo(verApplies, "S5735", "V200R019C00SPC500"))
+	assert.False(t, matchesAppliesTo(verApplies, "S5735", "V300R019C11SPC200"))
+
+	// 7. 款型 + 版本联合判定
+	comboApplies := &models.TemplateAppliesTo{
+		Models:   []string{"CE*", "S5700"},
+		Versions: []string{"V200*"},
+	}
+	assert.True(t, matchesAppliesTo(comboApplies, "CE6866", "V200R005"))
+	assert.True(t, matchesAppliesTo(comboApplies, "S5720", "V200R019"))
+	assert.False(t, matchesAppliesTo(comboApplies, "CE6866", "V300R005"))
+	assert.False(t, matchesAppliesTo(comboApplies, "AR6280", "V200R019"))
 }

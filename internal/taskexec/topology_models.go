@@ -22,11 +22,15 @@ type TaskRunDevice struct {
 	Role           string        `json:"role"`
 	Site           string        `json:"site"`
 	Hostname       string        `json:"hostname"`
-	Model          string        `json:"model"`
-	Version        string        `json:"version"`
-	MgmtIP         string        `json:"mgmtIp"`
-	NormalizedName string        `json:"normalizedName"`
-	ChassisID      string        `json:"chassisId"`
+	Model            string          `json:"model"`
+	ModelSeries      string          `json:"modelSeries"`      // 归一化系列（如 S5700、CE6800）
+	Version          string          `json:"version"`
+	PatchVersion     string          `json:"patchVersion"`     // 补丁版本
+	ProfileMatchPath string          `json:"profileMatchPath"` // 画像匹配路径（如 exact:... / series:... / vendor:... / global:default）
+	IdentityEvidence string          `json:"identityEvidence"` // 形态识别证据（如 命中 _REG2HANDLER: ...）
+	MgmtIP           string          `json:"mgmtIp"`
+	NormalizedName string          `json:"normalizedName"`
+	ChassisID      string          `json:"chassisId"`
 	NodeType       models.NodeType `json:"nodeType"`
 	StartedAt      *time.Time    `json:"startedAt"`
 	FinishedAt     *time.Time    `json:"finishedAt"`

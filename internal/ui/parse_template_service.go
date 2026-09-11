@@ -136,6 +136,13 @@ func (s *ParseTemplateService) CreateTemplate(req models.SaveParseTemplateReques
 		return fmt.Errorf("模板已存在: vendor=%s commandKey=%s", req.Vendor, req.CommandKey)
 	}
 
+	var appliesToJSON string
+	if req.AppliesTo != nil {
+		if data, err := json.Marshal(req.AppliesTo); err == nil {
+			appliesToJSON = string(data)
+		}
+	}
+
 	t := models.UserParseTemplate{
 		Vendor:       req.Vendor,
 		CommandKey:   req.CommandKey,
@@ -145,6 +152,7 @@ func (s *ParseTemplateService) CreateTemplate(req models.SaveParseTemplateReques
 		Aggregation:  aggregationJSON,
 		ParseRules:   parseRulesJSON,
 		FieldMapping: fieldMappingJSON,
+		AppliesTo:    appliesToJSON,
 		Description:  req.Description,
 		Enabled:      req.Enabled,
 		Revision:     1,
@@ -270,6 +278,11 @@ func (s *ParseTemplateService) UpdateTemplate(id uint, req models.SaveParseTempl
 	t.Aggregation = aggregationJSON
 	t.ParseRules = parseRulesJSON
 	t.FieldMapping = fieldMappingJSON
+	if req.AppliesTo != nil {
+		if data, err := json.Marshal(req.AppliesTo); err == nil {
+			t.AppliesTo = string(data)
+		}
+	}
 	t.Description = req.Description
 	t.Enabled = req.Enabled
 	t.Revision++
@@ -427,6 +440,11 @@ func (s *ParseTemplateService) toVO(t models.UserParseTemplate) (models.UserPars
 	if t.FieldMapping != "" {
 		if err := json.Unmarshal([]byte(t.FieldMapping), &vo.FieldMapping); err != nil {
 			return vo, fmt.Errorf("解析字段映射失败: %w", err)
+		}
+	}
+	if t.AppliesTo != "" {
+		if err := json.Unmarshal([]byte(t.AppliesTo), &vo.AppliesTo); err != nil {
+			return vo, fmt.Errorf("解析适用范围失败: %w", err)
 		}
 	}
 

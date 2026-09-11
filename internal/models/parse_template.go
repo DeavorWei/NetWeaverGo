@@ -15,6 +15,7 @@ type UserParseTemplate struct {
 	Aggregation  string    `gorm:"column:aggregation;type:text" json:"aggregation"`
 	FieldMapping string    `gorm:"column:field_mapping;type:text" json:"fieldMapping"`
 	ParseRules   string    `gorm:"column:parse_rules;type:text" json:"parseRules"`
+	AppliesTo    string    `gorm:"column:applies_to;type:text" json:"appliesTo"`
 	Description  string    `gorm:"column:description" json:"description"`
 	Enabled      bool      `gorm:"column:enabled;default:true" json:"enabled"`
 	Revision     uint      `gorm:"column:revision;default:1" json:"revision"`
@@ -27,6 +28,12 @@ func (UserParseTemplate) TableName() string {
 	return "net_user_parse_templates"
 }
 
+// TemplateAppliesTo 模板适用设备范围定义
+type TemplateAppliesTo struct {
+	Models   []string `json:"models,omitempty"`   // 款型/系列白名单（支持前缀匹配，如 S57*, CE68*）
+	Versions []string `json:"versions,omitempty"` // 版本白名单（支持前缀匹配，如 V200R019*）
+}
+
 // SaveParseTemplateRequest 保存模板请求
 type SaveParseTemplateRequest struct {
 	Vendor       string                 `json:"vendor"`
@@ -36,6 +43,7 @@ type SaveParseTemplateRequest struct {
 	Multiline    bool                   `json:"multiline"`
 	Aggregation  map[string]interface{} `json:"aggregation"`
 	ParseRules   map[string]interface{} `json:"parseRules"`
+	AppliesTo    *TemplateAppliesTo     `json:"appliesTo,omitempty"`
 	FieldMapping map[string]string      `json:"fieldMapping"`
 	Description  string                 `json:"description"`
 	Enabled      bool                   `json:"enabled"`
@@ -50,6 +58,7 @@ type TestParseTemplateRequest struct {
 	Multiline    bool                   `json:"multiline"`
 	Aggregation  map[string]interface{} `json:"aggregation"`
 	ParseRules   map[string]interface{} `json:"parseRules"`
+	AppliesTo    *TemplateAppliesTo     `json:"appliesTo,omitempty"`
 	FieldMapping map[string]string      `json:"fieldMapping"`
 	RawText      string                 `json:"rawText"`
 }
@@ -72,6 +81,7 @@ type UserParseTemplateVO struct {
 	Multiline    bool                   `json:"multiline"`
 	Aggregation  map[string]interface{} `json:"aggregation"`
 	ParseRules   map[string]interface{} `json:"parseRules"`
+	AppliesTo    *TemplateAppliesTo     `json:"appliesTo,omitempty"`
 	FieldMapping map[string]string      `json:"fieldMapping"`
 	Description  string                 `json:"description"`
 	Enabled      bool                   `json:"enabled"`

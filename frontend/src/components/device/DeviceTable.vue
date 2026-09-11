@@ -70,6 +70,33 @@
         </template>
       </el-table-column>
       
+      <el-table-column label="厂商" width="100">
+        <template #default="{ row }">
+          <el-tag v-if="row.vendor" size="small" effect="plain" class="capitalize">
+            {{ row.vendor }}
+          </el-tag>
+          <span v-else class="text-text-muted/50">-</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="款型 / 系列" min-width="140">
+        <template #default="{ row }">
+          <div class="flex flex-col">
+            <span class="text-xs font-medium text-text-primary">{{ row.model || "-" }}</span>
+            <span v-if="row.modelSeries" class="text-[11px] text-text-muted">系列: {{ row.modelSeries }}</span>
+          </div>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="版本 / 补丁" min-width="160">
+        <template #default="{ row }">
+          <div class="flex flex-col">
+            <span class="text-xs text-text-secondary">{{ row.version || "-" }}</span>
+            <span v-if="row.patchVersion" class="text-[11px] text-accent font-mono">补丁: {{ row.patchVersion }}</span>
+          </div>
+        </template>
+      </el-table-column>
+      
       <el-table-column label="协议" width="100">
         <template #header>
           <div class="flex items-center gap-1">

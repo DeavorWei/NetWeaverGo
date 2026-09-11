@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/device"
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
@@ -1103,12 +1104,6 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 	}
 	logger.Verbose("TaskExec", runID, "开始解析运行设备: device=%s, vendor=%s, vendorSource=%s", deviceIP, vendor, vendorSource)
 
-	// 获取厂商解析器
-	parserEngine, err := e.parserProvider.GetParser(vendor)
-	if err != nil {
-		return fmt.Errorf("get parser for vendor %s failed: %w", vendor, err)
-	}
-
 	var outputs []TaskRawOutput
 	if err := e.db.Where("task_run_id = ? AND device_ip = ? AND status = ?", runID, deviceIP, "success").
 		Order("created_at ASC").Find(&outputs).Error; err != nil {
@@ -1119,8 +1114,68 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 		logger.Warn("TaskExec", runID, "设备没有可解析的采集输出: device=%s, vendor=%s", deviceIP, vendor)
 	}
 
+	// A2: 输出预扫描 (Pre-scan) 多路识别设备形态（version, patch_info, device, sysname）
+	var prescanModel, prescanVersion, prescanMatchPath string
+	var prescanIdentity *device.Identity
+	prescanRaws := make(map[string]string)
+	for _, output := range outputs {
+		key := strings.ToLower(strings.TrimSpace(output.CommandKey))
+		if key == "version" || key == "patch_info" || key == "device" || key == "sysname" {
+			parsePath := strings.TrimSpace(output.ParseFilePath)
+			if parsePath == "" {
+				parsePath = strings.TrimSpace(output.RawFilePath)
+			}
+			if parsePath != "" {
+				if b, err := os.ReadFile(parsePath); err == nil && len(b) > 0 {
+					prescanRaws[key] = string(b)
+				}
+			}
+		}
+	}
+	if len(prescanRaws) > 0 {
+		if id, err := device.Identify(vendor, prescanRaws); err == nil && id != nil {
+			prescanModel = id.Model
+			prescanVersion = id.Version
+			prescanIdentity = id
+			// 解析真实画像匹配路径
+			_, prescanMatchPath = config.ResolveProfile(id.Vendor, id.Model, id.Version)
+			logger.Verbose("TaskExec", runID, "预扫描识别设备形态成功: device=%s, model=%s, series=%s, version=%s, patch=%s, matchPath=%s",
+				deviceIP, id.Model, id.Series, id.Version, id.Patch, prescanMatchPath)
+		}
+	}
+
+	// 获取解析器（若有识别形态则使用设备定制解析器，否则平滑回退厂商主解析器）
+	var parserEngine parser.CliParser
+	var err error
+	if prescanModel != "" || prescanVersion != "" {
+		parserEngine, err = e.parserProvider.GetParserForDevice(vendor, prescanModel, prescanVersion)
+	}
+	if parserEngine == nil || err != nil {
+		parserEngine, err = e.parserProvider.GetParser(vendor)
+		if err != nil {
+			return fmt.Errorf("get parser for vendor %s failed: %w", vendor, err)
+		}
+	}
+
 	mapper := parser.GetMapper(vendor)
-	identity := &parser.DeviceIdentity{Vendor: vendor, MgmtIP: deviceIP}
+	identity := &parser.DeviceIdentity{
+		Vendor:           vendor,
+		MgmtIP:           deviceIP,
+		Model:            prescanModel,
+		Version:          prescanVersion,
+		ProfileMatchPath: prescanMatchPath,
+		DeviceRef:        prescanIdentity,
+	}
+	if prescanIdentity != nil {
+		identity.ModelSeries = prescanIdentity.Series
+		identity.PatchVersion = prescanIdentity.Patch
+		if len(prescanIdentity.Evidence) > 0 {
+			identity.IdentityEvidence = strings.Join(prescanIdentity.Evidence, "; ")
+		}
+		if prescanIdentity.SysName != "" {
+			identity.Hostname = prescanIdentity.SysName
+		}
+	}
 	var interfaces []parser.InterfaceFact
 	var lldps []parser.LLDPFact
 	var fdbs []parser.FDBFact
@@ -1159,7 +1214,7 @@ func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vend
 		parseStatus := "success"
 		parseError := ""
 		rawRefID := fmt.Sprintf("%d", output.ID)
-		batch, mapErr := MapCommandOutput(mapper, output.CommandKey, rows, identity, rawRefID)
+		batch, mapErr := MapCommandOutput(mapper, output.CommandKey, rows, identity, rawRefID, string(rawText))
 		if mapErr != nil {
 			parseStatus = "parse_failed"
 			parseError = mapErr.Error()
@@ -1247,10 +1302,13 @@ func mergeIdentityFields(identity *parser.DeviceIdentity, fields map[string]stri
 	if identity == nil {
 		return
 	}
-	if v := strings.TrimSpace(fields["vendor"]); v != "" {
-		identity.Vendor = v
-	} else if strings.TrimSpace(identity.Vendor) == "" && strings.TrimSpace(fallbackVendor) != "" {
-		identity.Vendor = fallbackVendor
+	// 仅在已有 vendor 为空时才覆盖，防止资产原有厂商被 mapper 默认值覆盖 (P1-4)
+	if strings.TrimSpace(identity.Vendor) == "" {
+		if v := strings.TrimSpace(fields["vendor"]); v != "" {
+			identity.Vendor = v
+		} else if strings.TrimSpace(fallbackVendor) != "" {
+			identity.Vendor = fallbackVendor
+		}
 	}
 	if v := strings.TrimSpace(fields["model"]); v != "" {
 		identity.Model = v

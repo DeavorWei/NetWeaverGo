@@ -149,3 +149,38 @@ func TestGetGraphNodeWithMAC(t *testing.T) {
 		})
 	}
 }
+
+func TestGetTopologyDeviceDetail_IdentityFields(t *testing.T) {
+	db := setupTestDB(t)
+	service := NewTaskExecutionService(db, nil)
+	runID := "run-detail-test"
+	deviceIP := "10.10.10.1"
+
+	require.NoError(t, db.Create(&TaskRunDevice{
+		TaskRunID:        runID,
+		DeviceIP:         deviceIP,
+		Vendor:           "huawei",
+		Model:            "CE6866",
+		Version:          "V200R005C10SPC600",
+		ModelSeries:      "CE6800",
+		PatchVersion:     "V200R005SPH020",
+		ProfileMatchPath: "series:CE6800",
+		IdentityEvidence: "命中 _REG2HANDLER: CE/CloudEngine",
+		Hostname:         "TOR-SW-01",
+		MgmtIP:           deviceIP,
+	}).Error)
+
+	detail, err := service.GetTopologyDeviceDetail(runID, deviceIP)
+	require.NoError(t, err)
+	require.NotNil(t, detail)
+	require.NotNil(t, detail.Identity)
+
+	assert.Equal(t, "huawei", detail.Identity.Vendor)
+	assert.Equal(t, "CE6866", detail.Identity.Model)
+	assert.Equal(t, "CE6800", detail.Identity.ModelSeries)
+	assert.Equal(t, "V200R005C10SPC600", detail.Identity.Version)
+	assert.Equal(t, "V200R005SPH020", detail.Identity.PatchVersion)
+	assert.Equal(t, "series:CE6800", detail.Identity.ProfileMatchPath)
+	assert.Equal(t, "命中 _REG2HANDLER: CE/CloudEngine", detail.Identity.IdentityEvidence)
+}
+

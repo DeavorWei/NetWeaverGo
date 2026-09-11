@@ -307,12 +307,16 @@ func (s *TaskExecutionService) GetTopologyDeviceDetail(runID, deviceIP string) (
 	var dev TaskRunDevice
 	if err := s.db.Where("task_run_id = ? AND device_ip = ?", runID, deviceIP).First(&dev).Error; err == nil {
 		result.Identity = &parser.DeviceIdentity{
-			Vendor:       dev.Vendor,
-			Model:        dev.Model,
-			Version:      dev.Version,
-			Hostname:     dev.Hostname,
-			MgmtIP:       dev.MgmtIP,
-			ChassisID:    dev.ChassisID,
+			Vendor:           dev.Vendor,
+			Model:            dev.Model,
+			Version:          dev.Version,
+			Hostname:         dev.Hostname,
+			MgmtIP:           dev.MgmtIP,
+			ChassisID:        dev.ChassisID,
+			ModelSeries:      dev.ModelSeries,
+			PatchVersion:     dev.PatchVersion,
+			ProfileMatchPath: dev.ProfileMatchPath,
+			IdentityEvidence: dev.IdentityEvidence,
 		}
 	}
 

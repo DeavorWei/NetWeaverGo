@@ -5,7 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/device"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/normalize"
 	"github.com/NetWeaverGo/core/internal/parser"
 	"gorm.io/gorm"
@@ -28,18 +31,66 @@ func NewTopologyFactsPersister(db *gorm.DB) *TopologyFactsPersister {
 
 // SaveDeviceIdentity 保存设备身份信息
 func (p *TopologyFactsPersister) SaveDeviceIdentity(runID, deviceIP string, identity *parser.DeviceIdentity) error {
+	updates := map[string]interface{}{
+		"vendor":          identity.Vendor,
+		"model":           identity.Model,
+		"version":         identity.Version,
+		"hostname":        identity.Hostname,
+		"normalized_name": identity.Hostname,
+		"mgmt_ip":         identity.MgmtIP,
+		"chassis_id":      identity.ChassisID,
+		"status":          "completed",
+	}
+
+	if identity.DeviceRef != nil {
+		if identity.DeviceRef.Series != "" {
+			updates["model_series"] = identity.DeviceRef.Series
+		}
+		if identity.DeviceRef.Patch != "" {
+			updates["patch_version"] = identity.DeviceRef.Patch
+		}
+		if len(identity.DeviceRef.Evidence) > 0 {
+			updates["identity_evidence"] = strings.Join(identity.DeviceRef.Evidence, "; ")
+		}
+	}
+	if identity.ProfileMatchPath != "" {
+		updates["profile_match_path"] = identity.ProfileMatchPath
+	}
+	if identity.ModelSeries != "" && updates["model_series"] == nil {
+		updates["model_series"] = identity.ModelSeries
+	}
+	if identity.PatchVersion != "" && updates["patch_version"] == nil {
+		updates["patch_version"] = identity.PatchVersion
+	}
+	if identity.IdentityEvidence != "" && updates["identity_evidence"] == nil {
+		updates["identity_evidence"] = identity.IdentityEvidence
+	}
+
+	// 同步回写资产表的款型、版本、系列与补丁字段（彻底解决 P2-4 半成品列问题）
+	assetUpdates := map[string]interface{}{}
+	if identity.Model != "" {
+		assetUpdates["model"] = identity.Model
+	}
+	if identity.Version != "" {
+		assetUpdates["version"] = identity.Version
+	}
+	if s := identity.ModelSeries; s != "" {
+		assetUpdates["model_series"] = s
+	} else if identity.DeviceRef != nil && identity.DeviceRef.Series != "" {
+		assetUpdates["model_series"] = identity.DeviceRef.Series
+	}
+	if p := identity.PatchVersion; p != "" {
+		assetUpdates["patch_version"] = p
+	} else if identity.DeviceRef != nil && identity.DeviceRef.Patch != "" {
+		assetUpdates["patch_version"] = identity.DeviceRef.Patch
+	}
+	if len(assetUpdates) > 0 {
+		_ = p.db.Model(&models.DeviceAsset{}).Where("ip = ?", deviceIP).Updates(assetUpdates).Error
+	}
+
 	return p.db.Model(&TaskRunDevice{}).
 		Where("task_run_id = ? AND device_ip = ?", runID, deviceIP).
-		Updates(map[string]interface{}{
-			"vendor":          identity.Vendor,
-			"model":           identity.Model,
-			"version":         identity.Version,
-			"hostname":        identity.Hostname,
-			"normalized_name": identity.Hostname,
-			"mgmt_ip":         identity.MgmtIP,
-			"chassis_id":      identity.ChassisID,
-			"status":          "completed",
-		}).Error
+		Updates(updates).Error
 }
 
 // SaveParsedFacts 保存解析后的事实数据（接口/LLDP/FDB/ARP/聚合）
@@ -251,8 +302,9 @@ type ParsedFactBatch struct {
 // MapCommandOutput 将解析器输出映射为事实数据
 // commandKey: version/sysname/interface_brief/lldp_neighbor/arp_all/eth_trunk 等
 // rawRefID: 原始数据引用ID（用于追溯）
+// rawOutputs: 可选的命令原始文本（主要用于 version 分支调用 device.Identify 提取形态认知模型）
 func MapCommandOutput(mapper parser.ResultMapper, commandKey string, rows []map[string]string,
-	identity *parser.DeviceIdentity, rawRefID string) (*ParsedFactBatch, error) {
+	identity *parser.DeviceIdentity, rawRefID string, rawOutputs ...string) (*ParsedFactBatch, error) {
 
 	batch := &ParsedFactBatch{
 		Identity: identity,
@@ -265,6 +317,88 @@ func MapCommandOutput(mapper parser.ResultMapper, commandKey string, rows []map[
 			return nil, fmt.Errorf("映射设备信息失败: %w", err)
 		}
 		mergeIdentityResult(identity, id, identity.Vendor)
+
+		// 桥接设备形态认知层 (device.Identify)
+		var rawVer string
+		if len(rawOutputs) > 0 {
+			rawVer = rawOutputs[0]
+		}
+		if rawVer != "" {
+			raws := map[string]string{"version": rawVer}
+			if identity.DeviceRef != nil && identity.DeviceRef.Raws != nil {
+				for k, v := range identity.DeviceRef.Raws {
+					raws[k] = v
+				}
+			}
+			raws["version"] = rawVer
+			if devId, err := device.Identify(identity.Vendor, raws); err == nil {
+				identity.DeviceRef = devId
+				if devId.Model != "" {
+					identity.Model = devId.Model
+				}
+				if devId.Version != "" {
+					identity.Version = devId.Version
+				}
+				if devId.Series != "" {
+					identity.ModelSeries = devId.Series
+				}
+				if devId.Patch != "" {
+					identity.PatchVersion = devId.Patch
+				}
+				if len(devId.Evidence) > 0 {
+					identity.IdentityEvidence = strings.Join(devId.Evidence, "; ")
+				}
+				if identity.Hostname == "" && devId.SysName != "" {
+					identity.Hostname = devId.SysName
+				}
+				if (identity.Vendor == "" || identity.Vendor == "unknown") && devId.Vendor != "" {
+					identity.Vendor = devId.Vendor
+				}
+				modelKey := identity.Model
+				if modelKey == "" {
+					modelKey = identity.ModelSeries
+				}
+				prof, matchPath := config.ResolveProfile(identity.Vendor, modelKey, identity.Version)
+				if prof != nil {
+					identity.ProfileMatchPath = matchPath
+				}
+			}
+		}
+
+	case "patch_info":
+		var rawPatch string
+		if len(rawOutputs) > 0 {
+			rawPatch = rawOutputs[0]
+		}
+		if rawPatch != "" {
+			raws := map[string]string{"patch_info": rawPatch}
+			if identity.DeviceRef != nil && identity.DeviceRef.Raws != nil {
+				for k, v := range identity.DeviceRef.Raws {
+					raws[k] = v
+				}
+			}
+			raws["patch_info"] = rawPatch
+			if devId, err := device.Identify(identity.Vendor, raws); err == nil {
+				identity.DeviceRef = devId
+				if devId.Patch != "" {
+					identity.PatchVersion = devId.Patch
+				}
+				if devId.Series != "" && identity.ModelSeries == "" {
+					identity.ModelSeries = devId.Series
+				}
+				if len(devId.Evidence) > 0 {
+					identity.IdentityEvidence = strings.Join(devId.Evidence, "; ")
+				}
+				modelKey := identity.Model
+				if modelKey == "" {
+					modelKey = identity.ModelSeries
+				}
+				prof, matchPath := config.ResolveProfile(identity.Vendor, modelKey, identity.Version)
+				if prof != nil {
+					identity.ProfileMatchPath = matchPath
+				}
+			}
+		}
 
 	case "sysname":
 		mergeIdentityFields(identity, flattenParseRows(rows), identity.Vendor)

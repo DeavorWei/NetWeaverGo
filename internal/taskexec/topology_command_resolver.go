@@ -85,7 +85,7 @@ func (r *TopologyCommandResolver) SupportedVendors() []string {
 	vendors := make([]string, 0, len(profiles))
 	seen := make(map[string]struct{})
 	for _, profile := range profiles {
-		if profile == nil {
+		if profile == nil || !profile.TopologyEnabled {
 			continue
 		}
 		vendor := strings.ToLower(strings.TrimSpace(profile.Vendor))
@@ -109,13 +109,16 @@ func (r *TopologyCommandResolver) Resolve(taskVendor string, device *models.Devi
 	}
 
 	resolvedVendor, vendorSource := r.resolveVendor(taskVendor, device)
-	profile, ok := config.GetDeviceProfileByVendor(resolvedVendor)
-	if !ok || profile == nil {
-		profile = config.GetDeviceProfile(defaultTopologyVendor)
+	var model, version string
+	if device != nil {
+		model = device.Model
+		version = device.Version
 	}
+	profile, matchPath := config.ResolveProfile(resolvedVendor, model, version)
 	if profile == nil {
 		return nil, fmt.Errorf("拓扑命令解析失败: 无法加载厂商画像 %s", resolvedVendor)
 	}
+	logger.Verbose("TaskExec", "-", "拓扑画像解析成功: vendor=%s, model=%s, matchPath=%s", resolvedVendor, model, matchPath)
 
 	vendorCommands, err := config.GetTopologyVendorFieldCommands(profile.Vendor)
 	useBuiltinSeed := false
@@ -129,8 +132,9 @@ func (r *TopologyCommandResolver) Resolve(taskVendor string, device *models.Devi
 		vendorCommandMap[strings.TrimSpace(item.FieldKey)] = item
 	}
 
-	profileCommandMap := make(map[string]config.CommandSpec, len(profile.Commands))
-	for _, item := range profile.Commands {
+	resolvedCommands := profile.ResolveCommands(model, version)
+	profileCommandMap := make(map[string]config.CommandSpec, len(resolvedCommands))
+	for _, item := range resolvedCommands {
 		profileCommandMap[strings.TrimSpace(item.CommandKey)] = item
 	}
 
@@ -212,7 +216,7 @@ func (r *TopologyCommandResolver) resolveVendor(taskVendor string, device *model
 func buildTopologyCommandSeeds() map[string][]models.TopologyVendorFieldCommand {
 	seeds := make(map[string][]models.TopologyVendorFieldCommand)
 	for _, profile := range config.GetAllDeviceProfiles() {
-		if profile == nil {
+		if profile == nil || !profile.TopologyEnabled {
 			continue
 		}
 		vendor := strings.ToLower(strings.TrimSpace(profile.Vendor))
@@ -263,7 +267,7 @@ func normalizeSupportedVendor(value string) string {
 	if vendor == "" {
 		return ""
 	}
-	if _, ok := config.GetDeviceProfileByVendor(vendor); ok {
+	if p, ok := config.GetDeviceProfileByVendor(vendor); ok && p.TopologyEnabled {
 		return vendor
 	}
 	return ""

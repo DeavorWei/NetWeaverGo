@@ -4,17 +4,24 @@ import (
 	"errors"
 	"regexp"
 	"time"
+
+	"github.com/NetWeaverGo/core/internal/device"
 )
 
 // DeviceIdentity 设备身份信息
 type DeviceIdentity struct {
-	Vendor       string `json:"vendor"`       // 厂商：huawei / h3c / cisco
-	Model        string `json:"model"`        // 型号
-	Version      string `json:"version"`      // 软件版本
-	Hostname     string `json:"hostname"`     // 主机名
-	MgmtIP       string `json:"mgmtIp"`       // 管理IP
-	ChassisID    string `json:"chassisId"`    // 机箱ID（LLDP）
-	RawRefID     string `json:"rawRefId"`     // 原始输出引用ID
+	Vendor           string           `json:"vendor"`                     // 厂商：huawei / h3c / cisco
+	Model            string           `json:"model"`                      // 型号
+	ModelSeries      string           `json:"modelSeries,omitempty"`      // 设备系列（P2 认知层）
+	Version          string           `json:"version"`                    // 软件版本
+	PatchVersion     string           `json:"patchVersion,omitempty"`     // 补丁版本（P2 认知层）
+	ProfileMatchPath string           `json:"profileMatchPath,omitempty"` // 画像匹配路径（P2 认知层）
+	IdentityEvidence string           `json:"identityEvidence,omitempty"` // 形态识别证据（P2 认知层）
+	Hostname         string           `json:"hostname"`                   // 主机名
+	MgmtIP           string           `json:"mgmtIp"`                     // 管理IP
+	ChassisID        string           `json:"chassisId"`                  // 机箱ID（LLDP）
+	RawRefID         string           `json:"rawRefId"`                   // 原始输出引用ID
+	DeviceRef        *device.Identity `json:"deviceRef,omitempty"`        // 设备形态认知层模型引用（P2 认知层）
 }
 
 // InterfaceFact 接口信息
@@ -110,10 +117,12 @@ type ResultMapper interface {
 // ============================================================================
 
 // ParserProvider 解析器提供者接口
-// 用于从管理器获取指定厂商的只读解析器快照
+// 用于从管理器获取指定厂商或特定设备形态的只读解析器快照
 type ParserProvider interface {
-	// GetParser 获取指定厂商的解析器
+	// GetParser 获取指定厂商的基础解析器
 	GetParser(vendor string) (CliParser, error)
+	// GetParserForDevice 获取针对特定设备款型与版本的复合解析器（支持按款型/版本模板选配）
+	GetParserForDevice(vendor, model, version string) (CliParser, error)
 }
 
 // ParserReloader 解析器重载接口

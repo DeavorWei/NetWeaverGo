@@ -92,13 +92,36 @@
               <div class="text-xs font-medium text-text-secondary uppercase tracking-wide">基本信息</div>
               <div class="grid grid-cols-2 gap-2 text-xs">
                 <div class="text-text-muted">厂商:</div>
-                <div class="text-text-primary">{{ deviceDetail.identity.vendor || '-' }}</div>
+                <div class="text-text-primary capitalize">{{ deviceDetail.identity.vendor || '-' }}</div>
                 <div class="text-text-muted">型号:</div>
                 <div class="text-text-primary">{{ deviceDetail.identity.model || '-' }}</div>
+                <div class="text-text-muted">归一化系列:</div>
+                <div class="text-text-primary font-medium text-accent">{{ deviceDetail.identity.modelSeries || deviceDetail.identity.deviceRef?.series || '-' }}</div>
+                <div class="text-text-muted">软件版本:</div>
+                <div class="text-text-primary">{{ deviceDetail.identity.version || '-' }}</div>
+                <div class="text-text-muted">补丁版本:</div>
+                <div class="text-text-primary font-mono">{{ deviceDetail.identity.patchVersion || deviceDetail.identity.deviceRef?.patch || '-' }}</div>
                 <div class="text-text-muted">主机名:</div>
                 <div class="text-text-primary">{{ deviceDetail.identity.hostname || '-' }}</div>
                 <div class="text-text-muted">管理IP:</div>
                 <div class="text-text-primary">{{ deviceDetail.identity.mgmtIp || '-' }}</div>
+              </div>
+            </div>
+
+            <!-- 形态认知与画像匹配（非推断节点） -->
+            <div v-if="!isInferred && (deviceDetail?.identity?.identityEvidence || deviceDetail?.identity?.profileMatchPath)" class="bg-bg-panel border border-border rounded-lg p-3 space-y-2">
+              <div class="text-xs font-medium text-text-secondary uppercase tracking-wide">画像匹配与证据</div>
+              <div class="space-y-1.5 text-xs">
+                <div v-if="deviceDetail?.identity?.profileMatchPath" class="flex items-center gap-2">
+                  <span class="text-text-muted">匹配路径:</span>
+                  <span class="font-mono text-accent bg-accent/10 px-1.5 py-0.5 rounded text-[11px]">{{ deviceDetail.identity.profileMatchPath }}</span>
+                </div>
+                <div v-if="deviceDetail?.identity?.identityEvidence || deviceDetail?.identity?.deviceRef?.evidence?.length" class="flex flex-col gap-1">
+                  <span class="text-text-muted">形态识别证据:</span>
+                  <div class="text-text-secondary font-mono text-[11px] bg-bg-secondary p-2 rounded break-all border border-border/50">
+                    {{ deviceDetail.identity.identityEvidence || deviceDetail.identity.deviceRef?.evidence?.join('; ') }}
+                  </div>
+                </div>
               </div>
             </div>
 
