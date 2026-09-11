@@ -123,19 +123,20 @@ func (m *StreamMatcher) MatchErrorRule(line string) (bool, *ErrorRule) {
 
 // IsPrompt 检查字符流尾部是否为常见提示符（用于判读命令是否执行完毕）
 // 重要：如果 chunk 中包含分页符，返回 false（分页处理优先）
+//
+// 语义与 MatchPrompt 完全一致，仅为兼容既有调用方的薄包装。
 func (m *StreamMatcher) IsPrompt(chunk string) bool {
-	// DEBUG: 打印原始输入
-	//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt 输入 chunk 长度=%d, 内容='%s'", len(chunk), truncateString(chunk, 200))
+	ok, _ := m.MatchPrompt(chunk)
+	return ok
+}
 
+// MatchPrompt 检查字符流尾部是否为提示符，命中时一并返回该提示符的整行文本。
+// 返回的提示符行可用于反解设备视图（见 ResolveView）等需要上下文的场景。
+func (m *StreamMatcher) MatchPrompt(chunk string) (bool, string) {
 	cleanChunk := normalizeTerminalChunk(chunk)
-	//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt cleanChunk='%s'", truncateString(cleanChunk, 200))
-
 	promptLine := extractLastNonEmptyLine(cleanChunk)
-	//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt promptLine='%s'", promptLine)
-
 	if promptLine == "" {
-		//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt promptLine 为空，返回 false")
-		return false
+		return false, ""
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -144,43 +145,35 @@ func (m *StreamMatcher) IsPrompt(chunk string) bool {
 	// 这处理了分页符和提示符在同一 chunk 或相邻 chunk 的情况
 	for _, paginationPrompt := range m.PaginationPrompts {
 		if strings.Contains(cleanChunk, paginationPrompt) {
-			//logger.Verbose("Matcher", "-", "Chunk 包含分页符 '%s'，跳过提示符检测", paginationPrompt)
-			//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt 检测到分页符，返回 false")
-			return false
+			return false, ""
 		}
 	}
 
 	// 特殊处理：华为格式提示符 <主机名>
 	// 这种格式以 > 结尾，但前面有 < 包裹，如 <S2>
 	if strings.HasPrefix(promptLine, "<") && strings.HasSuffix(promptLine, ">") {
-		// 提取 < 和 > 之间的内容
 		inner := strings.TrimPrefix(strings.TrimSuffix(promptLine, ">"), "<")
 		// 内部应该有内容（主机名）
 		if inner != "" && !strings.Contains(inner, " ") {
-			//logger.Verbose("Matcher", "-", "检测到华为格式提示符: '%s'", promptLine)
-			//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt 华为格式匹配成功，返回 true")
-			return true
+			return true, promptLine
 		}
 	}
 
 	// 首先检查后缀匹配
 	for _, prompt := range m.Prompts {
 		if strings.HasSuffix(promptLine, prompt) && looksLikePromptLine(promptLine, prompt) {
-			//logger.Verbose("Matcher", "-", "Chunk 末缀匹配到了提示符: '%s'", prompt)
-			//logger.Debug("Matcher", "-", "[DEBUG] IsPrompt 后缀匹配成功 prompt='%s', promptLine='%s', 返回 true", prompt, promptLine)
-			return true
+			return true, promptLine
 		}
 	}
 
 	// 然后检查正则模式匹配
 	for _, pattern := range m.PromptPatterns {
 		if pattern.MatchString(promptLine) {
-			//logger.Verbose("Matcher", "-", "Chunk 正则匹配到了提示符: '%s'", pattern.String())
-			return true
+			return true, promptLine
 		}
 	}
 
-	return false
+	return false, ""
 }
 
 // knownPromptPrefixes 已知的提示符前缀列表

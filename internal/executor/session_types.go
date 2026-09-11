@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"strings"
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/matcher"
@@ -364,6 +365,14 @@ type SessionContext struct {
 
 	// RawBufferLimitBytes 单命令内存上限（字节，0表示使用默认8MB）
 	RawBufferLimitBytes int
+
+	// Vendor 当前设备厂商，供提示符反解视图等场景使用（对应方案 B5：
+	// deviceProfile.Vendor → opts.Vendor 的取值顺序）
+	Vendor string
+
+	// CurrentView 会话级当前视图，跨命令继承（命令缓存去重维度之一）。
+	// 必须保存在会话级：CommandContext 单命令即焚，无法承载跨命令状态。
+	CurrentView matcher.View
 }
 
 // NewSessionContext 创建新的会话上下文
@@ -410,6 +419,8 @@ func (c *SessionContext) AdvanceCommand() *CommandContext {
 
 	rawCmd := c.Queue[c.NextIndex]
 	ctx := NewCommandContext(c.NextIndex, rawCmd)
+	// 记录下发时刻的视图快照（供排障与审计，主状态仍在 SessionContext.CurrentView）
+	ctx.View = c.GetCurrentView()
 	if c.RawBufferLimitBytes > 0 {
 		ctx.SetMaxBufferSize(c.RawBufferLimitBytes)
 	}
@@ -446,6 +457,26 @@ func (c *SessionContext) SetConfirmPolicy(policy string) {
 	if policy != "" {
 		c.ConfirmPolicy = policy
 	}
+}
+
+// SetVendor 设置设备厂商（视图反解所需）
+func (c *SessionContext) SetVendor(vendor string) {
+	c.Vendor = strings.TrimSpace(vendor)
+}
+
+// SetCurrentView 更新会话级当前视图（空值忽略，保持原状态）
+func (c *SessionContext) SetCurrentView(v matcher.View) {
+	if v != "" {
+		c.CurrentView = v
+	}
+}
+
+// GetCurrentView 获取会话级当前视图，空值归一化为 unknown
+func (c *SessionContext) GetCurrentView() matcher.View {
+	if c.CurrentView == "" {
+		return matcher.ViewUnknown
+	}
+	return c.CurrentView
 }
 
 // GetCommandKey 获取指定索引的命令标识

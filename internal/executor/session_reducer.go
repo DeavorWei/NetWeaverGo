@@ -133,6 +133,8 @@ func (r *SessionReducer) handleWarmupPromptSeen(e EvWarmupPromptSeen) []SessionE
 
 	r.ctx.PromptFingerprint = e.Prompt
 	r.ctx.InitResidualCleared = true
+	// 依据真实提示符初始化会话视图（跨命令继承的基础状态）
+	r.ctx.SetCurrentView(matcher.ResolveView(r.ctx.Vendor, e.Prompt))
 	r.state = NewStateReady
 
 	logger.Debug("SessionReducer", "-", "预热完成，进入就绪状态: %s", e.Prompt)
@@ -233,6 +235,9 @@ func (r *SessionReducer) handleConfirmSeen(e EvConfirmSeen) []SessionEffect {
 
 // handleActivePromptSeen 处理活动行提示符检测事件
 func (r *SessionReducer) handleActivePromptSeen(e EvActivePromptSeen) []SessionEffect {
+	// 命令结束提示符即为当前真实视图（视图切换命令在此生效）
+	r.ctx.SetCurrentView(matcher.ResolveView(r.ctx.Vendor, e.Prompt))
+
 	switch r.state {
 	case NewStateRunning:
 		// 命令完成
@@ -369,6 +374,8 @@ func (r *SessionReducer) handleStreamClosed(e EvStreamClosed) []SessionEffect {
 
 // handleCommandPromptSeen 处理命令完成后提示符检测事件
 func (r *SessionReducer) handleCommandPromptSeen(e EvCommandPromptSeen) []SessionEffect {
+	r.ctx.SetCurrentView(matcher.ResolveView(r.ctx.Vendor, e.Prompt))
+
 	if r.state == NewStateRunning {
 		return r.completeCurrentCommand()
 	}

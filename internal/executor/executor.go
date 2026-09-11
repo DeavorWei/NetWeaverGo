@@ -67,6 +67,9 @@ type DeviceExecutor struct {
 	logSession    *report.DeviceLogSession
 	deviceProfile *config.DeviceProfile
 
+	// vendor 设备厂商（来自 ExecutorOptions，作为视图反解 vendor 的兜底来源）
+	vendor string
+
 	// Terminal Replayer - 实验性集成
 	// 用于将 SSH 字节流正确转换为规范化逻辑文本
 	replayer *terminal.Replayer
@@ -111,6 +114,7 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 		Username:          user,
 		Password:          pass,
 		Protocol:          opts.Protocol,
+		vendor:            strings.TrimSpace(opts.Vendor),
 		Matcher:           streamMatcher,
 		connectionFactory: factory,
 		EventBus:          opts.EventBus,
@@ -356,6 +360,16 @@ func (e *DeviceExecutor) executeInternal(
 	}
 	engine := NewStreamEngine(e, e.conn, commandStrings, ptyWidth)
 	engine.SetExecutionEventCallback(eventCallback)
+
+	// 设置设备厂商（视图反解 vendor 取值顺序：deviceProfile.Vendor → opts.Vendor，方案 B5）
+	vendorForView := ""
+	if e.deviceProfile != nil {
+		vendorForView = strings.TrimSpace(e.deviceProfile.Vendor)
+	}
+	if vendorForView == "" {
+		vendorForView = e.vendor
+	}
+	engine.adapter.SetVendor(vendorForView)
 
 	// 设置命令标识
 	engine.adapter.SetCommandKeys(commandKeys)

@@ -3,6 +3,8 @@ package executor
 import (
 	"strings"
 	"time"
+
+	"github.com/NetWeaverGo/core/internal/matcher"
 )
 
 // MaxRawBufferSize 单条命令原始回显内存缓冲区上限 (8MB)，超限截断并打标保全系统内存
@@ -43,6 +45,10 @@ type CommandContext struct {
 
 	// Cached 标记当前命令结果是否命中缓存
 	Cached bool
+
+	// View 下发该命令时所处视图的审计快照。
+	// 视图的主状态保存在会话级 SessionContext.CurrentView，此处仅记录当时快照便于排障。
+	View matcher.View
 
 	// EchoConsumed 是否已消费 echo 行
 	// 若首个逻辑行等于发送的命令文本，则标记消费并在后续有效行中剥离

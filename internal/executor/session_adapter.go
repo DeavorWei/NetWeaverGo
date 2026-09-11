@@ -260,6 +260,20 @@ func (a *SessionAdapter) SetConfirmPolicy(policy string) {
 	a.reducer.Context().SetConfirmPolicy(policy)
 }
 
+// SetVendor 设置设备厂商，并同步给 Reducer 上下文（视图反解使用，对应方案 B5）
+func (a *SessionAdapter) SetVendor(vendor string) {
+	a.newContext.SetVendor(vendor)
+	a.reducer.Context().SetVendor(vendor)
+}
+
+// CurrentView 获取会话级当前视图（命令缓存键的视图维度）
+func (a *SessionAdapter) CurrentView() matcher.View {
+	if a.newContext != nil {
+		return a.newContext.GetCurrentView()
+	}
+	return matcher.ViewUnknown
+}
+
 // SetRawBufferLimitBytes 设置单命令内存上限（字节）
 func (a *SessionAdapter) SetRawBufferLimitBytes(bytes int) {
 	a.newContext.SetRawBufferLimitBytes(bytes)

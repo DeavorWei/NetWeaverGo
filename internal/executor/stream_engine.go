@@ -54,6 +54,15 @@ type StreamEngine struct {
 	savedConfirmPolicy string // 风险命令临时收紧前保存的原交互确认策略
 }
 
+// currentCacheKey 组装命令缓存键：视图 + 命令。
+// 视图维度保证"同一设备、同一命令、不同视图"之间严格不复用（方案 §2）。
+func (e *StreamEngine) currentCacheKey(command string) string {
+	if e.adapter == nil {
+		return string(matcher.ViewUnknown) + "|" + command
+	}
+	return string(e.adapter.CurrentView()) + "|" + command
+}
+
 // NewStreamEngine 创建新的流处理引擎
 func NewStreamEngine(executor *DeviceExecutor, conn connutil.DeviceConnection, commands []string, width int) *StreamEngine {
 	m := matcher.NewStreamMatcher()
@@ -483,7 +492,8 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 			useCache = true
 		}
 		if useCache && e.executor != nil && e.executor.commandCache != nil {
-			if cachedResult, found := e.executor.commandCache.Get(act.Command); found && cachedResult != nil {
+			cacheKey := e.currentCacheKey(act.Command)
+			if cachedResult, found := e.executor.commandCache.Get(cacheKey); found && cachedResult != nil {
 				logger.Info("StreamEngine", "-", ">>> [命中文档/命令缓存]: %s (复用回显跳过物理下发)", act.Command)
 				// 写入详细日志标记
 				if e.executor != nil {
@@ -798,7 +808,7 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 			if len(results) > 0 {
 				lastResult := results[len(results)-1]
 				if lastResult != nil && lastResult.Command == act.Command && !lastResult.Cached {
-					e.executor.commandCache.Put(act.Command, lastResult)
+					e.executor.commandCache.Put(e.currentCacheKey(act.Command), lastResult)
 					logger.Debug("StreamEngine", "-", "已将命令结果写入缓存: %s (size=%d)", act.Command, lastResult.RawSize)
 				}
 			}

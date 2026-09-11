@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/matcher"
 )
 
 // scriptReader 按顺序返回预设的字符串块，模拟设备输出流。
@@ -312,8 +313,13 @@ func TestStreamEngine_CommandCache_ReadHit(t *testing.T) {
 		commandCache: DefaultCommandCache(),
 	}
 
-	// 先在缓存中预填一条命令回显
-	executor.commandCache.Put("display version", &CommandResult{
+	engine := NewStreamEngine(executor, conn, []string{"display version"}, 80)
+
+	// 缓存键含视图维度（方案 §2）：握手提示符 <S1> 反解为 user 视图，
+	// 预填必须使用与读取时一致的视图键，否则无法命中。
+	engine.adapter.SetVendor("huawei")
+	engine.adapter.reducer.Context().SetCurrentView(matcher.ResolveView("huawei", "<S1>"))
+	executor.commandCache.Put(engine.currentCacheKey("display version"), &CommandResult{
 		Command:         "display version",
 		RawText:         "display version\r\nVersion 5.20 (Pre-cached)\r\n<S1>",
 		NormalizedText:  "Version 5.20 (Pre-cached)",
@@ -321,7 +327,6 @@ func TestStreamEngine_CommandCache_ReadHit(t *testing.T) {
 		Success:         true,
 	})
 
-	engine := NewStreamEngine(executor, conn, []string{"display version"}, 80)
 	results, err := engine.RunPlaybook(context.Background(), 2*time.Second)
 	if err != nil {
 		t.Fatalf("缓存命中执行失败: %v", err)
