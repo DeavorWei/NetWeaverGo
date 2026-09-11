@@ -1,0 +1,4 @@
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.170 (AirEngine9700-M V200R019C00SPC500)
+Copyright (C) 2000-2021 HUAWEI TECH CO., LTD.
+HUAWEI AirEngine9700-M uptime is 1 week, 2 days, 5 hours, 9 minutes

@@ -1,0 +1,4 @@
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.170 (AR6280 V300R019C11SPC200)
+Copyright (C) 2011-2020 HUAWEI TECH CO., LTD.
+HUAWEI AR6280 uptime is 2 weeks, 0 day, 6 hours, 30 minutes

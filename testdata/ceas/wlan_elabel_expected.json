@@ -1,0 +1,299 @@
+{
+  "deviceIp": "",
+  "chassisEsn": "2102353WLAN10M1000002",
+  "roots": [
+    {
+      "id": "0",
+      "parentId": "",
+      "level": 1,
+      "type": "frame",
+      "name": "BackPlane_0",
+      "path": "0",
+      "slot": "",
+      "item": "",
+      "barCode": "",
+      "description": "",
+      "manufactured": "",
+      "vendorName": "",
+      "boardType": "",
+      "attrs": null,
+      "children": [
+        {
+          "id": "0_1",
+          "parentId": "0",
+          "level": 2,
+          "type": "slot",
+          "name": "Unit_1",
+          "path": "1/0",
+          "slot": "1",
+          "item": "02353WLAN",
+          "barCode": "2102353WLAN10M1000001",
+          "description": "AirEngine Wireless Access Controller",
+          "manufactured": "2023-05-18",
+          "vendorName": "Huawei",
+          "boardType": "AirEngine9700-M",
+          "attrs": {
+            "BarCode": "2102353WLAN10M1000001",
+            "BoardType": "AirEngine9700-M",
+            "Description": "AirEngine Wireless Access Controller",
+            "Item": "02353WLAN",
+            "Manufactured": "2023-05-18",
+            "VendorName": "Huawei"
+          },
+          "children": [
+            {
+              "id": "0_1_2",
+              "parentId": "0_1",
+              "level": 3,
+              "type": "mainboard",
+              "name": "Main_Board",
+              "path": "1/0",
+              "slot": "1",
+              "item": "02353WMB",
+              "barCode": "2102353WLAN10M1000002",
+              "description": "AC Main Control Unit",
+              "manufactured": "2023-05-19",
+              "vendorName": "Huawei",
+              "boardType": "AC-MAIN-BD",
+              "attrs": {
+                "BarCode": "2102353WLAN10M1000002",
+                "BoardType": "AC-MAIN-BD",
+                "Description": "AC Main Control Unit",
+                "Item": "02353WMB",
+                "Manufactured": "2023-05-19",
+                "VendorName": "Huawei"
+              },
+              "children": null
+            },
+            {
+              "id": "0_1_3",
+              "parentId": "0_1",
+              "level": 3,
+              "type": "port",
+              "name": "Port_1",
+              "path": "1/0/1",
+              "slot": "1",
+              "item": "02353WPT",
+              "barCode": "2102353WLAN10M1000003",
+              "description": "10GE SFP+ Port",
+              "manufactured": "",
+              "vendorName": "",
+              "boardType": "",
+              "attrs": {
+                "BarCode": "2102353WLAN10M1000003",
+                "Description": "10GE SFP+ Port",
+                "Item": "02353WPT"
+              },
+              "children": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "allNodes": [
+    {
+      "id": "0",
+      "parentId": "",
+      "level": 1,
+      "type": "frame",
+      "name": "BackPlane_0",
+      "path": "0",
+      "slot": "",
+      "item": "",
+      "barCode": "",
+      "description": "",
+      "manufactured": "",
+      "vendorName": "",
+      "boardType": "",
+      "attrs": null,
+      "children": [
+        {
+          "id": "0_1",
+          "parentId": "0",
+          "level": 2,
+          "type": "slot",
+          "name": "Unit_1",
+          "path": "1/0",
+          "slot": "1",
+          "item": "02353WLAN",
+          "barCode": "2102353WLAN10M1000001",
+          "description": "AirEngine Wireless Access Controller",
+          "manufactured": "2023-05-18",
+          "vendorName": "Huawei",
+          "boardType": "AirEngine9700-M",
+          "attrs": {
+            "BarCode": "2102353WLAN10M1000001",
+            "BoardType": "AirEngine9700-M",
+            "Description": "AirEngine Wireless Access Controller",
+            "Item": "02353WLAN",
+            "Manufactured": "2023-05-18",
+            "VendorName": "Huawei"
+          },
+          "children": [
+            {
+              "id": "0_1_2",
+              "parentId": "0_1",
+              "level": 3,
+              "type": "mainboard",
+              "name": "Main_Board",
+              "path": "1/0",
+              "slot": "1",
+              "item": "02353WMB",
+              "barCode": "2102353WLAN10M1000002",
+              "description": "AC Main Control Unit",
+              "manufactured": "2023-05-19",
+              "vendorName": "Huawei",
+              "boardType": "AC-MAIN-BD",
+              "attrs": {
+                "BarCode": "2102353WLAN10M1000002",
+                "BoardType": "AC-MAIN-BD",
+                "Description": "AC Main Control Unit",
+                "Item": "02353WMB",
+                "Manufactured": "2023-05-19",
+                "VendorName": "Huawei"
+              },
+              "children": null
+            },
+            {
+              "id": "0_1_3",
+              "parentId": "0_1",
+              "level": 3,
+              "type": "port",
+              "name": "Port_1",
+              "path": "1/0/1",
+              "slot": "1",
+              "item": "02353WPT",
+              "barCode": "2102353WLAN10M1000003",
+              "description": "10GE SFP+ Port",
+              "manufactured": "",
+              "vendorName": "",
+              "boardType": "",
+              "attrs": {
+                "BarCode": "2102353WLAN10M1000003",
+                "Description": "10GE SFP+ Port",
+                "Item": "02353WPT"
+              },
+              "children": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "0_1",
+      "parentId": "0",
+      "level": 2,
+      "type": "slot",
+      "name": "Unit_1",
+      "path": "1/0",
+      "slot": "1",
+      "item": "02353WLAN",
+      "barCode": "2102353WLAN10M1000001",
+      "description": "AirEngine Wireless Access Controller",
+      "manufactured": "2023-05-18",
+      "vendorName": "Huawei",
+      "boardType": "AirEngine9700-M",
+      "attrs": {
+        "BarCode": "2102353WLAN10M1000001",
+        "BoardType": "AirEngine9700-M",
+        "Description": "AirEngine Wireless Access Controller",
+        "Item": "02353WLAN",
+        "Manufactured": "2023-05-18",
+        "VendorName": "Huawei"
+      },
+      "children": [
+        {
+          "id": "0_1_2",
+          "parentId": "0_1",
+          "level": 3,
+          "type": "mainboard",
+          "name": "Main_Board",
+          "path": "1/0",
+          "slot": "1",
+          "item": "02353WMB",
+          "barCode": "2102353WLAN10M1000002",
+          "description": "AC Main Control Unit",
+          "manufactured": "2023-05-19",
+          "vendorName": "Huawei",
+          "boardType": "AC-MAIN-BD",
+          "attrs": {
+            "BarCode": "2102353WLAN10M1000002",
+            "BoardType": "AC-MAIN-BD",
+            "Description": "AC Main Control Unit",
+            "Item": "02353WMB",
+            "Manufactured": "2023-05-19",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        },
+        {
+          "id": "0_1_3",
+          "parentId": "0_1",
+          "level": 3,
+          "type": "port",
+          "name": "Port_1",
+          "path": "1/0/1",
+          "slot": "1",
+          "item": "02353WPT",
+          "barCode": "2102353WLAN10M1000003",
+          "description": "10GE SFP+ Port",
+          "manufactured": "",
+          "vendorName": "",
+          "boardType": "",
+          "attrs": {
+            "BarCode": "2102353WLAN10M1000003",
+            "Description": "10GE SFP+ Port",
+            "Item": "02353WPT"
+          },
+          "children": null
+        }
+      ]
+    },
+    {
+      "id": "0_1_2",
+      "parentId": "0_1",
+      "level": 3,
+      "type": "mainboard",
+      "name": "Main_Board",
+      "path": "1/0",
+      "slot": "1",
+      "item": "02353WMB",
+      "barCode": "2102353WLAN10M1000002",
+      "description": "AC Main Control Unit",
+      "manufactured": "2023-05-19",
+      "vendorName": "Huawei",
+      "boardType": "AC-MAIN-BD",
+      "attrs": {
+        "BarCode": "2102353WLAN10M1000002",
+        "BoardType": "AC-MAIN-BD",
+        "Description": "AC Main Control Unit",
+        "Item": "02353WMB",
+        "Manufactured": "2023-05-19",
+        "VendorName": "Huawei"
+      },
+      "children": null
+    },
+    {
+      "id": "0_1_3",
+      "parentId": "0_1",
+      "level": 3,
+      "type": "port",
+      "name": "Port_1",
+      "path": "1/0/1",
+      "slot": "1",
+      "item": "02353WPT",
+      "barCode": "2102353WLAN10M1000003",
+      "description": "10GE SFP+ Port",
+      "manufactured": "",
+      "vendorName": "",
+      "boardType": "",
+      "attrs": {
+        "BarCode": "2102353WLAN10M1000003",
+        "Description": "10GE SFP+ Port",
+        "Item": "02353WPT"
+      },
+      "children": null
+    }
+  ]
+}

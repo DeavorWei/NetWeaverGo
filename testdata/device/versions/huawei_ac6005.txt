@@ -1,0 +1,4 @@
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.170 (AC6005 V200R019C00SPC500)
+Copyright (C) 2000-2020 HUAWEI TECH CO., LTD.
+HUAWEI AC6005-8 uptime is 3 weeks, 1 day, 0 hour, 44 minutes

@@ -1,0 +1,4 @@
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 8.180 (CE16804 V200R005C20SPC800)
+Copyright (C) 2012-2021 HUAWEI TECH CO., LTD.
+HUAWEI CE16804 uptime is 30 weeks, 1 day, 0 hour, 5 minutes

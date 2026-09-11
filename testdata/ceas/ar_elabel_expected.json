@@ -1,0 +1,274 @@
+{
+  "deviceIp": "",
+  "chassisEsn": "2102311KLT10L3000001",
+  "roots": [
+    {
+      "id": "0",
+      "parentId": "",
+      "level": 1,
+      "type": "frame",
+      "name": "BackPlane_1",
+      "path": "1",
+      "slot": "",
+      "item": "02311KLT",
+      "barCode": "2102311KLT10L3000001",
+      "description": "AR6280 Integrated Router",
+      "manufactured": "2023-01-10",
+      "vendorName": "Huawei",
+      "boardType": "AR6280",
+      "attrs": {
+        "BarCode": "2102311KLT10L3000001",
+        "BoardType": "AR6280",
+        "Description": "AR6280 Integrated Router",
+        "Item": "02311KLT",
+        "Manufactured": "2023-01-10",
+        "VendorName": "Huawei"
+      },
+      "children": [
+        {
+          "id": "0_1",
+          "parentId": "0",
+          "level": 3,
+          "type": "motherboard",
+          "name": "Mother_Board",
+          "path": "0/0",
+          "slot": "",
+          "item": "02311SRU",
+          "barCode": "2102311SRU10L3000002",
+          "description": "Main Processing Unit",
+          "manufactured": "2023-01-11",
+          "vendorName": "Huawei",
+          "boardType": "SRU-100",
+          "attrs": {
+            "BarCode": "2102311SRU10L3000002",
+            "BoardType": "SRU-100",
+            "Description": "Main Processing Unit",
+            "Item": "02311SRU",
+            "Manufactured": "2023-01-11",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        },
+        {
+          "id": "0_2",
+          "parentId": "0",
+          "level": 3,
+          "type": "daughterboard",
+          "name": "Daughter_Board_1/1",
+          "path": "0/1",
+          "slot": "",
+          "item": "02312HQQ",
+          "barCode": "2102312HQQ10L3000003",
+          "description": "1-Port Channelized E1/T1 Card",
+          "manufactured": "2023-01-15",
+          "vendorName": "Huawei",
+          "boardType": "1E1T1-M",
+          "attrs": {
+            "BarCode": "2102312HQQ10L3000003",
+            "BoardType": "1E1T1-M",
+            "Description": "1-Port Channelized E1/T1 Card",
+            "Item": "02312HQQ",
+            "Manufactured": "2023-01-15",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        },
+        {
+          "id": "0_3",
+          "parentId": "0",
+          "level": 2,
+          "type": "power",
+          "name": "PowerFrame_1",
+          "path": "power/1",
+          "slot": "",
+          "item": "02311PWR",
+          "barCode": "2102311PWR10L3000004",
+          "description": "350W AC Power Supply",
+          "manufactured": "2022-11-20",
+          "vendorName": "Huawei",
+          "boardType": "PWR-350W-AC",
+          "attrs": {
+            "BarCode": "2102311PWR10L3000004",
+            "BoardType": "PWR-350W-AC",
+            "Description": "350W AC Power Supply",
+            "Item": "02311PWR",
+            "Manufactured": "2022-11-20",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        }
+      ]
+    }
+  ],
+  "allNodes": [
+    {
+      "id": "0",
+      "parentId": "",
+      "level": 1,
+      "type": "frame",
+      "name": "BackPlane_1",
+      "path": "1",
+      "slot": "",
+      "item": "02311KLT",
+      "barCode": "2102311KLT10L3000001",
+      "description": "AR6280 Integrated Router",
+      "manufactured": "2023-01-10",
+      "vendorName": "Huawei",
+      "boardType": "AR6280",
+      "attrs": {
+        "BarCode": "2102311KLT10L3000001",
+        "BoardType": "AR6280",
+        "Description": "AR6280 Integrated Router",
+        "Item": "02311KLT",
+        "Manufactured": "2023-01-10",
+        "VendorName": "Huawei"
+      },
+      "children": [
+        {
+          "id": "0_1",
+          "parentId": "0",
+          "level": 3,
+          "type": "motherboard",
+          "name": "Mother_Board",
+          "path": "0/0",
+          "slot": "",
+          "item": "02311SRU",
+          "barCode": "2102311SRU10L3000002",
+          "description": "Main Processing Unit",
+          "manufactured": "2023-01-11",
+          "vendorName": "Huawei",
+          "boardType": "SRU-100",
+          "attrs": {
+            "BarCode": "2102311SRU10L3000002",
+            "BoardType": "SRU-100",
+            "Description": "Main Processing Unit",
+            "Item": "02311SRU",
+            "Manufactured": "2023-01-11",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        },
+        {
+          "id": "0_2",
+          "parentId": "0",
+          "level": 3,
+          "type": "daughterboard",
+          "name": "Daughter_Board_1/1",
+          "path": "0/1",
+          "slot": "",
+          "item": "02312HQQ",
+          "barCode": "2102312HQQ10L3000003",
+          "description": "1-Port Channelized E1/T1 Card",
+          "manufactured": "2023-01-15",
+          "vendorName": "Huawei",
+          "boardType": "1E1T1-M",
+          "attrs": {
+            "BarCode": "2102312HQQ10L3000003",
+            "BoardType": "1E1T1-M",
+            "Description": "1-Port Channelized E1/T1 Card",
+            "Item": "02312HQQ",
+            "Manufactured": "2023-01-15",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        },
+        {
+          "id": "0_3",
+          "parentId": "0",
+          "level": 2,
+          "type": "power",
+          "name": "PowerFrame_1",
+          "path": "power/1",
+          "slot": "",
+          "item": "02311PWR",
+          "barCode": "2102311PWR10L3000004",
+          "description": "350W AC Power Supply",
+          "manufactured": "2022-11-20",
+          "vendorName": "Huawei",
+          "boardType": "PWR-350W-AC",
+          "attrs": {
+            "BarCode": "2102311PWR10L3000004",
+            "BoardType": "PWR-350W-AC",
+            "Description": "350W AC Power Supply",
+            "Item": "02311PWR",
+            "Manufactured": "2022-11-20",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        }
+      ]
+    },
+    {
+      "id": "0_1",
+      "parentId": "0",
+      "level": 3,
+      "type": "motherboard",
+      "name": "Mother_Board",
+      "path": "0/0",
+      "slot": "",
+      "item": "02311SRU",
+      "barCode": "2102311SRU10L3000002",
+      "description": "Main Processing Unit",
+      "manufactured": "2023-01-11",
+      "vendorName": "Huawei",
+      "boardType": "SRU-100",
+      "attrs": {
+        "BarCode": "2102311SRU10L3000002",
+        "BoardType": "SRU-100",
+        "Description": "Main Processing Unit",
+        "Item": "02311SRU",
+        "Manufactured": "2023-01-11",
+        "VendorName": "Huawei"
+      },
+      "children": null
+    },
+    {
+      "id": "0_2",
+      "parentId": "0",
+      "level": 3,
+      "type": "daughterboard",
+      "name": "Daughter_Board_1/1",
+      "path": "0/1",
+      "slot": "",
+      "item": "02312HQQ",
+      "barCode": "2102312HQQ10L3000003",
+      "description": "1-Port Channelized E1/T1 Card",
+      "manufactured": "2023-01-15",
+      "vendorName": "Huawei",
+      "boardType": "1E1T1-M",
+      "attrs": {
+        "BarCode": "2102312HQQ10L3000003",
+        "BoardType": "1E1T1-M",
+        "Description": "1-Port Channelized E1/T1 Card",
+        "Item": "02312HQQ",
+        "Manufactured": "2023-01-15",
+        "VendorName": "Huawei"
+      },
+      "children": null
+    },
+    {
+      "id": "0_3",
+      "parentId": "0",
+      "level": 2,
+      "type": "power",
+      "name": "PowerFrame_1",
+      "path": "power/1",
+      "slot": "",
+      "item": "02311PWR",
+      "barCode": "2102311PWR10L3000004",
+      "description": "350W AC Power Supply",
+      "manufactured": "2022-11-20",
+      "vendorName": "Huawei",
+      "boardType": "PWR-350W-AC",
+      "attrs": {
+        "BarCode": "2102311PWR10L3000004",
+        "BoardType": "PWR-350W-AC",
+        "Description": "350W AC Power Supply",
+        "Item": "02311PWR",
+        "Manufactured": "2022-11-20",
+        "VendorName": "Huawei"
+      },
+      "children": null
+    }
+  ]
+}

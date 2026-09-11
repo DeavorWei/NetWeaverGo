@@ -1,0 +1,122 @@
+{
+  "cisco_c9300": {
+    "vendor": "cisco",
+    "model": "",
+    "version": "16.9.5",
+    "series": "",
+    "evidence": [
+      "识别为 Cisco IOS/Nexus 平台"
+    ]
+  },
+  "h3c_s6520": {
+    "vendor": "h3c",
+    "model": "S6520",
+    "detailType": "S6520-30C-EI",
+    "version": "V7.1.070-R6326P01",
+    "series": "S6500",
+    "evidence": [
+      "识别为 H3C Comware 平台"
+    ]
+  },
+  "huawei_ac6005": {
+    "vendor": "huawei",
+    "model": "AC6005",
+    "detailType": "AC6005-8",
+    "version": "V200R019C00SPC500",
+    "vrbd": "V200R019C00SPC500",
+    "series": "AC6000",
+    "evidence": [
+      "命中 handle_else: AC6005-8"
+    ]
+  },
+  "huawei_airengine": {
+    "vendor": "huawei",
+    "model": "AirEngine9700",
+    "detailType": "AirEngine9700-M",
+    "version": "V200R019C00SPC500",
+    "vrbd": "V200R019C00SPC500",
+    "series": "AirEngine9700",
+    "evidence": [
+      "命中 handle_else: AirEngine9700-M"
+    ]
+  },
+  "huawei_ar6280": {
+    "vendor": "huawei",
+    "model": "AR6280",
+    "detailType": "AR6280",
+    "version": "V300R019C11SPC200",
+    "vrbd": "V300R019C11SPC200",
+    "series": "AR6000",
+    "evidence": [
+      "命中 _REG2HANDLER: VRP-R-AR-SRG (pattern=(?mi)VRP\\s+\\(R\\)\\s+software,\\s+Version\\s+\\d\\.\\d+\\s*\\((SRG|AR|NE16EX)(\\S*)\\s+)"
+    ]
+  },
+  "huawei_ce16800": {
+    "vendor": "huawei",
+    "model": "CE16800",
+    "detailType": "CE16804",
+    "version": "V200R005C20SPC800",
+    "vrbd": "V200R005C20SPC800",
+    "series": "CE16800",
+    "evidence": [
+      "命中 handle_else: CE16804"
+    ]
+  },
+  "huawei_ce6866": {
+    "vendor": "huawei",
+    "model": "CE6866",
+    "detailType": "CE6866-48S8CQ-EI",
+    "version": "V200R005C10SPC800",
+    "vrbd": "V200R005C10SPC800",
+    "series": "CE6800",
+    "evidence": [
+      "命中 handle_else: CE6866-48S8CQ-EI"
+    ]
+  },
+  "huawei_ne40e": {
+    "vendor": "huawei",
+    "model": "NE40E",
+    "detailType": "V800R011C00SPC600",
+    "version": "V800R011C00SPC600",
+    "vrbd": "V800R011C00SPC600",
+    "series": "NE40E",
+    "evidence": [
+      "命中 _REG2HANDLER: NE40E/CX600 (pattern=(?mi)\\(*\\((NE40E\u002680E|NE40E|NE80E|CX600|NE20[E]|NE05E|CX66\\S*)(?:-[A-Za-z0-9]+)?\\)?\\s+(\\S+)\\))"
+    ]
+  },
+  "huawei_s5720": {
+    "vendor": "huawei",
+    "model": "S5720",
+    "detailType": "S5720-36C-EI-AC",
+    "version": "V200R019C00SPC500",
+    "patch": "V200R019SPH005",
+    "vrbd": "V200R019C00SPC500",
+    "series": "S5700",
+    "evidence": [
+      "命中 handle_else: S5720-36C-EI-AC"
+    ]
+  },
+  "huawei_s5735": {
+    "vendor": "huawei",
+    "model": "S5735",
+    "detailType": "S5735-L24P4S-A1",
+    "version": "V200R019C00SPC500",
+    "vrbd": "V200R019C00SPC500",
+    "series": "S5700",
+    "evidence": [
+      "命中 handle_else: S5735-L24P4S-A1"
+    ]
+  },
+  "huawei_usg6650": {
+    "vendor": "huawei",
+    "model": "USG6650",
+    "detailType": "USG6650",
+    "version": "V500R005C20SPC200",
+    "vrbd": "V500R005C20SPC200",
+    "series": "USG6000",
+    "evidence": [
+      "从安全特征提取款型: USG6650",
+      "命中防火墙优先特征 (fw_priority)"
+    ]
+  }
+}

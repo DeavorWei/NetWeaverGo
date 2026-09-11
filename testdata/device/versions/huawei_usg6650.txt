@@ -1,0 +1,4 @@
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.170 (USG6650 V500R005C20SPC200)
+Copyright (C) 2013-2020 HUAWEI TECH CO., LTD.
+HUAWEI USG6650 uptime is 8 weeks, 4 days, 2 hours, 0 minute

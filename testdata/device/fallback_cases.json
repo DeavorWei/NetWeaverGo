@@ -1,0 +1,50 @@
+[
+  {
+    "vendor": "huawei",
+    "model": "S5735",
+    "version": "V200R019C00SPC500",
+    "expectMatchPath": "series:S5700",
+    "expectVendor": "huawei",
+    "note": "第 2 级：系列匹配（内置 huawei_s 细分画像）"
+  },
+  {
+    "vendor": "huawei",
+    "model": "CE6866",
+    "version": "V200R005C10SPC800",
+    "expectMatchPath": "series:CE6800",
+    "expectVendor": "huawei",
+    "note": "第 2 级：系列匹配（内置 huawei_ce 细分画像）"
+  },
+  {
+    "vendor": "huawei",
+    "model": "UNKNOWN-MODEL-9999",
+    "version": "V200R001",
+    "expectMatchPath": "vendor:huawei",
+    "expectVendor": "huawei",
+    "note": "第 3 级：厂商默认画像（款型与系列均未命中）"
+  },
+  {
+    "vendor": "cisco",
+    "model": "C9300",
+    "version": "16.9.5",
+    "expectMatchPath": "vendor:cisco",
+    "expectVendor": "cisco",
+    "note": "第 3 级：厂商默认画像"
+  },
+  {
+    "vendor": "h3c",
+    "model": "S6520",
+    "version": "V7.1.070",
+    "expectMatchPath": "vendor:h3c",
+    "expectVendor": "h3c",
+    "note": "第 3 级：厂商默认画像"
+  },
+  {
+    "vendor": "ruijie",
+    "model": "RG-S5750",
+    "version": "RGOS 11.4",
+    "expectMatchPath": "global:default",
+    "expectVendor": "default",
+    "note": "第 4 级：未注册厂商回退全局保守画像（禁止误套华为画像）"
+  }
+]

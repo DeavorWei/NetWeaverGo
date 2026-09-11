@@ -1,0 +1,274 @@
+{
+  "deviceIp": "",
+  "chassisEsn": "2102354FW10N2000001",
+  "roots": [
+    {
+      "id": "0",
+      "parentId": "",
+      "level": 1,
+      "type": "frame",
+      "name": "BackPlane_1",
+      "path": "1",
+      "slot": "",
+      "item": "02354FW1",
+      "barCode": "2102354FW10N2000001",
+      "description": "USG6650E Enterprise Firewall",
+      "manufactured": "2022-09-01",
+      "vendorName": "Huawei",
+      "boardType": "USG6650E",
+      "attrs": {
+        "BarCode": "2102354FW10N2000001",
+        "BoardType": "USG6650E",
+        "Description": "USG6650E Enterprise Firewall",
+        "Item": "02354FW1",
+        "Manufactured": "2022-09-01",
+        "VendorName": "Huawei"
+      },
+      "children": [
+        {
+          "id": "0_1",
+          "parentId": "0",
+          "level": 2,
+          "type": "slot",
+          "name": "Slot_1",
+          "path": "1/0",
+          "slot": "1",
+          "item": "02354FW2",
+          "barCode": "2102354FW10N2000002",
+          "description": "Security Processing Unit",
+          "manufactured": "2022-09-02",
+          "vendorName": "Huawei",
+          "boardType": "SPU-100",
+          "attrs": {
+            "BarCode": "2102354FW10N2000002",
+            "BoardType": "SPU-100",
+            "Description": "Security Processing Unit",
+            "Item": "02354FW2",
+            "Manufactured": "2022-09-02",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        },
+        {
+          "id": "0_3",
+          "parentId": "0",
+          "level": 2,
+          "type": "fanframe",
+          "name": "FAN_1",
+          "path": "fanframe/1",
+          "slot": "1",
+          "item": "02354FAN",
+          "barCode": "2102354FAN10N2000004",
+          "description": "Firewall Fan Module",
+          "manufactured": "2022-08-16",
+          "vendorName": "Huawei",
+          "boardType": "FAN-USG-60",
+          "attrs": {
+            "BarCode": "2102354FAN10N2000004",
+            "BoardType": "FAN-USG-60",
+            "Description": "Firewall Fan Module",
+            "Item": "02354FAN",
+            "Manufactured": "2022-08-16",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        },
+        {
+          "id": "0_2",
+          "parentId": "0",
+          "level": 2,
+          "type": "power",
+          "name": "PWR_1",
+          "path": "power/1",
+          "slot": "1",
+          "item": "02354PWR",
+          "barCode": "2102354PWR10N2000003",
+          "description": "600W DC Power Module",
+          "manufactured": "2022-08-15",
+          "vendorName": "Huawei",
+          "boardType": "PWR-600W-DC",
+          "attrs": {
+            "BarCode": "2102354PWR10N2000003",
+            "BoardType": "PWR-600W-DC",
+            "Description": "600W DC Power Module",
+            "Item": "02354PWR",
+            "Manufactured": "2022-08-15",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        }
+      ]
+    }
+  ],
+  "allNodes": [
+    {
+      "id": "0",
+      "parentId": "",
+      "level": 1,
+      "type": "frame",
+      "name": "BackPlane_1",
+      "path": "1",
+      "slot": "",
+      "item": "02354FW1",
+      "barCode": "2102354FW10N2000001",
+      "description": "USG6650E Enterprise Firewall",
+      "manufactured": "2022-09-01",
+      "vendorName": "Huawei",
+      "boardType": "USG6650E",
+      "attrs": {
+        "BarCode": "2102354FW10N2000001",
+        "BoardType": "USG6650E",
+        "Description": "USG6650E Enterprise Firewall",
+        "Item": "02354FW1",
+        "Manufactured": "2022-09-01",
+        "VendorName": "Huawei"
+      },
+      "children": [
+        {
+          "id": "0_1",
+          "parentId": "0",
+          "level": 2,
+          "type": "slot",
+          "name": "Slot_1",
+          "path": "1/0",
+          "slot": "1",
+          "item": "02354FW2",
+          "barCode": "2102354FW10N2000002",
+          "description": "Security Processing Unit",
+          "manufactured": "2022-09-02",
+          "vendorName": "Huawei",
+          "boardType": "SPU-100",
+          "attrs": {
+            "BarCode": "2102354FW10N2000002",
+            "BoardType": "SPU-100",
+            "Description": "Security Processing Unit",
+            "Item": "02354FW2",
+            "Manufactured": "2022-09-02",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        },
+        {
+          "id": "0_3",
+          "parentId": "0",
+          "level": 2,
+          "type": "fanframe",
+          "name": "FAN_1",
+          "path": "fanframe/1",
+          "slot": "1",
+          "item": "02354FAN",
+          "barCode": "2102354FAN10N2000004",
+          "description": "Firewall Fan Module",
+          "manufactured": "2022-08-16",
+          "vendorName": "Huawei",
+          "boardType": "FAN-USG-60",
+          "attrs": {
+            "BarCode": "2102354FAN10N2000004",
+            "BoardType": "FAN-USG-60",
+            "Description": "Firewall Fan Module",
+            "Item": "02354FAN",
+            "Manufactured": "2022-08-16",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        },
+        {
+          "id": "0_2",
+          "parentId": "0",
+          "level": 2,
+          "type": "power",
+          "name": "PWR_1",
+          "path": "power/1",
+          "slot": "1",
+          "item": "02354PWR",
+          "barCode": "2102354PWR10N2000003",
+          "description": "600W DC Power Module",
+          "manufactured": "2022-08-15",
+          "vendorName": "Huawei",
+          "boardType": "PWR-600W-DC",
+          "attrs": {
+            "BarCode": "2102354PWR10N2000003",
+            "BoardType": "PWR-600W-DC",
+            "Description": "600W DC Power Module",
+            "Item": "02354PWR",
+            "Manufactured": "2022-08-15",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        }
+      ]
+    },
+    {
+      "id": "0_1",
+      "parentId": "0",
+      "level": 2,
+      "type": "slot",
+      "name": "Slot_1",
+      "path": "1/0",
+      "slot": "1",
+      "item": "02354FW2",
+      "barCode": "2102354FW10N2000002",
+      "description": "Security Processing Unit",
+      "manufactured": "2022-09-02",
+      "vendorName": "Huawei",
+      "boardType": "SPU-100",
+      "attrs": {
+        "BarCode": "2102354FW10N2000002",
+        "BoardType": "SPU-100",
+        "Description": "Security Processing Unit",
+        "Item": "02354FW2",
+        "Manufactured": "2022-09-02",
+        "VendorName": "Huawei"
+      },
+      "children": null
+    },
+    {
+      "id": "0_3",
+      "parentId": "0",
+      "level": 2,
+      "type": "fanframe",
+      "name": "FAN_1",
+      "path": "fanframe/1",
+      "slot": "1",
+      "item": "02354FAN",
+      "barCode": "2102354FAN10N2000004",
+      "description": "Firewall Fan Module",
+      "manufactured": "2022-08-16",
+      "vendorName": "Huawei",
+      "boardType": "FAN-USG-60",
+      "attrs": {
+        "BarCode": "2102354FAN10N2000004",
+        "BoardType": "FAN-USG-60",
+        "Description": "Firewall Fan Module",
+        "Item": "02354FAN",
+        "Manufactured": "2022-08-16",
+        "VendorName": "Huawei"
+      },
+      "children": null
+    },
+    {
+      "id": "0_2",
+      "parentId": "0",
+      "level": 2,
+      "type": "power",
+      "name": "PWR_1",
+      "path": "power/1",
+      "slot": "1",
+      "item": "02354PWR",
+      "barCode": "2102354PWR10N2000003",
+      "description": "600W DC Power Module",
+      "manufactured": "2022-08-15",
+      "vendorName": "Huawei",
+      "boardType": "PWR-600W-DC",
+      "attrs": {
+        "BarCode": "2102354PWR10N2000003",
+        "BoardType": "PWR-600W-DC",
+        "Description": "600W DC Power Module",
+        "Item": "02354PWR",
+        "Manufactured": "2022-08-15",
+        "VendorName": "Huawei"
+      },
+      "children": null
+    }
+  ]
+}

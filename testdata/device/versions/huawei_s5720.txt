@@ -1,0 +1,4 @@
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.170 (S5720 V200R019C00SPC500)
+Copyright (C) 2000-2020 HUAWEI TECH CO., LTD.
+HUAWEI S5720-36C-EI-AC Routing Switch uptime is 30 week, 1 day, 2 hour, 5 minutes

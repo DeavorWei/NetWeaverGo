@@ -1,0 +1,5 @@
+Patch Information:
+The current active patch is: V200R019SPH005
+The current running patch is: V200R019SPH005
+Patch Package Name    : S5720_V200R019SPH005.PAT
+Patch Package Version : V200R019SPH005

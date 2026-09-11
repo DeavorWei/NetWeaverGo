@@ -1,0 +1,457 @@
+{
+  "deviceIp": "",
+  "chassisEsn": "2102352BBR10J8000001",
+  "roots": [
+    {
+      "id": "0",
+      "parentId": "",
+      "level": 1,
+      "type": "frame",
+      "name": "BackPlane_1",
+      "path": "1",
+      "slot": "",
+      "item": "02312DWR",
+      "barCode": "2102352BBR10J8000001",
+      "description": "CE6866-48S8CQ-EI Switch",
+      "manufactured": "2021-08-15",
+      "vendorName": "Huawei",
+      "boardType": "CE6866-48S8CQ-EI",
+      "attrs": {
+        "BarCode": "2102352BBR10J8000001",
+        "BoardType": "CE6866-48S8CQ-EI",
+        "Description": "CE6866-48S8CQ-EI Switch",
+        "Item": "02312DWR",
+        "Manufactured": "2021-08-15",
+        "VendorName": "Huawei"
+      },
+      "children": [
+        {
+          "id": "0_1",
+          "parentId": "0",
+          "level": 2,
+          "type": "slot",
+          "name": "Slot_1",
+          "path": "1/0",
+          "slot": "1",
+          "item": "02311VHB",
+          "barCode": "2102311VHB10J8000002",
+          "description": "CE MPU Board",
+          "manufactured": "2021-08-16",
+          "vendorName": "Huawei",
+          "boardType": "CE-MPU-D",
+          "attrs": {
+            "BarCode": "2102311VHB10J8000002",
+            "BoardType": "CE-MPU-D",
+            "Description": "CE MPU Board",
+            "Item": "02311VHB",
+            "Manufactured": "2021-08-16",
+            "VendorName": "Huawei"
+          },
+          "children": [
+            {
+              "id": "0_1_3",
+              "parentId": "0_1",
+              "level": 3,
+              "type": "port",
+              "name": "Port_1",
+              "path": "1/0/1",
+              "slot": "1",
+              "item": "02311UHE-P1",
+              "barCode": "2102311UHE10J8000004",
+              "description": "100GE Port",
+              "manufactured": "",
+              "vendorName": "",
+              "boardType": "",
+              "attrs": {
+                "BarCode": "2102311UHE10J8000004",
+                "Description": "100GE Port",
+                "Item": "02311UHE-P1"
+              },
+              "children": null
+            },
+            {
+              "id": "0_1_2",
+              "parentId": "0_1",
+              "level": 3,
+              "type": "daughterboard",
+              "name": "Daughter_Board_1/1",
+              "path": "1/1",
+              "slot": "1",
+              "item": "02311UHE",
+              "barCode": "2102311UHE10J8000003",
+              "description": "8-Port 100GE Sub-Card",
+              "manufactured": "2021-08-18",
+              "vendorName": "Huawei",
+              "boardType": "CE-SUB-8CQ",
+              "attrs": {
+                "BarCode": "2102311UHE10J8000003",
+                "BoardType": "CE-SUB-8CQ",
+                "Description": "8-Port 100GE Sub-Card",
+                "Item": "02311UHE",
+                "Manufactured": "2021-08-18",
+                "VendorName": "Huawei"
+              },
+              "children": null
+            }
+          ]
+        },
+        {
+          "id": "0_5",
+          "parentId": "0",
+          "level": 2,
+          "type": "fanframe",
+          "name": "FanSlot_1",
+          "path": "fanframe/1",
+          "slot": "1",
+          "item": "02312FAN",
+          "barCode": "2102312FAN10J8000006",
+          "description": "Fan Box",
+          "manufactured": "2021-07-21",
+          "vendorName": "Huawei",
+          "boardType": "FAN-40B-F",
+          "attrs": {
+            "BarCode": "2102312FAN10J8000006",
+            "BoardType": "FAN-40B-F",
+            "Description": "Fan Box",
+            "Item": "02312FAN",
+            "Manufactured": "2021-07-21",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        },
+        {
+          "id": "0_4",
+          "parentId": "0",
+          "level": 2,
+          "type": "power",
+          "name": "PowerFrame_1",
+          "path": "power/1",
+          "slot": "1",
+          "item": "02312NVE",
+          "barCode": "2102312NVE10J8000005",
+          "description": "600W AC Power Module",
+          "manufactured": "2021-07-20",
+          "vendorName": "Huawei",
+          "boardType": "PAC-600WA-F",
+          "attrs": {
+            "BarCode": "2102312NVE10J8000005",
+            "BoardType": "PAC-600WA-F",
+            "Description": "600W AC Power Module",
+            "Item": "02312NVE",
+            "Manufactured": "2021-07-20",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        }
+      ]
+    }
+  ],
+  "allNodes": [
+    {
+      "id": "0",
+      "parentId": "",
+      "level": 1,
+      "type": "frame",
+      "name": "BackPlane_1",
+      "path": "1",
+      "slot": "",
+      "item": "02312DWR",
+      "barCode": "2102352BBR10J8000001",
+      "description": "CE6866-48S8CQ-EI Switch",
+      "manufactured": "2021-08-15",
+      "vendorName": "Huawei",
+      "boardType": "CE6866-48S8CQ-EI",
+      "attrs": {
+        "BarCode": "2102352BBR10J8000001",
+        "BoardType": "CE6866-48S8CQ-EI",
+        "Description": "CE6866-48S8CQ-EI Switch",
+        "Item": "02312DWR",
+        "Manufactured": "2021-08-15",
+        "VendorName": "Huawei"
+      },
+      "children": [
+        {
+          "id": "0_1",
+          "parentId": "0",
+          "level": 2,
+          "type": "slot",
+          "name": "Slot_1",
+          "path": "1/0",
+          "slot": "1",
+          "item": "02311VHB",
+          "barCode": "2102311VHB10J8000002",
+          "description": "CE MPU Board",
+          "manufactured": "2021-08-16",
+          "vendorName": "Huawei",
+          "boardType": "CE-MPU-D",
+          "attrs": {
+            "BarCode": "2102311VHB10J8000002",
+            "BoardType": "CE-MPU-D",
+            "Description": "CE MPU Board",
+            "Item": "02311VHB",
+            "Manufactured": "2021-08-16",
+            "VendorName": "Huawei"
+          },
+          "children": [
+            {
+              "id": "0_1_3",
+              "parentId": "0_1",
+              "level": 3,
+              "type": "port",
+              "name": "Port_1",
+              "path": "1/0/1",
+              "slot": "1",
+              "item": "02311UHE-P1",
+              "barCode": "2102311UHE10J8000004",
+              "description": "100GE Port",
+              "manufactured": "",
+              "vendorName": "",
+              "boardType": "",
+              "attrs": {
+                "BarCode": "2102311UHE10J8000004",
+                "Description": "100GE Port",
+                "Item": "02311UHE-P1"
+              },
+              "children": null
+            },
+            {
+              "id": "0_1_2",
+              "parentId": "0_1",
+              "level": 3,
+              "type": "daughterboard",
+              "name": "Daughter_Board_1/1",
+              "path": "1/1",
+              "slot": "1",
+              "item": "02311UHE",
+              "barCode": "2102311UHE10J8000003",
+              "description": "8-Port 100GE Sub-Card",
+              "manufactured": "2021-08-18",
+              "vendorName": "Huawei",
+              "boardType": "CE-SUB-8CQ",
+              "attrs": {
+                "BarCode": "2102311UHE10J8000003",
+                "BoardType": "CE-SUB-8CQ",
+                "Description": "8-Port 100GE Sub-Card",
+                "Item": "02311UHE",
+                "Manufactured": "2021-08-18",
+                "VendorName": "Huawei"
+              },
+              "children": null
+            }
+          ]
+        },
+        {
+          "id": "0_5",
+          "parentId": "0",
+          "level": 2,
+          "type": "fanframe",
+          "name": "FanSlot_1",
+          "path": "fanframe/1",
+          "slot": "1",
+          "item": "02312FAN",
+          "barCode": "2102312FAN10J8000006",
+          "description": "Fan Box",
+          "manufactured": "2021-07-21",
+          "vendorName": "Huawei",
+          "boardType": "FAN-40B-F",
+          "attrs": {
+            "BarCode": "2102312FAN10J8000006",
+            "BoardType": "FAN-40B-F",
+            "Description": "Fan Box",
+            "Item": "02312FAN",
+            "Manufactured": "2021-07-21",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        },
+        {
+          "id": "0_4",
+          "parentId": "0",
+          "level": 2,
+          "type": "power",
+          "name": "PowerFrame_1",
+          "path": "power/1",
+          "slot": "1",
+          "item": "02312NVE",
+          "barCode": "2102312NVE10J8000005",
+          "description": "600W AC Power Module",
+          "manufactured": "2021-07-20",
+          "vendorName": "Huawei",
+          "boardType": "PAC-600WA-F",
+          "attrs": {
+            "BarCode": "2102312NVE10J8000005",
+            "BoardType": "PAC-600WA-F",
+            "Description": "600W AC Power Module",
+            "Item": "02312NVE",
+            "Manufactured": "2021-07-20",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        }
+      ]
+    },
+    {
+      "id": "0_1",
+      "parentId": "0",
+      "level": 2,
+      "type": "slot",
+      "name": "Slot_1",
+      "path": "1/0",
+      "slot": "1",
+      "item": "02311VHB",
+      "barCode": "2102311VHB10J8000002",
+      "description": "CE MPU Board",
+      "manufactured": "2021-08-16",
+      "vendorName": "Huawei",
+      "boardType": "CE-MPU-D",
+      "attrs": {
+        "BarCode": "2102311VHB10J8000002",
+        "BoardType": "CE-MPU-D",
+        "Description": "CE MPU Board",
+        "Item": "02311VHB",
+        "Manufactured": "2021-08-16",
+        "VendorName": "Huawei"
+      },
+      "children": [
+        {
+          "id": "0_1_3",
+          "parentId": "0_1",
+          "level": 3,
+          "type": "port",
+          "name": "Port_1",
+          "path": "1/0/1",
+          "slot": "1",
+          "item": "02311UHE-P1",
+          "barCode": "2102311UHE10J8000004",
+          "description": "100GE Port",
+          "manufactured": "",
+          "vendorName": "",
+          "boardType": "",
+          "attrs": {
+            "BarCode": "2102311UHE10J8000004",
+            "Description": "100GE Port",
+            "Item": "02311UHE-P1"
+          },
+          "children": null
+        },
+        {
+          "id": "0_1_2",
+          "parentId": "0_1",
+          "level": 3,
+          "type": "daughterboard",
+          "name": "Daughter_Board_1/1",
+          "path": "1/1",
+          "slot": "1",
+          "item": "02311UHE",
+          "barCode": "2102311UHE10J8000003",
+          "description": "8-Port 100GE Sub-Card",
+          "manufactured": "2021-08-18",
+          "vendorName": "Huawei",
+          "boardType": "CE-SUB-8CQ",
+          "attrs": {
+            "BarCode": "2102311UHE10J8000003",
+            "BoardType": "CE-SUB-8CQ",
+            "Description": "8-Port 100GE Sub-Card",
+            "Item": "02311UHE",
+            "Manufactured": "2021-08-18",
+            "VendorName": "Huawei"
+          },
+          "children": null
+        }
+      ]
+    },
+    {
+      "id": "0_1_3",
+      "parentId": "0_1",
+      "level": 3,
+      "type": "port",
+      "name": "Port_1",
+      "path": "1/0/1",
+      "slot": "1",
+      "item": "02311UHE-P1",
+      "barCode": "2102311UHE10J8000004",
+      "description": "100GE Port",
+      "manufactured": "",
+      "vendorName": "",
+      "boardType": "",
+      "attrs": {
+        "BarCode": "2102311UHE10J8000004",
+        "Description": "100GE Port",
+        "Item": "02311UHE-P1"
+      },
+      "children": null
+    },
+    {
+      "id": "0_1_2",
+      "parentId": "0_1",
+      "level": 3,
+      "type": "daughterboard",
+      "name": "Daughter_Board_1/1",
+      "path": "1/1",
+      "slot": "1",
+      "item": "02311UHE",
+      "barCode": "2102311UHE10J8000003",
+      "description": "8-Port 100GE Sub-Card",
+      "manufactured": "2021-08-18",
+      "vendorName": "Huawei",
+      "boardType": "CE-SUB-8CQ",
+      "attrs": {
+        "BarCode": "2102311UHE10J8000003",
+        "BoardType": "CE-SUB-8CQ",
+        "Description": "8-Port 100GE Sub-Card",
+        "Item": "02311UHE",
+        "Manufactured": "2021-08-18",
+        "VendorName": "Huawei"
+      },
+      "children": null
+    },
+    {
+      "id": "0_5",
+      "parentId": "0",
+      "level": 2,
+      "type": "fanframe",
+      "name": "FanSlot_1",
+      "path": "fanframe/1",
+      "slot": "1",
+      "item": "02312FAN",
+      "barCode": "2102312FAN10J8000006",
+      "description": "Fan Box",
+      "manufactured": "2021-07-21",
+      "vendorName": "Huawei",
+      "boardType": "FAN-40B-F",
+      "attrs": {
+        "BarCode": "2102312FAN10J8000006",
+        "BoardType": "FAN-40B-F",
+        "Description": "Fan Box",
+        "Item": "02312FAN",
+        "Manufactured": "2021-07-21",
+        "VendorName": "Huawei"
+      },
+      "children": null
+    },
+    {
+      "id": "0_4",
+      "parentId": "0",
+      "level": 2,
+      "type": "power",
+      "name": "PowerFrame_1",
+      "path": "power/1",
+      "slot": "1",
+      "item": "02312NVE",
+      "barCode": "2102312NVE10J8000005",
+      "description": "600W AC Power Module",
+      "manufactured": "2021-07-20",
+      "vendorName": "Huawei",
+      "boardType": "PAC-600WA-F",
+      "attrs": {
+        "BarCode": "2102312NVE10J8000005",
+        "BoardType": "PAC-600WA-F",
+        "Description": "600W AC Power Module",
+        "Item": "02312NVE",
+        "Manufactured": "2021-07-20",
+        "VendorName": "Huawei"
+      },
+      "children": null
+    }
+  ]
+}
