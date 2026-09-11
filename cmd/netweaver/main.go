@@ -16,7 +16,14 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+// version 由构建期 ldflags 注入（-X main.version=<ver>），未注入时回退 dev。
+// 声明该变量是接通 build/windows/Taskfile.yml 中 -X main.version 注入的必要条件。
+var version = "dev"
+
 func main() {
+	// 注入构建版本号，供升级前数据库备份等场景使用
+	config.SetAppVersion(version)
+
 	pm := config.GetPathManager()
 	if err := pm.EnsureDirectories(); err != nil {
 		fmt.Printf("存储目录初始化失败: %v\n", err)
@@ -42,6 +49,12 @@ func main() {
 	if err := taskexec.AutoMigrate(config.DB); err != nil {
 		logger.Error("System", "-", "统一运行时数据库迁移失败: %v", err)
 		os.Exit(1)
+	}
+
+	// 全部数据库迁移（config.InitDB + taskexec.AutoMigrate）成功后，
+	// 才提交"已备份版本"标记：确保任一迁移失败时下次启动仍会重新备份。
+	if err := config.CommitPreUpgradeBackupVersion(config.DB); err != nil {
+		logger.Warn("System", "-", "提交升级前备份版本标记失败（不影响运行）: %v", err)
 	}
 
 	// 初始化 SNMP 独立数据库

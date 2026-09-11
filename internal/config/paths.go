@@ -37,6 +37,7 @@ type PathManager struct {
 	FrontendLogDir     string
 	FrontendLogPath    string
 	BackupConfigDir    string
+	DBBackupDir        string
 	SSHDir             string
 	SSHKnownHostsPath  string
 
@@ -139,6 +140,7 @@ func (pm *PathManager) rebuildDerivedPathsLocked() {
 	pm.FrontendLogDir = filepath.Join(pm.StorageRoot, "logs")
 	pm.FrontendLogPath = filepath.Join(pm.FrontendLogDir, "frontend.log")
 	pm.BackupConfigDir = filepath.Join(pm.StorageRoot, "backup", "config")
+	pm.DBBackupDir = filepath.Join(pm.StorageRoot, "backup", "db")
 	pm.SSHDir = filepath.Join(pm.StorageRoot, "ssh")
 	pm.SSHKnownHostsPath = filepath.Join(pm.SSHDir, "known_hosts")
 
@@ -155,6 +157,7 @@ func (pm *PathManager) ensureDirectoriesLocked() error {
 		pm.AppLogDir,
 		pm.FrontendLogDir,
 		pm.BackupConfigDir,
+		pm.DBBackupDir,
 		pm.SSHDir,
 		filepath.Dir(pm.bootstrapPath),
 		// 拓扑发现相关目录
@@ -244,6 +247,13 @@ func (pm *PathManager) GetBackupDir() string {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 	return pm.BackupConfigDir
+}
+
+// GetDBBackupDir 获取主数据库升级前自动备份目录（<StorageRoot>/backup/db）
+func (pm *PathManager) GetDBBackupDir() string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	return pm.DBBackupDir
 }
 
 func (pm *PathManager) GetSSHKnownHostsPath() string {

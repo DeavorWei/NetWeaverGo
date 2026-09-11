@@ -34,6 +34,10 @@ func InitDB() error {
 	dbPath := pm.GetDBPath()
 	logger.Verbose("Config", "-", "开始初始化SQLite存储逻辑，数据根目录: %s", pm.GetStorageRoot())
 
+	// 判定是否既有库必须在打开数据库之前：SQLite 一旦 Open/查询即会创建主库文件，
+	// 打开后再 stat 无法区分"首次安装"与"待升级的既有库"。
+	isExistingDB := IsExistingDatabaseFile(dbPath)
+
 	// SQLite 性能优化参数
 	dsn := dbPath + "?_journal=WAL&_busy_timeout=5000&_cache_size=10000&_foreign_keys=1&_synchronous=NORMAL"
 
@@ -61,6 +65,13 @@ func InitDB() error {
 	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 
 	DB = db
+
+	// 升级前自动备份：必须在任何表迁移之前执行，且必须在 DB = db 之后
+	// （MirrorDatabaseToPath 依赖包级 DB 做 WAL checkpoint）。
+	// 版本标记的回写刻意滞后到 main.go 全部迁移成功之后，避免迁移失败时漏备。
+	if _, backupErr := EnsurePreUpgradeBackup(db, dbPath, isExistingDB); backupErr != nil {
+		logger.Warn("Config", "-", "升级前自动备份未完成（不阻断启动）: %v", backupErr)
+	}
 
 	logger.Verbose("Config", "-", "连接SQLite数据库引擎已建立！正在扫描并校验内部表结构约束...")
 	// 自动迁移表结构

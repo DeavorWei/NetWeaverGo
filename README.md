@@ -260,9 +260,17 @@ netWeaverGoData/
 ├── logs/                   # 日志（app.log + frontend.log）
 ├── execution/              # 执行报告和实时日志
 ├── backup/configs/         # 配置备份
+├── backup/db/              # 升级前主库自动备份（netweaver_<版本>_<时间戳>.db）
 ├── ssh/known_hosts         # SSH 主机密钥
 └── topology/               # 拓扑数据（原始/导出/规划导入）
 ```
+
+### 升级与回滚
+
+- **升级（旧库 → 新程序）**：直接替换程序并启动即可。启动时会先检测既有主库，在**执行任何表结构迁移之前**自动备份到 `netWeaverGoData/backup/db/`，随后自动补齐新表/新列（只增不减，旧数据不受影响）。
+- 备份文件保留最近 **5** 份，命名为 `netweaver_<版本>_<时间戳>.db`（并含一致性所需的 `-wal/-shm`）。
+- 备份失败（如磁盘不可写）**不会阻断启动**，仅记录告警日志。
+- **回滚（新库 → 旧程序）不承诺兼容**：新版写入的新表/新列会被旧程序忽略。若确需回滚，请先停止程序，用 `backup/db/` 中对应备份覆盖 `db/netweaver.db`（同时删除同目录下的 `netweaver.db-wal` / `netweaver.db-shm`）后再运行旧程序。
 
 ---
 
