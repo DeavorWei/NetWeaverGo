@@ -222,14 +222,95 @@ func BuildRegexWithFlags(pattern, flags string) string {
 	return pattern
 }
 
+// RuleMatch 规则命中区间（偏移为相对原始回显的绝对偏移）
+type RuleMatch struct {
+	Rule  string `json:"rule"`
+	Start int    `json:"start"`
+	End   int    `json:"end"`
+	Text  string `json:"text"`
+}
+
+// matchCollector 收集规则命中区间；为 nil 时不做任何收集（解析主路径零开销）
+type matchCollector struct {
+	raw     string
+	matches []RuleMatch
+}
+
+// add 记录一次命中（越界或空区间自动忽略）
+func (c *matchCollector) add(rule string, start, end int) {
+	if c == nil || start < 0 || end <= start || end > len(c.raw) {
+		return
+	}
+	c.matches = append(c.matches, RuleMatch{
+		Rule:  rule,
+		Start: start,
+		End:   end,
+		Text:  c.raw[start:end],
+	})
+}
+
+// addRegexMatches 记录 re 在 text 上的全部命中，偏移换算为相对原始回显的绝对值
+func (c *matchCollector) addRegexMatches(rule string, re *regexp.Regexp, text string, baseOffset int) {
+	if c == nil || re == nil || text == "" {
+		return
+	}
+	for _, loc := range re.FindAllStringIndex(text, -1) {
+		c.add(rule, baseOffset+loc[0], baseOffset+loc[1])
+	}
+}
+
+// CollectMatches 收集树引擎全部规则（含嵌套子规则）的命中区间，供前端"匹配高亮"视图使用。
+// 偏移为相对原始回显 rawText 的绝对偏移；结果按 (Start, End, Rule) 排序并去重。
+func (e *TreeEngine) CollectMatches(tpl *CompiledTemplate, rawText string) []RuleMatch {
+	if tpl == nil || rawText == "" || len(tpl.TreeRootRules) == 0 {
+		return nil
+	}
+	c := &matchCollector{raw: rawText}
+	for _, root := range tpl.TreeRootRules {
+		fillSubResultAt(rawText, root, 0, c)
+	}
+	if len(c.matches) == 0 {
+		return nil
+	}
+	sort.SliceStable(c.matches, func(i, j int) bool {
+		if c.matches[i].Start != c.matches[j].Start {
+			return c.matches[i].Start < c.matches[j].Start
+		}
+		if c.matches[i].End != c.matches[j].End {
+			return c.matches[i].End < c.matches[j].End
+		}
+		return c.matches[i].Rule < c.matches[j].Rule
+	})
+	// 同一 (rule, start, end) 可能被规则级与叶子级各记录一次，排序后相邻去重
+	out := make([]RuleMatch, 0, len(c.matches))
+	for i, m := range c.matches {
+		if i > 0 && m == c.matches[i-1] {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
 // fillSubResult 核心抽取算法：递归提取并成树
-func fillSubResult(
+func fillSubResult(text string, rule *CompiledTreeRule) []*ResultNode {
+	return fillSubResultAt(text, rule, 0, nil)
+}
+
+// fillSubResultAt 是 fillSubResult 的偏移感知实现：
+// baseOffset 为 text 在原始回显中的起始偏移，collector 非空时同步收集各规则命中区间。
+func fillSubResultAt(
 	text string,
 	rule *CompiledTreeRule,
+	baseOffset int,
+	c *matchCollector,
 ) []*ResultNode {
 	if len(text) == 0 {
 		return nil
 	}
+
+	// 记录本规则解析正则的命中（绝对偏移）
+	c.addRegexMatches(rule.ParseItem, rule.CompiledParseRegex, text, baseOffset)
 
 	// 场景 A：列表节点且包含分块正则（如 Slot 分块）
 	if rule.IsList && rule.CompiledSplitRegex != nil {
@@ -240,6 +321,9 @@ func fillSubResult(
 
 		var nodes []*ResultNode
 		for _, blk := range blocks {
+			// 记录分块正则（块头）命中：Body 起始偏移即块头起始偏移（keepHeader=true）
+			c.add(rule.ParseItem, baseOffset+blk.Start, baseOffset+blk.Start+len(blk.Match))
+
 			node := NewResultNode(rule.ParseItem, blk.Body)
 
 			// 优先从分块正则捕获组提取值（例如 Slot 序号）
@@ -262,9 +346,10 @@ func fillSubResult(
 				if !childRule.IsList && len(childRule.Children) == 0 {
 					// 叶子单值规则：直接在当前块抽取属性，并入 node.Attrs
 					extractScalarAttr(blk.Body, childRule, node.Attrs)
+					c.addRegexMatches(childRule.ParseItem, childRule.CompiledParseRegex, blk.Body, baseOffset+blk.Start)
 				} else {
 					// 具有下级或列表的子规则，递归生成子 ResultNode
-					childNodes := fillSubResult(blk.Body, childRule)
+					childNodes := fillSubResultAt(blk.Body, childRule, baseOffset+blk.Start, c)
 					node.Children = append(node.Children, childNodes...)
 				}
 			}
@@ -295,8 +380,9 @@ func fillSubResult(
 			for _, childRule := range rule.Children {
 				if !childRule.IsList && len(childRule.Children) == 0 {
 					extractScalarAttr(matchFullText, childRule, node.Attrs)
+					c.addRegexMatches(childRule.ParseItem, childRule.CompiledParseRegex, matchFullText, baseOffset+idxs[0])
 				} else {
-					childNodes := fillSubResult(matchFullText, childRule)
+					childNodes := fillSubResultAt(matchFullText, childRule, baseOffset+idxs[0], c)
 					node.Children = append(node.Children, childNodes...)
 				}
 			}
@@ -322,8 +408,9 @@ func fillSubResult(
 	for _, childRule := range rule.Children {
 		if !childRule.IsList && len(childRule.Children) == 0 {
 			extractScalarAttr(text, childRule, node.Attrs)
+			c.addRegexMatches(childRule.ParseItem, childRule.CompiledParseRegex, text, baseOffset)
 		} else {
-			childNodes := fillSubResult(text, childRule)
+			childNodes := fillSubResultAt(text, childRule, baseOffset, c)
 			node.Children = append(node.Children, childNodes...)
 		}
 	}

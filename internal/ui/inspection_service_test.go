@@ -24,6 +24,7 @@ func setupInspectionTestDB(t *testing.T) *gorm.DB {
 		&models.InspectionTemplate{},
 		&models.InspectionItem{},
 		&models.InspectionResult{},
+		&models.InspectionItemText{},
 	)
 	require.NoError(t, err)
 
@@ -201,6 +202,49 @@ func TestInspectionService_ResultsAndSummary(t *testing.T) {
 	jsonText, err := svc.ExportInspectionJSON("run-100")
 	require.NoError(t, err)
 	assert.Contains(t, jsonText, `"itemCode": "CHECK_FAN"`)
+}
+
+// 阶段二 2.2：按 locale 导出（英文文案命中 + 未命中回退中文 + 表头本地化）
+func TestInspectionService_ExportWithLocale(t *testing.T) {
+	db := setupInspectionTestDB(t)
+	svc := NewInspectionService(db, nil)
+
+	require.NoError(t, db.Create(&models.InspectionItemText{
+		Key: "CHECK_FAN", Locale: "en-US", Name: "Fan status check", Advice: "Replace faulty fan modules",
+	}).Error)
+	require.NoError(t, db.Create(&models.InspectionResult{
+		RunID: "run-loc", DeviceIP: "10.0.0.1", ItemCode: "CHECK_FAN",
+		ItemName: "风扇状态", Category: "environment", Status: string(inspection.ResultFail),
+		Severity: string(inspection.SeverityBlocker), Advice: "检查风扇模块并更换坏件",
+		Problem: "风扇异常", CreatedAt: time.Now(),
+	}).Error)
+	// 无对应文案的条目应回退中文
+	require.NoError(t, db.Create(&models.InspectionResult{
+		RunID: "run-loc", DeviceIP: "10.0.0.1", ItemCode: "CHECK_UNKNOWN",
+		ItemName: "未知检查项", Category: "system", Status: string(inspection.ResultPass),
+		Severity: string(inspection.SeverityMinor), CreatedAt: time.Now(),
+	}).Error)
+
+	// 中文（空 locale）保持原行为
+	zhCSV, err := svc.ExportInspectionCSVWithLocale("run-loc", "")
+	require.NoError(t, err)
+	assert.Contains(t, zhCSV, "设备IP")
+	assert.Contains(t, zhCSV, "风扇状态")
+
+	// 英文：命中文案替换 + 表头本地化
+	enCSV, err := svc.ExportInspectionCSVWithLocale("run-loc", "en-US")
+	require.NoError(t, err)
+	assert.Contains(t, enCSV, "Device IP")
+	assert.Contains(t, enCSV, "Fan status check")
+	assert.Contains(t, enCSV, "Replace faulty fan modules")
+	assert.NotContains(t, enCSV, "风扇状态")
+	assert.Contains(t, enCSV, "未知检查项") // 未命中文案回退原文
+
+	// JSON 遵循相同语义
+	enJSON, err := svc.ExportInspectionJSONWithLocale("run-loc", "en-US")
+	require.NoError(t, err)
+	assert.Contains(t, enJSON, "Fan status check")
+	assert.Contains(t, enJSON, "未知检查项")
 }
 
 func TestInspectionService_MultiRunIsolationAnd8States(t *testing.T) {

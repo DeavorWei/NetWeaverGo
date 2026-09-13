@@ -414,3 +414,61 @@ func (s *InspectionService) ExportInspectionJSON(runID string) (string, error) {
 	}
 	return jsonText, nil
 }
+
+// loadItemTexts 按 locale 加载巡检检查项文案种子（key = InspectionItem.Code）。
+// 中文 locale 或加载失败返回 nil，由导出层回退原始中文内容。
+func (s *InspectionService) loadItemTexts(locale string) map[string]models.InspectionItemText {
+	if s.db == nil || isChineseLocaleForText(locale) {
+		return nil
+	}
+	var rows []models.InspectionItemText
+	if err := s.db.Where("locale = ?", locale).Find(&rows).Error; err != nil {
+		logger.Warn("Inspection", "-", "加载巡检多语言文案失败: locale=%s, err=%v", locale, err)
+		return nil
+	}
+	out := make(map[string]models.InspectionItemText, len(rows))
+	for _, r := range rows {
+		out[r.Key] = r
+	}
+	return out
+}
+
+// isChineseLocaleForText 与 inspection 包保持一致的 locale 判定
+func isChineseLocaleForText(locale string) bool {
+	l := strings.ToLower(strings.TrimSpace(locale))
+	return l == "" || strings.HasPrefix(l, "zh")
+}
+
+// ExportInspectionCSVWithLocale 按 locale 导出巡检报告 CSV（locale 为空等价于中文，行为与 ExportInspectionCSV 一致）
+func (s *InspectionService) ExportInspectionCSVWithLocale(runID string, locale string) (string, error) {
+	results, err := s.GetInspectionResults(runID, "", "", "")
+	if err != nil {
+		return "", err
+	}
+	csvText, err := inspection.ExportInspectionResultsCSVWithLocale(results, locale, s.loadItemTexts(locale))
+	if err != nil {
+		return "", err
+	}
+	// 导出前脱敏自检：命中未脱敏敏感内容则阻断导出（规划方案 §5.2 P1-6）
+	if err := report.ValidateExportContent(csvText); err != nil {
+		return "", err
+	}
+	return csvText, nil
+}
+
+// ExportInspectionJSONWithLocale 按 locale 导出巡检报告 JSON（locale 为空等价于中文）
+func (s *InspectionService) ExportInspectionJSONWithLocale(runID string, locale string) (string, error) {
+	results, err := s.GetInspectionResults(runID, "", "", "")
+	if err != nil {
+		return "", err
+	}
+	jsonText, err := inspection.ExportInspectionResultsJSONWithLocale(results, locale, s.loadItemTexts(locale))
+	if err != nil {
+		return "", err
+	}
+	// 导出前脱敏自检：命中未脱敏敏感内容则阻断导出（规划方案 §5.2 P1-6）
+	if err := report.ValidateExportContent(jsonText); err != nil {
+		return "", err
+	}
+	return jsonText, nil
+}

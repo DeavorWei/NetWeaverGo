@@ -483,11 +483,10 @@ func (s *ParseTemplateService) TestTemplate(req models.TestParseTemplateRequest)
 //
 // 覆盖范围与说明：
 //   - regex 引擎：主正则的全部命中；
-//   - tree 引擎：根规则（ParentItem 为空）的 SplitRegex / ParseRegex 全部命中；
+//   - tree 引擎：委托 parser.TreeEngine（含嵌套子规则命中，已透传 baseOffset）；
 //   - aggregate 引擎：记录起始模式的全部命中。
 //
-// 所有偏移均为针对根 rawText 的字符绝对偏移；递归分块的子规则命中不在本版本范围内
-// （更高精度需透传 baseOffset 改造 TreeEngine，见方案 §6.3.2 备注）。
+// 所有偏移均为针对根 rawText 的字符绝对偏移。
 func collectParseMatches(compiled *parser.CompiledTemplate, rawText string) []models.ParseMatch {
 	if compiled == nil || rawText == "" {
 		return nil
@@ -512,22 +511,14 @@ func collectParseMatches(compiled *parser.CompiledTemplate, rawText string) []mo
 	case parser.EngineRegex:
 		appendAll(compiled.CommandKey, compiled.CompiledPattern)
 	case parser.EngineTree:
-		if compiled.TreeConfig != nil {
-			for _, r := range compiled.TreeConfig.Rules {
-				if strings.TrimSpace(r.ParentItem) != "" {
-					continue
-				}
-				if r.SplitRegex != "" {
-					if re, err := regexp.Compile(parser.BuildRegexWithFlags(r.SplitRegex, r.SplitFlags)); err == nil {
-						appendAll(r.ParseItem, re)
-					}
-				}
-				if r.ParseRegex != "" {
-					if re, err := regexp.Compile(parser.BuildRegexWithFlags(r.ParseRegex, r.ParseFlags)); err == nil {
-						appendAll(r.ParseItem, re)
-					}
-				}
-			}
+		// 委托 parser.TreeEngine 统一收集：覆盖嵌套子规则命中，偏移为相对 rawText 的绝对偏移
+		for _, m := range parser.NewTreeEngine().CollectMatches(compiled, rawText) {
+			matches = append(matches, models.ParseMatch{
+				Rule:  m.Rule,
+				Start: m.Start,
+				End:   m.End,
+				Text:  m.Text,
+			})
 		}
 	case parser.EngineAggregate:
 		for _, re := range compiled.CompiledRecordStart {

@@ -297,7 +297,7 @@ var textSeedOnce sync.Once
 // EnsureInspectionItemTextSeeds 初始化巡检多语言文案种子。
 //
 // 定位（方案 §5.3.6）：服务于海外/涉外局点的**英文巡检报告导出**，
-// 不铺开前端 UI 国际化。种子精简，仅覆盖内置的少量关键检查项。
+// 不铺开前端 UI 国际化。种子覆盖内置模板的全部检查项，Key 与 InspectionItem.Code 一一对应。
 func EnsureInspectionItemTextSeeds(db *gorm.DB) error {
 	if db == nil {
 		return nil
@@ -323,28 +323,97 @@ func EnsureInspectionItemTextSeeds(db *gorm.DB) error {
 	return err
 }
 
-// DefaultItemTexts 内置多语言文案（精简版，可按需增量补充）
+// DefaultItemTexts 内置多语言文案。
+// Key 必须等于 InspectionItem.Code（如 GEN_CPU_USAGE），否则导出时无法命中。
+// 覆盖内置模板的全部检查项；中文导出直接复用结果原文，不在此重复维护。
 var DefaultItemTexts = []models.InspectionItemText{
+	// ===== tpl-huawei-general =====
 	{
-		Key:         "PRE_CHECK_CPU_USAGE",
+		Key:         "GEN_CPU_USAGE",
 		Locale:      "en-US",
-		Name:        "CPU usage check",
-		Description: "Check whether the device CPU usage exceeds the threshold.",
-		Advice:      "Identify top CPU-consuming processes with display cpu-usage and optimize or schedule heavy tasks off-peak.",
+		Name:        "Main control CPU usage check",
+		Description: "Check whether the main control board CPU usage is below the threshold (80%).",
+		Advice:      "Identify top CPU-consuming processes with display cpu-usage; check for L2 broadcast storms, OSPF/BGP route flapping or micro-burst traffic.",
 	},
 	{
-		Key:         "PRE_CHECK_MEMORY_USAGE",
+		Key:         "GEN_MEM_USAGE",
 		Locale:      "en-US",
 		Name:        "Memory usage check",
-		Description: "Check whether the device memory usage exceeds the threshold.",
-		Advice:      "Run display memory to locate memory hogs; consider restarting abnormal processes or upgrading memory.",
+		Description: "Check whether the physical memory usage is below the threshold (85%).",
+		Advice:      "Run display memory-usage to locate the largest memory consumers; watch for oversized routing tables or process memory leaks.",
 	},
 	{
-		Key:         "PRE_CHECK_TEMPERATURE",
+		Key:         "GEN_TEMPERATURE",
 		Locale:      "en-US",
-		Name:        "Temperature check",
-		Description: "Check whether the device temperature is within the normal range.",
-		Advice:      "Verify fans and air ducts with display environment; clean dust or replace faulty fan modules.",
+		Name:        "Board temperature check",
+		Description: "Check whether board temperature sensors are within the safe range (<= 65C).",
+		Advice:      "Verify room air conditioning and humidity, clean dust filters and intake/exhaust vents, and check rack airflow.",
+	},
+	{
+		Key:         "GEN_FAN_STATUS",
+		Locale:      "en-US",
+		Name:        "Fan status check",
+		Description: "Check that no fan tray or module reports Abnormal/Fail state.",
+		Advice:      "Reseat fan trays, remove mechanical obstructions or dust from fan blades, and replace faulty fan modules if necessary.",
+	},
+	{
+		Key:         "GEN_POWER_STATUS",
+		Locale:      "en-US",
+		Name:        "Power module status check",
+		Description: "Check dual or redundant power supply state; no outage or fault is allowed.",
+		Advice:      "Verify PDU input voltage stability and that power module latches are securely seated.",
+	},
+	{
+		Key:         "GEN_DEVICE_UPTIME",
+		Locale:      "en-US",
+		Name:        "Device uptime health check",
+		Description: "Confirm a normal continuous uptime to detect unexpected reboots.",
+		Advice:      "Run display reboot-info to inspect the last reboot reason and determine whether a watchdog reset or power loss occurred.",
+	},
+	{
+		Key:         "GEN_INTERFACE_ERRORS",
+		Locale:      "en-US",
+		Name:        "Interface error and packet loss check",
+		Description: "Detect physical interfaces with CRC errors, input errors or frequent flaps.",
+		Advice:      "Use an optical power meter to check Rx/Tx levels, clean fiber end faces, or replace patch cords.",
+	},
+	{
+		Key:         "GEN_NTP_SYNC",
+		Locale:      "en-US",
+		Name:        "NTP clock synchronization check",
+		Description: "Verify the device is precisely synchronized (synchronized) with the reference clock server.",
+		Advice:      "Verify upstream NTP server reachability, UDP 123 policy and timezone configuration.",
+	},
+	// ===== tpl-huawei-ce =====
+	{
+		Key:         "CE_CPU_USAGE",
+		Locale:      "en-US",
+		Name:        "CE data center core CPU status check",
+		Description: "Monitor CPU usage of the CE core main control and service boards.",
+		Advice:      "Inspect EVPN/VXLAN control-plane convergence state or control-plane micro-burst traffic.",
+	},
+	{
+		Key:         "CE_BGP_PEER",
+		Locale:      "en-US",
+		Name:        "BGP/EVPN peer session status check",
+		Description: "Verify that BGP peers between data center Spine-Leaf nodes are Established.",
+		Advice:      "Verify BGP Router-ID, AS number configuration and direct-link connectivity.",
+	},
+	// ===== tpl-huawei-s =====
+	{
+		Key:         "S_STP_STATUS",
+		Locale:      "en-US",
+		Name:        "STP/RSTP loop protection status check",
+		Description: "Check loop protection and spanning tree convergence on campus edge access ports.",
+		Advice:      "Enable BPDU protection on edge ports and check for unauthorized switches causing topology flapping.",
+	},
+	// ===== tpl-huawei-ar =====
+	{
+		Key:         "AR_OSPF_NEIGHBOR",
+		Locale:      "en-US",
+		Name:        "OSPF neighbor adjacency status check",
+		Description: "Check that OSPF neighbors between WAN branches and the core are in Full state.",
+		Advice:      "Verify interface MTU, Area ID, Hello/Dead timers and authentication key consistency.",
 	},
 }
 
