@@ -518,12 +518,12 @@ func collectParseMatches(compiled *parser.CompiledTemplate, rawText string) []mo
 					continue
 				}
 				if r.SplitRegex != "" {
-					if re, err := regexp.Compile(applyRegexFlags(r.SplitRegex, r.SplitFlags)); err == nil {
+					if re, err := regexp.Compile(parser.BuildRegexWithFlags(r.SplitRegex, r.SplitFlags)); err == nil {
 						appendAll(r.ParseItem, re)
 					}
 				}
 				if r.ParseRegex != "" {
-					if re, err := regexp.Compile(applyRegexFlags(r.ParseRegex, r.ParseFlags)); err == nil {
+					if re, err := regexp.Compile(parser.BuildRegexWithFlags(r.ParseRegex, r.ParseFlags)); err == nil {
 						appendAll(r.ParseItem, re)
 					}
 				}
@@ -546,21 +546,6 @@ func collectParseMatches(compiled *parser.CompiledTemplate, rawText string) []mo
 		return matches[i].End < matches[j].End
 	})
 	return matches
-}
-
-// applyRegexFlags 将 m/i/s 标志转换为 Go 内联标志前缀 (?mis)
-func applyRegexFlags(pattern, flags string) string {
-	clean := strings.ToLower(strings.TrimSpace(flags))
-	valid := ""
-	for _, c := range clean {
-		if (c == 'm' || c == 'i' || c == 's') && !strings.ContainsRune(valid, c) {
-			valid += string(c)
-		}
-	}
-	if valid != "" && !strings.HasPrefix(pattern, "(?") {
-		return "(?" + valid + ")" + pattern
-	}
-	return pattern
 }
 
 // toVO 转换为视图对象

@@ -94,7 +94,7 @@ func CompileTreeRules(rules []TreeRule) ([]*CompiledTreeRule, []*CompiledTreeRul
 
 		// 编译 ParseRegex
 		if r.ParseRegex != "" {
-			pat := buildRegexWithFlags(r.ParseRegex, r.ParseFlags)
+			pat := BuildRegexWithFlags(r.ParseRegex, r.ParseFlags)
 			re, err := regexp.Compile(pat)
 			if err != nil {
 				return nil, nil, fmt.Errorf("%w: 字段 '%s' 的 parseRegex 编译失败: %v", ErrInvalidTreeRule, r.ParseItem, err)
@@ -104,7 +104,7 @@ func CompileTreeRules(rules []TreeRule) ([]*CompiledTreeRule, []*CompiledTreeRul
 
 		// 编译 SplitRegex
 		if r.SplitRegex != "" {
-			pat := buildRegexWithFlags(r.SplitRegex, r.SplitFlags)
+			pat := BuildRegexWithFlags(r.SplitRegex, r.SplitFlags)
 			re, err := regexp.Compile(pat)
 			if err != nil {
 				return nil, nil, fmt.Errorf("%w: 字段 '%s' 的 splitRegex 编译失败: %v", ErrInvalidTreeRule, r.ParseItem, err)
@@ -201,8 +201,9 @@ func markPathNodes(ruleMap map[string]*CompiledTreeRule) {
 	}
 }
 
-// 拼接内联正则修饰符 (?mi)
-func buildRegexWithFlags(pattern, flags string) string {
+// BuildRegexWithFlags 拼接内联正则修饰符 (?mi)。
+// 导出供其他包（如 ui 解析模板调试）复用，避免同一语义在不同包中重复实现与漂移。
+func BuildRegexWithFlags(pattern, flags string) string {
 	if flags == "" {
 		return pattern
 	}

@@ -207,6 +207,10 @@ func (e *InspectionCheckExecutor) executeCheckOnly(
 		}
 	}
 
+	// 产物登记：与单阶段路径 executeInspectionUnit 对齐。
+	// 三阶段纯判定路径此前只写库、不登记产物，导致任务产物列表缺少原始回显与报表导出文件。
+	e.registerCheckOnlyArtifacts(taskID, stageID, unit.ID, deviceIP, items, holder, results)
+
 	return completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), len(results), "巡检判定完成", deviceIP)
 }
 
@@ -477,4 +481,56 @@ func (e *InspectionCheckExecutor) createArtifactWithResult(taskRunID, stageID, u
 		return err
 	}
 	return nil
+}
+
+// registerCheckOnlyArtifacts 在三阶段纯判定路径下补齐产物登记，使其与单阶段路径
+// executeInspectionUnit 的产物可见性一致：
+//  1. raw_output：各检查项命令的原始回显（采集阶段虽已落盘，但仍需登记产物记录）；
+//  2. inspection_report.csv / inspection_report.json：巡检报表导出产物。
+//
+// 任何写盘或登记失败仅告警，不影响判定结果（与单阶段路径保持一致）。
+func (e *InspectionCheckExecutor) registerCheckOnlyArtifacts(
+	taskID, stageID, unitID, deviceIP string,
+	items []models.InspectionItem,
+	holder RunDataHolder,
+	results []models.InspectionResult,
+) {
+	// 1. 原始回显产物（按命令去重）
+	seen := make(map[string]struct{}, len(items))
+	for _, it := range items {
+		cmd := strings.TrimSpace(it.CommandKey)
+		if cmd == "" {
+			continue
+		}
+		if _, ok := seen[cmd]; ok {
+			continue
+		}
+		seen[cmd] = struct{}{}
+
+		echo, ok := holder.GetCommandEcho(deviceIP, cmd)
+		if !ok {
+			continue
+		}
+		rawPath := e.pathManager.GetInspectionRawFilePath(taskID, deviceIP, strings.ReplaceAll(cmd, " ", "_")+".txt")
+		if err := os.MkdirAll(filepath.Dir(rawPath), 0755); err == nil {
+			_ = os.WriteFile(rawPath, []byte(echo), 0644)
+		}
+		_ = e.createArtifactWithResult(taskID, stageID, unitID, string(ArtifactTypeRawOutput), fmt.Sprintf("%s:%s", deviceIP, cmd), rawPath)
+	}
+
+	// 2. 巡检报表产物（CSV 与 JSON）
+	if csvData, err := inspection.ExportInspectionResultsCSV(results); err == nil {
+		csvPath := e.pathManager.GetInspectionRawFilePath(taskID, deviceIP, "inspection_report.csv")
+		if err := os.MkdirAll(filepath.Dir(csvPath), 0755); err == nil {
+			_ = os.WriteFile(csvPath, []byte(csvData), 0644)
+		}
+		_ = e.createArtifactWithResult(taskID, stageID, unitID, string(ArtifactTypeInspectionReport), fmt.Sprintf("%s:inspection_report.csv", deviceIP), csvPath)
+	}
+	if jsonData, err := inspection.ExportInspectionResultsJSON(results); err == nil {
+		jsonPath := e.pathManager.GetInspectionRawFilePath(taskID, deviceIP, "inspection_report.json")
+		if err := os.MkdirAll(filepath.Dir(jsonPath), 0755); err == nil {
+			_ = os.WriteFile(jsonPath, []byte(jsonData), 0644)
+		}
+		_ = e.createArtifactWithResult(taskID, stageID, unitID, string(ArtifactTypeInspectionReport), fmt.Sprintf("%s:inspection_report.json", deviceIP), jsonPath)
+	}
 }

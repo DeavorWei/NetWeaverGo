@@ -2,6 +2,8 @@ package taskexec
 
 import (
 	"sync"
+
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 // maxRunDataBytes 单次运行的内存数据快照容量上限（64MB，对齐方案 §10.1 预算）
@@ -22,19 +24,32 @@ type RunDataHolder interface {
 }
 
 type runDataStore struct {
-	mu       sync.RWMutex
-	size     int64
-	full     bool
-	echos    map[string]map[string]string
-	parsed   map[string]map[string][]map[string]string
+	mu         sync.RWMutex
+	runID      string
+	size       int64
+	full       bool
+	echos      map[string]map[string]string
+	parsed     map[string]map[string][]map[string]string
 	anyDataSet bool
 }
 
-func newRunDataStore() *runDataStore {
+func newRunDataStore(runID string) *runDataStore {
 	return &runDataStore{
+		runID:  runID,
 		echos:  make(map[string]map[string]string),
 		parsed: make(map[string]map[string][]map[string]string),
 	}
+}
+
+// markFullLocked 首次触及容量上限时置位并输出一次告警（调用方需持有写锁）。
+// 满载后数据将被静默丢弃并回退读盘，此处补一条可观测日志，便于排查性能抖动。
+func (s *runDataStore) markFullLocked(module string) {
+	if s.full {
+		return
+	}
+	s.full = true
+	logger.Warn("TaskExec", s.runID,
+		"运行内存快照达到上限 %dMB，后续 %s 数据不再缓存并回退读盘", maxRunDataBytes/1024/1024, module)
 }
 
 func (s *runDataStore) SetCommandEcho(deviceIP, commandKey, echo string) {
@@ -47,7 +62,7 @@ func (s *runDataStore) SetCommandEcho(deviceIP, commandKey, echo string) {
 		return
 	}
 	if s.size+int64(len(echo)) > maxRunDataBytes {
-		s.full = true
+		s.markFullLocked("命令回显")
 		return
 	}
 	byCmd, ok := s.echos[deviceIP]
@@ -125,13 +140,13 @@ var runData = &runDataRegistry{runs: make(map[string]*runDataStore)}
 // GetRunData 获取（或惰性创建）指定运行的数据快照；runID 为空时返回只读空实现
 func GetRunData(runID string) RunDataHolder {
 	if runID == "" {
-		return newRunDataStore()
+		return newRunDataStore("")
 	}
 	runData.mu.Lock()
 	defer runData.mu.Unlock()
 	store, ok := runData.runs[runID]
 	if !ok {
-		store = newRunDataStore()
+		store = newRunDataStore(runID)
 		runData.runs[runID] = store
 	}
 	return store

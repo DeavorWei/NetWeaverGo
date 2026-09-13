@@ -177,6 +177,7 @@ func (e *InspectionCollectExecutor) executeCollectUnit(ctx RuntimeContext, stage
 	}
 
 	holder := GetRunData(taskID)
+	successSteps := 0
 	for _, step := range unit.Steps {
 		if ctx.IsCancelled() {
 			return cancelUnitExecution(ctx, handler, unit.ID, deviceIP, "run cancelled during collect", intPtrLocal(0))
@@ -188,6 +189,9 @@ func (e *InspectionCollectExecutor) executeCollectUnit(ctx RuntimeContext, stage
 		echo, cmdErr := exec.ExecuteCommandSync(ctx.Context(), cmd, cmdTimeout)
 		if cmdErr != nil {
 			logger.Warn("InspectionCollectExecutor", taskID, "设备 %s 执行命令 [%s] 异常: %v", deviceIP, cmd, cmdErr)
+		} else {
+			// 仅统计实际成功执行的命令数，避免个别命令异常时 doneSteps 被计满
+			successSteps++
 		}
 		holder.SetCommandEcho(deviceIP, cmd, echo)
 
@@ -197,8 +201,8 @@ func (e *InspectionCollectExecutor) executeCollectUnit(ctx RuntimeContext, stage
 		}
 	}
 
-	doneSteps := len(unit.Steps)
-	return completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), doneSteps, "巡检采集完成", deviceIP)
+	// 进度精度：doneSteps 反映实际成功命令数（设备级容错策略不变，Unit 终态仍为 Completed）
+	return completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), successSteps, "巡检采集完成", deviceIP)
 }
 
 func failCollectUnit(handler *ErrorHandler, ctx RuntimeContext, unit *UnitPlan, deviceIP, errMsg string) error {
