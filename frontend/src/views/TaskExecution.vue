@@ -168,6 +168,9 @@
             <el-progress :percentage="progressPercent" :status="progressPercent === 100 ? 'success' : ''" :show-text="false" />
           </div>
 
+          <!-- 本次运行指标（读取快照 metricsJson，无数据自动隐藏） -->
+          <MetricsSummaryCard :metrics-json="executionSnapshot?.metricsJson" />
+
           <!-- Stage 进度展示 -->
           <div v-if="executionStages.length > 0" class="flex-shrink-0">
             <StageProgress :stages="executionStages" :units="executionUnits" />
@@ -496,6 +499,7 @@ import ExecutionHistoryDrawer from "../components/task/ExecutionHistoryDrawer.vu
 import TaskDetailModal from "../components/task/TaskDetailModal.vue";
 import TaskEditModal from "../components/task/TaskEditModal.vue";
 import StageProgress from "../components/task/StageProgress.vue";
+import MetricsSummaryCard from "../components/MetricsSummaryCard.vue";
 import type { StageSnapshot, UnitSnapshot } from "../types/taskexec";
 import { getLogger } from '@/utils/logger'
 

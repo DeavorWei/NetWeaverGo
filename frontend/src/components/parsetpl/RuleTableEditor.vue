@@ -49,8 +49,26 @@
       <el-table-column label="默认值" min-width="70">
         <template #default="{ row }"><el-input v-model="row.defaultValue" size="small" placeholder="空或N/A" /></template>
       </el-table-column>
-      <el-table-column label="操作" width="50" align="center">
+      <el-table-column label="操作" width="132" align="center">
         <template #default="{ $index }">
+          <el-button
+            type="primary"
+            link
+            size="small"
+            :disabled="$index === 0"
+            @click="$emit('move', $index, -1)"
+          >
+            上移
+          </el-button>
+          <el-button
+            type="primary"
+            link
+            size="small"
+            :disabled="$index === rules.length - 1"
+            @click="$emit('move', $index, 1)"
+          >
+            下移
+          </el-button>
           <el-button type="danger" link size="small" @click="$emit('remove', $index)">删</el-button>
         </template>
       </el-table-column>
@@ -74,6 +92,8 @@ defineEmits<{
   (e: 'update:maxLevel', v: number): void
   (e: 'add'): void
   (e: 'remove', index: number): void
+  // delta = -1 上移 / 1 下移；父组件负责重排数组并同步 order 字段
+  (e: 'move', index: number, delta: -1 | 1): void
 }>()
 
 function checkUnsupportedRegex(pat?: string): boolean {

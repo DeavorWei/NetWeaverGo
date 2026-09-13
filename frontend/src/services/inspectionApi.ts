@@ -3,6 +3,7 @@ import type {
   InspectionTemplate,
   InspectionItem,
   InspectionResult,
+  InspectionGroup,
 } from "@/bindings/github.com/NetWeaverGo/core/internal/models/models";
 import type { InspectionSummaryVO } from "@/bindings/github.com/NetWeaverGo/core/internal/ui/models";
 import type { TaskRun } from "@/bindings/github.com/NetWeaverGo/core/internal/taskexec/models";
@@ -11,6 +12,7 @@ export type {
   InspectionTemplate,
   InspectionItem,
   InspectionResult,
+  InspectionGroup,
   InspectionSummaryVO,
   TaskRun,
 };

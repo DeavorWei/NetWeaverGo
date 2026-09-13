@@ -129,6 +129,7 @@
             :rules="treeRules"
             @add="addTreeRule"
             @remove="removeTreeRule"
+            @move="moveTreeRule"
           />
         </div>
 
@@ -402,6 +403,21 @@ function addTreeRule() {
 
 function removeTreeRule(idx: number) {
   treeRules.value.splice(idx, 1);
+}
+
+// 上移/下移规则项：数组顺序即执行次序，重排后按新顺序回写 order 字段
+function moveTreeRule(idx: number, delta: -1 | 1) {
+  const list = treeRules.value;
+  const target = idx + delta;
+  if (idx < 0 || target < 0 || idx >= list.length || target >= list.length) return;
+  const moving = list[idx];
+  const displaced = list[target];
+  if (!moving || !displaced) return;
+  list[idx] = displaced;
+  list[target] = moving;
+  list.forEach((rule, i) => {
+    rule.order = i + 1;
+  });
 }
 
 function addFieldMappingRow() {

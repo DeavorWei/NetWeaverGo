@@ -221,6 +221,7 @@ export const useTaskexecStore = defineStore('taskexec', () => {
           if (op.progress !== undefined) snapshot.progress = op.progress
           if ('startedAt' in op) snapshot.startedAt = op.startedAt ?? null
           if ('finishedAt' in op) snapshot.finishedAt = op.finishedAt ?? null
+          if (op.metricsJson !== undefined) snapshot.metricsJson = op.metricsJson
           break
         case 'stage_upsert':
           if (op.stage) upsertStage(snapshot, op.stage)

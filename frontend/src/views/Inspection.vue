@@ -39,8 +39,10 @@
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="csv">导出为 CSV (含 UTF-8 BOM)</el-dropdown-item>
-              <el-dropdown-item command="json">导出为 JSON 结构化数据</el-dropdown-item>
+              <el-dropdown-item command="csv:zh">导出为 CSV（中文，含 UTF-8 BOM）</el-dropdown-item>
+              <el-dropdown-item command="csv:en">Export as CSV (English)</el-dropdown-item>
+              <el-dropdown-item command="json:zh">导出为 JSON（中文结构化数据）</el-dropdown-item>
+              <el-dropdown-item command="json:en">Export as JSON (English)</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -317,6 +319,23 @@
                   <el-button type="primary" size="small" :icon="Plus" @click="openItemModal(null)">
                     添加检查项
                   </el-button>
+                </div>
+
+                <!-- 检查项分组树（报表/展示分层，不影响检查项执行逻辑） -->
+                <div class="flex-shrink-0">
+                  <InspectionGroupTree
+                    :groups="templateGroups"
+                    :item-codes="templateItemCodes"
+                    @update:groups="templateGroups = $event"
+                  />
+                  <div class="flex items-center justify-between mt-1.5">
+                    <span class="text-[11px] text-text-muted">
+                      分组仅用于报表与展示分层，不改变检查项执行顺序；旧模板可保持为空（按扁平列表展示）。
+                    </span>
+                    <el-button size="small" type="primary" :loading="savingGroups" @click="saveTemplateGroups">
+                      保存分组
+                    </el-button>
+                  </div>
                 </div>
 
                 <div class="flex-1 overflow-hidden border border-border rounded-lg">
@@ -701,10 +720,12 @@ import {
   type InspectionTemplate,
   type InspectionItem,
   type InspectionResult,
+  type InspectionGroup,
   type InspectionSummaryVO,
   type TaskRun,
 } from '@/services/inspectionApi'
 import { DeviceAPI, type DeviceAsset } from '@/services/api'
+import InspectionGroupTree from '@/components/inspection/InspectionGroupTree.vue'
 
 const route = useRoute()
 
@@ -745,6 +766,11 @@ const allResults = ref<InspectionResult[]>([])
 const templates = ref<InspectionTemplate[]>([])
 const selectedTemplate = ref<InspectionTemplate | null>(null)
 const templateItems = ref<InspectionItem[]>([])
+// 分组树（方案 §5.3 / §8.2 P4-1）：仅用于报表与展示分层，不改变检查项执行逻辑
+const templateGroups = ref<InspectionGroup[]>([])
+const savingGroups = ref(false)
+// 当前模板可用检查项编码（供分组归属选择）
+const templateItemCodes = computed(() => templateItems.value.map((item) => item.code))
 const selectedResult = ref<InspectionResult | null>(null)
 const allDevices = ref<DeviceAsset[]>([])
 
@@ -939,7 +965,26 @@ function filterLocalResults() {
 // 模板与项管理
 function selectTemplate(tpl: InspectionTemplate) {
   selectedTemplate.value = tpl
+  templateGroups.value = tpl.groups ? [...tpl.groups] : []
   loadTemplateItems(tpl.id)
+}
+
+// 保存分组树（整树提交，落 inspection_templates.groups JSON 列）
+async function saveTemplateGroups() {
+  if (!selectedTemplate.value) return
+  savingGroups.value = true
+  try {
+    await InspectionAPI.saveTemplate({
+      ...selectedTemplate.value,
+      groups: templateGroups.value,
+    } as InspectionTemplate)
+    selectedTemplate.value.groups = templateGroups.value
+    ElMessage.success('分组树已保存')
+  } catch (err) {
+    ElMessage.error(`保存分组失败: ${err}`)
+  } finally {
+    savingGroups.value = false
+  }
 }
 
 async function loadTemplateItems(templateId: string) {
@@ -1124,17 +1169,21 @@ async function handleLaunchInspection() {
   }
 }
 
-// 报告导出
+// 报告导出（命令格式：<csv|json>:<zh|en>）
 async function handleExportCommand(cmd: string) {
+  const [kind, lang] = cmd.split(':')
+  const locale = lang === 'en' ? 'en-US' : ''
+  const suffix = lang === 'en' ? '-en' : ''
+  const dateTag = new Date().toISOString().slice(0, 10)
   try {
-    if (cmd === 'csv') {
-      const csvData = await InspectionAPI.exportCSV(selectedRunID.value)
-      downloadFile(csvData, `inspection-report-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8')
-      ElMessage.success('已成功导出 CSV 巡检报告')
-    } else if (cmd === 'json') {
-      const jsonData = await InspectionAPI.exportJSON(selectedRunID.value)
-      downloadFile(jsonData, `inspection-report-${new Date().toISOString().slice(0, 10)}.json`, 'application/json')
-      ElMessage.success('已成功导出 JSON 巡检报告')
+    if (kind === 'csv') {
+      const csvData = await InspectionAPI.exportCSVWithLocale(selectedRunID.value, locale)
+      downloadFile(csvData, `inspection-report-${dateTag}${suffix}.csv`, 'text/csv;charset=utf-8')
+      ElMessage.success(locale ? 'Exported CSV report successfully' : '已成功导出 CSV 巡检报告')
+    } else if (kind === 'json') {
+      const jsonData = await InspectionAPI.exportJSONWithLocale(selectedRunID.value, locale)
+      downloadFile(jsonData, `inspection-report-${dateTag}${suffix}.json`, 'application/json')
+      ElMessage.success(locale ? 'Exported JSON report successfully' : '已成功导出 JSON 巡检报告')
     }
   } catch (err) {
     ElMessage.error(`导出失败: ${err}`)
