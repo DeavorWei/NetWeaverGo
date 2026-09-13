@@ -119,14 +119,9 @@
 import { computed } from 'vue'
 import type { UserParseTemplateVO, TestParseTemplateResult } from '@/services/parseTemplateApi'
 
-interface ParseMatch { rule: string; start: number; end: number; text: string }
-
-// 绑定模型尚未重新生成，matches 为本次新增的可选字段，用交叉类型向后兼容声明
-type ResultWithMatches = TestParseTemplateResult & { matches?: ParseMatch[] }
-
 const props = defineProps<{
   selectedTpl: UserParseTemplateVO | null
-  result: ResultWithMatches | null
+  result: TestParseTemplateResult | null
   testing: boolean
   columns: string[]
   viewMode: 'table' | 'tree' | 'json' | 'highlight'

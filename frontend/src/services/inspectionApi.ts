@@ -122,4 +122,18 @@ export const InspectionAPI = {
   async exportJSON(runId = ""): Promise<string> {
     return InspectionService.ExportInspectionJSON(runId);
   },
+
+  /**
+   * 按语言导出巡检报告为 CSV（locale 为空等价于中文，行为与 exportCSV 一致）
+   */
+  async exportCSVWithLocale(runId = "", locale = ""): Promise<string> {
+    return InspectionService.ExportInspectionCSVWithLocale(runId, locale);
+  },
+
+  /**
+   * 按语言导出巡检报告为结构化 JSON（locale 为空等价于中文）
+   */
+  async exportJSONWithLocale(runId = "", locale = ""): Promise<string> {
+    return InspectionService.ExportInspectionJSONWithLocale(runId, locale);
+  },
 };

@@ -18,6 +18,8 @@ export interface ExecutionSnapshot {
   units: UnitSnapshot[]
   startedAt?: string | null
   finishedAt?: string | null
+  /** 本次运行指标快照 JSON（后端 snapshot.go，方案 §10.2） */
+  metricsJson?: string
   events: EventSnapshot[]
   lastSessionSeqByUnit?: Record<string, number | undefined>
 }
@@ -84,6 +86,8 @@ export interface SnapshotDeltaOp {
   progress?: number
   startedAt?: string | null
   finishedAt?: string | null
+  /** 运行指标快照（随 run_patch 增量下发，用于实时展示） */
+  metricsJson?: string
   stage?: StageSnapshot
   unit?: UnitSnapshot
   event?: EventSnapshot
