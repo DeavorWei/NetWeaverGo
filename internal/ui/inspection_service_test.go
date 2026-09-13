@@ -327,3 +327,59 @@ func TestInspectionService_MultiRunIsolationAnd8States(t *testing.T) {
 	assert.Equal(t, 1, sumRun3.ExceptDevices, "10.0.0.1 全异常设备应计为 ExceptDevices，严禁归入 PassDevices")
 	assert.Equal(t, 0, sumRun3.FailDevices)
 }
+
+// 阶段五 5.2：分组树落库校验——合法分组可保存且读回一致（含嵌套与 ItemCodes 去重）；
+// 非法 ItemCodes / 重复 Code 被拒绝，避免脏数据写入 groups JSON 列。
+func TestInspectionService_SaveTemplateGroups(t *testing.T) {
+	db := setupInspectionTestDB(t)
+	svc := NewInspectionService(db, nil)
+
+	// 1. 创建模板（取回生成的 ID）
+	require.NoError(t, svc.SaveInspectionTemplate(models.InspectionTemplate{Name: "分组校验模板", Vendor: "huawei"}))
+	tpls, err := svc.ListInspectionTemplates()
+	require.NoError(t, err)
+	require.Len(t, tpls, 1)
+	tplID := tpls[0].ID
+
+	// 2. 为该模板写入两个检查项
+	require.NoError(t, db.Create(&models.InspectionItem{TemplateID: tplID, Code: "GEN_CPU_USAGE", Name: "CPU", CommandKey: "display cpu-usage"}).Error)
+	require.NoError(t, db.Create(&models.InspectionItem{TemplateID: tplID, Code: "GEN_MEM_USAGE", Name: "MEM", CommandKey: "display memory-usage"}).Error)
+
+	// 3. 合法分组（含嵌套 + 重复 ItemCode 去重）应成功
+	validGroups := models.InspectionGroups{
+		{
+			Code:      "G1",
+			Name:      "基础组",
+			ItemCodes: []string{"GEN_CPU_USAGE", "GEN_CPU_USAGE", "GEN_MEM_USAGE"},
+			Children:  []models.InspectionGroup{{Code: "G1-1", Name: "子组", ItemCodes: []string{"GEN_MEM_USAGE"}}},
+		},
+	}
+	require.NoError(t, svc.SaveInspectionTemplate(models.InspectionTemplate{ID: tplID, Name: "分组校验模板", Groups: validGroups}))
+
+	got, err := svc.GetInspectionTemplate(tplID)
+	require.NoError(t, err)
+	require.Len(t, got.Groups, 1)
+	assert.Equal(t, "G1", got.Groups[0].Code)
+	// ItemCodes 去重保序
+	assert.Equal(t, []string{"GEN_CPU_USAGE", "GEN_MEM_USAGE"}, got.Groups[0].ItemCodes)
+	require.Len(t, got.Groups[0].Children, 1)
+	assert.Equal(t, "G1-1", got.Groups[0].Children[0].Code)
+
+	// 4. 非法：分组引用不存在的检查项
+	badItem := models.InspectionGroups{{Code: "G2", ItemCodes: []string{"GEN_NOT_EXIST"}}}
+	err = svc.SaveInspectionTemplate(models.InspectionTemplate{ID: tplID, Name: "分组校验模板", Groups: badItem})
+	require.Error(t, err)
+
+	// 5. 非法：分组 Code 重复（含嵌套）
+	dupCode := models.InspectionGroups{
+		{Code: "G1", ItemCodes: []string{"GEN_CPU_USAGE"}},
+		{Code: "G1", ItemCodes: []string{"GEN_MEM_USAGE"}},
+	}
+	err = svc.SaveInspectionTemplate(models.InspectionTemplate{ID: tplID, Name: "分组校验模板", Groups: dupCode})
+	require.Error(t, err)
+
+	// 6. 空 Code 节点应被拒绝
+	emptyCode := models.InspectionGroups{{Code: "", Name: "无码组", ItemCodes: []string{"GEN_CPU_USAGE"}}}
+	err = svc.SaveInspectionTemplate(models.InspectionTemplate{ID: tplID, Name: "分组校验模板", Groups: emptyCode})
+	require.Error(t, err)
+}

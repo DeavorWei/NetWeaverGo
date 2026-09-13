@@ -7,6 +7,8 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // withPipelineMode 临时切换巡检编排模式，返回恢复函数
@@ -183,4 +185,61 @@ func TestInspectionTemplateGroupsPersistence(t *testing.T) {
 	if len(got.Groups) != 2 || got.Groups[0].Code != "sys" || len(got.Groups[1].Children) != 1 {
 		t.Fatalf("分组树未正确反序列化: %+v", got.Groups)
 	}
+}
+
+// 阶段一 1.3：采集 doneSteps 精度——空命令跳过、失败命令不计，仅成功命令计入 doneSteps。
+// 通过可注入的 runCmd 模拟命令失败，无需真实设备连接。
+func TestInspectionCollectExecutor_CollectUnitCommands_DoneStepsPrecision(t *testing.T) {
+	e := &InspectionCollectExecutor{pathManager: config.GetPathManager()}
+	runID := "run-donesteps-precision"
+	t.Cleanup(func() { ReleaseRunData(runID) })
+	holder := GetRunData(runID)
+
+	unit := &UnitPlan{
+		ID: "unit-1",
+		Steps: []StepPlan{
+			{Command: "display version"},
+			{Command: "display cpu-usage"},
+			{Command: ""},                // 空命令跳过，不执行不计数
+			{Command: "display invalid"}, // 被注入为执行失败
+		},
+	}
+
+	var calls int
+	runCmd := func(cmd string) (string, error) {
+		calls++
+		if cmd == "display invalid" {
+			return "", fmt.Errorf("simulated command failure")
+		}
+		return "echo-" + cmd, nil
+	}
+
+	success, err := e.collectUnitCommands(context.Background(), runID, "10.0.0.1", unit, holder, func() bool { return false }, runCmd)
+	require.NoError(t, err)
+
+	// 4 条步骤 → 1 空跳过 + 1 失败不计 = 2 成功
+	assert.Equal(t, 2, success, "doneSteps 应仅计成功命令（空命令跳过、失败命令不计）")
+	assert.Equal(t, 3, calls, "空命令不应触发执行器调用")
+
+	// 成功命令回显已登记；失败命令也登记（空回显，便于排查）
+	echo, ok := holder.GetCommandEcho("10.0.0.1", "display version")
+	require.True(t, ok)
+	assert.Equal(t, "echo-display version", echo)
+	_, ok = holder.GetCommandEcho("10.0.0.1", "display invalid")
+	assert.True(t, ok)
+}
+
+// 阶段一 1.3：采集期间取消应立即返回取消哨兵错误。
+func TestInspectionCollectExecutor_CollectUnitCommands_Cancel(t *testing.T) {
+	e := &InspectionCollectExecutor{pathManager: config.GetPathManager()}
+	runID := "run-donesteps-cancel"
+	t.Cleanup(func() { ReleaseRunData(runID) })
+	holder := GetRunData(runID)
+
+	unit := &UnitPlan{ID: "unit-1", Steps: []StepPlan{{Command: "display version"}, {Command: "display cpu"}}}
+	cancelled := true
+	_, err := e.collectUnitCommands(context.Background(), runID, "10.0.0.1", unit, holder, func() bool { return cancelled }, func(cmd string) (string, error) {
+		return "", nil
+	})
+	assert.ErrorIs(t, err, errCollectCancelled)
 }

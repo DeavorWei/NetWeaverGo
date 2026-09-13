@@ -89,6 +89,16 @@ func (s *InspectionService) SaveInspectionTemplate(tpl models.InspectionTemplate
 	if tpl.Name == "" {
 		return fmt.Errorf("模板名称不能为空")
 	}
+
+	// 分组树校验与规范化（方案 §5 5.2）：Code 唯一、ItemCodes 必须属于本模板检查项、
+	// Children 递归去重，避免脏数据写入 groups JSON 列。
+	if len(tpl.Groups) > 0 {
+		if err := validateInspectionGroups(tpl.Groups, s.loadTemplateItemCodes(tpl.ID)); err != nil {
+			return err
+		}
+		tpl.Groups = normalizeInspectionGroups(tpl.Groups)
+	}
+
 	if tpl.ID == "" {
 		tpl.ID = "tpl-" + uuid.New().String()[:8]
 		tpl.CreatedAt = time.Now()
@@ -98,6 +108,94 @@ func (s *InspectionService) SaveInspectionTemplate(tpl models.InspectionTemplate
 
 	tpl.UpdatedAt = time.Now()
 	return s.db.Save(&tpl).Error
+}
+
+// loadTemplateItemCodes 加载模板已有检查项的 Code 集合，用于分组树 ItemCodes 校验。
+// 返回 nil 表示该模板尚无检查项（无法校验，放行），避免阻断「先建模板后补项」的合法流程。
+func (s *InspectionService) loadTemplateItemCodes(templateID string) map[string]struct{} {
+	if s.db == nil || templateID == "" {
+		return nil
+	}
+	var items []models.InspectionItem
+	if err := s.db.Where("template_id = ?", templateID).Find(&items).Error; err != nil || len(items) == 0 {
+		return nil
+	}
+	codes := make(map[string]struct{}, len(items))
+	for _, it := range items {
+		codes[it.Code] = struct{}{}
+	}
+	return codes
+}
+
+// validateInspectionGroups 校验分组树：Code 非空且全局唯一（含嵌套）、ItemCodes 必须属于该模板。
+// validItemCodes 为 nil 时跳过 ItemCodes 校验。
+func validateInspectionGroups(groups models.InspectionGroups, validItemCodes map[string]struct{}) error {
+	seen := make(map[string]struct{})
+	var walk func(gs models.InspectionGroups) error
+	walk = func(gs models.InspectionGroups) error {
+		for i := range gs {
+			code := strings.TrimSpace(gs[i].Code)
+			if code == "" {
+				return fmt.Errorf("分组节点缺少 Code")
+			}
+			if _, dup := seen[code]; dup {
+				return fmt.Errorf("分组 Code 重复: %s", code)
+			}
+			seen[code] = struct{}{}
+			if validItemCodes != nil {
+				for _, ic := range gs[i].ItemCodes {
+					if _, ok := validItemCodes[ic]; !ok {
+						return fmt.Errorf("分组 %q 引用了不属于本模板的检查项: %s", code, ic)
+					}
+				}
+			}
+			if err := walk(gs[i].Children); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return walk(groups)
+}
+
+// normalizeInspectionGroups 递归规范化分组树：裁剪空白节点、兄弟节点 Code 去重、ItemCodes 去重保序。
+func normalizeInspectionGroups(groups models.InspectionGroups) models.InspectionGroups {
+	seen := make(map[string]struct{}, len(groups))
+	out := make(models.InspectionGroups, 0, len(groups))
+	for i := range groups {
+		code := strings.TrimSpace(groups[i].Code)
+		if code == "" {
+			continue
+		}
+		if _, dup := seen[code]; dup {
+			continue
+		}
+		seen[code] = struct{}{}
+		groups[i].Code = code
+		groups[i].Name = strings.TrimSpace(groups[i].Name)
+		groups[i].Children = normalizeInspectionGroups(groups[i].Children)
+		groups[i].ItemCodes = dedupeStrings(groups[i].ItemCodes)
+		out = append(out, groups[i])
+	}
+	return out
+}
+
+// dedupeStrings 对字符串切片去重保序并剔除空白项。
+func dedupeStrings(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, dup := seen[s]; dup {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
 }
 
 // DeleteInspectionTemplate 删除巡检模板及其关联项

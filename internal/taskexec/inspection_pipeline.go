@@ -1,6 +1,8 @@
 package taskexec
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -177,21 +179,44 @@ func (e *InspectionCollectExecutor) executeCollectUnit(ctx RuntimeContext, stage
 	}
 
 	holder := GetRunData(taskID)
-	successSteps := 0
-	for _, step := range unit.Steps {
-		if ctx.IsCancelled() {
+	// 采集命令经可注入的 runCmd 执行；doneSteps 精度由 collectUnitCommands 保障。
+	runCmd := func(cmd string) (string, error) {
+		return exec.ExecuteCommandSync(ctx.Context(), cmd, cmdTimeout)
+	}
+	successSteps, err := e.collectUnitCommands(ctx.Context(), taskID, deviceIP, unit, holder, ctx.IsCancelled, runCmd)
+	if err != nil {
+		if err == errCollectCancelled {
 			return cancelUnitExecution(ctx, handler, unit.ID, deviceIP, "run cancelled during collect", intPtrLocal(0))
+		}
+		return err
+	}
+
+	// 进度精度：doneSteps 反映实际成功命令数（设备级容错策略不变，Unit 终态仍为 Completed）
+	return completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), successSteps, "巡检采集完成", deviceIP)
+}
+
+// errCollectCancelled 采集阶段被取消的哨兵错误（由 collectUnitCommands 返回，供 executeCollectUnit 转换为取消终态）。
+var errCollectCancelled = errors.New("inspection collect cancelled")
+
+// collectUnitCommands 执行单台设备的全部采集命令并登记原始回显/落盘，返回实际成功命令数。
+// 仅成功执行的命令计入 doneSteps（阶段一 1.3 精度）；空命令跳过，失败命令不计满。
+// runCmd 注入命令执行器（生产为真实 DeviceExecutor.ExecuteCommandSync），便于无设备单测。
+func (e *InspectionCollectExecutor) collectUnitCommands(ctx context.Context, taskID, deviceIP string, unit *UnitPlan, holder RunDataHolder, isCancelled func() bool, runCmd func(cmd string) (string, error)) (int, error) {
+	success := 0
+	for _, step := range unit.Steps {
+		if isCancelled != nil && isCancelled() {
+			return success, errCollectCancelled
 		}
 		cmd := strings.TrimSpace(step.Command)
 		if cmd == "" {
 			continue
 		}
-		echo, cmdErr := exec.ExecuteCommandSync(ctx.Context(), cmd, cmdTimeout)
+		echo, cmdErr := runCmd(cmd)
 		if cmdErr != nil {
 			logger.Warn("InspectionCollectExecutor", taskID, "设备 %s 执行命令 [%s] 异常: %v", deviceIP, cmd, cmdErr)
 		} else {
 			// 仅统计实际成功执行的命令数，避免个别命令异常时 doneSteps 被计满
-			successSteps++
+			success++
 		}
 		holder.SetCommandEcho(deviceIP, cmd, echo)
 
@@ -200,9 +225,7 @@ func (e *InspectionCollectExecutor) executeCollectUnit(ctx RuntimeContext, stage
 			_ = os.WriteFile(rawPath, []byte(echo), 0644)
 		}
 	}
-
-	// 进度精度：doneSteps 反映实际成功命令数（设备级容错策略不变，Unit 终态仍为 Completed）
-	return completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), successSteps, "巡检采集完成", deviceIP)
+	return success, nil
 }
 
 func failCollectUnit(handler *ErrorHandler, ctx RuntimeContext, unit *UnitPlan, deviceIP, errMsg string) error {
