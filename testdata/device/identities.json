@@ -1,11 +1,72 @@
 {
-  "cisco_c9300": {
+  "cisco_c9200": {
     "vendor": "cisco",
-    "model": "",
-    "version": "16.9.5",
-    "series": "",
+    "model": "C9200-24T",
+    "detailType": "C9200-24T",
+    "version": "16.12.4",
+    "series": "C9200",
     "evidence": [
       "识别为 Cisco IOS/Nexus 平台"
+    ]
+  },
+  "cisco_c9300": {
+    "vendor": "cisco",
+    "model": "C9300-48P",
+    "detailType": "C9300-48P",
+    "version": "16.9.5",
+    "series": "C9300",
+    "evidence": [
+      "识别为 Cisco IOS/Nexus 平台"
+    ]
+  },
+  "cisco_c9500": {
+    "vendor": "cisco",
+    "model": "C9500-40X",
+    "detailType": "C9500-40X",
+    "version": "16.12.5",
+    "series": "C9500",
+    "evidence": [
+      "识别为 Cisco IOS/Nexus 平台"
+    ]
+  },
+  "cisco_isr4331": {
+    "vendor": "cisco",
+    "model": "ISR4331/K9",
+    "detailType": "ISR4331/K9",
+    "version": "16.09.04",
+    "series": "ISR4331",
+    "evidence": [
+      "识别为 Cisco IOS/Nexus 平台"
+    ]
+  },
+  "cisco_n9k": {
+    "vendor": "cisco",
+    "model": "N9K-C93180YC-EX",
+    "detailType": "N9K-C93180YC-EX",
+    "version": "9.3(8)",
+    "series": "N9K",
+    "evidence": [
+      "识别为 Cisco IOS/Nexus 平台"
+    ]
+  },
+  "h3c_msr36": {
+    "vendor": "h3c",
+    "model": "MSR36",
+    "detailType": "MSR36-40",
+    "version": "V7.1.064-R6749P02",
+    "series": "MSR36",
+    "evidence": [
+      "识别为 H3C Comware 平台"
+    ]
+  },
+  "h3c_s5130": {
+    "vendor": "h3c",
+    "model": "S5130",
+    "detailType": "S5130S-28P-EI",
+    "version": "V7.1.070-R6126P02",
+    "series": "S5100",
+    "evidence": [
+      "识别为 H3C Comware 平台"
     ]
   },
   "h3c_s6520": {
@@ -14,6 +75,16 @@
     "detailType": "S6520-30C-EI",
     "version": "V7.1.070-R6326P01",
     "series": "S6500",
+    "evidence": [
+      "识别为 H3C Comware 平台"
+    ]
+  },
+  "h3c_s6800": {
+    "vendor": "h3c",
+    "model": "S6800",
+    "detailType": "S6800-54QF",
+    "version": "V7.1.075-R3507P02",
+    "series": "S6800",
     "evidence": [
       "识别为 H3C Comware 平台"
     ]
@@ -78,6 +149,18 @@
       "命中 handle_else: CE6866-48S8CQ-EI"
     ]
   },
+  "huawei_ce8850": {
+    "vendor": "huawei",
+    "model": "CE8850",
+    "detailType": "CE8850-64CQ-EI",
+    "version": "V200R005C10SPC800",
+    "vrbd": "V200R005C10SPC800",
+    "series": "CE8800",
+    "handler": "HuaweiElseFallback",
+    "evidence": [
+      "命中 handle_else: CE8850-64CQ-EI"
+    ]
+  },
   "huawei_ne40e": {
     "vendor": "huawei",
     "model": "NE40E",
@@ -88,6 +171,18 @@
     "handler": "NE40E/CX600",
     "evidence": [
       "命中 _REG2HANDLER: NE40E/CX600 (pattern=(?mi)\\(*\\((NE40E\u002680E|NE40E|NE80E|CX600|NE20[E]|NE05E|CX66\\S*)(?:-[A-Za-z0-9]+)?\\)?\\s+(\\S+)\\))"
+    ]
+  },
+  "huawei_s5700": {
+    "vendor": "huawei",
+    "model": "S5700",
+    "detailType": "S5700-28C-EI",
+    "version": "V200R019C00SPC500",
+    "vrbd": "V200R019C00SPC500",
+    "series": "S5700",
+    "handler": "HuaweiElseFallback",
+    "evidence": [
+      "命中 handle_else: S5700-28C-EI"
     ]
   },
   "huawei_s5720": {
@@ -115,6 +210,18 @@
       "命中 handle_else: S5735-L24P4S-A1"
     ]
   },
+  "huawei_s6730": {
+    "vendor": "huawei",
+    "model": "S6730",
+    "detailType": "S6730-H24X6C",
+    "version": "V200R019C10SPC500",
+    "vrbd": "V200R019C10SPC500",
+    "series": "S6700",
+    "handler": "HuaweiElseFallback",
+    "evidence": [
+      "命中 handle_else: S6730-H24X6C"
+    ]
+  },
   "huawei_usg6650": {
     "vendor": "huawei",
     "model": "USG6650",
@@ -126,6 +233,24 @@
     "evidence": [
       "从安全特征提取款型: USG6650",
       "命中防火墙优先特征 (fw_priority)"
+    ]
+  },
+  "ruijie_s5750": {
+    "vendor": "ruijie",
+    "model": "",
+    "version": "11.4",
+    "series": "",
+    "evidence": [
+      "通用识别兜底: vendor=ruijie"
+    ]
+  },
+  "zte_zxr10": {
+    "vendor": "zte",
+    "model": "",
+    "version": "V5.00.10",
+    "series": "",
+    "evidence": [
+      "通用识别兜底: vendor=zte"
     ]
   }
 }

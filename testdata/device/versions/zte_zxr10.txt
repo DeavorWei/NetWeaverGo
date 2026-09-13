@@ -1,0 +1,3 @@
+ZTE ZXR10 Software, Version V5.00.10, Release 5960
+Copyright (c) 1998-2021 ZTE Corporation
+ZXR10 5960-56DT uptime is 10 weeks, 6 days, 3 hours, 40 minutes

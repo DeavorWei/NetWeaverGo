@@ -1,0 +1,4 @@
+Cisco Nexus Operating System (NX-OS) Software
+  system:    version 9.3(8)
+cisco N9K-C93180YC-EX (Intel) processor with 8388608K bytes of memory
+Kernel uptime is 18 day(s), 4 hour(s), 12 minute(s), 33 second(s)

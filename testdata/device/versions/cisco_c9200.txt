@@ -1,0 +1,4 @@
+Cisco IOS Software [Fuji], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 16.12.4, RELEASE SOFTWARE (fc2)
+Copyright (c) 1986-2020 by Cisco Systems, Inc.
+cisco C9200-24T (X86) processor with 838851K/6147K bytes of memory
+Switch uptime is 5 weeks, 2 days, 1 hour, 10 minutes

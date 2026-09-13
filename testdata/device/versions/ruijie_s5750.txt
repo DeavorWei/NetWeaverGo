@@ -1,0 +1,3 @@
+Ruijie Networks, Inc. RGOS Software, Version 11.4(1)B70P1
+Copyright (c) 2000-2021 by Ruijie Networks Co., Ltd.
+RG-S5750-28GT-L uptime is 4 weeks, 3 days, 2 hours, 5 minutes

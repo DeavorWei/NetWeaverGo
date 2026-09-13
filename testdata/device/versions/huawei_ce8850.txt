@@ -1,0 +1,4 @@
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 8.180 (CE8850 V200R005C10SPC800)
+Copyright (C) 2012-2021 HUAWEI TECH CO., LTD.
+HUAWEI CE8850-64CQ-EI uptime is 20 week, 2 day, 3 hour, 15 minutes

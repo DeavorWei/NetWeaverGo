@@ -2,4 +2,5 @@ Cisco IOS Software [Gibraltar], Catalyst L3 Switch Software (CAT9K_IOSXE), Versi
 Technical Support: http://www.cisco.com/techsupport
 Copyright (c) 1986-2020 by Cisco Systems, Inc.
 Compiled Tue 28-Apr-20 09:37 by mcpre
+cisco C9300-48P (X86) processor with 1547189K/6147K bytes of memory
 Switch uptime is 12 weeks, 3 days, 4 hours, 21 minutes

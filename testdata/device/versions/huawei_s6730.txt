@@ -1,0 +1,4 @@
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.170 (S6730 V200R019C10SPC500)
+Copyright (C) 2000-2021 HUAWEI TECH CO., LTD.
+HUAWEI S6730-H24X6C uptime is 8 week, 0 day, 5 hour, 30 minutes

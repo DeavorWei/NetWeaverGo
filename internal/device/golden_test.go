@@ -112,3 +112,33 @@ func TestIdentify_Golden_SeriesNormalized(t *testing.T) {
 		}
 	}
 }
+
+// TestIdentify_Golden_SampleCoverage 样本规模与关键款型提取的显式契约（与 golden 文件解耦）
+func TestIdentify_Golden_SampleCoverage(t *testing.T) {
+	got := collectDeviceSamples(t)
+
+	// 1. 样本规模：方案要求 20+ 款型
+	if len(got) < 20 {
+		t.Fatalf("设备样本应达到 20+ 款型，当前仅 %d", len(got))
+	}
+
+	// 2. Cisco 硬件款型可提取（样本必须包含 "cisco <model> (<arch>) processor" 行）
+	c9300, ok := got["cisco_c9300"]
+	if !ok {
+		t.Fatal("缺少 cisco_c9300 样本")
+	}
+	if c9300.Model == "" {
+		t.Error("cisco_c9300 应能提取硬件款型，请确认样本包含 cisco X (Y) processor 行")
+	}
+
+	// 3. 未注册厂商绝不误套内置（华为）画像
+	for _, name := range []string{"ruijie_s5750", "zte_zxr10"} {
+		id, ok := got[name]
+		if !ok {
+			t.Fatalf("缺少未注册厂商样本 %s", name)
+		}
+		if id.Series != "" {
+			t.Errorf("%s 不应命中任何内置系列画像，实际 series=%q", name, id.Series)
+		}
+	}
+}

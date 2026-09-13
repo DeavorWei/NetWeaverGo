@@ -1,0 +1,4 @@
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.170 (S5700 V200R019C00SPC500)
+Copyright (C) 2000-2020 HUAWEI TECH CO., LTD.
+HUAWEI S5700-28C-EI Routing Switch uptime is 52 week, 3 day, 1 hour, 8 minutes

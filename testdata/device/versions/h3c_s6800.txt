@@ -1,0 +1,3 @@
+H3C Comware Software, Version 7.1.075, Release 3507P02
+Copyright (c) 2004-2021 New H3C Technologies Co., Ltd. All rights reserved.
+H3C S6800-54QF uptime is 30 weeks, 5 days, 2 hours, 45 minutes
