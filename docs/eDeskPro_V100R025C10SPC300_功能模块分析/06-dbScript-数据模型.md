@@ -1,7 +1,19 @@
 # 06 · `dbScript/` 数据模型
 
-> 57 个 SQL（global/13、network/22、unicnetwork/12、unicollect/、log/），定义 eDesk Pro 全量数据库 schema。
+> 57 个 SQL（**实测**：`global/13` + `network/22` + `unicnetwork/12` + `unicollect/7` + `log/3`），定义 eDesk Pro 全量数据库 schema。
 > 注意：`network/1.2.2.sql` 是采集子系统的全量镜像，与 `unicnetwork/`、`unicollect/` 中表**高度重复**；移植时以 **unicnetwork/unicollect 为权威源**，避免重复建表。
+
+### 0.1 ⚠️ 重要补充：本交付包内共存在 **3 套独立数据库**
+
+| # | 数据库 | 位置 | 用途 |
+|---|---|---|---|
+| 1 | **巡检库**（本文档） | `dbScript/{global,network,unicnetwork,unicollect,log}`（57 SQL） | Easy-Health 巡检/采集 |
+| 2 | **在线分析库** | `services/IPOnlineService/webapps/ROOT/WEB-INF/classes/db/init/`（**134 SQL** = 1 init + 133 patch） | Easy-Diagnosis 业务比对/故障定界 |
+| 3 | **EMT 规则库** | `services/EMTMessageAnalyseClientService/{init/rules/basic/*.sql(43), webapps/ROOT/WEB-INF/classes/db/*.sql(71)}` | 配置审计规则（`TBL_AUDIT_RULE*`） |
+
+> **移植提示**：三套 schema 有语义重叠（都含"网元/任务"），NetWeaverGo 应**合并为单一模型**，切勿照搬三套。详见 `09` 篇 §6、`02` 篇 §5。
+>
+> **值得借鉴的一点**：`IPOnlineService/db/init/patch/` 的 **133 个按时间戳命名的增量补丁**（`20210927111600.sql` … `20260813000001.sql`）构成一条可审计的**数据库版本升级链**。NetWeaverGo 目前依赖 GORM `AutoMigrate`，缺少这种可回溯的迁移历史——建议引入带版本号的 migration 目录。
 
 ## 1. 全部表清单（按子目录）
 
@@ -74,4 +86,7 @@
 3. **采集项/模板**：`tbl_collect_item_entity` + `tbl_collect_template_entity` + `tbl_collect_template_item_entity` 是「检查项/模板」核心，直接对应 NetWeaverGo 的模板引擎。
 4. **结果模型**：`tbl_ne_analysis`(巡检结果 + 原始回显 CLOB) + `tbl_collect_result_entity`(回显包) 对应「检查结果/原始报文」存储。
 5. **规则/插件**：`TBL_COLLECT_PLUGIN_RULE` + `tbl_pipeline_entity` 是「解析规则/管线」载体，建议 NetWeaverGo 以 JSON/结构化表存储规则。
-6. **优先去重**：以 `unicnetwork/unicollect` 为权威源建表，忽略 `network/1.2.2.sql` 镜像。
+6. **优先去重**：以 `unicnetwork/unicollect` 为权威源建表，忽略 `network/1.2.2.sql` 镜像；**并把三套库（巡检/在线分析/EMT）合并为单一模型**（见 §0.1）。
+7. **IPDeviceCheck 的 8 张表**（由 `03` 篇 §8.3 的 MyBatis Mapper 反推）：`CheckTaskBatch`、`TaskBatchProgress`、`ParseTask`、`ParseDataPrepare`、`ProcessMessage`、`IfNameMapping`、`LldParseTemplate`、`OpticalCheckRule`。其中后两张说明**弱光阈值与 LLDP 规则是库表驱动**，对应 NetWeaverGo 应建的 `optical_check_rules` / `lld_parse_templates` 表。
+8. **数据库版本化迁移**：参考 `IPOnlineService/db/init/patch/`（133 个时间戳补丁），为 NetWeaverGo 引入可审计的 migration 目录（当前仅 GORM AutoMigrate）。
+9. **反范式合并建议**：`tbl_ne_common` 与 `tbl_ne_entity` 合并为 `device_assets`（NetWeaverGo 已如此），但**需补上本包独有的 `esn`、`patch_version`、`base_protocol_*`（多协议并存）字段**——尤其是 `base_protocol_*`，NetWeaverGo 目前每设备只存一套 SSH/Telnet 凭据，而 eDesk 支持**同一网元并存 SSH/Telnet/Serial/MML/SNMP/IPMI/HTTPS/VMM 多协议**。

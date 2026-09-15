@@ -67,3 +67,35 @@ apps/<AppName>/
 1. **功能边界可直接映射**：5 个 APP = NetWeaverGo 的 5 个一级子系统（巡检、故障、变更、光纤、工作台）。
 2. **菜单即能力目录**：每个 APP 的 `menuCategories` 已是「资源管理 / 任务 / 模板 / 分析」的标准四段式，NetWeaverGo 可沿用。
 3. **FiberOptics-Check / Easy-Diagnosis** 是差异化专项，建议作为独立功能模块立项，底层复用巡检采集框架 + `IPDeviceCheckService` 专项算法。
+
+---
+
+## 6. ✅ APP ↔ 后端服务映射（第二轮实测确证）
+
+`§1`/`§2` 的映射原为**推测**。本轮通过各服务 `app_define.json` 的 `menuIds` / `description` 得到**确证**：
+
+| APP | 承载服务 | 证据（`app_define.json`） |
+|---|---|---|
+| **Easy-Health**（数据采集/巡检） | `NMOTPlatformService`、`NMOTBusinessService`、`NMOTCollectAppService`、**`EMTMessageAnalyseClientService`** | `NMOT*`：`menuIds={resourceManagement, templateManagement}`、`{collectTask, aIHardware}`<br>`EMT`：`description="Inspection"`，`menuIds={Inspection: /PMIAnalysis/index.html#/pmiAnalysis}` |
+| **Easy-Diagnosis**（故障诊断） | **`IPOnlineService`** ★ | `callbacks.networkoccupation="/easydiagnosis/external/v1/getExecutingTaskCounts"`；<br>`menuIds={businessCompare, starWay, ipStorm, faultManage, taskManage}` |
+| **Easy-RFC**（网络变更/高竹） | **`uupgrade`** | `menuIds={upgrade: /uUpgrade/index.html#/upgrade, gaozhu: /uUpgrade/gaozhu.html#/gaozhu, auxiliaryTools}` |
+| **FiberOptics-Check**（错纤弱光排查） | **`IPDeviceCheckService`** + `NMOT*` | `description="continuous relocation inspection app"`，`menuIds={commissioning: /ipdevicecheckwebsite/index.html#/}` |
+| **Platform-App**（首页） | 平台底座（`NmotLicenseService` 等） | 无 `menuIds` |
+| （横切） | `NetCareInsideService` | 无 `menuIds`（`type: microService`，后端↔客户端 REST 控制面） |
+
+> **两条重要推论**：
+> 1. **Easy-Diagnosis 的全部差异化能力集中在 `IPOnlineService`**（此前 `01`~`08` 均未覆盖！）——其业务比对 / 告警规则 / 端口角色 / 智能 Ping 资产见新增的 **`09` 篇**。
+> 2. **`EMTMessageAnalyseClientService` 服务的不是"独立审计产品"，而是 Easy-Health 的「巡检分析(Inspection)」菜单**——即审计规则库的输出直接进入巡检报告，与 `product/Script` 的检查项**同级并列**。这解释了为何两套脚本体系并存：`product/Script` 负责"发命令取数 + 简单判定"，EMT 负责"配置合规深度审计"。
+
+### 6.1 `apps/Platform-App/` 的嵌套结构（实测）
+
+```
+apps/Platform-App/
+├── app.json
+└── Platform-App/                ← 同名嵌套目录
+    ├── config/
+    ├── process.json
+    └── start.bat
+```
+
+> 其余 4 个 APP 均为扁平结构（`app.json` + 4 properties + 2~3 json + 2 svg + 1~3 bat + 1 yml，实测各 10~12 文件）；只有 `Platform-App` 多一层同名目录与独立 `process.json`（进程编排定义）——因为它负责**拉起其他 APP**。

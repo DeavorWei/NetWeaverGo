@@ -11,6 +11,38 @@
 
 **推论**：NetWeaverGo 若要做实机协议连接，需另寻桌面客户端二进制（或抓其与后端 51943 的 REST 报文）做逆向；本 jar 唯一可 1:1 映射的是「后端↔客户端」的 REST 契约（见 §2）。
 
+### 1.1 ⚠️⚠️ 第二轮重大修正：协议层**就在本包内**（`lib/nmotprotocolcbb-*`）
+
+第一轮的结论「真正的 SSH/Telnet/SNMP 引擎不在本交付包内」**不成立**。第二轮把 `lib/*.jar` 推至 Kali 用 cfr 反编译（共 **1538 个 .java**）后确认：`lib/` 下存在完整的 **`nmotprotocolcbb-*` 协议层实现**（10 个 jar / **260 个类**）：
+
+| jar | 类数 | 关键类 | 底层库 |
+|---|---|---|---|
+| `nmotprotocolcbb-ssh` | 5 | `SSHProtocol`(implements `INetProtocol`)、`SSHReceiver`(Runnable)、`SSHProtocolUtil`、`SSHVersionUtils`、`SSHReceiverErrorHandle` | **Apache MINA SSHD 2.18.0**（`org.apache.sshd.client.SshClient` / `ChannelShell` / `PtyChannelConfiguration`） |
+| `nmotprotocolcbb-telnet` | 2 | `TelnetProtocol`、`MyTelnet` | 自研 |
+| `nmotprotocolcbb-snmp` | 17 | `SnmpProtocol`、`SnmpSession`, `SnmpSessionFactory`、`SnmpParam`、`SnmpConfig`、`SnmpCollectModeEnum`、`util/*` | **snmp4j 2.8.18** |
+| `nmotprotocolcbb-cli` | 9 | `CliSession`、`CliReceiver`、`CliFtpReceiver`、`MsgCheckUtils`、`ProtocolFactory`、`SpecialCharactersFilterProxy` | 自研 |
+| `nmotprotocolcbb-msgfilter` | **116** | `TerminalInterpreter`、`Screen`、`TerminalBuffer`、`TerminalXTerm`、`interpret handler/*`（AnsiPrinter/Bell/Bs/Cbt/Tab/Tbc/TrackMouseh/Vmto/Vmot2/XTermSeq）、`dpmodeshandler/*`、`sgrmodeshandler/*` | 自研**终端仿真器** |
+| `nmotprotocolcbb-model` | 47 | `ConnectionArgs`、`CmdArgs`、`ProtocolCfg`、`ProtocolType`、`SSHAuthMode`、`RuleProtocolRegex`、`VendorFilterPattern`、`DeviceFilterReceiveKeyModel`、`VendorCharsetCmd`、`strategy/*` | 自研策略引擎 |
+| `nmotprotocolcbb-multihop` | 34 | 跳板/多跳代理 | 自研 |
+| `nmotprotocolcbb-mml` | 21 | MML 会话 + 证书认证（`cert/auth/internal/*`） | 自研 |
+| `nmotprotocolcbb-xftp` | 7 | `FTPProtocol`、`SFTPProtocol`、`SFTPClientHelper` | 自研 |
+| `nmotprotocolcbb-serialport` | 2 | `SerialProtocol`、`ReceivedDataListener` | `jSerialComm` |
+
+**实测细节（对移植有直接价值）**：
+
+- `SSHReceiver` 默认字符集 **`gbk`**，单次回显上限 **`MAX_LENGTH = 0xA00000`（10MB）**；
+- SSH 支持 **PTY**（`PtyChannelConfiguration`）、**主机密钥指纹校验**（`KeyUtils` / `BuiltinDigests`）、**SOCKS5 代理**（`model/util/Socks5Utils`）；
+- 认证模式 `SSHAuthMode`（与 §3 的 `USER/KEY/KEY_PWD` 对应）、错误关键字列表（`"Permission denied"`、`"auth fail"`、`"Username or password invalid"` 等）；
+- `model/strategy/` 提供 `SimplePattern / ComplexPattern / AndOption / OROption / RegStrategy / PatternFactory / RuleParser / XmlHelper`——一套**从 XML 驱动的提示符/回显正则策略引擎**。
+
+**修正后的结论**：
+
+> 本包内存在两条与设备通信的路径：
+> 1. **CBB 协议层**（`nmotprotocolcbb-*`）——后端**直接**建连设备，真实实现，**可直接对照移植到 Go**；
+> 2. **客户端 REST 通道**（`netcareinside-driver` / `netcareinside-sdk`，51943）——用于托管 eDesk 桌面客户端的会话。
+>
+> 因此 NetWeaverGo **不需要**逆向桌面客户端二进制，只需参考 CBB 协议层即可。详见新增的 `10` 篇 §3。
+
 ## 2. `netcareinside-driver` 真实身份（后端↔客户端 REST，端口 51943）
 
 - 统一信封 **`bo/RequestData`**：`url`、`header`(JSONObject)、`type`("GET"/"POST")、`requestConfig`(Apache HttpClient5 `RequestConfig`)、`param`(JSONObject body)、`isCompatibleOldVersion`。
@@ -67,17 +99,24 @@
 | 端口 | 真实含义（反编译修正后） |
 |---|---|
 | **51943** | `netcareinside-driver` 后端 ↔ **桌面客户端** REST 控制面 |
-| **38887** | `SnmpCallback` **UDP SNMP 回调端口**（CBB `nmotbusinesscbb`，未反编译） |
+| **38887** | `SnmpCallback` **UDP SNMP 回调端口**（CBB `nmotbusinesscbb`-*，**第二轮已反编译**，见 `10` 篇 §4） |
 | 36888 / 38888 | Electron 前端（nmotplatformwebsite / nmotcollectappwebsite） |
 | REST `/rest/nmot/*` | 各微服务（platform/ir/inspect/licenseservice/filetransfer/unicollect*/netcareinsideservice…） |
 
 ## 9. 移植要点（NetWeaverGo）
 
-1. **协议层**：无法从本包取得（在桌面客户端二进制）。NetWeaverGo 应自建 SSH/Telnet/Netconf/SNMP 连接器；可**复用 `Build*` 系列的参数模型**（`ProtocolSSH` 字段：authMode/keyPath(AES)/fingerprint/superPassword/proxyId）做 Go struct。
+1. **协议层**：~~无法从本包取得~~ → **已取得**（`lib/nmotprotocolcbb-*`，见 §1.1 与 `10` 篇 §3）。NetWeaverGo 应自建 SSH/Telnet/SNMP 连接器，并**对照移植 CBB 的实现细节**（PTY、`gbk` 默认字符集、10MB 回显上限、SOCKS5、指纹校验、错误关键字表），同时**复用 `Build*` 系列的参数模型**（`ProtocolSSH` 字段：authMode/keyPath(AES)/fingerprint/superPassword/proxyId）做 Go struct。
 2. **脚本执行**：保留「外部脚本引擎」语义——Jython 进程或子进程调 Python；`SnmpCallback` 的 UDP 38887 回调可改为 Go 内部 channel/回调；EVA 分布式脚本 JSON（`eva.cliArray(view,cmd)`）协议可直接复刻为 Go 的 agent 指令格式。
 3. **调度/并发**：`inspect_collector` 池（300/300/200）+ 内存自适应背压 → Go `ants`/带信号量 worker pool + `runtime.MemStats` 自适应。
 4. **Agent 推送**：`DistributeScriptMgr`+`XftpActionMgr` 对应「下发脚本到设备/采集器」；`CrtService` 4A 集成按需。
 5. **NetCare 枚举**直接转为 Go 常量包。
 6. **后端↔客户端契约**：若 NetWeaverGo 定位为「替代后端」，可复用 `RequestData`/`HttpUtil` 契约与 `X-HW-ID/X-HW-APPKEY` 鉴权对桌面客户端发 REST（前提：客户端二进制可被对接）。
 
-> 未反编译部分：`nmotbusinesscbb`（CBB，含 `ProtocolSSH`/`EnumProtocol`/`SnmpCallback`/Python 引擎真正实现）与桌面客户端二进制。如需继续深挖协议层，需把 `nmotbusinesscbb` jar 或桌面客户端加入反编译范围。
+> **第二轮进展（原"未反编译部分"已补齐）**：本轮已把 `lib/` 下的 `nmotprotocolcbb-*`(10)、`nmotbusinesscbb-*`(7)、`nmotdcscriptcbb-service`、`netcareinside-sdk`、`nicprovidersdk-*`、`nicproviderxdeskdriver-driver-*`、`unicollectutilcbb` 全部反编译（**1538 个 .java**），产物在 Kali `/data/src/cbb/`。要点：
+>
+> - **协议层**：`nmotprotocolcbb-ssh`（Apache MINA SSHD）等 10 个 jar，见 §1.1 与 `10` 篇 §3；
+> - **脚本/任务引擎**：`nmotbusinesscbb-{collect(40),collect-execute(20),commonmodel(100),interpreter(6),scriptmgr(100),taskmgr(54),taskschedule(36)}`，其中 `scriptmgr/collectitem/{CollectItemSet,Vendor,ProductVersion,ScriptItem,Command,Param,PreCollectItem,ThresholdManagement,UnsupportProductVersion}` 正是 `product/CollectItem/*.xml` 的 **Java 类模型**，见 `10` 篇 §4；
+> - **分布式脚本**：`nmotdcscriptcbb-service`（247 类）；**采集公共工具**：`unicollectutilcbb`（337 类）；
+> - **客户端 SDK**：`netcareinside-sdk`（139 类，含 `HighRisk*`/`WhiteList*`/`TrustList*` 高危命令拦截模型），见 `10` 篇 §5。
+>
+> 仍未反编译的只有 **eDesk 桌面客户端二进制**（不在本包内），但既然 CBB 协议层已具备，其必要性大幅下降。
