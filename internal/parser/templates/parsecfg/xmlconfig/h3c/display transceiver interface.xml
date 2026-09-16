@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+display transceiver interface
+Ten-GigabitEthernet0/1/1 transceiver information:
+  Transceiver Type              : 10G_BASE_SR_SFP
+  Connector Type                : LC
+  Wavelength(nm)                : 850
+  Transfer Distance(m)          : 80(OM2),20(OM1),300(OM3)
+  Digital Diagnostic Monitoring : YES
+  Vendor Name                   : H3C
+  Ordering Name                 : SFP-XG-SX-MM850-D
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <Regex>^ *\S+ +transceiver *information</Regex>
+        <ParseNode name="ifTransBaseNode">
+            <ConfigParsePolicy>
+                <Field name="ifName" primary="true">
+                    <Regex>
+                        <![CDATA[
+                        ^ *(?<ifName>\S+) +transceiver *information
+                        ]]>
+                    </Regex>
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                    methodName="convertIfName"/>
+                    <Assign assignMap="vendor:H3C" filterType="NOT_NULL" order="-2"/>
+                </Field>
+                <Field name="transceiverType" primary="true">
+                    <Regex>
+                        <![CDATA[
+                            ^ {0,255}Transceiver {0,255}Type {0,255}: {0,255}(?<transceiverType>.{1,1024})
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="waveLength">
+                    <Regex>
+                        <![CDATA[
+                            ^ {0,255}Wavelength {0,255}\( {0,255}nm {0,255}\) {0,255}: {0,255}(?<waveLength>.{1,100})
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="transDistanceUnit,transDistanceInfo">
+                    <Regex>
+                        <![CDATA[
+                            ^ {0,255}Transfer {0,255}Distance {0,255}\( {0,255}(?<transDistanceUnit>k?m) {0,255}\) {0,255}: {0,255}(?<transDistanceInfo>((?!:)[ \r\n\S])+)
+                        ]]>
+                    </Regex>
+                    <ToUpper name="transDistanceUnit,transDistanceInfo"/>
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.InterfaceParseUtil"
+                                    methodName="dealTransferDistance"/>
+                </Field>
+            </ConfigParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

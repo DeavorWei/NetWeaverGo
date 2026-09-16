@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show mac
+ Total MAC address : 2406
+ Max MAC num       : 2468
+ Max MAC num time  : 2024-01-29 17:20:40
+ MAC start time    : 2023-12-31 16:52:34
+
+  MAC_Address    vid  vpn        port  per stc toS wtn srF dsF Frm     Time
+xxxx.xxxx.xxxx     1    0      gei_1/24 0   0   0   0   0   0   0     0:00:00:16
+xxxx.xxxx.xxxx     5    0      gei_1/24 0   0   0   0   0   0   0     0:00:00:17
+
+-->
+<CommandParseConfig>
+    <SegmentParse childMutex="true">
+        <ParseNode name="macNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *(?<mac>[a-f0-9.:-]+) +(?<vlanId>\d+|-) +\S+ +(?<ifName>\S+)
+                    ]]>
+                </Regex>
+                <Field name="mac,vlanId,ifName"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

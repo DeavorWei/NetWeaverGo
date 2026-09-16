@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+<HUAWEI> display mac-address
+Flags: * - Backup
+       # - forwarding logical interface, operations cannot be performed based
+           on the interface.
+BD   : bridge-domain   Age : dynamic MAC learned time in seconds
+MAC Address    VLAN/VSI/BD   Learned-From        Type                Age
+xxxx-xxxx-xxxx 100/-/-       10GE1/0/1           dynamic      4294367295
+xxxx-xxxx-xxxx 200/-/-       10GE1/0/2           static                -
+
+
+<HUAWEI> display mac-address
+MAC Address          VLAN/VSI/BD                 Learned-From          Type
+xxxx-xxxx-xxxx       100/-/-                     GE0/0/1             dynamic
+xxxx-xxxx-xxxx       200/-/-                     GE0/0/2             static
+
+
+MAC Address    VLAN          Learned-From        Type                Age
+xxxx-xxxx-xxxx 1             100GE1/1/1          dynamic                430
+xxxx-xxxx-xxxx 1             100GE1/2/5          dynamic                397
+
+-->
+<CommandParseConfig>
+    <SegmentParse childMutex="true">
+        <ParseNode name="macNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *(?<mac>[a-f0-9.:-]+) +(?:(?<vlanId>\d+)|-)/\S{1,255}/\S{1,255} +(?<ifName>\S+) +(?<type>\S+)( +(\d+|-))?[ \r\n]*$
+                    ]]>
+                </Regex>
+                <Field name="mac,vlanId,ifName,type"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+        <ParseNode name="macNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *(?<mac>[a-f0-9.:-]+) +(?<vlanId>\d+) +(?<ifName>\S+) +(?<type>\S+)( +(\d+|-))?[ \r\n]*$
+                    ]]>
+                </Regex>
+                <Field name="mac,vlanId,ifName,type"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

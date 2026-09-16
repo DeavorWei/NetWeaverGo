@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE CommonParseItem SYSTEM "commandparse.dtd">
+<CommonParseItem>
+    <VendorCommon vendor="HUAWEI">
+        <CommandParse cmd="display interface" path="parsecfg/xmlconfig/huawei/display interface.xml"/>
+        <CommandParse cmd="display interface brief" path="parsecfg/xmlconfig/huawei/display interface brief.xml"/>
+        <CommandParse cmd="display interface transceiver verbose@@display transceiver verbose"
+                      path="parsecfg/xmlconfig/huawei/display interface transceiver verbose.xml@@parsecfg/xmlconfig/huawei/display transceiver verbose.xml"
+                      isResultMutex="true"/>
+        <CommandParse cmd="display optical-module interface \S+@@display transceiver diagnosis interface"
+                      isRegexCmd="true" isResultMutex="true"
+                      path="parsecfg/xmlconfig/huawei/display optical-module interface.xml@@parsecfg/xmlconfig/huawei/display transceiver diagnosis interface.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="ZTE">
+        <CommandParse cmd="show interface" path="parsecfg/xmlconfig/zte/show interface.xml"/>
+        <CommandParse cmd="show interface brief" path="parsecfg/xmlconfig/zte/show interface brief.xml"/>
+        <CommandParse cmd="show opticalinfo \S+@@show optical-inform brief shelf 0" isRegexCmd="true"
+                      isResultMutex="true"
+                      path="parsecfg/xmlconfig/zte/show opticalinfo.xml@@parsecfg/xmlconfig/zte/show optical-inform brief shelf 0.xml"/>
+        <CommandParse cmd="show optical-inform shelf 0" path="parsecfg/xmlconfig/zte/show optical-inform shelf 0.xml"/>
+        <CommandParse cmd="show optical-inform details rx-power shelf 0"
+                      path="parsecfg/xmlconfig/zte/show optical-inform details rx-power shelf 0.xml"/>
+        <CommandParse cmd="show optical-inform details tx-power shelf 0"
+                      path="parsecfg/xmlconfig/zte/show optical-inform details tx-power shelf 0.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="H3C">
+        <CommandParse cmd="display interface" path="parsecfg/xmlconfig/h3c/display interface.xml"/>
+        <CommandParse cmd="display transceiver diagnosis interface"
+                      path="parsecfg/xmlconfig/h3c/display transceiver diagnosis interface.xml"/>
+        <CommandParse cmd="display transceiver interface"
+                      path="parsecfg/xmlconfig/h3c/display transceiver interface.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="RUIJIE">
+        <CommandParse cmd="show interfaces" path="parsecfg/xmlconfig/ruijie/show interfaces.xml"/>
+        <CommandParse cmd="show interfaces brief" path="parsecfg/xmlconfig/ruijie/show interfaces brief.xml"/>
+        <CommandParse cmd="show interfaces transceiver"
+                      path="parsecfg/xmlconfig/ruijie/show interfaces transceiver.xml"/>
+    </VendorCommon>
+</CommonParseItem>

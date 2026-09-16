@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+display arp all
+   Type: S-Static    D-Dynamic    O-Openflow   R-Rule   I-Invalid
+IP address      MAC address    SVLAN/VSI  Interface/Link ID        Aging Type
+xx.xx.xx.xx     xxxx-xxxx-xxxx xx         MGE0/0/2                 20    D
+xx.xx.xx.xx     xxxx-xxxx-xxxx xx         MGE0/0/2                 9     D
+
+display arp all
+  Type: S-Static   D-Dynamic   O-Openflow   R-Rule   I-Invalid
+IP address      MAC address    VLAN/VSI name Interface                Aging Type
+xx.xx.xx.xx     xxxx-xxxx-xxxx 1             GE1/0/1                  xx    S
+xx.xx.xx.xx     xxxx-xxxx-xxxx 12            GE1/0/2                  960   D
+
+-->
+<CommandParseConfig>
+    <SegmentParse childMutex="true">
+        <ParseNode name="arpNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *(?<entryIpAddr>(\d{0,3}\.){3}\d{0,3}) +(?<entryMac>\S+) +((?<vlanId>\d+)|N\/A|-+) +
+                    (?<entryOutIfName>\S+) +((?<entryExpireTime>\d+)|N\/A|DIS|-+) +(?<entryType>\S+)[ \r\n]*$
+                    ]]>
+                </Regex>
+                <Field name="entryIpAddr,entryMac,entryExpireTime,entryType,vlanId,entryOutIfName"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

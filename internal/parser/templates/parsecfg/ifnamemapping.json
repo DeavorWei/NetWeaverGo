@@ -1,0 +1,277 @@
+[
+  {
+    "mappingIfName": "100GE",
+    "originalIfName": "100G",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "10GE",
+    "originalIfName": "10G",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "200GE",
+    "originalIfName": "200G",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "20GE",
+    "originalIfName": "20G",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "25GE",
+    "originalIfName": "25G",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Twenty-FiveGigE",
+    "originalIfName": "25GE",
+    "vendor": "H3C"
+  },
+  {
+    "mappingIfName": "400GE",
+    "originalIfName": "400G",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "40GE",
+    "originalIfName": "40G",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "50GE",
+    "originalIfName": "50G",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "AggregatePort",
+    "originalIfName": "AG",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "smartgroup",
+    "originalIfName": "AGG",
+    "vendor": "ZTE"
+  },
+  {
+    "mappingIfName": "Bridge-Aggregation",
+    "originalIfName": "BAGG",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Bundle-Ether",
+    "originalIfName": "BE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Control Plane",
+    "originalIfName": "CPP",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "EOBC",
+    "originalIfName": "EO",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Ethernet",
+    "originalIfName": "ET",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Ethernet",
+    "originalIfName": "ETH",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "FastEthernet",
+    "originalIfName": "FA",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "FastEthernet",
+    "originalIfName": "FE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "FortyGigabitEthernet",
+    "originalIfName": "FGE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "FortyGigE",
+    "originalIfName": "FGE",
+    "vendor": "H3C"
+  },
+  {
+    "mappingIfName": "FortyGigabitEthernet",
+    "originalIfName": "FO",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "GigabitEthernet",
+    "originalIfName": "G",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "GigabitEthernet",
+    "originalIfName": "GE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "GigabitEthernet",
+    "originalIfName": "GEI_",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "GigabitEthernet",
+    "originalIfName": "GI",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "GigabitEthernet",
+    "originalIfName": "GIG",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "HundredGigE",
+    "originalIfName": "HGE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "HundredGigE",
+    "originalIfName": "HU",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "HundredGigabitEthernet",
+    "originalIfName": "HU",
+    "vendor": "RUIJIE"
+  },
+  {
+    "mappingIfName": "HundredGigabitEthernet",
+    "originalIfName": "HUNDREDGIGE",
+    "vendor": "RUIJIE"
+  },
+  {
+    "mappingIfName": "InLoopBack",
+    "originalIfName": "INLOOP",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Loopback",
+    "originalIfName": "LO",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "LoopBack",
+    "originalIfName": "LOOP",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "M-Ethernet",
+    "originalIfName": "M-E",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "M-GigabitEthernet",
+    "originalIfName": "M-GE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Mgmt",
+    "originalIfName": "MG",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "M-GigabitEthernet",
+    "originalIfName": "MGE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "NULL",
+    "originalIfName": "NU",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Port-channel",
+    "originalIfName": "PO",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Route-Aggregation",
+    "originalIfName": "RAGG",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Serial",
+    "originalIfName": "SE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "TenGigabitEthernet",
+    "originalIfName": "TE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "TenGigabitEthernet",
+    "originalIfName": "TEN",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Ten-GigabitEthernet",
+    "originalIfName": "TEN-GIGABITETHERNET-",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "TFGigabitEthernet",
+    "originalIfName": "TF",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Ten-GigabitEthernet",
+    "originalIfName": "TGE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Tunnel",
+    "originalIfName": "TU",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Tunnel",
+    "originalIfName": "TUN",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Virtual-Ethernet",
+    "originalIfName": "VE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Vlan",
+    "originalIfName": "VL",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "VLAN",
+    "originalIfName": "VL",
+    "vendor": "RUIJIE"
+  },
+  {
+    "mappingIfName": "Twenty-FiveGigE",
+    "originalIfName": "WGE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "XGigabitEthernet",
+    "originalIfName": "XGE",
+    "vendor": "OTHER"
+  },
+  {
+    "mappingIfName": "Ten-GigabitEthernet",
+    "originalIfName": "XGE",
+    "vendor": "H3C"
+  }
+]

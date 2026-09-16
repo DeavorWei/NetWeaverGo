@@ -28,6 +28,7 @@ type DeviceAsset struct {
 	Version      string    `json:"version"`                     // 软件版本
 	PatchVersion string    `json:"patchVersion"`                // 补丁版本
 	ESN          string    `json:"esn" gorm:"column:esn"`       // 设备序列号 (ESN)
+	FormFactor   string    `json:"formFactor,omitempty" gorm:"size:32"` // 形态 (hardware | software)
 	LastSeen     time.Time `json:"lastSeen"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
@@ -54,6 +55,7 @@ type DeviceAssetListItem struct {
 	Version      string    `json:"version"`
 	PatchVersion string    `json:"patchVersion"`
 	ESN          string    `json:"esn"`
+	FormFactor   string    `json:"formFactor,omitempty"`
 	LastSeen     time.Time `json:"lastSeen"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`

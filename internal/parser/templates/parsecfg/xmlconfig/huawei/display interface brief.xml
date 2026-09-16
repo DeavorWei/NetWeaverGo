@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+[~CSM-ASW-CE9860-200-diagnose]display interface brief
+PHY: Physical
+*down: administratively down
+^down: standby
+(l): loopback
+(s): spoofing
+(b): BFD down
+(e): ETHOAM down
+(d): Dampening Suppressed
+(p): port alarm down
+(dl): DLDP down
+(c): CFM down
+(sd): STP instance discarding
+(ed): error down
+InUti/OutUti: input utility rate/output utility rate
+Interface                  PHY      Protocol  InUti OutUti   inErrors  outErrors
+400GE1/1/1:1(200GE)        up       up        0.01%  0.01%          0          0
+400GE1/1/1:2(200GE)        up       up        0.01%  0.01%          0          0
+400GE1/1/2:1(200GE)        up       up        0.01%  0.01%          0          0
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="neInterfaceNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                        ^ *(?<interfaceName>\S{1,100} ?[\d/]{1,100}(:\d{1,10})?)(?:\(\S{1,100}\))? {1,100}(?<ifPhyStatus>(?:\^|\*)?down|up)(\(\w\))? {1,100}
+                        (?<ifOperStatus>down|up)?(\(\w\))? {1,100}((?<inUti>\d{1,10}(\.\d{1,10})?%)|-+) +((?<outUti>\d+(\.\d+)?%)|-+) +((?<inErrors>\d+)|-+) +((?<outErrors>\d+)|-+)
+                    ]]>
+                </Regex>
+                <Field name="interfaceName,inUti,outUti,inErrors,outErrors"/>
+                <Field name="ifPhyStatus">
+                    <ToUpper/>
+                    <ValueMapping srcValue="*DOWN,^DOWN" dstValue="Administratively DOWN|Administratively DOWN,UP|DOWN"/>
+                    <SplitField delimiter="|" dstFields="ifAdminStatus,ifPhyStatus"/>
+                </Field>
+                <Field name="ifOperStatus">
+                    <ToUpper/>
+                    <ValueMapping srcValue="*DOWN" dstValue="DOWN"/>
+                </Field>
+            </TableLineParsePolicy>
+            <DefaultValue name="ifAdminStatus" value="UP"/>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

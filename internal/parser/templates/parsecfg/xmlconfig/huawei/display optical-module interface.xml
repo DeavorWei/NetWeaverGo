@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+[~CSM-ASW-CE9860-200-diagnose]display optical-module interface 400G1/1/1:1
+400GE1/1/1:1 optical-module diagnostic information:
+CMIS version: 4.0
+================================================================================
+State-flag Diagnostic Monitoring:
+Items           Status
+TxFault Flag    Normal   | Normal   | Normal   | Normal
+RxLOS Flag      Normal   | Normal   | Normal   | Normal
+TxLOS Flag      Normal   | Normal   | Normal   | Normal
+TxLOL Flag      Normal   | Normal   | Normal   | Normal
+RxLOL Flag      Normal   | Normal   | Normal   | Normal
+Datapath State  Active   | Active   | Active   | Active
+Module State    Ready
+================================================================================
+Digital Diagnostic Monitoring:
+Items              Value      HighAlarm  HighWarn   LowAlarm   LowWarn    Status
+LaserTemp(C)       -          85.00      75.00      -10.00     0.00       -
+TecCurrent(%)      -          -          -          -          -          -
+Temperature(C)     38.75      80.00      70.00      -10.00     0.00       Normal
+Voltage(V)         3.34       3.63       3.46       2.97       3.13       Normal
+Bias Lane0(mA)     7.14       9.50       8.50       4.00       5.00       Normal
+Bias Lane1(mA)     7.12       9.50       8.50       4.00       5.00       Normal
+Bias Lane2(mA)     7.14       9.50       8.50       4.00       5.00       Normal
+Bias Lane3(mA)     7.14       9.50       8.50       4.00       5.00       Normal
+RxPower Lane0(dBm) 1.42       7.00       5.50       -10.00     -7.00      Normal
+RxPower Lane1(dBm) 1.30       7.00       5.50       -10.00     -7.00      Normal
+RxPower Lane2(dBm) 0.80       7.00       5.50       -10.00     -7.00      Normal
+RxPower Lane3(dBm) 1.27       7.00       5.50       -10.00     -7.00      Normal
+TxPower Lane0(dBm) 0.66       7.00       5.50       -9.50      -6.50      Normal
+TxPower Lane1(dBm) 0.64       7.00       5.50       -9.50      -6.50      Normal
+TxPower Lane2(dBm) 0.65       7.00       5.50       -9.50      -6.50      Normal
+TxPower Lane3(dBm) 0.65       7.00       5.50       -9.50      -6.50      Normal
+MediaSNR Lane0(dB) 24.33      -          -          -          -          -
+MediaSNR Lane1(dB) 24.01      -          -          -          -          -
+MediaSNR Lane2(dB) 24.66      -          -          -          -          -
+MediaSNR Lane3(dB) 23.66      -          -          -          -          -
+HostSNR Lane0(dB)  25.07      -          -          -          -          -
+HostSNR Lane1(dB)  24.59      -          -          -          -          -
+HostSNR Lane2(dB)  24.84      -          -          -          -          -
+HostSNR Lane3(dB)  23.43      -          -          -          -          -
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="ifOpticalNode">
+            <ConfigParsePolicy>
+                <Field name="ifName" primary="true">
+                    <Regex>
+                        <![CDATA[
+                        ^ *(?<ifName>\S+) +optical-module *diagnostic *information *:
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="dataPathState">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Datapath *State {1,255}(?<dataPathState>.*)
+                        ]]>
+                    </Regex>
+                    <ReplaceAll regex=" " replacement=""/>
+                </Field>
+                <Field name="moduleState">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Module *State +(?<moduleState>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="laserTemp">
+                    <Regex>
+                        <![CDATA[
+                            ^ *LaserTemp\(C\) +(?<laserTemp>[\d.-]+) +
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="tecCurrent">
+                    <Regex>
+                        <![CDATA[
+                            ^ *TecCurrent\((%|mA)\) +(?<tecCurrent>[\d.-]+) +
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+            <SegmentParse childMutex="true">
+                <Regex>\n</Regex>
+                <ParseNode name="mediaSnrNode">
+                    <ConfigParsePolicy>
+                        <Field name="lane,value">
+                            <Regex>
+                                <![CDATA[
+                                ^ *MediaSNR( *Lane(?<lane>\d+))? *\(dB\) *(?<value>[\d.-]+)
+                                ]]>
+                            </Regex>
+                        </Field>
+                    </ConfigParsePolicy>
+                </ParseNode>
+                <ParseNode name="hostSnrNode">
+                    <ConfigParsePolicy>
+                        <Field name="lane,value">
+                            <Regex>
+                                <![CDATA[
+                                ^ *HostSNR( *Lane(?<lane>\d+))? *\(dB\) *(?<value>[\d.-]+)
+                                ]]>
+                            </Regex>
+                        </Field>
+                    </ConfigParsePolicy>
+                </ParseNode>
+            </SegmentParse>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

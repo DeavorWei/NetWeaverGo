@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+<HUAWEI> display transceiver diagnosis interface
+Port 40GE0/0/1 transceiver diagnostic information:
+Item                   Value   HighAlarm    HighWarn    LowAlarm     LowWarn    Status
+TxPower lane0(dBm)      0.23        7.00        4.00       -7.40       -4.40    Normal
+TxPower lane1(dBm)     -1.56        7.00        4.00       -7.40       -4.40    Normal
+RxPower lane0(dBm)      0.06        7.00        4.00      -11.20       -8.20    Normal
+RxPower lane1(dBm)     -1.42        7.00        4.00      -11.20       -8.20    Normal
+Current lane0(mA)       7.03       12.00       10.00        3.00        5.00    Normal
+Current lane1(mA)       6.04       12.00       10.00        3.00        5.00    Normal
+Temperature(C)         47.97       80.00       70.00      -10.00        0.00    Normal
+Voltage(V)              3.35        3.63        3.46        2.97        3.13    Normal
+LaserTemp(C)               -           -           -           -           -    -
+TecCurrent(mA)             -           -           -           -           -    -
+MediaSNR(dB)               -           -           -           -           -    -
+
+Versatile Diagnostics Monitoring:
+Item          Minimum     Maximum     Average     Current PriorPeriod
+Ber          5.56e-10    8.22e-10    6.75e-10    7.07e-10    0.00e+00
+Fer          0.00e+00    0.00e+00    0.00e+00    0.00e+00    0.00e+00
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <Regex>^ *Port \S+ +transceiver diagnostic information *:</Regex>
+        <ParseNode name="ifOpticalNode">
+            <Regex>^ *Item +Value +HighAlarm +</Regex>
+            <ConfigParsePolicy>
+                <Field name="ifName" primary="true">
+                    <Regex>
+                        <![CDATA[
+                        ^ *Port (?<ifName>\S+) +transceiver diagnostic information *:
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="laserTemp">
+                    <Regex>
+                        <![CDATA[
+                            ^ *LaserTemp\(C\) +(?<laserTemp>[\d.-]+) +
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="tecCurrent">
+                    <Regex>
+                        <![CDATA[
+                            ^ *TecCurrent\((%|mA)\) +(?<tecCurrent>[\d.-]+) +
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+            <SegmentParse>
+                <Regex>\n</Regex>
+                <ParseNode name="mediaSnrNode">
+                    <ConfigParsePolicy>
+                        <Field name="lane,value">
+                            <Regex>
+                                <![CDATA[
+                                ^ *MediaSNR( *Lane(?<lane>\d+))? *\(dB\) *(?<value>[\d.-]+)
+                                ]]>
+                            </Regex>
+                        </Field>
+                    </ConfigParsePolicy>
+                </ParseNode>
+            </SegmentParse>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

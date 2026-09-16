@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+display lldp neighbor
+GigabitEthernet0/0/39 has 1 neighbor(s):
+
+Neighbor index :1
+Chassis type   :MAC address
+Chassis ID     :xxxx-xxxx-xxxx
+Port ID type   :Interface name
+Port ID        :GigabitEthernet0/0/1
+Port description    :HUAWEI, AC Series, GigabitEthernet0/0/1 Interface
+System name         :SHSZUniCity-AC9700S-Master
+System description  :Huawei AirEngine9700S-S
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <Regex>^(.{1,255}) has +(\d+) +neighbor(s)?:?</Regex>
+        <ParseNode name="lldpNeighborIf">
+            <ConfigParsePolicy>
+                <Field name="localPortName,neighborNum">
+                    <Regex>
+                        <![CDATA[
+                        ^(?<localPortName>.{1,255}) has +(?<neighborNum>\d+) +neighbor(s)?:?
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+            <Filter filterFieldName="neighborNum" filterType="NOT_EQUALS" filterValue="0"/>
+            <SegmentParse>
+                <Regex>^ *Neighbor *index {0,100}: {0,100}\d+</Regex>
+                <ParseNode name="lldpNeighborNode">
+                    <ConfigParsePolicy>
+                        <Field name="remotePortId">
+                            <Regex>
+                                <![CDATA[
+                                ^ *Port *Id *: *(?<remotePortId>\S+( +(\d+/){1,5}\d+)?)
+                                ]]>
+                            </Regex>
+                        </Field>
+                        <Field name="remoteSystemName">
+                            <Regex>
+                                <![CDATA[
+                                ^ *System *name {0,100}: {0,100}(?<remoteSystemName>.*)
+                                ]]>
+                            </Regex>
+                            <Assign assignMap="remoteSystemName:" filterType="EQUALS" filterValue="--"/>
+                        </Field>
+                    </ConfigParsePolicy>
+                </ParseNode>
+            </SegmentParse>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

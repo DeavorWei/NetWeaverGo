@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show arp
+Arp protect whole is disabled
+The count is 2
+IP                       Hardware                    Exter  Inter  Sub
+Address         Age      Address        Interface    VlanID VlanID Interface
+xx.xx.xx.xx     H        xxxx.xxxx.xxxx vlan389      389    N/A    N/A
+xx.xx.xx.xx     00:03:29 xxxx.xxxx.xxxx vlan389      389    N/A    smartgroup1
+
+
+-->
+<CommandParseConfig>
+    <SegmentParse childMutex="true">
+        <ParseNode name="arpNode">
+            <TableColumnParsePolicy newlineSupport="true">
+                <Regex>
+                    <![CDATA[
+                    ^(?<entryIpAddr>Address +)(?<entryExpireTime>Age +)(?<entryMac>Address +)(?<entryOutIfName>Interface +)(?<vlanId>VlanID +)(VlanID +)(?<subInterface>Interface *)
+                    ]]>
+                </Regex>
+                <Field name="entryIpAddr" primary="true">
+                    <Regex>(\d{1,3}\.){3}\d{1,3}</Regex>
+                </Field>
+                <Field name="entryExpireTime,entryMac,vlanId"/>
+                <Field name="entryOutIfName" merge="true" mergeDelimiter=""/>
+                <Field name="subInterface" merge="true" mergeDelimiter="" isEndOfLine="true">
+                    <ToUpper/>
+                    <Assign assignMap="subInterface:" filterType="EQUALS" filterValue="N/A"/>
+                </Field>
+            </TableColumnParsePolicy>
+        </ParseNode>
+        <ParseNode name="arpNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^(?<entryIpAddr>(\d{1,3}\.){3}\d{1,3}) +(?<entryExpireTime>\S+) +(?<entryMac>([0-9a-z]{4}\.){2}[0-9a-z]{4}) +
+                    (?<entryOutIfName>\S+) +(?<vlanId>\S+) +\S+ +(?<subInterface>\S+)
+                    ]]>
+                </Regex>
+                <Field name="entryIpAddr,entryMac,entryExpireTime,vlanId,entryOutIfName"/>
+                <Field name="subInterface">
+                    <ToUpper/>
+                    <Assign assignMap="subInterface:" filterType="EQUALS" filterValue="N/A"/>
+                </Field>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

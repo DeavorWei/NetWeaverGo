@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show running-config | include hostname
+hostname NJUST_WLAN_N18K
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="hostName">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[^hostname {0,100}(?<neName>([^\n]){1,1024})]]>
+                </Regex>
+                <Field name="neName"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

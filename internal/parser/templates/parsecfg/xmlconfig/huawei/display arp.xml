@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+[~CSM-ASW-CE9860-200-diagnose]display arp
+ARP Entry Types: D - Dynamic, S - Static, I - Interface, O - OpenFlow, RD - Redirect
+EXP: Expire-time VLAN:VLAN
+
+IP ADDRESS      MAC ADDRESS    EXP(M) TYPE/VLAN       INTERFACE        VPN-INSTANCE
+xx.xx.xx.xx   xxxx-xxxx-xxxx        I               MEth0/0/0        MGMT
+xx.xx.xx.xx   xxxx-xxxx-xxxx   19   D               MEth0/0/0        MGMT
+xx.xx.xx.xx     xxxx-xxxx-xxxx        I               Vlanif100
+xx.xx.xx.xx     xxxx-xxxx-xxxx   20   D/100           400GE1/1/1:1
+
+-->
+<CommandParseConfig>
+    <SegmentParse childMutex="true">
+        <ParseNode name="arpNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *(?<entryIpAddr>(\d{0,3}\.){3}\d{0,3}) {1,100}(?<entryMac>\S+) {1,100}(?<entryExpireTime>\d*) {1,100}
+                    (?<entryType>(S|I|D|R|RD|O|-)(F)?( {0,5}(-?\d{1,5}|-))?)(/(?<vlanId>\S{1,9}))? {0,100}(?<entryOutIfName>\S{1,255})? {0,100}(?<vpnInstanceName>\S{1,255})?[ \r\n]{0,100}$
+                    ]]>
+                </Regex>
+                <Field name="entryIpAddr,entryMac,entryExpireTime,entryType,vlanId,entryOutIfName,vpnInstanceName"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+        <ParseNode name="arpNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ {0,100}(?<entryIpAddr>(\d{0,3}\.){3}\d{0,3}) {1,100}(?<entryMac>\S{1,100}) {1,100}(?<vlanId>\S{1,50} {1,100})?
+                    (?<entryOutIfName>\S{1,100})? {0,100}(?<entryExpireTime>\S{1,100})? {0,100}(?<entryType>S|I|D|R|RD|O|BD|-)[ \r\n]{0,100}$
+                    ]]>
+                </Regex>
+                <Field name="entryIpAddr,entryMac,entryExpireTime,entryType,vlanId,entryOutIfName"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

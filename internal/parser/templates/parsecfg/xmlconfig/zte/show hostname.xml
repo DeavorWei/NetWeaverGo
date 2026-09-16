@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show running-config | include hostname
+hostname IDC-A-SW-5960-1-D11
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="sysNameNode">
+            <ConfigParsePolicy>
+                <Field name="sysName">
+                    <Regex>
+                        <![CDATA[
+                        ^ *hostname {1,100}(?<sysName>.+)
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

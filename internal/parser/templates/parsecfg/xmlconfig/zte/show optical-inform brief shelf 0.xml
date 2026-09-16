@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+HLJHEB2-PSC-ZS3F1-POD1-JQ1-I-JR-ZXR5952G-106#show optical-inform brief shelf 0
+If device is externally calibrated, only calibrated values are printed.
+-Inf: not applicable, Tx: transmit, Rx: receive.
+                                                        Optical   Optical
+Interface     Temperature  Voltage  Voltage    Current   Tx Power  Rx Power
+Name          (Celsius)  (3.3 Volts)(5 Volts)  (mA)      (dBm)     (dBm)
+xgei-0/1/1/49  34.29       3.33      N/A       30.23     -3.46     -2.85
+xgei-0/1/1/50  32.67       3.34      N/A       29.95     -2.76     -3.88
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <Regex>^\S+ +([\d.-]+|N/A) +([\d.-]+|N/A) +</Regex>
+        <ParseNode name="ifTransNode">
+            <ConfigParsePolicy>
+                <Field name="ifName,temperature,voltage" primary="true">
+                    <Regex>
+                        <![CDATA[
+                        ^(?<ifName>\S+) +(?<temperature>[\d.-]+|N/A) +(?<voltage>[\d.-]+|N/A)
+                        ]]>
+                    </Regex>
+                    <ValueMapping srcValue="N/A" dstValue="-" name="temperature,voltage"/>
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                    methodName="convertIfName"/>
+                    <Assign assignMap="vendor:ZTE" filterType="NOT_NULL" filterFieldName="ifName" order="-2"/>
+                </Field>
+            </ConfigParsePolicy>
+            <SegmentParse>
+                <ParseNode name="subIfTransNode">
+                    <TableLineParsePolicy>
+                        <Regex>
+                            <![CDATA[
+                            [ ]{1,255}(?<bias>[\d.-]+|N/A) +(?<txPower>[\d.-]+|N/A) +(?<rxPower>[\d.-]+|N/A)[ \r\n]*$
+                            ]]>
+                        </Regex>
+                        <Field name="bias,txPower,rxPower">
+                            <ToUpper/>
+                            <ValueMapping srcValue="N/A" dstValue="-" name="bias,txPower,rxPower"/>
+                        </Field>
+                    </TableLineParsePolicy>
+                </ParseNode>
+            </SegmentParse>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

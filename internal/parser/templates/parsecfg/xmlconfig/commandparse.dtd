@@ -1,0 +1,232 @@
+<!-- 统一正则节点-->
+<!ELEMENT Regex (#PCDATA)>
+
+<!-- 属性值转大写节点-->
+<!ELEMENT ToUpper EMPTY>
+<!--需转大写属性，多个以逗号间隔，缺省只处理第一个属性-->
+<!ATTLIST ToUpper name CDATA #IMPLIED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST ToUpper order CDATA #IMPLIED>
+
+<!-- 属性值转小写节点-->
+<!ELEMENT ToLower EMPTY>
+<!--需转小写属性，多个以逗号间隔，缺省只处理第一个属性-->
+<!ATTLIST ToLower name CDATA #IMPLIED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST ToLower order CDATA #IMPLIED>
+
+<!-- 属性设置为指定值节点-->
+<!ELEMENT MatchAndSet EMPTY>
+<!--属性名称，多个以逗号间隔，缺省只处理第一个属性-->
+<!ATTLIST MatchAndSet name CDATA #IMPLIED>
+<!--需设置的指定值，多个指定值以逗号间隔，需与name一一对应-->
+<!ATTLIST MatchAndSet value CDATA #REQUIRED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST MatchAndSet order CDATA #IMPLIED>
+
+
+<!-- 属性值映射节点-->
+<!ELEMENT ValueMapping EMPTY>
+<!--属性名称，多个以逗号间隔，缺省只处理第一个属性-->
+<!ATTLIST ValueMapping name CDATA #IMPLIED>
+<!--需映射属性原值，多种原值以逗号间隔-->
+<!ATTLIST ValueMapping srcValue CDATA #REQUIRED>
+<!--映射的目标值，多种目标值以逗号间隔，目标值与原值需一一对应-->
+<!ATTLIST ValueMapping dstValue CDATA #REQUIRED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST ValueMapping order CDATA #IMPLIED>
+
+<!-- 正则表达式提取指定属性值内容节点-->
+<!ELEMENT StrExtract EMPTY>
+<!--需正则提取属性名称，只支持单个属性正则提取，缺省只处理第一个属性-->
+<!ATTLIST StrExtract name CDATA #IMPLIED>
+<!--正则表达式-->
+<!ATTLIST StrExtract regex CDATA #REQUIRED>
+<!--group索引值(整型数值，>=0)，0-表示取正则表达式匹配出的整个字符串、1-表示取正则表达式第1个括号里匹配出的字符串、2-表示取正则表达式第2个括号里匹配出的字符串，依次类推。-->
+<!ATTLIST StrExtract groupId CDATA #REQUIRED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST StrExtract order CDATA #IMPLIED>
+
+<!-- 默认值节点-->
+<!ELEMENT DefaultValue EMPTY>
+<!--属性名称，多个以逗号间隔-->
+<!ATTLIST DefaultValue name CDATA #REQUIRED>
+<!--属性默认值，多个以逗号间隔，与属性名称一一对应-->
+<!ATTLIST DefaultValue value CDATA #REQUIRED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST DefaultValue order CDATA #IMPLIED>
+
+<!-- 过滤节点，按过滤条件过滤解析记录-->
+<!ELEMENT Filter EMPTY>
+<!--待过滤属性名，当filterType是NOT_ONLY时，支持多个属性。多个以逗号间隔-->
+<!ATTLIST Filter filterFieldName CDATA #REQUIRED>
+<!--过滤条件类型,EQUALS:等于；NOT_EQUALS:不等于；CONTAINS:包含；NOT_CONTAINS:不包含；NOT_ONLY:解析结果不仅仅包含待过滤属性;IN:等于多个值，逗号作分割-->
+<!ATTLIST Filter filterType (EQUALS|NOT_EQUALS|CONTAINS|NOT_CONTAINS|NOT_ONLY|IN|NULL|NOT_NULL) #REQUIRED>
+<!--过滤条件的固定值-->
+<!ATTLIST Filter filterValue CDATA #IMPLIED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST Filter order CDATA #IMPLIED>
+
+<!-- 将一个字符串属性值，按照分隔符拆分为多个属性-->
+<!ELEMENT SplitField EMPTY>
+<!--待进行字符串拆分的属性名，仅支持单个属性，缺省使用Field对应属性-->
+<!ATTLIST SplitField srcField CDATA #IMPLIED>
+<!--字符串拆分分隔符-->
+<!ATTLIST SplitField delimiter CDATA #REQUIRED>
+<!--字符串拆分后存放结果值的属性名，多个属性以逗号间隔。若该属性名在原结果数据中存在，则覆盖原值，若不存在则新增属性-->
+<!ATTLIST SplitField dstFields CDATA #REQUIRED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST SplitField order CDATA #IMPLIED>
+
+<!-- 多个属性合并为一个新的属性-->
+<!ELEMENT MergeField EMPTY>
+<!--需要合并的属性名列表，两个或多个属性，以逗号间隔-->
+<!ATTLIST MergeField srcFields CDATA #REQUIRED>
+<!--属性合并分隔符-->
+<!ATTLIST MergeField delimiter CDATA #REQUIRED>
+<!--存放结果值的目标结果属性名，若该属性在原结果数据中存在，则覆盖原值，若不存在则新增属性-->
+<!ATTLIST MergeField dstField CDATA #REQUIRED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST MergeField order CDATA #IMPLIED>
+
+<!-- 自定义算子仅用于处理解析属性值map-->
+<!ELEMENT CustomOperator EMPTY>
+<!--自定义工具类全名-->
+<!ATTLIST CustomOperator className CDATA #REQUIRED>
+<!--自定义处理类方法名，自定义处理方法入参必须为Map-->
+<!ATTLIST CustomOperator methodName CDATA #REQUIRED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST CustomOperator order CDATA #IMPLIED>
+
+<!-- 字符串替换节点-->
+<!ELEMENT ReplaceAll EMPTY>
+<!--属性名称，多个以逗号间隔，缺省只处理第一个属性-->
+<!ATTLIST ReplaceAll name CDATA #IMPLIED>
+<!--需要替换的字符串，支持正则表达式-->
+<!ATTLIST ReplaceAll regex CDATA #REQUIRED>
+<!--替换之后的字符串-->
+<!ATTLIST ReplaceAll replacement CDATA #REQUIRED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST ReplaceAll order CDATA #IMPLIED>
+
+<!-- 给满足条件数据的指定属性赋指定值-->
+<!ELEMENT Assign EMPTY>
+<!--指定属性赋指定值，指定多个属性时以逗号间隔，格式为field1:value1,field2:value2,value支持设置为#{属性名称}获取指定属性值-->
+<!ATTLIST Assign assignMap CDATA #REQUIRED>
+<!--待过滤属性名，只支持单个属性正则提取，缺省只处理第一个属性-->
+<!ATTLIST Assign filterFieldName CDATA #IMPLIED>
+<!--过滤条件类型,EQUALS:等于；NOT_EQUALS:不等于；CONTAINS:包含；NOT_CONTAINS:不包含；START_WITH:开始以；END_WITH:结束以;NULL:为null或空串-->
+<!ATTLIST Assign filterType (EQUALS|NOT_EQUALS|CONTAINS|NOT_CONTAINS|START_WITH|END_WITH|NULL|NOT_NULL) #REQUIRED>
+<!--过滤条件的固定值-->
+<!ATTLIST Assign filterValue CDATA #IMPLIED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST Assign order CDATA #IMPLIED>
+
+<!-- 属性重命名-->
+<!ELEMENT RenameField EMPTY>
+<!--指定属性名映射关系，指定多个属性时以逗号间隔，格式为oldname1:newname1,oldname2:newname2-->
+<!ATTLIST RenameField fieldMap CDATA #REQUIRED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST RenameField order CDATA #IMPLIED>
+
+<!-- 字符串拼接算子-->
+<!ELEMENT StrConcat EMPTY>
+<!--待进行字符串拼接的字段名，仅支持单个属性，缺省使用Field对应属性-->
+<!ATTLIST StrConcat srcField CDATA #IMPLIED>
+<!--待拼接的前缀字符串，缺省为空串-->
+<!ATTLIST StrConcat prefixStr CDATA #IMPLIED>
+<!--待拼接的后缀字符串，缺省为空串-->
+<!ATTLIST StrConcat suffixStr CDATA #IMPLIED>
+<!--存放结果值的目标结果字段名，若该字段名在原结果数据中存在，则覆盖原值，如果不存在则新增字段列-->
+<!ATTLIST StrConcat dstField CDATA #REQUIRED>
+<!--算子执行顺序，正整数，值越小越优先执行，缺省按DTD约束顺序执行-->
+<!ATTLIST StrConcat order CDATA #IMPLIED>
+
+<!-- 属性节点,Field节点下子节点不能重复配置-->
+<!ELEMENT Field (Regex?,ToUpper?,ToLower?,MatchAndSet?,ValueMapping?,StrExtract?,SplitField?,CustomOperator?,ReplaceAll?,Assign*,StrConcat?)>
+<!--属性名称，多个以逗号间隔，需与ConfigParsePolicy、TableLineParsePolicy、TableColumnParsePolicy下使用的Regex 正则别名相匹配-->
+<!ATTLIST Field name CDATA #REQUIRED>
+<!--解析属性是否必要，必要属性未解析会终止该节点解析-->
+<!ATTLIST Field primary (true|false) #IMPLIED>
+<!--解析属性是否需要多行合并，配合TableColumnParsePolicy使用-->
+<!ATTLIST Field merge (true|false) #IMPLIED>
+<!--属性多行合并的分隔符，缺省不分隔，配合TableColumnParsePolicy使用-->
+<!ATTLIST Field mergeDelimiter CDATA #IMPLIED>
+<!--属性是否行最后一个，即属性值会一直匹配到行结束，配合TableColumnParsePolicy使用-->
+<!ATTLIST Field isEndOfLine (true|false) #IMPLIED>
+
+<!-- 非表格文本解析节点-->
+<!ELEMENT ConfigParsePolicy (Field+)>
+
+<!-- 按行解析表格回显节点-->
+<!ELEMENT TableLineParsePolicy (Regex,Field+)>
+
+<!-- 按列解析表格回显节点-->
+<!ELEMENT TableColumnParsePolicy (Regex,Field+)>
+<!--是否支持换行解析-->
+<!ATTLIST TableColumnParsePolicy newlineSupport (true|false) #IMPLIED>
+
+<!-- 解析动态列表格回显节点-->
+<!ELEMENT DynamicColumnParsePolicy (Field+)>
+<!--列数据分隔符，缺省为空格-->
+<!ATTLIST DynamicColumnParsePolicy delimiter CDATA #IMPLIED>
+
+<!--待解析节点名称-->
+<!ATTLIST ParseNode name CDATA #REQUIRED>
+<!--指定设备类型/版本组合，多个以逗号间隔，如果指定该属性那么只有满足条件的设备才会解析节点。缺省不区分设备类型版本-->
+<!ATTLIST ParseNode productVersions CDATA #IMPLIED>
+<!--ParseNode解析支持读取单独xml配置文件，避免命令解析配置过大-->
+<!ATTLIST ParseNode xmlConfigPath CDATA #IMPLIED>
+<!--是否支持设置默认值，通过解析策略未解析出结果，也能通过节点及算子添加属性生成节点-->
+<!ATTLIST ParseNode supportDefault (true|false) #IMPLIED>
+
+<!--默认节点-->
+<!ELEMENT DefaultNode (SegmentParse?)>
+<!--默认节点名称-->
+<!ATTLIST DefaultNode name CDATA #REQUIRED>
+<!--默认节点属性，属性名称:属性值，多个以逗号间隔-->
+<!ATTLIST DefaultNode attributes CDATA #REQUIRED>
+
+<!-- 解析节点对应model中的节点
+Regex:添加节点需匹配的正则表达式,缺省直接执行后续解析策略
+-->
+<!ELEMENT ParseNode (Regex?,(ConfigParsePolicy|TableLineParsePolicy|TableColumnParsePolicy|DynamicColumnParsePolicy)?,Filter?,DefaultValue?,MergeField?,CustomOperator?,RenameField?,SegmentParse?)>
+
+<!--分片解析节点-->
+<!ELEMENT SegmentParse (Regex?,ParseNode+,DefaultNode?)>
+<!--ParseNode子节点解析是否互斥，true-按顺序只解析一种子节点，false-尝试解析所有节点，缺省为false-->
+<!ATTLIST SegmentParse childMutex (true|false) #IMPLIED>
+<!--分片提取正则group组，缺省时直接按Regex分片-->
+<!ATTLIST SegmentParse extractGroupName CDATA #IMPLIED>
+<!--使用正则分片时，分片结果是否包含第一段回显，缺省为false不包含-->
+<!ATTLIST SegmentParse hasFirst (true|false) #IMPLIED>
+
+<!--通用配置解析根节点-->
+<!ELEMENT CommandParseConfig (SegmentParse)>
+
+<!--配置化大命令解析命令具体配置-->
+<!ELEMENT CommandParse EMPTY>
+<!--回显命令，多个互斥命令使用@@间隔-->
+<!ATTLIST CommandParse cmd CDATA #REQUIRED>
+<!--命令是否是正则表达式，true-获取所有满足正则的命令回显-->
+<!ATTLIST CommandParse isRegexCmd (true|false) #IMPLIED>
+<!--回显命令对应解析配置路径。回显命令为多个时，命令处理配置都相同可以合并，存在不相同不能合并必须与回显命令一一对应以@@分隔-->
+<!ATTLIST CommandParse path CDATA #REQUIRED>
+<!--命令互斥，多个互斥命令时配置，命令回显存在即跳出-->
+<!ATTLIST CommandParse isCommandMutex (true|false) #IMPLIED>
+<!--解析结果互斥，多个互斥命令时配置，解析结果存在即跳出-->
+<!ATTLIST CommandParse isResultMutex (true|false) #IMPLIED>
+<!--大命令解析使用，回显独立文件名称，多个以@@间隔，与回显命令一一对应-->
+<!--<!ATTLIST CommandParse parseFile CDATA #IMPLIED>-->
+<!--大命令解析使用，回显分隔正则多个以@@间隔，与回显命令一一对应，保障回显正确分片-->
+<!ATTLIST CommandParse splitRegex CDATA #IMPLIED>
+
+<!--配置化解析采集项节点-->
+<!ELEMENT CommonParseItem (VendorCommon+)>
+
+<!--配置化解析厂商项节点-->
+<!ELEMENT VendorCommon (CommandParse+)>
+<!--厂商名称对应枚举值EnumNeVendorType-->
+<!ATTLIST VendorCommon vendor CDATA #REQUIRED>
+<!--配置化解析结果后置处理类-->
+<!ATTLIST VendorCommon afterClass CDATA #IMPLIED>

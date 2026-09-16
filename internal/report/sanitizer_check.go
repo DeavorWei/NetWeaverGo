@@ -6,39 +6,57 @@ import (
 	"strings"
 )
 
+// CheckSeverity 脱敏违规严重度
+type CheckSeverity string
+
+const (
+	SeverityCritical CheckSeverity = "CRITICAL" // 密码密文、密钥凭证未脱敏（阻断导出）
+	SeverityWarn     CheckSeverity = "WARN"     // 提示词/通用敏感词可能未脱敏（仅告警）
+)
+
+// CheckViolation 脱敏违规明细
+type CheckViolation struct {
+	Line     int           `json:"line"`
+	Name     string        `json:"name"`
+	Severity CheckSeverity `json:"severity"`
+	Snippet  string        `json:"snippet"`
+}
+
 // 未脱敏特征检测正则（用于导出前自检/阻断，呼应规划方案 §5.2 P1-6）
 var unmaskedPatterns = []struct {
-	name    string
-	pattern *regexp.Regexp
+	name     string
+	severity CheckSeverity
+	pattern  *regexp.Regexp
 }{
 	{
-		name:    "配置密码未掩码",
-		pattern: regexp.MustCompile(`(?i)\bpassword\s+(?:simple|cipher|plain)\s+([^\s\*]{2,})`),
+		name:     "配置密码未掩码",
+		severity: SeverityCritical,
+		pattern:  regexp.MustCompile(`(?i)\bpassword\s+(?:simple|cipher|plain)\s+([^\s\*]{2,})`),
 	},
 	{
-		name:    "通用密码未掩码",
-		pattern: regexp.MustCompile(`(?i)\bpassword\s+([^\s\*]{2,})`),
+		name:     "通用密码未掩码",
+		severity: SeverityWarn,
+		pattern:  regexp.MustCompile(`(?i)\bpassword\s+([^\s\*]{2,})`),
 	},
 	{
-		name:    "明文 shared-key / secret 未掩码",
-		pattern: regexp.MustCompile(`(?i)\b(?:shared-key|secret)\s+(?:cipher\s+)?([^\s\*]{2,})`),
+		name:     "明文 shared-key / secret 未掩码",
+		severity: SeverityCritical,
+		pattern:  regexp.MustCompile(`(?i)\b(?:shared-key|secret)\s+(?:cipher\s+)?([^\s\*]{2,})`),
 	},
 	{
-		name:    "JSON 敏感字段未掩码",
-		pattern: regexp.MustCompile(`(?i)"(?:password|secret|token|api_key|private_key)"\s*:\s*"([^\*"]+)"`),
+		name:     "JSON 敏感字段未掩码",
+		severity: SeverityCritical,
+		pattern:  regexp.MustCompile(`(?i)"(?:password|secret|token|api_key|private_key)"\s*:\s*"([^\*"]+)"`),
 	},
 }
 
-// CheckContentSanitized 抽检文本内容是否完全脱敏
-// 返回:
-//   - ok: true 表示通过脱敏检查，false 表示发现未脱敏敏感内容
-//   - violations: 命中的违规特征描述与摘要
-func CheckContentSanitized(content string) (bool, []string) {
+// CheckContentSanitizedDetailed 抽检文本内容是否完全脱敏（含分级）
+func CheckContentSanitizedDetailed(content string) (bool, []CheckViolation) {
 	if len(content) == 0 {
 		return true, nil
 	}
 
-	var violations []string
+	var violations []CheckViolation
 	lines := strings.Split(content, "\n")
 
 	for lineIdx, line := range lines {
@@ -57,9 +75,13 @@ func CheckContentSanitized(content string) (bool, []string) {
 					strings.EqualFold(matchedVal, "plain") {
 					continue
 				}
-				violation := fmt.Sprintf("行 %d 命中 [%s]: %s", lineIdx+1, up.name, trimmed)
-				violations = append(violations, violation)
-				if len(violations) >= 10 {
+				violations = append(violations, CheckViolation{
+					Line:     lineIdx + 1,
+					Name:     up.name,
+					Severity: up.severity,
+					Snippet:  trimmed,
+				})
+				if len(violations) >= 20 {
 					return false, violations
 				}
 			}
@@ -69,11 +91,36 @@ func CheckContentSanitized(content string) (bool, []string) {
 	return len(violations) == 0, violations
 }
 
-// ValidateExportContent 校验即将导出的内容，未脱敏时返回阻断错误
+// CheckContentSanitized 抽检文本内容是否完全脱敏（兼容历史接口）
+func CheckContentSanitized(content string) (bool, []string) {
+	ok, details := CheckContentSanitizedDetailed(content)
+	if ok {
+		return true, nil
+	}
+	var res []string
+	for _, v := range details {
+		res = append(res, fmt.Sprintf("行 %d 命中 [%s][%s]: %s", v.Line, v.Severity, v.Name, v.Snippet))
+	}
+	return false, res
+}
+
+// ValidateExportContent 校验即将导出的内容，仅在存在 CRITICAL 级别未脱敏时阻断导出
 func ValidateExportContent(content string) error {
-	ok, violations := CheckContentSanitized(content)
-	if !ok {
-		return fmt.Errorf("导出安全阻断: 检测到 %d 处未脱敏敏感数据 (例如: %s)，禁止导出", len(violations), violations[0])
+	ok, violations := CheckContentSanitizedDetailed(content)
+	if ok {
+		return nil
+	}
+
+	var criticals []CheckViolation
+	for _, v := range violations {
+		if v.Severity == SeverityCritical {
+			criticals = append(criticals, v)
+		}
+	}
+
+	if len(criticals) > 0 {
+		return fmt.Errorf("导出安全阻断: 检测到 %d 处 CRITICAL 级未脱敏敏感数据 (例如: %s)，禁止导出", len(criticals), criticals[0].Snippet)
 	}
 	return nil
 }
+

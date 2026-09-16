@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+ Portname      Online EtherProperty   Vendor        VendorPN         VendorSN    Type         Length                                W
+aveLen     Connector
+                                                                                            (single) (OM2) (OM1) (OM3) (OM4) (copper)
+
+xgei-0/1/1/49    NO
+
+xgei-0/1/1/50    NO
+
+xgei-0/1/1/51    SFP+   10GBASE-LR   LINKTEL         LX4002CDR-ZXOEM   ZTE2350LT1007 single       10KM     N/A   N/A   N/A   N/A   N/
+A  1310        LC
+                                                                       81
+
+xgei-0/1/1/52    SFP+   10GBASE-LR   LINKTEL         LX4002CDR-ZXOEM   ZTE2350LT3000 single       10KM     N/A   N/A   N/A   N/A   N/
+A  1310        LC
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <Regex>^ *\S+ +\S+ +\S+ (.{1,512})\s{1,255}\S+\s+\S+\s+(single|multi)\s</Regex>
+        <ParseNode name="ifTransBaseNode">
+            <ConfigParsePolicy>
+                <Field name="ifName,transceiverType,pn,sn,transceiverMode,transDistanceInfo,waveLength">
+                    <Regex>
+                        <![CDATA[
+                        ^ *(?<ifName>\S+) +\S+ +(?<transceiverType>\S+) (.{1,512})\s{1,255}(?<pn>\S+)\s+(?<sn>\S+)\s+
+                        (?<transceiverMode>single|multi)\s{1,255}(?<transDistanceInfo>[\S\s]{1,1024}?)(?<waveLength>\d{1,20})(nm)?\s
+                        ]]>
+                    </Regex>
+                    <ToUpper name="transceiverMode,transDistanceInfo"/>
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                    methodName="convertIfName"/>
+                    <Assign assignMap="vendor:ZTE" filterType="NOT_NULL" order="-2"/>
+                </Field>
+                <Field name="transDistanceInfo">
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.InterfaceParseUtil"
+                                    methodName="dealTransferDistanceForZte2"/>
+                </Field>
+                <!--标准化光模块传输模式-->
+                <Field name="transceiverMode">
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.InterfaceParseUtil"
+                                    methodName="standardTransceiverMode"/>
+                </Field>
+            </ConfigParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+display transceiver verbose
+Info: Port GigabitEthernet0/0/48, valid only on optical interface.
+
+Info: Port XGigabitEthernet0/0/1, transceiver is absent.
+
+GigabitEthernet0/0/3 transceiver information:
+Common information:
+  Transceiver Type               :GPS_SFP
+  Connector Type                 :SMA Coaxial Connector
+  Wavelength(nm)                 :-
+  Transfer Distance(m)           :275(OM1),550(OM2),1000(OM3)
+  Digital Diagnostic Monitoring  :NO
+  Vendor Name                    :HUAWEI
+  Vendor Part Number             :HUAWEI AE 905S A
+  Ordering Name                  :
+Manufacture information:
+  Manu. Serial Number            :031TUX10HB000065
+  Manufacturing Date             :2017-11-28
+  Vendor Name                    :HUAWEI
+Diagnostic information:
+  Temperature(°C)              :26.00
+  Temp High Threshold(°C)      :85.00
+  Temp Low  Threshold(°C)      :-40.00
+  Voltage(V)                    :3.29
+  Volt High Threshold(V)        :3.64
+  Volt Low  Threshold(V)        :2.95
+  Bias Current(mA)              :4.57
+  Bias High Threshold(mA)       :9.00
+  Bias Low  Threshold(mA)       :2.00
+  RX Power(dBM)                 :-40.00
+  RX Power High Warning(dBM)    :-1.00
+  RX Power Low  Warning(dBM)    :-15.80
+  RX Power High Threshold(dBM)  :0.00
+  RX Power Low  Threshold(dBM)  :-16.99
+  TX Power(dBM)                 :-5.03
+  TX Power High Warning(dBM)    :4.00
+  TX Power Low  Warning(dBM)    :-4.70
+  TX Power High Threshold(dBM)  :-2.22
+  TX Power Low  Threshold(dBM)  :-6.99
+  Transceiver phony alarm       :Yes
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <Regex>
+            ^ *(\S+ *transceiver *information *:|Info *: *Port)
+        </Regex>
+        <ParseNode name="ifTransNode">
+            <ConfigParsePolicy>
+                <Field name="ifName" primary="true">
+                    <Regex>
+                        <![CDATA[
+                        ^ *(?<ifName>\S+) *transceiver *information *:
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="pn">
+                    <Regex>
+                        <![CDATA[
+                            Part *Number *: {0,100}(?<pn>.+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="sn">
+                    <Regex>
+                        <![CDATA[
+                            Serial *Number *: *(?<sn>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="temperature">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Temperature *\(\S{1,100}\) *: *(?<temperature>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="voltage">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Voltage *\(V\) *: *(?<voltage>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="bias">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Bias Current *\(mA\) *: {0,100}(?<bias>(Lane|[()\d.|\r\n ,-]){0,1000})
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="biasHighThreshold">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Bias *High *Threshold *\(mA\) *: *(?<biasHighThreshold>[\d.-]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="biasLowThreshold">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Bias *Low *Threshold *\(mA\) *: *(?<biasLowThreshold>[\d.-]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="rxPower">
+                    <Regex>
+                        <![CDATA[
+                            ^ {0,100}(Current)? *RX *Power *\(dBm\) *: {0,100}(?<rxPower>(Lane|[()\d.|\r\n ,-]){0,1000})
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="defaultRxPowerHighThreshold">
+                    <Regex>
+                        <![CDATA[
+                            ^ {0,100}(Default)? *RX *Power *High *Threshold *\(dBm\) *: *(?<defaultRxPowerHighThreshold>[\d.-]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="defaultRxPowerLowThreshold">
+                    <Regex>
+                        <![CDATA[
+                            ^ {0,100}(Default)? *RX *Power *Low *Threshold *\(dBm\) *: *(?<defaultRxPowerLowThreshold>[\d.-]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="txPower">
+                    <Regex>
+                        <![CDATA[
+                            ^ {0,100}(Current)? *TX *Power *\(dBm\) *: {0,100}(?<txPower>(Lane|[()\d.|\r\n ,-]){0,1000})
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="defaultTxPowerHighThreshold">
+                    <Regex>
+                        <![CDATA[
+                            ^ {0,100}(Default)? *TX *Power *High *Threshold *\(dBm\) *: *(?<defaultTxPowerHighThreshold>[\d.-]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="defaultTxPowerLowThreshold">
+                    <Regex>
+                        <![CDATA[
+                            ^ {0,100}(Default)? *TX *Power *Low *Threshold *\(dBm\) *: *(?<defaultTxPowerLowThreshold>[\d.-]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="transceiverType">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Transceiver *Type *: {0,100}(?<transceiverType>.+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="waveLength">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Wavelength *\( *nm *\) *: {0,100}(?<waveLength>.+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="transDistanceUnit,transDistanceInfo">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Transfer *Distance *\( *(?<transDistanceUnit>k?m) *\) *:(?<transDistanceInfo>((?!:)[ \r\n\S])+)
+                        ]]>
+                    </Regex>
+                    <ToUpper name="transDistanceUnit,transDistanceInfo"/>
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.InterfaceParseUtil"
+                                    methodName="dealTransferDistance"/>
+                </Field>
+            </ConfigParsePolicy>
+        </ParseNode>
+        <!--解析光口节点-->
+        <ParseNode name="opticalIfNode">
+            <ConfigParsePolicy>
+                <Field name="ifName">
+                    <Regex>
+                        <![CDATA[
+                        ^ *(?<ifName>\S+) *transceiver *information *:
+                        ]]>
+                    </Regex>
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                    methodName="convertIfName"/>
+                    <Assign assignMap="vendor:HUAWEI" filterType="NOT_NULL" filterFieldName="ifName" order="-2"/>
+                </Field>
+                <Field name="ifName">
+                    <Regex>
+                        <![CDATA[
+                        ^ *Info *: *Port +(?<ifName>\S+) *, *transceiver
+                        ]]>
+                    </Regex>
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                    methodName="convertIfName"/>
+                    <Assign assignMap="vendor:HUAWEI" filterType="NOT_NULL" filterFieldName="ifName" order="-2"/>
+                </Field>
+            </ConfigParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

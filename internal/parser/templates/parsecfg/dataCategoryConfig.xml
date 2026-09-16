@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DataCategoryConfig>
+    <DataCategory name="hardware" configFileName="hardware.xml">
+        <VendorSaver vendor="HUAWEI"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.HardwareBaseDataSaver"/>
+        <VendorSaver vendor="HUAWEI"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.hw.AlarmDataSaver"/>
+        <VendorSaver vendor="ZTE"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.zte.HardwareDataSaver"/>
+        <VendorSaver vendor="H3C"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.HardwareBaseDataSaver"/>
+
+        <VendorSaver vendor="RUIJIE"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.ruijie.HardwareDataSaver"/>
+    </DataCategory>
+    <DataCategory name="lldp" configFileName="lldp.xml">
+        <VendorSaver vendor="HUAWEI"
+                     adapterClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.adapter.hw.LldpDataSaverAdapter"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.LldpBaseDataSaver"/>
+        <VendorSaver vendor="H3C"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.LldpBaseDataSaver"/>
+        <VendorSaver vendor="ZTE"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.zte.LldpDataSaver"/>
+        <VendorSaver vendor="RUIJIE"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.LldpBaseDataSaver"/>
+    </DataCategory>
+    <DataCategory name="interface" configFileName="interface.xml">
+        <VendorSaver vendor="HUAWEI"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.hw.InterfaceDataSaver"/>
+        <VendorSaver vendor="ZTE"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.zte.InterfaceDataSaver"/>
+        <VendorSaver vendor="H3C"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.h3c.InterfaceDataSaver"/>
+        <VendorSaver vendor="RUIJIE"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.ruijie.InterfaceDataSaver"/>
+    </DataCategory>
+    <DataCategory name="bgp" configFileName="bgp.xml">
+        <VendorSaver vendor="HUAWEI"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.hw.BgpDataSaver"/>
+    </DataCategory>
+    <DataCategory name="arp" configFileName="arp.xml" isBig="true">
+        <VendorSaver vendor="HUAWEI"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.ArpDataBaseSaver"/>
+        <VendorSaver vendor="ZTE"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.ArpDataBaseSaver"/>
+        <VendorSaver vendor="H3C"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.ArpDataBaseSaver"/>
+        <VendorSaver vendor="RUIJIE"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.ArpDataBaseSaver"/>
+    </DataCategory>
+    <DataCategory name="mac" configFileName="mac.xml" isBig="true">
+        <VendorSaver vendor="HUAWEI"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.MacBaseDataSaver"/>
+        <VendorSaver vendor="ZTE"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.MacBaseDataSaver"/>
+        <VendorSaver vendor="H3C"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.MacBaseDataSaver"/>
+        <VendorSaver vendor="RUIJIE"
+                     saverClass="com.huawei.ncetools.ipdevicecheckservice.parsecfg.datasaver.base.MacBaseDataSaver"/>
+    </DataCategory>
+</DataCategoryConfig>

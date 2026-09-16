@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+display mac-address
+MAC Address      VLAN ID    State            Port/Nickname            Aging
+XXXX-XXXX-XXXX   100        Learned          XGE0/1/1                 Y
+XXXX-XXXX-XXXX   100        Learned          XGE0/1/3                 Y
+
+-->
+<CommandParseConfig>
+    <SegmentParse childMutex="true">
+        <ParseNode name="macNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *(?<mac>[0-9a-f:.-]+) +(?<vlanId>\d+|-+) +(?<type>\S+) +(?<ifName>\S+) +\S+[ \r\n]*$
+                    ]]>
+                </Regex>
+                <Field name="mac,vlanId,ifName,type"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

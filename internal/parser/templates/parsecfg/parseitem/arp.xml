@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE CommonParseItem SYSTEM "commandparse.dtd">
+<CommonParseItem>
+    <VendorCommon vendor="HUAWEI">
+        <CommandParse cmd="display arp" path="parsecfg/xmlconfig/huawei/display arp.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="ZTE">
+        <CommandParse cmd="show arp" path="parsecfg/xmlconfig/zte/show arp.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="H3C">
+        <CommandParse cmd="display arp all" path="parsecfg/xmlconfig/h3c/display arp all.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="RUIJIE">
+        <CommandParse cmd="show arp" path="parsecfg/xmlconfig/ruijie/show arp.xml"/>
+    </VendorCommon>
+</CommonParseItem>

@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show interfaces
+========================== TenGigabitEthernet 1/1/3 ========================
+Index(dec):3 (hex):3
+TenGigabitEthernet 1/1/3 is UP  , line protocol is UP
+  Hardware is Broadcom 8704 TenGigabitEthernet, address is xxxx.xxxx.xxxx (bia xxxx.xxxx.xxxx)
+  Description: 无线-AC
+  Interface address is: xxx.xxx.xxx.xxx/30
+  Interface IPv6 address is:
+    No IPv6 address
+  MTU 1500 bytes, BW 10000000 Kbit
+Ethernet attributes:
+    Last link state change time: 2022-08-31 02:08:46
+    Time duration since last link state change: 411 days, 14 hours, 33 minutes, 30 seconds
+Rxload is 1/255, Txload is 2/255
+  Input peak rate: 2113643742 bits/sec, at 2022-11-22 19:58:20
+  Output peak rate: 1810892602 bits/sec, at 2022-11-03 21:00:56
+   10 seconds input rate 69552396 bits/sec, 47677 packets/sec
+   10 seconds output rate 92009238 bits/sec, 49134 packets/sec
+    864251723777 packets input, 534421590352844 bytes, 0 no buffer, 0 dropped
+    Received 1577794791 broadcasts, 0 runts, 0 giants
+    0 input errors, 0 CRC, 0 frame, 0 overrun, 0 abort
+    833546863160 packets output, 527579645863138 bytes, 0 underruns , 0 dropped
+    0 output errors, 0 collisions, 0 interface resets
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <Regex>
+            ^\s{0,100}={1,100}\s{1,100}[^\n]{1,500}={1,100}$
+        </Regex>
+        <ParseNode name="neInterfaceNode">
+            <ConfigParsePolicy>
+                <Field name="interfaceName,ifAdminStatus,ifPhyStatus,ifOperStatus">
+                    <Regex>
+                        <![CDATA[
+                        ^\s{0,100}(?<interfaceName>[^\n]{1,255}) {1,100}is {1,100}((?<ifAdminStatus>\w{1,100}) )?(?<ifPhyStatus>\S{1,100})
+                        \s*(\(.{1,255}?\) {0,100})?,\s{0,255}line\s{1,255}protocol\s{1,255}is\s{1,255}(?<ifOperStatus>[^\n]{1,100})
+                        ]]>
+                    </Regex>
+                    <ToUpper name="ifAdminStatus,ifPhyStatus"/>
+                    <ValueMapping name="ifAdminStatus" srcValue="ADMINISTRATIVELY" dstValue="Administratively DOWN|Administratively DOWN"/>
+                    <SplitField srcField="ifAdminStatus" delimiter="|" dstFields="ifAdminStatus,ifPhyStatus"/>
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                    methodName="convertIfName"/>
+                    <Assign assignMap="vendor:RUIJIE" filterType="NOT_NULL" filterFieldName="interfaceName" order="-2"/>
+                </Field>
+                <Field name="description">
+                    <Regex>
+                        <![CDATA[
+                            Description *: {0,255}(?<description>.+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="primaryIpAddr,primaryMask">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Interface *address *is: +(?<primaryIpAddr>(\d{1,3}\.){3}\d{1,3})/(?<primaryMask>\d+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="inputUtilityRate">
+                    <Regex>
+                        <![CDATA[
+                            ^\s*(?<inputUtilityRate>\d+)\s+packets\s+input,
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="inErrors">
+                    <Regex>
+                        <![CDATA[
+                            ^\s*(?<inErrors>\d+)\s+input\s+errors,
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="outputUtilityRate">
+                    <Regex>
+                        <![CDATA[
+                            ^\s*(?<outputUtilityRate>\d+)\s+packets\s+output,
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="outErrors">
+                    <Regex>
+                        <![CDATA[
+                            ^\s*(?<outErrors>\d+)\s+output\s+errors,
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="maxBandwidth,unit">
+                    <Regex>
+                        <![CDATA[
+                            BW *(?<maxBandwidth>\d{1,50}) *(?<unit>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+            <DefaultValue name="ifAdminStatus" value="UP"/>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

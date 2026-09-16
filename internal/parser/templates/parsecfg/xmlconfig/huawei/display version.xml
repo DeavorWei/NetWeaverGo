@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+display version
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 8.230 (CE9860EI V200R023C00SPC500)
+Copyright (C) 2012-2023 Huawei Technologies Co., Ltd.
+HUAWEI CE9860-4C-EI-A uptime is 150 days, 15 hours, 58 minutes
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="versionNode">
+            <ConfigParsePolicy>
+                <!--SF系列交换机-->
+                <Field name="deviceType">
+                    <Regex>
+                        <![CDATA[
+                          [ ](?<deviceType>SF\d{1,10}\S{1,100}) {1,20}uptime +is
+                        ]]>
+                    </Regex>
+                </Field>
+                <!--CE|XH交换机-->
+                <Field name="deviceType">
+                    <Regex>
+                        <![CDATA[
+                          [ ]{1,10}(?<deviceType>(CE|XH|FM)\d{1,10}\S{1,100}) {1,255}(Routing Switch )?uptime {1,255}is
+                        ]]>
+                    </Regex>
+                </Field>
+                <!--Eudemon防火墙-->
+                <Field name="deviceType">
+                    <Regex>
+                        <![CDATA[
+                          [ ]{1,10}(?<deviceType>Eudemon\S+) +uptime +is
+                        ]]>
+                    </Regex>
+                </Field>
+                <!--S系列交换机-->
+                <Field name="deviceType">
+                    <Regex>
+                        <![CDATA[
+                          [ ](?<deviceType>S\d{1,10}\S{1,100}) {1,20}(Routing Switch )?uptime +is
+                        ]]>
+                    </Regex>
+                </Field>
+                <!--DX系列交换机-->
+                <Field name="deviceType">
+                    <Regex>
+                        <![CDATA[
+                          [ ](?<deviceType>DX\d{1,10}) {1,20}uptime +is
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="deviceVersion">
+                    <Regex>
+                        <![CDATA[
+                          (?<deviceVersion>V[0-9]{1,9}R[0-9]\w{0,100})
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

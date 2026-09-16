@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+
+show arp
+Protocol  Address          Age(min)  Hardware        Type   Interface
+Internet  xx.xx.xx.xx      -        xxxx.xxxx.xxxx  arpa   VLAN 1
+Internet  xx.xx.xx.xx       34        xxxx.xxxx.xxxx  arpa   VLAN 1
+Internet  xx.xx.xx.xx      9         xxxx.xxxx.xxxx  arpa   VLAN 1
+
+
+-->
+<CommandParseConfig>
+    <SegmentParse childMutex="true">
+        <ParseNode name="arpNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *Internet *(?<entryIpAddr>(\d{0,3}\.){3}\d{0,3}) +(\S+) +(?<entryMac>\S+) +(\S+) {1,255}(?<entryOutIfName>[^\n]+)
+                    ]]>
+                </Regex>
+                <Field name="entryIpAddr,entryMac,entryOutIfName"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

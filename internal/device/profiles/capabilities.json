@@ -1,0 +1,644 @@
+{
+  "deviceTypes": [
+    "AntiDDoS1900",
+    "AntiDDoS12000",
+    "AntiDDoS12000-F",
+    "AntiDDos12000-H",
+    "ATN905",
+    "ATN910",
+    "ATN910C",
+    "ATN910C-H",
+    "ATN910D",
+    "ATN910I",
+    "ATN910I-C",
+    "ATN950",
+    "ATN950B",
+    "ATN950C",
+    "ATN980B",
+    "ATN980C",
+    "CE5800",
+    "CE6800",
+    "CE7800",
+    "CE8800",
+    "CE12800",
+    "CE9800",
+    "CE16800",
+    "CX600",
+    "XH8000",
+    "XH9000",
+    "XH16800",
+    "Eudemon200E-C2F",
+    "Eudemon200E-G",
+    "Eudemon200E-N",
+    "Eudemon500",
+    "Eudemon1000E-C",
+    "Eudemon1000E-F",
+    "Eudemon1000E-G",
+    "Eudemon1000E-M",
+    "Eudemon1000E-N",
+    "Eudemon1000E-S",
+    "Eudemon1000E-T",
+    "Eudemon1000E-X",
+    "Eudemon1000",
+    "Eudemon8000E",
+    "Eudemon8000E-X",
+    "Eudemon8080E",
+    "Eudemon9000E-F",
+    "Eudemon9000E-X",
+    "Eudemon9000E-H",
+    "HiSecEngine Probe1000",
+    "IPS6000F",
+    "IPS12000",
+    "IPS12000-F",
+    "IPS12000-H",
+    "MA5200G",
+    "ME60",
+    "NE20E",
+    "NE40E",
+    "NE80E",
+    "NE5000E",
+    "NE8000",
+    "NE9000",
+    "NetEngine A816",
+    "NetEngine A816 E",
+    "NetEngine A821 E",
+    "NetEngine XH821",
+    "NetEngine XH821 E",
+    "NetEngine XH8000E X8",
+    "NetEngine XH12000 X8",
+    "PTN6900",
+    "S2300",
+    "S3300",
+    "S5300",
+    "S6300",
+    "S5700",
+    "S7700",
+    "S7800",
+    "S9300",
+    "S12700",
+    "S6700",
+    "S8700",
+    "S16700",
+    "S9700",
+    "SIG9800",
+    "USG6600",
+    "USG6600E",
+    "USG6600F",
+    "USG6000F-C",
+    "USG9500",
+    "USG12000",
+    "USG12000-F",
+    "USG12000-H",
+    "USG9520",
+    "USG12004",
+    "USG12008-F",
+    "NetEngine XH16000 X8",
+    "NetEngine XH16000E X8",
+    "ATN980E",
+    "ATN910D-C",
+    "NetEngine 8000E F1A",
+    "NetEngine 8000E F1A-C",
+    "NetEngine 8000E F8",
+    "NetEngine 8000E F8A",
+    "NetEngine 8000E M1A",
+    "NetEngine 8000E M1C",
+    "NetEngine 8000E M1D",
+    "NetEngine 8000E M4",
+    "NetEngine XH16000 M14",
+    "NetEngine XH861",
+    "SIG16000 X4",
+    "SIG16000 X8",
+    "NetEngine XH12000 X8",
+    "NetEngine XH12000 X16",
+    "ATN910E-A",
+    "NetEngine 8000 F2D",
+    "NetEngine 8000E F2D",
+    "NetEngine A817",
+    "NetEngine 8000 NTN",
+    "NetEngine 8000E X8",
+    "NetEngine 6000 X4",
+    "NetEngine 6000 X8",
+    "NetEngine XH16100 X8",
+    "NetEngine XH16200 X8",
+    "NetEngine XH16100 M14",
+    "NetEngine XH16200 M14",
+    "NetEngine 8000 X-C",
+    "NetEngine XH16000E M14",
+    "AdtecRouter 8000E X8",
+    "AdtecRouter XH16000E X8",
+    "AdtecRouter 8000E M8",
+    "AdtecRouter XH16000E M14",
+    "AdtecRouter 8000E M1C",
+    "TGDataCom 8000E X8",
+    "TGDataCom XH16000E X8",
+    "TGDataCom 8000E M8",
+    "TGDataCom XH16000E M14",
+    "TGDataCom 8000E M1C",
+    "NetEngine 8000 F2C-P",
+    "NetEngine 8000E F2C-P",
+    "NetEngine 8000E M1E-B",
+    "NetEngine XH861 E",
+    "NetEngine XH871",
+    "NetEngine XH821-GE",
+    "NetEngine A822-Q",
+    "ATN905-L-Q",
+    "NetEngine 8000 F1A-S",
+    "NetEngine 8000E F1A-S",
+    "NetEngine 8000E F2C-C",
+    "NetEngine 8000E M1E-A"
+  ],
+  "deviceVersions": {
+    "ATN905": [
+      "V200RXXX",
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "ATN905-L-Q": [
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "ATN910": [
+      "V200RXXX",
+      "V800RXXX"
+    ],
+    "ATN910C": [
+      "V200RXXX",
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "ATN910C-H": [
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "ATN910D": [
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "ATN910D-C": [
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "ATN910E-A": [
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "ATN910I": [
+      "V200RXXX",
+      "V800RXXX"
+    ],
+    "ATN910I-C": [
+      "V200RXXX",
+      "V800RXXX"
+    ],
+    "ATN950": [
+      "V200RXXX",
+      "V800RXXX"
+    ],
+    "ATN950B": [
+      "V200RXXX",
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "ATN950C": [
+      "V200RXXX",
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "ATN980B": [
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "ATN980C": [
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "ATN980E": [
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "AdtecRouter 8000E M1C": [
+      "V800RXXX"
+    ],
+    "AdtecRouter 8000E M8": [
+      "V800RXXX"
+    ],
+    "AdtecRouter 8000E X8": [
+      "V800RXXX"
+    ],
+    "AdtecRouter XH16000E M14": [
+      "V800RXXX"
+    ],
+    "AdtecRouter XH16000E X8": [
+      "V800RXXX"
+    ],
+    "AntiDDoS12000": [
+      "V600RXXX"
+    ],
+    "AntiDDoS12000-F": [
+      "V600RXXX"
+    ],
+    "AntiDDoS1900": [
+      "V600RXXX"
+    ],
+    "AntiDDos12000-H": [
+      "V600RXXX"
+    ],
+    "CE12800": [
+      "V100RXXX",
+      "V200RXXX",
+      "V300RXXX"
+    ],
+    "CE16800": [
+      "V200RXXX",
+      "V300RXXX"
+    ],
+    "CE5800": [
+      "V100RXXX",
+      "V200RXXX",
+      "V300RXXX"
+    ],
+    "CE6800": [
+      "V100RXXX",
+      "V200RXXX",
+      "V300RXXX"
+    ],
+    "CE7800": [
+      "V200RXXX"
+    ],
+    "CE8800": [
+      "V200RXXX",
+      "V300RXXX"
+    ],
+    "CE9800": [
+      "V200RXXX",
+      "V300RXXX"
+    ],
+    "CX600": [
+      "V600RXXX",
+      "V800RXXX"
+    ],
+    "Eudemon1000": [
+      "V200RXXX"
+    ],
+    "Eudemon1000E-C": [
+      "V600RXXX"
+    ],
+    "Eudemon1000E-F": [
+      "V600RXXX"
+    ],
+    "Eudemon1000E-G": [
+      "V600RXXX"
+    ],
+    "Eudemon1000E-M": [
+      "V600RXXX"
+    ],
+    "Eudemon1000E-N": [
+      "V100RXXX",
+      "V500RXXX"
+    ],
+    "Eudemon1000E-S": [
+      "V600RXXX"
+    ],
+    "Eudemon1000E-T": [
+      "V600RXXX"
+    ],
+    "Eudemon1000E-X": [
+      "V200RXXX",
+      "V300RXXX"
+    ],
+    "Eudemon200E-C2F": [
+      "V300RXXX"
+    ],
+    "Eudemon200E-G": [
+      "V600RXXX"
+    ],
+    "Eudemon200E-N": [
+      "V100RXXX",
+      "V500RXXX"
+    ],
+    "Eudemon500": [
+      "V200RXXX"
+    ],
+    "Eudemon8000E": [
+      "V100RXXX",
+      "V200RXXX"
+    ],
+    "Eudemon8000E-X": [
+      "V200RXXX",
+      "V300RXXX",
+      "V500RXXX"
+    ],
+    "Eudemon8080E": [
+      "V100RXXX"
+    ],
+    "Eudemon9000E-F": [
+      "V600RXXX"
+    ],
+    "Eudemon9000E-H": [
+      "V600RXXX"
+    ],
+    "Eudemon9000E-X": [
+      "V600RXXX"
+    ],
+    "HiSecEngine Probe1000": [
+      "V600RXXX"
+    ],
+    "IPS12000": [
+      "V600RXXX"
+    ],
+    "IPS12000-F": [
+      "V600RXXX"
+    ],
+    "IPS12000-H": [
+      "V600RXXX"
+    ],
+    "IPS6000F": [
+      "V600RXXX"
+    ],
+    "MA5200G": [
+      "V300RXXX"
+    ],
+    "ME60": [
+      "V100RXXX",
+      "V600RXXX",
+      "V800RXXX"
+    ],
+    "NE20E": [
+      "V200RXXX",
+      "V600RXXX",
+      "V800RXXX"
+    ],
+    "NE40E": [
+      "V300RXXX",
+      "V600RXXX",
+      "V800RXXX"
+    ],
+    "NE5000E": [
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "NE8000": [
+      "V800RXXX"
+    ],
+    "NE80E": [
+      "V300RXXX"
+    ],
+    "NE9000": [
+      "V800RXXX"
+    ],
+    "NetEngine 6000 X4": [
+      "V800RXXX"
+    ],
+    "NetEngine 6000 X8": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000 F1A-S": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000 F2C-P": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000 F2D": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000 NTN": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000 X-C": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E F1A": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E F1A-C": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E F1A-S": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E F2C-C": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E F2C-P": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E F2D": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E F8": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E F8A": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E M1A": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E M1C": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E M1D": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E M1E-A": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E M1E-B": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E M4": [
+      "V800RXXX"
+    ],
+    "NetEngine 8000E X8": [
+      "V800RXXX"
+    ],
+    "NetEngine A816": [
+      "V800RXXX"
+    ],
+    "NetEngine A816 E": [
+      "V800RXXX"
+    ],
+    "NetEngine A817": [
+      "V800RXXX"
+    ],
+    "NetEngine A821 E": [
+      "V800RXXX"
+    ],
+    "NetEngine A822-Q": [
+      "V800RXXX"
+    ],
+    "NetEngine XH12000 X16": [
+      "V800RXXX"
+    ],
+    "NetEngine XH12000 X8": [
+      "V800RXXX"
+    ],
+    "NetEngine XH16000 M14": [
+      "V800RXXX"
+    ],
+    "NetEngine XH16000 X8": [
+      "V800RXXX"
+    ],
+    "NetEngine XH16000E M14": [
+      "V800RXXX"
+    ],
+    "NetEngine XH16000E X8": [
+      "V800RXXX"
+    ],
+    "NetEngine XH16100 M14": [
+      "V800RXXX"
+    ],
+    "NetEngine XH16100 X8": [
+      "V800RXXX"
+    ],
+    "NetEngine XH16200 M14": [
+      "V800RXXX"
+    ],
+    "NetEngine XH16200 X8": [
+      "V800RXXX"
+    ],
+    "NetEngine XH8000E X8": [
+      "V800RXXX"
+    ],
+    "NetEngine XH821": [
+      "V800RXXX"
+    ],
+    "NetEngine XH821 E": [
+      "V800RXXX"
+    ],
+    "NetEngine XH821-GE": [
+      "V800RXXX"
+    ],
+    "NetEngine XH861": [
+      "V800RXXX"
+    ],
+    "NetEngine XH861 E": [
+      "V800RXXX"
+    ],
+    "NetEngine XH871": [
+      "V800RXXX"
+    ],
+    "PTN6900": [
+      "V600RXXX",
+      "V800RXXX"
+    ],
+    "S12700": [
+      "V200RXXX"
+    ],
+    "S16700": [
+      "V600RXXX"
+    ],
+    "S2300": [
+      "V100RXXX",
+      "V200RXXX"
+    ],
+    "S3300": [
+      "V100RXXX",
+      "V200RXXX"
+    ],
+    "S5300": [
+      "V100RXXX",
+      "V200RXXX",
+      "V600RXXX"
+    ],
+    "S5700": [
+      "V100RXXX",
+      "V200RXXX",
+      "V600RXXX"
+    ],
+    "S6300": [
+      "V100RXXX",
+      "V200RXXX"
+    ],
+    "S6700": [
+      "V200RXXX",
+      "V600RXXX"
+    ],
+    "S7700": [
+      "V100RXXX",
+      "V200RXXX",
+      "V600RXXX"
+    ],
+    "S7800": [
+      "V600RXXX"
+    ],
+    "S8700": [
+      "V600RXXX"
+    ],
+    "S9300": [
+      "V100RXXX",
+      "V200RXXX",
+      "V600RXXX"
+    ],
+    "S9700": [
+      "V200RXXX"
+    ],
+    "SIG16000 X4": [
+      "V800RXXX"
+    ],
+    "SIG16000 X8": [
+      "V800RXXX"
+    ],
+    "SIG9800": [
+      "V300RXXX",
+      "V800RXXX"
+    ],
+    "TGDataCom 8000E M1C": [
+      "V800RXXX"
+    ],
+    "TGDataCom 8000E M8": [
+      "V800RXXX"
+    ],
+    "TGDataCom 8000E X8": [
+      "V800RXXX"
+    ],
+    "TGDataCom XH16000E M14": [
+      "V800RXXX"
+    ],
+    "TGDataCom XH16000E X8": [
+      "V800RXXX"
+    ],
+    "USG12000": [
+      "V600RXXX"
+    ],
+    "USG12000-F": [
+      "V600RXXX"
+    ],
+    "USG12000-H": [
+      "V600RXXX"
+    ],
+    "USG12004": [
+      "V600RXXX"
+    ],
+    "USG12008-F": [
+      "V600RXXX"
+    ],
+    "USG6000F-C": [
+      "V600RXXX"
+    ],
+    "USG6600": [
+      "V500RXXX"
+    ],
+    "USG6600E": [
+      "V600RXXX"
+    ],
+    "USG6600F": [
+      "V600RXXX"
+    ],
+    "USG9500": [
+      "V500RXXX"
+    ],
+    "USG9520": [
+      "V500RXXX"
+    ],
+    "XH16800": [
+      "V300RXXX"
+    ],
+    "XH8000": [
+      "V300RXXX"
+    ],
+    "XH9000": [
+      "V300RXXX"
+    ]
+  }
+}

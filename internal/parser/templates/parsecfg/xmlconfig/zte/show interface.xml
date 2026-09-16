@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show interface 样式一
+xgei-0/1/1/4 is up, line protocol is up, IPv4 protocol is up, IPv6 protocol is down
+  Last line protocol up time :  2010-09-14 16:45:14
+  Description is ADG_DB8_XT
+  Internet address is xx.xx.xx.xx/24
+  Hardware is XGigabit Ethernet, address is xxxx.xxxx.xxxx
+  BW 10000000 Kbps
+Intf utilization: input 0%             output 0%
+  HardwareCounters:
+  In_Bytes          14661697399888       In_Packets         138803826407
+  E_Bytes           2304189129021401     E_Packets          1587143569119
+
+show interface  样式二
+gei_1/1 is down,  line protocol is down
+  Description is test
+  The port is electric
+  Internet address is xx.xx.xx.xx/24
+  MTU 1500 bytes    BW 1000000 Kbits
+Interface utilization: input       0%,     output       0%
+  Input:
+    Packets      : 0                        Bytes     : 0
+    Dropped      : 0                        Fragments : 0
+  Output:
+    Packets      : 0                        Bytes     : 0
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <Regex>
+            ^(\S+) +is[ \r\n]*((\w+) )?(up|down) {0,255},?[ \r\n]{0,255}(line[ \r\n]*protocol[ \r\n]*is[ \r\n]*(up|down))?
+        </Regex>
+        <ParseNode name="neInterfaceNode">
+            <ConfigParsePolicy>
+                <Field name="interfaceName,ifAdminStatus,ifPhyStatus,ifOperStatus">
+                    <Regex>
+                        <![CDATA[
+                        ^(?<interfaceName>\S+) +is[ \r\n]*((?<ifAdminStatus>\w+) )?(?<ifPhyStatus>up|down) {0,255},?
+                        [ \r\n]{0,255}(line[ \r\n]*protocol[ \r\n]*is[ \r\n]*(?<ifOperStatus>up|down))?
+                        ]]>
+                    </Regex>
+                    <ToUpper name="ifAdminStatus,ifPhyStatus,ifOperStatus"/>
+                    <ValueMapping name="ifAdminStatus" srcValue="ADMINISTRATIVELY"
+                                  dstValue="Administratively DOWN|Administratively DOWN"/>
+                    <SplitField srcField="ifAdminStatus" delimiter="|" dstFields="ifAdminStatus,ifPhyStatus"/>
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                    methodName="convertIfName"/>
+                    <Assign assignMap="vendor:ZTE" filterType="NOT_NULL" filterFieldName="interfaceName" order="-2"/>
+                </Field>
+                <Field name="ifOperStatus">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Line protocol is (?<ifOperStatus>up|down)
+                        ]]>
+                    </Regex>
+                    <ToUpper/>
+                </Field>
+                <Field name="description">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Description *(is|:) {0,255}(?<description>.+)
+                        ]]>
+                    </Regex>
+                    <Assign assignMap="description:" filterType="EQUALS" filterValue="none"/>
+                </Field>
+                <Field name="lastPhysicalUptime">
+                    <Regex>
+                        <![CDATA[
+                            Last physical up time *: {0,255}(?<lastPhysicalUptime>((?!,).){1,255})
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="lastPhysicalDowntime">
+                    <Regex>
+                        <![CDATA[
+                            Last physical down time *: {0,255}(?<lastPhysicalDowntime>((?!,).){1,255})
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="inputUtilityRate">
+                    <Regex>
+                        <![CDATA[
+                            (In_Packets|Input *:[ \r\n]+ Packets *:) *(?<inputUtilityRate>\d+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="outputUtilityRate">
+                    <Regex>
+                        <![CDATA[
+                            (E_Packets|Output *:[ \r\n]+ Packets *:) *(?<outputUtilityRate>\d+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="primaryIpAddr,primaryMask">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Internet *Address *is +(?<primaryIpAddr>(\d{1,3}\.){3}\d{1,3})/(?<primaryMask>\d+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="inUti,outUti">
+                    <Regex>
+                        <![CDATA[
+                            ^ *(Intf|Interface) *utilization *: *input *(?<inUti>\d+(\.\d+)?%) {0,255},? {0,255}output *(?<outUti>\d+(\.\d+)?%)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="maxBandwidth,unit">
+                    <Regex>
+                        <![CDATA[
+                            BW *(?<maxBandwidth>\d{1,100}) *(?<unit>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+            <DefaultValue name="ifAdminStatus" value="UP"/>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    ZXR10#show lldp entry
+    Local Port: fei-0/1/0/1 | Interface Name
+    Chassis ID: xxxxxxxxxxx | MAC Address
+    Peer Port: fei-0/1/0/1 | Interface Name
+    TTL: 105 | Time to live
+    Port Description: Port name fei-0/1/0/1, PortPhyStatus is up,
+    PortPhotoElectricityMode is electric, Pvid 1
+    System Name: ZXR10
+    System Description: M6000v2.00.20(2.2.0), ZXR10, ZXR10 M6000-16
+    Software, NULL
+    System Capability: Bridge, Router
+    Management Address: IPv4 - x.x.x.x, ifIndex - 0, OID - Null
+    Link Aggregation: Not Enabled
+
+    ZXR10#show lldp entry
+    System Information
+    Local port           :gei-0/1/0/1
+    Group MAC address    :Nearest Bridge
+    Neighbor index       :1
+    Chassis type         :MAC address
+    Chassis ID           :xxxx.xxxx.xxxx
+    Port ID type         :Interface name
+    Port ID              :gei-0/1/0/1
+    Time to live         :113
+    Port description     :gei-0/1/0/1(electric)
+    System name          :ZXR10
+    System description   :T8000V4.00.10,ZXCTN vSwitch Software
+    System capabilities  :Bridge,Router
+    Management address   :IPv4-x.x.x.x, IfIndex-3, OID-0
+-->
+<CommandParseConfig>
+    <SegmentParse childMutex="true">
+        <ParseNode name="LldpEntry">
+            <Regex>
+                ^ *Local +Port *: {0,255}\S{1,255} *\|
+            </Regex>
+            <SegmentParse>
+                <Regex>
+                    ^ *Local +Port *: {0,255}\S{1,255} *\|
+                </Regex>
+                <ParseNode name="LldpEntryNode">
+                    <ConfigParsePolicy>
+                        <Field name="localPortName" primary="true">
+                            <Regex>
+                                <![CDATA[
+                                    ^ *Local +Port *: {0,255}(?<localPortName>\S{1,255}) *\|
+                                ]]>
+                            </Regex>
+                        </Field>
+                        <Field name="remotePortId,portType">
+                            <Regex>
+                                <![CDATA[
+                                    ^ *(Peer +Port|Port ID) *: {0,255}(?<remotePortId>\S{1,255}( \S{1,255})?) *\| *(?<portType>\S{0,255}( {1,100}\S{1,255})?)
+                                ]]>
+                            </Regex>
+                        </Field>
+                        <Field name="remoteSystemName">
+                            <Regex>
+                                <![CDATA[
+                                    ^ *System +Name *: *(?<remoteSystemName>.{1,300})
+                                ]]>
+                            </Regex>
+                        </Field>
+                    </ConfigParsePolicy>
+                </ParseNode>
+            </SegmentParse>
+        </ParseNode>
+        <ParseNode name="LldpEntry">
+            <Regex>
+                ^ *System +Information[ \r\n]*$
+            </Regex>
+            <SegmentParse>
+                <Regex>
+                    ^ *System +Information[ \r\n]*$
+                </Regex>
+                <ParseNode name="LldpEntryNode">
+                    <ConfigParsePolicy>
+                        <Field name="localPortName" primary="true">
+                            <Regex>
+                                <![CDATA[
+                                    ^ *Local +port *: *(?<localPortName>\S+)
+                                ]]>
+                            </Regex>
+                        </Field>
+                        <Field name="remotePortId">
+                            <Regex>
+                                <![CDATA[
+                                    ^ *Port +ID *: *(?<remotePortId>\S+( \S+)?)
+                                ]]>
+                            </Regex>
+                        </Field>
+                        <Field name="remoteSystemName">
+                            <Regex>
+                                <![CDATA[
+                                    ^ *System +Name *: *(?<remoteSystemName>.{1,300})
+                                ]]>
+                            </Regex>
+                        </Field>
+                    </ConfigParsePolicy>
+                </ParseNode>
+            </SegmentParse>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

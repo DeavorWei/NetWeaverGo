@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show version
+System description      : Ruijie High-density IPv6 100G Core Routing Switch(N18010) By Ruijie Networks
+System start time       : 2022-08-31 02:12:23
+System uptime           : 411:14:39:35
+System hardware version : 1.11
+System software version : N18000_RGOS 11.0(4)B19P2
+System patch number     : NA
+System serial number    : G1L703T00100A
+System boot version     : 1.2.27
+
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="versionNode">
+            <ConfigParsePolicy>
+                <Field name="deviceType">
+                    <Regex>
+                        <![CDATA[
+                          ^ {0,100}System\s{1,100}description\s{1,100}:.{0,1024}\((?<deviceType>\S{1,255})\)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="deviceVersion">
+                    <Regex>
+                        <![CDATA[
+                          System\s+software\s+version\s+:(?<deviceVersion>.{1,1024})
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

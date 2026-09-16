@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show interface brief
+Interface               Attribute  Mode         BW    Admin Phy   Prot  Description
+cgei-0/1/1/1            optical    Duplex/full  100G  down  down  down
+cgei-0/1/1/2            optical    Duplex/full  100G  down  down  down
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="opticalIfNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *(?<ifName>\S+) +optical +
+                    ]]>
+                </Regex>
+                <Field name="ifName">
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                    methodName="convertIfName"/>
+                    <Assign assignMap="vendor:ZTE" filterType="NOT_NULL" filterFieldName="ifName" order="-2"/>
+                </Field>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

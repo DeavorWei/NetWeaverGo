@@ -1,0 +1,14 @@
+[
+  {
+    "filePath": "..\\templates\\parsecfg\\xmlconfig\\ruijie\\show lldp neighbors.xml",
+    "node": "SegmentParse.Regex",
+    "rawPattern": "(?\u003ccontents\u003e((?!Total entries)[ \\S\\r\\n])+)",
+    "error": "error parsing regexp: invalid or unsupported Perl syntax: `(?!`"
+  },
+  {
+    "filePath": "..\\templates\\parsecfg\\xmlconfig\\zte\\show version.xml",
+    "node": "Field[deviceType1,deviceType2,deviceType3,deviceVersion].Regex",
+    "rawPattern": "^ {0,100}(ZTE )?\\b(?\u003cdeviceType1\u003e((?!ROS)\\S){1,100}?)([ _](?\u003cdeviceType2\u003e((?!(,|ROS))\\S){1,100}))? {1,255}\n                        (Software, {1,100}\\S{0,100} {0,100})?Version {0,100}(?:Number {1,100})?(: {0,100})?(?\u003cdeviceType3\u003e\\S{0,100} \\S{0,100}) {0,100}\n                        (?\u003cdeviceVersion\u003eV\\d{1,9}\\.\\d{1,9}\\.\\d{1,9}[\\d.a-z]{0,20})",
+    "error": "error parsing regexp: invalid or unsupported Perl syntax: `(?!`"
+  }
+]

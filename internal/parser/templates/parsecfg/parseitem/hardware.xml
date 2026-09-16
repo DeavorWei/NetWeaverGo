@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE CommonParseItem SYSTEM "commandparse.dtd">
+<CommonParseItem>
+    <VendorCommon vendor="HUAWEI">
+        <CommandParse cmd="display esn@@display device esn" isResultMutex="true"
+                      path="parsecfg/xmlconfig/huawei/display esn.xml"/>
+        <CommandParse cmd="display license" path="parsecfg/xmlconfig/huawei/display license.xml"/>
+        <CommandParse cmd="display alarm active" path="parsecfg/xmlconfig/huawei/display alarm active.xml"/>
+        <CommandParse cmd="display version" path="parsecfg/xmlconfig/huawei/display version.xml"/>
+        <CommandParse cmd="display current-configuration | include sysname"
+                      path="parsecfg/xmlconfig/h3c/display sysname.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="ZTE">
+        <CommandParse cmd="show version" path="parsecfg/xmlconfig/zte/show version.xml"/>
+        <CommandParse cmd="show running-config | include hostname" path="parsecfg/xmlconfig/zte/show hostname.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="H3C">
+        <CommandParse cmd="display version" path="parsecfg/xmlconfig/h3c/display version.xml"/>
+        <CommandParse cmd="display current-configuration | include sysname"
+                      path="parsecfg/xmlconfig/h3c/display sysname.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="RUIJIE">
+        <CommandParse cmd="show running-config | include hostname"
+                      path="parsecfg/xmlconfig/ruijie/show running config include hostname.xml"/>
+        <CommandParse cmd="show version"
+                      path="parsecfg/xmlconfig/ruijie/show version.xml"/>
+    </VendorCommon>
+</CommonParseItem>

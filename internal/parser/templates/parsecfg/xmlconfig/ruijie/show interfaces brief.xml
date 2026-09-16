@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show interfaces brief
+down: link down
+*down: administratively down
+disabled: err-disabled(Please reference to command [show interfaces status err-disabled] for detail.)
+Interface     Link Stat     Protocol Stat  Input Usage       Output Usage      inErrors      outErrors
+Te0/1         up            up             0.01%             0.01%             0             0
+Te0/2         up            up             0.00%             0.01%             0             0
+Te0/3         *down         down           0.00%             0.00%             0             0
+
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="neInterfaceNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                        ^ *(?<interfaceName>\S{1,100} ?[\d/]{1,100}) +(?<ifPhyStatus>(?:\^|\*)?down|up|disabled) +(?<ifOperStatus>down|up) +
+                        ((?<inUti>\d+(\.\d+)?%)|-+) +((?<outUti>\d+(\.\d+)?%)|-+) +((?<inErrors>\d+)|-+) +((?<outErrors>\d+)|-+)
+                    ]]>
+                </Regex>
+                <Field name="interfaceName,inUti,outUti,inErrors,outErrors">
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                methodName="convertIfName"/>
+                    <Assign assignMap="vendor:RUIJIE" filterType="NOT_NULL" filterFieldName="interfaceName" order="-2"/>
+                </Field>
+                <Field name="ifPhyStatus">
+                    <ToUpper/>
+                    <ValueMapping srcValue="*DOWN,^DOWN,DISABLED" dstValue="Administratively DOWN|Administratively DOWN,UP|DOWN,DOWN"/>
+                    <SplitField delimiter="|" dstFields="ifAdminStatus,ifPhyStatus"/>
+                </Field>
+                <Field name="ifOperStatus">
+                    <ToUpper/>
+                    <ValueMapping srcValue="*DOWN" dstValue="DOWN"/>
+                </Field>
+            </TableLineParsePolicy>
+            <DefaultValue name="ifAdminStatus" value="UP"/>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

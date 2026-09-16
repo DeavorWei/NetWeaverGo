@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+display version
+H3C Comware Software, Version 7.1.064, Ess 9141P04
+Copyright (c) 2004-2018 New H3C Technologies Co., Ltd. All rights reserved.
+H3C SecPath M9006 uptime is 0 weeks, 0 days, 23 hours, 35 minutes
+Last reboot reason : User reboot
+
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="versionNode">
+            <ConfigParsePolicy>
+                <Field name="deviceType">
+                    <Regex>
+                        <![CDATA[
+                        ^ {0,100}(?:H3C {1,255})?((?:(NS-)?SecPath|Quidway|UIS) {1,255})?(?<deviceType>(SecBlade {1,255}(?:III {1,255})?(?:FW {1,255})?)?[\w-]+)( \S+|\(\S+\))? +uptime
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="deviceVersion">
+                    <Regex>
+                        <![CDATA[
+                        Version \S{0,1024}?(?<deviceVersion>[\d.]{1,255}|V\d{3}R\d{3})
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

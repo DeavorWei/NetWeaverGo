@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show version
+ZXR10 M6000-5S
+ZTE ZXR10 Software, Version: M6000-S V3.00.20(develop), Release software
+Copyright (c) 2014 by ZTE Corporation
+Build on 2014/05/19 16:39:14
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="versionNode">
+            <ConfigParsePolicy>
+                <Field name="deviceVersion">
+                    <Regex>
+                        <![CDATA[
+                        \S? {0,255}ROS {0,255}Version *(?<deviceVersion>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="deviceType1,deviceType2,deviceType3,deviceVersion">
+                    <Regex>
+                        <![CDATA[
+                        ^ {0,100}(ZTE )?\b(?<deviceType1>((?!ROS)\S){1,100}?)([ _](?<deviceType2>((?!(,|ROS))\S){1,100}))? {1,255}
+                        (Software, {1,100}\S{0,100} {0,100})?Version {0,100}(?:Number {1,100})?(: {0,100})?(?<deviceType3>\S{0,100} \S{0,100}) {0,100}
+                        (?<deviceVersion>V\d{1,9}\.\d{1,9}\.\d{1,9}[\d.a-z]{0,20})
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="deviceType">
+                    <Regex>
+                        <![CDATA[
+                        ^(?<deviceType>ZXR10 \S+)( +V[\d.]+)?[ \r\n]+^ZTE ZXR10
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="deviceType">
+                    <Regex>
+                        <![CDATA[
+                        ^(?<deviceType>ZXR10 +(M6000|6800)-\S+( Plus)?)[ \r\n]*$
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

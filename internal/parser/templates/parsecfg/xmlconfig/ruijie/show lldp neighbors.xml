@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+
+show lldp neighbors
+Capability codes:
+    (R) Router, (B) Bridge, (T) Telephone, (C) DOCSIS Cable Device
+    (W) WLAN Access Point, (P) Repeater, (S) Station, (O) Other
+System Name                 Local Intf          Port ID                     Capability   Aging-time
+W-S-四教学楼C-1F-S5750-1    Te1/5/3             Te0/31                      P, B, R      1minutes 35seconds
+2beizhong1                  Te1/5/4             Te0/32                      P, B, R      1minutes 40seconds
+外国语-1                    Te1/5/5             Te0/32                      P, B, R      1minutes 50seconds
+动力学院-1                  Te1/5/6             Te0/32                      P, B, R      1minutes 43seconds
+
+-->
+<CommandParseConfig>
+    <!--extractGroupName 提取组名-->
+    <SegmentParse extractGroupName="contents">
+        <Regex>
+<!--            ?!反向匹配不包含Total entries的字符串-->
+            <![CDATA[
+                    (?<contents>((?!Total entries)[ \S\r\n])+)
+                    ]]>
+        </Regex>
+        <ParseNode name="lldpNeighborNode">
+            <!--表格文本解析策略，如果解析成功，会解析出一个alarmActiveInfo节点-->
+            <TableColumnParsePolicy newlineSupport="true">
+                <Regex>
+                    <![CDATA[
+                         ^(?<remoteSystemName> *System +Name +)(?<localPortName>Local +Intf +)(?<remotePortId>Port +ID +)(?<capability>Capability +)(?<agingTime>Aging-time *)
+                    ]]>
+                </Regex>
+                <Field name="remoteSystemName" merge="true" mergeDelimiter="">
+                    <ToUpper/>
+                </Field>
+                <Field name="localPortName" primary="true">
+                    <ToUpper/>
+                </Field>
+                <Field name="remotePortId"/>
+            </TableColumnParsePolicy>
+            <Filter filterFieldName="remoteSystemName" filterType="NOT_EQUALS" filterValue="SYSTEM NAME"/>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

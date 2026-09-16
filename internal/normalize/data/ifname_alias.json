@@ -1,0 +1,23 @@
+{
+  "Twenty-FiveGigE": "25GE",
+  "TwentyFiveGigE": "25GE",
+  "TwoGigabitEthernet": "2GE",
+  "FiveGigabitEthernet": "5GE",
+  "FortyGigabitEthernet": "40GE",
+  "FortyGigE": "40GE",
+  "HundredGigabitEthernet": "100GE",
+  "HundredGigE": "100GE",
+  "FourHundredGigE": "400GE",
+  "FourHundredGigabitEthernet": "400GE",
+  "Ten-GigabitEthernet": "XGE",
+  "TenGigabitEthernet": "XGE",
+  "TenGigE": "XGE",
+  "GigabitEthernet": "GE",
+  "FastEthernet": "FE",
+  "Ethernet": "Eth",
+  "Eth-Trunk": "Trunk",
+  "Bridge-Aggregation": "BAgg",
+  "Route-Aggregation": "RAGG",
+  "Port-channel": "Po",
+  "Vlan-interface": "Vlanif"
+}

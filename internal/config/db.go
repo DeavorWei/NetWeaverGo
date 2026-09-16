@@ -105,6 +105,11 @@ func InitDB() error {
 		logger.Warn("Config", "-", "加载设备画像 DB 覆盖记录失败: %v", err)
 	}
 
+	// 填充设备能力初始种子
+	if err := models.EnsureDeviceCapabilitySeeds(db); err != nil {
+		logger.Warn("Config", "-", "初始化设备能力种子失败: %v", err)
+	}
+
 	// 创建索引优化查询性能
 	createIndexes(db)
 
@@ -125,6 +130,7 @@ func autoMigrateAll(db *gorm.DB) error {
 		&models.RiskCommand{},
 		&models.UserParseTemplate{},
 		&models.DeviceProfileRecord{},
+		&models.DeviceCapability{},
 		// 规划比对相关表
 		&models.PlanFile{},
 		&models.PlannedLink{},

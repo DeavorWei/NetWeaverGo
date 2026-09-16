@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ModelCmdConfigRoot>
+    <ModelConfig model="com.huawei.ncetools.ipdevicecheckservice.model.network.NeArpTable"
+                 taskTypes="FIBER_CHECK,WEAK_LIGHT_CHECK">
+        <Vendor vendor="HUAWEI">
+            <CommandConfig cmd="display arp" isBig="true" fileName="display arp.txt"/>
+        </Vendor>
+        <Vendor vendor="ZTE">
+            <CommandConfig cmd="show arp" isBig="true" fileName="show arp.txt"/>
+        </Vendor>
+        <Vendor vendor="H3C">
+            <CommandConfig cmd="display arp all" isBig="true" fileName="display arp all.txt"/>
+        </Vendor>
+        <Vendor vendor="RUIJIE">
+            <CommandConfig cmd="show arp" isBig="true" fileName="show arp.txt"/>
+        </Vendor>
+    </ModelConfig>
+    <ModelConfig model="com.huawei.ncetools.ipdevicecheckservice.model.network.NeIfTransceiver"
+                 taskTypes="WEAK_LIGHT_CHECK">
+        <Vendor vendor="HUAWEI">
+            <CommandConfig cmd="display interface transceiver verbose"/>
+            <CommandConfig cmd="display transceiver verbose"/>
+            <CommandConfig cmd="display optical-module interface \S+" isRegex="true"/>
+            <CommandConfig cmd="display transceiver diagnosis interface"/>
+        </Vendor>
+        <Vendor vendor="ZTE">
+            <CommandConfig cmd="show opticalinfo \S+" isRegex="true"/>
+            <CommandConfig cmd="show optical-inform brief shelf 0"/>
+            <CommandConfig cmd="show optical-inform shelf 0"/>
+            <CommandConfig cmd="show optical-inform details rx-power shelf 0"/>
+            <CommandConfig cmd="show optical-inform details tx-power shelf 0"/>
+        </Vendor>
+        <Vendor vendor="H3C">
+            <CommandConfig cmd="display transceiver diagnosis interface"/>
+            <CommandConfig cmd="display transceiver interface"/>
+        </Vendor>
+        <Vendor vendor="RUIJIE">
+            <CommandConfig cmd="show interfaces transceiver"/>
+        </Vendor>
+    </ModelConfig>
+    <ModelConfig model="com.huawei.ncetools.ipdevicecheckservice.model.network.NeInterface"
+                 taskTypes="FIBER_CHECK,WEAK_LIGHT_CHECK">
+        <Vendor vendor="HUAWEI">
+            <CommandConfig cmd="display interface"/>
+            <CommandConfig cmd="display interface brief"/>
+        </Vendor>
+        <Vendor vendor="ZTE">
+            <CommandConfig cmd="show interface"/>
+            <CommandConfig cmd="show interface brief"/>
+        </Vendor>
+        <Vendor vendor="H3C">
+            <CommandConfig cmd="display interface"/>
+        </Vendor>
+        <Vendor vendor="RUIJIE">
+            <CommandConfig cmd="show interfaces"/>
+            <CommandConfig cmd="show interfaces brief"/>
+        </Vendor>
+    </ModelConfig>
+    <ModelConfig model="com.huawei.ncetools.ipdevicecheckservice.model.network.NeLldpNeighbor"
+                 taskTypes="FIBER_CHECK,WEAK_LIGHT_CHECK">
+        <Vendor vendor="HUAWEI">
+            <CommandConfig cmd="display lldp neighbor brief"/>
+            <CommandConfig cmd="display lldp neighbor"/>
+        </Vendor>
+        <Vendor vendor="ZTE">
+            <CommandConfig cmd="show lldp entry"/>
+        </Vendor>
+        <Vendor vendor="H3C">
+            <CommandConfig cmd="display lldp neighbor-information list"/>
+        </Vendor>
+        <Vendor vendor="RUIJIE">
+            <CommandConfig cmd="show lldp neighbors"/>
+        </Vendor>
+    </ModelConfig>
+    <ModelConfig model="com.huawei.ncetools.ipdevicecheckservice.model.network.NeBgpPeer"
+                 taskTypes="FIBER_CHECK">
+        <Vendor vendor="HUAWEI">
+            <CommandConfig cmd="display bgp peer"/>
+        </Vendor>
+    </ModelConfig>
+    <ModelConfig model="com.huawei.ncetools.ipdevicecheckservice.model.network.NeLicense"
+                 taskTypes="FIBER_CHECK">
+        <Vendor vendor="HUAWEI">
+            <CommandConfig cmd="display license"/>
+        </Vendor>
+    </ModelConfig>
+    <ModelConfig model="com.huawei.ncetools.ipdevicecheckservice.model.network.NeElement"
+                 taskTypes="FIBER_CHECK,WEAK_LIGHT_CHECK">
+        <Vendor vendor="HUAWEI">
+            <CommandConfig cmd="display esn"/>
+            <CommandConfig cmd="display device esn"/>
+            <CommandConfig cmd="display version"/>
+            <CommandConfig cmd="display current-configuration | include sysname"/>
+        </Vendor>
+        <Vendor vendor="ZTE">
+            <CommandConfig cmd="show version"/>
+            <CommandConfig cmd="show running-config | include hostname"/>
+        </Vendor>
+        <Vendor vendor="H3C">
+            <CommandConfig cmd="display version"/>
+            <CommandConfig cmd="display current-configuration | include sysname"/>
+        </Vendor>
+        <Vendor vendor="RUIJIE">
+            <CommandConfig cmd="show running-config | include hostname"/>
+            <CommandConfig cmd="show version"/>
+        </Vendor>
+    </ModelConfig>
+    <ModelConfig model="com.huawei.ncetools.ipdevicecheckservice.model.network.NeAlarmInfo"
+                 taskTypes="FIBER_CHECK">
+        <Vendor vendor="HUAWEI">
+            <CommandConfig cmd="display alarm active"/>
+        </Vendor>
+    </ModelConfig>
+    <ModelConfig model="com.huawei.ncetools.ipdevicecheckservice.model.network.NeMacData"
+                 taskTypes="FIBER_CHECK,WEAK_LIGHT_CHECK">
+        <Vendor vendor="HUAWEI">
+            <CommandConfig cmd="display mac-address" isBig="true" fileName="display mac-address.txt"/>
+        </Vendor>
+        <Vendor vendor="ZTE">
+            <CommandConfig cmd="show mac table" isBig="true" fileName="show mac table.txt"/>
+            <CommandConfig cmd="show mac" isBig="true" fileName="show mac.txt"/>
+        </Vendor>
+        <Vendor vendor="H3C">
+            <CommandConfig cmd="display mac-address" isBig="true" fileName="display mac-address.txt"/>
+        </Vendor>
+        <Vendor vendor="RUIJIE">
+            <CommandConfig cmd="show mac-address-table" isBig="true" fileName="show mac-address-table.txt"/>
+        </Vendor>
+    </ModelConfig>
+    <ModelConfig model="com.huawei.ncetools.ipdevicecheckservice.model.network.NeTrunkPort"
+                 taskTypes="FIBER_CHECK,WEAK_LIGHT_CHECK">
+        <Vendor vendor="HUAWEI">
+            <CommandConfig cmd="display interface"/>
+        </Vendor>
+    </ModelConfig>
+</ModelCmdConfigRoot>

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+
+MAC Address    VLAN          Learned-From        Type                Age
+xxxx-xxxx-xxxx 1             100GE1/1/1          dynamic                430
+xxxx-xxxx-xxxx 1             100GE1/2/5          dynamic                397
+
+show mac-address-table
+Vlan        MAC Address          Type     Interface                              Live Time
+   1        4881.d4ca.c1aa       MLAG     AggregatePort 100                      14d 15:12:41
+3010        4881.d4ca.c1ab       MLAG     AggregatePort 100                      14d 15:12:41
+
+
+show mac-address-table
+Vlan        MAC Address          Type     Interface
+   1        000b.5f1e.17c0       DYNAMIC  TenGigabitEthernet 0/5
+   1        000c.cecb.e058       DYNAMIC  TenGigabitEthernet 0/5
+
+show mac-address-table
+Vlan        MAC Address          Type     Interface                      Time
+   1        0074.9c2a.cfde       DYNAMIC  AggregatePort 14               2023-10-3 4:59:43
+   1        0074.9c3d.92f0       DYNAMIC  AggregatePort 45               2023-9-13 4:57:13
+
+
+-->
+<CommandParseConfig>
+    <SegmentParse childMutex="true">
+        <ParseNode name="macNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *\d{1,50}\s{0,255}(?<mac>[a-f0-9-.:]{1,100}) {1,255}(?<type>\S{1,255}) {1,255}(?<ifName>\D{1,255}( )?\S{1,255})
+                    ]]>
+                </Regex>
+                <Field name="mac,type,ifName"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

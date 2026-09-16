@@ -181,3 +181,35 @@ func Sanitize(msg string) string {
 func SanitizeText(msg string) string {
 	return globalSanitizer.Sanitize(msg)
 }
+
+// ContextSanitizer 带有厂商与命令上下文的脱敏代理
+type ContextSanitizer struct {
+	sanitizer *Sanitizer
+	vendor    string
+	command   string
+}
+
+// WithVendor 返回指定厂商上下文的脱敏代理
+func (s *Sanitizer) WithVendor(vendor string) *ContextSanitizer {
+	return &ContextSanitizer{
+		sanitizer: s,
+		vendor:    vendor,
+	}
+}
+
+// WithVendor 使用全局脱敏器指定厂商上下文
+func WithVendor(vendor string) *ContextSanitizer {
+	return globalSanitizer.WithVendor(vendor)
+}
+
+// WithCommand 设置当前执行的命令上下文
+func (cs *ContextSanitizer) WithCommand(command string) *ContextSanitizer {
+	cs.command = command
+	return cs
+}
+
+// Sanitize 执行脱敏
+func (cs *ContextSanitizer) Sanitize(msg string) string {
+	return cs.sanitizer.Sanitize(msg)
+}
+

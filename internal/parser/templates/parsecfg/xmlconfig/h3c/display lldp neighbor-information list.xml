@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+display lldp neighbor-information list
+Local Interface     Chassis ID        Port ID                System Name
+GE1/0/1             XXXX-XXXX-XXXX    GigabitEthernet1/0/1   System1
+
+display lldp neighbor-information list
+LocalIf         Nbr chassis ID  Nbr port ID                     Nbr system name
+XGE3/0/1        XXXX-XXXX-XXXX  GigabitEthernet0/0              System2
+
+-->
+<CommandParseConfig>
+    <SegmentParse childMutex="true">
+        <ParseNode name="lldpNeighborNode">
+            <Regex>^( *local *Interface +Chassis|LocalIf +Nbr)</Regex>
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *(?<localPortName>\S+) +([a-f0-9-.:]+) +(?<remotePortId>\S+( \S+)?) +(?<remoteSystemName>\S+)[ \r\n]*$
+                    ]]>
+                </Regex>
+                <Field name="localPortName,remotePortId,remoteSystemName"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

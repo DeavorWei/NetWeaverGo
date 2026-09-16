@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+400GE1/1/1:1 current state : UP (ifindex: 40)
+Line protocol current state : UP
+Description: To_302-K02_5-8U_A800-2001_eth1
+Switch Port, PVID :  100, TPID : 8100(Hex), The Maximum Frame Length is 9216
+Internet protocol processing : disabled
+IP Sending Frames' Format is PKTFMT_ETHNT_2, Hardware address is xxxx-xxxx-xxxx
+Port Mode:     COMMON FIBER,     Port Split/Aggregate:          ENABLE
+Speed:               200000,     Loopback:                        NONE
+Duplex:                FULL,     Negotiation:                  DISABLE
+Input Flow-control: DISABLE,     Output Flow-control:          DISABLE
+Mdi:                      -,     Fec:                        RS544-FEC
+Last physical up time   : 2024-03-09 18:05:37+08:00
+Last physical down time : 2024-03-09 18:05:36+08:00
+Current system time: 2024-03-15 11:42:35+08:00
+Statistics last cleared:2023-12-27 13:50:36+08:00
+    Input :  16746444271385425 bytes,      4765328470290 packets
+    Output:  16865347178509529 bytes,      4771781522464 packets
+    Input:
+      Total Error:                  0
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <Regex>
+            ^ {0,100}([0-9A-Za-z-\|]{1,100}\d{1,10}(/\d{1,10})?(/\d{1,10})?(/\d{1,10})?((:|\.)\d{1,10})?
+            (?: {0,255}[\r\n]{1,5}.{1,1000})?[ \r\n]{0,255}current[ \r\n]{0,255}state.{0,1000})$
+        </Regex>
+        <ParseNode name="neInterfaceNode">
+            <ConfigParsePolicy>
+                <Field name="interfaceName,ifAdminStatus,ifPhyStatus">
+                    <Regex>
+                        <![CDATA[
+                        ^ {0,100}(?<interfaceName>[0-9A-Za-z-\|]{1,100}[A-Za-z]\d{1,10}(/\d{1,10})?(/\d{1,10})?(/(\d{1,10}))?((:|\.)\d{1,10})?)
+                        (?: {0,255}[\r\n]{1,5}.{1,512})?[ \r\n]{0,255}current[ \r\n]{0,255}state[ \r\n]{0,255}:[ \r\n]{0,255}(?<ifAdminStatus>\w{1,255})?[ \r\n]{0,255}(?<ifPhyStatus>DOWN|UP)
+                        ]]>
+                    </Regex>
+                    <ToUpper name="ifAdminStatus,ifPhyStatus"/>
+                    <ValueMapping name="ifAdminStatus" srcValue="ADMINISTRATIVELY" dstValue="Administratively DOWN|Administratively DOWN"/>
+                    <SplitField srcField="ifAdminStatus" delimiter="|" dstFields="ifAdminStatus,ifPhyStatus"/>
+                </Field>
+                <Field name="ifOperStatus">
+                    <Regex>
+                        <![CDATA[
+                            Line[ \r\n]{0,100}protocol[ \r\n]{0,100}(current)?[ \r\n]{0,100}state[ \r\n]{0,100}:[ \r\n]{0,100}(?<ifOperStatus>DOWN|UP)
+                        ]]>
+                    </Regex>
+                    <ToUpper/>
+                </Field>
+                <Field name="description">
+                    <Regex>
+                        <![CDATA[
+                            Description {0,100}: {0,100}(?<description>.{1,1024})
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="lastPhysicalUptime">
+                    <Regex>
+                        <![CDATA[
+                            Last physical up time {0,100}: {0,100}(?<lastPhysicalUptime>.{1,1024})
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="lastPhysicalDowntime">
+                    <Regex>
+                        <![CDATA[
+                            Last physical down time {0,100}: {0,100}(?<lastPhysicalDowntime>.{1,1024})
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="inputUtilityRate">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Input *: *(?<inputUtilityRate>\d+) *packets *, *\d+ *bytes
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="inputUtilityRate">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Input *: *\d+ *bytes *, *(?<inputUtilityRate>\d+) *packets
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="outputUtilityRate">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Output *: *(?<outputUtilityRate>\d+) *packets *, *\d+ *bytes
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="outputUtilityRate">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Output *: *\d+ *bytes *, *(?<outputUtilityRate>\d+) *packets
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="totalError">
+                    <Regex>
+                        <![CDATA[
+                            ^ +Total Error *: *(?<totalError>\d+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="primaryIpAddr,primaryMask">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Internet *Address *is +(?<primaryIpAddr>(\d{1,3}\.){3}\d{1,3})/(?<primaryMask>\d+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="maxBandwidth">
+                    <Regex>
+                        <![CDATA[
+                            Maximal *BW *: *(?<maxBandwidth>\d+) *M
+                        ]]>
+                    </Regex>
+                    <Assign assignMap="unit:MBPS" filterType="NOT_NULL"/>
+                </Field>
+                <Field name="maxBandwidth">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Speed *: *(?<maxBandwidth>\d+)
+                        ]]>
+                    </Regex>
+                    <Assign assignMap="unit:MBPS" filterType="NOT_NULL"/>
+                </Field>
+            </ConfigParsePolicy>
+            <DefaultValue name="ifAdminStatus" value="UP"/>
+            <SegmentParse extractGroupName="content">
+                <Regex>
+                    <![CDATA[
+                        ^ *PortName {1,100}Status {1,100}(?<content>[ \S\r\n]{1,4000})
+                    ]]>
+                </Regex>
+                <ParseNode name="TrunkIfMember">
+                    <TableLineParsePolicy>
+                        <Regex>
+                            <![CDATA[
+                                ^ {0,100}(?<memberIfName>(([|0-9A-Za-z-]{1,100})(\d{1,10})(/\d{1,10})?(/\d{1,10})?(/\d{1,10})?)((:|.)\d{1,10})?)
+                                [ \r\n]{0,255}(?<trunkPortState>down|up)[ \r\n]{0,255}((?<weight>\d{0,100})[ \r\n]{0,255})?
+                            ]]>
+                        </Regex>
+                        <Field name="memberIfName,weight,trunkPortState"/>
+                    </TableLineParsePolicy>
+                </ParseNode>
+            </SegmentParse>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

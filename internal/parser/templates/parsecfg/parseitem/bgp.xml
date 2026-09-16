@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE CommonParseItem SYSTEM "commandparse.dtd">
+<CommonParseItem>
+    <VendorCommon vendor="HUAWEI">
+        <CommandParse cmd="display bgp peer" path="parsecfg/xmlconfig/huawei/display bgp peer.xml"/>
+    </VendorCommon>
+</CommonParseItem>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+<BJ-H3C-CR16006-F-01>display current-configuration | include sysname
+ sysname BJ-H3C-CR16006-F-01
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="sysNameNode">
+            <ConfigParsePolicy>
+                <Field name="sysName">
+                    <Regex>
+                        <![CDATA[
+                        ^ *sysname {1,255}(?<sysName>.{1,1024})
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

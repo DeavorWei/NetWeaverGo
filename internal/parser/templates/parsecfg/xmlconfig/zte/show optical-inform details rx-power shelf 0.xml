@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show optical-inform details rx-power shelf 0
+-Inf: not applicable, Tx: transmit, Rx: receive.
+          Optical       High Alarm High Warn Low Warn  Low Alarm
+Interface  Receive Power Threshold  Threshold Threshold Threshold
+Name           (dBm)      (dBm)     (dBm)      (dBm)     (dBm)
+xgei-0/2/0/1   12.40   17.40   OFFLINE   OFFLINE   3.50
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="ifRxPowerNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *(?<ifName>\S+) +\S+ +((?<highThreshold>[\d.-]+)|OFFLINE|N/A) +\S+ +\S+ +((?<lowThreshold>[\d.-]+)|OFFLINE|N/A)
+                    ]]>
+                </Regex>
+                <Field name="ifName,highThreshold,lowThreshold">
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                    methodName="convertIfName"/>
+                    <Assign assignMap="vendor:ZTE" filterType="NOT_NULL" order="-2"/>
+                </Field>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+[~CSM-ASW-CE9860-200-diagnose]display lldp neighbor brief
+Local Interface         Exptime(s) Neighbor Interface            Neighbor Device
+400GE1/1/1:1                   90  f4fb-b89d-946f
+400GE1/1/4:1                  117  f4fb-b89d-93ba
+400GE1/1/4:2                  109  f4fb-b89d-9469
+400GE1/1/5                    113  400GE6/0/19                   CSM-DSW-CE16808-01
+400GE1/1/6                    103  400GE6/0/19                   CSM-DSW-CE16808-02
+400GE1/1/7                     92  400GE6/0/19                   CSM-DSW-CE16808-03
+400GE1/1/8                    115  400GE6/0/19                   CSM-DSW-CE16808-04
+
+<DUT_1>display lldp neighbor brief
+Local Intf       Neighbor Dev             Neighbor Intf             Exptime(s)
+GE1/0/4          DUT_3                    10GE1/0/3                 91
+GE2/0/5          DUT_3                    10GE1/0/5                 112
+-->
+<CommandParseConfig>
+    <SegmentParse childMutex="true">
+        <ParseNode name="lldpNeighborNode">
+            <Regex>^ *Local *Intf +Neighbor *Dev</Regex>
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *(?<localPortName>\S+) {1,255}(?<remoteSystemName>\S+)? {1,255}(?<remotePortId>\S+( \S+)?) {1,255}(\d+)
+                    ]]>
+                </Regex>
+                <Field name="localPortName,remotePortId,remoteSystemName"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+        <ParseNode name="lldpNeighborNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[
+                    ^ *(?<localPortName>\S+) +(\d+) +(?<remotePortId>\S+( \S+)?)( +(?<remoteSystemName>\S+))?
+                    ]]>
+                </Regex>
+                <Field name="localPortName,remotePortId,remoteSystemName"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

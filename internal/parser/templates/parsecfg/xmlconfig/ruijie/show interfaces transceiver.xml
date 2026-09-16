@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show interfaces transceiver
+========Interface TenGigabitEthernet 0/2========
+Transceiver Type    :  10GBASE-LR-SFP+
+Connector Type      :  LC
+Wavelength(nm)      :  1310
+Transfer Distance   :
+    SMF fiber
+         10km
+Digital Diagnostic Monitoring  : YES
+Vendor Serial Number           : G1SPAU1012988
+Transfer BandWidth             : 10300Mbit/s (10Gbit/s)
+
+Current diagnostic parameters[AP:Average Power]:
+Temp(Celsius)   Voltage(V)      Bias(mA)            RX power(dBm)       TX power(dBm)
+27(OK)          3.31(OK)        28.74(OK)           -1.76(OK)[AP]       -2.15(OK)
+                                26.16(OK)[C2]       1.13(OK)[C2/AP]     -0.96(OK)[C2]
+
+Diagnostic parameters threshold:
+                Low Alarm       Low Warn            High Warn           High Alarm
+Temp(Celsius)   -10             -3                  73                  80
+Voltage(V)      2.97            3.13                3.46                3.63
+Bias(mA)        0.50            1.00                70.00               80.00
+RX power(dBm)   -17.40          -16.38              2.50                3.50
+TX power(dBm)   -11.20          -10.20              2.50                3.50
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <Regex>
+            ^\s{0,100}={1,100}Interface\s{1,20}[^\n]{1,500}={1,100}$
+        </Regex>
+        <ParseNode name="ifTransNode">
+            <Regex>(RX\s+power)|(TX\s+power)</Regex>
+            <ConfigParsePolicy>
+                <Field name="ifName" primary="true">
+                    <Regex>
+                        <![CDATA[
+                        ^\s{0,100}={1,100}Interface\s{1,20}(?<ifName>[^\n=]{1,500})={1,100}$
+                        ]]>
+                    </Regex>
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                    methodName="convertIfName"/>
+                    <Assign assignMap="vendor:RUIJIE" filterType="NOT_NULL" filterFieldName="ifName" order="-2"/>
+                </Field>
+                <Field name="sn">
+                    <Regex>
+                        <![CDATA[
+                            Vendor Serial Number\s+:\s{0,255}(?<sn>[^\n]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="biasLowThreshold,biasHighThreshold">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Bias\(mA\)\s+(?<biasLowThreshold>[\d.-]+)\s+[\d.-]+\s+[\d.-]+\s+(?<biasHighThreshold>[\d.-]+)\s*$
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="defaultRxPowerLowThreshold,defaultRxPowerHighThreshold">
+                    <Regex>
+                        <![CDATA[
+                            ^ *RX\s+power\(dBm\)\s+(?<defaultRxPowerLowThreshold>[\d.-]+)\s+[\d.-]+\s+[\d.-]+\s+(?<defaultRxPowerHighThreshold>[\d.-]+)\s*$
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="defaultTxPowerLowThreshold,defaultTxPowerHighThreshold">
+                    <Regex>
+                        <![CDATA[
+                            ^ *TX\s+power\(dBm\)\s+(?<defaultTxPowerLowThreshold>[\d.-]+)\s+[\d.-]+\s+[\d.-]+\s+(?<defaultTxPowerHighThreshold>[\d.-]+)\s*$
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="transceiverType">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Transceiver *Type *: {0,255}(?<transceiverType>.+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="waveLength">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Wavelength *\( *nm *\) *: {0,255}(?<waveLength>.+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="transDistanceInfo">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Transfer *Distance *: {0,255}(?<transDistanceInfo>((?!:)[ \r\n\S])+)
+                        ]]>
+                    </Regex>
+                    <ToUpper name="transDistanceInfo"/>
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.InterfaceParseUtil"
+                                    methodName="dealTransferDistanceForRj"/>
+                </Field>
+            </ConfigParsePolicy>
+            <SegmentParse childMutex="true" extractGroupName="contents">
+                <Regex>
+                    <!--            ?!反向匹配不包含:的字符串-->
+                    <![CDATA[
+                    (?<contents>((?!([^\n]{1,1000}:))[ \S\r\n]){1,8000})
+                    ]]>
+                </Regex>
+                <ParseNode name="channelInfo">
+                    <TableColumnParsePolicy>
+                        <Regex>
+                            <![CDATA[
+                         ^(?<temperature>\s*Temp\(Celsius\)\s+)(?<voltage>Voltage\(V\)\s+)(?<bias>Bias\(mA\)\s+)(?<rxPower>RX\s+power\(dBm\)\s+)(?<txPower>TX power\(dBm\)\s*)
+                    ]]>
+                        </Regex>
+                        <Field name="temperature">
+                            <StrExtract name="temperature" regex="[\d.-]+" groupId="0"/>
+                        </Field>
+                        <Field name="voltage">
+                            <StrExtract name="voltage" regex="[\d.-]+" groupId="0"/>
+                        </Field>
+                        <Field name="bias" primary="true">
+                            <ToUpper/>
+                            <ValueMapping srcValue="NA" dstValue="-"/>
+                            <StrExtract name="bias" regex="[\d.-]+" groupId="0"/>
+                        </Field>
+                        <Field name="rxPower" primary="true">
+                            <ToUpper/>
+                            <ValueMapping srcValue="NA" dstValue="-"/>
+                            <StrExtract name="rxPower" regex="[\d.-]+" groupId="0"/>
+                        </Field>
+                        <Field name="txPower" primary="true">
+                            <ToUpper/>
+                            <ValueMapping srcValue="NA" dstValue="-"/>
+                            <StrExtract name="txPower" regex="[\d.-]+" groupId="0"/>
+                        </Field>
+                    </TableColumnParsePolicy>
+                </ParseNode>
+            </SegmentParse>
+        </ParseNode>
+        <ParseNode name="opticalIfNode">
+            <ConfigParsePolicy>
+                <Field name="ifName" primary="true">
+                    <Regex>
+                        <![CDATA[
+                        ^\s{0,100}={1,255}Interface\s{1,255}(?<ifName>[^\n=]{1,255})={1,255}[ \r\n]*$
+                        ]]>
+                    </Regex>
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                    methodName="convertIfName"/>
+                    <Assign assignMap="vendor:RUIJIE" filterType="NOT_NULL" filterFieldName="ifName" order="-2"/>
+                </Field>
+                <Field name="electricPort">
+                    <Regex>
+                        <![CDATA[
+                        Connector +Type *: *(?<electricPort>Copper *pigtail)
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+            <!--过滤掉光转电口-->
+            <Filter filterFieldName="electricPort" filterType="NULL"/>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

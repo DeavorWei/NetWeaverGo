@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+show opticalinfo cgei-0/4/0/1
+The optical module is online
+Transceiver Type         : QSFP28
+Connector Type Code      : LC
+Transceiver Mode         : smf
+Directionality           : Normal
+SONET Compliance Codes   : no compliance
+Ethernet Compliance Codes: 100G CWDM4
+Transfer Distance: 9/125(Smf) um fiber 2000 (m)
+                  50/125(Om3) um fiber 0 (m)
+                  50/125(Om2) um fiber 0 (m)
+                62.5/125(Om1) um fiber 0 (m)
+                  50/125(Om4) um fiber 0 (m)
+Laser TX Wavelength: 1301 nm
+Laser RX Wavelength: 1301 nm
+Laser Output Power: Supported
+                   Network Lane 1 -0.007 dBm
+                   Network Lane 2 0.005 dBm
+                   Network Lane 3 0.233 dBm
+                   Network Lane 4 0.348 dBm
+                   Total 6.168 dBm
+Laser Input Power: Supported
+                   Network Lane 1 0.006 dBm
+                   Network Lane 2 0.520 dBm
+                   Network Lane 3 0.394 dBm
+                   Network Lane 4 0.360 dBm
+                   Total 6.345 dBm
+Laser Bias Current: Supported
+                   Network Lane 1 63.216 mA
+                   Network Lane 2 63.216 mA
+                   Network Lane 3 63.216 mA
+                   Network Lane 4 63.216 mA
+Measured Transceiver Temperature: 33.063 degree(s) Celsius
+Supply Voltage 1: 3.383 V
+Supply Voltage 2: N/A
+Default RX Channel Power PreHighAlarm Thresholds: 4.500 dBm
+Default RX Channel Power PreLowAlarm Thresholds: -10.605 dBm
+Default TX Channel Power PreHighAlarm Thresholds: 4.500 dBm
+Default TX Channel Power PreLowAlarm Thresholds: -4.300 dBm
+Vendor Name:  Oclaro Inc.
+Vendor PN  :  TRQ5E20ENF-LF310
+Vendor Rev :  02
+Vendor SN  :  T19B99905
+Vendor Part Number  : FTLC1182RDNL
+Vendor Serial Number: UPB0EVL
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="ifTransNode">
+            <Regex>(RX|TX) +</Regex>
+            <ConfigParsePolicy>
+                <Field name="ifName" primary="true">
+                    <Regex>
+                        <![CDATA[
+                        ^ *show opticalinfo (?<ifName>\S+)
+                        ]]>
+                    </Regex>
+                    <!--接口名称标准化-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.IfNameConvertUtil"
+                                    methodName="convertIfName"/>
+                    <Assign assignMap="vendor:ZTE" filterType="NOT_NULL" filterFieldName="ifName" order="-2"/>
+                </Field>
+                <Field name="pn">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Vendor *(PN|Part *Number) *: *(?<pn>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="sn">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Vendor *(SN|Serial *Number) *: *(?<sn>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="temperature">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Measured Transceiver Temperature *: *(?<temperature>[\d.-]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="voltage">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Supply Voltage {0,255}\d{0,10} {0,255}: *(?<voltage>[\d.]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="singleRxPower">
+                    <Regex>
+                        <![CDATA[
+                            Measured *RX *Input *Power *: *(?<singleRxPower>[\d.-]+|N/A)
+                        ]]>
+                    </Regex>
+                    <ToUpper/>
+                    <ValueMapping srcValue="N/A" dstValue="-"/>
+                </Field>
+                <Field name="singleTxPower">
+                    <Regex>
+                        <![CDATA[
+                            Measured *TX *Output *Power *: *(?<singleTxPower>[\d.-]+|N/A)
+                        ]]>
+                    </Regex>
+                    <ToUpper/>
+                    <ValueMapping srcValue="N/A" dstValue="-"/>
+                </Field>
+                <Field name="singleBias,biasUnit">
+                    <Regex>
+                        <![CDATA[
+                            Measured *\S{1,255} *Bias *Current *: *(?<singleBias>[\d.-]+|N/A) *(?<biasUnit>mA|uA)?
+                        ]]>
+                    </Regex>
+                    <ToUpper/>
+                    <ValueMapping srcValue="N/A" dstValue="-"/>
+                </Field>
+                <Field name="defaultRxPowerHighThreshold">
+                    <Regex>
+                        <![CDATA[
+                            Default *RX {0,100}(Channel)? {0,100}Power *PreHighAlarm *Thresholds *: *(?<defaultRxPowerHighThreshold>[\d.-]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="defaultRxPowerLowThreshold">
+                    <Regex>
+                        <![CDATA[
+                            Default *RX {0,100}(Channel)? {0,100}Power *PreLowAlarm *Thresholds *: *(?<defaultRxPowerLowThreshold>[\d.-]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="defaultTxPowerHighThreshold">
+                    <Regex>
+                        <![CDATA[
+                            Default *TX {0,100}(Channel)? {0,100}Power *PreHighAlarm *Thresholds *: *(?<defaultTxPowerHighThreshold>[\d.-]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="defaultTxPowerLowThreshold">
+                    <Regex>
+                        <![CDATA[
+                            Default *TX {0,100}(Channel)? {0,100}Power *PreLowAlarm *Thresholds *: *(?<defaultTxPowerLowThreshold>[\d.-]+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="transceiverType">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Transceiver *Type *: {0,255}(?<transceiverType>.+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="waveLength">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Laser {0,100}(Rx)? {0,100}Wavelength *: *(?<waveLength>\d+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="transceiverMode">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Transceiver Mode *: *(?<transceiverMode>\S+)
+                        ]]>
+                    </Regex>
+                    <!--标准化光模块传输模式-->
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.InterfaceParseUtil"
+                                    methodName="standardTransceiverMode"/>
+                </Field>
+                <Field name="transDistanceInfo">
+                    <Regex>
+                        <![CDATA[
+                            ^ *Transfer *Distance *: {0,255}(?<transDistanceInfo>((?!:)[ \r\n\S]){1,2048})
+                        ]]>
+                    </Regex>
+                    <ToUpper name="transDistanceInfo"/>
+                    <CustomOperator className="com.huawei.ncetools.ipdevicecheckservice.util.InterfaceParseUtil"
+                                    methodName="dealTransferDistanceForZte"/>
+                </Field>
+            </ConfigParsePolicy>
+            <SegmentParse childMutex="true">
+                <Regex>^ *Laser *((Output|Input) *Power|Bias *Current)</Regex>
+                <ParseNode name="txPower">
+                    <Regex>^ *Laser *Output *Power</Regex>
+                    <TableLineParsePolicy>
+                        <Regex>
+                            <![CDATA[
+                            ^ *Network *Lane {0,100}\d{0,10} {1,255}(?<value>[\d.-]+|N/A)
+                            ]]>
+                        </Regex>
+                        <Field name="value">
+                            <ToUpper/>
+                            <ValueMapping srcValue="N/A" dstValue="-"/>
+                        </Field>
+                    </TableLineParsePolicy>
+                </ParseNode>
+                <ParseNode name="rxPower">
+                    <Regex>^ *Laser *Input *Power</Regex>
+                    <TableLineParsePolicy>
+                        <Regex>
+                            <![CDATA[
+                            ^ *Network *Lane {0,100}\d{0,10} {1,255}(?<value>[\d.-]+|N/A)
+                            ]]>
+                        </Regex>
+                        <Field name="value">
+                            <ToUpper/>
+                            <ValueMapping srcValue="N/A" dstValue="-"/>
+                        </Field>
+                    </TableLineParsePolicy>
+                </ParseNode>
+                <ParseNode name="bias">
+                    <Regex>^ *Laser *Bias *Current</Regex>
+                    <TableLineParsePolicy>
+                        <Regex>
+                            <![CDATA[
+                            ^ *Network *Lane {0,100}\d{0,10} {1,255}(?<value>[\d.-]+|N/A) *(?<biasUnit>mA|uA)?
+                            ]]>
+                        </Regex>
+                        <Field name="value,biasUnit">
+                            <ToUpper/>
+                            <ValueMapping srcValue="N/A" dstValue="-"/>
+                        </Field>
+                    </TableLineParsePolicy>
+                </ParseNode>
+            </SegmentParse>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

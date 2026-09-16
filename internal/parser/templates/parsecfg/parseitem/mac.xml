@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE CommonParseItem SYSTEM "commandparse.dtd">
+<CommonParseItem>
+    <VendorCommon vendor="HUAWEI">
+        <CommandParse cmd="display mac-address" path="parsecfg/xmlconfig/huawei/display mac-address.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="ZTE">
+        <CommandParse cmd="show mac table@@show mac" isResultMutex="true"
+                      path="parsecfg/xmlconfig/zte/show mac table.xml@@parsecfg/xmlconfig/zte/show mac.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="H3C">
+        <CommandParse cmd="display mac-address" path="parsecfg/xmlconfig/h3c/display mac-address.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="RUIJIE">
+        <CommandParse cmd="show mac-address-table" path="parsecfg/xmlconfig/ruijie/show mac address table.xml"/>
+    </VendorCommon>
+</CommonParseItem>

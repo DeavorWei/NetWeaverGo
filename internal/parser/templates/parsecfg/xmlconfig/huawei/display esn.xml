@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+<YWM-ASW-CE6857-12>display esn
+ ESN of slot 1: 6T2380029201
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="esnNode">
+            <TableLineParsePolicy>
+                <Regex>
+                    <![CDATA[^ *ESN[\S ]*: *(?<esn>\w+)]]>
+                </Regex>
+                <Field name="esn"/>
+            </TableLineParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

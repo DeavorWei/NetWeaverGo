@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE CommonParseItem SYSTEM "commandparse.dtd">
+<CommonParseItem>
+    <VendorCommon vendor="HUAWEI">
+        <CommandParse cmd="display lldp neighbor@@display lldp neighbor brief"
+                      path="parsecfg/xmlconfig/huawei/display lldp neighbor.xml@@parsecfg/xmlconfig/huawei/display lldp neighbor brief.xml"
+                      isResultMutex="true"/>
+    </VendorCommon>
+    <VendorCommon vendor="ZTE">
+        <CommandParse cmd="show lldp entry" path="parsecfg/xmlconfig/zte/show lldp entry.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="H3C">
+        <CommandParse cmd="display lldp neighbor-information list"
+                      path="parsecfg/xmlconfig/h3c/display lldp neighbor-information list.xml"/>
+    </VendorCommon>
+    <VendorCommon vendor="RUIJIE">
+        <CommandParse cmd="show lldp neighbors" path="parsecfg/xmlconfig/ruijie/show lldp neighbors.xml"/>
+    </VendorCommon>
+</CommonParseItem>

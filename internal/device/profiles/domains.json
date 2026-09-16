@@ -1,0 +1,217 @@
+[
+  {
+    "order": 1,
+    "pattern": "^CE12800$",
+    "domain": "CE12800"
+  },
+  {
+    "order": 2,
+    "pattern": "^CE98.*",
+    "domain": "CE"
+  },
+  {
+    "order": 3,
+    "pattern": "^NE8000$",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 4,
+    "pattern": "^NE5000E$",
+    "domain": "NE-CR"
+  },
+  {
+    "order": 5,
+    "pattern": "^CX600$",
+    "domain": "CX600"
+  },
+  {
+    "order": 6,
+    "pattern": "^ME60$",
+    "domain": "ME60"
+  },
+  {
+    "order": 7,
+    "pattern": "^MA5200G$",
+    "domain": "ME60"
+  },
+  {
+    "order": 8,
+    "pattern": "^SIG9800$",
+    "domain": "SIG"
+  },
+  {
+    "order": 9,
+    "pattern": "^PTN\\d+",
+    "domain": "ATN"
+  },
+  {
+    "order": 10,
+    "pattern": "^ATN\\d+\\w?",
+    "domain": "ATN"
+  },
+  {
+    "order": 11,
+    "pattern": "^ETN\\d+",
+    "domain": "ATN"
+  },
+  {
+    "order": 12,
+    "pattern": "^NE0\\d\\w",
+    "domain": "ATN"
+  },
+  {
+    "order": 13,
+    "pattern": "^Eudemon9.*|^USG12|^AntiDDoS12",
+    "domain": "FW9000"
+  },
+  {
+    "order": 14,
+    "pattern": "^Eudemon1000E-C$|^Eudemon1000E-M$|^Eudemon1000E-S$|^Eudemon1000E-T$|^Eudemon1000E-F$|^Eudemon1000E-W$|^AntiDDoS19|^IPS6.*F|^USG6.*F|^HiSecEngine",
+    "domain": "FW1000E"
+  },
+  {
+    "order": 15,
+    "pattern": "^Eudemon8.*|^USG9.*|^NIP68.*|^AntiDDoS8",
+    "domain": "FW8000"
+  },
+  {
+    "order": 16,
+    "pattern": "^IPS12",
+    "domain": "IPS12000"
+  },
+  {
+    "order": 17,
+    "pattern": "^Eudemon|^USG|^IPS|^AntiDDoS.*|^CE-FWA|^CE-IPSA",
+    "domain": "FR"
+  },
+  {
+    "order": 18,
+    "pattern": "^A800$",
+    "domain": "ATN"
+  },
+  {
+    "order": 19,
+    "pattern": "NetEngine A816.*",
+    "domain": "ATN"
+  },
+  {
+    "order": 20,
+    "pattern": "NetEngine A817.*",
+    "domain": "ATN"
+  },
+  {
+    "order": 21,
+    "pattern": "NetEngine A822.*",
+    "domain": "ATN"
+  },
+  {
+    "order": 22,
+    "pattern": "NetEngine XH821.*",
+    "domain": "ATN"
+  },
+  {
+    "order": 23,
+    "pattern": "NetEngine XH861.*",
+    "domain": "ATN"
+  },
+  {
+    "order": 24,
+    "pattern": "NetEngine XH16000.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 25,
+    "pattern": "NetEngine XH16000E.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 26,
+    "pattern": "NetEngine XH16100.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 27,
+    "pattern": "NetEngine XH16200.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 28,
+    "pattern": "NetEngine A910.*",
+    "domain": "ATN"
+  },
+  {
+    "order": 29,
+    "pattern": "^SIG16000$",
+    "domain": "SIG"
+  },
+  {
+    "order": 30,
+    "pattern": "^NE8000E$",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 31,
+    "pattern": "NetEngine 8000E.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 32,
+    "pattern": "NetEngine 6000.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 33,
+    "pattern": "NetEngine 8000.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 34,
+    "pattern": "NetEngine XH12000.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 35,
+    "pattern": "AdtecRouter 8000E.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 36,
+    "pattern": "TGDataCom 8000E.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 37,
+    "pattern": "AdtecRouter XH16000E.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 38,
+    "pattern": "TGDataCom XH16000E.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 39,
+    "pattern": "NetEngine XH871.*",
+    "domain": "NE8000(IPRAN)"
+  },
+  {
+    "order": 40,
+    "pattern": "^CE\\d+",
+    "domain": "CE"
+  },
+  {
+    "order": 41,
+    "pattern": "^NE[1-9]\\d",
+    "domain": "NE-SR"
+  },
+  {
+    "order": 42,
+    "pattern": "^S\\S+",
+    "domain": "S"
+  },
+  {
+    "order": 43,
+    "pattern": "^XH80|^XH90|^XH168",
+    "domain": "CE"
+  }
+]

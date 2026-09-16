@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+<!-- 回显样例
+<YWM-ASW-CE6857-12>display license
+MainBoard:
+ Active License    : flash:/LICCloudEngine6800_V200R022_20230920JWMR80.dat
+ License state     : Normal
+ Revoke ticket     : No ticket
+
+ No relevant customer information
+
+ Product name      : CloudEngine 6800
+ Product version   : V200R022
+ License Serial No : LIC20230920JWMR80
+ Creator           : Huawei Technologies Co., Ltd.
+ Created Time      : 2023-09-20 11:21:00
+ SnS End Date      : 2028-12-03
+ Feature name      : CELIC
+ Authorize type    : comm
+ Expired date      : PERMANENT
+ Trial days        : -
+
+-->
+<CommandParseConfig>
+    <SegmentParse>
+        <ParseNode name="licenseInfoNode">
+            <ConfigParsePolicy>
+                <Field name="licenseFileName">
+                    <Regex>
+                        <![CDATA[
+                        ^ *Active *License {0,255}: {0,255}(?<licenseFileName>.+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="licenseState">
+                    <Regex>
+                        <![CDATA[
+                        ^ *License *state *: *(?<licenseState>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="productVersion">
+                    <Regex>
+                        <![CDATA[
+                        ^ *Product *version *: *(?<productVersion>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="licenseSerialNo">
+                    <Regex>
+                        <![CDATA[
+                        ^ *License *Serial *No *: *(?<licenseSerialNo>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="snsEndDate">
+                    <Regex>
+                        <![CDATA[
+                        ^ *SnS *End *Date {0,255}: {0,255}(?<snsEndDate>.+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="expiredDate">
+                    <Regex>
+                        <![CDATA[
+                        ^ *Expired *date *: *(?<expiredDate>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+                <Field name="trialDays">
+                    <Regex>
+                        <![CDATA[
+                        ^ *Trial *days *: *(?<trialDays>\S+)
+                        ]]>
+                    </Regex>
+                </Field>
+            </ConfigParsePolicy>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>

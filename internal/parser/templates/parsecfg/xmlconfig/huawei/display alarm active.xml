@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) Huawei Technologies Co., Ltd. 2022-2022. All rights reserved.
+  -->
+
+<!DOCTYPE CommandParseConfig SYSTEM "commandparse.dtd">
+<!--
+    非CDATA块中使用正则，需转义的特殊字符：< : &lt;  > : &gt;  &: &amp; ' : &apos; " : &quot;
+    CDATA代码块：<![CDATA[正则内容]]>
+-->
+
+<!--
+<CCGL-ASW-CE6857-03>display alarm active | no-more
+Sequence   AlarmId    Severity Date Time  Description
+201        0x81320C6  Minor    2023-09-28 The local fault alarm has occurred. (I
+                                14:55:07+ fIndex=22, IfName=10GE1/0/12)
+                               08:00
+200        0x8520003  Major    2023-09-28 The interface status changes. (ifName=
+                                14:55:07+ 10GE1/0/12, AdminStatus=UP, OperStatus
+                               08:00      =DOWN, Reason=Interface physical link
+                                          is down, mainIfname=10GE1/0/12)
+1          0x8132249  Warning  2023-09-24 The BIOS/BootLoader menu password is n
+                                18:06:25+ ot set or is the default password. Set
+                               08:00       the password using the CLI or through
+                                           the BIOS or BootLoader menu.(EntPhysi
+                                          calIndex=16842753, EntPhysicalName=MPU
+                                           slot 1, EntityType=1)
+-->
+<CommandParseConfig>
+    <SegmentParse childMutex="true">
+        <ParseNode name="alarmActiveNode">
+            <!--表格文本解析策略，如果解析成功，会解析出一个alarmActiveInfo节点-->
+            <TableColumnParsePolicy newlineSupport="true">
+                <Regex>
+                    <![CDATA[
+                         ^(?<sequence> *Sequence +)(?<alarmId>AlarmId +)(?<severity>(Level|Severity) +)(?<datetime>Date Time +)(?<description>Description *)
+                    ]]>
+                </Regex>
+                <Field name="sequence" primary="true">
+                    <Regex>^ {0,100}(\d{1,255}|-{10,1024}\S{0,255})[ ]{0,100}$</Regex>
+                    <!--多个横杆就取一个-->
+                    <StrExtract regex="(\d+|-)-*" groupId="1"/>
+                </Field>
+                <Field name="alarmId,severity"/>
+                <Field name="datetime" merge="true"/>
+                <Field name="description" merge="true" isEndOfLine="true"/>
+            </TableColumnParsePolicy>
+            <!--删除无效数据-->
+            <Filter filterFieldName="sequence" filterType="NOT_EQUALS" filterValue="-"/>
+        </ParseNode>
+        <ParseNode name="alarmNode">
+            <SegmentParse>
+                <Regex>^ {0,100}\d+/</Regex>
+                <ParseNode name="subAlarmNode">
+                    <ConfigParsePolicy>
+                        <Field name="sequence,datetime,alarmId,severity,description">
+                            <Regex>
+                                <![CDATA[
+                                     ^ {0,100}(?<sequence>\d+)/(?:(?!/)[\S ]){1,255}/(?<datetime>(?:(?!/)[\S ]){1,255})/(?:(?!/)[\S ]){1,255}
+                                     /(?<alarmId>0x[a-f0-9]{1,255})/(?:(?!/)[\S ]){1,255}/(?<severity>(?:(?!/)[\S ]){1,255})/(?:(?!/)[\S ]){1,255}
+                                     /(?<description>.{1,1000}([\r\n]{1,3}^ {1,100}.{1,1000}){0,8})
+                                ]]>
+                            </Regex>
+                        </Field>
+                    </ConfigParsePolicy>
+                </ParseNode>
+            </SegmentParse>
+        </ParseNode>
+    </SegmentParse>
+</CommandParseConfig>
