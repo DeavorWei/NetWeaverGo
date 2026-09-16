@@ -1,0 +1,197 @@
+[
+  {
+    "checkno": "REL-001",
+    "title": { "zh": "VRRP 虚拟网关主备状态检查", "en": "VRRP Master/Backup state check" },
+    "category": "Reliability",
+    "riskLevel": "critical",
+    "commands": ["display vrrp"],
+    "scope": { "vendors": ["huawei", "h3c", "cisco"] },
+    "extract": {
+      "fields": [{ "name": "vrrp_state", "pattern": "(?:State|Status)\\s*:\\s*(Master|Backup|Initialize)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "vrrp_state", "expr": "Initialize" },
+    "advice": { "zh": "VRRP 处于 Initialize 初始状态，表明下挂接口未就绪或配置错误", "en": "VRRP is in Initialize state, check physical interface and configuration" }
+  },
+  {
+    "checkno": "REL-002",
+    "title": { "zh": "BFD 会话在线状态检查", "en": "BFD session state check" },
+    "category": "Reliability",
+    "riskLevel": "critical",
+    "commands": ["display bfd session all"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "bfd_down_count", "pattern": "(?:Down|AdminDown)\\s*:\\s*([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "bfd_down_count", "expr": 0.0, "operator": "<=" },
+    "advice": { "zh": "存在 BFD 会话处于 Down 状态，请排查直连链路通断与对端协议配置", "en": "BFD session is down, verify peer interface and link connectivity" }
+  },
+  {
+    "checkno": "REL-003",
+    "title": { "zh": "设备堆叠与虚拟化集群状态", "en": "Stack/IRF virtualization state check" },
+    "category": "Reliability",
+    "riskLevel": "critical",
+    "commands": ["display stack", "display irf"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "stack_status", "pattern": "(?:Stack Status|IRF state)\\s*:\\s*(Normal|Split|Fault)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "stack_status", "expr": "Split" },
+    "advice": { "zh": "检测到堆叠裂化 (Split) 风险，请检查双主检测 MAD 机制及堆叠物理线缆", "en": "Stack split detected, verify stack cables and MAD configuration" }
+  },
+  {
+    "checkno": "REL-004",
+    "title": { "zh": "链路聚合成员端口状态检查", "en": "Link aggregation member port state check" },
+    "category": "Reliability",
+    "riskLevel": "major",
+    "commands": ["display eth-trunk"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "unselected_ports", "pattern": "Unselect(?:ed)?\\s*:\\s*([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "unselected_ports", "expr": 0.0, "operator": "<=" },
+    "advice": { "zh": "聚合组中存在未选中的 Unselected 端口，可能因速率/双工或 LACP 协商未对齐", "en": "Unselected member ports found in Eth-Trunk, verify duplex/speed settings" }
+  },
+  {
+    "checkno": "REL-005",
+    "title": { "zh": "LACP 协商状态与报文错误检查", "en": "LACP negotiation error check" },
+    "category": "Reliability",
+    "riskLevel": "major",
+    "commands": ["display lacp statistics"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "lacp_err_packets", "pattern": "(?:Illegal|Error) PDU(?:s)?\\s*:\\s*([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "lacp_err_packets", "expr": 10.0, "operator": "<=" },
+    "advice": { "zh": "LACP 错误报文数偏高，可能存在物理误码或配置错乱", "en": "High LACP error packet count, inspect physical layer quality" }
+  },
+  {
+    "checkno": "REL-006",
+    "title": { "zh": "双主控板同步与主备冗余状态", "en": "Dual control board synchronization check" },
+    "category": "Reliability",
+    "riskLevel": "critical",
+    "commands": ["display switchover state"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "sync_status", "pattern": "(?:Data Sync|HA Status)\\s*:\\s*(\\S+)", "group": 1 }]
+    },
+    "assert": { "type": "must_contain", "field": "sync_status", "expr": "Sync" },
+    "advice": { "zh": "备用主控板未实现数据同步，若主板故障将导致业务中断", "en": "Standby board is not synchronized, investigate board sync status" }
+  },
+  {
+    "checkno": "REL-007",
+    "title": { "zh": "生成树根桥抖动与拓扑变更频繁度", "en": "STP topology change flappings check" },
+    "category": "Reliability",
+    "riskLevel": "major",
+    "commands": ["display stp topology-change"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "tc_count", "pattern": "(?:Number of TC received|TC count)\\s*:\\s*([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "tc_count", "expr": 100.0, "operator": "<=" },
+    "advice": { "zh": "STP 拓扑变更频繁，可能存在下挂接入端口频繁震荡或未开启边缘端口", "en": "Frequent STP topology changes, enable STP edge-port on access ports" }
+  },
+  {
+    "checkno": "REL-008",
+    "title": { "zh": "接口 CRC 误码增长检查", "en": "Interface CRC error check" },
+    "category": "Reliability",
+    "riskLevel": "major",
+    "commands": ["display interface"],
+    "scope": { "vendors": ["huawei", "h3c", "cisco"] },
+    "extract": {
+      "fields": [{ "name": "crc_errors", "pattern": "(?:CRC|CRC errors)\\s*:\\s*([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "crc_errors", "expr": 50.0, "operator": "<=" },
+    "advice": { "zh": "接口检测到 CRC 错包，建议清洗光纤接头或更换光模块/跳线", "en": "CRC errors detected on interface, clean fiber connector or replace patch cord" }
+  },
+  {
+    "checkno": "REL-009",
+    "title": { "zh": "接口丢包与队列超载抑制", "en": "Interface drop packet check" },
+    "category": "Reliability",
+    "riskLevel": "major",
+    "commands": ["display interface"],
+    "scope": { "vendors": ["huawei", "h3c", "cisco"] },
+    "extract": {
+      "fields": [{ "name": "drops", "pattern": "(?:Output drops|Discard|Total drops)\\s*:\\s*([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "drops", "expr": 1000.0, "operator": "<=" },
+    "advice": { "zh": "接口出现较多丢包，请检查是否存在突发微突发拥塞或 QoS 队列带宽不足", "en": "Interface packet drops observed, investigate traffic microbursts or QoS bandwidth" }
+  },
+  {
+    "checkno": "REL-010",
+    "title": { "zh": "光模块发射光功率低告警", "en": "Optical TX power low alarm check" },
+    "category": "Reliability",
+    "riskLevel": "major",
+    "commands": ["display transceiver detail"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "tx_power_alarm", "pattern": "Tx Power Low Alarm\\s*:\\s*(\\S+)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "tx_power_alarm", "expr": "Alarm" },
+    "advice": { "zh": "光模块发射功率过低，发光芯片可能老化，需准备备件更换", "en": "Optical TX power is lower than safety limit, prepare transceiver replacement" }
+  },
+  {
+    "checkno": "REL-011",
+    "title": { "zh": "光模块接收光功率衰减检查", "en": "Optical RX power attenuation check" },
+    "category": "Reliability",
+    "riskLevel": "major",
+    "commands": ["display transceiver detail"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "rx_power_alarm", "pattern": "Rx Power Low Alarm\\s*:\\s*(\\S+)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "rx_power_alarm", "expr": "Alarm" },
+    "advice": { "zh": "接收光功率触及告警下限，对端发光异常或链路光纤弯折损耗严重", "en": "Optical RX power low alarm triggered, inspect fiber bend and attenuation" }
+  },
+  {
+    "checkno": "REL-012",
+    "title": { "zh": "光模块内部工作温度检查", "en": "Optical module temperature check" },
+    "category": "Reliability",
+    "riskLevel": "minor",
+    "commands": ["display transceiver verbose"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "transceiver_temp", "pattern": "(?:Temperature|Transceiver Temp)\\s*:\\s*([0-9.]+)C?", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "transceiver_temp", "expr": 75.0, "operator": "<=" },
+    "advice": { "zh": "光模块温度超过 75°C，可能机箱风道局部散热不畅，需改善通风", "en": "Transceiver temperature exceeds 75C, verify chassis ventilation" }
+  },
+  {
+    "checkno": "REL-013",
+    "title": { "zh": "背板及板间通信总线链路检查", "en": "Backplane bus communication check" },
+    "category": "Reliability",
+    "riskLevel": "critical",
+    "commands": ["display spine-chassis bus"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "bus_status", "pattern": "Bus Link Status\\s*:\\s*(\\S+)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "bus_status", "expr": "Fail" },
+    "advice": { "zh": "背板或机框总线通信链路存在故障，可能引起跨板转发失效", "en": "Backplane communication link failure, inspect chassis fabric" }
+  },
+  {
+    "checkno": "REL-014",
+    "title": { "zh": "NTP 网络时钟同步状态", "en": "NTP clock synchronization check" },
+    "category": "Reliability",
+    "riskLevel": "minor",
+    "commands": ["display ntp status"],
+    "scope": { "vendors": ["huawei", "h3c", "cisco"] },
+    "extract": {
+      "fields": [{ "name": "ntp_status", "pattern": "clock status\\s*:\\s*(\\S+)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "ntp_status", "expr": "unsynchronized" },
+    "advice": { "zh": "NTP 时钟未同步，将导致设备日志时间戳混乱影响故障追溯", "en": "NTP is unsynchronized, verify reachability to NTP server" }
+  },
+  {
+    "checkno": "REL-015",
+    "title": { "zh": "接口双工模式协商合规检查", "en": "Interface duplex mode check" },
+    "category": "Reliability",
+    "riskLevel": "minor",
+    "commands": ["display interface brief"],
+    "scope": { "vendors": ["huawei", "h3c", "cisco"] },
+    "extract": {
+      "fields": [{ "name": "duplex_mode", "pattern": "(?:Duplex|Mode)\\s*:\\s*(\\S+)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "duplex_mode", "expr": "Half" },
+    "advice": { "zh": "业务接口协商为半双工 (Half Duplex)，可能导致大量物理冲突与吞吐急剧下降", "en": "Interface negotiated as Half Duplex, force full duplex or fix cabling" }
+  }
+]

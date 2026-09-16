@@ -324,6 +324,7 @@ func (m *CiscoMapper) ToLLDP(rows []map[string]string) ([]LLDPFact, error) {
 		NeighborName    string
 		NeighborChassis string
 		NeighborPort    string
+		NeighborIP      string
 	}
 
 	infoMap := make(map[string]*lldpInfo)
@@ -355,6 +356,9 @@ func (m *CiscoMapper) ToLLDP(rows []map[string]string) ([]LLDPFact, error) {
 		if v := row["chassis_id"]; v != "" {
 			info.NeighborChassis = v
 		}
+		if v := row["neighbor_ip"]; v != "" {
+			info.NeighborIP = v
+		}
 	}
 
 	for _, ifName := range order {
@@ -367,6 +371,7 @@ func (m *CiscoMapper) ToLLDP(rows []map[string]string) ([]LLDPFact, error) {
 			NeighborName:    info.NeighborName,
 			NeighborChassis: info.NeighborChassis,
 			NeighborPort:    info.NeighborPort,
+			NeighborIP:      info.NeighborIP,
 		})
 	}
 

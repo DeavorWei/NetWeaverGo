@@ -1,0 +1,158 @@
+[
+  {
+    "checkno": "ROUTE-001",
+    "title": { "zh": "BGP 对等体邻居连接状态检查", "en": "BGP peer established state check" },
+    "category": "BGP",
+    "riskLevel": "critical",
+    "commands": ["display bgp peer"],
+    "scope": { "vendors": ["huawei", "h3c", "cisco"] },
+    "extract": {
+      "fields": [{ "name": "down_peers", "pattern": "(?:Idle|Connect|Active|OpenSent|OpenConfirm)\\s+([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "down_peers", "expr": 0.0, "operator": "<=" },
+    "advice": { "zh": "存在未处于 Established 状态的 BGP 邻居，请检查 TCP 179 端口与路由可达性", "en": "BGP peer is not in Established state, check TCP port 179 and network reachability" }
+  },
+  {
+    "checkno": "ROUTE-002",
+    "title": { "zh": "BGP 路由前缀收发容量超限预警", "en": "BGP prefix limit threshold check" },
+    "category": "BGP",
+    "riskLevel": "major",
+    "commands": ["display bgp peer verbose"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "prefix_percent", "pattern": "Prefix limit usage\\s*:\\s*([0-9.]+)%", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "prefix_percent", "expr": 80.0, "operator": "<=" },
+    "advice": { "zh": "BGP 对等体接收前缀数量达到阈值上限的 80%，存在邻居被断开重置风险", "en": "BGP received prefix count exceeds 80% threshold, danger of peer reset" }
+  },
+  {
+    "checkno": "ROUTE-003",
+    "title": { "zh": "BGP 路由振荡抑制 (Damping) 告警", "en": "BGP route flap damping alert check" },
+    "category": "BGP",
+    "riskLevel": "major",
+    "commands": ["display bgp routing-table damped"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "damped_routes", "pattern": "Total (?:routes|prefixes) damped\\s*:\\s*([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "damped_routes", "expr": 0.0, "operator": "<=" },
+    "advice": { "zh": "检测到被 Damping 抑制的路由，表明链路或对端前缀存在严重抖动", "en": "Damped routes detected, investigate route flapping causes" }
+  },
+  {
+    "checkno": "ROUTE-004",
+    "title": { "zh": "OSPF 邻居状态与双向通讯检查", "en": "OSPF neighbor state check" },
+    "category": "OSPF",
+    "riskLevel": "critical",
+    "commands": ["display ospf peer"],
+    "scope": { "vendors": ["huawei", "h3c", "cisco"] },
+    "extract": {
+      "fields": [{ "name": "abnormal_state", "pattern": "State\\s*:\\s*(Init|2-Way|ExStart|Exchange|Loading)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "abnormal_state", "expr": "ExStart" },
+    "advice": { "zh": "OSPF 邻居卡在 ExStart/Exchange 状态，常见原因通常为接口 MTU 不一致", "en": "OSPF neighbor stuck in ExStart, check MTU consistency" }
+  },
+  {
+    "checkno": "ROUTE-005",
+    "title": { "zh": "OSPF 接口 MTU 协商一致性告警", "en": "OSPF interface MTU mismatch check" },
+    "category": "OSPF",
+    "riskLevel": "major",
+    "commands": ["display ospf error"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "mtu_errors", "pattern": "Packet size larger than MTU\\s*:\\s*([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "mtu_errors", "expr": 0.0, "operator": "<=" },
+    "advice": { "zh": "发现 OSPF MTU 协商错误统计，请检查两端接口 IP MTU 配置", "en": "OSPF MTU errors observed, verify MTU match on both ends" }
+  },
+  {
+    "checkno": "ROUTE-006",
+    "title": { "zh": "IS-IS 邻接关系就绪状态检查", "en": "IS-IS adjacency state check" },
+    "category": "Routing",
+    "riskLevel": "critical",
+    "commands": ["display isis peer"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "isis_down", "pattern": "State\\s*:\\s*(Down|Init)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "isis_down", "expr": "Down" },
+    "advice": { "zh": "IS-IS 邻接关系处于 Down 状态，排查 System-ID 冲突或 Area-ID 不匹配", "en": "IS-IS adjacency is Down, check System-ID and Area-ID" }
+  },
+  {
+    "checkno": "ROUTE-007",
+    "title": { "zh": "核心缺省路由存在性检查", "en": "Default route existence check" },
+    "category": "Routing",
+    "riskLevel": "critical",
+    "commands": ["display ip routing-table 0.0.0.0 0"],
+    "scope": { "vendors": ["huawei", "h3c", "cisco"] },
+    "extract": {
+      "fields": [{ "name": "default_route", "pattern": "(0\\.0\\.0\\.0/0)", "group": 1 }]
+    },
+    "assert": { "type": "must_contain", "field": "default_route", "expr": "0.0.0.0/0" },
+    "advice": { "zh": "路由表中缺失默认路由 0.0.0.0/0，可能导致外部或出海流量全面丢弃", "en": "Default route 0.0.0.0/0 is missing, causes complete internet packet drops" }
+  },
+  {
+    "checkno": "ROUTE-008",
+    "title": { "zh": "静态路由下一跳黑洞与非激活状态", "en": "Static route inactive state check" },
+    "category": "Routing",
+    "riskLevel": "major",
+    "commands": ["display ip routing-table protocol static"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "inactive_count", "pattern": "Inactive\\s*:\\s*([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "inactive_count", "expr": 0.0, "operator": "<=" },
+    "advice": { "zh": "存在未激活 (Inactive) 的静态路由，下一跳不可达或关联的出口接口已 Down", "en": "Inactive static routes found, next-hop unreachable or interface down" }
+  },
+  {
+    "checkno": "ROUTE-009",
+    "title": { "zh": "硬件 FIB 转发表与路由容量水位", "en": "Hardware FIB and routing capacity check" },
+    "category": "Routing",
+    "riskLevel": "major",
+    "commands": ["display fib statistics"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "fib_usage", "pattern": "FIB usage percentage\\s*:\\s*([0-9.]+)%", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "fib_usage", "expr": 80.0, "operator": "<=" },
+    "advice": { "zh": "硬件 FIB 容量利用率超过 80%，需考虑路由聚合或硬件板卡升级", "en": "Hardware FIB utilization exceeds 80%, aggregate routes or upgrade TCAM" }
+  },
+  {
+    "checkno": "ROUTE-010",
+    "title": { "zh": "VPN 实例与多租户隔离路由规模", "en": "VPN instance route count check" },
+    "category": "Routing",
+    "riskLevel": "minor",
+    "commands": ["display ip routing-table vpn-instance all statistics"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "vpn_routes", "pattern": "Total routes in VPN-instances\\s*:\\s*([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "vpn_routes", "expr": 50000.0, "operator": "<=" },
+    "advice": { "zh": "多租户 VPN 路由总数逼近实例上限，请关注各租户路由收敛与泄露风险", "en": "Total VPN routes approaching license or hardware threshold" }
+  },
+  {
+    "checkno": "ROUTE-011",
+    "title": { "zh": "动态路由协议重发布与防环标记", "en": "Route redistribution loop-prevention tag check" },
+    "category": "Routing",
+    "riskLevel": "major",
+    "commands": ["display current-configuration | include import-route"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "import_policy", "pattern": "import-route\\s+\\S+\\s+(route-policy|route-filter)\\s+(\\S+)", "group": 1 }]
+    },
+    "assert": { "type": "must_contain", "field": "import_policy", "expr": "route-policy" },
+    "advice": { "zh": "路由引入/重发布未绑定策略过滤，容易引发次优路径或双向重分发路由环路", "en": "Route redistribution is missing policy filter, causing potential routing loops" }
+  },
+  {
+    "checkno": "ROUTE-012",
+    "title": { "zh": "ECMP 等价多路径不平衡与路径数", "en": "ECMP max equal-cost paths check" },
+    "category": "Routing",
+    "riskLevel": "info",
+    "commands": ["display current-configuration | include maximum load-balancing"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "max_paths", "pattern": "maximum load-balancing\\s+([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "max_paths", "expr": 1.0, "operator": ">=" },
+    "advice": { "zh": "最大等价负载分担路径数配置过小，可能导致骨干多链路带宽利用率不均衡", "en": "Maximum load-balancing paths is too low for multi-path fabric" }
+  }
+]

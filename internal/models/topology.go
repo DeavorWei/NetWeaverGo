@@ -81,6 +81,7 @@ type GraphEdge struct {
 	EdgeType        string  `json:"edgeType"`
 	Status          string  `json:"status"`
 	Confidence      float64 `json:"confidence"`
+	Role            string  `json:"role,omitempty"` // 端口链路角色 (Uplink, Downlink, Interconnect 等)
 }
 
 // TopologyEdgeDetailView 边详情视图
@@ -95,6 +96,7 @@ type TopologyEdgeDetailView struct {
 	EdgeType         string         `json:"edgeType"`
 	Status           string         `json:"status"`
 	Confidence       float64        `json:"confidence"`
+	Role             string         `json:"role,omitempty"` // 端口链路角色
 	DiscoveryMethods []string       `json:"discoveryMethods"`
 	Evidence         []EdgeEvidence `json:"evidence"`
 	// Phase A 扩展：决策解释字段

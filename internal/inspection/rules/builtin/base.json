@@ -1,0 +1,132 @@
+[
+  {
+    "checkno": "BASE-001",
+    "title": { "zh": "设备运行时长与异常重启检测", "en": "System uptime and unexpected reboot check" },
+    "category": "BASE",
+    "riskLevel": "major",
+    "commands": ["display version"],
+    "scope": { "vendors": ["huawei", "h3c", "cisco"] },
+    "extract": {
+      "fields": [{ "name": "uptime_days", "pattern": "uptime is (?:([0-9]+) days)?", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "uptime_days", "expr": 1.0, "operator": ">=" },
+    "advice": { "zh": "设备运行时间不足24小时，疑似近期发生非计划重启，请排查掉电或死机日志", "en": "System uptime is less than 24 hours, verify reload reason" }
+  },
+  {
+    "checkno": "BASE-002",
+    "title": { "zh": "主存储 Flash/Disk 剩余空间利用率", "en": "Flash storage capacity utilization check" },
+    "category": "BASE",
+    "riskLevel": "major",
+    "commands": ["dir flash:", "dir cfcard:"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "flash_usage", "pattern": "([0-9.]+)%\\s+total[\\s\\S]*?used", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "flash_usage", "expr": 85.0, "operator": "<=" },
+    "advice": { "zh": "存储介质空间占用超过 85%，请清理过期日志、升级包、core dump 文件", "en": "Flash disk utilization exceeds 85%, clean obsolete files" }
+  },
+  {
+    "checkno": "BASE-003",
+    "title": { "zh": "系统热补丁激活状态检查", "en": "System hot-patch running status check" },
+    "category": "BASE",
+    "riskLevel": "major",
+    "commands": ["display patch-information"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "patch_state", "pattern": "(?:Patch state|Status)\\s*:\\s*(Running|Active|Deactive|None)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "patch_state", "expr": "Deactive" },
+    "advice": { "zh": "已加载补丁未激活生效 (Deactive)，关键漏洞修复可能未生效", "en": "Patch is in Deactive state, please activate and save patch" }
+  },
+  {
+    "checkno": "BASE-004",
+    "title": { "zh": "设备商业 License 授权状态检查", "en": "Device license authorization state check" },
+    "category": "BASE",
+    "riskLevel": "critical",
+    "commands": ["display license"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "license_state", "pattern": "(?:License state|License status)\\s*:\\s*(\\S+)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "license_state", "expr": "Expired" },
+    "advice": { "zh": "设备 License 已过期或处于宽限期，请尽快申请续订正式授权", "en": "License has expired, renew commercial license" }
+  },
+  {
+    "checkno": "BASE-005",
+    "title": { "zh": "安全管理通道 SSH 开启状态", "en": "SSH secure management service check" },
+    "category": "BASE",
+    "riskLevel": "major",
+    "commands": ["display ssh server status"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "ssh_status", "pattern": "SSH server\\s*:\\s*(Enable|Disable)", "group": 1 }]
+    },
+    "assert": { "type": "equals", "field": "ssh_status", "expr": "Enable" },
+    "advice": { "zh": "SSH 服务未启用，存在明文传输或管理不可达风险，请执行 stelnet server enable", "en": "SSH server is not enabled, please enable SSH service" }
+  },
+  {
+    "checkno": "BASE-006",
+    "title": { "zh": "管理员登录防暴力破解锁定策略", "en": "Login retry lockout policy check" },
+    "category": "BASE",
+    "riskLevel": "minor",
+    "commands": ["display current-configuration | include lock"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "lock_config", "pattern": "(aaa-lock|login failed.*lock)", "group": 1 }]
+    },
+    "assert": { "type": "must_contain", "field": "lock_config", "expr": "lock" },
+    "advice": { "zh": "未配置连续登录密码失败自动锁定机制，存在暴力破解合规风险", "en": "Password retry lockout policy is missing in AAA configuration" }
+  },
+  {
+    "checkno": "BASE-007",
+    "title": { "zh": "信息中心 Syslog 远程日志服务器配置", "en": "Syslog remote logging server check" },
+    "category": "BASE",
+    "riskLevel": "minor",
+    "commands": ["display current-configuration | include info-center loghost"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "syslog_host", "pattern": "info-center loghost\\s+([0-9.]+)", "group": 1 }]
+    },
+    "assert": { "type": "regex", "field": "syslog_host", "expr": "\\d+\\.\\d+\\.\\d+\\.\\d+" },
+    "advice": { "zh": "未检测到集中式 Syslog 日志主机配置，日志本地留存易丢失", "en": "Syslog remote server is not configured" }
+  },
+  {
+    "checkno": "BASE-008",
+    "title": { "zh": "SNMP 弱口令与默认团体字安全检查", "en": "SNMP weak default community string check" },
+    "category": "BASE",
+    "riskLevel": "critical",
+    "commands": ["display current-configuration | include snmp-agent community"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "snmp_community", "pattern": "snmp-agent community\\s+read\\s+(\\S+)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "snmp_community", "expr": "public" },
+    "advice": { "zh": "发现使用缺省弱团体字 public，存在被探测与信息泄露高危隐患", "en": "Default public SNMP community is in use, replace with strong string" }
+  },
+  {
+    "checkno": "BASE-009",
+    "title": { "zh": "设备配置未保存状态告警", "en": "Unsaved configuration alert check" },
+    "category": "BASE",
+    "riskLevel": "major",
+    "commands": ["display current-configuration | include compare"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "config_diff", "pattern": "(?:Configuration changed|Save needed)\\s*:\\s*(\\S+)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "config_diff", "expr": "Yes" },
+    "advice": { "zh": "当前运行配置与已保存配置不一致，断电或重启将导致配置丢失，请及时执行 save", "en": "Current configuration differs from saved configuration, execute save" }
+  },
+  {
+    "checkno": "BASE-010",
+    "title": { "zh": "系统时区与时钟偏离检查", "en": "System timezone alignment check" },
+    "category": "BASE",
+    "riskLevel": "info",
+    "commands": ["display clock"],
+    "scope": { "vendors": ["huawei", "h3c", "cisco"] },
+    "extract": {
+      "fields": [{ "name": "timezone_text", "pattern": "(?:Time Zone|Zone)\\s*:\\s*(\\S+)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "timezone_text", "expr": "Unknown" },
+    "advice": { "zh": "设备时区设置异常或未配置标准时区，建议统一设置为所属行政时区", "en": "Device timezone is unknown or unconfigured" }
+  }
+]

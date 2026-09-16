@@ -195,6 +195,7 @@ type TaskTopologyEdge struct {
 	EdgeType         string         `json:"edgeType"`
 	Status           string         `json:"status"`
 	Confidence       float64        `json:"confidence"`
+	Role             string         `json:"role,omitempty"` // 端口链路角色 (Uplink, Downlink, Interconnect 等)
 	DiscoveryMethods []string       `gorm:"serializer:json" json:"discoveryMethods"`
 	Evidence         []EdgeEvidence `gorm:"serializer:json" json:"evidence"`
 	// Phase A 扩展字段：置信度拆解与决策解释

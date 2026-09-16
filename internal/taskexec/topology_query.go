@@ -132,6 +132,7 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 			EdgeType:        e.EdgeType,
 			Status:          e.Status,
 			Confidence:      e.Confidence,
+			Role:            e.Role,
 		})
 	}
 
@@ -143,9 +144,10 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 		var parseSuccessCount int64
 		_ = s.db.Model(&TaskParsedLLDPNeighbor{}).Where("task_run_id = ?", runID).Count(&lldpCount).Error
 		_ = s.db.Model(&TaskRawOutput{}).Where("task_run_id = ?", runID).Count(&rawOutputCount).Error
-		_ = s.db.Model(&TaskRawOutput{}).Where("task_run_id = ? AND parse_status = ?", runID, "parse_failed").Count(&parseFailedCount).Error
+		_ = s.db.Model(&TaskRawOutput{}).Where("task_run_id = ? AND parse_status = ?", runID, "failed").Count(&parseFailedCount).Error
 		_ = s.db.Model(&TaskRawOutput{}).Where("task_run_id = ? AND parse_status = ?", runID, "success").Count(&parseSuccessCount).Error
-		logger.Warn("TaskExec", runID, "查询拓扑图无边结果: devices=%d, nodes=%d, rawOutputs=%d, parseSuccess=%d, parseFailed=%d, lldpFacts=%d, deviceStatus=%v", len(devices), len(nodes), rawOutputCount, parseSuccessCount, parseFailedCount, lldpCount, deviceStatusStats)
+		logger.Warn("TaskExec", runID, "拓扑图未生成边: lldpNeighbors=%d, rawOutputs=%d, parseSuccess=%d, parseFailed=%d",
+			lldpCount, rawOutputCount, parseSuccessCount, parseFailedCount)
 	}
 
 	return &models.TopologyGraphView{
@@ -172,6 +174,7 @@ func (s *TaskExecutionService) GetTopologyEdgeDetail(runID, edgeID string) (*mod
 		EdgeType:            edge.EdgeType,
 		Status:              edge.Status,
 		Confidence:          edge.Confidence,
+		Role:                edge.Role,
 		DiscoveryMethods:    append([]string(nil), edge.DiscoveryMethods...),
 		Evidence:            edge.Evidence,
 		ConfidenceBreakdown: edge.ConfidenceBreakdown,

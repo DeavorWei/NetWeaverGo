@@ -12,6 +12,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/normalize"
 	"gorm.io/gorm"
 )
@@ -138,7 +139,7 @@ func (b *TopologyBuilder) Build(ctx context.Context, runID string, onProgress Bu
 	if onProgress != nil {
 		onProgress(9, totalSteps, "边物化")
 	}
-	edges := b.materializeEdges(resolvedCandidates, runID)
+	edges := b.materializeEdges(resolvedCandidates, runID, normalized)
 
 	// 检查取消
 	select {
@@ -192,6 +193,7 @@ type DeviceInfo struct {
 	Hostname       string
 	Vendor         string
 	Model          string
+	Role           string
 }
 
 // NormalizedLLDPNeighbor 标准化的 LLDP 邻居
@@ -386,6 +388,7 @@ func (b *TopologyBuilder) normalizeFacts(input *TopologyBuildInput) *NormalizedF
 			Hostname:       d.Hostname,
 			Vendor:         d.Vendor,
 			Model:          d.Model,
+			Role:           d.Role,
 		}
 		n.Devices[d.DeviceIP] = info
 
@@ -1184,7 +1187,11 @@ func (b *TopologyBuilder) traceConflictWindow(retainedCand *TopologyEdgeCandidat
 }
 
 // materializeEdges 生成最终边
-func (b *TopologyBuilder) materializeEdges(candidates []*TopologyEdgeCandidate, runID string) []TaskTopologyEdge {
+func (b *TopologyBuilder) materializeEdges(candidates []*TopologyEdgeCandidate, runID string, facts ...*NormalizedFacts) []TaskTopologyEdge {
+	var n *NormalizedFacts
+	if len(facts) > 0 {
+		n = facts[0]
+	}
 	edges := make([]TaskTopologyEdge, 0, len(candidates))
 
 	for _, c := range candidates {
@@ -1225,6 +1232,18 @@ func (b *TopologyBuilder) materializeEdges(candidates []*TopologyEdgeCandidate, 
 			}
 		}
 
+		// 推断端口角色
+		var aRole, bRole string
+		if n != nil && n.Devices != nil {
+			if dev, ok := n.Devices[c.ADeviceID]; ok {
+				aRole = dev.Role
+			}
+			if dev, ok := n.Devices[c.BDeviceID]; ok {
+				bRole = dev.Role
+			}
+		}
+		inferredRole := string(models.InferPortRole(aRole, bRole, c.AIf, c.BIf))
+
 		edge := TaskTopologyEdge{
 			ID:                  makeTaskEdgeID(),
 			TaskRunID:           runID,
@@ -1239,6 +1258,7 @@ func (b *TopologyBuilder) materializeEdges(candidates []*TopologyEdgeCandidate, 
 			EdgeType:            c.EdgeType,
 			Status:              status,
 			Confidence:          confidence,
+			Role:                inferredRole,
 			DiscoveryMethods:    c.Features,
 			Evidence:            c.EvidenceRefs,
 			ConfidenceBreakdown: b.serializeScoreBreakdown(c.score),

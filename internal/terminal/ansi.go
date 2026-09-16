@@ -1,5 +1,7 @@
 package terminal
 
+import "strings"
+
 // CommandType ANSI 命令类型
 type CommandType int
 
@@ -21,6 +23,12 @@ const (
 	CmdEraseScreen
 	// CmdSGR 样式设置 ESC[m
 	CmdSGR
+	// CmdDecSet DEC 私有模式设置 ESC[?...h
+	CmdDecSet
+	// CmdDecReset DEC 私有模式复位 ESC[?...l
+	CmdDecReset
+	// CmdOSC 操作系统命令 (如窗口标题设置 ESC]...BEL)
+	CmdOSC
 	// CmdUnknown 未支持的序列
 	CmdUnknown
 )
@@ -39,10 +47,46 @@ type Token struct {
 type ANSICommand struct {
 	// Type 命令类型
 	Type CommandType
+	// IsPrivate 是否为 DEC 私有序列 (带 ? 前缀)
+	IsPrivate bool
 	// Params 参数列表
 	Params []int
 	// Raw 原始序列文本
 	Raw string
+}
+
+// IsAltScreen 判断是否为切换/退出备用屏幕缓冲序列 (?1049)
+func (c ANSICommand) IsAltScreen() bool {
+	return c.IsPrivate && (c.Type == CmdDecSet || c.Type == CmdDecReset) && len(c.Params) > 0 && c.Params[0] == 1049
+}
+
+// CursorVisible 判断是否为光标显示/隐藏控制 (?25)
+func (c ANSICommand) CursorVisible() (visible bool, isCursorCmd bool) {
+	if c.IsPrivate && (c.Type == CmdDecSet || c.Type == CmdDecReset) && len(c.Params) > 0 && c.Params[0] == 25 {
+		return c.Type == CmdDecSet, true
+	}
+	return false, false
+}
+
+// OSCTitle 若为 OSC 窗口标题设置序列，返回提取的标题内容
+func (c ANSICommand) OSCTitle() string {
+	if c.Type != CmdOSC {
+		return ""
+	}
+	raw := c.Raw
+	// 格式形如 \x1b]0;Title\x07 或 \x1b]2;Title\x07
+	if idx := strings.Index(raw, ";"); idx >= 0 {
+		end := len(raw)
+		if strings.HasSuffix(raw, "\x07") {
+			end--
+		} else if strings.HasSuffix(raw, "\x1b\\") {
+			end -= 2
+		}
+		if idx+1 < end {
+			return raw[idx+1 : end]
+		}
+	}
+	return ""
 }
 
 // parseState 解析器状态
@@ -52,6 +96,7 @@ const (
 	stateGround parseState = iota
 	stateEscape
 	stateCSI
+	stateOSC
 )
 
 // ANSIParser ANSI 控制序列解析器
@@ -60,6 +105,8 @@ type ANSIParser struct {
 	state parseState
 	// buffer 累积的原始字节
 	buffer []byte
+	// isPrivate 是否包含 DEC 私有前缀 '?'
+	isPrivate bool
 	// params 解析中的参数
 	params []int
 	// currentParam 当前参数值
@@ -108,10 +155,13 @@ func (p *ANSIParser) Parse(data string) []Token {
 			p.buffer = append(p.buffer, byte(r))
 			if r == '[' {
 				p.state = stateCSI
+				p.isPrivate = false
 				p.params = p.params[:0]
 				p.currentParam = -1 // -1 表示尚未开始解析参数
+			} else if r == ']' {
+				p.state = stateOSC
 			} else {
-				// 非 CSI 序列，作为未知序列处理
+				// 非 CSI/OSC 序列，作为未知序列处理
 				cmd := ANSICommand{
 					Type: CmdUnknown,
 					Raw:  string(p.buffer),
@@ -124,9 +174,26 @@ func (p *ANSIParser) Parse(data string) []Token {
 				p.resetState()
 			}
 
+		case stateOSC:
+			p.buffer = append(p.buffer, byte(r))
+			// OSC 结束符: BEL (\x07) 或 ST (ESC \)
+			if r == 0x07 || (len(p.buffer) >= 2 && p.buffer[len(p.buffer)-2] == 0x1B && r == '\\') {
+				cmd := ANSICommand{
+					Type: CmdOSC,
+					Raw:  string(p.buffer),
+				}
+				tokens = append(tokens, Token{
+					IsText: false,
+					Cmd:    cmd,
+				})
+				p.resetState()
+			}
+
 		case stateCSI:
 			p.buffer = append(p.buffer, byte(r))
-			if r >= '0' && r <= '9' {
+			if r == '?' {
+				p.isPrivate = true
+			} else if r >= '0' && r <= '9' {
 				if p.currentParam < 0 {
 					p.currentParam = 0
 				}
@@ -159,13 +226,27 @@ func (p *ANSIParser) Parse(data string) []Token {
 func (p *ANSIParser) parseCommand(final byte) ANSICommand {
 	raw := string(p.buffer)
 	cmd := ANSICommand{
-		Raw: raw,
+		Raw:       raw,
+		IsPrivate: p.isPrivate,
 	}
 
 	// 复制参数
 	params := make([]int, len(p.params))
 	copy(params, p.params)
 	cmd.Params = params
+
+	if p.isPrivate {
+		switch final {
+		case 'h':
+			cmd.Type = CmdDecSet
+		case 'l':
+			cmd.Type = CmdDecReset
+		default:
+			cmd.Type = CmdUnknown
+			p.unknownCount++
+		}
+		return cmd
+	}
 
 	switch final {
 	case 'A':
@@ -200,6 +281,7 @@ func (p *ANSIParser) parseCommand(final byte) ANSICommand {
 func (p *ANSIParser) resetState() {
 	p.state = stateGround
 	p.buffer = p.buffer[:0]
+	p.isPrivate = false
 	p.currentParam = -1
 }
 
@@ -212,6 +294,7 @@ func (p *ANSIParser) UnknownCount() int {
 func (p *ANSIParser) Reset() {
 	p.state = stateGround
 	p.buffer = p.buffer[:0]
+	p.isPrivate = false
 	p.params = p.params[:0]
 	p.currentParam = 0
 	p.unknownCount = 0

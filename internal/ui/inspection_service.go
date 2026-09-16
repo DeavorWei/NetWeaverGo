@@ -570,3 +570,21 @@ func (s *InspectionService) ExportInspectionJSONWithLocale(runID string, locale 
 	}
 	return jsonText, nil
 }
+
+// ListDSLRules 获取已注册的 DSL 巡检规则
+func (s *InspectionService) ListDSLRules(category string) ([]*inspection.DSLRule, error) {
+	interp := inspection.GetGlobalDSLInterpreter()
+	return interp.RulesByCategory(category), nil
+}
+
+// ExportDSLRules 导出所有 DSL 巡检规则为 JSON 文本
+func (s *InspectionService) ExportDSLRules() (string, error) {
+	interp := inspection.GetGlobalDSLInterpreter()
+	return interp.ExportRulesJSON()
+}
+
+// ImportDSLRules 导入 DSL 巡检规则 JSON 文本
+func (s *InspectionService) ImportDSLRules(jsonData string) (int, error) {
+	interp := inspection.GetGlobalDSLInterpreter()
+	return interp.ImportRulesJSON([]byte(jsonData))
+}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/ceas"
+	"github.com/NetWeaverGo/core/internal/config/migrations"
 	"github.com/NetWeaverGo/core/internal/inspection"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
@@ -73,8 +74,13 @@ func InitDB() error {
 		logger.Warn("Config", "-", "升级前自动备份未完成（不阻断启动）: %v", backupErr)
 	}
 
-	logger.Verbose("Config", "-", "连接SQLite数据库引擎已建立！正在扫描并校验内部表结构约束...")
-	// 自动迁移表结构
+	logger.Verbose("Config", "-", "连接SQLite数据库引擎已建立！正在扫描并执行结构迁移...")
+	// 1. 先执行显式版本化 SQL 迁移
+	if err := migrations.RunMigrations(db); err != nil {
+		logger.Warn("Config", "-", "执行版本化迁移脚本告警 (将尝试 AutoMigrate 兜底): %v", err)
+	}
+
+	// 2. 自动迁移表结构（同步 GORM 实体与新增字段）
 	err = autoMigrateAll(db)
 	if err != nil {
 		return fmt.Errorf("自动迁移表结构失败: %v", err)
@@ -120,6 +126,8 @@ func InitDB() error {
 
 func autoMigrateAll(db *gorm.DB) error {
 	return db.AutoMigrate(
+		// 版本迁移记录
+		&models.SchemaMigration{},
 		// 基础表
 		&models.DeviceAsset{},
 		&models.GlobalSettings{},
@@ -152,6 +160,9 @@ func autoMigrateAll(db *gorm.DB) error {
 		&models.BizSnapshot{},
 		&models.BizCompareTask{},
 		&models.BizCompareItem{},
+		// 光模块检测与LLD拓扑模板表
+		&models.OpticalCheckRule{},
+		&models.LLDParseTemplate{},
 	)
 }
 

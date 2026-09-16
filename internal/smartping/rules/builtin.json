@@ -1,0 +1,67 @@
+[
+  {
+    "ruleId": "DC-SLA-001",
+    "scene": "datacenter",
+    "name": "数据中心超低时延与零丢包检查",
+    "description": "DC 内二层/三层 Fabric 网络应保证毫秒级转发与无损吞吐",
+    "maxLossRate": 0.0,
+    "maxAvgRtt": 3.0,
+    "maxJitter": 2.0,
+    "maxFailedCount": 0,
+    "severity": "critical",
+    "diagnosisTemplate": "数据中心内部出现丢包或时延异常",
+    "adviceTemplate": "检查接入/汇聚交换机 PFC/ECN 拥塞流控配置与缓冲区丢包"
+  },
+  {
+    "ruleId": "LAN-CAMPUS-001",
+    "scene": "lan",
+    "name": "园区局域网链路质量检查",
+    "description": "企业园区内网骨干与接入网关时延与稳定性判定",
+    "maxLossRate": 0.0,
+    "maxAvgRtt": 15.0,
+    "maxJitter": 10.0,
+    "maxFailedCount": 1,
+    "severity": "major",
+    "diagnosisTemplate": "内网局域网链路存在偶发抖动或微丢包",
+    "adviceTemplate": "检查内网接入交换机上行链路利用率与物理双工协商"
+  },
+  {
+    "ruleId": "LEASED-LINE-001",
+    "scene": "leased_line",
+    "name": "跨地域政企专线 SLA 监控",
+    "description": "MSTP/OTN/MPLS VPN 等点对点专线服务等级协议检查",
+    "maxLossRate": 0.5,
+    "maxAvgRtt": 50.0,
+    "maxJitter": 20.0,
+    "maxFailedCount": 1,
+    "severity": "major",
+    "diagnosisTemplate": "企业专线指标超出 SLA 保障协议",
+    "adviceTemplate": "联系电信运营商排查中继波分环路故障或接口光衰"
+  },
+  {
+    "ruleId": "WAN-INTERNET-001",
+    "scene": "wan",
+    "name": "广域网公网出口质量判定",
+    "description": "互联网出口及跨运营商链路时延抖动分析",
+    "maxLossRate": 3.0,
+    "maxAvgRtt": 120.0,
+    "maxJitter": 40.0,
+    "maxFailedCount": 3,
+    "severity": "minor",
+    "diagnosisTemplate": "广域网公网链路时延偏高或存在网络拥塞",
+    "adviceTemplate": "排查出口带宽峰值拥塞或考虑通过 SD-WAN 选路优化"
+  },
+  {
+    "ruleId": "DEFAULT-GENERAL-001",
+    "scene": "default",
+    "name": "通用默认连通性与抖动检查",
+    "description": "未指定场景时的通用基础网络质量规则",
+    "maxLossRate": 1.0,
+    "maxAvgRtt": 60.0,
+    "maxJitter": 25.0,
+    "maxFailedCount": 1,
+    "severity": "major",
+    "diagnosisTemplate": "网络探测指标偏离通用基线标准",
+    "adviceTemplate": "结合 Tracert 路由跟踪排查沿途瓶颈跳数"
+  }
+]

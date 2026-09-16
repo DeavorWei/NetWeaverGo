@@ -1,0 +1,327 @@
+[
+  {
+    "checkno": "HEALTH-001",
+    "title": { "zh": "CPU 5分钟平均利用率检查", "en": "CPU 5-minute average utilization check" },
+    "category": "Health",
+    "riskLevel": "critical",
+    "commands": ["display cpu-usage"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "cpu_usage", "pattern": "(?:CPU usage|CPU Utilization)\\s*:\\s*([0-9.]+)%", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "cpu_usage", "expr": 85.0, "operator": "<=" },
+    "advice": { "zh": "CPU利用率超过85%，请排查突发流量、广播风暴或异常高消耗进程", "en": "CPU utilization exceeds 85%, please inspect high usage processes" }
+  },
+  {
+    "checkno": "HEALTH-002",
+    "title": { "zh": "内存使用率检查", "en": "Memory utilization check" },
+    "category": "Health",
+    "riskLevel": "critical",
+    "commands": ["display memory-usage"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "mem_usage", "pattern": "(?:Memory Using Percentage|Memory utilization)\\s*:\\s*([0-9.]+)%", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "mem_usage", "expr": 80.0, "operator": "<=" },
+    "advice": { "zh": "内存使用率超过80%，请核查是否存在内存泄漏或大表项膨胀", "en": "Memory utilization exceeds 80%, please check memory leak or routing table size" }
+  },
+  {
+    "checkno": "HEALTH-003",
+    "title": { "zh": "电源模块运行状态", "en": "Power supply module health status" },
+    "category": "Health",
+    "riskLevel": "critical",
+    "commands": ["display power"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "power_status", "pattern": "Power\\s+\\S+\\s+(Normal|Abnormal|Fail|Fault|Off)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "power_status", "expr": "Fail" },
+    "advice": { "zh": "检测到电源异常或断电告警，请核实机房供电与电源冗余", "en": "Power module failure detected, check power supply" }
+  },
+  {
+    "checkno": "HEALTH-004",
+    "title": { "zh": "风扇模块运行状态", "en": "Fan module health status" },
+    "category": "Health",
+    "riskLevel": "major",
+    "commands": ["display fan"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "fan_status", "pattern": "Fan\\s+\\S+\\s+(Normal|Abnormal|Fail|Fault|Stopped)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "fan_status", "expr": "Fail" },
+    "advice": { "zh": "风扇出现故障或停转，请及时清理积灰或更换风扇模块", "en": "Fan failure detected, replace fan module" }
+  },
+  {
+    "checkno": "HEALTH-005",
+    "title": { "zh": "主控板温度监控", "en": "Main control board temperature check" },
+    "category": "Health",
+    "riskLevel": "major",
+    "commands": ["display temperature"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "temperature", "pattern": "(?:Current Temperature|Temperature)\\s*:\\s*([0-9.]+)\\s*(?:C|Celsius)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "temperature", "expr": 75.0, "operator": "<=" },
+    "advice": { "zh": "主控板工作温度超过75℃警戒线，需检查机房空调制冷", "en": "Board temperature exceeds 75C, check datacenter cooling" }
+  },
+  {
+    "checkno": "HEALTH-006",
+    "title": { "zh": "存储介质剩余空间", "en": "Flash storage available space check" },
+    "category": "Health",
+    "riskLevel": "major",
+    "commands": ["dir"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "flash_free_kb", "pattern": "([0-9,]+)\\s*KB free", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "", "expr": "0 KB free" },
+    "advice": { "zh": "Flash存储空间耗尽，需清理历史系统日志和多余安装包", "en": "Flash space exhausted, delete old core logs and packages" }
+  },
+  {
+    "checkno": "HEALTH-007",
+    "title": { "zh": "单板告警与异常状态", "en": "Device board status check" },
+    "category": "Health",
+    "riskLevel": "critical",
+    "commands": ["display device"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "board_status", "pattern": "\\b(Unregistered|Fault|Abnormal|Offline)\\b", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "board_status", "expr": "Fault" },
+    "advice": { "zh": "单板存在 Fault 故障状态，需重新插拔或联系技术支持", "en": "Board in Fault state, check connection or replace" }
+  },
+  {
+    "checkno": "HEALTH-008",
+    "title": { "zh": "光模块接收光功率低门限检查", "en": "Optical transceiver Rx power low alarm check" },
+    "category": "Health",
+    "riskLevel": "major",
+    "commands": ["display optical-module"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "rx_power", "pattern": "Rx Power\\(dBm\\)\\s*:\\s*([-0-9.]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "rx_power", "expr": -22.0, "operator": ">=" },
+    "advice": { "zh": "光模块接收功率过低(<-22dBm)，存在弱光风险，需清洁光纤端面或更换光纤跳线", "en": "Optical Rx power too low, clean fiber connector" }
+  },
+  {
+    "checkno": "HEALTH-009",
+    "title": { "zh": "光模块发送光功率低门限检查", "en": "Optical transceiver Tx power low alarm check" },
+    "category": "Health",
+    "riskLevel": "major",
+    "commands": ["display optical-module"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "tx_power", "pattern": "Tx Power\\(dBm\\)\\s*:\\s*([-0-9.]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "tx_power", "expr": -12.0, "operator": ">=" },
+    "advice": { "zh": "光模块发送光功率异常跌落，提示光模块发射端发光老化", "en": "Optical Tx power below normal threshold" }
+  },
+  {
+    "checkno": "HEALTH-010",
+    "title": { "zh": "系统活动告警检查", "en": "System active alarm check" },
+    "category": "Health",
+    "riskLevel": "critical",
+    "commands": ["display alarm active"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "active_alarms", "pattern": "(Critical|Major)\\s+alarm", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "", "expr": "Critical" },
+    "advice": { "zh": "设备当前存在 Critical 级别活动告警，请在网管或控制台确认处理", "en": "Critical active alarm present on device" }
+  },
+  {
+    "checkno": "HEALTH-011",
+    "title": { "zh": "接口丢包率与错包率", "en": "Interface packet error rate check" },
+    "category": "Health",
+    "riskLevel": "major",
+    "commands": ["display interface brief"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "in_errors", "pattern": "([0-9]+)\\s+input errors", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "in_errors", "expr": 100.0, "operator": "<=" },
+    "advice": { "zh": "接口存在持续性输入错包，可能为物理网线损伤或双工不匹配", "en": "Interface has high input errors, check physical cable" }
+  },
+  {
+    "checkno": "HEALTH-012",
+    "title": { "zh": "主备控同步状态", "en": "Dual MPU synchronization status" },
+    "category": "Health",
+    "riskLevel": "critical",
+    "commands": ["display switchover state"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "sync_state", "pattern": "Slave switchover status\\s*:\\s*(\\w+)", "group": 1 }]
+    },
+    "assert": { "type": "must_contain", "field": "", "expr": "real time synchronization" },
+    "advice": { "zh": "双主控未处于实时同步状态，倒换时可能引发业务中断", "en": "Slave MPU not synchronized with master MPU" }
+  },
+  {
+    "checkno": "HEALTH-013",
+    "title": { "zh": "ARP 表项容量占用率", "en": "ARP table capacity utilization" },
+    "category": "Health",
+    "riskLevel": "major",
+    "commands": ["display arp statistics"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "arp_total", "pattern": "Total ARP entries\\s*:\\s*([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "arp_total", "expr": 60000.0, "operator": "<=" },
+    "advice": { "zh": "ARP 表项接近规格上限，注意防范 ARP 泛洪攻击", "en": "ARP table entries approaching capacity" }
+  },
+  {
+    "checkno": "HEALTH-014",
+    "title": { "zh": "MAC 表项容量监控", "en": "MAC address table capacity check" },
+    "category": "Health",
+    "riskLevel": "major",
+    "commands": ["display mac-address summary"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "mac_total", "pattern": "Total dynamic MAC entries\\s*:\\s*([0-9]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "mac_total", "expr": 120000.0, "operator": "<=" },
+    "advice": { "zh": "MAC 地址表数量异常高，排查是否存在环路导致 MAC 翻滚", "en": "High MAC address count, inspect potential loops" }
+  },
+  {
+    "checkno": "HEALTH-015",
+    "title": { "zh": "光模块电压指标检查", "en": "Optical transceiver supply voltage" },
+    "category": "Health",
+    "riskLevel": "minor",
+    "commands": ["display optical-module"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "opt_voltage", "pattern": "Supply Voltage\\(V\\)\\s*:\\s*([0-9.]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "opt_voltage", "expr": 3.6, "operator": "<=" },
+    "advice": { "zh": "光模块供电电压异常，建议检查槽位供电与单板", "en": "Optical transceiver voltage abnormal" }
+  },
+  {
+    "checkno": "HEALTH-016",
+    "title": { "zh": "光模块工作偏置电流", "en": "Optical transceiver bias current check" },
+    "category": "Health",
+    "riskLevel": "minor",
+    "commands": ["display optical-module"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "bias_current", "pattern": "Tx Bias Current\\(mA\\)\\s*:\\s*([0-9.]+)", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "bias_current", "expr": 100.0, "operator": "<=" },
+    "advice": { "zh": "偏置电流偏高说明激光器严重老化，建议提早备件更换", "en": "High Tx bias current indicates aging laser diode" }
+  },
+  {
+    "checkno": "HEALTH-017",
+    "title": { "zh": "接口 CRC 错包统计", "en": "Interface CRC error check" },
+    "category": "Health",
+    "riskLevel": "major",
+    "commands": ["display interface"],
+    "scope": { "vendors": ["huawei", "h3c", "cisco"] },
+    "extract": {
+      "fields": [{ "name": "crc_errors", "pattern": "([0-9]+)\\s+CRC", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "crc_errors", "expr": 10.0, "operator": "<=" },
+    "advice": { "zh": "端口出现 CRC 错包，多由光衰过大、接触不良或电磁干扰引起", "en": "CRC errors found, inspect link quality" }
+  },
+  {
+    "checkno": "HEALTH-018",
+    "title": { "zh": "环境监控进风口温度", "en": "Air inlet temperature check" },
+    "category": "Health",
+    "riskLevel": "major",
+    "commands": ["display environment"],
+    "scope": { "vendors": ["huawei", "cisco"] },
+    "extract": {
+      "fields": [{ "name": "inlet_temp", "pattern": "Inlet\\s+([0-9.]+)\\s*C", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "inlet_temp", "expr": 40.0, "operator": "<=" },
+    "advice": { "zh": "设备进风口温度超过40℃，机房冷热通道未有效隔离", "en": "Inlet temperature too high" }
+  },
+  {
+    "checkno": "HEALTH-019",
+    "title": { "zh": "电源模块冗余状态检查", "en": "Power supply redundancy check" },
+    "category": "Health",
+    "riskLevel": "critical",
+    "commands": ["display power"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "power_mode", "pattern": "Redundant Mode\\s*:\\s*(\\w+)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "", "expr": "No Redundant" },
+    "advice": { "zh": "电源未处于有效冗余状态，单路断电将导致设备宕机", "en": "Power supply not in redundant configuration" }
+  },
+  {
+    "checkno": "HEALTH-020",
+    "title": { "zh": "设备风扇转速监控", "en": "Fan speed percentage check" },
+    "category": "Health",
+    "riskLevel": "minor",
+    "commands": ["display fan"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "fan_speed", "pattern": "Speed\\s*:\\s*([0-9.]+)%", "group": 1 }]
+    },
+    "assert": { "type": "threshold", "field": "fan_speed", "expr": 95.0, "operator": "<=" },
+    "advice": { "zh": "风扇持续全速运转(>95%)，请检查机箱积灰与散热通道", "en": "Fan running at maximum speed continuously" }
+  },
+  {
+    "checkno": "HEALTH-021",
+    "title": { "zh": "堆叠系统单板与链路状态", "en": "Stack member state check" },
+    "category": "Health",
+    "riskLevel": "critical",
+    "commands": ["display stack"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "stack_state", "pattern": "Role\\s*:\\s*(Master|Standby|Slave|None)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "", "expr": "Conflict" },
+    "advice": { "zh": "堆叠成员状态冲突或心跳异常，有堆叠分裂风险", "en": "Stack status conflict detected" }
+  },
+  {
+    "checkno": "HEALTH-022",
+    "title": { "zh": "CF卡/SD卡工作状态", "en": "CF card / SD card storage status" },
+    "category": "Health",
+    "riskLevel": "minor",
+    "commands": ["dir sdcard:"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "sd_status", "pattern": "(No such device|Directory of)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "", "expr": "No such device" },
+    "advice": { "zh": "外置存储卡不可读或损坏，备份写入可能失败", "en": "SD card not readable" }
+  },
+  {
+    "checkno": "HEALTH-023",
+    "title": { "zh": "关键进程挂死检查", "en": "Task hang check" },
+    "category": "Health",
+    "riskLevel": "critical",
+    "commands": ["display task"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "task_state", "pattern": "\\b(DEAD|SUSPEND)\\b", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "", "expr": "DEAD" },
+    "advice": { "zh": "检测到系统关键任务处于 DEAD 状态，需收集诊断日志排查", "en": "System task in DEAD state" }
+  },
+  {
+    "checkno": "HEALTH-024",
+    "title": { "zh": "主备倒换准备状态", "en": "Switchover readiness check" },
+    "category": "Health",
+    "riskLevel": "major",
+    "commands": ["display switchover state"],
+    "scope": { "vendors": ["huawei"] },
+    "extract": {
+      "fields": [{ "name": "ready_state", "pattern": "Switchover Ready\\s*:\\s*(Yes|No)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "", "expr": "Switchover Ready : No" },
+    "advice": { "zh": "备控板未做好倒换准备，当前无法安全热倒换", "en": "Standby board not ready for switchover" }
+  },
+  {
+    "checkno": "HEALTH-025",
+    "title": { "zh": "光衰变化与历史告警", "en": "Optical loss history check" },
+    "category": "Health",
+    "riskLevel": "minor",
+    "commands": ["display logbuffer"],
+    "scope": { "vendors": ["huawei", "h3c"] },
+    "extract": {
+      "fields": [{ "name": "opt_loss", "pattern": "(OPTICAL_INVALID|OPTIC_POWER_ALARM)", "group": 1 }]
+    },
+    "assert": { "type": "must_not_contain", "field": "", "expr": "OPTICAL_INVALID" },
+    "advice": { "zh": "日志中存在光功率越限告警历史，需关注链路稳定性", "en": "Optical power alarms recorded in logbuffer" }
+  }
+]
