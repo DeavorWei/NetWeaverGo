@@ -41,6 +41,7 @@ type ExecutorOptions struct {
 	Protocol          string                    // 连接协议: "ssh"（默认）或 "telnet"
 	ConnectionFactory connutil.ConnectionFactory // 可选的连接工厂，nil 则使用默认工厂
 	RunID             string                    // 所属运行 ID（可观测性按运行维度打点用）
+	PreCommands       []string                  // 前置执行命令序列（如跳板机跳转或会话前置命令）
 }
 
 // DeviceExecutor 封装特定设备的连接数据流及命令步进下发生命周期
@@ -67,6 +68,7 @@ type DeviceExecutor struct {
 	algorithms    *models.SSHAlgorithmSettings
 	logSession    *report.DeviceLogSession
 	deviceProfile *config.DeviceProfile
+	preCommands   []string // 前置命令序列（跳板跳转等）
 
 	// vendor 设备厂商（来自 ExecutorOptions，作为视图反解 vendor 的兜底来源）
 	vendor string
@@ -127,8 +129,16 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 		algorithms:        opts.Algorithms,
 		logSession:        opts.LogSession,
 		deviceProfile:     profile,
+		preCommands:       opts.PreCommands,
 		replayer:          terminal.NewReplayer(terminalWidth),
 		commandCache:      DefaultCommandCache(),
+	}
+}
+
+// SetPreCommands 设置前置命令序列（如跳板机跳转或会话前置指令）
+func (e *DeviceExecutor) SetPreCommands(cmds []string) {
+	if e != nil {
+		e.preCommands = cmds
 	}
 }
 
@@ -486,39 +496,50 @@ func (e *DeviceExecutor) buildUnifiedPlanCommands(commands []PlannedCommand) ([]
 }
 
 func (e *DeviceExecutor) buildInitCommands(commands []PlannedCommand) []PlannedCommand {
-	if e.deviceProfile == nil {
-		return nil
-	}
-
 	initTimeout := e.getInitTimeout(commands)
 	if initTimeout <= 0 {
 		initTimeout = 30 * time.Second
 	}
 
 	result := make([]PlannedCommand, 0)
-	for i, cmd := range e.deviceProfile.Init.DisablePagerCommands {
+	for i, cmd := range e.preCommands {
 		cmd = strings.TrimSpace(cmd)
 		if cmd == "" {
 			continue
 		}
 		result = append(result, PlannedCommand{
-			Key:             fmt.Sprintf("__init_disable_pager_%d", i),
+			Key:             fmt.Sprintf("__init_pre_%d", i),
 			Command:         cmd,
 			Timeout:         initTimeout,
 			ContinueOnError: false,
 		})
 	}
-	for i, cmd := range e.deviceProfile.Init.ExtraCommands {
-		cmd = strings.TrimSpace(cmd)
-		if cmd == "" {
-			continue
+
+	if e.deviceProfile != nil {
+		for i, cmd := range e.deviceProfile.Init.DisablePagerCommands {
+			cmd = strings.TrimSpace(cmd)
+			if cmd == "" {
+				continue
+			}
+			result = append(result, PlannedCommand{
+				Key:             fmt.Sprintf("__init_disable_pager_%d", i),
+				Command:         cmd,
+				Timeout:         initTimeout,
+				ContinueOnError: false,
+			})
 		}
-		result = append(result, PlannedCommand{
-			Key:             fmt.Sprintf("__init_extra_%d", i),
-			Command:         cmd,
-			Timeout:         initTimeout,
-			ContinueOnError: false,
-		})
+		for i, cmd := range e.deviceProfile.Init.ExtraCommands {
+			cmd = strings.TrimSpace(cmd)
+			if cmd == "" {
+				continue
+			}
+			result = append(result, PlannedCommand{
+				Key:             fmt.Sprintf("__init_extra_%d", i),
+				Command:         cmd,
+				Timeout:         initTimeout,
+				ContinueOnError: false,
+			})
+		}
 	}
 
 	return result

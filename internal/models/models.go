@@ -29,6 +29,8 @@ type DeviceAsset struct {
 	PatchVersion string    `json:"patchVersion"`                // 补丁版本
 	ESN          string    `json:"esn" gorm:"column:esn"`       // 设备序列号 (ESN)
 	FormFactor   string    `json:"formFactor,omitempty" gorm:"size:32"` // 形态 (hardware | software)
+	ConnectMode  string    `json:"connectMode,omitempty" gorm:"size:32;default:direct"` // direct | jumphost | proxy
+	JumpHostID   *uint     `json:"jumpHostID,omitempty" gorm:"index"`                   // 跳板机设备ID
 	LastSeen     time.Time `json:"lastSeen"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
@@ -43,6 +45,8 @@ type DeviceAssetListItem struct {
 	Username     string    `json:"username"`
 	Password     string    `json:"password"` // 列表场景始终为空字符串
 	Protocol     string    `json:"protocol"`
+	ConnectMode  string    `json:"connectMode,omitempty"`
+	JumpHostID   *uint     `json:"jumpHostID,omitempty"`
 	Group        string    `json:"group"`
 	DisplayName  string    `json:"displayName"`
 	Vendor       string    `json:"vendor"`
@@ -70,6 +74,8 @@ func (d *DeviceAsset) ToListItem() DeviceAssetListItem {
 		Username:     d.Username,
 		Password:     "", // 显式清空密码，不在列表中暴露
 		Protocol:     d.Protocol,
+		ConnectMode:  d.ConnectMode,
+		JumpHostID:   d.JumpHostID,
 		Group:        d.Group,
 		DisplayName:  d.DisplayName,
 		Vendor:       d.Vendor,
@@ -82,6 +88,7 @@ func (d *DeviceAsset) ToListItem() DeviceAssetListItem {
 		Version:      d.Version,
 		PatchVersion: d.PatchVersion,
 		ESN:          d.ESN,
+		FormFactor:   d.FormFactor,
 		LastSeen:     d.LastSeen,
 		CreatedAt:    d.CreatedAt,
 		UpdatedAt:    d.UpdatedAt,

@@ -15,8 +15,9 @@ type EvaluateInput struct {
 	RunID      string
 	DeviceIP   string
 	Item       *models.InspectionItem
-	RawEcho    string
-	ParsedRows []map[string]interface{}
+	RawEcho     string
+	ParsedRows  []map[string]interface{}
+	ContextVars map[string]string // 上下文变量（前置采集 PreCollect 结果供跨项引用）
 }
 
 // EvaluateItem 判定单台设备针对单个巡检项的执行结论

@@ -163,6 +163,10 @@ func autoMigrateAll(db *gorm.DB) error {
 		// 光模块检测与LLD拓扑模板表
 		&models.OpticalCheckRule{},
 		&models.LLDParseTemplate{},
+		// 告警与归并相关表（方案 §5.2 B9）
+		&models.AlarmRule{},
+		&models.AlarmRecord{},
+		&models.MergedPhenomenon{},
 	)
 }
 
@@ -193,6 +197,10 @@ func createIndexes(db *gorm.DB) {
 		"CREATE INDEX IF NOT EXISTS idx_inspection_results_run ON inspection_results(run_id)",
 		"CREATE INDEX IF NOT EXISTS idx_inspection_results_device ON inspection_results(device_ip)",
 		"CREATE INDEX IF NOT EXISTS idx_inspection_results_status ON inspection_results(status)",
+		// 告警相关索引
+		"CREATE INDEX IF NOT EXISTS idx_alarm_records_run ON alarm_records(run_id)",
+		"CREATE INDEX IF NOT EXISTS idx_alarm_records_device ON alarm_records(device_ip)",
+		"CREATE INDEX IF NOT EXISTS idx_merged_phenomena_run ON merged_phenomena(run_id)",
 	}
 
 	for _, sql := range indexes {

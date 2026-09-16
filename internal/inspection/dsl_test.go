@@ -165,3 +165,45 @@ func TestDSLInterpreter_Evaluate_KeywordsAndRegex(t *testing.T) {
 		t.Errorf("预期 Pass")
 	}
 }
+
+func TestDSLInterpreter_PreCollectAndInheritance(t *testing.T) {
+	interp := NewDSLInterpreter()
+
+	// 1. 前置采集执行
+	preItem := &PreCollectItem{
+		Name:    "get_sys_version",
+		Command: "display version",
+		Extract: ExtractSpec{
+			Fields: []FieldExtract{
+				{Name: "patch_str", Pattern: "Patch Version: (V[0-9A-Z]+)", Group: 1},
+			},
+		},
+		StoreAs: "global_patch_version",
+	}
+	k, v := interp.ExecutePreCollect(preItem, "Huawei Versatile OS\nPatch Version: V200R019SPH001\nUptime: 10 days")
+	if k != "global_patch_version" || v != "V200R019SPH001" {
+		t.Fatalf("前置采集提取异常: key=%s, val=%s", k, v)
+	}
+
+	// 2. 父规则与子规则继承
+	childRule := &DSLRule{
+		CheckNo:       "BASE-CHILD-01",
+		Category:      "BASE",
+		ParentCheckNo: "BASE-PARENT-01", // 继承父规则断言
+	}
+
+	// 注册父规则到解释器
+	_ = interp.LoadBuiltin()
+	_, _ = interp.ImportRulesJSON([]byte(`[{"checkno":"BASE-PARENT-01","category":"BASE","assert":{"type":"must_contain","field":"global_patch_version","expr":"SPH001"}}]`))
+
+	// 子规则无命令回显，但直接消费 ContextVars 中的前置变量
+	res := interp.Evaluate(childRule, &EvaluateInput{
+		ContextVars: map[string]string{
+			"global_patch_version": v,
+		},
+	})
+
+	if res.Status != string(ResultPass) {
+		t.Errorf("预期继承父规则并消费 ContextVars 评估 Pass，实际: %s, 原因: %s", res.Status, res.Problem)
+	}
+}

@@ -49,17 +49,29 @@ type AssertSpec struct {
 	Operator string      `json:"operator"` // < | <= | > | >= | == | != | between
 }
 
+// PreCollectItem 前置采集规约（B11：前置采集项，结果进入上下文供后续检查项复用）
+type PreCollectItem struct {
+	Name        string      `json:"name"`        // 前置项名称/标识
+	Command     string      `json:"command"`     // 执行命令
+	Extract     ExtractSpec `json:"extract"`     // 提取规约
+	StoreAs     string      `json:"storeAs"`     // 存储到上下文中的变量名
+	Description string      `json:"description"` // 说明
+}
+
 // DSLRule 声明式巡检规则
 type DSLRule struct {
-	CheckNo   string      `json:"checkno"`
-	Title     LocaleText  `json:"title"`
-	Category  string      `json:"category"`  // Health | Reliability | BGP | OSPF | BASE
-	RiskLevel string      `json:"riskLevel"` // critical | major | minor | info
-	Commands  []string    `json:"commands"`  // 依赖的 CLI 命令
-	Scope     RuleScope   `json:"scope"`     // 适用范围
-	Extract   ExtractSpec `json:"extract"`   // 数据提取规约
-	Assert    AssertSpec  `json:"assert"`    // 断言判定规约
-	Advice    LocaleText  `json:"advice"`    // 修复建议
+	CheckNo       string           `json:"checkno"`
+	Title         LocaleText       `json:"title"`
+	Category      string           `json:"category"`  // Health | Reliability | BGP | OSPF | BASE
+	RiskLevel     string           `json:"riskLevel"` // critical | major | minor | info
+	Commands      []string         `json:"commands"`  // 依赖的 CLI 命令
+	Scope         RuleScope        `json:"scope"`     // 适用范围
+	Extract       ExtractSpec      `json:"extract"`   // 数据提取规约
+	Assert        AssertSpec       `json:"assert"`    // 断言判定规约
+	Advice        LocaleText       `json:"advice"`    // 修复建议
+	PreCollects   []PreCollectItem `json:"preCollects,omitempty"`   // B11：前置采集项规约
+	ParentCheckNo string           `json:"parentCheckNo,omitempty"` // B11：继承父规则 CheckNo
+	IsBig         bool             `json:"isBig,omitempty"`         // B11：大表标记（触发流式落盘保护）
 }
 
 // DSLInterpreter 规则 DSL 解释器
@@ -188,6 +200,40 @@ func (di *DSLInterpreter) ImportRulesJSON(data []byte) (int, error) {
 	return count, nil
 }
 
+// FindRule 根据 CheckNo 查找规则
+func (di *DSLInterpreter) FindRule(checkNo string) *DSLRule {
+	di.mu.RLock()
+	defer di.mu.RUnlock()
+	for _, r := range di.rules {
+		if strings.EqualFold(r.CheckNo, checkNo) {
+			return r
+		}
+	}
+	return nil
+}
+
+// ExecutePreCollect 执行前置采集提取规约，返回存储键名与提取值
+func (di *DSLInterpreter) ExecutePreCollect(item *PreCollectItem, rawEcho string) (string, string) {
+	if item == nil || item.StoreAs == "" {
+		return "", ""
+	}
+	for _, f := range item.Extract.Fields {
+		re, err := regexp.Compile("(?im)" + f.Pattern)
+		if err != nil {
+			continue
+		}
+		matches := re.FindStringSubmatch(rawEcho)
+		if len(matches) > f.Group && f.Group >= 0 {
+			return item.StoreAs, strings.TrimSpace(matches[f.Group])
+		} else if len(matches) > 1 {
+			return item.StoreAs, strings.TrimSpace(matches[1])
+		} else if len(matches) > 0 {
+			return item.StoreAs, strings.TrimSpace(matches[0])
+		}
+	}
+	return item.StoreAs, ""
+}
+
 // MatchesScope 检查设备画像是否命中规则适用范围
 func (r *DSLRule) MatchesScope(vendor, model, version string) bool {
 	v := strings.ToLower(strings.TrimSpace(vendor))
@@ -270,8 +316,25 @@ func (di *DSLInterpreter) Evaluate(rule *DSLRule, input *EvaluateInput) models.I
 		ActualValue: "",
 	}
 
+	// 0. 支持父规则继承 (B11)
+	effectiveRule := *rule
+	if effectiveRule.ParentCheckNo != "" {
+		if parent := di.FindRule(effectiveRule.ParentCheckNo); parent != nil {
+			if effectiveRule.Assert.Type == "" {
+				effectiveRule.Assert = parent.Assert
+			}
+			if len(effectiveRule.Extract.Fields) == 0 {
+				effectiveRule.Extract = parent.Extract
+			}
+			if len(effectiveRule.Scope.Vendors) == 0 {
+				effectiveRule.Scope = parent.Scope
+			}
+		}
+	}
+	rule = &effectiveRule
+
 	rawEcho := input.RawEcho
-	if strings.TrimSpace(rawEcho) == "" && len(input.ParsedRows) == 0 {
+	if strings.TrimSpace(rawEcho) == "" && len(input.ParsedRows) == 0 && len(input.ContextVars) == 0 {
 		result.Status = string(ResultExcept)
 		result.Problem = fmt.Sprintf("未获取到检查项 [%s] 依赖的命令回显", rule.CheckNo)
 		return result
@@ -300,6 +363,12 @@ func (di *DSLInterpreter) Evaluate(rule *DSLRule, input *EvaluateInput) models.I
 	if actualVal == "" && len(input.ParsedRows) > 0 {
 		if v, ok := input.ParsedRows[0][targetField]; ok {
 			actualVal = fmt.Sprintf("%v", v)
+		}
+	}
+	// B11: 从前置上下文变量中获取 (跨项复用)
+	if actualVal == "" && len(input.ContextVars) > 0 {
+		if v, ok := input.ContextVars[targetField]; ok {
+			actualVal = v
 		}
 	}
 	result.ActualValue = actualVal

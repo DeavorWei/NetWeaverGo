@@ -162,6 +162,30 @@ func TestBuildUnifiedPlanCommands(t *testing.T) {
 			t.Fatalf("业务命令顺序错误")
 		}
 	})
+
+	t.Run("配置 PreCommands 时前置跳板跳转指令", func(t *testing.T) {
+		e := &DeviceExecutor{
+			IP: "192.168.1.1",
+			preCommands: []string{
+				"ssh -p 22 -l admin 10.0.0.1",
+				"terminal length 0",
+			},
+		}
+
+		merged, initCount := e.buildUnifiedPlanCommands(basePlan)
+		if initCount != 2 {
+			t.Fatalf("initCount 预期为 2，实际 %d", initCount)
+		}
+		if len(merged) != len(basePlan)+2 {
+			t.Fatalf("合并后命令数量错误: 预期 %d，实际 %d", len(basePlan)+2, len(merged))
+		}
+		if merged[0].Command != "ssh -p 22 -l admin 10.0.0.1" || merged[1].Command != "terminal length 0" {
+			t.Fatalf("前置跳板命令不符合预期: got[0]=%q got[1]=%q", merged[0].Command, merged[1].Command)
+		}
+		if merged[2].Command != basePlan[0].Command || merged[3].Command != basePlan[1].Command {
+			t.Fatalf("业务命令顺序错误")
+		}
+	})
 }
 
 func TestDropInitResultsAndKeys(t *testing.T) {

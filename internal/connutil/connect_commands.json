@@ -1,0 +1,119 @@
+[
+  {
+    "id": "ssh_standard",
+    "name": "标准 SSH 跳转命令",
+    "protocol": "ssh",
+    "commandTemplate": "ssh -p {port} -l {username} {ip}",
+    "passwordPrompt": "(?i)(password|passphrase):",
+    "confirmPrompt": "(?i)(yes/no\\[\\?|\\]:)",
+    "description": "通用 Linux/网络设备跳转命令"
+  },
+  {
+    "id": "ssh_legacy_ciphers",
+    "name": "SSH 弱加密兼容跳转",
+    "protocol": "ssh",
+    "commandTemplate": "ssh -o KexAlgorithms=+diffie-hellman-group1-sha1 -o HostKeyAlgorithms=+ssh-rsa -p {port} -l {username} {ip}",
+    "passwordPrompt": "(?i)(password|passphrase):",
+    "confirmPrompt": "(?i)(yes/no)",
+    "description": "针对老旧固件与低版本 SSH 服务的兼容模式"
+  },
+  {
+    "id": "ssh_insecure_hostkey",
+    "name": "SSH 免主机密钥确认",
+    "protocol": "ssh",
+    "commandTemplate": "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p {port} -l {username} {ip}",
+    "passwordPrompt": "(?i)(password|passphrase):",
+    "confirmPrompt": "",
+    "description": "临时跳板环境下忽略 known_hosts 校验"
+  },
+  {
+    "id": "ssh_forced_pty",
+    "name": "SSH 强制分配交互 PTY",
+    "protocol": "ssh",
+    "commandTemplate": "ssh -tt -p {port} -l {username} {ip}",
+    "passwordPrompt": "(?i)(password|passphrase):",
+    "confirmPrompt": "(?i)(yes/no)",
+    "description": "强制伪终端分配以获得标准回显"
+  },
+  {
+    "id": "ssh_proxy_command",
+    "name": "SSH 管道中继跳转",
+    "protocol": "ssh",
+    "commandTemplate": "ssh -o \"ProxyCommand=nc -X 5 -x {proxy_host}:{proxy_port} %h %p\" -p {port} -l {username} {ip}",
+    "passwordPrompt": "(?i)(password|passphrase):",
+    "confirmPrompt": "(?i)(yes/no)",
+    "description": "配合 SOCKS5 代理通道中继"
+  },
+  {
+    "id": "telnet_standard",
+    "name": "标准 Telnet 跳转",
+    "protocol": "telnet",
+    "commandTemplate": "telnet {ip} {port}",
+    "passwordPrompt": "(?i)(password|login):",
+    "confirmPrompt": "",
+    "description": "明文 Telnet 通用跳转"
+  },
+  {
+    "id": "telnet_escape_ctrl",
+    "name": "Telnet 控制转义字符模式",
+    "protocol": "telnet",
+    "commandTemplate": "telnet -e ^] {ip} {port}",
+    "passwordPrompt": "(?i)(password|login):",
+    "confirmPrompt": "",
+    "description": "指定退出字符防止终端锁死"
+  },
+  {
+    "id": "telnet_binary_mode",
+    "name": "Telnet 8位二进制流模式",
+    "protocol": "telnet",
+    "commandTemplate": "telnet -8 {ip} {port}",
+    "passwordPrompt": "(?i)(password|login):",
+    "confirmPrompt": "",
+    "description": "避免高位字节被过滤导致乱码"
+  },
+  {
+    "id": "huawei_stelnet",
+    "name": "华为 VRP STelnet 内部跳转",
+    "protocol": "ssh",
+    "commandTemplate": "stelnet {ip} {port}",
+    "passwordPrompt": "(?i)(password|continue connect):",
+    "confirmPrompt": "(?i)(\\[Y/N\\]|continue\\[Y/N\\])",
+    "description": "华为设备作为跳板时发起的 SSH 客户端命令"
+  },
+  {
+    "id": "huawei_telnet",
+    "name": "华为 VRP Telnet 内部跳转",
+    "protocol": "telnet",
+    "commandTemplate": "telnet {ip} {port}",
+    "passwordPrompt": "(?i)(password|username):",
+    "confirmPrompt": "",
+    "description": "华为设备命令行发起的 Telnet 会话"
+  },
+  {
+    "id": "cisco_ssh",
+    "name": "Cisco IOS SSH 客户端跳转",
+    "protocol": "ssh",
+    "commandTemplate": "ssh -v 2 -l {username} {ip}",
+    "passwordPrompt": "(?i)(password):",
+    "confirmPrompt": "(?i)(yes/no)",
+    "description": "Cisco 命令行发起的 SSH 客户端"
+  },
+  {
+    "id": "h3c_ssh2",
+    "name": "H3C Comware SSH2 跳转",
+    "protocol": "ssh",
+    "commandTemplate": "ssh2 {ip}",
+    "passwordPrompt": "(?i)(password):",
+    "confirmPrompt": "(?i)(continue)",
+    "description": "H3C Comware 平台发起的内部跳转"
+  },
+  {
+    "id": "privilege_escalation",
+    "name": "登录后特权提升序列",
+    "protocol": "common",
+    "commandTemplate": "super",
+    "passwordPrompt": "(?i)(password):",
+    "confirmPrompt": "",
+    "description": "跳转成功后提升操作权限等级"
+  }
+]
