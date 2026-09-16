@@ -138,6 +138,9 @@ func runGUI() {
 	tracertService := ui.NewTracertService()         // Tracert 路径探测服务
 	fileServerService := ui.NewFileServerService()   // 文件服务器服务
 	frontendLogService := ui.NewFrontendLogService() // 前端日志服务
+	bizCompareService := ui.NewBizCompareService()   // 业务比对服务
+	riskCommandService := ui.NewRiskCommandService() // 高危命令管理服务
+	alarmService := ui.NewAlarmService()             // 告警规则与归并服务
 	// 创建统一任务执行UI服务（Wails暴露层）
 	taskExecutionUIService := ui.NewTaskExecutionUIService(taskExecutionService)
 
@@ -186,14 +189,17 @@ func runGUI() {
 			application.NewService(executionHistoryService),
 			application.NewService(topologyCommandService),
 			application.NewService(planCompareService),
-			application.NewService(pingService),            // 批量 Ping 服务
-			application.NewService(tracertService),         // Tracert 路径探测服务
-			application.NewService(fileServerService),      // 文件服务器服务
-			application.NewService(frontendLogService),     // 前端日志服务
-			application.NewService(taskExecutionUIService), // 统一任务执行UI服务（阶段1）
-			application.NewService(scheduleUIService),      // 任务调度配置服务
-			application.NewService(snmpQueryService),       // SNMP 即时查询服务
-			application.NewService(parseTemplateService),  // 解析模板管理服务（断头路 #3 接通）
+			application.NewService(pingService),              // 批量 Ping 服务
+			application.NewService(tracertService),           // Tracert 路径探测服务
+			application.NewService(fileServerService),        // 文件服务器服务
+			application.NewService(frontendLogService),       // 前端日志服务
+			application.NewService(bizCompareService),        // 业务比对服务
+			application.NewService(riskCommandService),       // 高危命令服务
+			application.NewService(alarmService),             // 告警归并服务
+			application.NewService(taskExecutionUIService),   // 统一任务执行UI服务（阶段1）
+			application.NewService(scheduleUIService),        // 任务调度配置服务
+			application.NewService(snmpQueryService),         // SNMP 即时查询服务
+			application.NewService(parseTemplateService),     // 解析模板管理服务（断头路 #3 接通）
 			application.NewService(hardwareInventoryService), // 硬件清单与批次预警服务（P3）
 			application.NewService(inspectionService),        // 设备巡检管理与报告服务（P4）
 		},
