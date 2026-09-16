@@ -1,0 +1,47 @@
+{
+  "scene": "*",
+  "vendor": "h3c",
+  "deviceType": "*",
+  "promptPatterns": [
+    "^<[^>]+>$",
+    "^\\[[^\\]]+\\]$",
+    ">(?:\\s*)$",
+    "\\](?:\\s*)$"
+  ],
+  "pagerPatterns": [
+    "---- More ----",
+    "More:"
+  ],
+  "confirmPatterns": [
+    "\\[Y/N\\]",
+    "\\[y/n\\]",
+    "\\(y/n\\)"
+  ],
+  "errorRules": [
+    {
+      "name": "华三告警提示",
+      "pattern": "(?i)(% ?warning:|warning:)",
+      "severity": "warning",
+      "vendor": "h3c",
+      "message": "设备返回非致命的警告信息"
+    },
+    {
+      "name": "命令无法识别",
+      "pattern": "(?i)(unrecognized command|unknown command)",
+      "severity": "critical",
+      "vendor": "generic",
+      "message": "设备不认识该命令，可能拼写错误或不支持"
+    },
+    {
+      "name": "输入错误",
+      "pattern": "(?i)(^Error:|^% ?Error:|^\\\\s*\\\\^\\\\s*$)",
+      "severity": "critical",
+      "vendor": "generic",
+      "message": "设备执行输入返回 Error"
+    }
+  ],
+  "validateModel": "echo_align",
+  "needPrompt": true,
+  "receiveFilterKeys": [],
+  "connectCommandPolicy": 1
+}

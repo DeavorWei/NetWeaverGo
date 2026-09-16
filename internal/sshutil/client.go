@@ -96,6 +96,13 @@ type Config struct {
 
 	// RawSink 为可选的原始 SSH 字节流输出。
 	RawSink report.RawTranscriptSink
+
+	// MaxEchoBytes 逐流回显上限（默认 10MB: 10 * 1024 * 1024，超限截断并告警）
+	MaxEchoBytes int64
+	// Charset 字符集: "utf-8" | "gbk" | "auto"
+	Charset string
+	// ProxyAddr SOCKS5 代理地址（如 "127.0.0.1:1080"）
+	ProxyAddr string
 }
 
 const (
@@ -622,23 +629,11 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	logSSHConfig(cfg.IP, sshConfig, cfg)
 
 	target := fmt.Sprintf("%s:%d", cfg.IP, cfg.Port)
-	dialer := net.Dialer{Timeout: cfg.Timeout}
-
-	conn, err := dialer.DialContext(ctx, "tcp", target)
+	client, conn, err := DialWithProxy(ctx, target, sshConfig, cfg.ProxyAddr)
 	if err != nil {
-		logger.Debug("SSH", cfg.IP, "拨号 %s 失败: %v", target, err)
-		return nil, fmt.Errorf("TCP连通失败: %w", err)
-	}
-	logger.Verbose("SSH", cfg.IP, "TCP %s 拨号成功", target)
-
-	c, chans, reqs, err := ssh.NewClientConn(conn, target, sshConfig)
-	if err != nil {
-		// 记录详细的握手失败信息
 		logSSHHandshakeError(cfg.IP, err, sshConfig, cfg)
-		conn.Close()
-		return nil, fmt.Errorf("SSH握手失败: %w", err)
+		return nil, err
 	}
-	client := ssh.NewClient(c, chans, reqs)
 
 	session, err := client.NewSession()
 	if err != nil {
@@ -693,11 +688,24 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 
 	stdoutReader := io.Reader(stdout)
 	stderrReader := io.Reader(stderr)
+
+	maxEcho := cfg.MaxEchoBytes
+	if maxEcho <= 0 {
+		maxEcho = 10 * 1024 * 1024 // 默认 10MB
+	}
+	stdoutReader = &LimitedEchoReader{r: stdoutReader, limit: maxEcho, ip: cfg.IP}
+	stderrReader = &LimitedEchoReader{r: stderrReader, limit: maxEcho, ip: cfg.IP}
+
+	if cfg.Charset != "" && cfg.Charset != "utf-8" {
+		stdoutReader = NewCharsetReader(stdoutReader, cfg.Charset)
+		stderrReader = NewCharsetReader(stderrReader, cfg.Charset)
+	}
+
 	sink := cfg.RawSink
 	if sink != nil {
 		sink.WriteMarker("========== SESSION START %s %s:%d ==========\n", time.Now().Format(time.RFC3339), cfg.IP, cfg.Port)
-		stdoutReader = io.TeeReader(stdout, sink)
-		stderrReader = io.TeeReader(stderr, sink)
+		stdoutReader = io.TeeReader(stdoutReader, sink)
+		stderrReader = io.TeeReader(stderrReader, sink)
 	}
 
 	// 初始化读取上下文，用于控制读取中断
@@ -717,6 +725,34 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 		readCtx:        readCtx,
 		readCancel:     readCancel,
 	}, nil
+}
+
+// LimitedEchoReader 限制单流最大读取量，防止内存耗尽
+type LimitedEchoReader struct {
+	r         io.Reader
+	limit     int64
+	read      int64
+	truncated bool
+	ip        string
+}
+
+func (l *LimitedEchoReader) Read(p []byte) (n int, err error) {
+	if l.limit > 0 && l.read >= l.limit {
+		if !l.truncated {
+			l.truncated = true
+			logger.Warn("SSH", l.ip, "逐流回显已达上限 (%d MB)，自动截断", l.limit/(1024*1024))
+		}
+		return 0, io.EOF
+	}
+
+	toRead := p
+	if l.limit > 0 && l.read+int64(len(p)) > l.limit {
+		toRead = p[:l.limit-l.read]
+	}
+
+	n, err = l.r.Read(toRead)
+	l.read += int64(n)
+	return n, err
 }
 
 // SendCommand 发送单条命令及回车换行符到流中
@@ -885,27 +921,16 @@ func NewRawSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	logSSHConfig(cfg.IP, sshConfig, cfg)
 
 	target := fmt.Sprintf("%s:%d", cfg.IP, cfg.Port)
-	dialer := net.Dialer{Timeout: cfg.Timeout}
-
-	conn, err := dialer.DialContext(ctx, "tcp", target)
+	client, conn, err := DialWithProxy(ctx, target, sshConfig, cfg.ProxyAddr)
 	if err != nil {
-		logger.Debug("SSH", cfg.IP, "Raw 拨号 %s 失败: %v", target, err)
-		return nil, fmt.Errorf("TCP连通失败: %w", err)
-	}
-	logger.Verbose("SSH", cfg.IP, "Raw TCP %s 拨号成功", target)
-
-	c, chans, reqs, err := ssh.NewClientConn(conn, target, sshConfig)
-	if err != nil {
-		// 记录详细的握手失败信息
 		logSSHHandshakeError(cfg.IP, err, sshConfig, cfg)
-		conn.Close()
-		return nil, fmt.Errorf("SSH握手失败: %w", err)
+		return nil, err
 	}
-	client := ssh.NewClient(c, chans, reqs)
 
 	return &SSHClient{
 		Client: client, // 仅带有底层client，没有挂载任何终端特性 Session
 		IP:     cfg.IP,
 		Port:   cfg.Port,
+		conn:   conn,
 	}, nil
 }

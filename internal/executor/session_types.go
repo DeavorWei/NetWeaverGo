@@ -360,6 +360,9 @@ type SessionContext struct {
 	// ContinueOnCmdError 命令错误时是否继续执行
 	ContinueOnCmdError bool
 
+	// ValidateModel 回显校验模型 (echo_align | exact | any)
+	ValidateModel string
+
 	// ConfirmPolicy 交互确认策略: auto_yes / auto_no / ask_user
 	ConfirmPolicy string
 
@@ -419,6 +422,7 @@ func (c *SessionContext) AdvanceCommand() *CommandContext {
 
 	rawCmd := c.Queue[c.NextIndex]
 	ctx := NewCommandContext(c.NextIndex, rawCmd)
+	ctx.ValidateModel = c.ValidateModel
 	// 记录下发时刻的视图快照（供排障与审计，主状态仍在 SessionContext.CurrentView）
 	ctx.View = c.GetCurrentView()
 	if c.RawBufferLimitBytes > 0 {

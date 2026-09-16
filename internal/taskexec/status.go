@@ -120,6 +120,8 @@ const (
 	StageKindInspectionParse StageKind = "inspection_parse"
 	// StageKindInspectionCheck 巡检规则判定阶段
 	StageKindInspectionCheck StageKind = "inspection_check"
+	// StageKindBizCompareCollect 业务比对采集阶段
+	StageKindBizCompareCollect StageKind = "bizcompare_collect"
 )
 
 // UnitKind Unit类型
@@ -148,6 +150,8 @@ const (
 	RunKindCEAS RunKind = "ceas"
 	// RunKindInspection 设备巡检任务
 	RunKindInspection RunKind = "inspection"
+	// RunKindBizCompare 变更前后业务比对任务
+	RunKindBizCompare RunKind = "bizcompare"
 )
 
 // EventType 事件类型

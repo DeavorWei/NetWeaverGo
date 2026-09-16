@@ -1,0 +1,38 @@
+{
+  "scene": "*",
+  "vendor": "cisco",
+  "deviceType": "*",
+  "promptPatterns": [
+    "#(?:\\s*)$",
+    ">(?:\\s*)$"
+  ],
+  "pagerPatterns": [
+    "--More--",
+    "-- More --"
+  ],
+  "confirmPatterns": [
+    "\\[confirm\\]",
+    "\\[yes/no\\]",
+    "\\(yes/no\\)"
+  ],
+  "errorRules": [
+    {
+      "name": "无效输入",
+      "pattern": "(?i)(% ?Invalid input detected at)",
+      "severity": "critical",
+      "vendor": "cisco",
+      "message": "Cisco CLI 提示无效输入标记"
+    },
+    {
+      "name": "命令无法识别",
+      "pattern": "(?i)(unrecognized command|unknown command)",
+      "severity": "critical",
+      "vendor": "generic",
+      "message": "设备不认识该命令"
+    }
+  ],
+  "validateModel": "any",
+  "needPrompt": true,
+  "receiveFilterKeys": [],
+  "connectCommandPolicy": 0
+}

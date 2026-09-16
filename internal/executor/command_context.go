@@ -54,6 +54,12 @@ type CommandContext struct {
 	// 若首个逻辑行等于发送的命令文本，则标记消费并在后续有效行中剥离
 	EchoConsumed bool
 
+	// EchoAligned 首行命令回显是否与发送命令一致
+	EchoAligned bool
+
+	// ValidateModel 回显校验模型 (echo_align | exact | any)
+	ValidateModel string
+
 	// PaginationCount 分页次数
 	PaginationCount int
 
@@ -124,8 +130,11 @@ func (c *CommandContext) AddNormalizedLine(line string) {
 	if !c.EchoConsumed && len(c.NormalizedLines) == 0 && c.Command != "" {
 		cleanLine := strings.TrimSpace(line)
 		cleanCmd := strings.TrimSpace(c.Command)
-		if cleanLine == cleanCmd {
+		if cleanLine == cleanCmd || strings.HasPrefix(cleanLine, cleanCmd) {
 			c.EchoConsumed = true
+			c.EchoAligned = true
+		} else {
+			c.EchoAligned = false
 		}
 	}
 	limit := c.MaxBufferSize
@@ -254,6 +263,9 @@ type CommandResult struct {
 	// EchoConsumed 是否已消费 echo 行
 	EchoConsumed bool
 
+	// EchoAligned 首行命令回显是否对齐
+	EchoAligned bool
+
 	// StartedAt 命令开始时间
 	StartedAt time.Time
 
@@ -304,6 +316,7 @@ func (c *CommandContext) ToResult() *CommandResult {
 		PromptMatched:   c.PromptMatched,
 		PaginationCount: c.PaginationCount,
 		EchoConsumed:    c.EchoConsumed,
+		EchoAligned:     c.EchoAligned,
 		StartedAt:       c.StartedAt,
 		CompletedAt:     c.CompletedAt,
 		Duration:        c.Duration(),

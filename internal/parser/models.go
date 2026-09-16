@@ -146,6 +146,8 @@ const (
 	EngineAggregate TemplateEngine = "aggregate"
 	// EngineTree 规则树引擎（二维/层级结构）
 	EngineTree TemplateEngine = "tree"
+	// EngineXmlConfig XML配置驱动第四解析引擎
+	EngineXmlConfig TemplateEngine = "xmlconfig"
 )
 
 // EngineMode 解析引擎灰度模式（方案 §10.3）

@@ -29,13 +29,18 @@ type SessionAdapter struct {
 func NewSessionAdapter(width int, commands []string, m *matcher.StreamMatcher) *SessionAdapter {
 	reducer := NewSessionReducer(commands, m)
 
+	newCtx := reducer.Context()
+	if m != nil && m.Policy != nil && m.Policy.ValidateModel != "" {
+		newCtx.ValidateModel = m.Policy.ValidateModel
+	}
+
 	adapter := &SessionAdapter{
 		detector:          NewSessionDetector(m),
 		reducer:           reducer,
 		replayer:          terminal.NewReplayer(width),
 		matcher:           m,
-		newState:          reducer.State(),     // 使用 reducer 的状态
-		newContext:        reducer.Context(),   // 复用 reducer 的上下文，避免双实例问题
+		newState:          reducer.State(),   // 使用 reducer 的状态
+		newContext:        newCtx,            // 复用 reducer 的上下文，避免双实例问题
 		newCommittedLines: make([]string, 0),
 	}
 

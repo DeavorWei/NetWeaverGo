@@ -1,0 +1,64 @@
+{
+  "scene": "*",
+  "vendor": "huawei",
+  "deviceType": "*",
+  "promptPatterns": [
+    "^<[^>]+>$",
+    "^\\[[^\\]]+\\]$",
+    ">(?:\\s*)$",
+    "\\](?:\\s*)$"
+  ],
+  "pagerPatterns": [
+    "---- More ----",
+    "---- More System ----",
+    "More:"
+  ],
+  "confirmPatterns": [
+    "\\[Y/N\\]",
+    "\\[y/n\\]",
+    "\\(y/n\\)",
+    "Are you sure",
+    "continue"
+  ],
+  "errorRules": [
+    {
+      "name": "华为告警提示",
+      "pattern": "(?i)(% ?warning:|warning:)",
+      "severity": "warning",
+      "vendor": "huawei",
+      "message": "设备返回非致命的警告信息"
+    },
+    {
+      "name": "配置未改变或已存在",
+      "pattern": "(?i)(not changed|already exists|no change)",
+      "severity": "warning",
+      "vendor": "generic",
+      "message": "配置与当前运行状态一致，无需下发"
+    },
+    {
+      "name": "命令无法识别",
+      "pattern": "(?i)(unrecognized command|unknown command)",
+      "severity": "critical",
+      "vendor": "generic",
+      "message": "设备不认识该命令，可能拼写错误或不支持"
+    },
+    {
+      "name": "命令不完整",
+      "pattern": "(?i)(incomplete command|ambiguous command)",
+      "severity": "critical",
+      "vendor": "generic",
+      "message": "命令缺少参数或存在歧义"
+    },
+    {
+      "name": "输入错误",
+      "pattern": "(?i)(^Error:|^% ?Error:|^\\\\s*\\\\^\\\\s*$)",
+      "severity": "critical",
+      "vendor": "generic",
+      "message": "设备执行输入返回 Error"
+    }
+  ],
+  "validateModel": "echo_align",
+  "needPrompt": true,
+  "receiveFilterKeys": ["\u001b[16D", "\u001b[K"],
+  "connectCommandPolicy": 1
+}

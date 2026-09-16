@@ -128,6 +128,8 @@ func autoMigrateAll(db *gorm.DB) error {
 		&models.RuntimeSetting{},
 		&models.TopologyVendorFieldCommand{},
 		&models.RiskCommand{},
+		&models.RiskCommandLog{},
+		&models.RiskTrustEntry{},
 		&models.UserParseTemplate{},
 		&models.DeviceProfileRecord{},
 		&models.DeviceCapability{},
@@ -146,6 +148,10 @@ func autoMigrateAll(db *gorm.DB) error {
 		&models.InspectionItem{},
 		&models.InspectionResult{},
 		&models.InspectionItemText{},
+		// 业务比对相关表
+		&models.BizSnapshot{},
+		&models.BizCompareTask{},
+		&models.BizCompareItem{},
 	)
 }
 

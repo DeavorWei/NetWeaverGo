@@ -389,24 +389,57 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 
 		if riskMode != "off" {
 			vendor := ""
-			if e.executor != nil && e.executor.deviceProfile != nil {
-				vendor = e.executor.deviceProfile.Vendor
-			}
-			riskRule, riskAction := GetGlobalRiskValidator().Validate(act.Command, vendor)
-			if riskRule != nil {
-				metrics.Default.LabelInc(e.runID(), "risk.hit", string(riskAction))
-				// 安全收敛：命中任何风险规则，临时强制将交互确认策略收紧为 ask_user，杜绝 auto_yes 自动放行
-				if e.savedConfirmPolicy == "" {
-					e.savedConfirmPolicy = e.adapter.ConfirmPolicy()
+			deviceIP := ""
+			if e.executor != nil {
+				deviceIP = e.executor.IP
+				if e.executor.deviceProfile != nil {
+					vendor = e.executor.deviceProfile.Vendor
 				}
-				e.adapter.SetConfirmPolicy("ask_user")
+			}
 
-				if riskMode == "warn" {
-					// 灰度放行模式：仅审计记录 Warn 日志，不阻断生产命令
-					logger.Warn("StreamEngine", "-", "[高危灰度放行] 命令 %q 命中规则 [%s: %s], 原始策略: %s",
-						act.Command, riskRule.Pattern, riskRule.Reason, riskAction)
-				} else if riskMode == "enforce" {
-					// 严格生效模式
+			// 1. 检查是否命中信任清单
+			isTrusted, trustEntry := GetGlobalRiskValidator().CheckTrust(act.Command)
+			if isTrusted {
+				logger.Info("StreamEngine", "-", "[信任清单放行] 命令 %q 命中信任规则 [%s]", act.Command, trustEntry.Pattern)
+				RecordRiskLog(models.RiskCommandLog{
+					RunID:    e.runID(),
+					DeviceIP: deviceIP,
+					Command:  act.Command,
+					RuleID:   trustEntry.ID,
+					Action:   "bypassed",
+					Operator: trustEntry.UserID,
+					Reason:   "命中信任清单: " + trustEntry.Reason,
+				})
+			} else {
+				riskRule, riskAction := GetGlobalRiskValidator().Validate(act.Command, vendor)
+				if riskRule != nil {
+					metrics.Default.LabelInc(e.runID(), "risk.hit", string(riskAction))
+					// 安全收敛：命中任何风险规则，临时强制将交互确认策略收紧为 ask_user，杜绝 auto_yes 自动放行
+					if e.savedConfirmPolicy == "" {
+						e.savedConfirmPolicy = e.adapter.ConfirmPolicy()
+					}
+					e.adapter.SetConfirmPolicy("ask_user")
+
+					actionStr := string(riskAction)
+					if riskMode == "warn" {
+						actionStr = "warned"
+					}
+					RecordRiskLog(models.RiskCommandLog{
+						RunID:    e.runID(),
+						DeviceIP: deviceIP,
+						Command:  act.Command,
+						RuleID:   riskRule.ID,
+						Action:   actionStr,
+						Operator: "system",
+						Reason:   riskRule.Reason,
+					})
+
+					if riskMode == "warn" {
+						// 灰度放行模式：仅审计记录 Warn 日志，不阻断生产命令
+						logger.Warn("StreamEngine", "-", "[高危灰度放行] 命令 %q 命中规则 [%s: %s], 原始策略: %s",
+							act.Command, riskRule.Pattern, riskRule.Reason, riskAction)
+					} else if riskMode == "enforce" {
+						// 严格生效模式
 				switch riskAction {
 				case models.RiskActionBlock:
 					errMsg := fmt.Sprintf("风险命令阻断: 命令 %q 命中高危规则 [%s: %s]", act.Command, riskRule.Pattern, riskRule.Reason)
@@ -485,16 +518,17 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 				case models.RiskActionWarn:
 					logger.Warn("StreamEngine", "-", "[高危警告] 命令 %q 命中风险规则: %s", act.Command, riskRule.Reason)
 				}
-			} else if e.savedConfirmPolicy != "" {
-				// 未命中风险规则，恢复原本的会话交互确认策略
-				e.adapter.SetConfirmPolicy(e.savedConfirmPolicy)
-				e.savedConfirmPolicy = ""
 			}
 		} else if e.savedConfirmPolicy != "" {
+			// 未命中风险规则，恢复原本的会话交互确认策略
 			e.adapter.SetConfirmPolicy(e.savedConfirmPolicy)
 			e.savedConfirmPolicy = ""
 		}
 	}
+} else if e.savedConfirmPolicy != "" {
+	e.adapter.SetConfirmPolicy(e.savedConfirmPolicy)
+	e.savedConfirmPolicy = ""
+}
 
 		// 命令缓存读路径检查
 		useCache := false

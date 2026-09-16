@@ -20,6 +20,7 @@ type CompositeParser struct {
 	regex           *RegexParser
 	aggregate       *AggregateEngine
 	tree            *TreeEngine
+	xmlconfig       *XmlConfigEngine
 	modeProvider    ModeProvider
 	metricsRecorder MetricsRecorder
 }
@@ -35,6 +36,7 @@ func NewCompositeParser(vendor string, templates map[string]*CompiledTemplate) *
 		regex:     NewRegexParser(),
 		aggregate: NewAggregateEngine(),
 		tree:      NewTreeEngine(),
+		xmlconfig: GetDefaultXmlConfigEngine(),
 	}
 }
 
@@ -73,6 +75,17 @@ func (p *CompositeParser) ParseDetail(commandKey, rawText string) ([]map[string]
 
 	tpl, ok := p.templates[commandKey]
 	if !ok {
+		// 检查 XmlConfig 引擎是否具备该命令解析规则
+		if p.xmlconfig != nil {
+			if _, found := p.xmlconfig.ResolveConfig(p.vendor, commandKey); found {
+				results, err = p.xmlconfig.ParseWithVendor(p.vendor, commandKey, rawText)
+				return results, ParseOutcome{
+					Engine:     string(EngineXmlConfig),
+					Fallback:   false,
+					DurationMs: time.Since(start).Milliseconds(),
+				}, err
+			}
+		}
 		err = fmt.Errorf("未找到模板: vendor=%s commandKey=%s: %w", p.vendor, commandKey, ErrTemplateNotFound)
 		return nil, ParseOutcome{}, err
 	}
@@ -147,6 +160,8 @@ func (p *CompositeParser) ParseDetail(commandKey, rawText string) ([]map[string]
 					}
 				}
 			}
+		case EngineXmlConfig:
+			results, err = p.xmlconfig.ParseWithVendor(p.vendor, commandKey, rawText)
 		default:
 			err = fmt.Errorf("不支持的模板引擎: %s: %w", tpl.Engine, ErrUnsupportedEngine)
 			return nil, buildOutcome(), err

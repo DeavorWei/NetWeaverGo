@@ -32,8 +32,9 @@ func CleanAndCompileRegex(raw string) (string, *regexp.Regexp, bool, error) {
 		return "", nil, false, nil
 	}
 
-	// 1. 折叠连续空白与换行
-	s = strings.ReplaceAll(s, "\r\n", "\n")
+	// 1. 折叠连续空白与换行（对齐 eDeskPro RegexModel.init() 折叠 \r\n + 缩进 为单行）
+	reIndent := regexp.MustCompile(`[\r\n]+\s*`)
+	s = reIndent.ReplaceAllString(s, "")
 
 	modified := false
 
@@ -68,13 +69,14 @@ func CleanAndCompileRegex(raw string) (string, *regexp.Regexp, bool, error) {
 		modified = true
 	}
 
-	// 6. 尝试直接编译（默认开启跨行与忽略大小写 (?im) 模式）
-	prefix := "(?im)"
-	if strings.HasPrefix(s, "(?") {
-		prefix = ""
+	// 6. 确保开启跨行与忽略大小写 (?im) 模式
+	if strings.HasPrefix(s, "(?i)") {
+		s = "(?im)" + strings.TrimPrefix(s, "(?i)")
+	} else if !strings.HasPrefix(s, "(?im)") {
+		s = "(?im)" + s
 	}
 
-	re, err := regexp.Compile(prefix + s)
+	re, err := regexp.Compile(s)
 	if err == nil {
 		return s, re, modified, nil
 	}
@@ -85,7 +87,7 @@ func CleanAndCompileRegex(raw string) (string, *regexp.Regexp, bool, error) {
 			content := m[4 : len(m)-1]
 			return "(?:" + content + ")"
 		})
-		if re2, err2 := regexp.Compile(prefix + rewritten); err2 == nil {
+		if re2, err2 := regexp.Compile(rewritten); err2 == nil {
 			return rewritten, re2, true, nil
 		}
 	}

@@ -16,10 +16,16 @@ type compiledRiskRule struct {
 	Regexp *regexp.Regexp
 }
 
+type compiledTrustRule struct {
+	Entry  models.RiskTrustEntry
+	Regexp *regexp.Regexp
+}
+
 // RiskValidator 风险命令校验器
 type RiskValidator struct {
-	mu    sync.RWMutex
-	rules []compiledRiskRule
+	mu         sync.RWMutex
+	rules      []compiledRiskRule
+	trustRules []compiledTrustRule
 }
 
 var (
@@ -30,7 +36,8 @@ var (
 // NewRiskValidatorFromRules 基于规则列表创建校验器
 func NewRiskValidatorFromRules(rawRules []models.RiskCommand) *RiskValidator {
 	v := &RiskValidator{
-		rules: make([]compiledRiskRule, 0, len(rawRules)),
+		rules:      make([]compiledRiskRule, 0, len(rawRules)),
+		trustRules: make([]compiledTrustRule, 0),
 	}
 	for _, r := range rawRules {
 		if !r.Enabled {
@@ -60,19 +67,23 @@ func GetGlobalRiskValidator() *RiskValidator {
 func initGlobalRiskValidator() *RiskValidator {
 	db := config.GetDB()
 	var rules []models.RiskCommand
+	var trustEntries []models.RiskTrustEntry
 
 	if db != nil {
 		if err := db.Where("enabled = ?", true).Find(&rules).Error; err != nil {
 			logger.Warn("RiskValidator", "-", "从数据库读取风险规则失败，回退至内置种子: %v", err)
 			rules = models.DefaultRiskCommandSeeds()
 		}
+		_ = db.Find(&trustEntries).Error
 	}
 
 	if len(rules) == 0 {
 		rules = models.DefaultRiskCommandSeeds()
 	}
 
-	return NewRiskValidatorFromRules(rules)
+	v := NewRiskValidatorFromRules(rules)
+	v.ReloadTrustEntries(trustEntries)
+	return v
 }
 
 // ReloadRules 重新加载规则（支持动态修改后即时生效）
@@ -101,6 +112,54 @@ func (v *RiskValidator) ReloadRules(rawRules []models.RiskCommand) {
 	defer v.mu.Unlock()
 	v.rules = compiled
 	logger.Info("RiskValidator", "-", "成功重载风险命令规则，共 %d 条生效", len(compiled))
+}
+
+// ReloadTrustEntries 重载信任清单
+func (v *RiskValidator) ReloadTrustEntries(entries []models.RiskTrustEntry) {
+	if v == nil {
+		return
+	}
+	compiled := make([]compiledTrustRule, 0, len(entries))
+	for _, e := range entries {
+		if e.IsExpired() {
+			continue
+		}
+		re, err := regexp.Compile(e.Pattern)
+		if err != nil {
+			logger.Warn("RiskValidator", "-", "跳过无效信任清单正则: pattern=%s, err=%v", e.Pattern, err)
+			continue
+		}
+		compiled = append(compiled, compiledTrustRule{
+			Entry:  e,
+			Regexp: re,
+		})
+	}
+
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.trustRules = compiled
+	logger.Info("RiskValidator", "-", "成功重载信任清单，共 %d 条生效", len(compiled))
+}
+
+// CheckTrust 检查命令是否命中有效信任清单
+func (v *RiskValidator) CheckTrust(cmd string) (bool, *models.RiskTrustEntry) {
+	if v == nil || strings.TrimSpace(cmd) == "" {
+		return false, nil
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	cleanCmd := strings.TrimSpace(cmd)
+	for _, tr := range v.trustRules {
+		if tr.Entry.IsExpired() {
+			continue
+		}
+		if tr.Regexp.MatchString(cleanCmd) {
+			entryCopy := tr.Entry
+			return true, &entryCopy
+		}
+	}
+	return false, nil
 }
 
 // Validate 校验命令是否命中风险规则

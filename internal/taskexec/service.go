@@ -39,6 +39,7 @@ func NewTaskExecutionService(db *gorm.DB, parserProvider parser.ParserProvider) 
 	compilerReg.Register(string(RunKindBackup), NewBackupTaskCompiler(nil))
 	compilerReg.Register(string(RunKindCEAS), NewCEASTaskCompiler(nil))
 	compilerReg.Register(string(RunKindInspection), NewInspectionTaskCompiler(nil, db))
+	compilerReg.Register(string(RunKindBizCompare), NewBizCompareTaskCompiler(nil))
 
 	// Register stage executors
 	runtime.RegisterExecutor(NewDeviceCommandExecutor(repository.NewDeviceRepository()))
@@ -51,6 +52,7 @@ func NewTaskExecutionService(db *gorm.DB, parserProvider parser.ParserProvider) 
 	// 巡检三阶段编排执行器（仅在 InspectionPipelineMode=three_stage 时由编译器产出对应 Stage）
 	runtime.RegisterExecutor(NewInspectionCollectExecutor(repository.NewDeviceRepository()))
 	runtime.RegisterExecutor(NewInspectionParseExecutor(db, repository.NewDeviceRepository(), parserProvider))
+	runtime.RegisterExecutor(NewBizCompareExecutor(repository.NewDeviceRepository(), db))
 
 	service := &TaskExecutionService{
 		runtime:        runtime,

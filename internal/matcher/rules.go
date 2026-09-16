@@ -76,3 +76,16 @@ var DefaultRules = []ErrorRule{
 		Message:  "Cisco 终端报告语法错误",
 	},
 }
+
+// GetRulesForVendor 根据厂商获取规则，若策略系统可用则解析，否则回退到 DefaultRules
+func GetRulesForVendor(vendor string) []ErrorRule {
+	pm := GetDefaultPolicyMatcher()
+	if pm != nil {
+		p := pm.Resolve("*", vendor, "*")
+		if p != nil && len(p.ErrorRules) > 0 {
+			return p.ToCompiledErrorRules()
+		}
+	}
+	return DefaultRules
+}
+

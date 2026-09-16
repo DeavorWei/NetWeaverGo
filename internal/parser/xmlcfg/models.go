@@ -76,6 +76,7 @@ type FieldNode struct {
 	ValueMapping   *ValueMappingNode `xml:"ValueMapping"`
 	StrExtract     *StrExtractNode   `xml:"StrExtract"`
 	SplitField     *SplitFieldNode   `xml:"SplitField"`
+	MergeField     *MergeFieldNode   `xml:"MergeField"`
 	ReplaceAll     *ReplaceAllNode   `xml:"ReplaceAll"`
 	Assigns        []AssignNode      `xml:"Assign"`
 	StrConcat      *StrConcatNode    `xml:"StrConcat"`

@@ -29,6 +29,8 @@ type StreamMatcher struct {
 	PaginationPrompts []string
 	PromptPatterns    []*regexp.Regexp // 正则模式（可选）
 	ConfirmPatterns   []*regexp.Regexp // 交互确认提示符模式（如 [Y/N]）
+	Policy            *MatchPolicy     // 外置策略引用
+	Shadow            *ShadowMatcher   // 影子模式对比
 	mu                sync.RWMutex
 }
 
@@ -40,6 +42,50 @@ func NewStreamMatcher() *StreamMatcher {
 		PaginationPrompts: DefaultPaginationPrompts,
 		PromptPatterns:    nil,
 		ConfirmPatterns:   CompileConfirmPatterns(DefaultConfirmPatterns),
+	}
+}
+
+// NewStreamMatcherWithPolicy 基于指定策略初始化匹配器
+func NewStreamMatcherWithPolicy(p *MatchPolicy) *StreamMatcher {
+	m := NewStreamMatcher()
+	if p != nil {
+		m.ApplyPolicy(p)
+	}
+	return m
+}
+
+// ApplyPolicy 应用外置匹配策略
+func (m *StreamMatcher) ApplyPolicy(p *MatchPolicy) {
+	if p == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.Policy = p
+	if len(p.PromptPatterns) > 0 {
+		m.PromptPatterns = p.CompilePromptRegexes()
+	}
+	if len(p.PagerPatterns) > 0 {
+		m.PaginationPrompts = p.PagerPatterns
+	}
+	if len(p.ErrorRules) > 0 {
+		m.Rules = p.ToCompiledErrorRules()
+	}
+	if len(p.ConfirmPatterns) > 0 {
+		m.ConfirmPatterns = CompileConfirmPatterns(p.ConfirmPatterns)
+	}
+}
+
+// EnableShadowMode 开启或关闭影子对比模式
+func (m *StreamMatcher) EnableShadowMode(enabled bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.Shadow == nil {
+		m.Shadow = NewShadowMatcher(DefaultRules, m.Rules, enabled)
+	} else {
+		m.Shadow.SetEnabled(enabled)
+		m.Shadow.SetNewRules(m.Rules)
 	}
 }
 
@@ -109,6 +155,14 @@ func (m *StreamMatcher) ConfigureFromProfile(promptSuffixes []string, promptPatt
 
 // MatchErrorRule 检查流数据的一行是否命中错误特征规则，返回是否命中和最高优先级的规则实体
 func (m *StreamMatcher) MatchErrorRule(line string) (bool, *ErrorRule) {
+	m.mu.RLock()
+	shadow := m.Shadow
+	m.mu.RUnlock()
+
+	if shadow != nil && shadow.IsEnabled() {
+		shadow.MatchBoth(line)
+	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for _, rule := range m.Rules {
