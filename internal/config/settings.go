@@ -43,6 +43,9 @@ func DefaultSettings() models.GlobalSettings {
 		// A6 Shadow 影子对比（Phase 1 默认只记录差异率，不参与裁决；"off" 可关闭）
 		MatcherShadowMode: "record",
 
+		// A2 业务比对数值漂移阈值（0 = 任意数值差异均判定为漂移，保持历史行为）
+		BizCompareDriftThreshold: 0,
+
 		// 巡检编排模式：默认 single（对齐红线 6：自动/新编排默认最保守档）
 		InspectionPipelineMode: "single",
 	}

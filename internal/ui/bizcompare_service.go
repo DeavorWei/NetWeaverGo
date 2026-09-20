@@ -10,6 +10,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/bizcompare"
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
 )
@@ -78,6 +79,10 @@ func (s *BizCompareService) RunComparison(name, domain, sceneID, beforeRunID, af
 	}
 
 	differ := bizcompare.NewDiffer()
+	// P1-3：数值漂移阈值可配置（全局设置 bizCompareDriftThreshold，<=0 表示任意数值差异均视为漂移）
+	if st := config.GetGlobalSettings(); st != nil && st.BizCompareDriftThreshold > 0 {
+		differ.DriftThreshold = st.BizCompareDriftThreshold
+	}
 	var allDiffs []models.BizCompareItem
 
 	taskRecord := models.BizCompareTask{
@@ -97,10 +102,21 @@ func (s *BizCompareService) RunComparison(name, domain, sceneID, beforeRunID, af
 		}
 	}
 
+	skippedFailed := 0
 	for _, bSnap := range beforeSnaps {
 		aSnap := afterMap[bSnap.DeviceIP]
+		// P1-3：任一侧采集失败或缺失时跳过该设备，避免"失败 vs 成功"制造整片假差异
+		if aSnap == nil || bSnap.Failed() || aSnap.Failed() {
+			skippedFailed++
+			logger.Warn("BizCompare", "-", "跳过采集失败/缺失的设备: ip=%s before=%s after=%s",
+				bSnap.DeviceIP, snapshotStatus(bSnap), snapshotStatus(aSnap))
+			continue
+		}
 		diffs := differ.CompareSnapshots(taskRecord.ID, bSnap, aSnap)
 		allDiffs = append(allDiffs, diffs...)
+	}
+	if skippedFailed > 0 {
+		logger.Warn("BizCompare", "-", "本次比对跳过 %d 台采集失败/缺失设备（未计入差异）", skippedFailed)
 	}
 
 	taskRecord.DiffCount = len(allDiffs)
@@ -116,6 +132,20 @@ func (s *BizCompareService) RunComparison(name, domain, sceneID, beforeRunID, af
 	}
 
 	return &taskRecord, allDiffs, nil
+}
+
+// snapshotStatus 返回快照状态描述（用于跳过日志）
+func snapshotStatus(s *bizcompare.DeviceSnapshot) string {
+	if s == nil {
+		return "missing"
+	}
+	if s.Failed() {
+		if s.Error != "" {
+			return "failed(" + s.Error + ")"
+		}
+		return "failed"
+	}
+	return "ok"
 }
 
 // GetCompareTask 查询比对任务详情及差异项

@@ -17,13 +17,21 @@ type SnapshotItem struct {
 	Value    string `json:"value"`
 }
 
+// 快照采集状态（P1-3：设备级失败标记，diff 时跳过，避免"失败 vs 成功"制造假差异）
+const (
+	SnapshotStatusOK     = "ok"
+	SnapshotStatusFailed = "failed"
+)
+
 // DeviceSnapshot 设备业务快照
 type DeviceSnapshot struct {
 	RunID     string                  `json:"runId"`
 	DeviceIP  string                  `json:"deviceIp"`
 	Domain    string                  `json:"domain"`
 	SceneID   string                  `json:"sceneId"`
-	Phase     string                  `json:"phase"` // before | after
+	Phase     string                  `json:"phase"`  // before | after
+	Status    string                  `json:"status"` // ok | failed
+	Error     string                  `json:"error,omitempty"`
 	Items     map[string]SnapshotItem `json:"items"` // key -> Item
 	CreatedAt time.Time               `json:"createdAt"`
 }
@@ -36,9 +44,26 @@ func NewDeviceSnapshot(runID, deviceIP, domain, sceneID, phase string) *DeviceSn
 		Domain:    domain,
 		SceneID:   sceneID,
 		Phase:     phase,
+		Status:    SnapshotStatusOK,
 		Items:     make(map[string]SnapshotItem),
 		CreatedAt: time.Now(),
 	}
+}
+
+// MarkFailed 标记该设备快照采集失败（携带可读原因）
+func (s *DeviceSnapshot) MarkFailed(err error) {
+	if s == nil {
+		return
+	}
+	s.Status = SnapshotStatusFailed
+	if err != nil {
+		s.Error = err.Error()
+	}
+}
+
+// Failed 返回该快照是否为采集失败状态
+func (s *DeviceSnapshot) Failed() bool {
+	return s != nil && s.Status == SnapshotStatusFailed
 }
 
 // AddItem 添加快照项
@@ -105,6 +130,8 @@ func (s *DefaultSnapshotStore) SaveSnapshot(snap *DeviceSnapshot) error {
 				Domain:    snap.Domain,
 				SceneID:   snap.SceneID,
 				Phase:     snap.Phase,
+				Status:    snap.Status,
+				Error:     snap.Error,
 				DataJSON:  string(dataBytes),
 				CreatedAt: snap.CreatedAt,
 			}
@@ -130,6 +157,10 @@ func (s *DefaultSnapshotStore) GetSnapshot(runID, deviceIP string) (*DeviceSnaps
 		if err := db.Where("run_id = ? AND device_ip = ?", runID, deviceIP).First(&record).Error; err == nil {
 			snap := NewDeviceSnapshot(record.RunID, record.DeviceIP, record.Domain, record.SceneID, record.Phase)
 			snap.CreatedAt = record.CreatedAt
+			if record.Status != "" {
+				snap.Status = record.Status
+			}
+			snap.Error = record.Error
 			var items map[string]SnapshotItem
 			if err := json.Unmarshal([]byte(record.DataJSON), &items); err == nil {
 				snap.Items = items
@@ -166,6 +197,10 @@ func (s *DefaultSnapshotStore) ListSnapshots(runID string) ([]*DeviceSnapshot, e
 			for _, record := range records {
 				snap := NewDeviceSnapshot(record.RunID, record.DeviceIP, record.Domain, record.SceneID, record.Phase)
 				snap.CreatedAt = record.CreatedAt
+				if record.Status != "" {
+					snap.Status = record.Status
+				}
+				snap.Error = record.Error
 				var items map[string]SnapshotItem
 				if err := json.Unmarshal([]byte(record.DataJSON), &items); err == nil {
 					snap.Items = items

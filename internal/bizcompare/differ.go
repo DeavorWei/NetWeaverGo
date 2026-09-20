@@ -12,6 +12,9 @@ import (
 // Differ 业务比对引擎
 type Differ struct {
 	analyzer *ImpactAnalyzer
+
+	// DriftThreshold 数值漂移判定阈值（绝对差值）：差值 >= 阈值才算漂移；<=0 表示任意数值差异均视为漂移
+	DriftThreshold float64
 }
 
 // NewDiffer 创建比对引擎
@@ -24,6 +27,11 @@ func NewDiffer() *Differ {
 // CompareSnapshots 比较变更前和变更后的两份快照
 func (d *Differ) CompareSnapshots(taskID uint, before, after *DeviceSnapshot) []models.BizCompareItem {
 	if before == nil && after == nil {
+		return nil
+	}
+
+	// P1-3：任一阶段设备级采集失败时不产出差异项，避免"失败 vs 成功"制造整片假差异
+	if before.Failed() || after.Failed() {
 		return nil
 	}
 
@@ -71,7 +79,7 @@ func (d *Differ) CompareSnapshots(taskID uint, before, after *DeviceSnapshot) []
 		// 两边都存在，比较值
 		if bItem.Value != aItem.Value {
 			diffType := "modified"
-			if isNumericDrift(bItem.Value, aItem.Value) {
+			if d.isNumericDrift(bItem.Value, aItem.Value) {
 				diffType = "drift"
 			}
 			item := models.BizCompareItem{
@@ -110,16 +118,20 @@ func (d *Differ) CompareSnapshots(taskID uint, before, after *DeviceSnapshot) []
 	return diffs
 }
 
-// isNumericDrift 判断是否属于数值漂移
-func isNumericDrift(v1, v2 string) bool {
+// isNumericDrift 判断是否属于数值漂移（含可配置阈值，P1-3）
+func (d *Differ) isNumericDrift(v1, v2 string) bool {
 	f1, err1 := strconv.ParseFloat(strings.TrimSpace(v1), 64)
 	f2, err2 := strconv.ParseFloat(strings.TrimSpace(v2), 64)
-	if err1 == nil && err2 == nil {
-		if f1 != f2 && math.Abs(f1-f2) > 0 {
-			return true
-		}
+	if err1 != nil || err2 != nil {
+		return false
 	}
-	return false
+	if f1 == f2 {
+		return false
+	}
+	if d.DriftThreshold <= 0 {
+		return true
+	}
+	return math.Abs(f1-f2) >= d.DriftThreshold
 }
 
 // FormatDiffSummary 生成比对汇总描述

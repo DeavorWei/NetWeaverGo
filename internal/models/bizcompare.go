@@ -10,6 +10,8 @@ type BizSnapshot struct {
 	Domain    string    `gorm:"size:32;not null" json:"domain"`  // S | NE-SR | CE
 	SceneID   string    `gorm:"size:64;not null" json:"sceneId"` // routing | interface | l2vpn | etc.
 	Phase     string    `gorm:"size:32;not null" json:"phase"`   // before | after
+	Status    string    `gorm:"size:32" json:"status"`           // ok | failed（P1-3 设备级采集状态）
+	Error     string    `gorm:"type:text" json:"error"`          // 采集失败原因
 	DataJSON  string    `gorm:"type:text;not null" json:"data"`  // JSON 格式键值对
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 }

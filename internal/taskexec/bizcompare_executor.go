@@ -2,7 +2,6 @@ package taskexec
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -154,13 +153,9 @@ func (e *BizCompareExecutor) executeUnit(ctx RuntimeContext, unit *UnitPlan) err
 						if cat == "" {
 							cat = "general"
 						}
-						// 提取有效逻辑行入快照
-						for _, line := range res.NormalizedLines {
-							trimmed := strings.TrimSpace(line)
-							if trimmed != "" && !strings.HasPrefix(trimmed, "<") && !strings.HasPrefix(trimmed, "[") {
-								key := fmt.Sprintf("%s.%s", res.CommandKey, trimmed)
-								snap.AddItem(key, cat, trimmed)
-							}
+						// P1-3：提取"归一化字段/指标"级快照项（显式 key:value 结构化，其余折叠空白）
+						for _, item := range bizcompare.ExtractStructuredItems(res.CommandKey, cat, res.NormalizedLines) {
+							snap.AddItem(item.Key, item.Category, item.Value)
 						}
 					}
 				}
@@ -170,6 +165,11 @@ func (e *BizCompareExecutor) executeUnit(ctx RuntimeContext, unit *UnitPlan) err
 
 	if collectErr != nil {
 		logger.Warn("BizCompareExecutor", deviceIP, "业务快照采集失败: %v", collectErr)
+		// P1-3：标记设备级失败并落库，供比对阶段识别并跳过（不产生占位差异）
+		snap.MarkFailed(collectErr)
+		if saveErr := bizcompare.GetGlobalSnapshotStore().SaveSnapshot(snap); saveErr != nil {
+			logger.Warn("BizCompareExecutor", deviceIP, "失败状态快照保存失败: %v", saveErr)
+		}
 		return collectErr
 	}
 

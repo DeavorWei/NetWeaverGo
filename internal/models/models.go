@@ -172,6 +172,9 @@ type GlobalSettings struct {
 	// A6 Shadow 影子对比模式: "" 或 "record"（默认，只记录差异率） | "off"（关闭）
 	MatcherShadowMode string `json:"matcherShadowMode"`
 
+	// A2 业务比对数值漂移阈值（绝对差值）：<=0 表示任意数值差异均视为漂移
+	BizCompareDriftThreshold float64 `json:"bizCompareDriftThreshold"`
+
 	// 巡检编排模式：single（默认，单阶段内联） | three_stage（采集/解析/判定三阶段）
 	InspectionPipelineMode string `json:"inspectionPipelineMode"`
 }
