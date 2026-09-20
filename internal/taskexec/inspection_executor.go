@@ -241,6 +241,25 @@ func (e *InspectionCheckExecutor) executeCheckOnly(
 		metrics.Default.LabelInc(taskID, "inspection.result_code", string(evalRes.Status))
 	}
 
+	// A4/P0-8：三阶段路径同样按命令维度执行 DSL 规则判定
+	results = append(results, evaluateDSLRules(taskID, deviceIP, items,
+		func(cmd string) (string, bool) {
+			return holder.GetCommandEcho(deviceIP, cmd)
+		},
+		func(cmd string) []map[string]interface{} {
+			rows, _ := holder.GetParsedRows(deviceIP, cmd)
+			parsed := make([]map[string]interface{}, 0, len(rows))
+			for _, r := range rows {
+				m := make(map[string]interface{}, len(r))
+				for k, v := range r {
+					m[k] = v
+				}
+				parsed = append(parsed, m)
+			}
+			return parsed
+		},
+		map[string]string{})...)
+
 	// 结果持久化（与单阶段路径一致的幂等清理 + 批量插入）
 	if e.db != nil {
 		errTx := e.db.Transaction(func(tx *gorm.DB) error {
@@ -540,6 +559,17 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 			warnCount++
 		}
 	}
+
+	// A4/P0-8：按命令维度执行 DSL 规则判定（内置规则编号与模板项不同，需按命令触发）
+	results = append(results, evaluateDSLRules(taskID, deviceIP, items,
+		func(cmd string) (string, bool) {
+			echo, ok := commandEchos[cmd]
+			return echo, ok
+		},
+		func(cmd string) []map[string]interface{} {
+			return parsedData[cmd]
+		},
+		contextVars)...)
 
 	// 5. 结果持久化与产物登记（事务保证，清理历史并批量插入）
 	if e.db != nil {

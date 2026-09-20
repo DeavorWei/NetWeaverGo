@@ -36,6 +36,43 @@ func TestDSLInterpreter_LoadBuiltin(t *testing.T) {
 	}
 }
 
+// P0-8：内置规则必须能按"依赖命令"检索到，作为按命令触发判定的基础
+func TestDSLInterpreter_RulesForCommand(t *testing.T) {
+	interp := NewDSLInterpreter()
+	if err := interp.LoadBuiltin(); err != nil {
+		t.Fatalf("加载内置规则失败: %v", err)
+	}
+	all := interp.AllRules()
+	if len(all) == 0 {
+		t.Fatal("内置 DSL 规则不应为空")
+	}
+
+	var target *DSLRule
+	for _, r := range all {
+		if len(r.Commands) > 0 && r.Commands[0] != "" {
+			target = r
+			break
+		}
+	}
+	if target == nil {
+		t.Skip("内置规则未声明依赖命令")
+	}
+
+	found := false
+	for _, r := range interp.RulesForCommand(target.Commands[0]) {
+		if r.CheckNo == target.CheckNo {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("命令 %q 应检索到规则 %s", target.Commands[0], target.CheckNo)
+	}
+	if len(interp.RulesForCommand("__no_such_command__")) != 0 {
+		t.Fatal("不存在的命令不应命中任何规则")
+	}
+}
+
 func TestDSLRule_MatchesScope(t *testing.T) {
 	rule := &DSLRule{
 		CheckNo: "TEST-001",

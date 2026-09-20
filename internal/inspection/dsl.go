@@ -236,6 +236,32 @@ func (di *DSLInterpreter) FindRule(checkNo string) *DSLRule {
 	return nil
 }
 
+// RulesForCommand 返回依赖指定命令的 DSL 规则（大小写不敏感，支持前缀匹配）。
+// 用于按命令维度触发判定：内置规则编号与模板检查项编号不同，不能仅依赖 CheckNo 命中。
+func (di *DSLInterpreter) RulesForCommand(command string) []*DSLRule {
+	di.mu.RLock()
+	defer di.mu.RUnlock()
+
+	cmd := strings.ToLower(strings.TrimSpace(command))
+	if cmd == "" {
+		return nil
+	}
+	var res []*DSLRule
+	for _, r := range di.rules {
+		for _, c := range r.Commands {
+			cLower := strings.ToLower(strings.TrimSpace(c))
+			if cLower == "" {
+				continue
+			}
+			if cLower == cmd || strings.HasPrefix(cLower, cmd) || strings.HasPrefix(cmd, cLower) {
+				res = append(res, r)
+				break
+			}
+		}
+	}
+	return res
+}
+
 // ExecutePreCollect 执行前置采集提取规约，返回存储键名与提取值
 func (di *DSLInterpreter) ExecutePreCollect(item *PreCollectItem, rawEcho string) (string, string) {
 	if item == nil || item.StoreAs == "" {
