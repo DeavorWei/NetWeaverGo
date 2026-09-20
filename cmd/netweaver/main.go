@@ -141,6 +141,8 @@ func runGUI() {
 	bizCompareService := ui.NewBizCompareService()   // 业务比对服务
 	riskCommandService := ui.NewRiskCommandService() // 高危命令管理服务
 	alarmService := ui.NewAlarmService()             // 告警规则与归并服务
+	opticalService := ui.NewOpticalService()         // 弱光检测与阈值分析服务
+	smartPingService := ui.NewSmartPingService()     // 智能 Ping 诊断分析服务
 	// 创建统一任务执行UI服务（Wails暴露层）
 	taskExecutionUIService := ui.NewTaskExecutionUIService(taskExecutionService)
 
@@ -196,6 +198,8 @@ func runGUI() {
 			application.NewService(bizCompareService),        // 业务比对服务
 			application.NewService(riskCommandService),       // 高危命令服务
 			application.NewService(alarmService),             // 告警归并服务
+			application.NewService(opticalService),           // 弱光检测服务
+			application.NewService(smartPingService),         // 智能 Ping 诊断服务
 			application.NewService(taskExecutionUIService),   // 统一任务执行UI服务（阶段1）
 			application.NewService(scheduleUIService),        // 任务调度配置服务
 			application.NewService(snmpQueryService),         // SNMP 即时查询服务
