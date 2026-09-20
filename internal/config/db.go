@@ -184,6 +184,9 @@ func autoMigrateAll(db *gorm.DB) error {
 // createIndexes 创建数据库索引优化查询性能
 func createIndexes(db *gorm.DB) {
 	indexes := []string{
+		// P1-7 索引迁移：清理历史 (vendor, field_key) 唯一索引（旧约束会阻止同字段多场景配置），
+		// 复合唯一索引 (vendor, field_key, scene) 由下方 CREATE UNIQUE INDEX 补齐。
+		"DROP INDEX IF EXISTS idx_topology_vendor_field",
 		"CREATE INDEX IF NOT EXISTS idx_devices_ip ON device_assets(ip)",
 		"CREATE INDEX IF NOT EXISTS idx_devices_group_name ON device_assets(group_name)",
 		"CREATE INDEX IF NOT EXISTS idx_devices_protocol ON device_assets(protocol)",

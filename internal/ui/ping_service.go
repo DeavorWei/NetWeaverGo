@@ -16,6 +16,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/icmp"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/repository"
+	"github.com/NetWeaverGo/core/internal/security"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -555,8 +556,11 @@ func (s *PingService) resolveTargets(targets string, deviceIDs []uint) ([]string
 
 // parseTargetLine parses a single target line (IP, CIDR, or range).
 func (s *PingService) parseTargetLine(line string) ([]string, error) {
-	// Check for CIDR notation
+	// C3 入参安全校验：CIDR / 单 IP 先经 security 包统一校验
 	if strings.Contains(line, "/") {
+		if !security.ValidateIPOrCIDR(line) {
+			return nil, fmt.Errorf("无效的 CIDR 网段: %s", line)
+		}
 		return s.expandCIDR(line)
 	}
 
@@ -566,6 +570,9 @@ func (s *PingService) parseTargetLine(line string) ([]string, error) {
 	}
 
 	// Single IP
+	if !security.ValidateIPv4(line) {
+		return nil, fmt.Errorf("无效的 IP 地址: %s", line)
+	}
 	ip := net.ParseIP(line)
 	if ip == nil {
 		return nil, fmt.Errorf("无效的 IP 地址: %s", line)

@@ -3,6 +3,7 @@ package normalize
 import (
 	_ "embed"
 	"encoding/json"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -103,12 +104,38 @@ var (
 	}
 )
 
-// NameToIFType 接口名转换为标准 ifType 数字编码
+// nameToCodeOrdered 按"最长键优先"排序的接口名前缀列表。
+// 顺序固定（长度倒序 + 字典序），消除 map 迭代随机性导致的前缀命中不确定
+// （例如 eth-trunk10 必须命中 eth-trunk 而非 eth）。
+var nameToCodeOrdered = func() []struct {
+	key  string
+	code int
+} {
+	items := make([]struct {
+		key  string
+		code int
+	}, 0, len(nameToCode))
+	for k, v := range nameToCode {
+		items = append(items, struct {
+			key  string
+			code int
+		}{k, v})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if len(items[i].key) != len(items[j].key) {
+			return len(items[i].key) > len(items[j].key)
+		}
+		return items[i].key < items[j].key
+	})
+	return items
+}()
+
+// NameToIFType 接口名转换为标准 ifType 数字编码（最长前缀优先，结果确定）
 func NameToIFType(ifName string) (int, bool) {
 	norm := strings.ToLower(NormalizeInterfaceName(ifName))
-	for k, v := range nameToCode {
-		if strings.HasPrefix(norm, k) {
-			return v, true
+	for _, item := range nameToCodeOrdered {
+		if strings.HasPrefix(norm, item.key) {
+			return item.code, true
 		}
 	}
 	return 0, false
@@ -120,18 +147,42 @@ func IFTypeToName(ifType int) (string, bool) {
 	return name, ok
 }
 
-// NormalizeWithAlias 增强版接口名归一化（包含厂商别名表替换）
+// aliasOrdered 按"最长别名优先"排序的别名替换列表（确定性）
+var aliasOrdered = func() []struct {
+	alias       string
+	replacement string
+} {
+	aliases := getAliasMap()
+	items := make([]struct {
+		alias       string
+		replacement string
+	}, 0, len(aliases))
+	for a, r := range aliases {
+		items = append(items, struct {
+			alias       string
+			replacement string
+		}{a, r})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if len(items[i].alias) != len(items[j].alias) {
+			return len(items[i].alias) > len(items[j].alias)
+		}
+		return items[i].alias < items[j].alias
+	})
+	return items
+}()
+
+// NormalizeWithAlias 增强版接口名归一化（包含厂商别名表替换，最长别名优先）
 func NormalizeWithAlias(name string) string {
 	raw := strings.TrimSpace(name)
 	if raw == "" {
 		return ""
 	}
 
-	aliases := getAliasMap()
-	for alias, replacement := range aliases {
-		if strings.HasPrefix(raw, alias) {
-			remainder := strings.TrimPrefix(raw, alias)
-			return replacement + remainder
+	for _, item := range aliasOrdered {
+		if strings.HasPrefix(raw, item.alias) {
+			remainder := strings.TrimPrefix(raw, item.alias)
+			return item.replacement + remainder
 		}
 	}
 

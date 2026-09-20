@@ -166,6 +166,54 @@ func (e *InspectionCheckExecutor) executeCheckOnly(
 		return fmt.Errorf("%s", errMsg)
 	}
 
+	// P0-6：三阶段纯判定路径同样基于内存回显快照执行告警匹配，保证两种编排模式的告警数据一致
+	family := "COMMON"
+	if e.repo != nil {
+		if dev, devErr := e.repo.FindByIP(deviceIP); devErr == nil && dev != nil {
+			family = resolveAlarmFamily(dev.Model)
+		}
+	}
+	var matchedAlarms []models.AlarmRecord
+	if alarmReg := alarm.GetDefaultRegistry(); alarmReg != nil {
+		seenCmd := make(map[string]struct{}, len(items))
+		for _, it := range items {
+			cmd := strings.TrimSpace(it.CommandKey)
+			if cmd == "" {
+				continue
+			}
+			if _, ok := seenCmd[cmd]; ok {
+				continue
+			}
+			seenCmd[cmd] = struct{}{}
+
+			echo, ok := holder.GetCommandEcho(deviceIP, cmd)
+			if !ok || echo == "" {
+				continue
+			}
+			for _, line := range strings.Split(echo, "\n") {
+				trimmedLine := strings.TrimSpace(line)
+				if trimmedLine == "" {
+					continue
+				}
+				for _, hit := range alarmReg.MatchLine(family, trimmedLine) {
+					matchedAlarms = append(matchedAlarms, models.AlarmRecord{
+						RunID:      taskID,
+						DeviceIP:   deviceIP,
+						Family:     family,
+						AlarmName:  hit.AlarmName,
+						Severity:   hit.Severity,
+						Category:   hit.Category,
+						Summary:    hit.Description,
+						RawEcho:    trimmedLine,
+						Status:     "active",
+						OccurredAt: time.Now(),
+						CreatedAt:  time.Now(),
+					})
+				}
+			}
+		}
+	}
+
 	results := make([]models.InspectionResult, 0, len(items))
 	for _, it := range items {
 		cmd := strings.TrimSpace(it.CommandKey)
@@ -200,12 +248,23 @@ func (e *InspectionCheckExecutor) executeCheckOnly(
 				return err
 			}
 			if len(results) > 0 {
-				return tx.CreateInBatches(results, 100).Error
+				if err := tx.CreateInBatches(results, 100).Error; err != nil {
+					return err
+				}
+			}
+			if len(matchedAlarms) > 0 {
+				if err := tx.CreateInBatches(matchedAlarms, 100).Error; err != nil {
+					return err
+				}
 			}
 			return nil
 		})
 		if errTx != nil {
-			logger.Error("InspectionCheckExecutor", taskID, "写入 InspectionResult 数据库事务失败: %v", errTx)
+			logger.Error("InspectionCheckExecutor", taskID, "写入 InspectionResult 与 AlarmRecord 数据库事务失败: %v", errTx)
+		} else if len(matchedAlarms) > 0 {
+			if _, mergeErr := alarm.PersistMergedPhenomena(e.db, nil, matchedAlarms); mergeErr != nil {
+				logger.Warn("InspectionCheckExecutor", taskID, "告警归并持久化失败: %v", mergeErr)
+			}
 		}
 	}
 
@@ -214,6 +273,26 @@ func (e *InspectionCheckExecutor) executeCheckOnly(
 	e.registerCheckOnlyArtifacts(taskID, stageID, unit.ID, deviceIP, items, holder, results)
 
 	return completeUnitExecution(handler, ctx, unit.ID, string(UnitStatusCompleted), len(results), "巡检判定完成", deviceIP)
+}
+
+// resolveAlarmFamily 将设备型号映射为内置告警规则的产品族（P0-6）。
+// 注意：内置规则族名为 "Router"（并非 AR/NE），AR/NE 型号必须统一映射到 Router，
+// 否则 4 条 Router 专属规则永远无法命中。
+func resolveAlarmFamily(model string) string {
+	mUpper := strings.ToUpper(strings.TrimSpace(model))
+	switch {
+	case mUpper == "":
+		return "COMMON"
+	case strings.HasPrefix(mUpper, "CE"):
+		return "CE"
+	case strings.HasPrefix(mUpper, "AR"), strings.HasPrefix(mUpper, "NE"):
+		return "Router"
+	case strings.HasPrefix(mUpper, "USG"):
+		return "USG"
+	case strings.HasPrefix(mUpper, "S"):
+		return "S"
+	}
+	return "COMMON"
 }
 
 // executeInspectionUnit 执行单台设备的指标采集与规则判定
@@ -328,22 +407,7 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 	var matchedAlarms []models.AlarmRecord
 	alarmReg := alarm.GetDefaultRegistry()
 
-	family := "COMMON"
-	if device.Model != "" {
-		mUpper := strings.ToUpper(device.Model)
-		switch {
-		case strings.HasPrefix(mUpper, "CE"):
-			family = "CE"
-		case strings.HasPrefix(mUpper, "S"):
-			family = "S"
-		case strings.HasPrefix(mUpper, "AR"):
-			family = "AR"
-		case strings.HasPrefix(mUpper, "NE"):
-			family = "NE"
-		case strings.HasPrefix(mUpper, "USG"):
-			family = "USG"
-		}
-	}
+	family := resolveAlarmFamily(device.Model)
 
 	// 先按 IsPreCollect 排序保证前置采集项优先执行
 	sort.SliceStable(items, func(i, j int) bool {
@@ -498,6 +562,11 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 		})
 		if errTx != nil {
 			logger.Error("InspectionCheckExecutor", taskID, "写入 InspectionResult 与 AlarmRecord 数据库事务失败: %v", errTx)
+		} else if len(matchedAlarms) > 0 && e.db != nil {
+			// P0-6：将原始告警归并为故障现象并持久化（幂等；失败不阻断巡检主流程）
+			if _, mergeErr := alarm.PersistMergedPhenomena(e.db, nil, matchedAlarms); mergeErr != nil {
+				logger.Warn("InspectionCheckExecutor", taskID, "告警归并持久化失败: %v", mergeErr)
+			}
 		}
 	}
 

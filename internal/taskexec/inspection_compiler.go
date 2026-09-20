@@ -209,9 +209,35 @@ func (c *InspectionTaskCompiler) compileThreeStage(
 	}
 
 	timeout := time.Duration(timeoutSec) * time.Second
+
+	// 设备准入（P0-3）：三阶段路径与单阶段保持一致，不支持的设备标记 unsupported 并携带可读原因
+	deviceMap := make(map[string]*models.DeviceAsset, len(deviceIPs))
+	if c.db != nil {
+		devRepo := repository.NewDeviceRepositoryWithDB(c.db)
+		if devList, err := devRepo.FindByIPs(deviceIPs); err == nil {
+			for i := range devList {
+				deviceMap[devList[i].IP] = &devList[i]
+			}
+		}
+	}
+
 	buildUnits := func(stepsBuilder func() []StepPlan) []UnitPlan {
 		units := make([]UnitPlan, 0, len(deviceIPs))
 		for i, deviceIP := range deviceIPs {
+			if dev := deviceMap[deviceIP]; dev != nil {
+				if eligible, reason := CheckDeviceEligibility(dev, "inspection"); !eligible {
+					units = append(units, UnitPlan{
+						ID:            fmt.Sprintf("unit-%d", i),
+						Kind:          string(UnitKindDevice),
+						Target:        TargetRef{Type: "device_ip", Key: deviceIP},
+						Timeout:       timeout,
+						InitialStatus: string(UnitStatusUnsupported),
+						ErrorMessage:  reason,
+						Steps:         nil,
+					})
+					continue
+				}
+			}
 			units = append(units, UnitPlan{
 				ID:      fmt.Sprintf("unit-%d", i),
 				Kind:    string(UnitKindDevice),

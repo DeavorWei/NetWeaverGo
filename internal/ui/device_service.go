@@ -9,6 +9,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/repository"
+	"github.com/NetWeaverGo/core/internal/security"
 	"github.com/NetWeaverGo/core/internal/sshutil"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -88,10 +89,26 @@ func (s *DeviceService) ResetDeviceSSHHostKey(id uint) error {
 	return nil
 }
 
+// validateDeviceSecurityParams 对设备关键入参执行 security 包统一校验（C3 入参校验接线）
+func validateDeviceSecurityParams(device *models.DeviceAsset) error {
+	if device.IP != "" && !security.ValidateIPv4(device.IP) {
+		return fmt.Errorf("IP 地址格式非法: %s", device.IP)
+	}
+	if device.Port != 0 && !security.ValidatePort(device.Port) {
+		return fmt.Errorf("端口号非法(应在 1-65535): %d", device.Port)
+	}
+	return nil
+}
+
 // AddDevice 新增设备
 func (s *DeviceService) AddDevice(device models.DeviceAsset) error {
 	// 标准化设备信息
 	config.NormalizeDevice(&device)
+
+	// C3 入参安全校验（security 包统一校验函数）
+	if err := validateDeviceSecurityParams(&device); err != nil {
+		return err
+	}
 
 	// 校验设备信息
 	if err := config.ValidateDevice(&device); err != nil {
@@ -225,9 +242,17 @@ func (s *DeviceService) UpdateDevice(id uint, device models.DeviceAsset) error {
 	if len(device.Tags) > 0 {
 		existing.Tags = device.Tags
 	}
+	if device.Charset != "" {
+		existing.Charset = device.Charset
+	}
 
 	// 标准化
 	config.NormalizeDevice(existing)
+
+	// C3 入参安全校验（security 包统一校验函数）
+	if err := validateDeviceSecurityParams(existing); err != nil {
+		return err
+	}
 
 	// 校验
 	if err := config.ValidateDevice(existing); err != nil {
@@ -271,6 +296,9 @@ func mergeDeviceFields(existing *models.DeviceAsset, incoming models.DeviceAsset
 	}
 	if incoming.Vendor != "" {
 		existing.Vendor = incoming.Vendor
+	}
+	if incoming.Charset != "" {
+		existing.Charset = incoming.Charset
 	}
 	if incoming.Role != "" {
 		existing.Role = incoming.Role

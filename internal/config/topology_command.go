@@ -80,9 +80,13 @@ func EnsureTopologyVendorCommandSeeds(seed map[string][]models.TopologyVendorFie
 			}
 			normalized := normalizeTopologyVendorFieldCommands(normalizedVendor, items)
 			for _, item := range normalized {
+				scene := strings.TrimSpace(item.Scene)
+				if scene == "" {
+					scene = "default"
+				}
 				var count int64
 				if err := tx.Model(&models.TopologyVendorFieldCommand{}).
-					Where("vendor = ? AND field_key = ?", item.Vendor, item.FieldKey).
+					Where("vendor = ? AND field_key = ? AND scene = ?", item.Vendor, item.FieldKey, scene).
 					Count(&count).Error; err != nil {
 					return err
 				}
@@ -107,13 +111,21 @@ func normalizeTopologyVendorFieldCommands(vendor string, commands []models.Topol
 		if fieldKey == "" {
 			continue
 		}
-		if _, exists := seen[fieldKey]; exists {
+		// P1-7：Scene 必须随规则一同落库，否则复合唯一索引 (vendor, field_key, scene)
+		// 会因写库恒为 default 而失去"同字段多场景"能力
+		scene := strings.TrimSpace(item.Scene)
+		if scene == "" {
+			scene = "default"
+		}
+		dedupeKey := fieldKey + "|" + scene
+		if _, exists := seen[dedupeKey]; exists {
 			continue
 		}
-		seen[fieldKey] = struct{}{}
+		seen[dedupeKey] = struct{}{}
 		result = append(result, models.TopologyVendorFieldCommand{
 			Vendor:     vendor,
 			FieldKey:   fieldKey,
+			Scene:      scene,
 			Command:    strings.TrimSpace(item.Command),
 			TimeoutSec: item.TimeoutSec,
 			Enabled:    item.Enabled,
@@ -121,6 +133,9 @@ func normalizeTopologyVendorFieldCommands(vendor string, commands []models.Topol
 		})
 	}
 	sort.Slice(result, func(i, j int) bool {
+		if result[i].Scene != result[j].Scene {
+			return result[i].Scene < result[j].Scene
+		}
 		return result[i].FieldKey < result[j].FieldKey
 	})
 	return result

@@ -101,18 +101,9 @@ func (s *AlarmService) AnalyzeAndMerge(runID string) ([]models.MergedPhenomenon,
 		return nil, nil
 	}
 
-	phenomena := s.merger.Merge(records)
-	for i := range phenomena {
-		if err := db.Create(&phenomena[i]).Error; err != nil {
-			return nil, err
-		}
-		// 回填 AlarmRecord 的 MergedPhenomenonID
-		if len(phenomena[i].RecordIDs) > 0 {
-			_ = db.Model(&models.AlarmRecord{}).
-				Where("id IN ?", phenomena[i].RecordIDs).
-				Update("merged_phenomenon_id", phenomena[i].ID).Error
-		}
+	phenomena, err := alarm.PersistMergedPhenomena(db, s.merger, records)
+	if err != nil {
+		return nil, err
 	}
-
 	return phenomena, nil
 }
