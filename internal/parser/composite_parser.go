@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 // ModeProvider 提供当前引擎模式获取函数
@@ -91,19 +93,25 @@ func (p *CompositeParser) ParseDetail(commandKey, rawText string) ([]map[string]
 		}
 	}()
 
-	tpl, ok := p.templates[commandKey]
-	if !ok {
-		// 检查 XmlConfig 引擎是否具备该命令解析规则
-		if p.xmlconfig != nil {
-			if _, found := p.xmlconfig.ResolveConfig(p.vendor, commandKey); found {
-				results, err = p.xmlconfig.ParseWithVendor(p.vendor, commandKey, rawText)
-				return results, ParseOutcome{
+	// A3-β 路由优先级（方案要求）：XmlConfig → 用户模板 → Aggregate → Tree → Regex。
+	// XmlConfig 命中且成功产出时优先返回；解析失败或无产出则回退模板引擎链（保留旧行为兜底）。
+	if p.xmlconfig != nil {
+		if _, found := p.xmlconfig.ResolveConfig(p.vendor, commandKey); found {
+			xmlResults, xmlErr := p.xmlconfig.ParseWithVendor(p.vendor, commandKey, rawText)
+			if xmlErr == nil && len(xmlResults) > 0 {
+				return xmlResults, ParseOutcome{
 					Engine:     string(EngineXmlConfig),
 					Fallback:   false,
 					DurationMs: time.Since(start).Milliseconds(),
-				}, err
+				}, nil
 			}
+			isFallback = true
+			logger.Debug("CompositeParser", "-", "XmlConfig 命中但未产出，回退模板引擎: vendor=%s commandKey=%s err=%v", p.vendor, commandKey, xmlErr)
 		}
+	}
+
+	tpl, ok := p.templates[commandKey]
+	if !ok {
 		err = fmt.Errorf("未找到模板: vendor=%s commandKey=%s: %w", p.vendor, commandKey, ErrTemplateNotFound)
 		return nil, ParseOutcome{}, err
 	}

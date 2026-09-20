@@ -2,12 +2,15 @@ package parser
 
 import (
 	"embed"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io/fs"
+	"sort"
 	"strings"
 	"sync"
 
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/parser/xmlcfg"
 )
 
@@ -18,6 +21,7 @@ var parsecfgFS embed.FS
 type XmlConfigEngine struct {
 	mu           sync.RWMutex
 	configs      map[string]*xmlcfg.CommandParseConfig // key: "vendor/cmd"
+	orderedKeys  map[string][]string                   // key: "vendor" -> 按"最长优先"排序的命令键列表（确定性匹配）
 	parseItems   map[string][]xmlcfg.CommandParse      // key: "vendor" -> []CommandParse
 	configPolicy *ConfigPolicyExecutor
 	tablePolicy  *TableLinePolicyExecutor
@@ -42,6 +46,7 @@ func GetDefaultXmlConfigEngine() *XmlConfigEngine {
 func NewXmlConfigEngine() *XmlConfigEngine {
 	return &XmlConfigEngine{
 		configs:      make(map[string]*xmlcfg.CommandParseConfig),
+		orderedKeys:  make(map[string][]string),
 		parseItems:   make(map[string][]xmlcfg.CommandParse),
 		configPolicy: &ConfigPolicyExecutor{},
 		tablePolicy:  &TableLinePolicyExecutor{},
@@ -73,7 +78,7 @@ func (e *XmlConfigEngine) LoadEmbedded() error {
 	}
 
 	// 2. 遍历 xmlconfig 目录加载具体命令解析规则
-	return fs.WalkDir(parsecfgFS, "templates/parsecfg/xmlconfig", func(path string, d fs.DirEntry, walkErr error) error {
+	walkErr := fs.WalkDir(parsecfgFS, "templates/parsecfg/xmlconfig", func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil || d.IsDir() {
 			return nil
 		}
@@ -83,11 +88,13 @@ func (e *XmlConfigEngine) LoadEmbedded() error {
 
 		data, readErr := parsecfgFS.ReadFile(path)
 		if readErr != nil {
+			logger.Warn("XmlConfigEngine", "-", "读取 XML 解析规则失败(已跳过): path=%s err=%v", path, readErr)
 			return nil
 		}
 
 		cfg, parseErr := xmlcfg.LoadConfigFromBytes(data)
 		if parseErr != nil {
+			logger.Warn("XmlConfigEngine", "-", "加载 XML 解析规则失败(已跳过): path=%s err=%v", path, parseErr)
 			return nil
 		}
 
@@ -103,9 +110,67 @@ func (e *XmlConfigEngine) LoadEmbedded() error {
 
 		return nil
 	})
+
+	// 3. 重建同厂商"最长优先"有序命令键索引（P0-7：确定性匹配，消除 map 随机性）
+	e.rebuildOrderedKeys()
+	// 4. 输出 parsecfg 不兼容规则清单启动告警（P2-2）
+	e.logBrokenParseConfigs()
+	return walkErr
 }
 
-// ResolveConfig 查找最匹配的 CommandParseConfig
+// rebuildOrderedKeys 重建 vendor -> 有序命令键列表索引。
+// 排序规则：命令键长度倒序（最长匹配优先），长度相同按字典序，保证同输入同结果。
+func (e *XmlConfigEngine) rebuildOrderedKeys() {
+	index := make(map[string][]string)
+	for key := range e.configs {
+		parts := strings.SplitN(key, "/", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		index[parts[0]] = append(index[parts[0]], parts[1])
+	}
+	for vendor, keys := range index {
+		sort.Slice(keys, func(i, j int) bool {
+			if len(keys[i]) != len(keys[j]) {
+				return len(keys[i]) > len(keys[j])
+			}
+			return keys[i] < keys[j]
+		})
+		index[vendor] = keys
+	}
+	e.orderedKeys = index
+}
+
+// logBrokenParseConfigs 读取并输出 parsecfg 不兼容规则清单（P2-2：启动 WARN），
+// 使"编译失败规则清单"从静态文件变为可观测的启动告警。
+func (e *XmlConfigEngine) logBrokenParseConfigs() {
+	data, err := parsecfgFS.ReadFile("templates/parsecfg/parsecfg_broken.json")
+	if err != nil {
+		return
+	}
+	var broken []struct {
+		FilePath   string `json:"filePath"`
+		Node       string `json:"node"`
+		RawPattern string `json:"rawPattern"`
+		Error      string `json:"error"`
+	}
+	if json.Unmarshal(data, &broken) != nil {
+		return
+	}
+	if len(broken) == 0 {
+		logger.Info("XmlConfigEngine", "-", "parsecfg 不兼容规则清单为空，全部规则编译通过")
+		return
+	}
+	for _, b := range broken {
+		logger.Warn("XmlConfigEngine", "-", "parsecfg 不兼容规则: file=%s node=%s pattern=%s err=%s", b.FilePath, b.Node, b.RawPattern, b.Error)
+	}
+}
+
+// ResolveConfig 查找最匹配的 CommandParseConfig（P0-7：确定性 + 不跨厂商兜底）。
+// 匹配顺序：
+//  1. vendor/cmd 精确匹配；
+//  2. 同厂商内按"最长命令键优先"的有序索引做前缀匹配；
+//  3. 不做跨厂商兜底 —— 厂商不匹配直接未命中，避免 A 厂商规则套用到 B 厂商设备。
 func (e *XmlConfigEngine) ResolveConfig(vendor, commandKey string) (*xmlcfg.CommandParseConfig, bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -114,29 +179,20 @@ func (e *XmlConfigEngine) ResolveConfig(vendor, commandKey string) (*xmlcfg.Comm
 	cmd := strings.ToLower(strings.TrimSpace(commandKey))
 
 	// 1. 精确匹配 vendor/cmd
-	key := v + "/" + cmd
-	if cfg, ok := e.configs[key]; ok {
+	if cfg, ok := e.configs[v+"/"+cmd]; ok {
 		return cfg, true
 	}
 
-	// 2. 针对常见华为命令去除 display 前缀或包含匹配
-	for k, cfg := range e.configs {
-		if strings.HasPrefix(k, v+"/") {
-			cfgCmd := strings.TrimPrefix(k, v+"/")
-			if cfgCmd == cmd || strings.HasPrefix(cmd, cfgCmd) || strings.HasPrefix(cfgCmd, cmd) {
+	// 2. 同厂商内最长命令键优先匹配（有序索引，结果确定）
+	for _, cfgCmd := range e.orderedKeys[v] {
+		if cfgCmd == cmd || strings.HasPrefix(cmd, cfgCmd) || strings.HasPrefix(cfgCmd, cmd) {
+			if cfg, ok := e.configs[v+"/"+cfgCmd]; ok {
 				return cfg, true
 			}
 		}
 	}
 
-	// 3. 兜底尝试任何 vendor 下匹配同名命令
-	for k, cfg := range e.configs {
-		parts := strings.Split(k, "/")
-		if len(parts) == 2 && parts[1] == cmd {
-			return cfg, true
-		}
-	}
-
+	// 3. 无跨厂商兜底
 	return nil, false
 }
 

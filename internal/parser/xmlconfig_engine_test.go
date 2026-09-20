@@ -21,6 +21,41 @@ func TestXmlConfigEngine_Load(t *testing.T) {
 	assert.GreaterOrEqual(t, itemCount, 2, "至少加载 2 个厂商的 parseitem 映射")
 }
 
+// P0-7：不得跨厂商兜底命中（A 厂规则不得套用到 B 厂设备）
+func TestResolveConfig_NoCrossVendorFallback(t *testing.T) {
+	engine := GetDefaultXmlConfigEngine()
+
+	// huawei 存在 "display arp" 规则；cisco 不存在对应 vendor 目录，必须未命中
+	if _, found := engine.ResolveConfig("cisco", "display arp"); found {
+		t.Fatal("cisco 设备不得命中 huawei 的 XML 解析规则（禁止跨厂商兜底）")
+	}
+	// 同厂商命令必须命中，证明拒绝兜底不影响正常解析
+	if _, found := engine.ResolveConfig("huawei", "display arp"); !found {
+		t.Fatal("huawei/display arp 应正常命中")
+	}
+}
+
+// P0-7：最长命令键优先，且多次匹配结果确定（消除 map 迭代随机性）
+func TestResolveConfig_LongestMatchDeterministic(t *testing.T) {
+	engine := GetDefaultXmlConfigEngine()
+
+	// huawei 同时存在 "display interface" 与 "display interface brief"，
+	// 传入带后缀的命令时应稳定命中最长键（display interface brief）
+	first, ok := engine.ResolveConfig("huawei", "display interface brief 10GE1/0/1")
+	if !ok {
+		t.Fatal("应命中最长前缀规则")
+	}
+	for i := 0; i < 100; i++ {
+		cfg, ok := engine.ResolveConfig("huawei", "display interface brief 10GE1/0/1")
+		if !ok {
+			t.Fatalf("第 %d 次匹配失败", i)
+		}
+		if cfg != first {
+			t.Fatalf("第 %d 次匹配结果与首次不一致（存在非确定性）", i)
+		}
+	}
+}
+
 // 6 模型 Golden 测试
 func TestXmlConfigEngine_Golden_6Models(t *testing.T) {
 	engine := GetDefaultXmlConfigEngine()
