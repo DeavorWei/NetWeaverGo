@@ -70,6 +70,20 @@
         </el-select>
       </el-form-item>
 
+      <el-form-item label="字符集" prop="charset">
+        <el-select v-model="localForm.charset" placeholder="默认（UTF-8 直通）" class="w-full" clearable>
+          <el-option label="默认（UTF-8 直通）" value="" />
+          <el-option label="自动探测 (auto)" value="auto" />
+          <el-option label="UTF-8" value="utf-8" />
+          <el-option label="GBK" value="gbk" />
+          <el-option label="GB18030" value="gb18030" />
+          <el-option label="Big5" value="big5" />
+        </el-select>
+        <div class="mt-1 text-xs text-text-muted w-full">
+          中文设备回显乱码时选择 GBK/GB18030 或"自动探测"
+        </div>
+      </el-form-item>
+
       <el-form-item label="标签" prop="tags">
         <div class="flex flex-wrap items-center gap-2 w-full">
           <el-tag
@@ -164,6 +178,7 @@ const localForm = ref<DeviceFormData>({
   site: "",
   displayName: "",
   description: "",
+  charset: "",
 });
 
 const errorMessage = ref("");
@@ -319,6 +334,7 @@ function resetForm() {
     site: "",
     displayName: "",
     description: "",
+    charset: "",
   };
   newTag.value = "";
   lastProtocol.value = "SSH";

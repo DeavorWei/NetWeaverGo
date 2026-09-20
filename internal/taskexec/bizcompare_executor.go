@@ -131,6 +131,7 @@ func (e *BizCompareExecutor) executeUnit(ctx RuntimeContext, unit *UnitPlan) err
 				Vendor:   device.Vendor,
 				Protocol: device.Protocol,
 				RunID:    ctx.RunID(),
+				Charset:  device.Charset,
 			}
 			exec := executor.NewDeviceExecutor(
 				device.IP,

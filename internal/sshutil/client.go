@@ -33,7 +33,7 @@ type SSHClient struct {
 	Stdout io.Reader
 	Stderr io.Reader
 
-	// transcriptSink 保存原始交互流，用于问题排查和执行回显审计。
+	// transcriptSink 保存设备侧原始交互流（未做字符集转码），用于问题排查和执行回显审计。
 	transcriptSink report.RawTranscriptSink
 
 	// conn 保存底层的 TCP 连接，用于设置 deadline
@@ -94,7 +94,7 @@ type Config struct {
 	// 注意：建议从 DeviceProfile 获取
 	PTY *PTYConfig
 
-	// RawSink 为可选的原始 SSH 字节流输出。
+	// RawSink 为可选的原始 SSH 字节流输出（Tee 位于字符集转码之前，落盘为未转码原始字节）。
 	RawSink report.RawTranscriptSink
 
 	// MaxEchoBytes 逐流回显上限（默认 10MB: 10 * 1024 * 1024，超限截断并告警）
@@ -696,16 +696,18 @@ func NewSSHClient(ctx context.Context, cfg Config) (*SSHClient, error) {
 	stdoutReader = &LimitedEchoReader{r: stdoutReader, limit: maxEcho, ip: cfg.IP}
 	stderrReader = &LimitedEchoReader{r: stderrReader, limit: maxEcho, ip: cfg.IP}
 
-	if cfg.Charset != "" && cfg.Charset != "utf-8" {
-		stdoutReader = NewCharsetReader(stdoutReader, cfg.Charset)
-		stderrReader = NewCharsetReader(stderrReader, cfg.Charset)
-	}
-
+	// P2-9：RawSink 语义为"设备侧原始 SSH 字节流"，Tee 必须位于字符集转码之前，
+	// 确保审计落盘内容是未转码原始字节；转码仅作用于业务读取侧。
 	sink := cfg.RawSink
 	if sink != nil {
 		sink.WriteMarker("========== SESSION START %s %s:%d ==========\n", time.Now().Format(time.RFC3339), cfg.IP, cfg.Port)
 		stdoutReader = io.TeeReader(stdoutReader, sink)
 		stderrReader = io.TeeReader(stderrReader, sink)
+	}
+
+	if cfg.Charset != "" && cfg.Charset != "utf-8" {
+		stdoutReader = NewCharsetReader(stdoutReader, cfg.Charset)
+		stderrReader = NewCharsetReader(stderrReader, cfg.Charset)
 	}
 
 	// 初始化读取上下文，用于控制读取中断

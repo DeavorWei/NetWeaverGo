@@ -186,6 +186,7 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 		Vendor:   device.Vendor,
 		Protocol: device.Protocol,
 		RunID:    ctx.RunID(),
+		Charset:  device.Charset,
 	}
 	exec := executor.NewDeviceExecutor(
 		device.IP,

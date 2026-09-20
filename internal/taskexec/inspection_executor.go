@@ -261,6 +261,7 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 		Protocol:   device.Protocol,
 		LogSession: logSession,
 		RunID:      ctx.RunID(),
+		Charset:    device.Charset,
 	}
 	exec := executor.NewDeviceExecutor(
 		device.IP,

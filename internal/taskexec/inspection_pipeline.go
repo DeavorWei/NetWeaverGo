@@ -158,7 +158,7 @@ func (e *InspectionCollectExecutor) executeCollectUnit(ctx RuntimeContext, stage
 	logSession := ctx.Logger(scope).Session(scope)
 
 	exec := executor.NewDeviceExecutor(device.IP, device.Port, device.Username, device.Password,
-		executor.ExecutorOptions{Vendor: device.Vendor, Protocol: device.Protocol, LogSession: logSession, RunID: taskID})
+		executor.ExecutorOptions{Vendor: device.Vendor, Protocol: device.Protocol, LogSession: logSession, RunID: taskID, Charset: device.Charset})
 	defer exec.Close()
 
 	connTimeout, cmdTimeout := 30*time.Second, unit.Timeout

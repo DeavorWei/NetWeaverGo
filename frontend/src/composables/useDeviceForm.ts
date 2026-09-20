@@ -20,6 +20,8 @@ export interface DeviceFormData {
   site: string
   displayName: string
   description: string
+  /** 字符集: "" | utf-8 | gbk | gb18030 | big5 | auto */
+  charset: string
 }
 
 // IP 范围提示类型
@@ -56,6 +58,7 @@ function createDefaultForm(): DeviceFormData {
     site: '',
     displayName: '',
     description: '',
+    charset: '',
   }
 }
 

@@ -35,6 +35,7 @@ type ConnectionConfig struct {
 	Protocol  string        // 协议: "ssh" 或 "telnet"
 	Timeout   time.Duration // 连接超时
 	ProxyAddr string        // 代理地址 (SOCKS5/HTTP 代理，如 "127.0.0.1:1080")
+	Charset   string        // 字符集: "" | utf-8 | gbk | gb18030 | big5 | auto（SSH 专用）
 
 	// SSH 专用配置（仅在 Protocol="ssh" 时生效）
 	SSH *SSHOptions
@@ -103,6 +104,7 @@ func (f *DefaultConnectionFactory) connectSSH(ctx context.Context, cfg Connectio
 		Password:  cfg.Password,
 		Timeout:   cfg.Timeout,
 		ProxyAddr: cfg.ProxyAddr,
+		Charset:   cfg.Charset,
 	}
 
 	// 应用 SSH 专用选项

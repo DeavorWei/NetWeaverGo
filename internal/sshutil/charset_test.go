@@ -3,12 +3,39 @@ package sshutil
 import (
 	"bytes"
 	"io"
+	"strings"
 	"testing"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/encoding/traditionalchinese"
 	"golang.org/x/text/transform"
 )
+
+func TestNewCharsetReader_AutoDetectGBK(t *testing.T) {
+	gbkData, err := simplifiedchinese.GBK.NewEncoder().Bytes([]byte("中文设备回显 GBK 编码"))
+	if err != nil {
+		t.Fatalf("构造 GBK 样本失败: %v", err)
+	}
+	reader := NewCharsetReader(bytes.NewReader(gbkData), "auto")
+	got, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("读取失败: %v", err)
+	}
+	if string(got) != "中文设备回显 GBK 编码" {
+		t.Fatalf("auto 探测 GBK 解码结果不正确: %q", string(got))
+	}
+}
+
+func TestNewCharsetReader_AutoDetectUTF8(t *testing.T) {
+	input := "UTF-8 中文回显 auto 探测"
+	got, err := io.ReadAll(NewCharsetReader(strings.NewReader(input), "auto"))
+	if err != nil {
+		t.Fatalf("读取失败: %v", err)
+	}
+	if string(got) != input {
+		t.Fatalf("auto 探测 UTF-8 解码结果不正确: %q", string(got))
+	}
+}
 
 func TestCharsetDecoder_UTF8(t *testing.T) {
 	d := NewCharsetDecoder("auto")

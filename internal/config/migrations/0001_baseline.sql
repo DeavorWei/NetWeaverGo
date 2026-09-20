@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS device_assets (
     form_factor TEXT DEFAULT 'hardware',
     connect_mode TEXT DEFAULT 'direct',
     jump_host_id INTEGER,
+    charset TEXT,
     last_seen DATETIME,
     created_at DATETIME,
     updated_at DATETIME

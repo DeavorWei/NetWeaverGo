@@ -205,6 +205,7 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 		Protocol:  protocol,
 		Timeout:   timeout,
 		ProxyAddr: e.proxyAddr,
+		Charset:   e.charset,
 	}
 
 	// SSH 协议需要额外配置

@@ -31,6 +31,7 @@ type DeviceAsset struct {
 	FormFactor   string    `json:"formFactor,omitempty" gorm:"size:32"`                 // 形态 (hardware | software)
 	ConnectMode  string    `json:"connectMode,omitempty" gorm:"size:32;default:direct"` // direct | jumphost | proxy
 	JumpHostID   *uint     `json:"jumpHostID,omitempty" gorm:"index"`                   // 跳板机设备ID
+	Charset      string    `json:"charset,omitempty" gorm:"size:32"`                    // 字符集: "" | utf-8 | gbk | gb18030 | big5 | auto
 	LastSeen     time.Time `json:"lastSeen"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
@@ -47,6 +48,7 @@ type DeviceAssetListItem struct {
 	Protocol     string    `json:"protocol"`
 	ConnectMode  string    `json:"connectMode,omitempty"`
 	JumpHostID   *uint     `json:"jumpHostID,omitempty"`
+	Charset      string    `json:"charset,omitempty"`
 	Group        string    `json:"group"`
 	DisplayName  string    `json:"displayName"`
 	Vendor       string    `json:"vendor"`
@@ -76,6 +78,7 @@ func (d *DeviceAsset) ToListItem() DeviceAssetListItem {
 		Protocol:     d.Protocol,
 		ConnectMode:  d.ConnectMode,
 		JumpHostID:   d.JumpHostID,
+		Charset:      d.Charset,
 		Group:        d.Group,
 		DisplayName:  d.DisplayName,
 		Vendor:       d.Vendor,

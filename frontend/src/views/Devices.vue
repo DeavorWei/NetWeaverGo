@@ -241,6 +241,7 @@ async function openEditModal(device: Device) {
       site: fullDevice.site || "",
       displayName: fullDevice.displayName || "",
       description: fullDevice.description || "",
+      charset: fullDevice.charset || "",
     };
   } catch (err) {
     logger.error("获取设备详情失败", 'Devices', err);
@@ -280,6 +281,7 @@ async function saveDevice(deviceData: DeviceFormData) {
     site: deviceData.site,
     displayName: deviceData.displayName,
     description: deviceData.description,
+    charset: deviceData.charset,
   });
 
   try {

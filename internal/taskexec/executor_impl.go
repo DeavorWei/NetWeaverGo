@@ -214,6 +214,7 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		Protocol:       device.Protocol,
 		SuspendHandler: BuildDefaultSuspendHandler(ctx.RunID(), errorMode),
 		RunID:          ctx.RunID(),
+		Charset:        device.Charset,
 	}
 
 	// P1-3 修复：校验并支持连接模式 (direct | jumphost | proxy)
@@ -605,6 +606,7 @@ func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID strin
 		LogSession:    logSession,
 		Protocol:      device.Protocol,
 		RunID:         ctx.RunID(),
+		Charset:       device.Charset,
 	}
 
 	// Create device executor

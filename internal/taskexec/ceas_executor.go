@@ -158,6 +158,7 @@ func (e *CEASExecutor) executeCEASUnit(ctx RuntimeContext, stageID string, unit 
 		Protocol:   device.Protocol,
 		LogSession: logSession,
 		RunID:      ctx.RunID(),
+		Charset:    device.Charset,
 	}
 	exec := executor.NewDeviceExecutor(
 		device.IP,
