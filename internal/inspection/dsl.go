@@ -174,6 +174,30 @@ func (di *DSLInterpreter) ImportRulesJSON(data []byte) (int, error) {
 		return 0, fmt.Errorf("解析 DSL 规则 JSON 失败: %w", err)
 	}
 
+	// 预先校验每条规则中的正则合法性，防止非法正则污染运行时
+	for i := range imported {
+		rule := &imported[i]
+		if rule.Extract.BlockRegex != "" {
+			if _, err := regexp.Compile("(?im)" + rule.Extract.BlockRegex); err != nil {
+				return 0, fmt.Errorf("规则 [%s] 分块正则非法: %w", rule.CheckNo, err)
+			}
+		}
+		for _, f := range rule.Extract.Fields {
+			if f.Pattern != "" {
+				if _, err := regexp.Compile("(?im)" + f.Pattern); err != nil {
+					return 0, fmt.Errorf("规则 [%s] 字段 [%s] 正则非法: %w", rule.CheckNo, f.Name, err)
+				}
+			}
+		}
+		if rule.Assert.Type == "regex" && rule.Assert.Expr != nil {
+			if exprStr, ok := rule.Assert.Expr.(string); ok && exprStr != "" {
+				if _, err := regexp.Compile(exprStr); err != nil {
+					return 0, fmt.Errorf("规则 [%s] 断言正则非法: %w", rule.CheckNo, err)
+				}
+			}
+		}
+	}
+
 	di.mu.Lock()
 	defer di.mu.Unlock()
 

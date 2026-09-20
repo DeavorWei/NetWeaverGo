@@ -855,6 +855,10 @@ func (m *RuntimeManager) materializeStageUnits(runtimeCtx *defaultRuntimeContext
 
 	now := time.Now()
 	for _, unitPlan := range stagePlan.Units {
+		initialStatus := string(UnitStatusPending)
+		if unitPlan.InitialStatus != "" {
+			initialStatus = unitPlan.InitialStatus
+		}
 		runtimeUnit := &TaskRunUnit{
 			ID:             newUnitID(),
 			TaskRunID:      runID,
@@ -862,7 +866,8 @@ func (m *RuntimeManager) materializeStageUnits(runtimeCtx *defaultRuntimeContext
 			UnitKind:       unitPlan.Kind,
 			TargetType:     unitPlan.Target.Type,
 			TargetKey:      unitPlan.Target.Key,
-			Status:         string(UnitStatusPending),
+			Status:         initialStatus,
+			ErrorMessage:   unitPlan.ErrorMessage,
 			TotalSteps:     len(unitPlan.Steps),
 			DoneSteps:      0,
 			CreatedAt:      now,

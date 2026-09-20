@@ -173,7 +173,7 @@ func ResolveCategory(vendor, seriesOrModel string) string {
 	case strings.Contains(v, "juniper"):
 		return "JUNIPER"
 	case strings.Contains(v, "ruijie"):
-		return "RUIJIE"
+		return "" // 锐捷在 eDesk 数据中无独立 category 规则，对齐数据回退为通用分类
 	case strings.Contains(v, "alu") || strings.Contains(v, "alcatel"):
 		return "ALU"
 	case strings.Contains(v, "nokia"):

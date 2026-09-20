@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/alarm"
 	"github.com/NetWeaverGo/core/internal/ceas"
 	"github.com/NetWeaverGo/core/internal/config/migrations"
 	"github.com/NetWeaverGo/core/internal/inspection"
@@ -119,6 +120,11 @@ func InitDB() error {
 	// 填充设备能力初始种子
 	if err := models.EnsureDeviceCapabilitySeeds(db); err != nil {
 		logger.Warn("Config", "-", "初始化设备能力种子失败: %v", err)
+	}
+
+	// 填充内置告警规则种子
+	if err := alarm.EnsureAlarmSeeds(db); err != nil {
+		logger.Warn("Config", "-", "初始化告警规则种子失败: %v", err)
 	}
 
 	// 创建索引优化查询性能

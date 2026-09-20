@@ -78,8 +78,60 @@ func (m *AlarmMerger) Merge(records []models.AlarmRecord) []models.MergedPhenome
 	return allPhenomena
 }
 
-// mergeDeviceRecords 归并单台设备的告警
+// mergeDeviceRecords 归并单台设备的告警（按 TimeWindow 进行时间窗口分桶）
 func (m *AlarmMerger) mergeDeviceRecords(deviceIP string, records []models.AlarmRecord) []models.MergedPhenomenon {
+	if len(records) == 0 {
+		return nil
+	}
+
+	// 1. 按发生时间排序
+	sortedRecords := make([]models.AlarmRecord, len(records))
+	copy(sortedRecords, records)
+	sort.Slice(sortedRecords, func(i, j int) bool {
+		return sortedRecords[i].OccurredAt.Before(sortedRecords[j].OccurredAt)
+	})
+
+	// 2. 根据 TimeWindow 切片分桶
+	window := m.config.TimeWindow
+	if window <= 0 {
+		window = 10 * time.Minute
+	}
+
+	var buckets [][]models.AlarmRecord
+	var currentBucket []models.AlarmRecord
+	var bucketStart time.Time
+
+	for _, rec := range sortedRecords {
+		if len(currentBucket) == 0 {
+			currentBucket = append(currentBucket, rec)
+			bucketStart = rec.OccurredAt
+			continue
+		}
+
+		// 若当前记录与当前桶起始时间之差超过时间窗口，则开启新桶
+		if !rec.OccurredAt.IsZero() && !bucketStart.IsZero() && rec.OccurredAt.Sub(bucketStart) > window {
+			buckets = append(buckets, currentBucket)
+			currentBucket = []models.AlarmRecord{rec}
+			bucketStart = rec.OccurredAt
+		} else {
+			currentBucket = append(currentBucket, rec)
+		}
+	}
+	if len(currentBucket) > 0 {
+		buckets = append(buckets, currentBucket)
+	}
+
+	// 3. 逐桶执行规则归并
+	var allResults []models.MergedPhenomenon
+	for _, b := range buckets {
+		phenomena := m.mergeDeviceBucket(deviceIP, b)
+		allResults = append(allResults, phenomena...)
+	}
+	return allResults
+}
+
+// mergeDeviceBucket 归并单台设备单一时间窗口内的告警
+func (m *AlarmMerger) mergeDeviceBucket(deviceIP string, records []models.AlarmRecord) []models.MergedPhenomenon {
 	if len(records) == 0 {
 		return nil
 	}

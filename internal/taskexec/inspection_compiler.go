@@ -12,6 +12,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/inspection"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/repository"
 	"gorm.io/gorm"
 )
 
@@ -96,11 +97,42 @@ func (c *InspectionTaskCompiler) Compile(ctx context.Context, def *TaskDefinitio
 		return c.compileThreeStage(def.Name, deviceIPs, items, templateID, concurrency, timeoutSec)
 	}
 
+	devRepo := repository.NewDeviceRepositoryWithDB(c.db)
+	devList, _ := devRepo.FindByIPs(deviceIPs)
+	devMap := make(map[string]*models.DeviceAsset, len(devList))
+	for idx := range devList {
+		devMap[devList[idx].IP] = &devList[idx]
+	}
+
 	// 单阶段模式：采集 + 解析 + 判定内联在 inspection_check 内
 	units := make([]UnitPlan, 0, len(deviceIPs))
 	for i, deviceIP := range deviceIPs {
+		dev := devMap[deviceIP]
+		eligible, reason := true, ""
+		if dev != nil {
+			eligible, reason = CheckDeviceEligibility(dev, "inspection")
+		}
+		if !eligible {
+			units = append(units, UnitPlan{
+				ID:            fmt.Sprintf("unit-%d", i),
+				Kind:          string(UnitKindDevice),
+				Target:        TargetRef{Type: "device_ip", Key: deviceIP},
+				Timeout:       time.Duration(timeoutSec) * time.Second,
+				InitialStatus: string(UnitStatusUnsupported),
+				ErrorMessage:  reason,
+				Steps:         nil,
+			})
+			continue
+		}
+
 		steps := make([]StepPlan, 0, len(items))
 		for stepIdx, item := range items {
+			// 形态判定：软件形态跳过 optical / hardware 检查项
+			if dev != nil && strings.EqualFold(dev.FormFactor, "software") {
+				if strings.EqualFold(item.Category, "optical") || strings.EqualFold(item.Category, "hardware") {
+					continue
+				}
+			}
 			steps = append(steps, StepPlan{
 				ID:      fmt.Sprintf("step-%d", stepIdx),
 				Kind:    "inspection_item",

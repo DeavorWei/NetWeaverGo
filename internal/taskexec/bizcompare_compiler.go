@@ -9,6 +9,8 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/bizcompare"
 	"github.com/NetWeaverGo/core/internal/logger"
+	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/repository"
 )
 
 // BizCompareTaskConfig 业务比对任务配置
@@ -70,8 +72,34 @@ func (c *BizCompareTaskCompiler) Compile(ctx context.Context, def *TaskDefinitio
 		timeoutSec = 60
 	}
 
+	devRepo := repository.NewDeviceRepository()
+	devList, _ := devRepo.FindByIPs(deviceIPs)
+	devMap := make(map[string]*models.DeviceAsset, len(devList))
+	for idx := range devList {
+		devMap[devList[idx].IP] = &devList[idx]
+	}
+
 	units := make([]UnitPlan, 0, len(deviceIPs))
 	for i, deviceIP := range deviceIPs {
+		dev := devMap[deviceIP]
+		eligible, reason := true, ""
+		if dev != nil {
+			eligible, reason = CheckDeviceEligibility(dev, "bizcompare")
+		}
+
+		if !eligible {
+			units = append(units, UnitPlan{
+				ID:            fmt.Sprintf("unit-%d", i),
+				Kind:          string(UnitKindDevice),
+				Target:        TargetRef{Type: "device_ip", Key: deviceIP},
+				Timeout:       time.Duration(timeoutSec) * time.Second,
+				InitialStatus: string(UnitStatusUnsupported),
+				ErrorMessage:  reason,
+				Steps:         nil,
+			})
+			continue
+		}
+
 		steps := make([]StepPlan, 0, len(scene.Commands))
 		for sIdx, cmd := range scene.Commands {
 			steps = append(steps, StepPlan{

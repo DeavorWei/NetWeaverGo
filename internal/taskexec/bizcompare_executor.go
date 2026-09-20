@@ -83,6 +83,10 @@ func (e *BizCompareExecutor) Run(ctx RuntimeContext, stage *StagePlan) error {
 
 func (e *BizCompareExecutor) executeUnit(ctx RuntimeContext, unit *UnitPlan) error {
 	deviceIP := unit.Target.Key
+	if unit.InitialStatus == string(UnitStatusUnsupported) {
+		logger.Info("TaskExec", ctx.RunID(), "设备 %s 不支持业务比对能力，跳过执行: %s", deviceIP, unit.ErrorMessage)
+		return nil
+	}
 	if deviceIP == "" {
 		return fmt.Errorf("设备IP为空")
 	}
@@ -117,9 +121,12 @@ func (e *BizCompareExecutor) executeUnit(ctx RuntimeContext, unit *UnitPlan) err
 	snap := bizcompare.NewDeviceSnapshot(ctx.RunID(), deviceIP, domain, sceneID, phase)
 
 	// 若未接入真实连接则模拟/记录命令执行结果，已接入则走 DeviceExecutor
+	var collectErr error
 	if e.repo != nil {
 		device, err := e.repo.FindByIP(deviceIP)
-		if err == nil && device != nil {
+		if err != nil || device == nil {
+			collectErr = fmt.Errorf("设备未找到: %s", deviceIP)
+		} else {
 			opts := executor.ExecutorOptions{
 				Vendor:   device.Vendor,
 				Protocol: device.Protocol,
@@ -134,9 +141,13 @@ func (e *BizCompareExecutor) executeUnit(ctx RuntimeContext, unit *UnitPlan) err
 			)
 			defer exec.Close()
 			connTimeout := 30 * time.Second
-			if connErr := exec.Connect(ctx.Context(), connTimeout); connErr == nil {
+			if connErr := exec.Connect(ctx.Context(), connTimeout); connErr != nil {
+				collectErr = fmt.Errorf("连接设备失败: %w", connErr)
+			} else {
 				rep, playbookErr := exec.ExecutePlaybookWithReport(ctx.Context(), commands, 30*time.Second, nil)
-				if playbookErr == nil && rep != nil {
+				if playbookErr != nil {
+					collectErr = fmt.Errorf("执行比对采集命令失败: %w", playbookErr)
+				} else if rep != nil {
 					for _, res := range rep.Results {
 						cat := categoryMap[res.Command]
 						if cat == "" {
@@ -156,11 +167,9 @@ func (e *BizCompareExecutor) executeUnit(ctx RuntimeContext, unit *UnitPlan) err
 		}
 	}
 
-	// 保底：若快照未采集到行（例如无物理设备连通或测试），记录命令本身执行状态
-	if len(snap.Items) == 0 {
-		for _, cmd := range commands {
-			snap.AddItem(cmd, categoryMap[cmd], "executed")
-		}
+	if collectErr != nil {
+		logger.Warn("BizCompareExecutor", deviceIP, "业务快照采集失败: %v", collectErr)
+		return collectErr
 	}
 
 	store := bizcompare.GetGlobalSnapshotStore()

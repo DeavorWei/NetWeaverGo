@@ -61,6 +61,17 @@ func (s *BizCompareService) RunComparison(name, domain, sceneID, beforeRunID, af
 		return nil, nil, fmt.Errorf("未找到变更后快照数据 (runID=%s)", afterRunID)
 	}
 
+	for _, bSnap := range beforeSnaps {
+		if bSnap.Phase != "" && bSnap.Phase != "before" {
+			return nil, nil, fmt.Errorf("变更前快照 phase 异常: 期望 before, 实际 %s", bSnap.Phase)
+		}
+	}
+	for _, aSnap := range afterSnaps {
+		if aSnap.Phase != "" && aSnap.Phase != "after" {
+			return nil, nil, fmt.Errorf("变更后快照 phase 异常: 期望 after, 实际 %s", aSnap.Phase)
+		}
+	}
+
 	afterMap := make(map[string]*bizcompare.DeviceSnapshot)
 	for _, snap := range afterSnaps {
 		afterMap[snap.DeviceIP] = snap
@@ -81,7 +92,9 @@ func (s *BizCompareService) RunComparison(name, domain, sceneID, beforeRunID, af
 
 	db := config.GetDB()
 	if db != nil {
-		_ = db.Create(&taskRecord).Error
+		if err := db.Create(&taskRecord).Error; err != nil {
+			return nil, nil, fmt.Errorf("保存比对任务记录失败: %w", err)
+		}
 	}
 
 	for _, bSnap := range beforeSnaps {
@@ -92,9 +105,13 @@ func (s *BizCompareService) RunComparison(name, domain, sceneID, beforeRunID, af
 
 	taskRecord.DiffCount = len(allDiffs)
 	if db != nil {
-		_ = db.Model(&taskRecord).Update("diff_count", len(allDiffs)).Error
+		if err := db.Model(&taskRecord).Update("diff_count", len(allDiffs)).Error; err != nil {
+			return nil, nil, fmt.Errorf("更新比对差异计数失败: %w", err)
+		}
 		if len(allDiffs) > 0 {
-			_ = db.Create(&allDiffs).Error
+			if err := db.Create(&allDiffs).Error; err != nil {
+				return nil, nil, fmt.Errorf("保存比对差异详情失败: %w", err)
+			}
 		}
 	}
 

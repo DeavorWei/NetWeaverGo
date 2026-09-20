@@ -143,6 +143,11 @@ loop:
 
 func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, unit *UnitPlan, reportProgress func(doneSteps, totalSteps int)) error {
 	handler := NewErrorHandler(ctx.RunID())
+	if unit.InitialStatus == string(UnitStatusUnsupported) {
+		logger.Info("TaskExec", ctx.RunID(), "设备 %s 不支持当前任务能力，跳过执行: %s", unit.Target.Key, unit.ErrorMessage)
+		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelInfo, fmt.Sprintf("设备不受支持已跳过: %s", unit.ErrorMessage))
+		return nil
+	}
 	if ctx.IsCancelled() {
 		return cancelUnitExecution(ctx, handler, unit.ID, unit.Target.Key, "run cancelled before unit start", intPtrLocal(0))
 	}
@@ -516,6 +521,11 @@ func (e *DeviceCollectExecutor) Run(ctx RuntimeContext, stage *StagePlan) error 
 
 func (e *DeviceCollectExecutor) executeCollect(ctx RuntimeContext, stageID string, unit *UnitPlan) error {
 	handler := NewErrorHandler(ctx.RunID())
+	if unit.InitialStatus == string(UnitStatusUnsupported) {
+		logger.Info("TaskExec", ctx.RunID(), "设备 %s 不支持拓扑采集能力，跳过执行: %s", unit.Target.Key, unit.ErrorMessage)
+		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelInfo, fmt.Sprintf("设备不受支持已跳过: %s", unit.ErrorMessage))
+		return nil
+	}
 	pm := config.GetPathManager()
 	// Get device info from unit target
 	deviceIP := unit.Target.Key

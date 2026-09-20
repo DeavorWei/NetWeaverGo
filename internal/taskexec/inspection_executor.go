@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/alarm"
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/inspection"
@@ -218,6 +219,11 @@ func (e *InspectionCheckExecutor) executeCheckOnly(
 func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stageID string, unit *UnitPlan) error {
 	handler := NewErrorHandler(ctx.RunID())
 	deviceIP := unit.Target.Key
+	if unit.InitialStatus == string(UnitStatusUnsupported) {
+		logger.Info("TaskExec", ctx.RunID(), "设备 %s 不支持巡检能力，跳过执行: %s", deviceIP, unit.ErrorMessage)
+		emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelInfo, fmt.Sprintf("设备不受支持已跳过: %s", unit.ErrorMessage))
+		return nil
+	}
 	if ctx.IsCancelled() {
 		return cancelUnitExecution(ctx, handler, unit.ID, deviceIP, "run cancelled before inspection unit start", intPtrLocal(0))
 	}
@@ -316,6 +322,26 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 	// 3. 命令归类与前置执行（去重，同一个命令只执行一次）
 	commandEchos := make(map[string]string)
 	parsedData := make(map[string][]map[string]interface{})
+	contextVars := make(map[string]string)
+	var matchedAlarms []models.AlarmRecord
+	alarmReg := alarm.GetDefaultRegistry()
+
+	family := "COMMON"
+	if device.Model != "" {
+		mUpper := strings.ToUpper(device.Model)
+		switch {
+		case strings.HasPrefix(mUpper, "CE"):
+			family = "CE"
+		case strings.HasPrefix(mUpper, "S"):
+			family = "S"
+		case strings.HasPrefix(mUpper, "AR"):
+			family = "AR"
+		case strings.HasPrefix(mUpper, "NE"):
+			family = "NE"
+		case strings.HasPrefix(mUpper, "USG"):
+			family = "USG"
+		}
+	}
 
 	// 先按 IsPreCollect 排序保证前置采集项优先执行
 	sort.SliceStable(items, func(i, j int) bool {
@@ -345,6 +371,48 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 			logger.Warn("InspectionCheckExecutor", taskID, "设备 %s 执行命令 [%s] 发生异常: %v", deviceIP, cmd, cmdErr)
 		}
 		commandEchos[cmd] = echo
+
+		// 前置采集规约变量提取
+		if it.IsPreCollect {
+			contextVars[it.Code] = echo
+			dslInterp := inspection.GetGlobalDSLInterpreter()
+			if dslInterp != nil {
+				if r := dslInterp.FindRule(it.Code); r != nil {
+					for _, pc := range r.PreCollects {
+						if k, v := dslInterp.ExecutePreCollect(&pc, echo); k != "" {
+							contextVars[k] = v
+						}
+					}
+				}
+			}
+		}
+
+		// 告警规则匹配收集
+		if echo != "" && alarmReg != nil {
+			lines := strings.Split(echo, "\n")
+			for _, line := range lines {
+				trimmedLine := strings.TrimSpace(line)
+				if trimmedLine == "" {
+					continue
+				}
+				hits := alarmReg.MatchLine(family, trimmedLine)
+				for _, hit := range hits {
+					matchedAlarms = append(matchedAlarms, models.AlarmRecord{
+						RunID:      taskID,
+						DeviceIP:   deviceIP,
+						Family:     family,
+						AlarmName:  hit.AlarmName,
+						Severity:   hit.Severity,
+						Category:   hit.Category,
+						Summary:    hit.Description,
+						RawEcho:    trimmedLine,
+						Status:     "active",
+						OccurredAt: time.Now(),
+						CreatedAt:  time.Now(),
+					})
+				}
+			}
+		}
 
 		// 保存原始回显文件产物
 		rawPath := e.pathManager.GetInspectionRawFilePath(taskID, deviceIP, strings.ReplaceAll(cmd, " ", "_")+".txt")
@@ -384,11 +452,12 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 		cmd := strings.TrimSpace(it.CommandKey)
 		itemCopy := it
 		input := &inspection.EvaluateInput{
-			RunID:      taskID,
-			DeviceIP:   deviceIP,
-			Item:       &itemCopy,
-			RawEcho:    commandEchos[cmd],
-			ParsedRows: parsedData[cmd],
+			RunID:       taskID,
+			DeviceIP:    deviceIP,
+			Item:        &itemCopy,
+			RawEcho:     commandEchos[cmd],
+			ParsedRows:  parsedData[cmd],
+			ContextVars: contextVars,
 		}
 		evalRes := inspection.EvaluateItem(input)
 		results = append(results, evalRes)
@@ -417,10 +486,15 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 					return err
 				}
 			}
+			if len(matchedAlarms) > 0 {
+				if err := tx.CreateInBatches(matchedAlarms, 100).Error; err != nil {
+					return err
+				}
+			}
 			return nil
 		})
 		if errTx != nil {
-			logger.Error("InspectionCheckExecutor", taskID, "写入 InspectionResult 数据库事务失败: %v", errTx)
+			logger.Error("InspectionCheckExecutor", taskID, "写入 InspectionResult 与 AlarmRecord 数据库事务失败: %v", errTx)
 		}
 	}
 

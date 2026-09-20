@@ -72,6 +72,7 @@ func TestVendorSanitizer_ResolveCategory(t *testing.T) {
 	assert.Equal(t, "CISCO", ResolveCategory("Cisco", "Catalyst9300"))
 	assert.Equal(t, "H3C", ResolveCategory("H3C", "S5500"))
 	assert.Equal(t, "ZTE", ResolveCategory("ZTE", "ZXR10"))
+	assert.Equal(t, "", ResolveCategory("Ruijie", "RG-S2910"))
 }
 
 func TestVendorSanitizer_Performance(t *testing.T) {

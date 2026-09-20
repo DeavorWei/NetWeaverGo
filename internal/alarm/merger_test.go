@@ -185,3 +185,39 @@ func TestAlarmMerger_FanAndTemperature(t *testing.T) {
 		t.Errorf("expected category hardware_environment, got %s", p.Category)
 	}
 }
+
+func TestAlarmMerger_TimeWindowBucketing(t *testing.T) {
+	merger := NewAlarmMerger(MergerConfig{TimeWindow: 10 * time.Minute})
+	baseTime := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+
+	records := []models.AlarmRecord{
+		{
+			ID:         1,
+			RunID:      "run-tw-01",
+			DeviceIP:   "10.0.0.1",
+			Family:     "CE",
+			AlarmName:  "CE_OPTICAL_LOS",
+			Severity:   "major",
+			Category:   "interface",
+			Summary:    "Morning optical issue",
+			OccurredAt: baseTime,
+		},
+		{
+			ID:         2,
+			RunID:      "run-tw-01",
+			DeviceIP:   "10.0.0.1",
+			Family:     "CE",
+			AlarmName:  "CE_BGP_PEER_DOWN",
+			Severity:   "critical",
+			Category:   "routing",
+			Summary:    "Afternoon bgp peer down (2 hours later)",
+			OccurredAt: baseTime.Add(2 * time.Hour), // 超出 10 分钟窗口
+		},
+	}
+
+	phenomena := merger.Merge(records)
+	// 由于时间超出 10 分钟窗口，分属不同时间桶，不应被聚合为单一衍生故障，而是 2 个独立现象
+	if len(phenomena) != 2 {
+		t.Fatalf("expected 2 separate phenomena due to time window, got %d", len(phenomena))
+	}
+}

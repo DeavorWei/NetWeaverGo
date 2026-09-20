@@ -29,11 +29,13 @@ type StagePlan struct {
 
 // UnitPlan 调度单元计划
 type UnitPlan struct {
-	ID      string        `json:"id"`
-	Kind    string        `json:"kind"` // device / run / dataset
-	Target  TargetRef     `json:"target"`
-	Timeout time.Duration `json:"timeout"`
-	Steps   []StepPlan    `json:"steps"`
+	ID            string        `json:"id"`
+	Kind          string        `json:"kind"` // device / run / dataset
+	Target        TargetRef     `json:"target"`
+	Timeout       time.Duration `json:"timeout"`
+	Steps         []StepPlan    `json:"steps"`
+	InitialStatus string        `json:"initialStatus,omitempty"`
+	ErrorMessage  string        `json:"errorMessage,omitempty"`
 }
 
 // TargetRef 目标引用

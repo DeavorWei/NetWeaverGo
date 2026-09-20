@@ -86,12 +86,14 @@ const (
 	UnitStatusFailed UnitStatus = "failed"
 	// UnitStatusCancelled 已取消
 	UnitStatusCancelled UnitStatus = "cancelled"
+	// UnitStatusUnsupported 设备能力准入拦截（不支持）
+	UnitStatusUnsupported UnitStatus = "unsupported"
 )
 
 // IsTerminal 是否终态
 func (s UnitStatus) IsTerminal() bool {
 	switch s {
-	case UnitStatusCompleted, UnitStatusPartial, UnitStatusFailed, UnitStatusCancelled:
+	case UnitStatusCompleted, UnitStatusPartial, UnitStatusFailed, UnitStatusCancelled, UnitStatusUnsupported:
 		return true
 	default:
 		return false

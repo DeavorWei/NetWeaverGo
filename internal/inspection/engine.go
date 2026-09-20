@@ -39,6 +39,15 @@ func EvaluateItem(input *EvaluateInput) models.InspectionResult {
 	}
 
 	item := input.Item
+
+	// 0. DSL 规则接入：若检查项命中内置或导入的 DSL 规则，调用 DSLInterpreter.Evaluate
+	dslInterp := GetGlobalDSLInterpreter()
+	if dslInterp != nil {
+		if rule := dslInterp.FindRule(item.Code); rule != nil {
+			return dslInterp.Evaluate(rule, input)
+		}
+	}
+
 	result := models.InspectionResult{
 		RunID:       input.RunID,
 		DeviceIP:    input.DeviceIP,

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/NetWeaverGo/core/internal/models"
+	"gorm.io/gorm"
 )
 
 // CompiledAlarmRule 带预编译正则的告警规则
@@ -283,4 +284,20 @@ func GetBuiltinAlarmRules() []models.AlarmRule {
 			Enabled:     true,
 		},
 	}
+}
+
+// EnsureAlarmSeeds 初始化内置告警规则种子入库（幂等）
+func EnsureAlarmSeeds(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	var count int64
+	if err := db.Model(&models.AlarmRule{}).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	seeds := GetBuiltinAlarmRules()
+	return db.Create(&seeds).Error
 }

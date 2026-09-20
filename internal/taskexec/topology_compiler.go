@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/repository"
 )
 
 // TopologyTaskCompiler 拓扑任务编译器
@@ -64,7 +67,32 @@ func (c *TopologyTaskCompiler) buildCollectStage(config *TopologyTaskConfig) Sta
 	units := make([]UnitPlan, 0, len(config.DeviceIPs))
 	steps := c.buildCollectSteps(config)
 
+	devRepo := repository.NewDeviceRepository()
+	devList, _ := devRepo.FindByIPs(config.DeviceIPs)
+	devMap := make(map[string]*models.DeviceAsset, len(devList))
+	for idx := range devList {
+		devMap[devList[idx].IP] = &devList[idx]
+	}
+
 	for _, deviceIP := range config.DeviceIPs {
+		dev := devMap[deviceIP]
+		eligible, reason := true, ""
+		if dev != nil {
+			eligible, reason = CheckDeviceEligibility(dev, "topology")
+		}
+		if !eligible {
+			units = append(units, UnitPlan{
+				ID:            fmt.Sprintf("collect-%s", deviceIP),
+				Kind:          string(UnitKindDevice),
+				Target:        TargetRef{Type: "device_ip", Key: deviceIP},
+				Timeout:       time.Duration(config.TimeoutSec) * time.Second,
+				InitialStatus: string(UnitStatusUnsupported),
+				ErrorMessage:  reason,
+				Steps:         nil,
+			})
+			continue
+		}
+
 		unitSteps := make([]StepPlan, len(steps))
 		copy(unitSteps, steps)
 		units = append(units, UnitPlan{

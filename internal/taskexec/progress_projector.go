@@ -111,6 +111,8 @@ func projectStageCompletion(units []TaskRunUnit, runtimeCancelled bool) projecte
 		case UnitStatusPartial:
 			result.CompletedUnits++
 			result.PartialUnits++
+		case UnitStatusUnsupported:
+			result.CompletedUnits++
 		}
 	}
 
