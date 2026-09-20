@@ -52,9 +52,14 @@ type CapabilityMatrix struct {
 }
 
 func main() {
-	baseDir := flag.String("base", `D:\ICSLite_download\eDesk_Pro_V100R025C10SPC300\eDeskPro_V100R025C10SPC300-windows-x64`, "eDesk Pro 根目录")
-	outDir := flag.String("out", `internal/device/profiles`, "规则输出目录")
+	baseDir := flag.String("base", "", "eDesk Pro 根目录（例如 D:\\...\\eDeskPro_...）")
+	outDir := flag.String("out", filepath.Join("internal", "device", "profiles"), "规则输出目录")
 	flag.Parse()
+
+	if *baseDir == "" {
+		fmt.Println("用法: convert_profiles -base <eDeskPro根目录> [-out <输出目录>]")
+		return
+	}
 
 	_ = os.MkdirAll(*outDir, 0755)
 

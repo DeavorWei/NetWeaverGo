@@ -47,9 +47,14 @@ func normalizePatternForRE2(pat string) string {
 }
 
 func main() {
-	xmlPath := flag.String("xml", `D:\ICSLite_download\eDesk_Pro_V100R025C10SPC300\eDeskPro_V100R025C10SPC300-windows-x64\config\deviceversion\sensitiveCmd.xml`, "sensitiveCmd.xml 路径")
-	outPath := flag.String("out", `internal/report/rules/sensitive_cmd.json`, "输出 JSON 路径")
+	xmlPath := flag.String("xml", "", "sensitiveCmd.xml 路径")
+	outPath := flag.String("out", filepath.Join("internal", "report", "rules", "sensitive_cmd.json"), "输出 JSON 路径")
 	flag.Parse()
+
+	if *xmlPath == "" {
+		fmt.Println("用法: convert_sensitive -xml <sensitiveCmd.xml路径> [-out <输出JSON路径>]")
+		return
+	}
 
 	fmt.Println("==================================================")
 	fmt.Println("  敏感命令脱敏规则转换器 (tools/convert_sensitive)")

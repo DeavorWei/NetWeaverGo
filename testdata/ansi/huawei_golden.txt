@@ -1,0 +1,10 @@
+<Huawei>screen-length 0 temporary
+<Huawei>display version
+Huawei Versatile Routing Platform Software
+VRP (R) software, Version 5.170 (V200R019C00SPC800)
+Copyright (C) 2012-2020 HUAWEI TECH Co., Ltd.
+HUAWEI CE6800 uptime is 224 days, 14 hours, 28 minutes
+
+CE6800(Master) 1 : UPC 0x00010000 
+Startup: 2026/01/29 08:30:15
+Patch Version: V200R019SPH020

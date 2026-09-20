@@ -78,7 +78,7 @@
               </div>
 
               <!-- 链路属性 -->
-              <div class="flex items-center justify-center gap-3 mt-4 pt-3 border-t border-border">
+              <div class="flex flex-wrap items-center justify-center gap-3 mt-4 pt-3 border-t border-border">
                 <div class="flex items-center gap-1">
                   <span class="text-xs text-text-muted">类型:</span>
                   <span class="text-xs px-2 py-0.5 rounded bg-bg-hover text-text-primary">
@@ -95,6 +95,18 @@
                   <span class="text-xs text-text-muted">置信度:</span>
                   <span class="text-xs text-text-primary font-mono">
                     {{ edgeDetail.confidence.toFixed(2) }}
+                  </span>
+                </div>
+                <div v-if="edgeDetail.role" class="flex items-center gap-1">
+                  <span class="text-xs text-text-muted">角色:</span>
+                  <span class="text-xs px-2 py-0.5 rounded bg-accent/20 text-accent font-medium">
+                    {{ edgeDetail.role }}
+                  </span>
+                </div>
+                <div v-if="edgeDetail.discoveryMethods && edgeDetail.discoveryMethods.length" class="flex items-center gap-1">
+                  <span class="text-xs text-text-muted">发现方式:</span>
+                  <span class="text-xs px-2 py-0.5 rounded bg-bg-hover text-text-secondary font-mono">
+                    {{ Array.isArray(edgeDetail.discoveryMethods) ? edgeDetail.discoveryMethods.join(', ') : edgeDetail.discoveryMethods }}
                   </span>
                 </div>
               </div>

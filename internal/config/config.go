@@ -7,6 +7,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/security"
 	"gorm.io/gorm"
 )
 
@@ -133,6 +134,12 @@ func NormalizeDevice(device *models.DeviceAsset) {
 func SaveCommands(commands []string) error {
 	if DB == nil {
 		return fmt.Errorf("数据库未初始化")
+	}
+
+	for _, cmd := range commands {
+		if err := security.ValidateSafeCommand(cmd); err != nil {
+			return fmt.Errorf("命令 %q 校验未通过: %w", cmd, err)
+		}
 	}
 
 	var group models.CommandGroup

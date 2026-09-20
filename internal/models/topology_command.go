@@ -20,6 +20,7 @@ var defaultTopologyFieldCatalog = []TopologyFieldSpec{
 	{FieldKey: "sysname", Name: "设备名称", Phase: "collect", Required: true, ParserBinding: "sysname", DefaultEnabled: true, Description: "采集设备 sysname 或 hostname。", Scene: "default"},
 	{FieldKey: "interface_brief", Name: "接口概要", Phase: "collect", Required: true, ParserBinding: "interface_brief", DefaultEnabled: true, Description: "采集接口 up/down 与基础摘要。", Scene: "default"},
 	{FieldKey: "lldp_neighbor", Name: "LLDP 邻居", Phase: "collect", Required: true, ParserBinding: "lldp_neighbor", DefaultEnabled: true, Description: "采集 LLDP 邻居发现结果。", Scene: "default"},
+	{FieldKey: "cdp_neighbor", Name: "CDP 邻居", Phase: "collect", Required: false, ParserBinding: "cdp_neighbor", DefaultEnabled: true, Description: "采集 Cisco CDP 邻居发现结果。", Scene: "default"},
 	{FieldKey: "arp_all", Name: "ARP 表", Phase: "collect", Required: true, ParserBinding: "arp_all", DefaultEnabled: true, Description: "采集 ARP 地址表。", Scene: "default"},
 	{FieldKey: "mac_address", Name: "MAC 地址表", Phase: "collect", Required: false, ParserBinding: "mac_address", DefaultEnabled: true, Description: "采集 FDB/MAC 地址转发表，用于推断终端设备连接。", Scene: "default"},
 	{FieldKey: "eth_trunk", Name: "聚合链路", Phase: "collect", Required: false, ParserBinding: "eth_trunk", DefaultEnabled: true, Description: "采集 Eth-Trunk/Port-Channel 聚合信息。", Scene: "default"},
@@ -45,9 +46,9 @@ type TopologyTaskFieldOverride struct {
 // TopologyVendorFieldCommand 厂商默认字段命令映射。
 type TopologyVendorFieldCommand struct {
 	ID         uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	Vendor     string    `json:"vendor" gorm:"not null;index:idx_topology_vendor_field,unique"`
-	FieldKey   string    `json:"fieldKey" gorm:"not null;index:idx_topology_vendor_field,unique"`
-	Scene      string    `json:"scene" gorm:"size:64;default:'default';index:idx_topology_vendor_field_scene"`
+	Vendor     string    `json:"vendor" gorm:"not null;index:idx_topology_vendor_field_scene,unique"`
+	FieldKey   string    `json:"fieldKey" gorm:"not null;index:idx_topology_vendor_field_scene,unique"`
+	Scene      string    `json:"scene" gorm:"size:64;default:'default';not null;index:idx_topology_vendor_field_scene,unique"`
 	Command    string    `json:"command"`
 	TimeoutSec int       `json:"timeoutSec"`
 	Enabled    bool      `json:"enabled"`

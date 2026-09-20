@@ -10,6 +10,7 @@ import (
 
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/security"
 	"github.com/google/uuid"
 )
 
@@ -111,6 +112,12 @@ func CreateCommandGroup(group models.CommandGroup) (*models.CommandGroup, error)
 		return nil, fmt.Errorf("命令组名称不能为空")
 	}
 
+	for _, cmd := range group.Commands {
+		if err := security.ValidateSafeCommand(cmd); err != nil {
+			return nil, fmt.Errorf("命令 %q 校验未通过: %w", cmd, err)
+		}
+	}
+
 	// 移除手动检查，直接创建，让数据库唯一约束处理（修复问题05竞态条件）
 	if err := DB.Create(&group).Error; err != nil {
 		return nil, handleDuplicateError(err, group.Name)
@@ -137,6 +144,12 @@ func UpdateCommandGroup(id uint, group models.CommandGroup) (*models.CommandGrou
 	group.Name = strings.TrimSpace(group.Name)
 	if group.Name == "" {
 		return nil, fmt.Errorf("命令组名称不能为空")
+	}
+
+	for _, cmd := range group.Commands {
+		if err := security.ValidateSafeCommand(cmd); err != nil {
+			return nil, fmt.Errorf("命令 %q 校验未通过: %w", cmd, err)
+		}
 	}
 
 	// 移除手动检查，直接保存，让数据库唯一约束处理（修复问题05竞态条件）

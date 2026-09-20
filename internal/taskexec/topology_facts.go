@@ -410,10 +410,10 @@ func MapCommandOutput(mapper parser.ResultMapper, commandKey string, rows []map[
 		}
 		batch.Interfaces = items
 
-	case "lldp_neighbor", "lldp_neighbor_verbose":
+	case "lldp_neighbor", "lldp_neighbor_verbose", "cdp_neighbor":
 		items, err := mapper.ToLLDP(rows)
 		if err != nil {
-			return nil, fmt.Errorf("映射LLDP失败: %w", err)
+			return nil, fmt.Errorf("映射LLDP/CDP失败: %w", err)
 		}
 		for i := range items {
 			items[i].CommandKey = commandKey

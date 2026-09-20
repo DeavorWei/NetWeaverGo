@@ -84,6 +84,15 @@ func (e *Engine) RegisterRule(rule *SmartPingRule) {
 	e.rules = append(e.rules, rule)
 }
 
+// GetRules 返回全部规则列表
+func (e *Engine) GetRules() []*SmartPingRule {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	res := make([]*SmartPingRule, len(e.rules))
+	copy(res, e.rules)
+	return res
+}
+
 // matchRule 为指定场景查找最佳适配规则
 func (e *Engine) matchRule(scene string) *SmartPingRule {
 	e.mu.RLock()

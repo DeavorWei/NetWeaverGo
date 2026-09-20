@@ -1,0 +1,13 @@
+Router#terminal length 0
+Router#show version
+Cisco IOS Software, C2960 Software (C2960-LANBASEK9-M), Version 15.0(2)SE4
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2013 by Cisco Systems, Inc.
+Compiled Wed 26-Jun-13 02:49 by prod_rel_team
+
+ROM: Bootstrap program is C2960 boot loader
+BOOTLDR: C2960 Boot Loader (C2960-HBOOT-M) Version 12.2(25r)FX, RELEASE SOFTWARE (fc4)
+
+Router uptime is 15 weeks, 2 days, 3 hours, 45 minutes
+System returned to ROM by power-on
+System image file is "flash:/c2960-lanbasek9-mz.150-2.SE4.bin"

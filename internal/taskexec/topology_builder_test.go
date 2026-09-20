@@ -798,3 +798,47 @@ func deepCopyCandidates(src []*TopologyEdgeCandidate) []*TopologyEdgeCandidate {
 	}
 	return dst
 }
+
+func TestTopologyBuilder_CDPCandidate(t *testing.T) {
+	builder := NewTopologyBuilder(nil, DefaultTopologyBuildConfig())
+	n := &NormalizedFacts{
+		Devices: map[string]*DeviceInfo{
+			"192.168.1.1": {DeviceIP: "192.168.1.1", Hostname: "Cisco-Core-1", Role: "core"},
+			"192.168.1.2": {DeviceIP: "192.168.1.2", Hostname: "Cisco-Access-1", Role: "access"},
+		},
+		DeviceByName: map[string]string{
+			"cisco-access-1": "192.168.1.2",
+		},
+		DeviceByMgmtIP:    make(map[string]string),
+		DeviceByChassisID: make(map[string]string),
+		AggregateGroups:   make(map[string]*AggregateGroupInfo),
+		AggregateMembers:  make(map[string]string),
+		Interfaces:        make(map[string]*InterfaceInfo),
+		LLDPNeighbors: []NormalizedLLDPNeighbor{
+			{
+				DeviceIP:     "192.168.1.1",
+				LocalIf:      "GigabitEthernet0/1",
+				NeighborName: "Cisco-Access-1",
+				NeighborPort: "GigabitEthernet0/24",
+				NeighborIP:   "192.168.1.2",
+				CommandKey:   "cdp_neighbor",
+				RawRefID:     "101",
+			},
+		},
+	}
+
+	candidates := builder.buildLLDPCandidates(n)
+	require.Len(t, candidates, 1)
+	c := candidates[0]
+	assert.Contains(t, c.Features, "cdp")
+	assert.Contains(t, c.Features, "cdp_single_side")
+	require.Len(t, c.EvidenceRefs, 1)
+	assert.Equal(t, "cdp", c.EvidenceRefs[0].Type)
+	assert.Equal(t, "cdp", c.EvidenceRefs[0].Source)
+
+	// 物化边
+	edges := builder.materializeEdges(candidates, "run-cdp-01", n)
+	require.Len(t, edges, 1)
+	assert.Contains(t, edges[0].DiscoveryMethods, "cdp")
+	assert.Equal(t, "Downlink", edges[0].Role)
+}

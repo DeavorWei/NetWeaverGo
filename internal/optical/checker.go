@@ -230,3 +230,8 @@ func (c *Checker) CheckBatch(metrics []TransceiverMetric) []CheckResult {
 	}
 	return results
 }
+
+// BatchCheck 别名兼容
+func (c *Checker) BatchCheck(metrics []TransceiverMetric) []CheckResult {
+	return c.CheckBatch(metrics)
+}

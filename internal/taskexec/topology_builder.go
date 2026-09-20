@@ -547,34 +547,47 @@ func (b *TopologyBuilder) buildLLDPCandidates(n *NormalizedFacts) []*TopologyEdg
 		// 计算评分
 		score := b.scoreLLDPCandidate(lldp, remoteDevice, resolutionSource, localLogicalIf, remoteLogicalIf, n)
 
+		sourceType := "lldp"
+		if strings.Contains(strings.ToLower(lldp.CommandKey), "cdp") {
+			sourceType = "cdp"
+		}
+
 		// 构建证据
 		evidence := EdgeEvidence{
-			Type:       "lldp",
-			Source:     "lldp",
+			Type:       sourceType,
+			Source:     sourceType,
 			DeviceID:   lldp.DeviceIP,
-			Command:    chooseValue(lldp.CommandKey, "lldp_neighbor"),
+			Command:    chooseValue(lldp.CommandKey, sourceType+"_neighbor"),
 			RawRefID:   lldp.RawRefID,
 			LocalIf:    lldp.LocalIf,
 			RemoteName: lldp.NeighborName,
 			RemoteIf:   remoteIf,
 			RemoteMAC:  lldp.NeighborChassis,
 			RemoteIP:   lldp.NeighborIP,
-			Summary:    fmt.Sprintf("LLDP %s -> %s(%s)", chooseValue(localLogicalIf, lldp.LocalIf), lldp.NeighborName, chooseValue(remoteLogicalIf, remoteIf)),
+			Summary:    fmt.Sprintf("%s %s -> %s(%s)", strings.ToUpper(sourceType), chooseValue(localLogicalIf, lldp.LocalIf), lldp.NeighborName, chooseValue(remoteLogicalIf, remoteIf)),
 		}
 
-		// 检查是否已有相同候选（双向 LLDP）
+		// 检查是否已有相同候选（双向 LLDP/CDP）
 		if existing, ok := candidateMap[candidateKey]; ok {
 			// 合并证据
 			existing.EvidenceRefs = append(existing.EvidenceRefs, evidence)
 			// 更新特征
-			existing.Features = appendUniqueStrings(existing.Features, "lldp_bidirectional")
+			feat := sourceType + "_bidirectional"
+			existing.Features = appendUniqueStrings(existing.Features, feat)
+			if sourceType == "cdp" {
+				existing.Features = appendUniqueStrings(existing.Features, "cdp")
+			}
 			// 更新评分 - 标记为双向
 			existing.score.LLDPScore.Bidirectional = true
 			existing.score.TotalScore = b.recalculateLLDPScore(existing.score)
 			existing.TotalScore = existing.score.TotalScore
 		} else {
 			// 创建新候选
-			features := []string{"lldp_single_side"}
+			feat := sourceType + "_single_side"
+			features := []string{feat}
+			if sourceType == "cdp" {
+				features = appendUniqueStrings(features, "cdp")
+			}
 			if localLogicalIf != "" || remoteLogicalIf != "" {
 				features = appendUniqueStrings(features, "aggregate_mapped")
 			}

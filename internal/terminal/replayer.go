@@ -121,6 +121,20 @@ func (r *Replayer) processCommand(cmd ANSICommand, events []LineEvent) []LineEve
 	case CmdSGR:
 		// ESC[m 样式设置，忽略（不影响文本内容）
 
+	case CmdDecSet, CmdDecReset:
+		// DEC 模式设置/复位（如备用屏幕切换 ?1049 等）
+		events = append(events, LineEvent{
+			Type: EventControlSequence,
+			Raw:  cmd.Raw,
+		})
+
+	case CmdOSC:
+		// OSC 操作系统命令（如终端窗口标题设置）
+		events = append(events, LineEvent{
+			Type: EventControlSequence,
+			Raw:  cmd.Raw,
+		})
+
 	case CmdUnknown, CmdCursorUp, CmdCursorDown, CmdCursorHome, CmdEraseScreen:
 		// 未支持的序列，生成控制序列事件用于调试
 		events = append(events, LineEvent{
