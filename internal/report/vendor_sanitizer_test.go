@@ -20,11 +20,11 @@ func TestVendorSanitizer_Load(t *testing.T) {
 
 	cats := vs.Categories()
 	t.Logf("Categories loaded: %d (%v)", len(cats), cats)
-	assert.GreaterOrEqual(t, len(cats), 15)
+	assert.Equal(t, 16, len(cats), "应与 eDesk 数据类别集合精确一致（16 类）")
 
 	broken := vs.BrokenRules()
 	t.Logf("Broken rules count: %d", len(broken))
-	assert.LessOrEqual(t, len(broken), 5, "编译失败规则应当极少")
+	assert.Empty(t, broken, "不应存在编译失败的脱敏规则（启动自检应处于干净状态）")
 }
 
 func TestVendorSanitizer_HuaweiMasking(t *testing.T) {
@@ -89,7 +89,25 @@ func TestVendorSanitizer_Performance(t *testing.T) {
 
 	t.Logf("1MB 脱敏耗时: %v", duration)
 	assert.NotEmpty(t, res)
-	assert.Less(t, duration, 200*time.Millisecond, "1MB 数据脱敏耗时应在合理范围内")
+	// 本机实测约 100ms；方案目标 50ms 需规则引擎按字面量预筛优化，此处先收紧回归基线
+	assert.Less(t, duration, 150*time.Millisecond, "1MB 数据脱敏耗时应在回归基线上限内")
+}
+
+func TestSanitizeContent_MasksVendorPlaintext(t *testing.T) {
+	raw := "local-user guest password simple Huawei@123\n" +
+		"dldp authentication-mode simple PlainKey999\n" +
+		"radius-server shared-key cipher %^%#K5_8d*h9W!@#X91238471289371289371289%^%#\n"
+	masked := SanitizeContent("huawei", "S5735", "display current-configuration", raw)
+
+	assert.NotContains(t, masked, "Huawei@123")
+	assert.NotContains(t, masked, "PlainKey999")
+	assert.NotContains(t, masked, "%^%#K5_8d*h9W!@#X91238471289371289371289%^%#")
+	assert.Contains(t, masked, "****")
+}
+
+func TestResolveCategory_EmptyVendorNoCrossVendorFallback(t *testing.T) {
+	// 空厂商不得回退为任何厂商默认品类（防止跨厂商规则误用）
+	assert.Equal(t, "", ResolveCategory("", ""))
 }
 
 func TestVendorSanitizer_LoggerCascade(t *testing.T) {

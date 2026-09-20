@@ -8,6 +8,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -168,9 +169,13 @@ func TestBizCompareService_ExportDiffCSVSanitizeGuard(t *testing.T) {
 		ImpactScope:   "全局",
 	})
 
-	// 尝试导出 CSV，应被 report.ValidateExportContent 拦截阻断
+	// P0-1 新行为：导出前先自动脱敏，明文口令被掩码且导出成功；自检作为兜底仍保留
 	csvStr, err := svc.ExportDiffCSV(taskID)
-	assert.Error(t, err, "包含未掩码明文口令的 CSV 必须阻断导出")
-	assert.Contains(t, err.Error(), "导出安全阻断")
-	assert.Empty(t, csvStr)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, csvStr)
+	assert.NotContains(t, csvStr, "PlainSecret888", "导出内容不得包含明文口令")
+	assert.NotContains(t, csvStr, "PlainSecret999", "导出内容不得包含明文口令")
+	assert.Contains(t, csvStr, "****")
+	// 兜底自检对清洗后内容应放行
+	assert.NoError(t, report.ValidateExportContent(csvStr))
 }

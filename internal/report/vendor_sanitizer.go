@@ -76,6 +76,35 @@ func NewVendorSanitizer() (*VendorSanitizer, error) {
 	return NewVendorSanitizerFromBytes(embeddedSensitiveCmdJSON)
 }
 
+// SanitizeContent 对导出/落盘内容执行"全局规则 + 分厂商规则"两级脱敏（P0-1 生产统一入口）。
+// vendor/model 用于解析厂商品类（为空时仅应用通用规则）；command 用于命令维度规则过滤。
+// 返回值为脱敏后的文本，调用方随后应执行 ValidateExportContent 兜底自检。
+func SanitizeContent(vendor, model, command, content string) string {
+	if content == "" {
+		return content
+	}
+	// 1. 全局基础规则（与日志管道同源，保证口径一致）
+	masked := logger.GetGlobalSanitizer().Sanitize(content)
+	// 2. 厂商/命令维度规则（引擎内部会追加通用 category 规则）
+	category := ResolveCategory(vendor, model)
+	return GetDefaultVendorSanitizer().Sanitize(category, command, masked)
+}
+
+// LogSanitizerHealth 输出脱敏引擎启动自检结果：
+// 无损坏规则时 INFO 汇总，存在损坏规则时逐条输出 WARN 明细（P2-3 启动告警闭环）。
+func LogSanitizerHealth() {
+	vs := GetDefaultVendorSanitizer()
+	broken := vs.BrokenRules()
+	if len(broken) == 0 {
+		logger.Info("VendorSanitizer", "-", "分厂商脱敏规则加载完成: 有效规则 %d 条, 损坏规则 0 条", vs.TotalRules())
+		return
+	}
+	for _, r := range broken {
+		logger.Warn("VendorSanitizer", "-", "脱敏规则编译失败(已跳过): category=%s pattern=%s err=%s", r.Category, r.Pattern, r.Error)
+	}
+	logger.Warn("VendorSanitizer", "-", "分厂商脱敏规则自检完成: 有效 %d 条, 损坏 %d 条", vs.TotalRules(), len(broken))
+}
+
 // NewVendorSanitizerFromBytes 从 JSON 字节流初始化脱敏引擎
 func NewVendorSanitizerFromBytes(data []byte) (*VendorSanitizer, error) {
 	if len(data) == 0 {
@@ -186,7 +215,10 @@ func ResolveCategory(vendor, seriesOrModel string) string {
 		return "DELL"
 	case strings.Contains(v, "ruckus"):
 		return "RUCKUS"
-	case strings.Contains(v, "huawei") || v == "hw" || v == "":
+	case v == "":
+		// 无厂商上下文时不下发任何厂商推断，仅应用通用（空 category）规则，避免跨厂商规则误用
+		return ""
+	case strings.Contains(v, "huawei") || v == "hw":
 		// 华为细分
 		if strings.HasPrefix(s, "AR") || strings.Contains(s, "ROUTER") {
 			return "AR router"

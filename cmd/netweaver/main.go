@@ -9,6 +9,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/parser"
+	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/NetWeaverGo/core/internal/snmp"
 	"github.com/NetWeaverGo/core/internal/taskexec"
@@ -50,6 +51,9 @@ func main() {
 		logger.Error("System", "-", "统一运行时数据库迁移失败: %v", err)
 		os.Exit(1)
 	}
+
+	// 脱敏引擎启动自检（P2-3）：输出有效/损坏规则清单，损坏规则逐条 WARN
+	report.LogSanitizerHealth()
 
 	// 全部数据库迁移（config.InitDB + taskexec.AutoMigrate）成功后，
 	// 才提交"已备份版本"标记：确保任一迁移失败时下次启动仍会重新备份。

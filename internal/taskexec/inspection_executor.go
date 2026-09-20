@@ -17,6 +17,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/metrics"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/parser"
+	"github.com/NetWeaverGo/core/internal/report"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"gorm.io/gorm"
 )
@@ -414,10 +415,11 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 			}
 		}
 
-		// 保存原始回显文件产物
+		// 保存原始回显文件产物（P0-1：落盘前先执行分厂商脱敏，避免明文口令写入磁盘）
+		sanitizedEcho := report.SanitizeContent(device.Vendor, device.Model, cmd, echo)
 		rawPath := e.pathManager.GetInspectionRawFilePath(taskID, deviceIP, strings.ReplaceAll(cmd, " ", "_")+".txt")
 		if err := os.MkdirAll(filepath.Dir(rawPath), 0755); err == nil {
-			_ = os.WriteFile(rawPath, []byte(echo), 0644)
+			_ = os.WriteFile(rawPath, []byte(sanitizedEcho), 0644)
 		}
 		_ = e.createArtifactWithResult(taskID, stageID, unit.ID, string(ArtifactTypeRawOutput), fmt.Sprintf("%s:%s", deviceIP, cmd), rawPath)
 
@@ -498,9 +500,10 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 		}
 	}
 
-	// 6. 生成巡检报表产物（CSV 与 JSON）
+	// 6. 生成巡检报表产物（CSV 与 JSON，P0-1：落盘前统一脱敏）
 	csvData, errCSV := inspection.ExportInspectionResultsCSV(results)
 	if errCSV == nil {
+		csvData = report.SanitizeContent(device.Vendor, device.Model, "", csvData)
 		csvPath := e.pathManager.GetInspectionRawFilePath(taskID, deviceIP, "inspection_report.csv")
 		if err := os.MkdirAll(filepath.Dir(csvPath), 0755); err == nil {
 			_ = os.WriteFile(csvPath, []byte(csvData), 0644)
@@ -510,6 +513,7 @@ func (e *InspectionCheckExecutor) executeInspectionUnit(ctx RuntimeContext, stag
 
 	jsonData, errJSON := inspection.ExportInspectionResultsJSON(results)
 	if errJSON == nil {
+		jsonData = report.SanitizeContent(device.Vendor, device.Model, "", jsonData)
 		jsonPath := e.pathManager.GetInspectionRawFilePath(taskID, deviceIP, "inspection_report.json")
 		if err := os.MkdirAll(filepath.Dir(jsonPath), 0755); err == nil {
 			_ = os.WriteFile(jsonPath, []byte(jsonData), 0644)
@@ -585,15 +589,18 @@ func (e *InspectionCheckExecutor) registerCheckOnlyArtifacts(
 		if !ok {
 			continue
 		}
+		// P0-1：三阶段纯判定路径无设备画像上下文，按通用规则脱敏后落盘
+		sanitizedEcho := report.SanitizeContent("", "", cmd, echo)
 		rawPath := e.pathManager.GetInspectionRawFilePath(taskID, deviceIP, strings.ReplaceAll(cmd, " ", "_")+".txt")
 		if err := os.MkdirAll(filepath.Dir(rawPath), 0755); err == nil {
-			_ = os.WriteFile(rawPath, []byte(echo), 0644)
+			_ = os.WriteFile(rawPath, []byte(sanitizedEcho), 0644)
 		}
 		_ = e.createArtifactWithResult(taskID, stageID, unitID, string(ArtifactTypeRawOutput), fmt.Sprintf("%s:%s", deviceIP, cmd), rawPath)
 	}
 
-	// 2. 巡检报表产物（CSV 与 JSON）
+	// 2. 巡检报表产物（CSV 与 JSON，P0-1：落盘前统一脱敏）
 	if csvData, err := inspection.ExportInspectionResultsCSV(results); err == nil {
+		csvData = report.SanitizeContent("", "", "", csvData)
 		csvPath := e.pathManager.GetInspectionRawFilePath(taskID, deviceIP, "inspection_report.csv")
 		if err := os.MkdirAll(filepath.Dir(csvPath), 0755); err == nil {
 			_ = os.WriteFile(csvPath, []byte(csvData), 0644)
@@ -601,6 +608,7 @@ func (e *InspectionCheckExecutor) registerCheckOnlyArtifacts(
 		_ = e.createArtifactWithResult(taskID, stageID, unitID, string(ArtifactTypeInspectionReport), fmt.Sprintf("%s:inspection_report.csv", deviceIP), csvPath)
 	}
 	if jsonData, err := inspection.ExportInspectionResultsJSON(results); err == nil {
+		jsonData = report.SanitizeContent("", "", "", jsonData)
 		jsonPath := e.pathManager.GetInspectionRawFilePath(taskID, deviceIP, "inspection_report.json")
 		if err := os.MkdirAll(filepath.Dir(jsonPath), 0755); err == nil {
 			_ = os.WriteFile(jsonPath, []byte(jsonData), 0644)

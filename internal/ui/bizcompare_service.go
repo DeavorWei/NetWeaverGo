@@ -175,6 +175,8 @@ func (s *BizCompareService) ExportDiffCSV(taskID string) (string, error) {
 	}
 
 	csvContent := buf.String()
+	// 导出前脱敏（P0-1）：先应用全局 + 分厂商/通用规则掩码，再执行自检兜底
+	csvContent = report.SanitizeContent("", "", "", csvContent)
 	// 安全合规校验：若存在 CRITICAL 级别未脱敏敏感数据则阻断导出
 	if err := report.ValidateExportContent(csvContent); err != nil {
 		return "", err

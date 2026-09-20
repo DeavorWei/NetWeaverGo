@@ -433,6 +433,8 @@ func (s *HardwareInventoryService) ExportBOMAlertsCSV(deviceIP string, severity 
 	if err != nil {
 		return "", err
 	}
+	// 导出前脱敏（P0-1）：先应用全局 + 分厂商/通用规则掩码，再执行自检兜底
+	csvText = report.SanitizeContent("", "", "", csvText)
 	// 导出前脱敏自检：命中未脱敏敏感内容则阻断导出（规划方案 §5.2 P1-6）
 	if err := report.ValidateExportContent(csvText); err != nil {
 		return "", err
@@ -488,6 +490,8 @@ func (s *HardwareInventoryService) ExportHardwareInventoryCSV(deviceIP string) (
 	}
 	writer.Flush()
 	csvText := buf.String()
+	// 导出前脱敏（P0-1）：先应用全局 + 分厂商/通用规则掩码，再执行自检兜底
+	csvText = report.SanitizeContent("", "", "", csvText)
 	// 导出前脱敏自检：命中未脱敏敏感内容则阻断导出（规划方案 §5.2 P1-6）
 	if err := report.ValidateExportContent(csvText); err != nil {
 		return "", err
