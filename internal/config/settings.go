@@ -40,6 +40,9 @@ func DefaultSettings() models.GlobalSettings {
 		// §10.3 解析引擎灰度模式（默认 auto 自适应，支持 tree_only 与 legacy_only 应急回退）
 		ParserEngineMode: "auto",
 
+		// A6 Shadow 影子对比（Phase 1 默认只记录差异率，不参与裁决；"off" 可关闭）
+		MatcherShadowMode: "record",
+
 		// 巡检编排模式：默认 single（对齐红线 6：自动/新编排默认最保守档）
 		InspectionPipelineMode: "single",
 	}

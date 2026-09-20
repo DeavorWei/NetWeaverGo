@@ -113,3 +113,60 @@ func TestShadowMatcher(t *testing.T) {
 		t.Errorf("RecentSamples len = %d, want 2", len(metrics.RecentSamples))
 	}
 }
+
+// P0-4：先开启影子再应用策略时，影子"新规则集"必须同步刷新（修复规则过期缺陷）
+func TestStreamMatcher_ShadowRefreshOnApplyPolicy(t *testing.T) {
+	m := NewStreamMatcher()
+	m.EnableShadowMode(true)
+
+	policy := &MatchPolicy{
+		Vendor: "test",
+		ErrorRules: []ErrorRuleDef{
+			{Name: "PolicyOnlyRule", Pattern: `(?i)policy-only-token`, Severity: "critical"},
+		},
+	}
+	m.ApplyPolicy(policy)
+
+	m.MatchErrorRule("policy-only-token appeared")
+
+	metrics, ok := m.ShadowMetrics()
+	if !ok {
+		t.Fatal("影子模式应处于启用状态")
+	}
+	if metrics.TotalEvaluations == 0 {
+		t.Fatal("影子模式应完成评估")
+	}
+	if metrics.Discrepancies == 0 {
+		t.Fatal("策略更新后影子新规则集应生效并记录差异（旧实现会因规则过期漏记）")
+	}
+}
+
+// P0-4：未启用影子模式时不得返回统计
+func TestStreamMatcher_ShadowDisabled(t *testing.T) {
+	m := NewStreamMatcher()
+	if _, ok := m.ShadowMetrics(); ok {
+		t.Fatal("未启用影子模式时 ShadowMetrics 应返回 ok=false")
+	}
+}
+
+// P2-5：Resolve 返回副本，调用方修改不得污染内部策略单例
+func TestPolicyMatcher_ResolveReturnsCopy(t *testing.T) {
+	pm := NewPolicyMatcher()
+	if err := pm.LoadEmbedded(); err != nil {
+		t.Fatalf("LoadEmbedded 失败: %v", err)
+	}
+	p1 := pm.Resolve("*", "huawei", "*")
+	if p1 == nil {
+		t.Fatal("应解析到 huawei 策略")
+	}
+	origVendor := p1.Vendor
+
+	p1.Vendor = "tampered"
+	p2 := pm.Resolve("*", "huawei", "*")
+	if p2 == nil {
+		t.Fatal("二次解析不应返回 nil")
+	}
+	if p2.Vendor != origVendor {
+		t.Fatalf("Resolve 应返回副本，内部策略被污染: want %s got %s", origVendor, p2.Vendor)
+	}
+}

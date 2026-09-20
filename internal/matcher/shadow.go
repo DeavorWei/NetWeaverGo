@@ -146,7 +146,12 @@ func (sm *ShadowMatcher) MatchBoth(line string) (oldHit bool, oldRule *ErrorRule
 		sm.recentSamples = append(sm.recentSamples, rec)
 		sm.mu.Unlock()
 
-		logger.Warn("MatcherShadow", "-", "规则裁决差异! 行: %q, 旧规则: %s, 新规则: %s", line, oldName, newName)
+		// 仅前 20 条差异走 WARN（避免刷屏），其余降级为 Verbose；汇总差异率由执行器统一输出
+		if atomic.LoadUint64(&sm.diffCount) <= 20 {
+			logger.Warn("MatcherShadow", "-", "规则裁决差异! 行: %q, 旧规则: %s, 新规则: %s", line, oldName, newName)
+		} else {
+			logger.Verbose("MatcherShadow", "-", "规则裁决差异! 行: %q, 旧规则: %s, 新规则: %s", line, oldName, newName)
+		}
 	}
 
 	return oldHit, oldRule, newHit, newRule, hasDiff

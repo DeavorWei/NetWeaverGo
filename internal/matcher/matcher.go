@@ -75,6 +75,21 @@ func (m *StreamMatcher) ApplyPolicy(p *MatchPolicy) {
 	if len(p.ConfirmPatterns) > 0 {
 		m.ConfirmPatterns = CompileConfirmPatterns(p.ConfirmPatterns)
 	}
+	// P0-4：策略更新后同步刷新影子对比的"新规则集"，避免先开启影子再应用策略时规则过期
+	if m.Shadow != nil {
+		m.Shadow.SetNewRules(m.Rules)
+	}
+}
+
+// ShadowMetrics 返回影子对比统计指标（未启用影子模式时 ok=false）
+func (m *StreamMatcher) ShadowMetrics() (ShadowMetrics, bool) {
+	m.mu.RLock()
+	shadow := m.Shadow
+	m.mu.RUnlock()
+	if shadow == nil || !shadow.IsEnabled() {
+		return ShadowMetrics{}, false
+	}
+	return shadow.GetMetrics(), true
 }
 
 // EnableShadowMode 开启或关闭影子对比模式

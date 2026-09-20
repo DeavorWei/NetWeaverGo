@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 //go:embed policies/*.json
@@ -76,19 +78,31 @@ func (pm *PolicyMatcher) LoadEmbedded() error {
 		if strings.HasSuffix(entry.Name(), ".json") {
 			data, err := policiesFS.ReadFile("policies/" + entry.Name())
 			if err != nil {
+				logger.Warn("PolicyMatcher", "-", "读取策略文件失败(已跳过): file=%s err=%v", entry.Name(), err)
 				continue
 			}
 			p := &MatchPolicy{}
-			if err := json.Unmarshal(data, p); err == nil {
-				if entry.Name() == "default.json" {
-					pm.fallback = p
-				} else {
-					pm.policies = append(pm.policies, p)
-				}
+			if err := json.Unmarshal(data, p); err != nil {
+				logger.Warn("PolicyMatcher", "-", "解析策略文件失败(已跳过): file=%s err=%v", entry.Name(), err)
+				continue
+			}
+			if entry.Name() == "default.json" {
+				pm.fallback = p
+			} else {
+				pm.policies = append(pm.policies, p)
 			}
 		}
 	}
 	return nil
+}
+
+// clonePolicy 返回策略副本，避免调用方修改内部单例状态（P2-5）
+func clonePolicy(p *MatchPolicy) *MatchPolicy {
+	if p == nil {
+		return nil
+	}
+	cp := *p
+	return &cp
 }
 
 // Resolve 根据场景、厂商、设备类型解析最优策略
@@ -113,7 +127,7 @@ func (pm *PolicyMatcher) Resolve(scene, vendor, deviceType string) *MatchPolicy 
 	// 查找匹配：优先级 1. 厂商 + 场景 + 设备类型完全匹配
 	for _, p := range pm.policies {
 		if strings.EqualFold(p.Vendor, v) && strings.EqualFold(p.Scene, s) && strings.EqualFold(p.DeviceType, d) {
-			return p
+			return clonePolicy(p)
 		}
 	}
 
@@ -122,7 +136,7 @@ func (pm *PolicyMatcher) Resolve(scene, vendor, deviceType string) *MatchPolicy 
 		if strings.EqualFold(p.Vendor, v) &&
 			(p.Scene == s || p.Scene == "*") &&
 			(p.DeviceType == d || p.DeviceType == "*") {
-			return p
+			return clonePolicy(p)
 		}
 	}
 
@@ -131,12 +145,12 @@ func (pm *PolicyMatcher) Resolve(scene, vendor, deviceType string) *MatchPolicy 
 		if (p.Vendor == v || p.Vendor == "*") &&
 			(p.Scene == s || p.Scene == "*") &&
 			(p.DeviceType == d || p.DeviceType == "*") {
-			return p
+			return clonePolicy(p)
 		}
 	}
 
 	if pm.fallback != nil {
-		return pm.fallback
+		return clonePolicy(pm.fallback)
 	}
 
 	// 最终保底默认对象
@@ -164,6 +178,7 @@ func (p *MatchPolicy) ToCompiledErrorRules() []ErrorRule {
 		}
 		re, err := regexp.Compile(r.Pattern)
 		if err != nil {
+			logger.Warn("PolicyMatcher", "-", "错误规则正则编译失败(已跳过): name=%s pattern=%s err=%v", r.Name, r.Pattern, err)
 			continue
 		}
 		rules = append(rules, ErrorRule{
@@ -183,9 +198,11 @@ func (p *MatchPolicy) CompilePromptRegexes() []*regexp.Regexp {
 	var regexes []*regexp.Regexp
 	for _, pat := range p.PromptPatterns {
 		re, err := regexp.Compile(pat)
-		if err == nil {
-			regexes = append(regexes, re)
+		if err != nil {
+			logger.Warn("PolicyMatcher", "-", "提示符正则编译失败(已跳过): pattern=%s err=%v", pat, err)
+			continue
 		}
+		regexes = append(regexes, re)
 	}
 	return regexes
 }

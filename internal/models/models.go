@@ -166,6 +166,9 @@ type GlobalSettings struct {
 	// §10.3 解析引擎灰度模式与应急回退开关 (auto / tree_only / legacy_only)
 	ParserEngineMode string `json:"parserEngineMode"`
 
+	// A6 Shadow 影子对比模式: "" 或 "record"（默认，只记录差异率） | "off"（关闭）
+	MatcherShadowMode string `json:"matcherShadowMode"`
+
 	// 巡检编排模式：single（默认，单阶段内联） | three_stage（采集/解析/判定三阶段）
 	InspectionPipelineMode string `json:"inspectionPipelineMode"`
 }

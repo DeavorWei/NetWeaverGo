@@ -44,6 +44,7 @@ type ExecutorOptions struct {
 	PreCommands       []string                   // 前置执行命令序列（如跳板机跳转或会话前置命令）
 	Charset           string                     // 字符集: utf-8 | gbk | gb18030 | big5 | auto
 	ProxyAddr         string                     // 代理服务器地址 (SOCKS5/HTTP 代理，如 "127.0.0.1:1080")
+	ShadowMode        *bool                      // 影子对比模式（Phase 1 只记录）；nil 时按全局设置 matcherShadowMode（默认开启，off 关闭）
 }
 
 // DeviceExecutor 封装特定设备的连接数据流及命令步进下发生命周期
@@ -73,6 +74,7 @@ type DeviceExecutor struct {
 	preCommands   []string // 前置命令序列（跳板跳转等）
 	charset       string   // 字符集编码
 	proxyAddr     string   // 代理服务器地址
+	shadowMode    bool     // 影子对比是否启用（用于汇总差异率输出）
 
 	// vendor 设备厂商（来自 ExecutorOptions，作为视图反解 vendor 的兜底来源）
 	vendor string
@@ -135,6 +137,17 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 		charset = profile.Charset
 	}
 
+	// P0-4：影子对比模式（Phase 1 只记录裁决差异，不改变执行行为）。
+	// 默认按全局设置 matcherShadowMode 开启；显式传入 options 时以其为准。
+	shadowEnabled := true
+	if st := config.GetGlobalSettings(); st != nil {
+		shadowEnabled = !strings.EqualFold(strings.TrimSpace(st.MatcherShadowMode), "off")
+	}
+	if opts.ShadowMode != nil {
+		shadowEnabled = *opts.ShadowMode
+	}
+	streamMatcher.EnableShadowMode(shadowEnabled)
+
 	return &DeviceExecutor{
 		IP:                ip,
 		Port:              port,
@@ -153,6 +166,7 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 		preCommands:       opts.PreCommands,
 		charset:           charset,
 		proxyAddr:         strings.TrimSpace(opts.ProxyAddr),
+		shadowMode:        shadowEnabled,
 		replayer:          terminal.NewReplayer(terminalWidth),
 		commandCache:      DefaultCommandCache(),
 	}
@@ -837,8 +851,24 @@ func isTimeoutError(err error) bool {
 	return false
 }
 
+// logShadowMetrics 输出影子模式差异率（P0-4 Phase 1：仅记录与上报，不影响裁决结果）
+func (e *DeviceExecutor) logShadowMetrics() {
+	if e == nil || e.Matcher == nil || !e.shadowMode {
+		return
+	}
+	metrics, ok := e.Matcher.ShadowMetrics()
+	if !ok || metrics.TotalEvaluations == 0 {
+		return
+	}
+	logger.Info("MatcherShadow", e.IP, "影子对比汇总: 评估 %d 行, 差异 %d 行, 差异率 %.4f%%",
+		metrics.TotalEvaluations, metrics.Discrepancies, metrics.DiscrepancyRate*100)
+}
+
 // Close 断开所有的流和连接
 func (e *DeviceExecutor) Close() {
+	// P0-4：关闭前输出影子对比差异率汇总
+	e.logShadowMetrics()
+
 	// 优先通过统一连接接口关闭
 	if e.conn != nil {
 		e.conn.Close()
