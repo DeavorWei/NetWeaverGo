@@ -449,6 +449,8 @@ const graphEdges = computed(() =>
     targetIf: e.targetIf,
     status: e.status,
     edgeType: e.edgeType,
+    role: e.role,
+    discoveryMethods: e.discoveryMethods,
   })),
 );
 

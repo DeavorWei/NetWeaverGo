@@ -49,6 +49,9 @@ type TopologyTaskConfig struct {
 	// 任务级覆盖配置
 	FieldOverrides []models.TopologyTaskFieldOverride `json:"fieldOverrides"`
 
+	// 发现源可选配置：lldp / cdp / arp / mac（为空表示不限制，按字段启用状态执行）
+	DiscoverySources []string `json:"discoverySources"`
+
 	// 统一解析后的采集命令计划
 	ResolvedCommands []ResolvedTopologyCommand `json:"resolvedCommands"`
 

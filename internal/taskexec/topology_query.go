@@ -122,17 +122,18 @@ func (s *TaskExecutionService) GetTopologyGraph(runID string) (*models.TopologyG
 	graphEdges := make([]models.GraphEdge, 0, len(edges))
 	for _, e := range edges {
 		graphEdges = append(graphEdges, models.GraphEdge{
-			ID:              e.ID,
-			Source:          e.ADeviceID,
-			Target:          e.BDeviceID,
-			SourceIf:        e.AIf,
-			TargetIf:        e.BIf,
-			LogicalSourceIf: e.LogicalAIf,
-			LogicalTargetIf: e.LogicalBIf,
-			EdgeType:        e.EdgeType,
-			Status:          e.Status,
-			Confidence:      e.Confidence,
-			Role:            e.Role,
+			ID:               e.ID,
+			Source:           e.ADeviceID,
+			Target:           e.BDeviceID,
+			SourceIf:         e.AIf,
+			TargetIf:         e.BIf,
+			LogicalSourceIf:  e.LogicalAIf,
+			LogicalTargetIf:  e.LogicalBIf,
+			EdgeType:         e.EdgeType,
+			Status:           e.Status,
+			Confidence:       e.Confidence,
+			Role:             e.Role,
+			DiscoveryMethods: append([]string(nil), e.DiscoveryMethods...),
 		})
 	}
 

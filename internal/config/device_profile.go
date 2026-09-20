@@ -404,6 +404,7 @@ func registerVendorProfiles() {
 		Commands: []CommandSpec{
 			{Command: "show version", CommandKey: "version", TimeoutSec: 30},
 			{Command: "show lldp neighbors detail", CommandKey: "lldp_neighbor", TimeoutSec: 60},
+			{Command: "show cdp neighbors detail", CommandKey: "cdp_neighbor", TimeoutSec: 60},
 			{Command: "show interface status", CommandKey: "interface_brief", TimeoutSec: 30},
 			{Command: "show etherchannel summary", CommandKey: "eth_trunk", TimeoutSec: 30},
 			{Command: "show ip arp", CommandKey: "arp_all", TimeoutSec: 60},

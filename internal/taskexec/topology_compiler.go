@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/repository"
 )
@@ -183,9 +185,21 @@ func (c *TopologyTaskCompiler) buildTopologyBuildStage(config *TopologyTaskConfi
 // buildCollectSteps 构建设备采集步骤
 func (c *TopologyTaskCompiler) buildCollectSteps(config *TopologyTaskConfig) []StepPlan {
 	overridesJSON, _ := json.Marshal(config.FieldOverrides)
+	sources := normalizeDiscoverySources(config.DiscoverySources)
+
+	// P0-9：发现源风险提示 —— 仅依赖 ARP/MAC 推断链路存在误连风险
+	riskNotice := ""
+	if len(sources) > 0 && !sources["lldp"] && !sources["cdp"] {
+		riskNotice = "当前发现源未包含 LLDP/CDP，链路将主要由 ARP/MAC 推断，存在误连风险；建议至少启用一种邻居协议发现源"
+		logger.Warn("TopologyCompiler", "-", "%s", riskNotice)
+	}
+
 	steps := make([]StepPlan, 0, len(config.ResolvedCommands))
 	for i, cmd := range config.ResolvedCommands {
 		if !cmd.Enabled {
+			continue
+		}
+		if len(sources) > 0 && !discoverySourceAllowed(cmd.FieldKey, sources) {
 			continue
 		}
 		params := map[string]string{
@@ -200,6 +214,7 @@ func (c *TopologyTaskCompiler) buildCollectSteps(config *TopologyTaskConfig) []S
 			"fieldOverrides":       string(overridesJSON),
 			"previewCommand":       cmd.Command,
 			"previewCommandSource": cmd.CommandSource,
+			"discoveryRiskNotice":  riskNotice,
 		}
 		steps = append(steps, StepPlan{
 			ID:         fmt.Sprintf("collect-step-%d", i),
@@ -210,6 +225,39 @@ func (c *TopologyTaskCompiler) buildCollectSteps(config *TopologyTaskConfig) []S
 		})
 	}
 	return steps
+}
+
+// normalizeDiscoverySources 归一化发现源配置（lldp/cdp/arp/mac），空表示不限制
+func normalizeDiscoverySources(sources []string) map[string]bool {
+	if len(sources) == 0 {
+		return nil
+	}
+	result := make(map[string]bool, len(sources))
+	for _, s := range sources {
+		switch strings.ToLower(strings.TrimSpace(s)) {
+		case "lldp", "cdp", "arp", "mac":
+			result[strings.ToLower(strings.TrimSpace(s))] = true
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+// discoverySourceAllowed 判断字段是否在发现源白名单内（非发现类字段不受限制）
+func discoverySourceAllowed(fieldKey string, sources map[string]bool) bool {
+	switch strings.ToLower(strings.TrimSpace(fieldKey)) {
+	case "lldp_neighbor", "lldp_neighbor_verbose":
+		return sources["lldp"]
+	case "cdp_neighbor":
+		return sources["cdp"]
+	case "arp_all":
+		return sources["arp"]
+	case "mac_address":
+		return sources["mac"]
+	}
+	return true
 }
 
 func topologyParseMetadata(config *TopologyTaskConfig) (string, string) {

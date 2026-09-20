@@ -82,6 +82,8 @@ type GraphEdge struct {
 	Status          string  `json:"status"`
 	Confidence      float64 `json:"confidence"`
 	Role            string  `json:"role,omitempty"` // 端口链路角色 (Uplink, Downlink, Interconnect 等)
+	// DiscoveryMethods 发现方式（lldp/cdp/arp/mac），供前端按发现源展示
+	DiscoveryMethods []string `json:"discoveryMethods,omitempty"`
 }
 
 // TopologyEdgeDetailView 边详情视图

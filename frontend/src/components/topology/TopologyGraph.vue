@@ -191,6 +191,8 @@ export interface GraphEdge {
   targetIf: string;
   status: string;
   edgeType: string;
+  role?: string;                // 端口链路角色 (Uplink/Downlink/Interconnect/Stacking/OOB/Access)
+  discoveryMethods?: string[];  // 发现方式 (lldp/cdp/arp/mac)
 }
 
 const props = defineProps<{
@@ -246,6 +248,19 @@ function getStatusColors(): Record<string, string> {
     semi_confirmed: style.getPropertyValue('--color-topology-status-semi-confirmed').trim() || '#f59e0b',
     inferred: style.getPropertyValue('--color-topology-status-inferred').trim() || '#f59e0b',
     conflict: style.getPropertyValue('--color-topology-status-conflict').trim() || '#ef4444',
+  };
+}
+
+// 边角色配色（与节点角色区分，按 InferPortRole 的角色枚举）
+function getEdgeRoleColors(): Record<string, string> {
+  return {
+    Uplink: '#3b82f6',       // 上联 - 蓝
+    Downlink: '#22c55e',     // 下联 - 绿
+    Interconnect: '#a855f7', // 横向互联 - 紫
+    Stacking: '#f59e0b',     // 堆叠/集群 - 橙
+    OOB: '#64748b',          // 带外管理 - 灰蓝
+    Access: '#14b8a6',       // 终端接入 - 青
+    Unknown: '#94a3b8',      // 未知 - 浅灰
   };
 }
 
@@ -314,6 +329,7 @@ function initGraph() {
   const themeColors = getThemeColors();
   const statusColors = getStatusColors();
   const roleColors = getRoleColors();
+  const edgeRoleColors = getEdgeRoleColors();
 
   // 获取额外颜色变量
   const style = getComputedStyle(document.documentElement);
@@ -341,6 +357,8 @@ function initGraph() {
         edgeType: e.edgeType,
         sourceIf: e.sourceIf,
         targetIf: e.targetIf,
+        role: e.role,
+        discoveryMethods: (e.discoveryMethods || []).join(" / "),
       },
     })),
   ];
@@ -404,10 +422,15 @@ function initGraph() {
         selector: "edge",
         style: {
           width: 2,
+          // P0-9：优先按端口角色分色（Uplink/Downlink/Interconnect...），无角色时回退状态色
           "line-color": (ele: EdgeSingular) =>
-            statusColors[ele.data("status")] || edgeDefault,
+            edgeRoleColors[ele.data("role")] ||
+            statusColors[ele.data("status")] ||
+            edgeDefault,
           "target-arrow-color": (ele: EdgeSingular) =>
-            statusColors[ele.data("status")] || edgeDefault,
+            edgeRoleColors[ele.data("role")] ||
+            statusColors[ele.data("status")] ||
+            edgeDefault,
           "target-arrow-shape": "none",
           "curve-style": "straight",
           label: "",
