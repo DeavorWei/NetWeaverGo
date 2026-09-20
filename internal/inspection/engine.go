@@ -12,9 +12,9 @@ import (
 
 // EvaluateInput 评估引擎输入
 type EvaluateInput struct {
-	RunID      string
-	DeviceIP   string
-	Item       *models.InspectionItem
+	RunID       string
+	DeviceIP    string
+	Item        *models.InspectionItem
 	RawEcho     string
 	ParsedRows  []map[string]interface{}
 	ContextVars map[string]string // 上下文变量（前置采集 PreCollect 结果供跨项引用）

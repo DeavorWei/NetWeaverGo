@@ -341,9 +341,9 @@ func TestExecutePlan_UnifiedInitCommands_MultiVendorReplay(t *testing.T) {
 				Stderr: strings.NewReader(""),
 			}
 			e := &DeviceExecutor{
-				IP:           "192.168.58.200",
-				Client:       client,
-				conn:         connutil.NewSSHConnectionAdapter(client),
+				IP:            "192.168.58.200",
+				Client:        client,
+				conn:          connutil.NewSSHConnectionAdapter(client),
 				deviceProfile: profile,
 			}
 

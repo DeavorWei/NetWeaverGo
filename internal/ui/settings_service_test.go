@@ -53,4 +53,3 @@ func TestGetSSHAlgorithmOptions_StableAndNonEmpty(t *testing.T) {
 		t.Fatalf("expected stable result across calls")
 	}
 }
-

@@ -2,8 +2,6 @@ package parser
 
 import "testing"
 
-
-
 func TestHuaweiMapperToLLDP(t *testing.T) {
 	mapper := NewHuaweiMapper()
 	rows := []map[string]string{

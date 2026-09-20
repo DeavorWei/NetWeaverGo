@@ -7,10 +7,10 @@ type BizSnapshot struct {
 	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
 	RunID     string    `gorm:"index;size:64;not null" json:"runId"`
 	DeviceIP  string    `gorm:"index;size:64;not null" json:"deviceIp"`
-	Domain    string    `gorm:"size:32;not null" json:"domain"`   // S | NE-SR | CE
-	SceneID   string    `gorm:"size:64;not null" json:"sceneId"`  // routing | interface | l2vpn | etc.
-	Phase     string    `gorm:"size:32;not null" json:"phase"`    // before | after
-	DataJSON  string    `gorm:"type:text;not null" json:"data"`   // JSON 格式键值对
+	Domain    string    `gorm:"size:32;not null" json:"domain"`  // S | NE-SR | CE
+	SceneID   string    `gorm:"size:64;not null" json:"sceneId"` // routing | interface | l2vpn | etc.
+	Phase     string    `gorm:"size:32;not null" json:"phase"`   // before | after
+	DataJSON  string    `gorm:"type:text;not null" json:"data"`  // JSON 格式键值对
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"createdAt"`
 }
 
@@ -45,9 +45,9 @@ type BizCompareItem struct {
 	CompareTaskID uint      `gorm:"index;not null" json:"compareTaskId"`
 	DeviceIP      string    `gorm:"index;size:64;not null" json:"deviceIp"`
 	Domain        string    `gorm:"size:32;not null" json:"domain"`
-	ItemKey       string    `gorm:"size:128;not null" json:"itemKey"`       // 如 GigabitEthernet0/0/1.status
-	ItemCategory  string    `gorm:"size:64;not null" json:"itemCategory"`   // interface | route | arp | mac
-	DiffType      string    `gorm:"size:32;not null" json:"diffType"`       // added | deleted | modified | drift
+	ItemKey       string    `gorm:"size:128;not null" json:"itemKey"`     // 如 GigabitEthernet0/0/1.status
+	ItemCategory  string    `gorm:"size:64;not null" json:"itemCategory"` // interface | route | arp | mac
+	DiffType      string    `gorm:"size:32;not null" json:"diffType"`     // added | deleted | modified | drift
 	BeforeValue   string    `gorm:"type:text" json:"beforeValue"`
 	AfterValue    string    `gorm:"type:text" json:"afterValue"`
 	ImpactLevel   string    `gorm:"size:32;default:'minor'" json:"impactLevel"` // critical | major | minor | info

@@ -1088,8 +1088,6 @@ func (e *DeviceCollectExecutor) createTaskRawOutput(taskID, deviceIP string, res
 	return e.db.Create(output).Error
 }
 
-
-
 func (e *ParseExecutor) parseAndSaveRunDevice(ctx RuntimeContext, deviceIP, vendor string) error {
 	handler := NewErrorHandler(ctx.RunID())
 	runID := ctx.RunID()
@@ -1282,11 +1280,11 @@ func mergeIdentityResult(identity *parser.DeviceIdentity, incoming *parser.Devic
 		return
 	}
 	mergeIdentityFields(identity, map[string]string{
-		"vendor":        incoming.Vendor,
-		"model":         incoming.Model,
-		"hostname":      incoming.Hostname,
-		"mgmt_ip":       incoming.MgmtIP,
-		"chassis_id":    incoming.ChassisID,
+		"vendor":     incoming.Vendor,
+		"model":      incoming.Model,
+		"hostname":   incoming.Hostname,
+		"mgmt_ip":    incoming.MgmtIP,
+		"chassis_id": incoming.ChassisID,
 	}, fallbackVendor)
 }
 

@@ -32,10 +32,10 @@ func (m *HuaweiMapper) ToDeviceInfo(rows []map[string]string) (*DeviceIdentity, 
 	}
 
 	identity := &DeviceIdentity{
-		Vendor:       "huawei",
-		Model:        data["model"],
-		Version:      data["version"],
-		Hostname:     data["hostname"],
+		Vendor:   "huawei",
+		Model:    data["model"],
+		Version:  data["version"],
+		Hostname: data["hostname"],
 	}
 
 	return identity, nil
@@ -52,9 +52,9 @@ func (m *HuaweiMapper) ToInterfaces(rows []map[string]string) ([]InterfaceFact, 
 		}
 
 		iface := InterfaceFact{
-			Name:        ifName,
-			Status:      normalizeStatus(row["phy"]),
-			Protocol:    normalizeProtocol(row["protocol"]),
+			Name:     ifName,
+			Status:   normalizeStatus(row["phy"]),
+			Protocol: normalizeProtocol(row["protocol"]),
 		}
 
 		interfaces = append(interfaces, iface)
@@ -287,8 +287,8 @@ func (m *CiscoMapper) ToDeviceInfo(rows []map[string]string) (*DeviceIdentity, e
 	}
 
 	return &DeviceIdentity{
-		Vendor:       "cisco",
-		Model:        data["model"],
+		Vendor: "cisco",
+		Model:  data["model"],
 	}, nil
 }
 

@@ -8,23 +8,31 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 
 CREATE TABLE IF NOT EXISTS device_assets (
-    id TEXT PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     ip TEXT NOT NULL,
     port INTEGER DEFAULT 22,
-    protocol TEXT DEFAULT 'ssh',
-    auth_type TEXT DEFAULT 'password',
     username TEXT,
     password TEXT,
-    enable_password TEXT,
-    vendor TEXT,
-    model TEXT,
-    os_version TEXT,
+    protocol TEXT DEFAULT 'ssh',
     group_name TEXT,
-    device_type TEXT,
-    status TEXT DEFAULT 'unknown',
+    display_name TEXT,
+    vendor TEXT,
+    role TEXT,
+    site TEXT,
     description TEXT,
-    login_status TEXT DEFAULT 'untested',
-    last_login_at DATETIME,
+    tags TEXT,
+    model TEXT,
+    model_series TEXT,
+    version TEXT,
+    patch_version TEXT,
+    esn TEXT,
+    form_factor TEXT DEFAULT 'hardware',
+    connect_mode TEXT DEFAULT 'direct',
+    jump_host_id INTEGER,
+    last_seen DATETIME,
     created_at DATETIME,
     updated_at DATETIME
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_assets_ip ON device_assets(ip);
+CREATE INDEX IF NOT EXISTS idx_device_assets_jump_host_id ON device_assets(jump_host_id);
+

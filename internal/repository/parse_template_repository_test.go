@@ -23,24 +23,24 @@ func TestParseTemplateRepository_ListEnabled_WithAppliesTo(t *testing.T) {
 
 	templates := []models.UserParseTemplate{
 		{
-			Vendor:      "huawei",
-			CommandKey:  "display_interface",
-			Engine:      "tree",
-			ParseRules:  rulesJSON,
-			AppliesTo:   appliesJSON,
-			Enabled:     true,
+			Vendor:     "huawei",
+			CommandKey: "display_interface",
+			Engine:     "tree",
+			ParseRules: rulesJSON,
+			AppliesTo:  appliesJSON,
+			Enabled:    true,
 		},
 		{
-			Vendor:      "huawei",
-			CommandKey:  "display_device",
-			Engine:      "tree",
-			Enabled:     false, // 未启用
+			Vendor:     "huawei",
+			CommandKey: "display_device",
+			Engine:     "tree",
+			Enabled:    false, // 未启用
 		},
 		{
-			Vendor:      "cisco",
-			CommandKey:  "show_version",
-			Engine:      "regex",
-			Enabled:     true,
+			Vendor:     "cisco",
+			CommandKey: "show_version",
+			Engine:     "regex",
+			Enabled:    true,
 		},
 	}
 

@@ -83,10 +83,10 @@ func TestExpandSyntaxSugar_NonRange(t *testing.T) {
 
 func TestDetectArithmeticSequence_Valid(t *testing.T) {
 	tests := []struct {
-		name       string
-		values     []string
-		wantArith  bool
-		wantDiff   int
+		name      string
+		values    []string
+		wantArith bool
+		wantDiff  int
 	}{
 		{"simple 2,4,6", []string{"2", "4", "6"}, true, 2},
 		{"simple 1,2,3", []string{"1", "2", "3"}, true, 1},

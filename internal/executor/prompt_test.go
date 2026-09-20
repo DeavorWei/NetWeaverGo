@@ -119,4 +119,3 @@ func TestPrompt_HuaweiTestdataConfirm(t *testing.T) {
 		t.Errorf("期望识别到提示符文本")
 	}
 }
-

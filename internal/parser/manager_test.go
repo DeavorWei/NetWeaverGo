@@ -42,11 +42,11 @@ func TestParserManager_UserTemplateOverride(t *testing.T) {
 	mockSource := &mockUserTemplateSource{
 		templates: []StoredTemplate{
 			{
-				Vendor:      "huawei",
-				CommandKey:  "custom_test_cmd",
-				Engine:      "tree",
-				ParseRules:  customRulesJSON,
-				Enabled:     true,
+				Vendor:     "huawei",
+				CommandKey: "custom_test_cmd",
+				Engine:     "tree",
+				ParseRules: customRulesJSON,
+				Enabled:    true,
 			},
 		},
 	}

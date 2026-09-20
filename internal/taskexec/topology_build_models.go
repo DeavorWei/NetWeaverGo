@@ -60,7 +60,7 @@ type TopologyEdgeCandidate struct {
 	// 最终边 ID（如果被保留，指向最终的 TaskTopologyEdge）
 	FinalEdgeID string `json:"finalEdgeId"`
 	// B端设备的MAC地址列表（用于IP标识时保留MAC信息）
-	BDeviceMACs []string `gorm:"serializer:json" json:"bDeviceMacs"`
+	BDeviceMACs []string  `gorm:"serializer:json" json:"bDeviceMacs"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 
@@ -196,12 +196,12 @@ type DecisionCandidate struct {
 
 const (
 	// LLDP 评分权重
-	wLLDPBaseSingleSide      = 75.0 // 单边基础分
-	wLLDPBidirectionalBonus  = 25.0 // 双向确认额外加分（双向总分 = 单边 + 此值）
-	wLLDPChassisMatch        = 5.0  // chassis 匹配加分
-	wLLDPNameMatch           = 3.0  // 名称匹配加分
-	wLLDPIPMatch             = 5.0  // IP 匹配加分
-	wLLDPRemoteIfPresent     = 2.0  // 远端接口存在加分
+	wLLDPBaseSingleSide     = 75.0 // 单边基础分
+	wLLDPBidirectionalBonus = 25.0 // 双向确认额外加分（双向总分 = 单边 + 此值）
+	wLLDPChassisMatch       = 5.0  // chassis 匹配加分
+	wLLDPNameMatch          = 3.0  // 名称匹配加分
+	wLLDPIPMatch            = 5.0  // IP 匹配加分
+	wLLDPRemoteIfPresent    = 2.0  // 远端接口存在加分
 
 	// FDB/ARP 评分权重
 	wFDBBaseScore      = 20.0 // 基础分

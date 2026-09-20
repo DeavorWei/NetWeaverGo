@@ -87,7 +87,7 @@ func (s *FTPServer) Start(config *models.FileServerConfig) error {
 
 	// 启动服务器（使用 safeGo 包装）
 	logger.Info("FileServer:FTP", "-", "正在启动 FTP 服务器，监听端口 %d...", config.Port)
-	
+
 	s.running = true
 
 	safeGo("FTP-ListenAndServe", func() {
@@ -386,7 +386,7 @@ func (d *ftpDriver) GetTLSConfig() (*tls.Config, error) {
 // Create 创建文件
 func (c *ftpClientDriver) Create(name string) (afero.File, error) {
 	logger.Verbose("FileServer:FTP", c.clientIP, "Create: %s", name)
-	
+
 	// 检查上传权限
 	if !c.driver.config.AllowPut {
 		logger.Warn("FileServer:FTP", c.clientIP, "拒绝创建文件 %s: 权限不足", name)
@@ -400,9 +400,9 @@ func (c *ftpClientDriver) Create(name string) (afero.File, error) {
 		})
 		return nil, fmt.Errorf("权限不足: 不允许上传文件")
 	}
-	
+
 	logger.Info("FileServer:FTP", c.clientIP, "上传文件: %s", name)
-	
+
 	c.driver.manager.emitLog(LogEvent{
 		Level:    LogLevelInfo,
 		Protocol: ProtocolFTP,
@@ -411,16 +411,16 @@ func (c *ftpClientDriver) Create(name string) (afero.File, error) {
 		Message:  "开始上传",
 		File:     name,
 	})
-	
+
 	return c.driver.fs.Create(name)
 }
 
 // Mkdir 创建目录
 func (c *ftpClientDriver) Mkdir(name string, perm os.FileMode) error {
 	logger.Verbose("FileServer:FTP", c.clientIP, "Mkdir: %s, perm: %v", name, perm)
-	
+
 	logger.Info("FileServer:FTP", c.clientIP, "创建目录: %s", name)
-	
+
 	c.driver.manager.emitLog(LogEvent{
 		Level:    LogLevelInfo,
 		Protocol: ProtocolFTP,
@@ -429,16 +429,16 @@ func (c *ftpClientDriver) Mkdir(name string, perm os.FileMode) error {
 		Message:  "创建目录",
 		File:     name,
 	})
-	
+
 	return c.driver.fs.Mkdir(name, perm)
 }
 
 // MkdirAll 递归创建目录
 func (c *ftpClientDriver) MkdirAll(path string, perm os.FileMode) error {
 	logger.Verbose("FileServer:FTP", c.clientIP, "MkdirAll: %s, perm: %v", path, perm)
-	
+
 	logger.Info("FileServer:FTP", c.clientIP, "递归创建目录: %s", path)
-	
+
 	c.driver.manager.emitLog(LogEvent{
 		Level:    LogLevelInfo,
 		Protocol: ProtocolFTP,
@@ -447,14 +447,14 @@ func (c *ftpClientDriver) MkdirAll(path string, perm os.FileMode) error {
 		Message:  "递归创建目录",
 		File:     path,
 	})
-	
+
 	return c.driver.fs.MkdirAll(path, perm)
 }
 
 // Open 打开文件
 func (c *ftpClientDriver) Open(name string) (afero.File, error) {
 	logger.Verbose("FileServer:FTP", c.clientIP, "Open: %s", name)
-	
+
 	// 检查下载权限
 	if !c.driver.config.AllowGet {
 		logger.Warn("FileServer:FTP", c.clientIP, "拒绝打开文件 %s: 权限不足", name)
@@ -468,9 +468,9 @@ func (c *ftpClientDriver) Open(name string) (afero.File, error) {
 		})
 		return nil, fmt.Errorf("权限不足: 不允许下载文件")
 	}
-	
+
 	logger.Info("FileServer:FTP", c.clientIP, "下载文件: %s", name)
-	
+
 	c.driver.manager.emitLog(LogEvent{
 		Level:    LogLevelInfo,
 		Protocol: ProtocolFTP,
@@ -479,14 +479,14 @@ func (c *ftpClientDriver) Open(name string) (afero.File, error) {
 		Message:  "开始下载",
 		File:     name,
 	})
-	
+
 	return c.driver.fs.Open(name)
 }
 
 // OpenFile 打开文件（带标志）
 func (c *ftpClientDriver) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
 	logger.Verbose("FileServer:FTP", c.clientIP, "OpenFile: %s, flag: %d, perm: %v", name, flag, perm)
-	
+
 	// 根据标志检查权限
 	if flag&os.O_WRONLY != 0 || flag&os.O_RDWR != 0 {
 		if !c.driver.config.AllowPut {
@@ -501,9 +501,9 @@ func (c *ftpClientDriver) OpenFile(name string, flag int, perm os.FileMode) (afe
 			})
 			return nil, fmt.Errorf("权限不足: 不允许上传文件")
 		}
-		
+
 		logger.Info("FileServer:FTP", c.clientIP, "写入文件: %s", name)
-		
+
 		c.driver.manager.emitLog(LogEvent{
 			Level:    LogLevelInfo,
 			Protocol: ProtocolFTP,
@@ -519,7 +519,7 @@ func (c *ftpClientDriver) OpenFile(name string, flag int, perm os.FileMode) (afe
 // Remove 删除文件
 func (c *ftpClientDriver) Remove(name string) error {
 	logger.Verbose("FileServer:FTP", c.clientIP, "Remove: %s", name)
-	
+
 	// 检查删除权限
 	if !c.driver.config.AllowDel {
 		logger.Warn("FileServer:FTP", c.clientIP, "拒绝删除文件 %s: 权限不足", name)
@@ -535,7 +535,7 @@ func (c *ftpClientDriver) Remove(name string) error {
 	}
 
 	logger.Info("FileServer:FTP", c.clientIP, "删除文件: %s", name)
-	
+
 	c.driver.manager.emitLog(LogEvent{
 		Level:    LogLevelSuccess,
 		Protocol: ProtocolFTP,
@@ -551,7 +551,7 @@ func (c *ftpClientDriver) Remove(name string) error {
 // RemoveAll 递归删除
 func (c *ftpClientDriver) RemoveAll(path string) error {
 	logger.Verbose("FileServer:FTP", c.clientIP, "RemoveAll: %s", path)
-	
+
 	// 检查删除权限
 	if !c.driver.config.AllowDel {
 		logger.Warn("FileServer:FTP", c.clientIP, "拒绝删除目录 %s: 权限不足", path)
@@ -567,7 +567,7 @@ func (c *ftpClientDriver) RemoveAll(path string) error {
 	}
 
 	logger.Info("FileServer:FTP", c.clientIP, "递归删除: %s", path)
-	
+
 	c.driver.manager.emitLog(LogEvent{
 		Level:    LogLevelSuccess,
 		Protocol: ProtocolFTP,
@@ -576,14 +576,14 @@ func (c *ftpClientDriver) RemoveAll(path string) error {
 		Message:  "递归删除",
 		File:     path,
 	})
-	
+
 	return c.driver.fs.RemoveAll(path)
 }
 
 // Rename 重命名
 func (c *ftpClientDriver) Rename(oldname, newname string) error {
 	logger.Verbose("FileServer:FTP", c.clientIP, "Rename: %s -> %s", oldname, newname)
-	
+
 	// 检查重命名权限
 	if !c.driver.config.AllowRename {
 		logger.Warn("FileServer:FTP", c.clientIP, "拒绝重命名文件 %s: 权限不足", oldname)
@@ -599,7 +599,7 @@ func (c *ftpClientDriver) Rename(oldname, newname string) error {
 	}
 
 	logger.Info("FileServer:FTP", c.clientIP, "重命名: %s -> %s", oldname, newname)
-	
+
 	c.driver.manager.emitLog(LogEvent{
 		Level:    LogLevelSuccess,
 		Protocol: ProtocolFTP,

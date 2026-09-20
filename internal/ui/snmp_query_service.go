@@ -80,11 +80,11 @@ type SNMPCredentialInputVM struct {
 
 // SNMPQueryRequest 单次查询请求
 type SNMPQueryRequest struct {
-	Address         string                  `json:"address"`
-	Operation       string                  `json:"operation"`       // device_info / get / walk
-	OID             string                  `json:"oid"`             // get: 多个 OID 以逗号或换行分隔；walk: 根 OID
-	CredentialID    *uint                   `json:"credentialId"`    // 已保存凭据 ID，为空则使用临时凭据
-	TempCredential  *SNMPCredentialInputVM  `json:"tempCredential"`  // 临时凭据
+	Address        string                 `json:"address"`
+	Operation      string                 `json:"operation"`      // device_info / get / walk
+	OID            string                 `json:"oid"`            // get: 多个 OID 以逗号或换行分隔；walk: 根 OID
+	CredentialID   *uint                  `json:"credentialId"`   // 已保存凭据 ID，为空则使用临时凭据
+	TempCredential *SNMPCredentialInputVM `json:"tempCredential"` // 临时凭据
 }
 
 // SNMPQueryResponse 单次查询响应
@@ -96,9 +96,9 @@ type SNMPQueryResponse struct {
 
 // SNMPBatchQueryRequest 批量查询请求
 type SNMPBatchQueryRequest struct {
-	Addresses       []string                `json:"addresses"`
-	CredentialID    *uint                   `json:"credentialId"`
-	TempCredential  *SNMPCredentialInputVM  `json:"tempCredential"`
+	Addresses      []string               `json:"addresses"`
+	CredentialID   *uint                  `json:"credentialId"`
+	TempCredential *SNMPCredentialInputVM `json:"tempCredential"`
 }
 
 // SNMPBatchQueryResponse 批量查询响应

@@ -200,5 +200,3 @@ func TestSessionAdapter_RawBufferLimitEnforcement(t *testing.T) {
 		t.Fatalf("期望 Truncated 标志被置为 true")
 	}
 }
-
-

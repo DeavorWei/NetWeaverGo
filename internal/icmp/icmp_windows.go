@@ -37,33 +37,33 @@ func initWindowsBackend() icmpBackend {
 
 // Windows ICMP API constants
 const (
-	IP_SUCCESS             = 0
-	IP_BUF_TOO_SMALL       = 11001
-	IP_DEST_NET_UNREACHABLE = 11002
+	IP_SUCCESS               = 0
+	IP_BUF_TOO_SMALL         = 11001
+	IP_DEST_NET_UNREACHABLE  = 11002
 	IP_DEST_HOST_UNREACHABLE = 11003
 	IP_DEST_PROT_UNREACHABLE = 11004
 	IP_DEST_PORT_UNREACHABLE = 11005
-	IP_NO_RESOURCES        = 11006
-	IP_BAD_OPTION          = 11007
-	IP_HW_ERROR            = 11008
-	IP_PACKET_TOO_BIG      = 11009
-	IP_REQ_TIMED_OUT       = 11010
-	IP_BAD_REQ             = 11011
-	IP_BAD_ROUTE           = 11012
-	IP_TTL_EXPIRED_TRANSIT = 11013
-	IP_TTL_EXPIRED_REASSEM = 11014
-	IP_PARAM_PROBLEM       = 11015
-	IP_SOURCE_QUENCH       = 11016
-	IP_OPTION_TOO_BIG      = 11017
-	IP_BAD_DESTINATION     = 11018
-	IP_GENERAL_FAILURE     = 11050
+	IP_NO_RESOURCES          = 11006
+	IP_BAD_OPTION            = 11007
+	IP_HW_ERROR              = 11008
+	IP_PACKET_TOO_BIG        = 11009
+	IP_REQ_TIMED_OUT         = 11010
+	IP_BAD_REQ               = 11011
+	IP_BAD_ROUTE             = 11012
+	IP_TTL_EXPIRED_TRANSIT   = 11013
+	IP_TTL_EXPIRED_REASSEM   = 11014
+	IP_PARAM_PROBLEM         = 11015
+	IP_SOURCE_QUENCH         = 11016
+	IP_OPTION_TOO_BIG        = 11017
+	IP_BAD_DESTINATION       = 11018
+	IP_GENERAL_FAILURE       = 11050
 
 	// Buffer size constants for IcmpSendEcho
 	// Windows IcmpSendEcho requires more buffer space than the theoretical calculation
 	// Reference: https://docs.microsoft.com/en-us/windows/win32/api/icmpapi/nf-icmpapi-icmpsendecho
-	minBufferSize = 256  // Minimum recommended buffer size
-	extraPadding  = 128  // Extra padding for IP headers and internal processing
-	alignment     = 8    // 8-byte alignment for Windows API compatibility
+	minBufferSize = 256 // Minimum recommended buffer size
+	extraPadding  = 128 // Extra padding for IP headers and internal processing
+	alignment     = 8   // 8-byte alignment for Windows API compatibility
 )
 
 // IP_OPTION_INFORMATION32 - 32-bit version for 64-bit Windows compatibility
@@ -90,9 +90,9 @@ type ICMP_ECHO_REPLY struct {
 
 // Windows DLL and function pointers
 var (
-	iphlpapi          = syscall.NewLazyDLL("iphlpapi.dll")
-	procIcmpCreateFile = iphlpapi.NewProc("IcmpCreateFile")
-	procIcmpSendEcho   = iphlpapi.NewProc("IcmpSendEcho")
+	iphlpapi            = syscall.NewLazyDLL("iphlpapi.dll")
+	procIcmpCreateFile  = iphlpapi.NewProc("IcmpCreateFile")
+	procIcmpSendEcho    = iphlpapi.NewProc("IcmpSendEcho")
 	procIcmpCloseHandle = iphlpapi.NewProc("IcmpCloseHandle")
 )
 

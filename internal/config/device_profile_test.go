@@ -424,5 +424,3 @@ func TestEmbeddedProfiles_Loaded(t *testing.T) {
 		t.Errorf("S 系列画像应命中 exact 或 series，实际 matchPath: %s", sMatch)
 	}
 }
-
-

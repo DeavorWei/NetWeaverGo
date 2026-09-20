@@ -38,10 +38,10 @@ type ExecutorOptions struct {
 	Algorithms        *models.SSHAlgorithmSettings
 	Vendor            string
 	DeviceProfile     *config.DeviceProfile
-	Protocol          string                    // 连接协议: "ssh"（默认）或 "telnet"
+	Protocol          string                     // 连接协议: "ssh"（默认）或 "telnet"
 	ConnectionFactory connutil.ConnectionFactory // 可选的连接工厂，nil 则使用默认工厂
-	RunID             string                    // 所属运行 ID（可观测性按运行维度打点用）
-	PreCommands       []string                  // 前置执行命令序列（如跳板机跳转或会话前置命令）
+	RunID             string                     // 所属运行 ID（可观测性按运行维度打点用）
+	PreCommands       []string                   // 前置执行命令序列（如跳板机跳转或会话前置命令）
 }
 
 // DeviceExecutor 封装特定设备的连接数据流及命令步进下发生命周期

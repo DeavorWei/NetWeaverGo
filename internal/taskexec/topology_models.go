@@ -8,35 +8,35 @@ import (
 
 // TaskRunDevice 运行期设备信息
 type TaskRunDevice struct {
-	ID             uint          `gorm:"primaryKey;autoIncrement" json:"id"`
-	TaskRunID      string        `gorm:"index;not null" json:"taskRunId"`
-	NodeUUID       string        `gorm:"index" json:"nodeUuid"`
-	DeviceID       uint          `json:"deviceId"`
-	DeviceIP       string        `gorm:"index;not null" json:"deviceIp"`
-	AllIPs         string        `gorm:"type:text" json:"allIps"`
-	Status         string        `json:"status"`
-	ErrorMessage   string        `json:"errorMessage"`
-	Vendor         string        `json:"vendor"`
-	VendorSource   string        `json:"vendorSource"`
-	DisplayName    string        `json:"displayName"`
-	Role           string        `json:"role"`
-	Site           string        `json:"site"`
-	Hostname       string        `json:"hostname"`
+	ID               uint            `gorm:"primaryKey;autoIncrement" json:"id"`
+	TaskRunID        string          `gorm:"index;not null" json:"taskRunId"`
+	NodeUUID         string          `gorm:"index" json:"nodeUuid"`
+	DeviceID         uint            `json:"deviceId"`
+	DeviceIP         string          `gorm:"index;not null" json:"deviceIp"`
+	AllIPs           string          `gorm:"type:text" json:"allIps"`
+	Status           string          `json:"status"`
+	ErrorMessage     string          `json:"errorMessage"`
+	Vendor           string          `json:"vendor"`
+	VendorSource     string          `json:"vendorSource"`
+	DisplayName      string          `json:"displayName"`
+	Role             string          `json:"role"`
+	Site             string          `json:"site"`
+	Hostname         string          `json:"hostname"`
 	Model            string          `json:"model"`
-	ModelSeries      string          `json:"modelSeries"`      // 归一化系列（如 S5700、CE6800）
+	ModelSeries      string          `json:"modelSeries"` // 归一化系列（如 S5700、CE6800）
 	Version          string          `json:"version"`
-	PatchVersion     string          `json:"patchVersion"`     // 补丁版本
-	ProfileMatchPath string          `json:"profileMatchPath"` // 画像匹配路径（如 exact:... / series:... / vendor:... / global:default）
-	IdentityEvidence string          `json:"identityEvidence"` // 形态识别证据（如 命中 _REG2HANDLER: ...）
+	PatchVersion     string          `json:"patchVersion"`          // 补丁版本
+	ProfileMatchPath string          `json:"profileMatchPath"`      // 画像匹配路径（如 exact:... / series:... / vendor:... / global:default）
+	IdentityEvidence string          `json:"identityEvidence"`      // 形态识别证据（如 命中 _REG2HANDLER: ...）
 	ESN              string          `json:"esn" gorm:"column:esn"` // 设备序列号 (ESN)
 	MgmtIP           string          `json:"mgmtIp"`
-	NormalizedName string          `json:"normalizedName"`
-	ChassisID      string          `json:"chassisId"`
-	NodeType       models.NodeType `json:"nodeType"`
-	StartedAt      *time.Time    `json:"startedAt"`
-	FinishedAt     *time.Time    `json:"finishedAt"`
-	CreatedAt      time.Time     `json:"createdAt"`
-	UpdatedAt      time.Time     `json:"updatedAt"`
+	NormalizedName   string          `json:"normalizedName"`
+	ChassisID        string          `json:"chassisId"`
+	NodeType         models.NodeType `json:"nodeType"`
+	StartedAt        *time.Time      `json:"startedAt"`
+	FinishedAt       *time.Time      `json:"finishedAt"`
+	CreatedAt        time.Time       `json:"createdAt"`
+	UpdatedAt        time.Time       `json:"updatedAt"`
 }
 
 func (TaskRunDevice) TableName() string {
@@ -65,8 +65,6 @@ type TaskRawOutput struct {
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
 }
-
-
 
 func (TaskRawOutput) TableName() string {
 	return "task_raw_outputs"
@@ -199,14 +197,14 @@ type TaskTopologyEdge struct {
 	DiscoveryMethods []string       `gorm:"serializer:json" json:"discoveryMethods"`
 	Evidence         []EdgeEvidence `gorm:"serializer:json" json:"evidence"`
 	// Phase A 扩展字段：置信度拆解与决策解释
-	ConfidenceBreakdown string    `gorm:"type:text" json:"confidenceBreakdown"` // JSON 序列化的评分明细
-	DecisionReason      string    `json:"decisionReason"`                       // 决策原因
-	EvidenceRefs        []string  `gorm:"serializer:json" json:"evidenceRefs"`  // 证据引用 ID 列表
-	CandidateID         string    `json:"candidateId"`                          // 关联的候选 ID
-	TraceID             string    `json:"traceId"`                              // 关联的决策轨迹 ID
+	ConfidenceBreakdown string   `gorm:"type:text" json:"confidenceBreakdown"` // JSON 序列化的评分明细
+	DecisionReason      string   `json:"decisionReason"`                       // 决策原因
+	EvidenceRefs        []string `gorm:"serializer:json" json:"evidenceRefs"`  // 证据引用 ID 列表
+	CandidateID         string   `json:"candidateId"`                          // 关联的候选 ID
+	TraceID             string   `json:"traceId"`                              // 关联的决策轨迹 ID
 	// 推断节点MAC地址字段（用于IP标识时保留MAC信息）
-	BDeviceMAC  string `json:"bDeviceMac"`  // B端设备的主MAC地址（推断节点）
-	BDeviceMACs string `gorm:"type:text" json:"bDeviceMacs"` // B端设备的多MAC（JSON数组）
+	BDeviceMAC  string    `json:"bDeviceMac"`                   // B端设备的主MAC地址（推断节点）
+	BDeviceMACs string    `gorm:"type:text" json:"bDeviceMacs"` // B端设备的多MAC（JSON数组）
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }

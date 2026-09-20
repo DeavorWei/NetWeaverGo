@@ -11,6 +11,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/bizcompare"
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/models"
+	"github.com/NetWeaverGo/core/internal/report"
 )
 
 // BizCompareService 业务比对前端服务
@@ -152,5 +153,15 @@ func (s *BizCompareService) ExportDiffCSV(taskID string) (string, error) {
 	}
 
 	writer.Flush()
-	return buf.String(), nil
+	if err := writer.Error(); err != nil {
+		return "", err
+	}
+
+	csvContent := buf.String()
+	// 安全合规校验：若存在 CRITICAL 级别未脱敏敏感数据则阻断导出
+	if err := report.ValidateExportContent(csvContent); err != nil {
+		return "", err
+	}
+
+	return csvContent, nil
 }

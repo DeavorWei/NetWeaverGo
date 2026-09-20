@@ -895,7 +895,6 @@ func TestGetTopologyGraphReturnsStandaloneDeviceNodesWhenNoEdges(t *testing.T) {
 	assert.Equal(t, "S6700", graph.Nodes[0].Model)
 }
 
-
 // mockPlanCompiler 模拟计划编译器
 type mockPlanCompiler struct {
 	kind string

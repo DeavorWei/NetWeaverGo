@@ -12,16 +12,16 @@ import (
 )
 
 var (
-	shell32              = syscall.NewLazyDLL("shell32.dll")
-	procShellExecuteW    = shell32.NewProc("ShellExecuteW")
-	advapi32             = syscall.NewLazyDLL("advapi32.dll")
+	shell32                      = syscall.NewLazyDLL("shell32.dll")
+	procShellExecuteW            = shell32.NewProc("ShellExecuteW")
+	advapi32                     = syscall.NewLazyDLL("advapi32.dll")
 	procAllocateAndInitializeSid = advapi32.NewProc("AllocateAndInitializeSid")
-	procFreeSid          = advapi32.NewProc("FreeSid")
-	procCheckTokenMembership = advapi32.NewProc("CheckTokenMembership")
+	procFreeSid                  = advapi32.NewProc("FreeSid")
+	procCheckTokenMembership     = advapi32.NewProc("CheckTokenMembership")
 )
 
 const (
-	SECURITY_NT_AUTHORITY = 5
+	SECURITY_NT_AUTHORITY       = 5
 	SECURITY_BUILTIN_DOMAIN_RID = 0x00000020
 	DOMAIN_ALIAS_RID_ADMINS     = 0x00000220
 )
@@ -82,12 +82,12 @@ func RequestElevation() error {
 	logger.Info("ICMP", "-", "正在请求 UAC 提权重新启动程序...")
 
 	ret, _, lastErr := procShellExecuteW.Call(
-		0,                              // hwnd
-		uintptr(unsafe.Pointer(verb)),  // "runas"
-		uintptr(unsafe.Pointer(file)),  // 可执行文件路径
-		0,                              // 参数
-		0,                              // 工作目录
-		1,                              // SW_SHOWNORMAL
+		0,                             // hwnd
+		uintptr(unsafe.Pointer(verb)), // "runas"
+		uintptr(unsafe.Pointer(file)), // 可执行文件路径
+		0,                             // 参数
+		0,                             // 工作目录
+		1,                             // SW_SHOWNORMAL
 	)
 
 	// ShellExecuteW 返回值 > 32 表示成功

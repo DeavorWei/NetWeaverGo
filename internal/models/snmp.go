@@ -9,14 +9,14 @@ import "time"
 type SNMPCredential struct {
 	ID              uint      `json:"id" gorm:"primaryKey;autoIncrement"`
 	Name            string    `json:"name" gorm:"uniqueIndex;not null"`
-	Version         string    `json:"version"`         // v1/v2c/v3
-	Community       string    `json:"community"`       // v1/v2c community string（加密存储）
-	SecurityLevel   string    `json:"securityLevel"`   // noAuthNoPriv/authNoPriv/authPriv
+	Version         string    `json:"version"`       // v1/v2c/v3
+	Community       string    `json:"community"`     // v1/v2c community string（加密存储）
+	SecurityLevel   string    `json:"securityLevel"` // noAuthNoPriv/authNoPriv/authPriv
 	Username        string    `json:"username"`
-	AuthProtocol    string    `json:"authProtocol"`    // MD5/SHA/SHA224/SHA256/SHA384/SHA512
-	AuthPassword    string    `json:"authPassword"`    // 加密存储
-	PrivProtocol    string    `json:"privProtocol"`    // DES/AES/AES192/AES256/AES192C/AES256C
-	PrivPassword    string    `json:"privPassword"`    // 加密存储
+	AuthProtocol    string    `json:"authProtocol"` // MD5/SHA/SHA224/SHA256/SHA384/SHA512
+	AuthPassword    string    `json:"authPassword"` // 加密存储
+	PrivProtocol    string    `json:"privProtocol"` // DES/AES/AES192/AES256/AES192C/AES256C
+	PrivPassword    string    `json:"privPassword"` // 加密存储
 	ContextName     string    `json:"contextName"`
 	ContextEngineID string    `json:"contextEngineId"` // v3 上下文引擎 ID
 	CreatedAt       time.Time `json:"createdAt"`

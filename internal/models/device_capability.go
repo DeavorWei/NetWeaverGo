@@ -7,8 +7,8 @@ import (
 // DeviceCapability 设备能力准入记录
 type DeviceCapability struct {
 	ID            uint   `gorm:"primaryKey;autoIncrement" json:"id"`
-	ModelPattern  string `gorm:"index;size:128;not null" json:"modelPattern"` // 款型正则/名称
-	Versions      string `gorm:"type:text" json:"versions"`                   // JSON 版本列表
+	ModelPattern  string `gorm:"index;size:128;not null" json:"modelPattern"`  // 款型正则/名称
+	Versions      string `gorm:"type:text" json:"versions"`                    // JSON 版本列表
 	CapabilityKey string `gorm:"index;size:128;not null" json:"capabilityKey"` // 能力标识 (如 "inspection", "bizcompare", "topology")
 	Enabled       bool   `gorm:"default:true" json:"enabled"`
 }

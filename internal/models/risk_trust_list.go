@@ -17,10 +17,10 @@ func (RiskTrustEntry) TableName() string {
 	return "risk_trust_entries"
 }
 
-// IsExpired 判断是否已过期
+// IsExpired 判断是否已过期（未设置过期时间亦视为过期，禁止永久放行）
 func (e *RiskTrustEntry) IsExpired() bool {
 	if e.ExpiresAt.IsZero() {
-		return false
+		return true
 	}
 	return time.Now().After(e.ExpiresAt)
 }

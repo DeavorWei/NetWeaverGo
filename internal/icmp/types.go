@@ -115,16 +115,16 @@ type PingHostResult struct {
 
 // BatchPingProgress represents the progress of a batch ping operation.
 type BatchPingProgress struct {
-	TotalIPs      int               `json:"totalIPs"`      // Total number of IPs to ping
-	CompletedIPs  int               `json:"completedIPs"`  // Number of IPs completed
-	OnlineCount   int               `json:"onlineCount"`   // Number of online hosts
-	OfflineCount  int               `json:"offlineCount"`  // Number of offline hosts
-	ErrorCount    int               `json:"errorCount"`    // Number of errors
-	Progress      float64           `json:"progress"`      // Progress percentage (0-100)
-	IsRunning     bool              `json:"isRunning"`     // Whether the operation is running
-	StartTime     time.Time         `json:"startTime"`     // Start time of the operation
-	ElapsedMs     int64             `json:"elapsedMs"`     // Elapsed time in milliseconds
-	Results       []PingHostResult  `json:"results"`       // Results for each IP
+	TotalIPs     int              `json:"totalIPs"`     // Total number of IPs to ping
+	CompletedIPs int              `json:"completedIPs"` // Number of IPs completed
+	OnlineCount  int              `json:"onlineCount"`  // Number of online hosts
+	OfflineCount int              `json:"offlineCount"` // Number of offline hosts
+	ErrorCount   int              `json:"errorCount"`   // Number of errors
+	Progress     float64          `json:"progress"`     // Progress percentage (0-100)
+	IsRunning    bool             `json:"isRunning"`    // Whether the operation is running
+	StartTime    time.Time        `json:"startTime"`    // Start time of the operation
+	ElapsedMs    int64            `json:"elapsedMs"`    // Elapsed time in milliseconds
+	Results      []PingHostResult `json:"results"`      // Results for each IP
 }
 
 // NewBatchPingProgress creates a new BatchPingProgress instance.
@@ -146,7 +146,7 @@ func NewBatchPingProgress(ips []string) *BatchPingProgress {
 	}
 	// 初始化每个 result 的业务初始值，避免 Go 零值导致前端误判
 	for i := range p.Results {
-		p.Results[i].IP = ips[i]     // 预填充 IP，确保前端实时事件能按 IP 匹配
+		p.Results[i].IP = ips[i] // 预填充 IP，确保前端实时事件能按 IP 匹配
 		p.Results[i].Status = "pending"
 		p.Results[i].MinRtt = -1
 	}
@@ -231,7 +231,7 @@ type PartialStats struct {
 	AvgRtt        float64 `json:"avgRtt"`                  // Average RTT (ms)
 	ErrorMsg      string  `json:"errorMsg,omitempty"`      // Last error message
 	LastSucceedAt int64   `json:"lastSucceedAt,omitempty"` // Last success timestamp (Unix ms)
-	LastFailedAt  int64   `json:"lastFailedAt,omitempty"` // Last failure timestamp (Unix ms)
+	LastFailedAt  int64   `json:"lastFailedAt,omitempty"`  // Last failure timestamp (Unix ms)
 	TTL           uint8   `json:"ttl"`                     // Last successful TTL
 }
 
@@ -281,39 +281,39 @@ func DefaultTracertConfig() TracertConfig {
 
 // GeoInfo IP地理位置信息
 type GeoInfo struct {
-	Status      string  `json:"status"`      // API查询状态: "success"/"fail"
-	Country     string  `json:"country"`     // 国家
-	CountryCode string  `json:"countryCode"` // 国家代码
-	Region      string  `json:"region"`      // 省份代码
-	RegionName  string  `json:"regionName"`  // 省份/地区
-	City        string  `json:"city"`        // 城市
-	ISP         string  `json:"isp"`         // 运营商
-	AS          string  `json:"as"`          // AS号
-	QueryIP     string  `json:"queryIp"`     // 查询的IP
-	Message     string  `json:"message"`     // API错误信息（status=fail时）
+	Status      string `json:"status"`      // API查询状态: "success"/"fail"
+	Country     string `json:"country"`     // 国家
+	CountryCode string `json:"countryCode"` // 国家代码
+	Region      string `json:"region"`      // 省份代码
+	RegionName  string `json:"regionName"`  // 省份/地区
+	City        string `json:"city"`        // 城市
+	ISP         string `json:"isp"`         // 运营商
+	AS          string `json:"as"`          // AS号
+	QueryIP     string `json:"queryIp"`     // 查询的IP
+	Message     string `json:"message"`     // API错误信息（status=fail时）
 }
 
 // TracertHopResult 单跳探测结果
 type TracertHopResult struct {
-	TTL       int       `json:"ttl"`       // 第几跳
-	IP        string    `json:"ip"`        // 响应 IP
-	Geo       *GeoInfo  `json:"geo"`       // IP地理位置信息
-	Status    string    `json:"status"`    // "success" / "timeout" / "error" / "pending" / "cancelled"
-	SentCount int       `json:"sentCount"` // 发送报文数量
-	RecvCount int       `json:"recvCount"` // 接收报文数量
-	LossRate  float64   `json:"lossRate"`  // 丢包率 (0-100)
-	MinRtt    float64   `json:"minRtt"`    // 最低延迟(ms), -1 表示无效
-	MaxRtt    float64   `json:"maxRtt"`    // 最高延迟(ms)
-	AvgRtt    float64   `json:"avgRtt"`    // 平均延迟(ms)
-	LastRtt   float64   `json:"lastRtt"`   // 上次探测延迟(ms)
-	Reached   bool      `json:"reached"`   // 是否到达目标
-	ErrorMsg  string    `json:"errorMsg"`  // 错误信息
+	TTL       int      `json:"ttl"`       // 第几跳
+	IP        string   `json:"ip"`        // 响应 IP
+	Geo       *GeoInfo `json:"geo"`       // IP地理位置信息
+	Status    string   `json:"status"`    // "success" / "timeout" / "error" / "pending" / "cancelled"
+	SentCount int      `json:"sentCount"` // 发送报文数量
+	RecvCount int      `json:"recvCount"` // 接收报文数量
+	LossRate  float64  `json:"lossRate"`  // 丢包率 (0-100)
+	MinRtt    float64  `json:"minRtt"`    // 最低延迟(ms), -1 表示无效
+	MaxRtt    float64  `json:"maxRtt"`    // 最高延迟(ms)
+	AvgRtt    float64  `json:"avgRtt"`    // 平均延迟(ms)
+	LastRtt   float64  `json:"lastRtt"`   // 上次探测延迟(ms)
+	Reached   bool     `json:"reached"`   // 是否到达目标
+	ErrorMsg  string   `json:"errorMsg"`  // 错误信息
 }
 
 // TracertProgress tracert 探测进度
 type TracertProgress struct {
 	Target         string             `json:"target"`         // 目标地址（用户输入）
-	ResolvedIP     string             `json:"resolvedIP"`      // 解析后的 IP
+	ResolvedIP     string             `json:"resolvedIP"`     // 解析后的 IP
 	SessionID      string             `json:"sessionId"`      // 会话ID（用于前端区分不同探测会话）
 	Round          int                `json:"round"`          // 当前第几轮探测
 	TotalHops      int                `json:"totalHops"`      // 总跳数（配置的最大跳数）
@@ -339,11 +339,11 @@ func NewTracertProgress(target string, maxHops int) *TracertProgress {
 		}
 	}
 	return &TracertProgress{
-		Target:     target,
-		TotalHops:  maxHops,
-		IsRunning:  true,
-		StartTime:  time.Now(),
-		Hops:       hops,
+		Target:    target,
+		TotalHops: maxHops,
+		IsRunning: true,
+		StartTime: time.Now(),
+		Hops:      hops,
 	}
 }
 

@@ -252,8 +252,8 @@ func (s *WebServer) requestAuth(w http.ResponseWriter) {
 func (s *WebServer) handleRequest(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	config := s.config
-		running := s.running
-		s.mu.RUnlock()
+	running := s.running
+	s.mu.RUnlock()
 
 	if !running {
 		http.Error(w, "Server not running", http.StatusServiceUnavailable)

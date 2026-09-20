@@ -119,7 +119,7 @@ func TestBuild_ValueLoopFill(t *testing.T) {
 	builder := NewConfigBuilder()
 	// [A] 有3个值, [B] 只有1个值, [B] 应循环补齐
 	result, err := builder.Build(&BuildRequest{
-		Template:  "[A] -> [B]",
+		Template: "[A] -> [B]",
 		Variables: []VarInput{
 			{Name: "[A]", ValueString: "a1, a2, a3"},
 			{Name: "[B]", ValueString: "b1"},
@@ -144,7 +144,7 @@ func TestBuild_VariableNameConflict_A_AB(t *testing.T) {
 	builder := NewConfigBuilder()
 	// 验证 [A] 不会误匹配 [AB] 中的 A
 	result, err := builder.Build(&BuildRequest{
-		Template:  "set [A] and [AB]",
+		Template: "set [A] and [AB]",
 		Variables: []VarInput{
 			{Name: "[A]", ValueString: "alpha"},
 			{Name: "[AB]", ValueString: "beta"},
@@ -170,7 +170,7 @@ func TestBuild_VariableNameConflict_ShortLong(t *testing.T) {
 	builder := NewConfigBuilder()
 	// 更极端的冲突测试: [X] 和 [XYZ]
 	result, err := builder.Build(&BuildRequest{
-		Template:  "val1=[X] val2=[XYZ]",
+		Template: "val1=[X] val2=[XYZ]",
 		Variables: []VarInput{
 			{Name: "[X]", ValueString: "short"},
 			{Name: "[XYZ]", ValueString: "longvalue"},

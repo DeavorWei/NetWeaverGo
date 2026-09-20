@@ -76,8 +76,8 @@ func TestSmartPingEngine_Analyze_DatacenterJitterAndLoss(t *testing.T) {
 		RecvCount: 18,
 		LossRate:  10.0, // 丢包
 		MinRtt:    1.0,
-		MaxRtt:    8.5,  // Jitter = 7.5 > 2.0
-		AvgRtt:    4.2,  // > 3.0
+		MaxRtt:    8.5, // Jitter = 7.5 > 2.0
+		AvgRtt:    4.2, // > 3.0
 	}
 
 	report := engine.Analyze(res, "datacenter")

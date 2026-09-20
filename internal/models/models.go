@@ -10,25 +10,25 @@ import "time"
 
 // DeviceAsset 设备资产表
 type DeviceAsset struct {
-	ID          uint      `json:"id" gorm:"primaryKey;autoIncrement"`
-	IP          string    `json:"ip" gorm:"uniqueIndex;not null"`
-	Port        int       `json:"port"`
-	Username    string    `json:"username"`
-	Password    string    `json:"password" gorm:"column:password"`
-	Protocol    string    `json:"protocol"`
-	Group       string    `json:"group" gorm:"column:group_name"` // 映射到数据库的 group_name 列
-	DisplayName string    `json:"displayName"`
-	Vendor      string    `json:"vendor"`
-	Role        string    `json:"role"`
-	Site        string    `json:"site"`
-	Description string    `json:"description"`
-	Tags         []string  `json:"tags" gorm:"serializer:json"` // 标签列表
-	Model        string    `json:"model"`                       // 设备具体型号
-	ModelSeries  string    `json:"modelSeries"`                 // 归一化系列（如 S5700、CE6800）
-	Version      string    `json:"version"`                     // 软件版本
-	PatchVersion string    `json:"patchVersion"`                // 补丁版本
-	ESN          string    `json:"esn" gorm:"column:esn"`       // 设备序列号 (ESN)
-	FormFactor   string    `json:"formFactor,omitempty" gorm:"size:32"` // 形态 (hardware | software)
+	ID           uint      `json:"id" gorm:"primaryKey;autoIncrement"`
+	IP           string    `json:"ip" gorm:"uniqueIndex;not null"`
+	Port         int       `json:"port"`
+	Username     string    `json:"username"`
+	Password     string    `json:"password" gorm:"column:password"`
+	Protocol     string    `json:"protocol"`
+	Group        string    `json:"group" gorm:"column:group_name"` // 映射到数据库的 group_name 列
+	DisplayName  string    `json:"displayName"`
+	Vendor       string    `json:"vendor"`
+	Role         string    `json:"role"`
+	Site         string    `json:"site"`
+	Description  string    `json:"description"`
+	Tags         []string  `json:"tags" gorm:"serializer:json"`                         // 标签列表
+	Model        string    `json:"model"`                                               // 设备具体型号
+	ModelSeries  string    `json:"modelSeries"`                                         // 归一化系列（如 S5700、CE6800）
+	Version      string    `json:"version"`                                             // 软件版本
+	PatchVersion string    `json:"patchVersion"`                                        // 补丁版本
+	ESN          string    `json:"esn" gorm:"column:esn"`                               // 设备序列号 (ESN)
+	FormFactor   string    `json:"formFactor,omitempty" gorm:"size:32"`                 // 形态 (hardware | software)
 	ConnectMode  string    `json:"connectMode,omitempty" gorm:"size:32;default:direct"` // direct | jumphost | proxy
 	JumpHostID   *uint     `json:"jumpHostID,omitempty" gorm:"index"`                   // 跳板机设备ID
 	LastSeen     time.Time `json:"lastSeen"`
@@ -229,8 +229,8 @@ type TaskGroup struct {
 	LastScheduledRunID string     `json:"lastScheduledRunId,omitempty"`
 	LastScheduledAt    *time.Time `json:"lastScheduledAt,omitempty"`
 	ScheduleError      string     `json:"scheduleError,omitempty"`
-	CreatedAt              time.Time                   `json:"createdAt"`
-	UpdatedAt              time.Time                   `json:"updatedAt"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	UpdatedAt          time.Time  `json:"updatedAt"`
 }
 
 // TableName 指定表名
@@ -277,11 +277,11 @@ type TaskItem struct {
 type FileServerConfig struct {
 	ID        uint      `json:"id" gorm:"primaryKey;autoIncrement"`
 	Protocol  string    `json:"protocol" gorm:"uniqueIndex;not null"` // sftp, ftp, tftp
-	Enabled   bool      `json:"enabled"`                             // 是否开机自启
-	Port      int       `json:"port"`                                // 监听端口
-	HomeDir   string    `json:"homeDir"`                             // 根目录
-	Username  string    `json:"username"`                            // 登录用户名
-	Password  string    `json:"password" gorm:"column:password"`     // 登录密码
+	Enabled   bool      `json:"enabled"`                              // 是否开机自启
+	Port      int       `json:"port"`                                 // 监听端口
+	HomeDir   string    `json:"homeDir"`                              // 根目录
+	Username  string    `json:"username"`                             // 登录用户名
+	Password  string    `json:"password" gorm:"column:password"`      // 登录密码
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 

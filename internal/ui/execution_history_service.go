@@ -284,10 +284,18 @@ func (s *ExecutionHistoryService) DeleteAllRunRecords(req DeleteAllRunRecordsReq
 			}
 			if units, err := s.repo.GetUnitsByRun(context.Background(), run.ID); err == nil {
 				for _, u := range units {
-					if u.SummaryLogPath != "" { logPaths = append(logPaths, u.SummaryLogPath) }
-					if u.DetailLogPath != "" { logPaths = append(logPaths, u.DetailLogPath) }
-					if u.RawLogPath != "" { logPaths = append(logPaths, u.RawLogPath) }
-					if u.JournalLogPath != "" { logPaths = append(logPaths, u.JournalLogPath) }
+					if u.SummaryLogPath != "" {
+						logPaths = append(logPaths, u.SummaryLogPath)
+					}
+					if u.DetailLogPath != "" {
+						logPaths = append(logPaths, u.DetailLogPath)
+					}
+					if u.RawLogPath != "" {
+						logPaths = append(logPaths, u.RawLogPath)
+					}
+					if u.JournalLogPath != "" {
+						logPaths = append(logPaths, u.JournalLogPath)
+					}
 				}
 			}
 		}

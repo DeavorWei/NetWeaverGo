@@ -5,7 +5,7 @@ import "net"
 type BackendType int
 
 const (
-	BackendAuto       BackendType = iota
+	BackendAuto BackendType = iota
 	BackendWindowsAPI
 	BackendRawSocket
 )

@@ -25,6 +25,11 @@ func GetDB() *gorm.DB {
 	return DB
 }
 
+// SetDB 设置全局数据库实例（主要用于测试与自定义生命周期管理）
+func SetDB(db *gorm.DB) {
+	DB = db
+}
+
 // InitDB 初始化 SQLite 数据库
 func InitDB() error {
 	pm := GetPathManager()

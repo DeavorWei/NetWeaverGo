@@ -22,9 +22,9 @@ type ErrorRuleDef struct {
 
 // MatchPolicy 匹配策略模型
 type MatchPolicy struct {
-	Scene                string         `json:"scene"`                // collect | inspect | diagnose | *
-	Vendor               string         `json:"vendor"`               // huawei | h3c | cisco | *
-	DeviceType           string         `json:"deviceType"`           // router | switch | firewall | *
+	Scene                string         `json:"scene"`      // collect | inspect | diagnose | *
+	Vendor               string         `json:"vendor"`     // huawei | h3c | cisco | *
+	DeviceType           string         `json:"deviceType"` // router | switch | firewall | *
 	PromptPatterns       []string       `json:"promptPatterns"`
 	PagerPatterns        []string       `json:"pagerPatterns"`
 	ErrorRules           []ErrorRuleDef `json:"errorRules"`

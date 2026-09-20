@@ -115,11 +115,11 @@ func TestRiskValidator_Matches(t *testing.T) {
 	{
 		customRules := []models.RiskCommand{
 			{
-				Vendor:   "*",
-				Pattern:  `(?i)^\s*custom-dangerous-cmd\b`,
-				Action:   models.RiskActionBlock,
-				Reason:   "自定义测试规则",
-				Enabled:  true,
+				Vendor:  "*",
+				Pattern: `(?i)^\s*custom-dangerous-cmd\b`,
+				Action:  models.RiskActionBlock,
+				Reason:  "自定义测试规则",
+				Enabled: true,
 			},
 		}
 		validator.ReloadRules(customRules)
@@ -130,4 +130,3 @@ func TestRiskValidator_Matches(t *testing.T) {
 		}
 	}
 }
-

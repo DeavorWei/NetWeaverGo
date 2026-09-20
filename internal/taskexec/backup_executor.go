@@ -112,7 +112,7 @@ loop:
 			localCompleted := completedCount
 			localFailed := failedCount
 			localCancelled := cancelledCount
-	
+
 			// 在锁内发射事件，避免两个 goroutine 交错导致前端收到乱序进度
 			if IsContextCancelled(ctx, err) {
 				emitProjectedUnitEvent(ctx, stage.ID, u.ID, EventTypeUnitFinished, EventLevelWarn, fmt.Sprintf("Backup cancelled for %s", u.Target.Key))
@@ -121,7 +121,7 @@ loop:
 			} else {
 				emitProjectedUnitEvent(ctx, stage.ID, u.ID, EventTypeUnitFinished, EventLevelInfo, fmt.Sprintf("Backup completed for %s", u.Target.Key))
 			}
-	
+
 			applyProjectedStageProgress(handler, ctx, stage.ID, len(stage.Units), localCompleted, localFailed, localCancelled, stageProgressFromCounts(len(stage.Units), localCompleted, localFailed, localCancelled), "更新采集阶段进度")
 			mu.Unlock()
 		}(unit)
@@ -181,7 +181,7 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 
 	// [step-0] 获取配置文件路径
 	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeStepStarted, EventLevelInfo, "获取配置路径...")
-	
+
 	opts := executor.ExecutorOptions{
 		Vendor:   device.Vendor,
 		Protocol: device.Protocol,
@@ -209,14 +209,14 @@ func (e *BackupExecutor) executeBackupUnit(ctx RuntimeContext, stageID string, u
 		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "写入命令失败状态", nil)
 		return fmt.Errorf("执行启动配置命令失败: %w", err)
 	}
-	
+
 	remotePath := e.extractNextStartupConfigPath(cmdOutput)
 	if remotePath == "" {
 		errMsg := fmt.Sprintf("未能从输出中提取配置文件路径:\n%s", cmdOutput)
 		failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "提取失败", nil)
 		return fmt.Errorf("未能从输出中提取配置文件路径: %s", truncateForError(cmdOutput, 200))
 	}
-	
+
 	emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeStepFinished, EventLevelInfo, fmt.Sprintf("发现配置文件: %s", remotePath))
 
 	// [step-1] SFTP下载配置文件

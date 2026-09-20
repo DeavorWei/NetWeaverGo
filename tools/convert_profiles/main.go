@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"encoding/xml"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,26 +52,23 @@ type CapabilityMatrix struct {
 }
 
 func main() {
-	baseDir := `D:\ICSLite_download\eDesk_Pro_V100R025C10SPC300\eDeskPro_V100R025C10SPC300-windows-x64`
-	outDir := `internal/config/device_profiles`
-	deviceOutDir := `internal/device/profiles`
-	_ = os.MkdirAll(outDir, 0755)
-	_ = os.MkdirAll(deviceOutDir, 0755)
+	baseDir := flag.String("base", `D:\ICSLite_download\eDesk_Pro_V100R025C10SPC300\eDeskPro_V100R025C10SPC300-windows-x64`, "eDesk Pro 根目录")
+	outDir := flag.String("out", `internal/device/profiles`, "规则输出目录")
+	flag.Parse()
+
+	_ = os.MkdirAll(*outDir, 0755)
 
 	// 1. 转换 productItem.xml
-	productItemPath := filepath.Join(baseDir, `config\devicemapping\productItem.xml`)
-	convertProductItems(productItemPath, filepath.Join(outDir, "product_items.json"))
-	copyFile(filepath.Join(outDir, "product_items.json"), filepath.Join(deviceOutDir, "product_items.json"))
+	productItemPath := filepath.Join(*baseDir, `config\devicemapping\productItem.xml`)
+	convertProductItems(productItemPath, filepath.Join(*outDir, "product_items.json"))
 
 	// 2. 转换 domain.json（保序）
-	domainPath := filepath.Join(baseDir, `services\IPOnlineService\webapps\ROOT\WEB-INF\classes\template\businesscompare\domain.json`)
-	convertDomains(domainPath, filepath.Join(outDir, "domains.json"))
-	copyFile(filepath.Join(outDir, "domains.json"), filepath.Join(deviceOutDir, "domains.json"))
+	domainPath := filepath.Join(*baseDir, `services\IPOnlineService\webapps\ROOT\WEB-INF\classes\template\businesscompare\domain.json`)
+	convertDomains(domainPath, filepath.Join(*outDir, "domains.json"))
 
 	// 3. 转换 support_devices.json
-	supportPath := filepath.Join(baseDir, `services\IPOnlineService\webapps\ROOT\WEB-INF\classes\template\businesscompare\support_devices.json`)
-	convertCapabilities(supportPath, filepath.Join(outDir, "capabilities.json"))
-	copyFile(filepath.Join(outDir, "capabilities.json"), filepath.Join(deviceOutDir, "capabilities.json"))
+	supportPath := filepath.Join(*baseDir, `services\IPOnlineService\webapps\ROOT\WEB-INF\classes\template\businesscompare\support_devices.json`)
+	convertCapabilities(supportPath, filepath.Join(*outDir, "capabilities.json"))
 }
 
 func copyFile(src, dst string) {

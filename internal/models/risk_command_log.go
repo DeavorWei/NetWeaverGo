@@ -19,3 +19,25 @@ type RiskCommandLog struct {
 func (RiskCommandLog) TableName() string {
 	return "risk_command_logs"
 }
+
+// 标准高危留痕 Action 枚举
+const (
+	RiskLogActionBlocked   = "blocked"
+	RiskLogActionConfirmed = "confirmed"
+	RiskLogActionWarned    = "warned"
+	RiskLogActionBypassed  = "bypassed"
+)
+
+// ToRiskLogAction 将命令风险动作转换为合规留痕枚举
+func ToRiskLogAction(action RiskCommandAction) string {
+	switch action {
+	case RiskActionBlock:
+		return RiskLogActionBlocked
+	case RiskActionConfirm:
+		return RiskLogActionConfirmed
+	case RiskActionWarn:
+		return RiskLogActionWarned
+	default:
+		return string(action)
+	}
+}

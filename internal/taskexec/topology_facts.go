@@ -443,7 +443,6 @@ func MapCommandOutput(mapper parser.ResultMapper, commandKey string, rows []map[
 		}
 		batch.FDBs = items
 
-
 	case "eth_trunk", "eth_trunk_verbose":
 		items, err := mapper.ToAggregate(rows)
 		if err != nil {
@@ -467,4 +466,3 @@ func NormalizeIdentity(identity *parser.DeviceIdentity) {
 	identity.Vendor = strings.ToLower(strings.TrimSpace(identity.Vendor))
 	identity.Hostname = normalize.NormalizeDeviceName(identity.Hostname)
 }
-

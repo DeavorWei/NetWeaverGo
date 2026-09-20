@@ -94,15 +94,15 @@ var rateLimitError = errors.New("ip-api rate limit exceeded (429)")
 // TracertGeoResolver 管理IP地理位置的异步查询、缓存和事件推送。
 // 采用进程级单例模式，通过 GetGlobalGeoResolver() 获取实例。
 type TracertGeoResolver struct {
-	mu          sync.RWMutex                   // 保护 cache、pending、sessionID
-	cache       map[string]*GeoResolveResult   // IP → 查询结果缓存
-	pending     map[string]struct{}            // 正在查询的IP集合
-	sessionID   string                         // 当前会话ID
-	httpClient  *http.Client                   // HTTP客户端（超时5秒）
-	eventBridge func(string, any)              // Wails事件推送函数
-	limiter     *rate.Limiter                  // 全局请求频率限制器（每4秒1次）
-	cancelFunc  context.CancelFunc             // 用于取消所有进行中的请求
-	stopCleanup context.CancelFunc             // 用于停止缓存清理goroutine
+	mu          sync.RWMutex                 // 保护 cache、pending、sessionID
+	cache       map[string]*GeoResolveResult // IP → 查询结果缓存
+	pending     map[string]struct{}          // 正在查询的IP集合
+	sessionID   string                       // 当前会话ID
+	httpClient  *http.Client                 // HTTP客户端（超时5秒）
+	eventBridge func(string, any)            // Wails事件推送函数
+	limiter     *rate.Limiter                // 全局请求频率限制器（每4秒1次）
+	cancelFunc  context.CancelFunc           // 用于取消所有进行中的请求
+	stopCleanup context.CancelFunc           // 用于停止缓存清理goroutine
 }
 
 // ---------------------------------------------------------------------------

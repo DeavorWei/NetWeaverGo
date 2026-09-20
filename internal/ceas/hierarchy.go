@@ -7,10 +7,10 @@ import (
 )
 
 var (
-	reSlotClean     = regexp.MustCompile(`(?i)^(?:slot|unit)_?`)
-	reCardIndex     = regexp.MustCompile(`(?i)(?:card|daughter_board|sub_board|board)_?(\d+)`)
-	rePortIndex     = regexp.MustCompile(`(?i)(?:port|interface)_?(\d+)`)
-	reChassisSlot   = regexp.MustCompile(`^(\d+)/(\d+)$`)
+	reSlotClean   = regexp.MustCompile(`(?i)^(?:slot|unit)_?`)
+	reCardIndex   = regexp.MustCompile(`(?i)(?:card|daughter_board|sub_board|board)_?(\d+)`)
+	rePortIndex   = regexp.MustCompile(`(?i)(?:port|interface)_?(\d+)`)
+	reChassisSlot = regexp.MustCompile(`^(\d+)/(\d+)$`)
 )
 
 // GenerateNodeID 生成层级 ID (对齐 CEAS data.csv 语义，如 0, 0_1, 0_1_2)

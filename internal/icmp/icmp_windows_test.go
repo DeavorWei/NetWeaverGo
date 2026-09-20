@@ -100,7 +100,7 @@ func TestBatchPingEngine_Cancel(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	// Cancel after a short delay
 	go func() {
 		time.Sleep(100 * time.Millisecond)
@@ -257,9 +257,9 @@ func TestPingOne_LargeDataSize(t *testing.T) {
 		expectError bool // localhost may not support very large packets
 	}{
 		{"Small_32", 32, false},
-		{"Medium_300", 300, false},      // Previously failed before fix
+		{"Medium_300", 300, false}, // Previously failed before fix
 		{"Large_1000", 1000, false},
-		{"Large_8000", 8000, false},     // Test larger but reasonable size
+		{"Large_8000", 8000, false}, // Test larger but reasonable size
 		// Note: 65500 is skipped because localhost loopback interface
 		// typically doesn't support maximum-sized ICMP packets
 	}

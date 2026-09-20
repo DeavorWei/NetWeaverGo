@@ -62,13 +62,13 @@ type PreCollectItem struct {
 type DSLRule struct {
 	CheckNo       string           `json:"checkno"`
 	Title         LocaleText       `json:"title"`
-	Category      string           `json:"category"`  // Health | Reliability | BGP | OSPF | BASE
-	RiskLevel     string           `json:"riskLevel"` // critical | major | minor | info
-	Commands      []string         `json:"commands"`  // 依赖的 CLI 命令
-	Scope         RuleScope        `json:"scope"`     // 适用范围
-	Extract       ExtractSpec      `json:"extract"`   // 数据提取规约
-	Assert        AssertSpec       `json:"assert"`    // 断言判定规约
-	Advice        LocaleText       `json:"advice"`    // 修复建议
+	Category      string           `json:"category"`                // Health | Reliability | BGP | OSPF | BASE
+	RiskLevel     string           `json:"riskLevel"`               // critical | major | minor | info
+	Commands      []string         `json:"commands"`                // 依赖的 CLI 命令
+	Scope         RuleScope        `json:"scope"`                   // 适用范围
+	Extract       ExtractSpec      `json:"extract"`                 // 数据提取规约
+	Assert        AssertSpec       `json:"assert"`                  // 断言判定规约
+	Advice        LocaleText       `json:"advice"`                  // 修复建议
 	PreCollects   []PreCollectItem `json:"preCollects,omitempty"`   // B11：前置采集项规约
 	ParentCheckNo string           `json:"parentCheckNo,omitempty"` // B11：继承父规则 CheckNo
 	IsBig         bool             `json:"isBig,omitempty"`         // B11：大表标记（触发流式落盘保护）

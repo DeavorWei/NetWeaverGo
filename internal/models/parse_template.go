@@ -83,10 +83,10 @@ type TestParseTemplateResult struct {
 
 // UserParseTemplateVO 用户模板视图对象
 type UserParseTemplateVO struct {
-	ID           uint                   `json:"id"`
-	Vendor       string                 `json:"vendor"`
-	CommandKey   string                 `json:"commandKey"`
-	Engine       string                 `json:"engine"`
+	ID         uint   `json:"id"`
+	Vendor     string `json:"vendor"`
+	CommandKey string `json:"commandKey"`
+	Engine     string `json:"engine"`
 	// Source 模板来源：builtin（内置快照） / user（用户自定义） / override（用户覆盖内置）
 	// 由后端在列表汇聚时精准回填，前端无需猜测（方案 §6.3.1）。
 	Source       string                 `json:"source,omitempty"`

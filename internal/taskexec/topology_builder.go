@@ -772,8 +772,8 @@ func (b *TopologyBuilder) buildFDBARPCandidates(n *NormalizedFacts) []*TopologyE
 		localLogicalIf := b.resolveAggregateInterface(n, deviceIP, localIf)
 
 		// 统计候选对端（同时收集MAC信息）
-		candidatePeers := make(map[string]int)           // remoteDevice -> count
-		candidatePeerMACs := make(map[string][]string)   // remoteDevice -> []mac
+		candidatePeers := make(map[string]int)         // remoteDevice -> count
+		candidatePeerMACs := make(map[string][]string) // remoteDevice -> []mac
 		for _, mac := range g.macs {
 			remoteDevice, _, _, resolvedMAC := b.resolveFDBRemoteEndpoint(deviceIP, mac, n)
 			if remoteDevice != "" && remoteDevice != deviceIP {
@@ -1099,12 +1099,12 @@ func (b *TopologyBuilder) resolveCandidatesGlobal(candidates []*TopologyEdgeCand
 
 			// 记录淘汰决策轨迹
 			traces = append(traces, TopologyDecisionTrace{
-				TraceID:        makeTaskEdgeID(),
-				DecisionType:   "conflict_resolution",
-				DecisionGroup:  localA,
-				DecisionResult: "rejected",
-				DecisionReason: c.DecisionReason,
-				DecisionBasis:  fmt.Sprintf("score=%.2f, occupied_endpoints=%d", c.TotalScore, len(reasons)),
+				TraceID:              makeTaskEdgeID(),
+				DecisionType:         "conflict_resolution",
+				DecisionGroup:        localA,
+				DecisionResult:       "rejected",
+				DecisionReason:       c.DecisionReason,
+				DecisionBasis:        fmt.Sprintf("score=%.2f, occupied_endpoints=%d", c.TotalScore, len(reasons)),
 				RejectedCandidateIDs: []string{c.CandidateID},
 			})
 		}
@@ -1154,12 +1154,12 @@ func (b *TopologyBuilder) traceConflictWindow(retainedCand *TopologyEdgeCandidat
 	}
 
 	trace := TopologyDecisionTrace{
-		TraceID:             makeTaskEdgeID(),
-		DecisionType:        "conflict_resolution",
-		DecisionGroup:       localA,
-		DecisionResult:      "retained",
-		DecisionReason:      "top candidate retained, close competitors marked",
-		DecisionBasis:       fmt.Sprintf("top_score=%.2f, window=%.2f, conflict_count=%d", retainedCand.TotalScore, b.config.ConflictWindow, len(conflictCandidates)),
+		TraceID:              makeTaskEdgeID(),
+		DecisionType:         "conflict_resolution",
+		DecisionGroup:        localA,
+		DecisionResult:       "retained",
+		DecisionReason:       "top candidate retained, close competitors marked",
+		DecisionBasis:        fmt.Sprintf("top_score=%.2f, window=%.2f, conflict_count=%d", retainedCand.TotalScore, b.config.ConflictWindow, len(conflictCandidates)),
 		RetainedCandidateIDs: []string{retainedCand.CandidateID},
 	}
 

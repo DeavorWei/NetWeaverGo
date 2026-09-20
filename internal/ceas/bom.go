@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	reSlotBlock = regexp.MustCompile(`(?i)\[(?:Slot|Unit)_?(\S+)\]`)
+	reSlotBlock   = regexp.MustCompile(`(?i)\[(?:Slot|Unit)_?(\S+)\]`)
 	reItemInBlock = regexp.MustCompile(`(?im)^\s*Item\s*=\s*(\S+)`)
 )
 

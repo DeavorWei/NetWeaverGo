@@ -494,7 +494,7 @@ func formatIPForExport(ip, name string) string {
 		val = name
 	}
 	val = strings.TrimRight(val, " .")
-	
+
 	if idx := strings.Index(val, ":"); idx > 0 {
 		prefix := val[:idx]
 		isAlpha := true
@@ -584,8 +584,6 @@ func normalizePlanID(planID string) string {
 	}
 	return trimmed
 }
-
-
 
 type planColumnIndex struct {
 	aName int
@@ -706,14 +704,14 @@ func detectPlanHeader(header []string) (planColumnIndex, bool) {
 		typ:   find("链路类型", "类型"),
 		note:  find("备注"),
 	}
-	
+
 	if result.aIf < 0 || result.bIf < 0 {
 		return planColumnIndex{}, false
 	}
 	if (result.aName < 0 && result.aIP < 0) || (result.bName < 0 && result.bIP < 0) {
 		return planColumnIndex{}, false
 	}
-	
+
 	return result, true
 }
 

@@ -88,10 +88,10 @@ func TestParseTemplateService_UpdateTemplate_PreserveConfigs(t *testing.T) {
 
 	// 2. 用户只编辑了 description，未传 aggregation（模拟前端弹窗保存）
 	updateReq := models.SaveParseTemplateRequest{
-		Vendor:      "hacked_vendor",     // 试图篡改 vendor（M5）
-		CommandKey:  "hacked_command",    // 试图篡改 commandKey（M5）
+		Vendor:      "hacked_vendor",  // 试图篡改 vendor（M5）
+		CommandKey:  "hacked_command", // 试图篡改 commandKey（M5）
 		Engine:      "aggregate",
-		Aggregation: nil,                 // 模拟未传或为 nil（H1）
+		Aggregation: nil, // 模拟未传或为 nil（H1）
 		Description: "更新后的聚合模板说明",
 		Enabled:     true,
 	}
@@ -168,11 +168,11 @@ func TestParseTemplateService_UpdateTemplate_ClearAppliesTo(t *testing.T) {
 
 	// 3. 传空条件对象同样视为清空
 	require.NoError(t, svc.UpdateTemplate(tplID, models.SaveParseTemplateRequest{
-		Vendor:    "huawei",
-		Engine:    "tree",
+		Vendor:     "huawei",
+		Engine:     "tree",
 		ParseRules: createReq.ParseRules,
-		AppliesTo: &models.TemplateAppliesTo{},
-		Enabled:   true,
+		AppliesTo:  &models.TemplateAppliesTo{},
+		Enabled:    true,
 	}))
 	updated, err = svc.GetTemplate(tplID)
 	require.NoError(t, err)

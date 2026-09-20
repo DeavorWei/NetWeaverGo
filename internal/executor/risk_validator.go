@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/logger"
@@ -21,11 +22,22 @@ type compiledTrustRule struct {
 	Regexp *regexp.Regexp
 }
 
+// TemporaryBypass 动态临时放行条目
+type TemporaryBypass struct {
+	RunID     string    `json:"runId"`
+	DeviceIP  string    `json:"deviceIp"`
+	Command   string    `json:"command"`
+	Operator  string    `json:"operator"`
+	Reason    string    `json:"reason"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
 // RiskValidator 风险命令校验器
 type RiskValidator struct {
 	mu         sync.RWMutex
 	rules      []compiledRiskRule
 	trustRules []compiledTrustRule
+	bypasses   []TemporaryBypass
 }
 
 var (
@@ -38,6 +50,7 @@ func NewRiskValidatorFromRules(rawRules []models.RiskCommand) *RiskValidator {
 	v := &RiskValidator{
 		rules:      make([]compiledRiskRule, 0, len(rawRules)),
 		trustRules: make([]compiledTrustRule, 0),
+		bypasses:   make([]TemporaryBypass, 0),
 	}
 	for _, r := range rawRules {
 		if !r.Enabled {
@@ -157,6 +170,55 @@ func (v *RiskValidator) CheckTrust(cmd string) (bool, *models.RiskTrustEntry) {
 		if tr.Regexp.MatchString(cleanCmd) {
 			entryCopy := tr.Entry
 			return true, &entryCopy
+		}
+	}
+	return false, nil
+}
+
+// AddTemporaryBypass 注入单次/短期临时放行凭据
+func (v *RiskValidator) AddTemporaryBypass(b TemporaryBypass) {
+	if v == nil {
+		return
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	now := time.Now()
+	active := make([]TemporaryBypass, 0, len(v.bypasses)+1)
+	for _, item := range v.bypasses {
+		if now.Before(item.ExpiresAt) {
+			active = append(active, item)
+		}
+	}
+	if b.ExpiresAt.IsZero() {
+		b.ExpiresAt = now.Add(10 * time.Minute)
+	}
+	active = append(active, b)
+	v.bypasses = active
+	logger.Info("RiskValidator", b.DeviceIP, "已注册临时放行凭证: runID=%s cmd=%q 有效期至=%s", b.RunID, b.Command, b.ExpiresAt.Format(time.RFC3339))
+}
+
+// CheckBypass 检查是否有针对当前执行的有效临时放行凭据（命中则放行并消费）
+func (v *RiskValidator) CheckBypass(runID, deviceIP, cmd string) (bool, *TemporaryBypass) {
+	if v == nil || strings.TrimSpace(cmd) == "" {
+		return false, nil
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	now := time.Now()
+	cleanCmd := strings.TrimSpace(cmd)
+	for i, b := range v.bypasses {
+		if now.After(b.ExpiresAt) {
+			continue
+		}
+		if (b.RunID == "" || b.RunID == runID) &&
+			(b.DeviceIP == "" || b.DeviceIP == deviceIP) &&
+			(b.Command == cleanCmd || strings.EqualFold(b.Command, cleanCmd)) {
+			matched := b
+			// 单次放行生效后移除，保障逃生不产生持久漏洞
+			v.bypasses = append(v.bypasses[:i], v.bypasses[i+1:]...)
+			return true, &matched
 		}
 	}
 	return false, nil

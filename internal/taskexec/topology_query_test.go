@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
-
 // TestExtractMACFromEdges 测试从边信息中提取推断节点的MAC地址
 func TestExtractMACFromEdges(t *testing.T) {
 	edges := []TaskTopologyEdge{
@@ -183,4 +181,3 @@ func TestGetTopologyDeviceDetail_IdentityFields(t *testing.T) {
 	assert.Equal(t, "series:CE6800", detail.Identity.ProfileMatchPath)
 	assert.Equal(t, "命中 _REG2HANDLER: CE/CloudEngine", detail.Identity.IdentityEvidence)
 }
-

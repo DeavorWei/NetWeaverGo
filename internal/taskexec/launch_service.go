@@ -30,19 +30,19 @@ type TaskLaunchService struct {
 }
 
 type CanonicalLaunchSpec struct {
-	TaskGroupID       uint               `json:"taskGroupId"`
-	TaskNameSnapshot  string             `json:"taskNameSnapshot"`
-	TaskDescription   string             `json:"taskDescription"`
-	RunKind           string             `json:"runKind"`
-	Mode              string             `json:"mode,omitempty"`
-	Concurrency       int                `json:"concurrency"`
-	TimeoutSec        int                `json:"timeoutSec"`
-	EnableRawLog      bool               `json:"enableRawLog"`
-	TopologyVendor    string             `json:"topologyVendor,omitempty"`
-	AutoBuildTopology bool               `json:"autoBuildTopology,omitempty"`
-	Normal            *CanonicalNormal   `json:"normal,omitempty"`
-	Topology          *CanonicalTopology `json:"topology,omitempty"`
-	Backup            *CanonicalBackup   `json:"backup,omitempty"`
+	TaskGroupID       uint                 `json:"taskGroupId"`
+	TaskNameSnapshot  string               `json:"taskNameSnapshot"`
+	TaskDescription   string               `json:"taskDescription"`
+	RunKind           string               `json:"runKind"`
+	Mode              string               `json:"mode,omitempty"`
+	Concurrency       int                  `json:"concurrency"`
+	TimeoutSec        int                  `json:"timeoutSec"`
+	EnableRawLog      bool                 `json:"enableRawLog"`
+	TopologyVendor    string               `json:"topologyVendor,omitempty"`
+	AutoBuildTopology bool                 `json:"autoBuildTopology,omitempty"`
+	Normal            *CanonicalNormal     `json:"normal,omitempty"`
+	Topology          *CanonicalTopology   `json:"topology,omitempty"`
+	Backup            *CanonicalBackup     `json:"backup,omitempty"`
 	CEAS              *CanonicalCEAS       `json:"ceas,omitempty"`
 	Inspection        *CanonicalInspection `json:"inspection,omitempty"`
 }

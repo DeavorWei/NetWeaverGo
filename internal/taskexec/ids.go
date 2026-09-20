@@ -37,4 +37,3 @@ func newEdgeID() string {
 func newDefinitionID() string {
 	return newPrefixedID("definition_")
 }
-

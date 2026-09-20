@@ -88,4 +88,3 @@ func GetRulesForVendor(vendor string) []ErrorRule {
 	}
 	return DefaultRules
 }
-

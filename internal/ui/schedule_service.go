@@ -271,4 +271,3 @@ func (s *ScheduleUIService) buildScheduleResponse(group *models.TaskGroup) *Sche
 
 	return resp
 }
-

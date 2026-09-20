@@ -30,19 +30,19 @@ type PathManager struct {
 	DefaultStorageRoot string
 	StorageRoot        string
 
-	DBDir               string
-	DBPath              string
-	AppLogDir           string
-	AppLogPath          string
-	FrontendLogDir     string
-	FrontendLogPath    string
-	BackupConfigDir    string
-	DBBackupDir        string
-	SSHDir             string
-	SSHKnownHostsPath  string
+	DBDir             string
+	DBPath            string
+	AppLogDir         string
+	AppLogPath        string
+	FrontendLogDir    string
+	FrontendLogPath   string
+	BackupConfigDir   string
+	DBBackupDir       string
+	SSHDir            string
+	SSHKnownHostsPath string
 
 	// 拓扑发现相关路径
-	TopologyRawDir    string // 原始 CLI 输出目录
+	TopologyRawDir string // 原始 CLI 输出目录
 
 	// SNMP 相关路径
 	SNMPDBPath string // SNMP 独立数据库路径（仅存储查询凭据）
@@ -280,9 +280,9 @@ func (pm *PathManager) GetBackupFilePath(subDir, fileName string) string {
 
 func resolvePathPattern(pattern, deviceIP string, t time.Time) string {
 	res := pattern
-	
+
 	cleanIP := strings.ReplaceAll(deviceIP, ":", "-")
-	
+
 	res = strings.ReplaceAll(res, "%H", cleanIP)
 	res = strings.ReplaceAll(res, "%Y", fmt.Sprintf("%04d", t.Year()))
 	res = strings.ReplaceAll(res, "%M", fmt.Sprintf("%02d", t.Month()))
@@ -290,7 +290,7 @@ func resolvePathPattern(pattern, deviceIP string, t time.Time) string {
 	res = strings.ReplaceAll(res, "%h", fmt.Sprintf("%02d", t.Hour()))
 	res = strings.ReplaceAll(res, "%m", fmt.Sprintf("%02d", t.Minute()))
 	res = strings.ReplaceAll(res, "%s", fmt.Sprintf("%02d", t.Second()))
-	
+
 	return filepath.Clean(res)
 }
 
@@ -364,8 +364,6 @@ func (pm *PathManager) GetTopologyRawDir() string {
 	return pm.TopologyRawDir
 }
 
-
-
 // GetDiscoveryRawFilePath 获取发现任务原始审计输出文件路径
 // 格式: <TopologyRawDir>/<taskID>/<deviceIP>/<commandKey>.txt
 // 用于保存原始字节流，供审计和排障使用
@@ -407,12 +405,12 @@ func (pm *PathManager) GetAllPaths() map[string]string {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 	return map[string]string{
-		"workDir":             pm.WorkDir,
-		"defaultStorageRoot":  pm.DefaultStorageRoot,
-		"storageRoot":         pm.StorageRoot,
-		"dbPath":              pm.DBPath,
-		"appLogPath":          pm.AppLogPath,
-		"backupConfigDir":     pm.BackupConfigDir,
-		"sshKnownHostsPath":   pm.SSHKnownHostsPath,
+		"workDir":            pm.WorkDir,
+		"defaultStorageRoot": pm.DefaultStorageRoot,
+		"storageRoot":        pm.StorageRoot,
+		"dbPath":             pm.DBPath,
+		"appLogPath":         pm.AppLogPath,
+		"backupConfigDir":    pm.BackupConfigDir,
+		"sshKnownHostsPath":  pm.SSHKnownHostsPath,
 	}
 }

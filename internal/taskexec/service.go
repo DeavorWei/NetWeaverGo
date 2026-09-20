@@ -260,5 +260,3 @@ func (s *TaskExecutionService) GetRunArtifacts(runID string) ([]TaskArtifact, er
 func (s *TaskExecutionService) GetRepository() Repository {
 	return s.repo
 }
-
-

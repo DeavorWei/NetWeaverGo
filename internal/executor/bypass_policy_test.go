@@ -112,3 +112,52 @@ func TestRiskValidator_TrustList(t *testing.T) {
 		t.Errorf("未授权命令不应判定为信任")
 	}
 }
+
+func TestRiskTrustEntry_ZeroExpiry(t *testing.T) {
+	entry := models.RiskTrustEntry{
+		ID:      3,
+		Pattern: "format flash:",
+		// ExpiresAt 为零值
+	}
+	if !entry.IsExpired() {
+		t.Errorf("未设置 ExpiresAt 的信任清单条目必须视为过期（禁止永久放行漏洞）")
+	}
+}
+
+func TestRiskValidator_TemporaryBypass(t *testing.T) {
+	v := NewRiskValidatorFromRules(models.DefaultRiskCommandSeeds())
+
+	// 注入临时放行
+	v.AddTemporaryBypass(TemporaryBypass{
+		RunID:     "run-100",
+		DeviceIP:  "192.168.1.1",
+		Command:   "reset saved-configuration",
+		Operator:  "sec-admin",
+		Reason:    "紧急变更放行",
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+	})
+
+	// 1. 匹配放行成功
+	ok, bypass := v.CheckBypass("run-100", "192.168.1.1", "reset saved-configuration")
+	if !ok || bypass == nil || bypass.Operator != "sec-admin" {
+		t.Fatalf("预期临时放行命中成功")
+	}
+
+	// 2. 验证单次消费机制：二次执行应不再放行
+	ok2, _ := v.CheckBypass("run-100", "192.168.1.1", "reset saved-configuration")
+	if ok2 {
+		t.Errorf("临时放行凭据应当单次消费，不应重复生效")
+	}
+
+	// 3. 过期放行凭据测试
+	v.AddTemporaryBypass(TemporaryBypass{
+		RunID:     "run-101",
+		DeviceIP:  "192.168.1.2",
+		Command:   "reboot",
+		ExpiresAt: time.Now().Add(-1 * time.Minute), // 已过期
+	})
+	okExpired, _ := v.CheckBypass("run-101", "192.168.1.2", "reboot")
+	if okExpired {
+		t.Errorf("已过期的临时放行凭据不应生效")
+	}
+}

@@ -35,13 +35,33 @@ var unmaskedPatterns = []struct {
 	},
 	{
 		name:     "通用密码未掩码",
-		severity: SeverityWarn,
+		severity: SeverityCritical, // 提升为 Critical 级别，杜绝明文口令泄漏阻断逃逸
 		pattern:  regexp.MustCompile(`(?i)\bpassword\s+([^\s\*]{2,})`),
 	},
 	{
 		name:     "明文 shared-key / secret 未掩码",
 		severity: SeverityCritical,
 		pattern:  regexp.MustCompile(`(?i)\b(?:shared-key|secret)\s+(?:cipher\s+)?([^\s\*]{2,})`),
+	},
+	{
+		name:     "SNMP 团体名未掩码",
+		severity: SeverityCritical,
+		pattern:  regexp.MustCompile(`(?i)\b(?:snmp-agent\s+community\s+(?:read|write)|snmp-server\s+community)\s+(?:cipher\s+|simple\s+)?([^\s\*]{2,})`),
+	},
+	{
+		name:     "SNMPv3 认证或加密凭证未掩码",
+		severity: SeverityCritical,
+		pattern:  regexp.MustCompile(`(?i)\b(?:authentication-mode|privacy-mode)\s+(?:md5|sha|sha2-256|aes128|des56)\s+(?:cipher\s+)?([^\s\*]{2,})`),
+	},
+	{
+		name:     "认证模式明文未掩码",
+		severity: SeverityCritical,
+		pattern:  regexp.MustCompile(`(?i)\bauthentication-mode\s+simple\s+([^\s\*]{2,})`),
+	},
+	{
+		name:     "私钥明文未脱敏",
+		severity: SeverityCritical,
+		pattern:  regexp.MustCompile(`(?i)(-----BEGIN\s+(?:RSA\s+|EC\s+|OPENSSH\s+)?PRIVATE\s+KEY-----)`),
 	},
 	{
 		name:     "JSON 敏感字段未掩码",
@@ -123,4 +143,3 @@ func ValidateExportContent(content string) error {
 	}
 	return nil
 }
-

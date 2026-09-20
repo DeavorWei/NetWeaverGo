@@ -2,7 +2,10 @@ package ui
 
 import (
 	"errors"
+	"fmt"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/executor"
@@ -79,6 +82,16 @@ func (s *RiskCommandService) AddTrustEntry(entry models.RiskTrustEntry) error {
 	if strings.TrimSpace(entry.Pattern) == "" {
 		return errors.New("信任规则正则不能为空")
 	}
+	if _, err := regexp.Compile(entry.Pattern); err != nil {
+		return fmt.Errorf("信任规则正则格式无效: %w", err)
+	}
+	now := time.Now()
+	if entry.ExpiresAt.IsZero() || entry.ExpiresAt.Before(now) {
+		return errors.New("信任规则必须设置未来的有效过期时间")
+	}
+	if entry.ExpiresAt.After(now.Add(24 * time.Hour)) {
+		return errors.New("信任规则单次有效期不能超过24小时")
+	}
 
 	if err := db.Create(&entry).Error; err != nil {
 		return err
@@ -110,7 +123,7 @@ func (s *RiskCommandService) DeleteTrustEntry(id uint) error {
 	return nil
 }
 
-// BypassRiskCommand 紧急放行高危命令（校验二次确认与理由，记录留痕）
+// BypassRiskCommand 紧急放行高危命令（校验二次确认与理由，记录留痕，注入临时放行凭据）
 func (s *RiskCommandService) BypassRiskCommand(req executor.BypassRequest) error {
 	if err := executor.ValidateBypass(req); err != nil {
 		return err
@@ -121,9 +134,19 @@ func (s *RiskCommandService) BypassRiskCommand(req executor.BypassRequest) error
 		DeviceIP: req.DeviceIP,
 		Command:  req.Command,
 		RuleID:   req.RuleID,
-		Action:   "bypassed",
+		Action:   models.RiskLogActionBypassed,
 		Operator: req.Operator,
 		Reason:   req.Reason,
+	})
+
+	// 注入执行器临时放行通道，形成闭环逃生
+	executor.GetGlobalRiskValidator().AddTemporaryBypass(executor.TemporaryBypass{
+		RunID:     req.RunID,
+		DeviceIP:  req.DeviceIP,
+		Command:   req.Command,
+		Operator:  req.Operator,
+		Reason:    req.Reason,
+		ExpiresAt: time.Now().Add(10 * time.Minute),
 	})
 
 	return nil

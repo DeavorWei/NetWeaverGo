@@ -17,11 +17,11 @@ import (
 
 // TaskSchedulerStatus 调度器状态
 type TaskSchedulerStatus struct {
-	IsRunning       bool       `json:"isRunning"`                  // 是否运行中
-	ScheduledCount  int        `json:"scheduledCount"`             // 已调度任务组数
-	TotalTriggers   int64      `json:"totalTriggers"`              // 总触发次数
-	LastTriggerTime *time.Time `json:"lastTriggerTime,omitempty"`  // 最后触发时间（指针类型，未触发时为 nil）
-	StartTime       time.Time  `json:"startTime"`                  // 调度器启动时间
+	IsRunning       bool       `json:"isRunning"`                 // 是否运行中
+	ScheduledCount  int        `json:"scheduledCount"`            // 已调度任务组数
+	TotalTriggers   int64      `json:"totalTriggers"`             // 总触发次数
+	LastTriggerTime *time.Time `json:"lastTriggerTime,omitempty"` // 最后触发时间（指针类型，未触发时为 nil）
+	StartTime       time.Time  `json:"startTime"`                 // 调度器启动时间
 }
 
 // scheduledTaskGroup 调度任务信息

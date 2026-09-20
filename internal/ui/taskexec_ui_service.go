@@ -101,10 +101,6 @@ func (s *TaskExecutionUIService) GetRunArtifacts(runID string) ([]taskexec.TaskA
 	return s.service.GetRunArtifacts(runID)
 }
 
-
-
-
-
 // GetTopologyEdgeExplain 获取边解释视图（包含候选和决策轨迹）
 func (s *TaskExecutionUIService) GetTopologyEdgeExplain(runID string, edgeID string) (*models.TopologyEdgeExplainView, error) {
 	return s.service.GetTopologyEdgeExplain(runID, edgeID)

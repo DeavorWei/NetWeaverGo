@@ -39,4 +39,18 @@ set authentication password simple Admin@12345
 	err := ValidateExportContent(dirtyText)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "导出安全阻断")
+
+	// 3. 包含通用密码（未带 simple/cipher）必须阻断 (P0-2 修复验证)
+	genericPasswordText := "local-user operator password SecretPass123"
+	ok, _ = CheckContentSanitized(genericPasswordText)
+	assert.False(t, ok)
+	err = ValidateExportContent(genericPasswordText)
+	require.Error(t, err, "通用密码未掩码必须触发 CRITICAL 导出阻断")
+
+	// 4. 包含未掩码的 SNMP 团体名必须阻断
+	snmpText := "snmp-agent community read public123"
+	ok, _ = CheckContentSanitized(snmpText)
+	assert.False(t, ok)
+	err = ValidateExportContent(snmpText)
+	require.Error(t, err, "SNMP 团体名未掩码必须触发导出阻断")
 }

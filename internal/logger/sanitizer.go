@@ -208,8 +208,35 @@ func (cs *ContextSanitizer) WithCommand(command string) *ContextSanitizer {
 	return cs
 }
 
-// Sanitize 执行脱敏
-func (cs *ContextSanitizer) Sanitize(msg string) string {
-	return cs.sanitizer.Sanitize(msg)
+// ExtraSanitizerFunc 厂商或业务上下文级脱敏处理器钩子
+type ExtraSanitizerFunc func(vendor, command, text string) string
+
+var (
+	extraSanitizersMu sync.RWMutex
+	extraSanitizers   []ExtraSanitizerFunc
+)
+
+// RegisterExtraSanitizer 注册额外的厂商/命令级脱敏处理钩子（实现解耦级联）
+func RegisterExtraSanitizer(fn ExtraSanitizerFunc) {
+	if fn == nil {
+		return
+	}
+	extraSanitizersMu.Lock()
+	defer extraSanitizersMu.Unlock()
+	extraSanitizers = append(extraSanitizers, fn)
 }
 
+// Sanitize 执行脱敏（基础规则 + 级联厂商/命令上下文规则）
+func (cs *ContextSanitizer) Sanitize(msg string) string {
+	if msg == "" {
+		return ""
+	}
+	result := cs.sanitizer.Sanitize(msg)
+
+	extraSanitizersMu.RLock()
+	defer extraSanitizersMu.RUnlock()
+	for _, fn := range extraSanitizers {
+		result = fn(cs.vendor, cs.command, result)
+	}
+	return result
+}

@@ -7,10 +7,19 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/NetWeaverGo/core/internal/logger"
 )
 
 //go:embed rules/sensitive_cmd.json
 var embeddedSensitiveCmdJSON []byte
+
+func init() {
+	logger.RegisterExtraSanitizer(func(vendor, command, text string) string {
+		cat := ResolveCategory(vendor, "")
+		return GetDefaultVendorSanitizer().Sanitize(cat, command, text)
+	})
+}
 
 // VendorSanitizeRule 单条厂商脱敏规则
 type VendorSanitizeRule struct {
@@ -48,10 +57,14 @@ func GetDefaultVendorSanitizer() *VendorSanitizer {
 	defaultVendorSanitizerOnce.Do(func() {
 		vs, err := NewVendorSanitizerFromBytes(embeddedSensitiveCmdJSON)
 		if err != nil {
+			logger.Error("VendorSanitizer", "-", "加载内置分厂商脱敏规则失败: %v", err)
 			defaultVendorSanitizer = &VendorSanitizer{
 				rulesByCat: make(map[string][]VendorSanitizeRule),
 			}
 			return
+		}
+		if len(vs.broken) > 0 {
+			logger.Warn("VendorSanitizer", "-", "内置分厂商脱敏规则包含 %d 条不兼容/损坏正则 (有效: %d 条)", len(vs.broken), len(vs.rules))
 		}
 		defaultVendorSanitizer = vs
 	})
@@ -87,8 +100,15 @@ func NewVendorSanitizerFromBytes(data []byte) (*VendorSanitizer, error) {
 		}
 		r.Replacement = replacement
 
-		// 编译正则表达式
-		re, err := regexp.Compile(r.RawPattern)
+		// 编译正则表达式（若显式标记非正则或原串为字面量，转义以保证匹配）
+		var re *regexp.Regexp
+		var err error
+		if r.IsRegex {
+			re, err = regexp.Compile(r.RawPattern)
+		} else {
+			re, err = regexp.Compile(regexp.QuoteMeta(r.RawPattern))
+		}
+
 		if err != nil {
 			vs.broken = append(vs.broken, BrokenRule{
 				Category: r.Category,

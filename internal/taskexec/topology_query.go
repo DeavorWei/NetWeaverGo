@@ -396,8 +396,6 @@ func (s *TaskExecutionService) GetTopologyDeviceDetail(runID, deviceIP string) (
 	return result, nil
 }
 
-
-
 func (s *TaskExecutionService) getGraphNode(runID, deviceID string, macAddress ...string) models.GraphNode {
 	if strings.TrimSpace(deviceID) == "" {
 		return models.GraphNode{ID: "unknown", Label: "unknown"}
@@ -405,12 +403,12 @@ func (s *TaskExecutionService) getGraphNode(runID, deviceID string, macAddress .
 	if strings.HasPrefix(deviceID, "endpoint:") {
 		ip := strings.TrimPrefix(deviceID, "endpoint:")
 		node := models.GraphNode{
-			ID:        deviceID,
-			Label:     ip,
-			IP:        ip,
-			Role:      "endpoint-inferred",
-			Vendor:    "endpoint",
-			NodeType:  models.NodeTypeInferred,
+			ID:       deviceID,
+			Label:    ip,
+			IP:       ip,
+			Role:     "endpoint-inferred",
+			Vendor:   "endpoint",
+			NodeType: models.NodeTypeInferred,
 		}
 		if len(macAddress) > 0 && macAddress[0] != "" {
 			node.MACAddress = macAddress[0]
@@ -421,12 +419,12 @@ func (s *TaskExecutionService) getGraphNode(runID, deviceID string, macAddress .
 	if strings.HasPrefix(deviceID, "server:") {
 		ip := strings.TrimPrefix(deviceID, "server:")
 		node := models.GraphNode{
-			ID:        deviceID,
-			Label:     ip,
-			IP:        ip,
-			Role:      "endpoint-inferred",
-			Vendor:    "endpoint",
-			NodeType:  models.NodeTypeInferred,
+			ID:       deviceID,
+			Label:    ip,
+			IP:       ip,
+			Role:     "endpoint-inferred",
+			Vendor:   "endpoint",
+			NodeType: models.NodeTypeInferred,
 		}
 		if len(macAddress) > 0 && macAddress[0] != "" {
 			node.MACAddress = macAddress[0]
@@ -436,12 +434,12 @@ func (s *TaskExecutionService) getGraphNode(runID, deviceID string, macAddress .
 	if strings.HasPrefix(deviceID, "terminal:") {
 		ip := strings.TrimPrefix(deviceID, "terminal:")
 		node := models.GraphNode{
-			ID:        deviceID,
-			Label:     ip,
-			IP:        ip,
-			Role:      "endpoint-inferred",
-			Vendor:    "endpoint",
-			NodeType:  models.NodeTypeInferred,
+			ID:       deviceID,
+			Label:    ip,
+			IP:       ip,
+			Role:     "endpoint-inferred",
+			Vendor:   "endpoint",
+			NodeType: models.NodeTypeInferred,
 		}
 		if len(macAddress) > 0 && macAddress[0] != "" {
 			node.MACAddress = macAddress[0]
@@ -453,14 +451,14 @@ func (s *TaskExecutionService) getGraphNode(runID, deviceID string, macAddress .
 		return models.GraphNode{ID: deviceID, Label: deviceID}
 	}
 	return models.GraphNode{
-		ID:           deviceID,
-		Label:        chooseValue(dev.DisplayName, dev.Hostname, dev.Model, dev.DeviceIP),
-		IP:           dev.DeviceIP,
-		Vendor:       dev.Vendor,
-		Model:        dev.Model,
-		Role:         dev.Role,
-		Site:         dev.Site,
-		NodeType:     models.NodeTypeManaged,
+		ID:       deviceID,
+		Label:    chooseValue(dev.DisplayName, dev.Hostname, dev.Model, dev.DeviceIP),
+		IP:       dev.DeviceIP,
+		Vendor:   dev.Vendor,
+		Model:    dev.Model,
+		Role:     dev.Role,
+		Site:     dev.Site,
+		NodeType: models.NodeTypeManaged,
 	}
 }
 

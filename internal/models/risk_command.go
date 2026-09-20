@@ -23,13 +23,13 @@ const (
 // RiskCommand 风险命令规则模型
 type RiskCommand struct {
 	ID        uint              `gorm:"primaryKey;autoIncrement" json:"id"`
-	Vendor    string            `gorm:"index;size:64;not null" json:"vendor"`      // huawei / h3c / cisco / *
-	Category  string            `gorm:"index;size:64" json:"category"`            // switch / router / firewall / *
-	Pattern   string            `gorm:"type:text;not null" json:"pattern"`        // 匹配命令的正则表达式
-	Action    RiskCommandAction `gorm:"type:varchar(32);not null" json:"action"`  // block / confirm / warn
-	Reason    string            `gorm:"type:text" json:"reason"`                  // 风险描述或拦截理由
-	Enabled   bool              `gorm:"default:true" json:"enabled"`              // 是否启用
-	Builtin   bool              `gorm:"default:false" json:"builtin"`             // 是否内置规则
+	Vendor    string            `gorm:"index;size:64;not null" json:"vendor"`    // huawei / h3c / cisco / *
+	Category  string            `gorm:"index;size:64" json:"category"`           // switch / router / firewall / *
+	Pattern   string            `gorm:"type:text;not null" json:"pattern"`       // 匹配命令的正则表达式
+	Action    RiskCommandAction `gorm:"type:varchar(32);not null" json:"action"` // block / confirm / warn
+	Reason    string            `gorm:"type:text" json:"reason"`                 // 风险描述或拦截理由
+	Enabled   bool              `gorm:"default:true" json:"enabled"`             // 是否启用
+	Builtin   bool              `gorm:"default:false" json:"builtin"`            // 是否内置规则
 	CreatedAt time.Time         `json:"createdAt"`
 	UpdatedAt time.Time         `json:"updatedAt"`
 }

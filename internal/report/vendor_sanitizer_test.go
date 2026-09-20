@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -88,4 +89,12 @@ func TestVendorSanitizer_Performance(t *testing.T) {
 	t.Logf("1MB 脱敏耗时: %v", duration)
 	assert.NotEmpty(t, res)
 	assert.Less(t, duration, 200*time.Millisecond, "1MB 数据脱敏耗时应在合理范围内")
+}
+
+func TestVendorSanitizer_LoggerCascade(t *testing.T) {
+	echo := "local-user admin password irreversible-cipher $1a$X#K$819238129381928391823918239128391283"
+	cs := logger.WithVendor("huawei").WithCommand("display current-configuration")
+	sanitized := cs.Sanitize(echo)
+	assert.NotContains(t, sanitized, "$1a$X#K$819238129381928391823918239128391283")
+	assert.Contains(t, sanitized, "****")
 }

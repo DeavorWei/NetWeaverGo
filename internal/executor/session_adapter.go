@@ -39,8 +39,8 @@ func NewSessionAdapter(width int, commands []string, m *matcher.StreamMatcher) *
 		reducer:           reducer,
 		replayer:          terminal.NewReplayer(width),
 		matcher:           m,
-		newState:          reducer.State(),   // 使用 reducer 的状态
-		newContext:        newCtx,            // 复用 reducer 的上下文，避免双实例问题
+		newState:          reducer.State(), // 使用 reducer 的状态
+		newContext:        newCtx,          // 复用 reducer 的上下文，避免双实例问题
 		newCommittedLines: make([]string, 0),
 	}
 

@@ -16,10 +16,10 @@ var (
 	}
 
 	// elabel 回显中的 BarCode 快速抽取
-	reElabelBarCode    = regexp.MustCompile(`(?i)BarCode\s*=\s*([A-Za-z0-9_-]+)`)
-	reBackPlaneBlock   = regexp.MustCompile(`(?is)\[BackPlane_\d+\](.*?)(?:\[\S+\]|\z)`)
-	reMainBoardBlock   = regexp.MustCompile(`(?is)\[(?:Main|Mother)_Board[^\d\r\n]*\d*\](.*?)(?:\[\S+\]|\z)`)
-	reUnitOrMainBlock  = regexp.MustCompile(`(?is)\[(?:Unit_\d+|Main_Board|BackPlane_\d+)\](.*?)(?:\[\S+\]|\z)`)
+	reElabelBarCode   = regexp.MustCompile(`(?i)BarCode\s*=\s*([A-Za-z0-9_-]+)`)
+	reBackPlaneBlock  = regexp.MustCompile(`(?is)\[BackPlane_\d+\](.*?)(?:\[\S+\]|\z)`)
+	reMainBoardBlock  = regexp.MustCompile(`(?is)\[(?:Main|Mother)_Board[^\d\r\n]*\d*\](.*?)(?:\[\S+\]|\z)`)
+	reUnitOrMainBlock = regexp.MustCompile(`(?is)\[(?:Unit_\d+|Main_Board|BackPlane_\d+)\](.*?)(?:\[\S+\]|\z)`)
 )
 
 // ExtractESN 从 display esn 与 display elabel 联合提取设备主序列号

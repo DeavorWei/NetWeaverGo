@@ -27,41 +27,41 @@ func getAliasMap() map[string]string {
 
 // ifType 数字编码常量（对齐 IANA ifType MIB 与 eDeskPro InterfaceTransition）
 const (
-	IFTypeOther                 = 1
-	IFTypeRegular1822           = 2
-	IFTypeHdh1822               = 3
-	IFTypeDdnX25                = 4
-	IFTypeRfc877x25             = 5
-	IFTypeEthernet              = 6
-	IFTypeIso88023Csmacd        = 7
+	IFTypeOther                  = 1
+	IFTypeRegular1822            = 2
+	IFTypeHdh1822                = 3
+	IFTypeDdnX25                 = 4
+	IFTypeRfc877x25              = 5
+	IFTypeEthernet               = 6
+	IFTypeIso88023Csmacd         = 7
 	IFTypeIso88024TokenBus       = 8
 	IFTypeIso88025TokenRing      = 9
-	IFTypeFddi                  = 15
-	IFTypeLapb                  = 16
-	IFTypeSdlc                  = 17
-	IFTypeDs1                   = 18
-	IFTypeE1                    = 19
-	IFTypeBasicISDN             = 20
-	IFTypePrimaryISDN           = 21
+	IFTypeFddi                   = 15
+	IFTypeLapb                   = 16
+	IFTypeSdlc                   = 17
+	IFTypeDs1                    = 18
+	IFTypeE1                     = 19
+	IFTypeBasicISDN              = 20
+	IFTypePrimaryISDN            = 21
 	IFTypePropPointToPointSerial = 22
-	IFTypePpp                   = 23
-	IFTypeLoopback              = 24
-	IFTypeEon                   = 25
-	IFTypeEthernet3Mbit         = 26
-	IFTypeNsip                  = 27
-	IFTypeSlip                  = 28
-	IFTypeUltra                 = 29
-	IFTypeDs3                   = 30
-	IFTypeSip                   = 31
-	IFTypeFrameRelay            = 32
-	IFTypeAtm                   = 37
-	IFTypeMiox25                = 38
-	IFTypePos                   = 39
-	IFTypeVlanif                = 53
-	IFTypeTunnel                = 131
-	IFTypeTrunk                 = 161
-	IFTypeLldp                  = 200
-	IFTypeCellular              = 243
+	IFTypePpp                    = 23
+	IFTypeLoopback               = 24
+	IFTypeEon                    = 25
+	IFTypeEthernet3Mbit          = 26
+	IFTypeNsip                   = 27
+	IFTypeSlip                   = 28
+	IFTypeUltra                  = 29
+	IFTypeDs3                    = 30
+	IFTypeSip                    = 31
+	IFTypeFrameRelay             = 32
+	IFTypeAtm                    = 37
+	IFTypeMiox25                 = 38
+	IFTypePos                    = 39
+	IFTypeVlanif                 = 53
+	IFTypeTunnel                 = 131
+	IFTypeTrunk                  = 161
+	IFTypeLldp                   = 200
+	IFTypeCellular               = 243
 )
 
 var (

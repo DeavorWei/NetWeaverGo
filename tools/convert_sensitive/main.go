@@ -48,7 +48,7 @@ func normalizePatternForRE2(pat string) string {
 
 func main() {
 	xmlPath := flag.String("xml", `D:\ICSLite_download\eDesk_Pro_V100R025C10SPC300\eDeskPro_V100R025C10SPC300-windows-x64\config\deviceversion\sensitiveCmd.xml`, "sensitiveCmd.xml 路径")
-	outPath := flag.String("out", `internal/config/sanitize_rules/sensitive_cmd.json`, "输出 JSON 路径")
+	outPath := flag.String("out", `internal/report/rules/sensitive_cmd.json`, "输出 JSON 路径")
 	flag.Parse()
 
 	fmt.Println("==================================================")

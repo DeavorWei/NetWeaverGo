@@ -397,16 +397,28 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 				}
 			}
 
-			// 1. 检查是否命中信任清单
-			isTrusted, trustEntry := GetGlobalRiskValidator().CheckTrust(act.Command)
-			if isTrusted {
+			// 0. 检查是否命中动态紧急放行凭证
+			if isBypassed, bypassInfo := GetGlobalRiskValidator().CheckBypass(e.runID(), deviceIP, act.Command); isBypassed {
+				logger.Info("StreamEngine", "-", "[紧急放行生效] 命令 %q 命中放行凭据 (操作人: %s, 理由: %s)",
+					act.Command, bypassInfo.Operator, bypassInfo.Reason)
+				RecordRiskLog(models.RiskCommandLog{
+					RunID:    e.runID(),
+					DeviceIP: deviceIP,
+					Command:  act.Command,
+					RuleID:   0,
+					Action:   models.RiskLogActionBypassed,
+					Operator: bypassInfo.Operator,
+					Reason:   "紧急放行生效: " + bypassInfo.Reason,
+				})
+			} else if isTrusted, trustEntry := GetGlobalRiskValidator().CheckTrust(act.Command); isTrusted {
+				// 1. 检查是否命中信任清单
 				logger.Info("StreamEngine", "-", "[信任清单放行] 命令 %q 命中信任规则 [%s]", act.Command, trustEntry.Pattern)
 				RecordRiskLog(models.RiskCommandLog{
 					RunID:    e.runID(),
 					DeviceIP: deviceIP,
 					Command:  act.Command,
 					RuleID:   trustEntry.ID,
-					Action:   "bypassed",
+					Action:   models.RiskLogActionBypassed,
 					Operator: trustEntry.UserID,
 					Reason:   "命中信任清单: " + trustEntry.Reason,
 				})
@@ -420,9 +432,9 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 					}
 					e.adapter.SetConfirmPolicy("ask_user")
 
-					actionStr := string(riskAction)
+					actionStr := models.ToRiskLogAction(riskAction)
 					if riskMode == "warn" {
-						actionStr = "warned"
+						actionStr = models.RiskLogActionWarned
 					}
 					RecordRiskLog(models.RiskCommandLog{
 						RunID:    e.runID(),
@@ -440,44 +452,20 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 							act.Command, riskRule.Pattern, riskRule.Reason, riskAction)
 					} else if riskMode == "enforce" {
 						// 严格生效模式
-				switch riskAction {
-				case models.RiskActionBlock:
-					errMsg := fmt.Sprintf("风险命令阻断: 命令 %q 命中高危规则 [%s: %s]", act.Command, riskRule.Pattern, riskRule.Reason)
-					logger.Error("StreamEngine", "-", "%s", errMsg)
-					if e.executor != nil && e.executor.EventBus != nil {
-						e.executor.EventBus <- report.ExecutorEvent{
-							IP:       e.executor.IP,
-							Type:     report.EventDeviceError,
-							Message:  errMsg,
-							CmdIndex: act.Index + 1,
-							TotalCmd: e.adapter.TotalCommands(),
-						}
-					}
-					// 阻断降级为单命令失败，遵循 ContinueOnCmdError 不终止整机 Run
-					if e.adapter.newContext.ContinueOnCmdError {
-						e.adapter.newContext.FailCurrentCommand(errMsg)
-						e.emitExecutionEvent(ExecutionEvent{
-							Type:         EventError,
-							Kind:         RecordCommandFailed,
-							Command:      act.Command,
-							Index:        act.Index,
-							ErrorMessage: errMsg,
-							Timestamp:    time.Now(),
-						})
-						// 调度推进下一条命令
-						followups := e.adapter.reducer.trySendCommand()
-						return e.executeBatch(NewTransitionBatch(followups...), currentTimeout, defaultTimeout, timer)
-					}
-					e.adapter.MarkFailed(errMsg)
-					return fmt.Errorf("%s", errMsg)
-
-				case models.RiskActionConfirm:
-					logger.Warn("StreamEngine", "-", "风险命令挂起审批: 命令 %q 命中规则 [%s: %s]", act.Command, riskRule.Pattern, riskRule.Reason)
-					if e.suspendHandler != nil {
-						userAction := e.suspendHandler(context.Background(), e.executor.IP, "高危命令人工审批: "+riskRule.Reason, act.Command)
-						if userAction != ActionContinue {
-							errMsg := fmt.Sprintf("风险命令被用户拒绝或取消: %q", act.Command)
-							logger.Warn("StreamEngine", "-", "%s", errMsg)
+						switch riskAction {
+						case models.RiskActionBlock:
+							errMsg := fmt.Sprintf("风险命令阻断: 命令 %q 命中高危规则 [%s: %s]", act.Command, riskRule.Pattern, riskRule.Reason)
+							logger.Error("StreamEngine", "-", "%s", errMsg)
+							if e.executor != nil && e.executor.EventBus != nil {
+								e.executor.EventBus <- report.ExecutorEvent{
+									IP:       e.executor.IP,
+									Type:     report.EventDeviceError,
+									Message:  errMsg,
+									CmdIndex: act.Index + 1,
+									TotalCmd: e.adapter.TotalCommands(),
+								}
+							}
+							// 阻断降级为单命令失败，遵循 ContinueOnCmdError 不终止整机 Run
 							if e.adapter.newContext.ContinueOnCmdError {
 								e.adapter.newContext.FailCurrentCommand(errMsg)
 								e.emitExecutionEvent(ExecutionEvent{
@@ -488,47 +476,71 @@ func (e *StreamEngine) executeSessionEffect(effect SessionEffect, currentTimeout
 									ErrorMessage: errMsg,
 									Timestamp:    time.Now(),
 								})
+								// 调度推进下一条命令
 								followups := e.adapter.reducer.trySendCommand()
 								return e.executeBatch(NewTransitionBatch(followups...), currentTimeout, defaultTimeout, timer)
 							}
 							e.adapter.MarkFailed(errMsg)
 							return fmt.Errorf("%s", errMsg)
-						}
-						logger.Info("StreamEngine", "-", "工程师确认执行高危命令: %q", act.Command)
-					} else {
-						errMsg := fmt.Sprintf("无挂起处理器，高危命令被默认阻断: %q", act.Command)
-						logger.Warn("StreamEngine", "-", "%s", errMsg)
-						if e.adapter.newContext.ContinueOnCmdError {
-							e.adapter.newContext.FailCurrentCommand(errMsg)
-							e.emitExecutionEvent(ExecutionEvent{
-								Type:         EventError,
-								Kind:         RecordCommandFailed,
-								Command:      act.Command,
-								Index:        act.Index,
-								ErrorMessage: errMsg,
-								Timestamp:    time.Now(),
-							})
-							followups := e.adapter.reducer.trySendCommand()
-							return e.executeBatch(NewTransitionBatch(followups...), currentTimeout, defaultTimeout, timer)
-						}
-						e.adapter.MarkFailed(errMsg)
-						return fmt.Errorf("%s", errMsg)
-					}
 
-				case models.RiskActionWarn:
-					logger.Warn("StreamEngine", "-", "[高危警告] 命令 %q 命中风险规则: %s", act.Command, riskRule.Reason)
+						case models.RiskActionConfirm:
+							logger.Warn("StreamEngine", "-", "风险命令挂起审批: 命令 %q 命中规则 [%s: %s]", act.Command, riskRule.Pattern, riskRule.Reason)
+							if e.suspendHandler != nil {
+								userAction := e.suspendHandler(context.Background(), e.executor.IP, "高危命令人工审批: "+riskRule.Reason, act.Command)
+								if userAction != ActionContinue {
+									errMsg := fmt.Sprintf("风险命令被用户拒绝或取消: %q", act.Command)
+									logger.Warn("StreamEngine", "-", "%s", errMsg)
+									if e.adapter.newContext.ContinueOnCmdError {
+										e.adapter.newContext.FailCurrentCommand(errMsg)
+										e.emitExecutionEvent(ExecutionEvent{
+											Type:         EventError,
+											Kind:         RecordCommandFailed,
+											Command:      act.Command,
+											Index:        act.Index,
+											ErrorMessage: errMsg,
+											Timestamp:    time.Now(),
+										})
+										followups := e.adapter.reducer.trySendCommand()
+										return e.executeBatch(NewTransitionBatch(followups...), currentTimeout, defaultTimeout, timer)
+									}
+									e.adapter.MarkFailed(errMsg)
+									return fmt.Errorf("%s", errMsg)
+								}
+								logger.Info("StreamEngine", "-", "工程师确认执行高危命令: %q", act.Command)
+							} else {
+								errMsg := fmt.Sprintf("无挂起处理器，高危命令被默认阻断: %q", act.Command)
+								logger.Warn("StreamEngine", "-", "%s", errMsg)
+								if e.adapter.newContext.ContinueOnCmdError {
+									e.adapter.newContext.FailCurrentCommand(errMsg)
+									e.emitExecutionEvent(ExecutionEvent{
+										Type:         EventError,
+										Kind:         RecordCommandFailed,
+										Command:      act.Command,
+										Index:        act.Index,
+										ErrorMessage: errMsg,
+										Timestamp:    time.Now(),
+									})
+									followups := e.adapter.reducer.trySendCommand()
+									return e.executeBatch(NewTransitionBatch(followups...), currentTimeout, defaultTimeout, timer)
+								}
+								e.adapter.MarkFailed(errMsg)
+								return fmt.Errorf("%s", errMsg)
+							}
+
+						case models.RiskActionWarn:
+							logger.Warn("StreamEngine", "-", "[高危警告] 命令 %q 命中风险规则: %s", act.Command, riskRule.Reason)
+						}
+					}
+				} else if e.savedConfirmPolicy != "" {
+					// 未命中风险规则，恢复原本的会话交互确认策略
+					e.adapter.SetConfirmPolicy(e.savedConfirmPolicy)
+					e.savedConfirmPolicy = ""
 				}
 			}
 		} else if e.savedConfirmPolicy != "" {
-			// 未命中风险规则，恢复原本的会话交互确认策略
 			e.adapter.SetConfirmPolicy(e.savedConfirmPolicy)
 			e.savedConfirmPolicy = ""
 		}
-	}
-} else if e.savedConfirmPolicy != "" {
-	e.adapter.SetConfirmPolicy(e.savedConfirmPolicy)
-	e.savedConfirmPolicy = ""
-}
 
 		// 命令缓存读路径检查
 		useCache := false

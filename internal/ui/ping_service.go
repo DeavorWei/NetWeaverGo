@@ -28,9 +28,9 @@ const (
 
 // PingRequest represents the request for batch ping operation.
 type PingRequest struct {
-	Targets   string         `json:"targets"`   // IP addresses, CIDR, or ranges (newline separated)
-	Config    icmp.PingConfig `json:"config"`    // Ping configuration
-	DeviceIDs []uint         `json:"deviceIds"` // Optional: device IDs to import IPs from
+	Targets   string           `json:"targets"`   // IP addresses, CIDR, or ranges (newline separated)
+	Config    icmp.PingConfig  `json:"config"`    // Ping configuration
+	DeviceIDs []uint           `json:"deviceIds"` // Optional: device IDs to import IPs from
 	Options   icmp.PingOptions `json:"options"`   // Ping options (new)
 }
 
@@ -57,7 +57,7 @@ type PingService struct {
 
 	// DNS 预解析取消控制
 	dnsCancelMu sync.Mutex
-	dnsCancel    context.CancelFunc
+	dnsCancel   context.CancelFunc
 
 	// DNS 缓存
 	dnsCache    map[string]dnsCacheEntry
