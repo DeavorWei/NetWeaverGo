@@ -7,6 +7,7 @@ import (
 
 	"github.com/NetWeaverGo/core"
 	"github.com/NetWeaverGo/core/internal/config"
+	"github.com/NetWeaverGo/core/internal/inspection"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/parser"
 	"github.com/NetWeaverGo/core/internal/report"
@@ -54,6 +55,16 @@ func main() {
 
 	// 脱敏引擎启动自检（P2-3）：输出有效/损坏规则清单，损坏规则逐条 WARN
 	report.LogSanitizerHealth()
+
+	// P2-8：恢复持久化的 DSL 导入规则（重启后仍生效）
+	if n, err := inspection.LoadImportedRulesFromFile(inspection.DefaultImportedRulesPath(pm.GetStorageRoot())); err != nil {
+		logger.Warn("System", "-", "恢复 DSL 导入规则失败: %v", err)
+	} else if n > 0 {
+		logger.Info("System", "-", "已恢复 %d 条 DSL 导入规则", n)
+	}
+
+	// A3-α/P2-1：启动阶段预热 XmlConfig 引擎，触发不兼容清单与正则改写留痕告警
+	_ = parser.GetDefaultXmlConfigEngine()
 
 	// 全部数据库迁移（config.InitDB + taskexec.AutoMigrate）成功后，
 	// 才提交"已备份版本"标记：确保任一迁移失败时下次启动仍会重新备份。

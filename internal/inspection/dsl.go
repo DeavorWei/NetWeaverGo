@@ -9,8 +9,20 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
 )
+
+// validAssertTypes 支持的断言类型集合（P2-8 字段完整性校验）
+var validAssertTypes = map[string]bool{
+	"must_not_contain": true,
+	"must_contain":     true,
+	"regex":            true,
+	"threshold":        true,
+	"bound":            true,
+	"numeric":          true,
+	"equals":           true,
+}
 
 //go:embed rules/builtin/*.json
 var builtinRulesFS embed.FS
@@ -76,8 +88,10 @@ type DSLRule struct {
 
 // DSLInterpreter 规则 DSL 解释器
 type DSLInterpreter struct {
-	mu    sync.RWMutex
-	rules []*DSLRule
+	mu       sync.RWMutex
+	rules    []*DSLRule
+	builtins map[string]bool // 内置规则编号集合（用于覆盖告警）
+	imported map[string]bool // 经导入规则集（用于持久化导出）
 }
 
 var (
@@ -97,7 +111,9 @@ func GetGlobalDSLInterpreter() *DSLInterpreter {
 // NewDSLInterpreter 创建 DSL 解释器
 func NewDSLInterpreter() *DSLInterpreter {
 	return &DSLInterpreter{
-		rules: make([]*DSLRule, 0),
+		rules:    make([]*DSLRule, 0),
+		builtins: make(map[string]bool),
+		imported: make(map[string]bool),
 	}
 }
 
@@ -122,6 +138,9 @@ func (di *DSLInterpreter) LoadBuiltin() error {
 				for i := range ruleList {
 					r := ruleList[i]
 					di.rules = append(di.rules, &r)
+					if r.CheckNo != "" {
+						di.builtins[r.CheckNo] = true
+					}
 				}
 			}
 		}
@@ -196,6 +215,13 @@ func (di *DSLInterpreter) ImportRulesJSON(data []byte) (int, error) {
 				}
 			}
 		}
+		// P2-8：字段完整性校验（断言类型合法，且至少声明命令或断言）
+		if rule.Assert.Type != "" && !validAssertTypes[strings.ToLower(rule.Assert.Type)] {
+			return 0, fmt.Errorf("规则 [%s] 断言类型不受支持: %s", rule.CheckNo, rule.Assert.Type)
+		}
+		if len(rule.Commands) == 0 && rule.Assert.Type == "" {
+			return 0, fmt.Errorf("规则 [%s] 缺少 commands 与 assert，无法执行", rule.CheckNo)
+		}
 	}
 
 	di.mu.Lock()
@@ -205,7 +231,12 @@ func (di *DSLInterpreter) ImportRulesJSON(data []byte) (int, error) {
 	for i := range imported {
 		rule := imported[i]
 		if rule.CheckNo == "" {
+			logger.Warn("DSL", "-", "忽略缺少 checkno 的导入规则")
 			continue
+		}
+		if di.builtins[rule.CheckNo] {
+			// P2-8：允许覆盖内置规则，但必须留下明确告警（便于审计与回滚）
+			logger.Warn("DSL", "-", "导入规则覆盖内置规则: %s", rule.CheckNo)
 		}
 		// 查找是否已存在，存在则更新，不存在则追加
 		found := false
@@ -219,9 +250,35 @@ func (di *DSLInterpreter) ImportRulesJSON(data []byte) (int, error) {
 		if !found {
 			di.rules = append(di.rules, &rule)
 		}
+		di.imported[rule.CheckNo] = true
 		count++
 	}
 	return count, nil
+}
+
+// ExportImportedRulesJSON 导出"经导入的规则"为 JSON（用于持久化，重启后可恢复）
+func (di *DSLInterpreter) ExportImportedRulesJSON() (string, error) {
+	di.mu.RLock()
+	defer di.mu.RUnlock()
+
+	rules := make([]*DSLRule, 0, len(di.imported))
+	for _, r := range di.rules {
+		if di.imported[r.CheckNo] {
+			rules = append(rules, r)
+		}
+	}
+	data, err := json.MarshalIndent(rules, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// ImportedRuleCount 返回当前生效的导入规则数量
+func (di *DSLInterpreter) ImportedRuleCount() int {
+	di.mu.RLock()
+	defer di.mu.RUnlock()
+	return len(di.imported)
 }
 
 // FindRule 根据 CheckNo 查找规则

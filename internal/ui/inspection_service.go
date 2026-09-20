@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/inspection"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/models"
@@ -594,5 +595,15 @@ func (s *InspectionService) ExportDSLRules() (string, error) {
 // ImportDSLRules 导入 DSL 巡检规则 JSON 文本
 func (s *InspectionService) ImportDSLRules(jsonData string) (int, error) {
 	interp := inspection.GetGlobalDSLInterpreter()
-	return interp.ImportRulesJSON([]byte(jsonData))
+	count, err := interp.ImportRulesJSON([]byte(jsonData))
+	if err != nil {
+		return count, err
+	}
+	// P2-8：持久化导入规则，重启后由 main 启动流程自动恢复
+	if path := inspection.DefaultImportedRulesPath(config.GetPathManager().GetStorageRoot()); path != "" {
+		if saveErr := inspection.SaveImportedRules(path); saveErr != nil {
+			logger.Warn("Inspection", "-", "导入规则持久化失败（本次运行仍生效）: %v", saveErr)
+		}
+	}
+	return count, nil
 }

@@ -115,7 +115,26 @@ func (e *XmlConfigEngine) LoadEmbedded() error {
 	e.rebuildOrderedKeys()
 	// 4. 输出 parsecfg 不兼容规则清单启动告警（P2-2）
 	e.logBrokenParseConfigs()
+	// 5. 输出正则语法改写留痕启动告警（P2-1：改写可追溯，便于人工复核）
+	e.logRegexRewriteRecords()
 	return walkErr
+}
+
+// logRegexRewriteRecords 输出 XML 规则加载期间的正则语法改写留痕（P2-1）
+func (e *XmlConfigEngine) logRegexRewriteRecords() {
+	records := xmlcfg.RewriteRecords()
+	if len(records) == 0 {
+		return
+	}
+	logger.Warn("XmlConfigEngine", "-", "XML 解析规则加载期间发生 %d 处正则语法改写（已自动适配 RE2，请人工复核）", len(records))
+	const maxDetail = 5
+	for i, rec := range records {
+		if i >= maxDetail {
+			logger.Warn("XmlConfigEngine", "-", "其余 %d 处改写留痕可通过 xmlcfg.RewriteRecords() 查询", len(records)-maxDetail)
+			break
+		}
+		logger.Warn("XmlConfigEngine", "-", "改写留痕[%s]: %s -> %s", rec.Reason, rec.Original, rec.Rewritten)
+	}
 }
 
 // rebuildOrderedKeys 重建 vendor -> 有序命令键列表索引。
