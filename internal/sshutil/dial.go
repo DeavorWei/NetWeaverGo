@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/NetWeaverGo/core/internal/logger"
 	"golang.org/x/crypto/ssh"
@@ -16,8 +17,10 @@ func DialWithProxy(ctx context.Context, target string, sshConfig *ssh.ClientConf
 	var err error
 
 	if proxyAddr != "" {
-		logger.Verbose("SSH", target, "使用 SOCKS5 代理 %s 进行拨号", proxyAddr)
-		dialer, pErr := proxy.SOCKS5("tcp", proxyAddr, nil, proxy.Direct)
+		cleanedProxy := strings.TrimPrefix(proxyAddr, "socks5://")
+		cleanedProxy = strings.TrimPrefix(cleanedProxy, "socks5h://")
+		logger.Verbose("SSH", target, "使用 SOCKS5 代理 %s 进行拨号", cleanedProxy)
+		dialer, pErr := proxy.SOCKS5("tcp", cleanedProxy, nil, proxy.Direct)
 		if pErr != nil {
 			return nil, nil, fmt.Errorf("创建 SOCKS5 代理拨号器失败: %w", pErr)
 		}

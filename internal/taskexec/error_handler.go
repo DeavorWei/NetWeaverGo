@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
 	"gorm.io/gorm"
 )
@@ -168,4 +169,42 @@ func IsNotFoundError(err error) bool {
 // timeNow 为便于后续测试替换预留
 var timeNow = func() time.Time {
 	return time.Now()
+}
+
+// FormatTroubleshootMessage 结合细分错误归类生成对运维与排障友好的错误描述 (P2-2)
+func FormatTroubleshootMessage(deviceIP, rawErrMsg string, err error) string {
+	category := executor.ClassifyErrorReason(err)
+	if category == "" || category == executor.ErrCategoryUnknown {
+		if rawErrMsg != "" {
+			category = executor.ClassifyErrorReason(fmt.Errorf("%s", rawErrMsg))
+		}
+	}
+
+	var humanCategory string
+	switch category {
+	case executor.ErrCategoryAuthFailed:
+		humanCategory = "设备认证失败 (auth_failed: 请核对用户名/密码/特权等级)"
+	case executor.ErrCategoryTimeout:
+		humanCategory = "连接或命令执行超时 (timeout)"
+	case executor.ErrCategoryNetworkUnreachable:
+		humanCategory = "网络不可达或端口拒绝 (network_unreachable)"
+	case executor.ErrCategoryCommandNotFound:
+		humanCategory = "命令无法识别或款型不支持 (command_not_found)"
+	case executor.ErrCategorySyntaxError:
+		humanCategory = "命令语法或参数格式错误 (syntax_error)"
+	case executor.ErrCategoryPermissionDenied:
+		humanCategory = "权限不足执行受限 (permission_denied)"
+	case executor.ErrCategorySystemFault:
+		humanCategory = "系统致命异常或资源耗尽 (system_fault)"
+	default:
+		humanCategory = "执行异常 (execution_failed)"
+	}
+
+	if rawErrMsg != "" {
+		return fmt.Sprintf("[%s] %s: %s", deviceIP, humanCategory, rawErrMsg)
+	}
+	if err != nil {
+		return fmt.Sprintf("[%s] %s: %v", deviceIP, humanCategory, err)
+	}
+	return fmt.Sprintf("[%s] %s", deviceIP, humanCategory)
 }

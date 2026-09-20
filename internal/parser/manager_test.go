@@ -264,3 +264,32 @@ func TestMatchesAppliesTo_WildcardAndSeries(t *testing.T) {
 	assert.False(t, matchesAppliesTo(comboApplies, "CE6866", "V300R005"))
 	assert.False(t, matchesAppliesTo(comboApplies, "AR6280", "V200R019"))
 }
+
+func TestValidateCommandKey_PathTraversal(t *testing.T) {
+	assert.NoError(t, ValidateCommandKey("display_version"))
+	assert.NoError(t, ValidateCommandKey("interface_brief"))
+
+	assert.Error(t, ValidateCommandKey("../cmd"))
+	assert.Error(t, ValidateCommandKey("..\\cmd"))
+	assert.Error(t, ValidateCommandKey("foo/bar"))
+	assert.Error(t, ValidateCommandKey("foo\\bar"))
+	assert.Error(t, ValidateCommandKey(""))
+}
+
+func TestCalculateTemplateSpecificity_Priority(t *testing.T) {
+	// 验证：精准型号 > 系列归一化 > 通配符
+	exactApplies := &models.TemplateAppliesTo{Models: []string{"S5735-L24P4S-A2"}}
+	seriesApplies := &models.TemplateAppliesTo{Models: []string{"S5700"}}
+	wildcardApplies := &models.TemplateAppliesTo{Models: []string{"S57*"}}
+	globalApplies := &models.TemplateAppliesTo{Models: []string{"*"}}
+
+	model := "S5735-L24P4S-A2"
+	exactScore := calculateTemplateSpecificity(exactApplies, model, "V200")
+	seriesScore := calculateTemplateSpecificity(seriesApplies, model, "V200")
+	wildcardScore := calculateTemplateSpecificity(wildcardApplies, model, "V200")
+	globalScore := calculateTemplateSpecificity(globalApplies, model, "V200")
+
+	assert.Greater(t, exactScore, seriesScore, "精准匹配得分应高于系列归一化")
+	assert.Greater(t, seriesScore, wildcardScore, "系列归一化得分应高于粗粒度前缀通配")
+	assert.Greater(t, wildcardScore, globalScore, "前缀通配得分应高于全量通配")
+}

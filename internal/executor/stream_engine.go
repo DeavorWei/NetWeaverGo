@@ -14,6 +14,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/metrics"
 	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/report"
+	"github.com/NetWeaverGo/core/internal/sshutil"
 	"github.com/NetWeaverGo/core/internal/terminal"
 )
 
@@ -74,7 +75,12 @@ func (e *StreamEngine) runID() string {
 
 // NewStreamEngine 创建新的流处理引擎
 func NewStreamEngine(executor *DeviceExecutor, conn connutil.DeviceConnection, commands []string, width int) *StreamEngine {
-	m := matcher.NewStreamMatcher()
+	var m *matcher.StreamMatcher
+	if executor != nil && executor.Matcher != nil {
+		m = executor.Matcher
+	} else {
+		m = matcher.NewStreamMatcher()
+	}
 	adapter := NewSessionAdapter(width, commands, m)
 	logger.Debug("StreamEngine", "-", "使用新会话架构 (Detector+Reducer+Driver)")
 
@@ -126,7 +132,11 @@ func (e *StreamEngine) Run(ctx context.Context, mode RunMode, defaultTimeout tim
 	}
 
 	buf := make([]byte, bufferSize)
-	outReader := e.conn // DeviceConnection 实现了 io.Reader
+	var outReader io.Reader = e.conn // DeviceConnection 实现了 io.Reader
+	if e.executor != nil && e.executor.charset != "" && !strings.EqualFold(e.executor.charset, "utf-8") {
+		outReader = sshutil.NewCharsetReader(outReader, e.executor.charset)
+		logger.Debug("StreamEngine", "-", "启用字符集转码 Reader: %s", e.executor.charset)
+	}
 
 	// 丢弃并记录 stderr（SSH 有独立 stderr，Telnet 没有）
 	// 通过类型断言检查是否支持 stderr

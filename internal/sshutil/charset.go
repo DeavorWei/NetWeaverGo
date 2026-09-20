@@ -3,15 +3,17 @@ package sshutil
 import (
 	"bytes"
 	"io"
+	"strings"
 	"unicode/utf8"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/traditionalchinese"
 	"golang.org/x/text/transform"
 )
 
 // CharsetDecoder 字符集自动探测与转码
 type CharsetDecoder struct {
-	defaultCharset string // "utf-8" | "gbk" | "auto"
+	defaultCharset string // "utf-8" | "gbk" | "gb18030" | "big5" | "auto"
 }
 
 // NewCharsetDecoder 创建字符集转码器
@@ -55,7 +57,7 @@ func (d *CharsetDecoder) AutoDetect(data []byte) string {
 	return "utf-8"
 }
 
-// Decode 尝试 UTF-8 解码，若指定为 GBK 或自动探测判定为 GBK 时转码为 UTF-8
+// Decode 尝试 UTF-8 解码，若指定为 GBK/GB18030/Big5 或自动探测判定为非 UTF-8 时转码为 UTF-8
 func (d *CharsetDecoder) Decode(data []byte) (string, error) {
 	if len(data) == 0 {
 		return "", nil
@@ -66,14 +68,38 @@ func (d *CharsetDecoder) Decode(data []byte) (string, error) {
 		charset = d.AutoDetect(data)
 	}
 
-	switch charset {
-	case "gbk":
+	c := strings.ToLower(strings.TrimSpace(charset))
+	switch c {
+	case "gbk", "cp936":
 		reader := transform.NewReader(bytes.NewReader(data), simplifiedchinese.GBK.NewDecoder())
 		decoded, err := io.ReadAll(reader)
 		if err != nil {
 			return string(data), err
 		}
 		return string(decoded), nil
+	case "gb18030":
+		reader := transform.NewReader(bytes.NewReader(data), simplifiedchinese.GB18030.NewDecoder())
+		decoded, err := io.ReadAll(reader)
+		if err != nil {
+			return string(data), err
+		}
+		return string(decoded), nil
+	case "big5":
+		reader := transform.NewReader(bytes.NewReader(data), traditionalchinese.Big5.NewDecoder())
+		decoded, err := io.ReadAll(reader)
+		if err != nil {
+			return string(data), err
+		}
+		return string(decoded), nil
+	case "hz-gb2312", "hzgb2312":
+		reader := transform.NewReader(bytes.NewReader(data), simplifiedchinese.HZGB2312.NewDecoder())
+		decoded, err := io.ReadAll(reader)
+		if err != nil {
+			return string(data), err
+		}
+		return string(decoded), nil
+	case "utf-8", "utf8":
+		return string(data), nil
 	default:
 		if utf8.Valid(data) {
 			return string(data), nil
@@ -90,11 +116,19 @@ func (d *CharsetDecoder) Decode(data []byte) (string, error) {
 
 // NewCharsetReader 创建带转码的 Reader
 func NewCharsetReader(r io.Reader, charset string) io.Reader {
-	if charset == "utf-8" || charset == "" {
+	c := strings.ToLower(strings.TrimSpace(charset))
+	switch c {
+	case "utf-8", "utf8", "":
 		return r
-	}
-	if charset == "gbk" {
+	case "gbk", "cp936":
+		return transform.NewReader(r, simplifiedchinese.GBK.NewDecoder())
+	case "gb18030":
+		return transform.NewReader(r, simplifiedchinese.GB18030.NewDecoder())
+	case "big5":
+		return transform.NewReader(r, traditionalchinese.Big5.NewDecoder())
+	case "hz-gb2312", "hzgb2312":
+		return transform.NewReader(r, simplifiedchinese.HZGB2312.NewDecoder())
+	default:
 		return transform.NewReader(r, simplifiedchinese.GBK.NewDecoder())
 	}
-	return r
 }

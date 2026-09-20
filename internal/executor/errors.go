@@ -236,6 +236,56 @@ func ClassifyError(err error) ErrorType {
 	return ErrorTypeWarning
 }
 
+// 细分排障原因分类代码 (P2-2)
+const (
+	ErrCategoryAuthFailed         = "auth_failed"
+	ErrCategoryTimeout            = "timeout"
+	ErrCategoryNetworkUnreachable = "network_unreachable"
+	ErrCategoryCommandNotFound    = "command_not_found"
+	ErrCategorySyntaxError        = "syntax_error"
+	ErrCategoryPermissionDenied   = "permission_denied"
+	ErrCategorySystemFault        = "system_fault"
+	ErrCategoryUnknown            = "unknown"
+)
+
+// ClassifyErrorReason 诊断并归类具体失败原因
+func ClassifyErrorReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	errStr := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(errStr, "authentication failed") ||
+		strings.Contains(errStr, "unable to authenticate") ||
+		strings.Contains(errStr, "login failed") ||
+		strings.Contains(errStr, "password") ||
+		strings.Contains(errStr, "auth"):
+		return ErrCategoryAuthFailed
+	case strings.Contains(errStr, "permission denied") || strings.Contains(errStr, "privilege"):
+		return ErrCategoryPermissionDenied
+	case strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline"):
+		return ErrCategoryTimeout
+	case strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "no route to host") ||
+		strings.Contains(errStr, "network is unreachable") ||
+		strings.Contains(errStr, "unreachable"):
+		return ErrCategoryNetworkUnreachable
+	case strings.Contains(errStr, "unrecognized command") ||
+		strings.Contains(errStr, "unknown command") ||
+		strings.Contains(errStr, "command not found"):
+		return ErrCategoryCommandNotFound
+	case strings.Contains(errStr, "syntax error") ||
+		strings.Contains(errStr, "incomplete command") ||
+		strings.Contains(errStr, "ambiguous command") ||
+		strings.Contains(errStr, "invalid input"):
+		return ErrCategorySyntaxError
+	case strings.Contains(errStr, "panic") || strings.Contains(errStr, "out of memory") || strings.Contains(errStr, "fatal"):
+		return ErrCategorySystemFault
+	default:
+		return ErrCategoryUnknown
+	}
+}
+
 // IsExecutionError 检查是否为ExecutionError
 func IsExecutionError(err error) (*ExecutionError, bool) {
 	var execErr *ExecutionError

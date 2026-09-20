@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/traditionalchinese"
 	"golang.org/x/text/transform"
 )
 
@@ -64,5 +65,31 @@ func TestNewCharsetReader_GBK(t *testing.T) {
 	}
 	if string(out) != src {
 		t.Errorf("转码结果 = %s, want %s", string(out), src)
+	}
+}
+
+func TestNewCharsetReader_GB18030_And_Big5(t *testing.T) {
+	// 1. GB18030 测试
+	srcGB := "华三交换机测试"
+	gbData, err := io.ReadAll(transform.NewReader(bytes.NewReader([]byte(srcGB)), simplifiedchinese.GB18030.NewEncoder()))
+	if err != nil {
+		t.Fatalf("编码 GB18030 失败: %v", err)
+	}
+	readerGB := NewCharsetReader(bytes.NewReader(gbData), "gb18030")
+	outGB, err := io.ReadAll(readerGB)
+	if err != nil || string(outGB) != srcGB {
+		t.Fatalf("GB18030 转码失败: %v, got %s", err, string(outGB))
+	}
+
+	// 2. Big5 繁体测试
+	srcBig5 := "網絡設備狀態"
+	big5Data, err := io.ReadAll(transform.NewReader(bytes.NewReader([]byte(srcBig5)), traditionalchinese.Big5.NewEncoder()))
+	if err != nil {
+		t.Fatalf("编码 Big5 失败: %v", err)
+	}
+	readerBig5 := NewCharsetReader(bytes.NewReader(big5Data), "big5")
+	outBig5, err := io.ReadAll(readerBig5)
+	if err != nil || string(outBig5) != srcBig5 {
+		t.Fatalf("Big5 转码失败: %v, got %s", err, string(outBig5))
 	}
 }

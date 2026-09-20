@@ -168,24 +168,28 @@ func (m *ParserManager) GetParserForDevice(vendor, model, version string) (CliPa
 		return baseParser, nil
 	}
 
-	// 检索是否有适用的针对款型或版本的覆盖模板（多命中时更具体优先仲裁）
+	// 检索是否有适用的针对款型或版本的覆盖模板（A3-β/P1-7: 多维度更具体优先与确定性破局仲裁）
 	var matchedOverrides map[string]*CompiledTemplate
 	matchedSpecificity := make(map[string]int)
+	matchedTieBreaker := make(map[string]string)
+
 	for _, st := range scoped {
 		if matchesAppliesTo(&st.appliesTo, model, version) {
-			spec := 0
+			spec := calculateTemplateSpecificity(&st.appliesTo, model, version)
+			// 确定性破局标识
+			tieKey := st.commandKey + ":" + st.compiled.Vendor + ":" + string(st.compiled.Engine)
 			if len(st.appliesTo.Models) > 0 {
-				spec++
+				tieKey += ":" + st.appliesTo.Models[0]
 			}
-			if len(st.appliesTo.Versions) > 0 {
-				spec++
-			}
+
 			if matchedOverrides == nil {
 				matchedOverrides = make(map[string]*CompiledTemplate)
 			}
-			if spec >= matchedSpecificity[st.commandKey] {
+			currSpec := matchedSpecificity[st.commandKey]
+			if spec > currSpec || (spec == currSpec && tieKey > matchedTieBreaker[st.commandKey]) {
 				matchedOverrides[st.commandKey] = st.compiled
 				matchedSpecificity[st.commandKey] = spec
+				matchedTieBreaker[st.commandKey] = tieKey
 			}
 		}
 	}
@@ -212,6 +216,40 @@ func (m *ParserManager) GetParserForDevice(vendor, model, version string) (CliPa
 	deviceParser.SetModeProvider(m.GetEngineMode)
 	deviceParser.SetMetricsRecorder(m.RecordParse)
 	return deviceParser, nil
+}
+
+// calculateTemplateSpecificity 计算模板针对特定款型与版本的多维特异度评分 (A3-β / P1-7)
+func calculateTemplateSpecificity(applies *models.TemplateAppliesTo, model, version string) int {
+	if applies == nil {
+		return 0
+	}
+	score := 0
+	// 1. 款型匹配度细化
+	for _, m := range applies.Models {
+		m = strings.TrimSpace(m)
+		if m == "" || m == "*" {
+			score += 1
+		} else if strings.EqualFold(m, model) {
+			score += 100 // 完全精准型号匹配
+		} else if strings.EqualFold(m, device.ConvertSeries(model)) {
+			score += 50 // 系列归一化型号匹配
+		} else if strings.HasSuffix(m, "*") && strings.HasPrefix(strings.ToLower(model), strings.ToLower(strings.TrimSuffix(m, "*"))) {
+			score += 10 + len(m) // 前缀通配，前缀越长权重越高
+		}
+	}
+
+	// 2. 版本匹配度细化
+	for _, v := range applies.Versions {
+		v = strings.TrimSpace(v)
+		if v == "" || v == "*" {
+			score += 1
+		} else if strings.EqualFold(v, version) {
+			score += 50 // 完全精准版本匹配
+		} else if strings.HasSuffix(v, "*") && strings.HasPrefix(strings.ToLower(version), strings.ToLower(strings.TrimSuffix(v, "*"))) {
+			score += 5 + len(v) // 版本前缀匹配
+		}
+	}
+	return score
 }
 
 // matchesAppliesTo 检查 model 和 version 是否符合 AppliesTo 约束

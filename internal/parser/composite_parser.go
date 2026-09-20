@@ -1,7 +1,9 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -56,10 +58,26 @@ func (p *CompositeParser) Parse(commandKey string, rawText string) ([]map[string
 	return rows, err
 }
 
+// ValidateCommandKey 校验模板与命令键安全性，防止路径穿越风险 (P2-1)
+func ValidateCommandKey(key string) error {
+	trimmed := strings.TrimSpace(key)
+	if trimmed == "" {
+		return errors.New("commandKey 不能为空")
+	}
+	if strings.Contains(trimmed, "..") || strings.Contains(trimmed, "/") || strings.Contains(trimmed, "\\") {
+		return fmt.Errorf("非法 commandKey: %q 包含路径穿越字符", key)
+	}
+	return nil
+}
+
 // ParseDetail 在 Parse 基础上返回解析元信息（引擎、是否降级、耗时）。
 // 供 taskexec 在持有 RunID 的调用点按运行维度打点（方案 §10.2），
 // 避免在 ParserManager 全局单例上取区间差值导致多任务指标串扰。
 func (p *CompositeParser) ParseDetail(commandKey, rawText string) ([]map[string]string, ParseOutcome, error) {
+	if err := ValidateCommandKey(commandKey); err != nil {
+		return nil, ParseOutcome{}, err
+	}
+
 	start := time.Now()
 	var (
 		results    []map[string]string

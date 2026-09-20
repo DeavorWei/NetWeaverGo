@@ -211,6 +211,39 @@ func (e *DeviceCommandExecutor) executeUnit(ctx RuntimeContext, stageID string, 
 		RunID:          ctx.RunID(),
 	}
 
+	// P1-3 修复：校验并支持连接模式 (direct | jumphost | proxy)
+	if strings.EqualFold(device.ConnectMode, "jumphost") {
+		if device.JumpHostID == nil || *device.JumpHostID == 0 {
+			errMsg := fmt.Sprintf("设备 %s 配置为跳板机连接模式，但未关联有效跳板机(JumpHostID)", deviceIP)
+			logger.Error("TaskExec", ctx.RunID(), "%s", errMsg)
+			failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "跳板机未配置", nil)
+			projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, errMsg, 0, 0)
+			emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, errMsg)
+			return fmt.Errorf("%s", errMsg)
+		}
+		jumpHost, err := e.repo.FindByID(*device.JumpHostID)
+		if err != nil || jumpHost == nil {
+			errMsg := fmt.Sprintf("设备 %s 关联的跳板机(ID: %d)不存在: %v", deviceIP, *device.JumpHostID, err)
+			logger.Error("TaskExec", ctx.RunID(), "%s", errMsg)
+			failUnitExecution(handler, ctx, unit.ID, deviceIP, errMsg, "跳板机不存在", nil)
+			projectTaskexecLifecycleRecord(ctx, runtimeLogger, scope, recordExecutionFailed, errMsg, 0, 0)
+			emitProjectedUnitEvent(ctx, stageID, unit.ID, EventTypeUnitFinished, EventLevelError, errMsg)
+			return fmt.Errorf("%s", errMsg)
+		}
+		// 注入前置跳板跳转指令
+		jumpCmd := fmt.Sprintf("ssh -p %d %s@%s", device.Port, device.Username, device.IP)
+		opts.PreCommands = append([]string{jumpCmd}, opts.PreCommands...)
+	} else if strings.EqualFold(device.ConnectMode, "proxy") {
+		proxyAddr := ""
+		if e.settings != nil {
+			proxyAddr = e.settings.ProxyAddress
+		}
+		if proxyAddr == "" && strings.HasPrefix(device.Description, "proxy=") {
+			proxyAddr = strings.TrimPrefix(device.Description, "proxy=")
+		}
+		opts.ProxyAddr = proxyAddr
+	}
+
 	// Create device executor
 	exec := executor.NewDeviceExecutor(
 		device.IP,
@@ -1441,9 +1474,10 @@ func markUnitRunning(handler *ErrorHandler, ctx RuntimeContext, unitID, operatio
 
 func failUnitExecution(handler *ErrorHandler, ctx RuntimeContext, unitID, targetKey, errMsg, operation string, doneSteps *int) {
 	finishedAt := time.Now()
+	formattedMsg := FormatTroubleshootMessage(targetKey, errMsg, nil)
 	patch := &UnitPatch{
 		Status:       strPtr(string(UnitStatusFailed)),
-		ErrorMessage: &errMsg,
+		ErrorMessage: &formattedMsg,
 		FinishedAt:   &finishedAt,
 	}
 	if doneSteps != nil {

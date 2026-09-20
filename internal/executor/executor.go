@@ -42,6 +42,8 @@ type ExecutorOptions struct {
 	ConnectionFactory connutil.ConnectionFactory // 可选的连接工厂，nil 则使用默认工厂
 	RunID             string                     // 所属运行 ID（可观测性按运行维度打点用）
 	PreCommands       []string                   // 前置执行命令序列（如跳板机跳转或会话前置命令）
+	Charset           string                     // 字符集: utf-8 | gbk | gb18030 | big5 | auto
+	ProxyAddr         string                     // 代理服务器地址 (SOCKS5/HTTP 代理，如 "127.0.0.1:1080")
 }
 
 // DeviceExecutor 封装特定设备的连接数据流及命令步进下发生命周期
@@ -69,6 +71,8 @@ type DeviceExecutor struct {
 	logSession    *report.DeviceLogSession
 	deviceProfile *config.DeviceProfile
 	preCommands   []string // 前置命令序列（跳板跳转等）
+	charset       string   // 字符集编码
+	proxyAddr     string   // 代理服务器地址
 
 	// vendor 设备厂商（来自 ExecutorOptions，作为视图反解 vendor 的兜底来源）
 	vendor string
@@ -88,11 +92,8 @@ type DeviceExecutor struct {
 func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOptions) *DeviceExecutor {
 	logger.Verbose("Executor", ip, "初始化 NewDeviceExecutor")
 	profile := opts.DeviceProfile
-	if profile == nil && strings.TrimSpace(opts.Vendor) != "" {
-		profile = config.GetDeviceProfile(opts.Vendor)
-	}
 
-	// 确定连接工厂
+	// 统一连接工厂初始化，未注入时使用默认工厂
 	factory := opts.ConnectionFactory
 	if factory == nil {
 		factory = connutil.NewDefaultConnectionFactory()
@@ -104,7 +105,21 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 		terminalWidth = profile.PTY.Width
 	}
 
-	streamMatcher := matcher.NewStreamMatcher()
+	// A6/P0-4 接线：基于厂商与设备类型解析外置匹配策略
+	vendor := strings.TrimSpace(opts.Vendor)
+	deviceType := ""
+	if profile != nil {
+		if vendor == "" {
+			vendor = profile.Vendor
+		}
+		deviceType = profile.DeviceType
+	}
+	pm := matcher.GetDefaultPolicyMatcher()
+	var policy *matcher.MatchPolicy
+	if pm != nil {
+		policy = pm.Resolve("*", vendor, deviceType)
+	}
+	streamMatcher := matcher.NewStreamMatcherWithPolicy(policy)
 	if profile != nil {
 		streamMatcher.ConfigureFromProfile(
 			profile.Prompt.Suffixes,
@@ -114,13 +129,19 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 		)
 	}
 
+	// 字符集解析
+	charset := strings.TrimSpace(opts.Charset)
+	if charset == "" && profile != nil && profile.Charset != "" {
+		charset = profile.Charset
+	}
+
 	return &DeviceExecutor{
 		IP:                ip,
 		Port:              port,
 		Username:          user,
 		Password:          pass,
 		Protocol:          opts.Protocol,
-		vendor:            strings.TrimSpace(opts.Vendor),
+		vendor:            vendor,
 		runID:             strings.TrimSpace(opts.RunID),
 		Matcher:           streamMatcher,
 		connectionFactory: factory,
@@ -130,6 +151,8 @@ func NewDeviceExecutor(ip string, port int, user, pass string, opts ExecutorOpti
 		logSession:        opts.LogSession,
 		deviceProfile:     profile,
 		preCommands:       opts.PreCommands,
+		charset:           charset,
+		proxyAddr:         strings.TrimSpace(opts.ProxyAddr),
 		replayer:          terminal.NewReplayer(terminalWidth),
 		commandCache:      DefaultCommandCache(),
 	}
@@ -161,12 +184,13 @@ func (e *DeviceExecutor) Connect(ctx context.Context, timeout time.Duration) err
 
 	// 构建连接配置
 	cfg := connutil.ConnectionConfig{
-		IP:       e.IP,
-		Port:     e.Port,
-		Username: e.Username,
-		Password: e.Password,
-		Protocol: protocol,
-		Timeout:  timeout,
+		IP:        e.IP,
+		Port:      e.Port,
+		Username:  e.Username,
+		Password:  e.Password,
+		Protocol:  protocol,
+		Timeout:   timeout,
+		ProxyAddr: e.proxyAddr,
 	}
 
 	// SSH 协议需要额外配置

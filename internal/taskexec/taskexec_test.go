@@ -18,9 +18,13 @@ import (
 
 // setupTestDB 创建测试数据库 (使用glebarez/sqlite纯Go驱动)
 func setupTestDB(t *testing.T) *gorm.DB {
-	dsn := fmt.Sprintf("file:%s?mode=memory&cache=private", t.Name())
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", t.Name())
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
+
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
 
 	err = AutoMigrate(db)
 	require.NoError(t, err)

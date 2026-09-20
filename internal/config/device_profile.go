@@ -228,15 +228,17 @@ func (s *ProfileSelector) Specificity() int {
 
 // DeviceProfile 设备画像 - 统一的厂商/款型配置
 type DeviceProfile struct {
-	Vendor          string           `json:"vendor"`             // 厂商标识
-	Name            string           `json:"name"`               // 厂商名称
-	TopologyEnabled bool             `json:"topologyEnabled"`    // 是否可用于网络拓扑采集（主机/通用设为 false）
-	Selector        *ProfileSelector `json:"selector,omitempty"` // 细分款型/系列匹配器（主画像为 nil）
-	PTY             PTYConfig        `json:"pty"`                // PTY 配置
-	Prompt          PromptConfig     `json:"prompt"`             // 提示符配置
-	Pager           PagerConfig      `json:"pager"`              // 分页配置
-	Init            InitConfig       `json:"init"`               // 初始化配置
-	Commands        []CommandSpec    `json:"commands"`           // 命令列表
+	Vendor          string           `json:"vendor"`               // 厂商标识
+	Name            string           `json:"name"`                 // 厂商名称
+	DeviceType      string           `json:"deviceType,omitempty"` // 设备类型: router | switch | firewall | host | *
+	Charset         string           `json:"charset,omitempty"`    // 字符集编码: utf-8 | gbk | gb18030 | big5 | auto
+	TopologyEnabled bool             `json:"topologyEnabled"`      // 是否可用于网络拓扑采集（主机/通用设为 false）
+	Selector        *ProfileSelector `json:"selector,omitempty"`   // 细分款型/系列匹配器（主画像为 nil）
+	PTY             PTYConfig        `json:"pty"`                  // PTY 配置
+	Prompt          PromptConfig     `json:"prompt"`               // 提示符配置
+	Pager           PagerConfig      `json:"pager"`                // 分页配置
+	Init            InitConfig       `json:"init"`                 // 初始化配置
+	Commands        []CommandSpec    `json:"commands"`             // 命令列表
 }
 
 // ResolveCommands 根据设备 Model 和 Version 动态过滤生效命令

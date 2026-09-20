@@ -28,12 +28,13 @@ const DefaultTelnetPort = 23
 
 // ConnectionConfig 连接配置，包含建连所需的全部参数。
 type ConnectionConfig struct {
-	IP       string        // 设备 IP
-	Port     int           // 设备端口（0 表示使用协议默认端口）
-	Username string        // 用户名
-	Password string        // 密码
-	Protocol string        // 协议: "ssh" 或 "telnet"
-	Timeout  time.Duration // 连接超时
+	IP        string        // 设备 IP
+	Port      int           // 设备端口（0 表示使用协议默认端口）
+	Username  string        // 用户名
+	Password  string        // 密码
+	Protocol  string        // 协议: "ssh" 或 "telnet"
+	Timeout   time.Duration // 连接超时
+	ProxyAddr string        // 代理地址 (SOCKS5/HTTP 代理，如 "127.0.0.1:1080")
 
 	// SSH 专用配置（仅在 Protocol="ssh" 时生效）
 	SSH *SSHOptions
@@ -96,11 +97,12 @@ func (f *DefaultConnectionFactory) connectSSH(ctx context.Context, cfg Connectio
 	}
 
 	sshCfg := sshutil.Config{
-		IP:       cfg.IP,
-		Port:     port,
-		Username: cfg.Username,
-		Password: cfg.Password,
-		Timeout:  cfg.Timeout,
+		IP:        cfg.IP,
+		Port:      port,
+		Username:  cfg.Username,
+		Password:  cfg.Password,
+		Timeout:   cfg.Timeout,
+		ProxyAddr: cfg.ProxyAddr,
 	}
 
 	// 应用 SSH 专用选项

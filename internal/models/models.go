@@ -156,10 +156,12 @@ type GlobalSettings struct {
 	Theme string `json:"theme"` // 主题设置: "light" | "dark" | "system"
 
 	// P1 阶段可靠性与灰度控制开关
-	RiskCommandMode     string `json:"riskCommandMode"`     // "warn"（默认，仅告警） | "enforce"（强制阻断/审批） | "off"（关闭）
-	ConfirmPolicy       string `json:"confirmPolicy"`       // "ask_user"（默认） | "auto_yes" | "auto_no" | "off"
-	CommandCacheEnabled bool   `json:"commandCacheEnabled"` // 任务级命令缓存开关，默认 false
-	RawBufferLimitMB    int    `json:"rawBufferLimitMB"`    // 单命令缓冲区内存上限（MB），默认 8
+	RiskCommandMode string `json:"riskCommandMode"`        // "warn"（默认，仅告警） | "enforce"（强制阻断/审批） | "off"（关闭）
+	ConfirmPolicy   string `json:"confirmPolicy"`          // "ask_user"（默认） | "auto_yes" | "auto_no" | "off"
+	ProxyAddress    string `json:"proxyAddress,omitempty"` // 全局默认代理服务器 (SOCKS5/HTTP 如 127.0.0.1:1080)
+
+	CommandCacheEnabled bool `json:"commandCacheEnabled"` // 任务级命令缓存开关，默认 false
+	RawBufferLimitMB    int  `json:"rawBufferLimitMB"`    // 单命令缓冲区内存上限（MB），默认 8
 
 	// §10.3 解析引擎灰度模式与应急回退开关 (auto / tree_only / legacy_only)
 	ParserEngineMode string `json:"parserEngineMode"`
