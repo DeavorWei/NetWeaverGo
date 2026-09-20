@@ -6,29 +6,19 @@ import (
 	"time"
 
 	"github.com/NetWeaverGo/core/internal/bizcompare"
-	"github.com/NetWeaverGo/core/internal/config"
 	"github.com/NetWeaverGo/core/internal/executor"
 	"github.com/NetWeaverGo/core/internal/logger"
-	"github.com/NetWeaverGo/core/internal/models"
 	"github.com/NetWeaverGo/core/internal/repository"
-	"gorm.io/gorm"
 )
 
 // BizCompareExecutor 业务比对阶段执行器
 type BizCompareExecutor struct {
-	repo     repository.DeviceRepository
-	db       *gorm.DB
-	settings *models.GlobalSettings
+	repo repository.DeviceRepository
 }
 
 // NewBizCompareExecutor 创建业务比对执行器
-func NewBizCompareExecutor(repo repository.DeviceRepository, db *gorm.DB) *BizCompareExecutor {
-	settings, _, _ := config.LoadSettings()
-	return &BizCompareExecutor{
-		repo:     repo,
-		db:       db,
-		settings: settings,
-	}
+func NewBizCompareExecutor(repo repository.DeviceRepository) *BizCompareExecutor {
+	return &BizCompareExecutor{repo: repo}
 }
 
 // Kind 返回支持的阶段类型
@@ -90,7 +80,8 @@ func (e *BizCompareExecutor) executeUnit(ctx RuntimeContext, unit *UnitPlan) err
 		return fmt.Errorf("设备IP为空")
 	}
 
-	domain := "S"
+	// P3-5：默认域由场景种子派生（不再硬编码 "S"）
+	domain := bizcompare.DefaultDomain()
 	sceneID := "default"
 	phase := "before"
 

@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -30,13 +31,28 @@ type DomainInfo struct {
 	Description string `json:"description"`
 }
 
-// ListDomains 获取支持的产品域列表
+// ListDomains 获取支持的产品域列表（P3-6：由场景种子派生，消除硬编码重复定义）
 func (s *BizCompareService) ListDomains() []DomainInfo {
-	return []DomainInfo{
-		{Code: "S", Name: "S系列园区交换机", Description: "针对二层及基础网络，覆盖接口、MAC表、ARP表、VLAN及生成树"},
-		{Code: "NE-SR", Name: "NE/SR核心路由器", Description: "针对关键路由网络，覆盖接口、BGP、OSPF、ISIS及路由统计"},
-		{Code: "CE", Name: "CloudEngine数据中心交换机", Description: "针对数据中心网络，覆盖接口、EVPN、VXLAN、LLDP拓扑及大二层表项"},
+	mgr := bizcompare.GetGlobalSceneManager()
+	seen := make(map[string]struct{})
+	domains := make([]DomainInfo, 0, 3)
+	for _, sc := range mgr.ListByDomain("") {
+		code := strings.TrimSpace(sc.Domain)
+		if code == "" || code == "*" {
+			continue
+		}
+		if _, ok := seen[code]; ok {
+			continue
+		}
+		seen[code] = struct{}{}
+		domains = append(domains, DomainInfo{
+			Code:        code,
+			Name:        sc.Name,
+			Description: sc.Description,
+		})
 	}
+	sort.Slice(domains, func(i, j int) bool { return domains[i].Code < domains[j].Code })
+	return domains
 }
 
 // ListScenes 获取指定域支持的场景列表

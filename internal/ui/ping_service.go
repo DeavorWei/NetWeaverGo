@@ -17,6 +17,7 @@ import (
 	"github.com/NetWeaverGo/core/internal/logger"
 	"github.com/NetWeaverGo/core/internal/repository"
 	"github.com/NetWeaverGo/core/internal/security"
+	"github.com/NetWeaverGo/core/internal/smartping"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -67,6 +68,10 @@ type PingService struct {
 
 	// 清理控制
 	cleanupStopCh chan struct{}
+
+	// P1-10：智能 Ping 诊断报告（批量 Ping 完成后自动生成）
+	smartPingReports []*smartping.AnalysisReport
+	smartPingMu      sync.RWMutex
 }
 
 // NewPingService creates a new PingService instance.
@@ -294,9 +299,68 @@ func (s *PingService) StartBatchPing(req PingRequest) (*icmp.BatchPingProgress, 
 		s.setProgress(progress)
 		s.emitProgress(progress)
 		logger.Info("PingService", "-", "批量 Ping 后台执行完成")
+
+		// P1-10：批量 Ping 结果接入智能 Ping 诊断引擎（逐主机质量诊断）
+		s.setSmartPingReports(s.analyzeWithSmartPing(progress, "default"))
 	}()
 
 	return s.GetPingProgress(), nil
+}
+
+// analyzeWithSmartPing 将批量 Ping 结果转换为智能 Ping 指标并生成诊断报告（P1-10）
+func (s *PingService) analyzeWithSmartPing(progress *icmp.BatchPingProgress, scene string) []*smartping.AnalysisReport {
+	if progress == nil || len(progress.Results) == 0 {
+		return nil
+	}
+	engine := smartping.GetGlobalEngine()
+	if engine == nil {
+		return nil
+	}
+
+	metrics := make([]*smartping.PingHostMetric, 0, len(progress.Results))
+	for i := range progress.Results {
+		r := progress.Results[i]
+		if strings.TrimSpace(r.IP) == "" {
+			continue
+		}
+		metrics = append(metrics, &smartping.PingHostMetric{
+			IP:          r.IP,
+			HostName:    r.HostName,
+			Alive:       r.Alive,
+			SentCount:   r.SentCount,
+			RecvCount:   r.RecvCount,
+			FailedCount: r.FailedCount,
+			LossRate:    r.LossRate,
+			MinRtt:      r.MinRtt,
+			MaxRtt:      r.MaxRtt,
+			AvgRtt:      r.AvgRtt,
+		})
+	}
+	reports := engine.AnalyzeBatch(metrics, scene)
+	unhealthy := 0
+	for _, rep := range reports {
+		if rep != nil && rep.Status != "healthy" {
+			unhealthy++
+		}
+	}
+	logger.Info("PingService", "-", "智能 Ping 诊断完成: total=%d, 异常主机=%d", len(reports), unhealthy)
+	return reports
+}
+
+// setSmartPingReports 保存最近一次智能诊断报告
+func (s *PingService) setSmartPingReports(reports []*smartping.AnalysisReport) {
+	s.smartPingMu.Lock()
+	defer s.smartPingMu.Unlock()
+	s.smartPingReports = reports
+}
+
+// GetSmartPingReports 返回最近一次批量 Ping 的智能诊断报告（Wails 绑定，供前端展示）
+func (s *PingService) GetSmartPingReports() []*smartping.AnalysisReport {
+	s.smartPingMu.RLock()
+	defer s.smartPingMu.RUnlock()
+	res := make([]*smartping.AnalysisReport, len(s.smartPingReports))
+	copy(res, s.smartPingReports)
+	return res
 }
 
 // StopBatchPing stops the current batch ping operation.

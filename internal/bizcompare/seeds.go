@@ -1,5 +1,30 @@
 package bizcompare
 
+import "strings"
+
+// DefaultDomain 返回默认产品域（P3-6：由已注册场景派生，避免散落硬编码）。
+// 优先返回 S 域；未注册时取字典序最小的域；仍无则兜底 "S"。
+func DefaultDomain() string {
+	scenes := GetGlobalSceneManager().ListByDomain("")
+	fallback := ""
+	for _, sc := range scenes {
+		d := strings.TrimSpace(sc.Domain)
+		if d == "" || d == "*" {
+			continue
+		}
+		if d == "S" {
+			return "S"
+		}
+		if fallback == "" || d < fallback {
+			fallback = d
+		}
+	}
+	if fallback == "" {
+		return "S"
+	}
+	return fallback
+}
+
 // RegisterBuiltinScenes 注册首期支持的 3 域场景种子数据
 func (m *SceneManager) RegisterBuiltinScenes() {
 	// 1. S 系列园区交换机域 (裁剪重命令，突出二层与基础三层)

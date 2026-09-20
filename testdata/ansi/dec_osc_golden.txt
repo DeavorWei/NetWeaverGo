@@ -1,0 +1,10 @@
+Router#terminal length 0
+[?1049h
+[?25l
+]0;Huawei VRP Console
+show version
+Huawei Versatile Routing Platform Software
+Info: The max number of VTY users is 10.
+[?25h
+[?1049l
+Router#

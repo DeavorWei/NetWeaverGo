@@ -55,9 +55,16 @@ type ANSICommand struct {
 	Raw string
 }
 
-// IsAltScreen 判断是否为切换/退出备用屏幕缓冲序列 (?1049)
+// IsAltScreen 判断是否为切换/退出备用屏幕缓冲序列（?1049 / ?1047 / ?47）
 func (c ANSICommand) IsAltScreen() bool {
-	return c.IsPrivate && (c.Type == CmdDecSet || c.Type == CmdDecReset) && len(c.Params) > 0 && c.Params[0] == 1049
+	if !c.IsPrivate || (c.Type != CmdDecSet && c.Type != CmdDecReset) || len(c.Params) == 0 {
+		return false
+	}
+	switch c.Params[0] {
+	case 47, 1047, 1049:
+		return true
+	}
+	return false
 }
 
 // CursorVisible 判断是否为光标显示/隐藏控制 (?25)

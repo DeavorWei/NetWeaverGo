@@ -11,15 +11,32 @@ type Replayer struct {
 	committed []string
 	// width 终端宽度（可选，用于调试）
 	width int
+
+	// === P1-8：控制序列消费状态（DEC 私有模式 / OSC） ===
+	altScreen     bool   // 是否处于备用屏幕（alt-screen）
+	cursorVisible bool   // 光标显隐状态
+	oscTitle      string // 最近一次 OSC 设置的窗口标题
+	decSetCount   int    // DECSET 序列计数
+	decResetCount int    // DECRST 序列计数
+	oscCount      int    // OSC 序列计数
+}
+
+// ANSIStats ANSI 控制序列消费统计（P1-8）
+type ANSIStats struct {
+	DecSetCount   int `json:"decSetCount"`
+	DecResetCount int `json:"decResetCount"`
+	OSCCount      int `json:"oscCount"`
+	UnknownCount  int `json:"unknownCount"`
 }
 
 // NewReplayer 创建新的重放器
 func NewReplayer(width int) *Replayer {
 	return &Replayer{
-		ansi:      NewANSIParser(),
-		lineBuf:   NewLineBuffer(),
-		committed: make([]string, 0),
-		width:     width,
+		ansi:          NewANSIParser(),
+		lineBuf:       NewLineBuffer(),
+		committed:     make([]string, 0),
+		width:         width,
+		cursorVisible: true,
 	}
 }
 
@@ -122,7 +139,18 @@ func (r *Replayer) processCommand(cmd ANSICommand, events []LineEvent) []LineEve
 		// ESC[m 样式设置，忽略（不影响文本内容）
 
 	case CmdDecSet, CmdDecReset:
-		// DEC 模式设置/复位（如备用屏幕切换 ?1049 等）
+		// DEC 模式设置/复位（如备用屏幕切换 ?1049、光标显隐 ?25）
+		if cmd.Type == CmdDecSet {
+			r.decSetCount++
+		} else {
+			r.decResetCount++
+		}
+		if cmd.IsAltScreen() {
+			r.altScreen = cmd.Type == CmdDecSet
+		}
+		if visible, isCursorCmd := cmd.CursorVisible(); isCursorCmd {
+			r.cursorVisible = visible
+		}
 		events = append(events, LineEvent{
 			Type: EventControlSequence,
 			Raw:  cmd.Raw,
@@ -130,6 +158,10 @@ func (r *Replayer) processCommand(cmd ANSICommand, events []LineEvent) []LineEve
 
 	case CmdOSC:
 		// OSC 操作系统命令（如终端窗口标题设置）
+		r.oscCount++
+		if title := cmd.OSCTitle(); title != "" {
+			r.oscTitle = title
+		}
 		events = append(events, LineEvent{
 			Type: EventControlSequence,
 			Raw:  cmd.Raw,
@@ -163,9 +195,40 @@ func (r *Replayer) Reset() {
 	r.ansi.Reset()
 	r.lineBuf.Reset()
 	r.committed = r.committed[:0]
+	r.altScreen = false
+	r.cursorVisible = true
+	r.oscTitle = ""
+	r.decSetCount = 0
+	r.decResetCount = 0
+	r.oscCount = 0
 }
 
 // UnknownCount 返回未支持的 ANSI 序列计数
 func (r *Replayer) UnknownCount() int {
 	return r.ansi.UnknownCount()
+}
+
+// AltScreenActive 返回当前是否处于备用屏幕（alt-screen）
+func (r *Replayer) AltScreenActive() bool {
+	return r.altScreen
+}
+
+// CursorVisible 返回当前光标显隐状态
+func (r *Replayer) CursorVisible() bool {
+	return r.cursorVisible
+}
+
+// OSCTitle 返回最近一次 OSC 设置的窗口标题（无则空串）
+func (r *Replayer) OSCTitle() string {
+	return r.oscTitle
+}
+
+// ControlSequenceStats 返回控制序列消费统计（P1-8）
+func (r *Replayer) ControlSequenceStats() ANSIStats {
+	return ANSIStats{
+		DecSetCount:   r.decSetCount,
+		DecResetCount: r.decResetCount,
+		OSCCount:      r.oscCount,
+		UnknownCount:  r.ansi.UnknownCount(),
+	}
 }

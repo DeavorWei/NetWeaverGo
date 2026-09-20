@@ -29,6 +29,44 @@ type VendorSanitizeRule struct {
 	Replacement string         `json:"replacement"`
 	IsRegex     bool           `json:"isRegex"`
 	Pattern     *regexp.Regexp `json:"-"`
+	Literal     string         `json:"-"` // 前导字面量（性能优化：不包含则跳过正则）
+}
+
+// literalPrefix 提取正则的"必然出现"字面量前缀（跳过零宽前缀后遇到元字符即停止），
+// 用于快速预筛：文本中不含该字面量时，正则必然无法匹配，可安全跳过。
+// 返回空串表示无法预筛（该规则始终执行）。
+func literalPrefix(raw string) string {
+	s := strings.TrimSpace(raw)
+	// 1. 剥离零宽前缀（不引入字面量约束）
+	zeroWidth := []string{"(?im)", "(?mi)", "(?i)", "(?m)", `\A`, "^", `\s*`, `\s+`, `\s`, `\b`}
+	for {
+		trimmed := false
+		for _, p := range zeroWidth {
+			if strings.HasPrefix(s, p) {
+				s = s[len(p):]
+				trimmed = true
+			}
+		}
+		if !trimmed {
+			break
+		}
+	}
+
+	// 2. 提取到第一个元字符为止
+	end := len(s)
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '\\', '(', '[', '{', '.', '*', '+', '?', '|', '^', '$':
+			end = i
+			i = len(s)
+		}
+	}
+	lit := strings.ToLower(strings.TrimSpace(s[:end]))
+	if len(lit) < 3 {
+		// 过短字面量（如空串、"a"）误筛风险与收益均低，不做预筛
+		return ""
+	}
+	return lit
 }
 
 // BrokenRule 记录编译失败的规则
@@ -147,6 +185,7 @@ func NewVendorSanitizerFromBytes(data []byte) (*VendorSanitizer, error) {
 			continue
 		}
 		r.Pattern = re
+		r.Literal = literalPrefix(r.RawPattern)
 		vs.rules = append(vs.rules, r)
 
 		catKey := strings.ToLower(strings.TrimSpace(r.Category))
@@ -288,13 +327,23 @@ func (vs *VendorSanitizer) Sanitize(category, command, text string) string {
 	matchedRules := vs.rulesByCat[catKey]
 
 	currentText := text
+	// 性能优化：脱敏规则的前导字面量若在文本中不存在，则可安全跳过该正则；
+	// 掩码替换只会删除原文/插入 ****，不会引入新的敏感锚点，故可基于初始文本判定一次。
+	lowerText := strings.ToLower(currentText)
+
+	shouldRun := func(rule VendorSanitizeRule) bool {
+		if rule.Pattern == nil {
+			return false
+		}
+		if rule.Literal != "" && !strings.Contains(lowerText, rule.Literal) {
+			return false
+		}
+		return matchCommand(rule.Commands, command)
+	}
 
 	// 1. 先应用该 Category 匹配到的规则
 	for _, rule := range matchedRules {
-		if rule.Pattern == nil {
-			continue
-		}
-		if !matchCommand(rule.Commands, command) {
+		if !shouldRun(rule) {
 			continue
 		}
 		currentText = applyMaskRule(rule.Pattern, rule.Replacement, currentText)
@@ -302,10 +351,7 @@ func (vs *VendorSanitizer) Sanitize(category, command, text string) string {
 
 	// 2. 补充通用（空 category）规则
 	for _, rule := range vs.genericRules {
-		if rule.Pattern == nil {
-			continue
-		}
-		if !matchCommand(rule.Commands, command) {
+		if !shouldRun(rule) {
 			continue
 		}
 		currentText = applyMaskRule(rule.Pattern, rule.Replacement, currentText)
